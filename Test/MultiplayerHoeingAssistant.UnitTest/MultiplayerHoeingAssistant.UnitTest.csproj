@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj" />
+    <Compile Include="..\..\BgiCoordinatorServer\Services\CoordinatedBatchState.cs" Link="Integration\CoordinatedBatchState.cs" />
   </ItemGroup>
 
   <ItemGroup>

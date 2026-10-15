@@ -11,6 +11,7 @@ using System.Windows;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoOnline;
 using BetterGenshinImpact.Service.ExternalInterface;
@@ -773,11 +774,33 @@ internal sealed class InstanceRequestHandler
             $"检测到手动停止（F11/停止热键），{remainingSeconds:F0}s 冷却期内拒绝外部 task.start（{channelTag}）");
     }
 
+    internal static InstanceIpcEnvelope? ValidateCoordinatedHoeingRequest(InstanceIpcEnvelope request)
+    {
+        var data = request.Data;
+        var flag = data?["coordinatedHoeing"];
+        if (flag is null or { Type: JTokenType.Null })
+            return data?.Property("hoeingBatchId") != null || data?.Property("hoeingParticipantUids") != null
+                ? InstanceIpcEnvelope.Failure(request, "invalid_request", "协调批次身份必须与 coordinatedHoeing=v1 一起提供") : null;
+        if (flag.Type != JTokenType.String || flag.Value<string>() != "v1")
+            return InstanceIpcEnvelope.Failure(request, "capability_required", "不支持的协调锄地合同版本");
+        if (data?.Property("hoeingBatchId") is null || data.Property("hoeingParticipantUids") is null)
+            return InstanceIpcEnvelope.Failure(request, "capability_required", "协调锄地要求 hoeing.coordinatedStart.v1 的批次及固定参与成员身份");
+        var batchId = data["hoeingBatchId"];
+        var participants = data["hoeingParticipantUids"] as JArray;
+        if (batchId?.Type != JTokenType.String || string.IsNullOrWhiteSpace(batchId.Value<string>())
+            || participants is null || participants.Count == 0
+            || participants.Any(uid => uid.Type != JTokenType.String || string.IsNullOrWhiteSpace(uid.Value<string>()))
+            || participants.Values<string>().Select(uid => uid!.Trim()).Distinct(StringComparer.Ordinal).Count() != participants.Count)
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "协调锄地必须提供非空批次身份及无重复的固定参与 UID 列表");
+        return null;
+    }
+
     internal async Task<InstanceIpcEnvelope> HandleTaskStart(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
         {
             if (ExecutionRequestContract.Validate(request) is { } rejected) return rejected;
+            if (ValidateCoordinatedHoeingRequest(request) is { } invalidHoeing) return invalidHoeing;
             // 显式 "key":null 归一化为 C# null（否则 taskName 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
             var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
             var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
@@ -862,6 +885,8 @@ internal sealed class InstanceRequestHandler
     {
         if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } rejected)
             throw new ExecutionNotStartedException(jobId, rejected.ErrorCode + ": " + rejected.ErrorMessage);
+        if (executionRequest != null && ValidateCoordinatedHoeingRequest(executionRequest) is { } invalidHoeing)
+            throw new ExecutionNotStartedException(jobId, invalidHoeing.ErrorMessage!, invalidHoeing.ErrorCode!);
         workflowRunId ??= executionIdentity?.WorkflowRunId;
         if (cancellationToken.IsCancellationRequested)
             throw new ExecutionNotStartedException(jobId, "启动前已取消");
@@ -875,7 +900,9 @@ internal sealed class InstanceRequestHandler
         var dispatch = Application.Current!.Dispatcher.InvokeAsync(async () =>
         {
             using var coordinatedHoeing = new CoordinatedHoeingScope(executionRequest != null
-                && InstanceIpcProtocol.GetStringOrNull(executionRequest.Data, "coordinatedHoeing") == "v1");
+                && InstanceIpcProtocol.GetStringOrNull(executionRequest.Data, "coordinatedHoeing") == "v1",
+                InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "hoeingBatchId"),
+                (executionRequest?.Data?["hoeingParticipantUids"] as Newtonsoft.Json.Linq.JArray)?.Values<string>()!);
             void FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult result)
             {
                 if (result == BetterGenshinImpact.GameTask.TaskRunResult.Failed && coordinatedHoeing.Incomplete)
@@ -1257,6 +1284,7 @@ internal sealed class InstanceRequestHandler
                 onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
                 onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
                 hasSuspendedTaskContext,
+                takeoverActive = PreemptionGate.IsArmed,
                 suspendedTakeoverTicket = suspendedCtx?.TakeoverTicket,
                 suspendedTaskType,
                 suspendedTaskName,
@@ -1621,6 +1649,12 @@ internal sealed class InstanceRequestHandler
     internal static bool IsOnlineSignalTask(string? projectName, string? folderName)
         => BetterGenshinImpact.Service.Execution.SuspendContextCapture.IsOnlineSignalTask(projectName, folderName);
 
+    private sealed record TargetedSuspendReceipt(Guid? InstanceId, long? StateRevision, long StopVersion,
+        Newtonsoft.Json.Linq.JObject Data);
+    private static readonly SemaphoreSlim TargetedSuspendGate = new(1, 1);
+    private static readonly Dictionary<string, TargetedSuspendReceipt> TargetedSuspendReceipts = new();
+    private static readonly Queue<string> TargetedSuspendReceiptOrder = new();
+
     internal async Task<InstanceIpcEnvelope> HandleTaskSuspend(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         try
@@ -1628,60 +1662,110 @@ internal sealed class InstanceRequestHandler
             var ticket = InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket");
             if (string.IsNullOrWhiteSpace(ticket))
                 return InstanceIpcEnvelope.Failure(request, "capability_required", "可靠接管需要升级助手并提供 takeoverTicket");
-            var epoch = request.Data?["bgiEpoch"];
-            if (epoch?["processId"]?.ToObject<int?>() != JobRegistry.CurrentEpoch.ProcessId
-                || epoch?["startTicksUtc"]?.ToObject<long?>() != JobRegistry.CurrentEpoch.StartTicksUtc)
+            if (request.Data?.Property("expectedExecutionInstanceId") is null
+                || request.Data.Property("expectedStateRevision") is null)
+                return InstanceIpcEnvelope.Failure(request, "capability_required",
+                    "可靠接管需要 execution.targetedSuspend.v1；必须显式提供目标执行实例及修订号，空闲目标使用 null/null");
+            if (!TryReadSuspendTarget(request, out var expectedInstanceId, out var expectedRevision)
+                || !TryReadEpochIdentity(request.Data, out var processId, out var startTicksUtc))
+                return InstanceIpcEnvelope.Failure(request, "invalid_request", "接管目标或 bgiEpoch 形状错误，未执行接管");
+            if (processId != JobRegistry.CurrentEpoch.ProcessId
+                || startTicksUtc != JobRegistry.CurrentEpoch.StartTicksUtc)
                 return InstanceIpcEnvelope.Failure(request, "stale_epoch", "BGI 进程身份已改变或未知，不能重放旧接管意图");
-            if (CheckManualStopCooldown(request, "task.suspend") is { } stopped) return stopped;
-            PreemptionGate.Arm(ticket);
-            var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
-            if (PreemptionGate.TryMarkContextSaved())
+            var stopVersion = ExecutionScope.StopVersionNow;
+            if (!await TargetedSuspendGate.WaitAsync(PreemptionGate.QuiesceBound))
+                return InstanceIpcEnvelope.Failure(request, "takeover_busy", "另一接管请求尚未完成，本请求未产生副作用");
+            try
             {
-                config.SuspendedTaskContext = null;
-                var snapshot = ExecutionScope.Suspend();
-                if (snapshot != null && SuspendContextCapture.Save(_logger, snapshot, "IPC task.suspend"))
+                if (CheckManualStopCooldown(request, "task.suspend") is { } stopped) return stopped;
+                if (TargetedSuspendReceipts.TryGetValue(ticket, out var previous))
                 {
-                    config.SuspendedTaskContext!.TakeoverTicket = ticket;
-                    config.SuspendedTaskContext.StopVersion = ExecutionScope.StopVersionNow;
+                    if (previous.InstanceId != expectedInstanceId || previous.StateRevision != expectedRevision)
+                        return InstanceIpcEnvelope.Failure(request, "takeover_identity_mismatch", "同一接管票据不能改绑另一执行目标");
+                    if (previous.StopVersion != ExecutionScope.StopVersionNow)
+                        return InstanceIpcEnvelope.Failure(request, "stale_ticket", "用户已停止原接管，不能重放旧回执");
+                    if (!PreemptionGate.Renew(ticket))
+                        return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管票据已撤销或过期，不能重放旧回执");
+                    var replay = (Newtonsoft.Json.Linq.JObject)previous.Data.DeepClone();
+                    replay["replayed"] = true;
+                    return InstanceIpcEnvelope.Response(request, replay);
                 }
-                BetterGenshinImpact.Core.Script.CancellationContext.Instance.Cancel();
+                var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+                BetterGenshinImpact.Core.Config.SuspendedTaskContext? context = null;
+                if (!ExecutionScope.TrySuspendTarget(ticket, expectedInstanceId, expectedRevision, stopVersion, ManualStopCooldownWindow,
+                    (snapshot, capturedStopVersion) =>
+                    {
+                        config.SuspendedTaskContext = null;
+                        if (snapshot != null && SuspendContextCapture.Save(_logger, snapshot, "IPC task.suspend"))
+                        {
+                            context = config.SuspendedTaskContext!;
+                            context.TakeoverTicket = ticket;
+                            context.StopVersion = capturedStopVersion;
+                        }
+                    }, out var target, out var refusal))
+                    return InstanceIpcEnvelope.Failure(request, refusal!, "接管目标已经变化或身份不可用；未取消当前任务，也不构成退出证明");
+                var confirmed = await WaitSuspendTargetReleasedBoundedAsync(target!);
+                if (!PreemptionGate.Authorize(ticket) || stopVersion != ExecutionScope.StopVersionNow)
+                    return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管期间票据已被停止或撤销，未授权启动新任务");
+                var data = Newtonsoft.Json.Linq.JObject.FromObject(new
+                {
+                    status = context == null ? "no_task" : "suspended",
+                    liveTask = context != null, quiesceConfirmed = confirmed, takeoverTicket = ticket,
+                    expectedExecutionInstanceId = expectedInstanceId?.ToString("N"), expectedStateRevision = expectedRevision,
+                    replayed = false,
+                    taskType = context?.TaskType, groupName = context?.GroupName, taskIndex = context?.TaskIndex,
+                    workflowRunId = context?.RootRunId, nodeId = context?.NodeId,
+                    occurrence = context?.Occurrence, iteration = context?.Iteration,
+                    attempt = context?.Attempt, originalJobId = context?.AttemptId,
+                    configRevision = context?.ConfigRevision,
+                    planNextTaskIndex = context?.PlanNextTaskIndex,
+                    planCheckpointPhase = context?.PlanCheckpointPhase,
+                    planNextFolderName = context?.PlanNextFolderName,
+                    planNextProjectName = context?.PlanNextProjectName,
+                    planNextDragonTaskId = context?.PlanNextDragonTaskId,
+                    planPreExecution = context?.PlanPreExecution
+                });
+                TargetedSuspendReceipts[ticket] = new(expectedInstanceId, expectedRevision, stopVersion, (JObject)data.DeepClone());
+                TargetedSuspendReceiptOrder.Enqueue(ticket);
+                while (TargetedSuspendReceiptOrder.Count > 256)
+                    TargetedSuspendReceipts.Remove(TargetedSuspendReceiptOrder.Dequeue());
+                return InstanceIpcEnvelope.Response(request, data);
             }
-            var confirmed = await WaitSlotReleasedBoundedAsync("IPC task.suspend");
-            var context = config.SuspendedTaskContext;
-            return InstanceIpcEnvelope.Response(request, new
-            {
-                status = context == null ? "no_task" : "suspended",
-                liveTask = context != null, quiesceConfirmed = confirmed, takeoverTicket = ticket,
-                taskType = context?.TaskType, groupName = context?.GroupName, taskIndex = context?.TaskIndex,
-                workflowRunId = context?.RootRunId, nodeId = context?.NodeId,
-                occurrence = context?.Occurrence, iteration = context?.Iteration,
-                attempt = context?.Attempt, originalJobId = context?.AttemptId,
-                configRevision = context?.ConfigRevision,
-                planNextTaskIndex = context?.PlanNextTaskIndex,
-                planCheckpointPhase = context?.PlanCheckpointPhase,
-                planNextFolderName = context?.PlanNextFolderName,
-                planNextProjectName = context?.PlanNextProjectName,
-                planNextDragonTaskId = context?.PlanNextDragonTaskId,
-                planPreExecution = context?.PlanPreExecution
-            });
+            finally { TargetedSuspendGate.Release(); }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "挂起失败");
-            return InstanceIpcEnvelope.Failure(request, ex.Message == "stale_ticket" ? "stale_ticket" : "task_suspend_failed", ex.Message);
+            return InstanceIpcEnvelope.Failure(request,
+                ex.Message is "stale_ticket" or "takeover_conflict" ? ex.Message : "task_suspend_failed", ex.Message);
         }
     }
 
-    private async Task<bool> WaitSlotReleasedBoundedAsync(string channelTag)
+    private static bool TryReadSuspendTarget(InstanceIpcEnvelope request, out Guid? instanceId, out long? revision)
+    {
+        instanceId = null;
+        revision = null;
+        var rawId = request.Data?["expectedExecutionInstanceId"];
+        var rawRevision = request.Data?["expectedStateRevision"];
+        if (rawId?.Type == Newtonsoft.Json.Linq.JTokenType.Null
+            && rawRevision?.Type == Newtonsoft.Json.Linq.JTokenType.Null) return true;
+        if (rawId?.Type != Newtonsoft.Json.Linq.JTokenType.String
+            || !Guid.TryParse(rawId.Value<string>(), out var parsedId) || parsedId == Guid.Empty
+            || !TryReadJsonInteger(rawRevision, out var parsedRevision) || parsedRevision <= 0) return false;
+        instanceId = parsedId;
+        revision = parsedRevision;
+        return true;
+    }
+
+    private async Task<bool> WaitSuspendTargetReleasedBoundedAsync(ExecutionScope.TargetedSuspendTarget target)
     {
         var deadline = DateTime.UtcNow + PreemptionGate.QuiesceBound;
         while (DateTime.UtcNow < deadline)
         {
-            if (!ExecutionScope.HasActive && BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0)
-                return true;
+            if (target.ObserveQuiescence()) return true;
             await Task.Delay(100);
         }
-        _logger.LogWarning("{Channel}: 原流程未在有界时间内退出", channelTag);
+        _logger.LogWarning("IPC task.suspend: 被接管的执行实例未在有界时间内退出");
         return false;
     }
 

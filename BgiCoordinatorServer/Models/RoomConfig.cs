@@ -3,6 +3,8 @@ namespace BgiCoordinatorServer.Models;
 /// <summary>房主锄地配置，同步给所有成员</summary>
 public class RoomConfig
 {
+    public string? HoeingBatchId { get; set; }
+    public List<string> ExpectedParticipantUids { get; set; } = [];
     public double SyncPointMinDistance { get; set; } = 30;
     public int StartRouteIndex { get; set; } = 0;
     /// <summary>线路关键词过滤（逗号分隔，全角/半角），文件名含任一关键词的线路跳过。默认空=不过滤。hoeing-route-keyword-filter，与客户端 RoomConfig 严格对称</summary>

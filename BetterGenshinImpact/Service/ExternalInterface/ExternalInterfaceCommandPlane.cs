@@ -78,6 +78,8 @@ internal static class ExternalInterfaceCommandPlane
     {
         // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
         if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request, invalid));
+        if (InstanceRequestHandler.ValidateCoordinatedHoeingRequest(request) is { } invalidHoeing)
+            return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request, invalidHoeing));
         var identity = Execution.ExecutionRequestContract.ReadIdentity(request.Data);
         var groupName = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
         var configName = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");

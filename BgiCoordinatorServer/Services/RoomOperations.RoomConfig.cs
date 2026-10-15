@@ -15,7 +15,15 @@ public sealed partial class RoomOperations
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room != null && room.HostConnectionId == ctx.ConnectionId)
         {
-            room.HostConfig = config;
+            lock (room)
+            {
+                if (!string.Equals(room.HoeingBatchId ?? "", config.HoeingBatchId ?? "", StringComparison.Ordinal)
+                    || !room.ExpectedParticipantUids.Order(StringComparer.Ordinal)
+                        .SequenceEqual((config.ExpectedParticipantUids ?? []).Order(StringComparer.Ordinal)))
+                    throw new InvalidOperationException("hoeing_start_config_identity_mismatch");
+                config.ExpectedParticipantUids = room.ExpectedParticipantUids.ToList();
+                room.HostConfig = config;
+            }
             _logger.LogInformation("房间 {Code} 房主配置已更新", roomCode);
         }
         return Task.CompletedTask;

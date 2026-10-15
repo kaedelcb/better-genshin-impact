@@ -12,7 +12,7 @@ public class GatewayProtocolTests
     /// <summary>客户端订阅核对清单（CoordinatorClient.cs / SignalRClient.cs / control-room.js）。</summary>
     private static readonly string[] ClientSubscribedLegacyEvents =
     [
-        "PlayerListUpdated", "AllArrived", "AllFightDone", "RouteDiffReceived",
+        "SyncBarrierFailed", "PlayerListUpdated", "AllArrived", "AllFightDone", "RouteDiffReceived",
         "RouteVerificationPassed", "RouteVariantConsistencyPassed", "RouteVariantConsistencyFailed",
         "RoomClosed", "VersionCheckRejected", "RouteVerificationAllDone", "AllReachedExpCap",
         "KazuhaPlayerUpdated", "KazuhaCollectStarted", "AllWorldJoined", "HostReadyChanged",
@@ -38,7 +38,7 @@ public class GatewayProtocolTests
 
         var mapKeys = GatewayProtocol.LegacyMethodMap.Keys.ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(67, GatewayProtocol.LegacyMethodMap.Count);
+        Assert.Equal(68, GatewayProtocol.LegacyMethodMap.Count);
 
         var missing = hubMethods.Except(mapKeys).ToList();
         var extra = mapKeys.Except(hubMethods).ToList();

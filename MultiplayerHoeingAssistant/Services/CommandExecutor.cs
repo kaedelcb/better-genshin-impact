@@ -119,9 +119,9 @@ public class CommandExecutor
 
     /// <summary>助手侧已知的**执行根身份**（来自 BGI `task.status` 的 executionInstanceId ＋ bgiEpoch）。</summary>
     internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc,
-        Guid? RunId = null, Guid? JobId = null);
+        Guid? RunId = null, Guid? JobId = null, long StateRevision = 0);
     internal readonly record struct ExecutionBoundarySnapshot(bool Known, bool SlotOccupied,
-        int ProcessId, long StartTicksUtc, ExecutionIdentity? Active);
+        int ProcessId, long StartTicksUtc, ExecutionIdentity? Active, bool AutoHoeingRunning = false);
 
     /// <summary>
     /// 助手侧"执行根已退出"的**证据**：只由 BGI 的按身份退出查询产生，**不等于**"看到空闲"。
@@ -328,8 +328,11 @@ public class CommandExecutor
         // 返回 null 仅供不适用早期通道的入口走 `core`；E3 接线态队列不可用明确拒绝。
         Func<CancellationToken, CancellationToken,
             Task<(ExternalStartExecution Early, Func<CancellationToken, Task<ExternalStartCompletion?>>? Observer)?>>? earlyStart = null,
-        ArbitrationTier tier = ArbitrationTier.Plan, int priority = 0, DateTimeOffset? scheduledAt = null)
+        ArbitrationTier tier = ArbitrationTier.Plan, int priority = 0, DateTimeOffset? scheduledAt = null,
+        CancellationToken cancellationToken = default)
     {
+        if (cancellationToken.IsCancellationRequested)
+            return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未申请启动后继任务" };
         ExternalStartAdmissionOutcome outcome;
         CommandResult? coreResult = null;
         Func<CancellationToken, Task<ExternalStartCompletion?>>? earlyObserver = null;
@@ -349,6 +352,8 @@ public class CommandExecutor
                 ScheduledAt = scheduledAt,
                 ExecuteAsync = async sendToken =>
                 {
+                    if (cancellationToken.IsCancellationRequested)
+                        return ExternalStartExecution.RejectedWith("start_cancelled", evidenceSource: "adapter:cancelled_before_send");
                     var previousContext = _requestContext.Value;
                     _requestContext.Value = capturedCommand; // 冻结的请求上下文（回调期间生效，结束即还原）
                     try
@@ -380,7 +385,7 @@ public class CommandExecutor
                     ? await observer(ct).ConfigureAwait(false)
                     : null,
             };
-            outcome = await admit(admissionRequest, CancellationToken.None).ConfigureAwait(false);
+            outcome = await admit(admissionRequest, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -1907,15 +1912,25 @@ public class CommandExecutor
     public async Task<CommandResult> ExecuteSuspendAsync(string hoeingGroupName)
     {
         await _suspendGate.WaitAsync();
-        try { return await ExecuteSuspendCoreAsync(hoeingGroupName); }
+        try { return await ExecuteSuspendCoreAsync(hoeingGroupName, await CaptureExecutionBoundarySnapshotAsync()); }
         finally { _suspendGate.Release(); }
     }
 
-    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName)
+    internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected)
+    {
+        await _suspendGate.WaitAsync();
+        try { return await ExecuteSuspendCoreAsync(description, expected); }
+        finally { _suspendGate.Release(); }
+    }
+
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected)
     {
         if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
-            || !capable.HasCapability("task.takeover"))
+            || !capable.HasCapability("task.takeover") || !capable.HasCapability("execution.targetedSuspend.v1"))
             return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
+        if (!expected.Known || expected.ProcessId <= 0 || expected.StartTicksUtc <= 0
+            || expected.SlotOccupied && expected.Active is null || expected.Active is { StateRevision: <= 0 })
+            return new CommandResult { Status = "failed", ErrorCode = "execution_identity_unavailable", Message = "原任务身份未确认，未执行接管" };
         try
         {
             await ReconcileTakeoverEpochAsync();
@@ -1927,16 +1942,19 @@ public class CommandExecutor
             // 发 task.suspend（35s：A6 有界退出契约下 BGI 持响应等槽位确认，上限 QuiesceBound=30s，
             // 客户端必须留余量覆盖该上界才能读到 quiesceConfirmed 字段，否则"超时但实际挂起成功"
             // ——超时≠未执行，2026-09-12 分层超时）
+            var createdTicket = _takeoverTicket == null;
             if (_takeoverTicket == null)
             {
-                _takeoverEpoch = (await capable.QueryJobListAsync()).Epoch;
-                if (_takeoverEpoch == null)
-                    return new CommandResult { Status = "failed", ErrorCode = "epoch_unknown", Message = "无法确认目标 BGI 进程身份，不执行接管" };
+                _takeoverEpoch = new BgiEpoch { ProcessId = expected.ProcessId, StartTicksUtc = expected.StartTicksUtc };
                 _takeoverTicket = Guid.NewGuid().ToString("N");
             }
+            if (_takeoverEpoch?.ProcessId != expected.ProcessId || _takeoverEpoch.StartTicksUtc != expected.StartTicksUtc)
+                return new CommandResult { Status = "failed", ErrorCode = "stale_epoch", Message = "原任务进程身份已改变，未执行接管" };
             var ticket = _takeoverTicket;
             if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { takeoverTicket = ticket,
+                expectedExecutionInstanceId = expected.Active?.InstanceId.ToString("N"),
+                expectedStateRevision = expected.Active?.StateRevision,
                 bgiEpoch = new { processId = _takeoverEpoch?.ProcessId, startTicksUtc = _takeoverEpoch?.StartTicksUtc } });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
             if (response.Success)
@@ -1945,11 +1963,23 @@ public class CommandExecutor
                 bool? liveTask = null;
                 bool? quiesceConfirmed = null;
                 string? confirmedTicket = null;
+                var targetConfirmed = false;
                 if (!string.IsNullOrEmpty(response.Data))
                 {
                     try
                     {
                         var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+                        if (data.TryGetProperty("expectedExecutionInstanceId", out var expectedId)
+                            && data.TryGetProperty("expectedStateRevision", out var expectedRevision))
+                        {
+                            targetConfirmed = expected.Active is { } active
+                                ? expectedId.ValueKind == System.Text.Json.JsonValueKind.String
+                                  && Guid.TryParse(expectedId.GetString(), out var parsedId) && parsedId == active.InstanceId
+                                  && expectedRevision.ValueKind == System.Text.Json.JsonValueKind.Number
+                                  && expectedRevision.TryGetInt64(out var parsedRevision) && parsedRevision == active.StateRevision
+                                : expectedId.ValueKind == System.Text.Json.JsonValueKind.Null
+                                  && expectedRevision.ValueKind == System.Text.Json.JsonValueKind.Null;
+                        }
                         if (data.TryGetProperty("takeoverTicket", out var ticketEl)) confirmedTicket = ticketEl.GetString();
                         if (data.TryGetProperty("liveTask", out var ltEl)
                             && ltEl.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
@@ -1964,16 +1994,12 @@ public class CommandExecutor
                     }
                     catch
                     {
-                        // Data 解析失败不影响：按老 BGI 语义继续（字段未知 = 不告警不升级）
+                        // 缺失或错误的定向回执不构成接管确认。
                     }
                 }
 
-                // [A6 有界退出契约 ADR-2026-09-16] quiesceConfirmed=false = 30s 槽位未确认释放，
-                // 旧任务可能卡死：响亮告警 + 按既有策略升级（进程仲裁器受控重启 BGI，
-                // 沿用"有意杀死豁免崩溃误判"语义）。重启成功后槽位必然空闲，按成功返回让
-                // 调用方（批次/按键）继续后续流程；被中断任务的内存恢复点随重启丢失，
-                // 策略收尾的 Resume 分支会因 HasContext=false 自动退化为停止（既有守卫）。
-                if (quiesceConfirmed != true || confirmedTicket != ticket)
+                // 退出证明、票据与目标必须同时匹配；未确认时保留责任，不强杀或改认后继根。
+                if (quiesceConfirmed != true || confirmedTicket != ticket || !targetConfirmed)
                 {
                     NotifyLoud("接管未完成", "BGI 未确认原流程退出，本次启动已中止，不自动重启 BGI。");
                     return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "原流程未退出或对端缺少可靠接管能力" };
@@ -1990,6 +2016,9 @@ public class CommandExecutor
                 // 返回包含被中断任务的上下文信息（给调用方日志用）
                 return new CommandResult { Status = "success", Message = $"任务已中断", RawData = response.Data };
             }
+            if (createdTicket && response.ErrorCode is "not_current" or "execution_identity_unavailable"
+                or "invalid_request" or "capability_required" or "manual_stop_cooldown" or "suspend_busy")
+                ClearTicket(ticket); // BGI在任何接管副作用之前明确拒绝了此新票据。
             if (response.ErrorCode is "stale_epoch" or "stale_ticket") ClearTicket(ticket);
             return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = $"task.suspend 失败: {response.ErrorMessage}" };
         }
@@ -2016,9 +2045,12 @@ public class CommandExecutor
 
     /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
     public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null,
-        IReadOnlyDictionary<string, object?>? planContinuation = null)
+        IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default)
     {
+        if (!cancel && cancellationToken.IsCancellationRequested)
+            return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未发送恢复请求" };
         var ticket = _takeoverTicket;
+        var receiptEpoch = _takeoverEpoch ?? _externalClientProvider?.Invoke()?.ServerEpoch;
         if (expectedTicket is not null && !string.Equals(ticket, expectedTicket, StringComparison.Ordinal))
             return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
         try
@@ -2029,11 +2061,21 @@ public class CommandExecutor
             if (blocked != null) return blocked;
             if (expectedTicket is not null && !string.Equals(_takeoverTicket, expectedTicket, StringComparison.Ordinal))
                 return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
+            if (!cancel && cancellationToken.IsCancellationRequested)
+                return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未发送恢复请求" };
             var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket, planContinuation });
             var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
             if (!response.Success)
             {
-                if (response.ErrorCode is "stale_ticket" or "stale_context") ClearTicket(ticket);
+                if (response.ErrorCode is "stale_ticket" or "stale_context")
+                {
+                    var heldEpoch = _takeoverEpoch;
+                    if (heldEpoch != null && await ConfirmTakeoverRevokedAsync(heldEpoch, false, CancellationToken.None))
+                    {
+                        ClearTicket(ticket);
+                        return new CommandResult { Status = "success", ErrorCode = "already_revoked", Message = "原接管已由停止撤销，已确认当前空闲且没有恢复现场" };
+                    }
+                }
                 return new CommandResult { Status = "failed", ErrorCode = response.ErrorCode, Message = response.ErrorMessage };
             }
             var status = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data ?? "{}");
@@ -2047,6 +2089,7 @@ public class CommandExecutor
             ClearTicket(ticket);
             return new CommandResult { Status = "success", ErrorCode = !cancel && noContext ? "no_context" : null,
                 JobId = resumedJobId,
+                TargetProcessId = receiptEpoch?.ProcessId, TargetStartTicksUtc = receiptEpoch?.StartTicksUtc.ToString(),
                 Message = cancel ? "已释放执行权，不恢复原任务" : noContext ? "无原任务需要恢复" : "恢复请求已确认受理" };
         }
         catch (Exception ex)
@@ -2067,6 +2110,67 @@ public class CommandExecutor
         if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
     }
 
+    internal async Task<bool> ConfirmTakeoverRevokedAsync(BgiEpoch expectedEpoch,
+        bool ownedExecutionExited, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var response = await SendIpcPreferredAsync("task.status", null, 1000).WaitAsync(ct);
+        if (response is not { Success: true } || string.IsNullOrWhiteSpace(response.Data)
+            || !TryParseEpoch(response.Data, out var pid, out var ticks)
+            || pid != expectedEpoch.ProcessId || ticks != expectedEpoch.StartTicksUtc) return false;
+        try
+        {
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+            return data.TryGetProperty("takeoverActive", out var lease) && lease.ValueKind == System.Text.Json.JsonValueKind.False
+                && data.TryGetProperty("hasSuspendedTaskContext", out var context) && context.ValueKind == System.Text.Json.JsonValueKind.False
+                && (ownedExecutionExited || data.TryGetProperty("executionSlotOccupied", out var slot)
+                    && slot.ValueKind == System.Text.Json.JsonValueKind.False);
+        }
+        catch (System.Text.Json.JsonException) { return false; }
+    }
+
+    internal async Task<bool> CancelHoeingPolicyExecutionAsync(HoeingPolicyExecution execution)
+    {
+        static bool SameJob(string? left, string? right) => Guid.TryParse(left, out var a)
+            && Guid.TryParse(right, out var b) && a == b;
+        try
+        {
+            if (execution.RegisteredJob)
+            {
+                var ext = _externalClientProvider?.Invoke();
+                if (ext is not { State: BgiExternalLinkState.Ready }
+                    || WorkflowStopAuthority.Epoch(ext.ServerEpoch) != WorkflowStopAuthority.Epoch(execution.Epoch)) return false;
+                using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                await ext.SendCommandAsync(BgiExternalClient.ExternalOperations.TaskCancel,
+                    new { taskHandle = execution.JobId, bgiEpoch = new { processId = execution.Epoch.ProcessId,
+                        startTicksUtc = execution.Epoch.StartTicksUtc } }, cancellationToken: budget.Token).ConfigureAwait(false);
+                while (!budget.IsCancellationRequested)
+                {
+                    if (WorkflowStopAuthority.Epoch(ext.ServerEpoch) != WorkflowStopAuthority.Epoch(execution.Epoch)) return false;
+                    var (_, job) = await ext.QueryJobStatusAsync(execution.JobId, budget.Token).ConfigureAwait(false);
+                    if (job is not null && SameJob(job.JobId, execution.JobId)
+                        && WorkflowStopAuthority.Epoch(job.Epoch) == WorkflowStopAuthority.Epoch(execution.Epoch)
+                        && BgiJobTerminalPolling.IsTerminal(job.State) && job.ExecutionExitConfirmed) return true;
+                    await Task.Delay(100, budget.Token).ConfigureAwait(false);
+                }
+                return false;
+            }
+            var root = execution.NativeRoot ?? await CaptureExecutionIdentityAsync().ConfigureAwait(false);
+            if (root is null || !SameJob(root.Value.JobId?.ToString("N"), execution.JobId)
+                || root.Value.ProcessId != execution.Epoch.ProcessId || root.Value.StartTicksUtc != execution.Epoch.StartTicksUtc
+                || root.Value.StateRevision is not > 0) return false;
+            var payload = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                executionInstanceId = root.Value.InstanceId.ToString("N"), executionStateRevision = root.Value.StateRevision,
+                bgiEpoch = new { processId = execution.Epoch.ProcessId, startTicksUtc = execution.Epoch.StartTicksUtc }
+            });
+            // The exact root and revision are mandatory: never fall back to a global stop.
+            await SendIpcPreferredAsync("task.stop", payload, 3000).ConfigureAwait(false);
+            return await WaitExecutionExitAsync(root.Value, TimeSpan.FromSeconds(12), TimeSpan.FromMilliseconds(100)).ConfigureAwait(false);
+        }
+        catch { return false; }
+    }
+
     /// <summary>
     /// [另案②] task_busy 有限重试：BGI 端恢复/释放改为"确认起步才消费上下文"后，
     /// 槽位被占/派发未起步会回 task_busy 且保留上下文（不再是静默丢失）。这里 10s×3 有限重试；
@@ -2077,7 +2181,7 @@ public class CommandExecutor
     /// </summary>
     private async Task<CommandResult> ExecuteResumeWithBusyRetryAsync(
         Action<string>? log, string? expectedTicket = null, bool cancel = false,
-        IReadOnlyDictionary<string, object?>? planContinuation = null)
+        IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default)
     {
         const int maxAttempts = 3;
         var busySeen = false;
@@ -2086,7 +2190,7 @@ public class CommandExecutor
             for (var attempt = 1; ; attempt++)
             {
                 var result = await ExecuteResumeAsync(cancel: cancel, expectedTicket: expectedTicket,
-                    planContinuation: planContinuation);
+                    planContinuation: planContinuation, cancellationToken: cancellationToken);
                 if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
                 {
                     return result;
@@ -2100,7 +2204,9 @@ public class CommandExecutor
                 log?.Invoke(cancel
                     ? $"[任务冲突策略] BGI 任务槽位忙/释放未完成，10 秒后重试清理执行权（第 {attempt}/{maxAttempts - 1} 次）..."
                     : $"[任务冲突策略] BGI 任务槽位忙/恢复未起步，10 秒后重试恢复（第 {attempt}/{maxAttempts - 1} 次）...");
-                await Task.Delay(TimeSpan.FromSeconds(10));
+                try { await Task.Delay(TimeSpan.FromSeconds(10), cancel ? CancellationToken.None : cancellationToken); }
+                catch (OperationCanceledException)
+                { return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未继续重试恢复" }; }
             }
         }
         finally
@@ -2115,15 +2221,15 @@ public class CommandExecutor
 
     /// <summary>任务中心专用：沿原 BGI 恢复现场起步并保留新作业句柄供原计划观察。</summary>
     internal async Task<CommandResult> ExecutePlanResumeAsync(string ticket,
-        IReadOnlyDictionary<string, object?> continuation, Action<string>? log = null)
+        IReadOnlyDictionary<string, object?> continuation, Action<string>? log = null, CancellationToken cancellationToken = default)
     {
         var result = await ExecuteResumeWithBusyRetryAsync(log ?? _log, ticket,
-            planContinuation: continuation);
+            planContinuation: continuation, cancellationToken: cancellationToken);
         if (result.Status == "success" || result.ErrorCode is not null
             || !string.Equals(_takeoverTicket, ticket, StringComparison.Ordinal)) return result;
         // 回执在传输中丢失时，BGI 同进程按 ticket 返回原 attemptId；不得分配第二个恢复身份。
         return await ExecuteResumeWithBusyRetryAsync(log ?? _log, ticket,
-            planContinuation: continuation);
+            planContinuation: continuation, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -2493,7 +2599,8 @@ public class CommandExecutor
                 return default;
             var identity = available.GetBoolean() ? ParseExecutionIdentity(resp.Data) : null;
             if (available.GetBoolean() && identity is null) return default;
-            return new ExecutionBoundarySnapshot(true, occupied.GetBoolean(), processId, startTicksUtc, identity);
+            var hoeing = data.TryGetProperty("autoHoeingRunning", out var hoeingEl) && hoeingEl.ValueKind == System.Text.Json.JsonValueKind.True;
+            return new ExecutionBoundarySnapshot(true, occupied.GetBoolean(), processId, startTicksUtc, identity, hoeing);
         }
         catch (System.Text.Json.JsonException) { return default; }
     }
@@ -2528,7 +2635,9 @@ public class CommandExecutor
             if (data.TryGetProperty("executionJobId", out var jobEl)
                 && jobEl.ValueKind == System.Text.Json.JsonValueKind.String
                 && Guid.TryParse(jobEl.GetString(), out var parsedJob)) jobId = parsedJob;
-            return new ExecutionIdentity(instanceId, processId, startTicks, runId, jobId);
+            var revision = data.TryGetProperty("executionStateRevision", out var revisionEl)
+                && revisionEl.ValueKind == System.Text.Json.JsonValueKind.Number && revisionEl.TryGetInt64(out var value) ? value : 0;
+            return new ExecutionIdentity(instanceId, processId, startTicks, runId, jobId, revision);
         }
         catch (System.Text.Json.JsonException)
         {
@@ -3349,133 +3458,80 @@ public class CommandExecutor
     /// RunSpecified：resume(cancel:true) 后校验并启动指定配置组/一条龙；名称为空或不存在则日志报错退化为停止。
     /// 供按键抢占闭环（CommandExecutor 内部）与上线锄地两条恢复触发路径（MainViewModel）复用。
     /// </summary>
-    public async Task ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null, string? expectedTicket = null)
+    public async Task<CommandResult> ApplyPolicyTeardownAsync(TaskConflictPolicySettings policy, string executedDesc, bool userCancelled, Action<string>? log = null, string? expectedTicket = null,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? specifiedStartAdmission = null,
+        Func<Task>? beforeSpecifiedStart = null, CancellationToken cancellationToken = default,
+        Func<CommandResult, bool, Task>? executionAccepted = null)
     {
         log ??= _log;
-
-        if (userCancelled)
+        if (userCancelled || cancellationToken.IsCancellationRequested || policy.Policy == TaskConflictPolicy.Stop)
         {
-            log?.Invoke($"[任务冲突策略] {executedDesc}被用户取消（F11），优先于配置策略：清除中断上下文，不执行后续动作");
             var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
-            if (release.Status != "success")
-                log?.Invoke($"[任务冲突策略] 清除中断上下文失败，执行权仍待释放: {release.Message}");
-            return;
+            log?.Invoke(release.Status == "success"
+                ? $"[任务冲突策略] {executedDesc}结束，已释放执行权，不恢复原任务"
+                : $"[任务冲突策略] 执行权释放未确认：{release.Message}");
+            return release;
         }
-
-        switch (policy.Policy)
+        if (policy.Policy == TaskConflictPolicy.Resume)
         {
-            case TaskConflictPolicy.Resume:
-            {
-                // WasCancelled/丢上下文守卫：BGI 侧用户刚 F11 时 suspend 不保存上下文（BGI 既有行为），
-                // 或 BGI 曾被重启导致内存上下文丢失，此时"恢复"必然失败，退化为停止
-                var status = await QueryTaskStatusAsync();
-                if (status is null)
-                {
-                    log?.Invoke("[任务冲突策略] BGI 状态未确认，保留中断上下文，暂不恢复");
-                    return;
-                }
-                if (status is { HasContext: false })
-                {
-                    log?.Invoke("[任务冲突策略] 无原任务需要恢复，释放本批次执行权");
-                    var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
-                    if (release.Status != "success")
-                        log?.Invoke($"[任务冲突策略] 释放本批次执行权失败: {release.Message}");
-                    return;
-                }
-                // [兜底 2026-09-08] 被中断的是「联机锄地上线」信号任务本身：恢复会重复触发上线（无限循环），
-                // 退化为停止并清上下文。主修复在 BGI 端（suspend 不保存信号任务上下文），这里按名匹配只做最后一道防线。
-                if (IsOnlineSignalContext(status))
-                {
-                    log?.Invoke("[任务冲突策略] 被中断的是上线触发任务本身，恢复会重复触发上线，退化为停止（清除中断上下文）");
-                    var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
-                    if (release.Status != "success")
-                        log?.Invoke($"[任务冲突策略] 清除上线触发现场失败: {release.Message}");
-                    return;
-                }
-                // [另案②] task_busy（槽位占用/派发未起步，BGI 已保留上下文）走 10s×3 有限重试；
-                // 其他失败（无上下文/传输失败/重试耗尽）直接响亮失败
-                var resumeResult = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket);
-                if (resumeResult.Status == "success")
-                {
-                    log?.Invoke(resumeResult.ErrorCode == "no_context"
-                        ? "[任务冲突策略] 无原任务需要恢复" : "[任务冲突策略] 原任务恢复尝试已确认受理");
-                }
-                else
-                {
-                    log?.Invoke($"[任务冲突策略] 恢复原任务失败: {resumeResult.Message}；恢复上下文只存内存，BGI 被重启则无法恢复，请手动在 BGI 中重新启动调度器/一条龙");
-                }
-                break;
-            }
-            case TaskConflictPolicy.Stop:
-            {
-                var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
-                if (release.Status == "success")
-                    log?.Invoke("[任务冲突策略] 已按策略清除中断上下文，不恢复原任务（执行完停止）");
-                else
-                    log?.Invoke($"[任务冲突策略] 清除中断上下文失败，未确认释放执行权: {release.Message}");
-                break;
-            }
-            case TaskConflictPolicy.RunSpecified:
-            {
-                var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
-                if (release.Status != "success")
-                {
-                    log?.Invoke($"[任务冲突策略] 执行权未确认释放，不启动指定任务: {release.Message}");
-                    return;
-                }
-                if (string.IsNullOrWhiteSpace(policy.SpecifiedTaskName))
-                {
-                    log?.Invoke("[任务冲突策略] 策略为「不恢复并执行指定任务」但未配置指定任务名称，退化为停止");
-                    return;
-                }
-                await StartSpecifiedTaskAsync(policy, log);
-                break;
-            }
+            var status = await QueryTaskStatusAsync();
+            if (status is null)
+                return new CommandResult { Status = "failed", ErrorCode = "result_unknown", Message = "BGI 状态未确认，保留原恢复责任" };
+            var cancel = cancellationToken.IsCancellationRequested || !status.Value.HasContext || IsOnlineSignalContext(status);
+            var resume = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: cancel,
+                cancellationToken: cancellationToken);
+            if (!cancel && resume.Status == "success" && resume.JobId is not null && executionAccepted is not null)
+                await executionAccepted(resume, false).ConfigureAwait(false);
+            log?.Invoke(resume.Status == "success"
+                ? cancel ? "[任务冲突策略] 无可恢复原任务，执行权已释放" : "[任务冲突策略] 原任务恢复已确认受理"
+                : "[任务冲突策略] 原任务处理未确认：" + resume.Message);
+            return resume;
         }
+        if (policy.Policy == TaskConflictPolicy.RunSpecified)
+        {
+            var release = await ExecuteResumeWithBusyRetryAsync(log, expectedTicket, cancel: true);
+            if (release.Status != "success") return release;
+            if (cancellationToken.IsCancellationRequested)
+                return new CommandResult { Status = "success", Message = "本批已取消，已释放原上下文且未启动指定任务" };
+            return await StartSpecifiedTaskAsync(policy, log, specifiedStartAdmission, beforeSpecifiedStart,
+                cancellationToken, executionAccepted);
+        }
+        return new CommandResult { Status = "failed", ErrorCode = "invalid_policy", Message = "任务收尾策略无效" };
     }
 
-    /// <summary>
-    /// [任务冲突策略] RunSpecified 收尾：校验指定配置组/一条龙存在后，经 R5 准入和带编号队列启动。
-    /// 名称不存在（或 config.list 查询失败）则日志报错退化为停止；准入未接线时 fail-closed，不回退 v2 task.start。
-    /// </summary>
-    private async Task StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log)
+    /// <summary>校验完成后指定任务，并传播准入/执行结果，不能把拒绝记为完整完成。</summary>
+    internal Task<CommandResult> StartSpecifiedAfterReleasedAsync(TaskConflictPolicySettings policy,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? admission,
+        Func<Task>? beforeStart, CancellationToken cancellationToken, Func<CommandResult, bool, Task> executionAccepted)
+        => StartSpecifiedTaskAsync(policy, _log, admission, beforeStart, cancellationToken, executionAccepted);
+
+    private async Task<CommandResult> StartSpecifiedTaskAsync(TaskConflictPolicySettings policy, Action<string>? log,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? admission, Func<Task>? beforeStart,
+        CancellationToken cancellationToken = default, Func<CommandResult, bool, Task>? executionAccepted = null)
     {
         var isOneDragon = policy.SpecifiedTaskType == "onedragon";
-        var typeDesc = isOneDragon ? "一条龙" : "配置组";
-        var name = policy.SpecifiedTaskName;
-
-        // 执行时校验存在性（设置里是自由文本输入，可能填错或 BGI 侧已删除）
+        var name = policy.SpecifiedTaskName?.Trim() ?? "";
+        if (name.Length == 0)
+            return new CommandResult { Status = "failed", ErrorCode = "specified_task_missing", Message = "完成后指定任务名称为空" };
         try
         {
-            var listResp = await SendIpcPreferredAsync("config.list", null, 3000);
-            if (listResp is { Success: true } && !string.IsNullOrEmpty(listResp.Data))
-            {
-                var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(listResp.Data);
-                var listKey = isOneDragon ? "oneClickConfigs" : "configGroups";
-                var exists = data.TryGetProperty(listKey, out var arr)
-                    && arr.ValueKind == System.Text.Json.JsonValueKind.Array
-                    && arr.EnumerateArray().Any(e => e.ValueKind == System.Text.Json.JsonValueKind.String && e.GetString() == name);
-                if (!exists)
-                {
-                    log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」在 BGI 中不存在，退化为停止（请在设置页检查指定任务配置）");
-                    return;
-                }
-            }
-            else
-            {
-                log?.Invoke($"[任务冲突策略] 无法读取 BGI 配置列表，无法校验指定{typeDesc}「{name}」，退化为停止");
-                return;
-            }
+            var response = await SendIpcPreferredAsync("config.list", null, 3000);
+            if (response is not { Success: true, Data: not null })
+                return new CommandResult { Status = "failed", ErrorCode = "config_unavailable", Message = "无法校验完成后指定任务" };
+            var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(response.Data);
+            var key = isOneDragon ? "oneClickConfigs" : "configGroups";
+            if (!data.TryGetProperty(key, out var names) || names.ValueKind != System.Text.Json.JsonValueKind.Array
+                || !names.EnumerateArray().Any(item => item.ValueKind == System.Text.Json.JsonValueKind.String && item.GetString() == name))
+                return new CommandResult { Status = "failed", ErrorCode = "specified_task_missing", Message = "完成后指定任务不存在：" + name };
         }
         catch (Exception ex)
-        {
-            log?.Invoke($"[任务冲突策略] 校验指定任务失败: {ex.Message}，退化为停止");
-            return;
-        }
-
-        log?.Invoke($"[任务冲突策略] 按策略启动指定{typeDesc}「{name}」");
-        var startResult = await StartSpecifiedTaskViaAdmissionAsync(policy).ConfigureAwait(false);
-        log?.Invoke($"[任务冲突策略] 指定{typeDesc}「{name}」: {startResult.Message}");
+        { return new CommandResult { Status = "failed", ErrorCode = "config_unavailable", Message = "完成后指定任务校验未确认：" + ex.Message }; }
+        if (cancellationToken.IsCancellationRequested)
+            return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未启动指定任务" };
+        if (beforeStart != null) await beforeStart().ConfigureAwait(false);
+        var result = await StartSpecifiedTaskViaAdmissionAsync(policy, admission, cancellationToken, executionAccepted).ConfigureAwait(false);
+        log?.Invoke("[任务冲突策略] 完成后指定任务：" + result.Message);
+        return result;
     }
 
     /// <summary>
@@ -3483,10 +3539,13 @@ public class CommandExecutor
     /// 并且 earlyStart 任何异常/通道不可用都形成拒绝或 Unknown，绝不落到无编号 core 直启。
     /// internal 供适配器边界夹具验证身份和排序字段，不访问真实 BGI。
     /// </summary>
-    internal Task<CommandResult> StartSpecifiedTaskViaAdmissionAsync(TaskConflictPolicySettings policy)
+    internal Task<CommandResult> StartSpecifiedTaskViaAdmissionAsync(TaskConflictPolicySettings policy,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? admission = null,
+        CancellationToken cancellationToken = default, Func<CommandResult, bool, Task>? executionAccepted = null)
     {
         ArgumentNullException.ThrowIfNull(policy);
-        if (_externalStartAdmission is null)
+        admission ??= _externalStartAdmission;
+        if (admission is null)
         {
             return Task.FromResult(new CommandResult
             {
@@ -3510,7 +3569,7 @@ public class CommandExecutor
 
         var workflowId = (isOneDragon ? "onedragon:" : "group:") + name;
         var target = $"指定{(isOneDragon ? "一条龙" : "配置组")}「{name}」";
-        return StartViaAdmissionAsync(_externalStartAdmission,
+        return StartViaAdmissionAsync(admission,
             ns: "system",
             workflowId: workflowId,
             trigger: "system:post-hoeing:{requestIdentity}",
@@ -3518,18 +3577,31 @@ public class CommandExecutor
             target: target,
             core: () => throw new InvalidOperationException("S4b 必须使用带编号队列通道；禁止进入 core 直启。"),
             earlyStart: async (sendToken, hostToken) =>
-                await TryStartViaQueueEarlyForAdmissionAsync(
+            {
+                if (cancellationToken.IsCancellationRequested || sendToken.IsCancellationRequested)
+                    return (ExternalStartExecution.RejectedWith("start_cancelled", evidenceSource: "adapter:cancelled_before_send"), null);
+                var epoch = _externalClientProvider?.Invoke()?.ServerEpoch;
+                var early = await TryStartViaQueueEarlyForAdmissionAsync(
                     isOneDragon ? null : name,
                     isOneDragon ? name : null,
                     startFromIndex: 0,
                     generation: 0,
                     batchGroupNames: null,
                     startFromTaskId: null,
-                    sendToken,
+                    CancellationToken.None, // Once sent, retain the early receipt even if this batch is stopped.
                     hostToken).ConfigureAwait(false)
                 ?? (ExternalStartExecution.RejectedWith("numbered_channel_required",
-                        evidenceSource: "adapter:queue_required"), null),
+                        evidenceSource: "adapter:queue_required"), null);
+                if (early.Early.Kind == ExternalStartExecutionKind.Accepted && early.Early.JobId is { } job
+                    && executionAccepted is not null)
+                    await executionAccepted(new CommandResult
+                    {
+                        Status = "success", JobId = job, TargetProcessId = epoch?.ProcessId,
+                        TargetStartTicksUtc = epoch?.StartTicksUtc.ToString()
+                    }, true).ConfigureAwait(false);
+                return early;
+            },
             tier: ArbitrationTier.Plan,
-            priority: policy.SpecifiedTaskPriority);
+            priority: policy.SpecifiedTaskPriority, cancellationToken: cancellationToken);
     }
 }

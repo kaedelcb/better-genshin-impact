@@ -8,6 +8,7 @@ namespace BgiCoordinatorServer.Gateway;
 /// </summary>
 public static class GatewayProtocol
 {
+    public const string HoeingStartCapability = "hoeing.start.v2";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
 
@@ -16,7 +17,7 @@ public static class GatewayProtocol
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
     public static readonly string[] ServerCapabilities =
-        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability];
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability];
 
     public static class MessageTypes
     {
@@ -141,8 +142,11 @@ public static class GatewayProtocol
         public const string ControlSendCommand = "control.sendCommand";
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";
+        public const string ControlBatchBegin = "control.batch.begin";
+        public const string ControlBatchCurrent = "control.batch.current";
         public const string ControlBatchUpdate = "control.batch.update";
         public const string ControlBatchReset = "control.batch.reset";
+        public const string ControlBatchResetCleaned = "control.batch.resetCleaned";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
 
@@ -331,6 +335,8 @@ public static class GatewayProtocol
     /// </summary>
     public static class Events
     {
+        public const string ControlBatchStart = "control.batch.start";
+        public const string ControlBatchState = "control.batch.state";
         /// <summary>专用同步门禁失败，只取消本次门禁，不触发协同中止。</summary>
         public const string SyncBarrierFailed = "sync.barrierFailed";
 

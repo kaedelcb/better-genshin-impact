@@ -1200,8 +1200,13 @@ public partial class MainViewModel : INotifyPropertyChanged
                 AddLog("[JS进度探针] 脚本进度文本已恢复");
         }
 
+        OnlineHoeingBatch? visibleBatch;
+        lock (_batchGate) visibleBatch = _activeBatch;
         var status = new ControlStatus
         {
+            HoeingBatchId = visibleBatch?.BatchId ?? _lastHoeingBatchId,
+            HoeingStartPhase = visibleBatch?.Phase ?? _lastHoeingStartPhase,
+            HoeingStartMessage = visibleBatch?.Message ?? _lastHoeingStartMessage,
             PlayerUid = _config!.PlayerUid,
             PlayerName = _config.PlayerName,
             BgiStatus = _config?.ObserverMode == true ? "observer" : (_processMonitor?.IsBgiRunning == true ? "running" : "stopped"),
@@ -1460,6 +1465,18 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
 
         // [P1] 状态跃迁（置 Armed）、gen 自增+写盘、清零 AllReady 执行守卫，全部在状态机内完成
+        if (!_signalRClient.SupportsCoordinatedStart)
+        {
+            AddLog("上线锄地未受理：服务端不支持统一开始协议，请更新配套服务端");
+            return false;
+        }
+        bool activeHoeing;
+        lock (_batchGate) activeHoeing = _activeBatch?.IsAlive == true;
+        if (activeHoeing)
+        {
+            AddLog("已有联机批次正在执行或清理，本次普通上线不会重新开锄");
+            return true;
+        }
         var gen = _intentLifecycle.RaiseLocalIntent(mode);
         AddLog($"已上线（{mode}）");
         // 立即上报服务端，让卡片实时更新（不等下一次 10 秒轮询）
@@ -2044,10 +2061,6 @@ public partial class MainViewModel : INotifyPropertyChanged
         var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认停止 BGI", "确定要停止 BGI 吗？");
         if (!confirmed) return; // 用户取消
 
-        // [P1b] 用户手动停止 = 取消当前 AllReady 批次（原共享 bool _isAllReadySequenceCancelled 已并入批次 CTS），
-        // 后台依次执行序列在下一次迭代检查点退出，剩余配置组不再执行
-        lock (_batchGate) { _activeBatch?.Cancel(); }
-
         if (broadcastAll)
         {
             // 缓存问题：不在线成员收不到广播命令，弹窗提醒（缓存数据可能过时）
@@ -2065,7 +2078,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                     Sender = _config?.PlayerName ?? "",
                     SenderUid = _config?.PlayerUid ?? "",
                     Target = ["*"],
-                    CommandId = "remote_" + DateTime.Now.Ticks
+                    CommandId = "remote_" + DateTime.Now.Ticks,
+                    Params = FreezeStopTargets(Members.Where(m => m.Online).Select(m => m.PlayerUid)
+                        .Append(_config?.PlayerUid ?? ""))
                 };
                 AddLog("已发送停止 BGI 命令给所有成员");
                 _ = _signalRClient.SendRemoteCommandAsync(cmd);
@@ -2476,7 +2491,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         var expectedGeneration = 0;
         lock (_batchGate) expectedGeneration = _activeBatch?.Generation ?? 0;
         expectedGeneration = Math.Max(expectedGeneration, _intentLifecycle.LastProcessedAllReadyGeneration);
-        string expectedBatchId = "";
+        string expectedBatchId;
+        lock (_batchGate) expectedBatchId = _activeBatch?.Start?.BatchId ?? targetMember?.HoeingBatchId ?? "";
         Interlocked.Exchange(ref _resetFenceGeneration, expectedGeneration);
         var serverResetGeneration = expectedGeneration;
         var serverResetConfirmed = false;
@@ -2486,13 +2502,20 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             try
             {
+                var current = await _signalRClient.GetCurrentCoordinatedBatchAsync();
+                if (current != null) expectedBatchId = current.BatchId;
                 var reset = await _signalRClient.ResetCoordinatedBatchAsync(
                     resetId, requestedTargets,
-                    expectedGeneration: null,
-                    expectedBatchId: null);
+                    expectedGeneration: current?.Generation,
+                    expectedBatchId: current?.BatchId);
+                if (reset.Reason == "stale_reset")
+                {
+                    AddLog("[状态重置] 当前批次已改变，旧重置请求未执行；当前任务保持运行");
+                    return;
+                }
                 serverResetConfirmed = true;
                 serverResetGeneration = Math.Max(serverResetGeneration, reset.Generation);
-                expectedBatchId = reset.BatchId;
+                if (reset.Found) expectedBatchId = reset.BatchId;
                 Interlocked.Exchange(ref _resetFenceGeneration, serverResetGeneration);
                 var missing = reset.MissingRegistrationUids.Count == 0
                     ? "无"
@@ -2533,7 +2556,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 执行模式先本地全局复位（包含单机任务、BGI 队列和受控重建）；遥控器把自己交给同 UID 执行端。
             var localResetSucceeded = !isSelf || _config.ObserverMode == true;
             if (isSelf && _config.ObserverMode != true)
-                localResetSucceeded = (await ResetLocalExecutionStateAsync()).Status == "success";
+                localResetSucceeded = (await ResetLocalExecutionStateAsync(resetId, expectedBatchId)).Status == "success";
             if (_signalRClient != null)
             {
                 var missing = await SendAndWaitResetAcksAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId);
@@ -2567,7 +2590,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
             else
             {
-                await ResetLocalExecutionStateAsync();
+                await ResetLocalExecutionStateAsync(resetId, expectedBatchId);
             }
         }
         else if (_signalRClient != null)
@@ -2961,7 +2984,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 本机“重置状态”收口：取消当前批次、清理上线边沿，再按 BGI 纪元安全释放接管权。
     /// 释放失败时保留票据并把不确定性显示出来，禁止静默当作成功。
     /// </summary>
-    private async Task<CommandResult> ResetLocalExecutionStateAsync()
+    private async Task<CommandResult> ResetLocalExecutionStateAsync(string? resetId = null, string? expectedBatchId = null)
     {
         if (!await _localResetGate.WaitAsync(0))
             return new CommandResult { Status = "failed", ErrorCode = "reset_in_progress", Message = "本机已有一轮状态重置正在执行" };
@@ -2975,8 +2998,14 @@ public partial class MainViewModel : INotifyPropertyChanged
                 return unavailable;
             }
 
-            // 确认重置后立即取消旧批次并冻结任务中心发送，再等待它退出。
-            lock (_batchGate) { _activeBatch?.Cancel(); }
+            // 重置与已观察批次绑定；迟到重置不能取消后继批次。
+            lock (_batchGate)
+            {
+                if (_activeBatch is { Start: not null } current
+                    && !string.Equals(current.BatchId, expectedBatchId, StringComparison.Ordinal))
+                    return new CommandResult { Status = "failed", ErrorCode = "stale_reset", Message = "批次身份已改变，未影响当前任务" };
+                _activeBatch?.Cancel();
+            }
             var resetHost = TaskCenterHost;
             using (var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
                 await resetHost.BeginManualResetAsync(gateBudget.Token);
@@ -3003,6 +3032,50 @@ public partial class MainViewModel : INotifyPropertyChanged
                 result.Status = "failed";
                 result.ErrorCode = "task_center_gate_not_open";
                 result.Message = "BGI 已复位，但任务中心仍有驱动或未停止的活动运行，发送闸门保持关闭";
+            }
+            if (result.Status == "success" && batchToWait?.RunTask is { IsCompleted: false } unfinished)
+            {
+                try { await unfinished.WaitAsync(TimeSpan.FromSeconds(20)); }
+                catch (Exception ex)
+                {
+                    result.Status = "failed"; result.ErrorCode = "old_batch_callback_pending";
+                    result.Message = "BGI 已复位，但旧批次回调尚未退出：" + ex.Message;
+                }
+            }
+            if (result.Status == "success" && !string.IsNullOrWhiteSpace(resetId)
+                && !string.IsNullOrWhiteSpace(expectedBatchId) && _signalRClient?.SupportsCoordinatedStart == true)
+            {
+                try
+                {
+                    await _signalRClient.ConfirmCoordinatedResetCleanedAsync(resetId, expectedBatchId);
+                }
+                catch (Exception ex)
+                {
+                    // 服务器明确无此批次（例如已重启）时不冒认其他批次，也不保留假的旧权限。
+                    var current = await _signalRClient.GetCurrentCoordinatedBatchAsync();
+                    if (current != null)
+                    {
+                        result.Status = "failed"; result.ErrorCode = "reset_cleanup_unconfirmed";
+                        result.Message = "本机已复位，服务端同批清理未确认：" + ex.Message;
+                    }
+                }
+            }
+            if (result.Status == "success")
+            {
+                if (batchToWait != null)
+                {
+                    batchToWait.CleanupConfirmed = true;
+                    batchToWait.MarkSettled();
+                    _intentLifecycle.FinishCoordinatedBatch(batchToWait.BatchId, "人工重置已完成");
+                    lock (_batchGate)
+                    {
+                        _settledHoeingBatchIds.Add(batchToWait.BatchId);
+                        if (ReferenceEquals(_activeBatch, batchToWait)) _activeBatch = null;
+                    }
+                }
+                _lastHoeingBatchId = expectedBatchId;
+                _lastHoeingStartPhase = "cancelled";
+                _lastHoeingStartMessage = "联机状态已重置，可重新开始";
             }
             AddLog(result.Status == "success"
                 ? $"[状态重置] 本机执行状态已收口：{result.Message}"
@@ -4825,6 +4898,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.TaskRunning = np.TaskRunning;
                         existing.TaskStatusAvailable = np.TaskStatusAvailable;
                         existing.TaskPaused = np.TaskPaused;
+                        existing.HoeingBatchId = np.HoeingBatchId;
+                        existing.HoeingStartPhase = np.HoeingStartPhase;
+                        existing.HoeingStartMessage = np.HoeingStartMessage;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
                         existing.CurrentRouteDisplay = np.CurrentRouteDisplay;
@@ -4863,6 +4939,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                         TaskRunning = np.TaskRunning,
                         TaskStatusAvailable = np.TaskStatusAvailable,
                         TaskPaused = np.TaskPaused,
+                        HoeingBatchId = np.HoeingBatchId,
+                        HoeingStartPhase = np.HoeingStartPhase,
+                        HoeingStartMessage = np.HoeingStartMessage,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
                         CurrentRouteDisplay = np.CurrentRouteDisplay,
@@ -4951,6 +5030,15 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             ObserveOnlineTask(OnAllReadyConfirmedInternal(generation), "全员就绪启动");
         };
+        client.OnHoeingBatchStart += batch => ObserveOnlineTask(OnCoordinatedBatchStartAsync(batch), "联机开始受理");
+        client.OnHoeingBatchState += OnCoordinatedBatchState;
+        client.OnCoordinatedAuthorityReady += () =>
+        {
+            OnlineHoeingBatch? pending;
+            lock (_batchGate) pending = _activeBatch;
+            if (pending?.LocalCleanupConfirmed == true && pending.RunTask?.IsCompleted == true)
+                ObserveOnlineTask(RetryCoordinatedCleanupAsync(pending), "重连后批次清理确认");
+        };
 
         client.OnAllReadyConfirmReceived += generation =>
         {
@@ -4968,6 +5056,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 return;
             lock (_batchGate)
             {
+                // v2只接受携带BatchId的状态通知，旧上线generation不能取消当前批次。
+                if (_activeBatch?.Start is not null) return;
                 // 迟到旧代 Abort 不能取消新代批次。
                 if (_activeBatch is { } active && active.Generation != generation)
                     return;
@@ -5175,13 +5265,16 @@ public partial class MainViewModel : INotifyPropertyChanged
                     if (cmd.Params?.GetValueOrDefault("generation") is { } generationValue
                         && int.TryParse(generationValue.ToString(), out var parsedGeneration))
                         resetGeneration = parsedGeneration;
+                    var resetBatchId = cmd.Params?.GetValueOrDefault("batchId")?.ToString();
                     var duplicateReset = false;
                     var staleReset = false;
                     lock (_batchGate)
                     {
                         duplicateReset = string.Equals(_lastAppliedResetId, resetId, StringComparison.Ordinal);
-                        staleReset = !duplicateReset && resetGeneration > 0
-                            && _activeBatch is { } active && active.Generation > resetGeneration;
+                        staleReset = !duplicateReset && _activeBatch is { } active
+                            && (active.Start is not null
+                                ? !string.Equals(active.BatchId, resetBatchId, StringComparison.Ordinal)
+                                : resetGeneration > 0 && active.Generation > resetGeneration);
                     }
                     if (duplicateReset)
                     {
@@ -5195,7 +5288,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     }
                     Interlocked.Exchange(ref _resetFenceGeneration,
                         Math.Max(Volatile.Read(ref _resetFenceGeneration), resetGeneration));
-                    var result = await ResetLocalExecutionStateAsync();
+                    var result = await ResetLocalExecutionStateAsync(resetId, resetBatchId);
                     if (result.Status == "success")
                         lock (_batchGate) _lastAppliedResetId = resetId;
                     await SendAckAsync(cmd, result.Status, result.Message);
@@ -5234,33 +5327,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 // 特殊处理"一键锄地"：key="一键锄地" 时，遍历自己的 OnlineHoeingGroupNames 依次执行
                 if (key == "一键锄地")
                 {
-                    var groupNames = _config.OnlineHoeingGroupNames ?? [];
-                    if (groupNames.Count == 0)
-                    {
-                        AddLog("收到一键锄地，但未绑定联机锄地配置组，跳过");
-                        return;
-                    }
-                    AddLog($"收到一键锄地，开始执行本地绑定的 {groupNames.Count} 个配置组...");
-                    foreach (var groupName in groupNames)
-                    {
-                        if (_commandExecutor == null) break;
-                        var hoeingCmd = new RemoteCommand
-                        {
-                            Cmd = "start_group",
-                            Params = new Dictionary<string, object>
-                            {
-                                ["groupName"] = groupName,
-                                ["startFromIndex"] = 0,
-                                ["batchGroupNames"] = string.Join(",", groupNames)
-                            }
-                        };
-                        var result = await _commandExecutor.ExecuteAsync(hoeingCmd);
-                        if (result.Status == "cancelled") break;
-                        AddLog($"  - 执行配置组「{groupName}」: {result.Status}"
-                            + (result.Status == "failed"
-                                ? $"（{result.ErrorCode ?? "未提供错误码"}：{result.Message}）" : ""));
-                    }
-                    AddLog("一键锄地执行完毕");
+                    await SendAckAsync(cmd, "failed", "旧一键锄地命令未执行，请更新控制端和服务端后使用统一批次开始");
+                    AddLog("一键锄地未接受：缺少统一批次身份，未中断当前任务");
                     return;
                 }
 
@@ -5280,7 +5348,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
             if (_commandExecutor != null)
             {
-                var result = await _commandExecutor.ExecuteAsync(cmd);
+                var result = await ExecuteCommandWithHoeingStopAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
                 // [远端任务回执] start_group/start_oneclick 额外经新通道回执给发起方卡片（内部已过滤命令名、不抛异常）
                 await MaybeSendCommandResultAsync(cmd, result.Status, result.ErrorCode, result.Message, result);
@@ -5669,7 +5737,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             SenderUid = selfUid,
             Target = target,
             CommandId = "local_" + Guid.NewGuid().ToString("N"),
-            Params = param
+            Params = cmd == "stop" ? FreezeStopTargets(target, param) : param
         };
 
         if (_commandExecutor == null)
@@ -5703,7 +5771,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (selfTargeted)
         {
             // 有本地 BGI：走本地 IPC 执行
-            var result = await _commandExecutor.ExecuteAsync(NewCmd([selfUid]));
+            var result = await ExecuteCommandWithHoeingStopAsync(FreezeLocalStop(NewCmd([selfUid])));
             AddLog($"命令结果: {result.Message}");
         }
         if (remoteTargets.Count > 0)
@@ -6904,24 +6972,35 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("已取消一键锄地下发");
             return;
         }
-        // 下发 start_group 命令，带 key="一键锄地" 但不带 groupName，
-        // 接收端收到后会用 key 检测到"一键锄地"，遍历自己的 OnlineHoeingGroupNames 执行。
-        var remoteCmd = new RemoteCommand
+        if (!_signalRClient.SupportsCoordinatedStart)
         {
-            Cmd = "start_group",
-            Sender = _config!.PlayerName,
-            SenderUid = _config.PlayerUid,
-            Target = targets,
-            CommandId = "hoeing_" + DateTime.Now.Ticks,
-            Params = new Dictionary<string, object>
+            AddLog("一键锄地未发送：请先更新支持统一开锄的配套服务端");
+            return;
+        }
+        var requestId = "hoeing_" + Guid.NewGuid().ToString("N");
+        try
+        {
+            var batch = await _signalRClient.BeginCoordinatedBatchAsync(requestId, targets,
+                DateTimeOffset.UtcNow.AddMinutes(2));
+            AddLog($"一键锄地已受理，批次 {batch.BatchId}，等待 {batch.ParticipantUids.Count} 名成员准备完成");
+        }
+        catch (Services.Gateway.GatewayErrorException ex)
+        {
+            AddLog("一键锄地未受理，当前任务保持执行：" + ex.Message);
+        }
+        catch (Exception ex)
+        {
+            // 传输异常不能写成未受理；按原开始身份补查，绝不另造请求重发。
+            try
             {
-                ["groupName"] = "",
-                ["startFromIndex"] = 0,
-                ["key"] = "一键锄地"
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var state = await _signalRClient.GetCurrentCoordinatedBatchAsync(timeout.Token);
+                AddLog(state?.RequestId == requestId
+                    ? $"一键锄地已受理，批次 {state.BatchId}，当前阶段 {state.Phase}"
+                    : "一键锄地受理结果未确认，未自动重发：" + ex.Message);
             }
-        };
-        await _signalRClient.SendRemoteCommandAsync(remoteCmd);
-        AddLog($"已向 {targets.Count} 个在线成员下发一键锄地（各成员执行自己绑定的配置组）");
+            catch { AddLog("一键锄地受理结果未确认，未自动重发：" + ex.Message); }
+        }
     }
 
     /// <summary>一键锄地确认弹窗：展示每个成员绑定的锄地任务列表，未绑定者标注提示。</summary>
@@ -7968,6 +8047,13 @@ public class MemberViewModel : INotifyPropertyChanged
     private string _remoteStartResult = "";
     /// <summary>[远端任务回执] 本机作为发起方时，该成员卡片上显示的最近一次远端启动结果文本
     /// （"等待回执…" / "启动成功：…" / "启动失败：…" / "已发送（无回执）"）；空串 = 无进行中/已结束的下发，UI 隐藏。</summary>
+    private string? _hoeingBatchId;
+    private string? _hoeingStartPhase;
+    private string? _hoeingStartMessage;
+    public string? HoeingBatchId { get => _hoeingBatchId; set { if (_hoeingBatchId != value) { _hoeingBatchId = value; OnPropertyChanged(); } } }
+    public string? HoeingStartPhase { get => _hoeingStartPhase; set { if (_hoeingStartPhase != value) { _hoeingStartPhase = value; OnPropertyChanged(); } } }
+    public string? HoeingStartMessage { get => _hoeingStartMessage; set { if (_hoeingStartMessage != value) { _hoeingStartMessage = value; OnPropertyChanged(); } } }
+
     public string RemoteStartResult { get => _remoteStartResult; set { if (_remoteStartResult != value) { _remoteStartResult = value; OnPropertyChanged(); } } }
 
     private string _remoteStartResultState = "";

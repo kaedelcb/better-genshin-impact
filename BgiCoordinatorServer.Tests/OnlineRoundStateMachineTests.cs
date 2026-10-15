@@ -12,8 +12,8 @@ namespace BgiCoordinatorServer.Tests;
 ///    （推翻 R6 封顶修复，用户明确取舍"缺 1 人都不开锄"；人少的队伍应改配置人数）；
 /// 2) ConsumeOnlineReady 按本轮参与者 UID 集合消费：高 gen 成员不再残留武装事件（幻影轮次根因）；
 /// 3) DisarmOnlineEvents：确认超时耗尽收尾解除武装且不记"已联机记录"；
-/// 4) 单人直达 AllReady 定向只发就绪成员：不再全组广播把未上线成员拖进开锄；
-/// 5) 多人确认轮端到端：两名成员 gen 不等（minGen=2），全员 ack 后两人都被消费（旧实现只消费 minGen 成员）。
+/// 4) v2开始只发冻结参与者；未上线成员不自动入批；
+/// 5) 两名成员本地counter不同仍按UID消费，并保存在独立IntentGenerations中。
 /// </summary>
 public class OnlineRoundStateMachineTests
 {
@@ -22,12 +22,15 @@ public class OnlineRoundStateMachineTests
 
     private static string Conn(string tag) => $"conn-{tag}-{Guid.NewGuid():N}";
 
-    private static GatewayHandlerContext Ctx(string conn) => GatewayHandlerContext.Legacy(conn);
+    private static GatewayHandlerContext Ctx(string conn) => GatewayHandlerContext.V3(conn);
 
     private static string Group(string room) => $"CTRL_{room}";
 
     private static async Task JoinAsync(GatewayTestHarness h, string room, string pwd, string conn, string uid, string name)
-        => await h.Ops.JoinControlRoomAsync(Ctx(conn), room, pwd, uid, name);
+        {
+            await h.Dispatcher.DispatchAsync(Ctx(conn), GatewayTestHarness.HelloEnvelope());
+            await h.Ops.JoinControlRoomAsync(Ctx(conn), room, pwd, uid, name);
+        }
 
     private static async Task ReportStatusAsync(GatewayTestHarness h, string room, string conn, int expectedPlayers,
         IReadOnlyList<string>? bindingNames = null, IReadOnlyList<string>? bindingTypes = null)
@@ -35,7 +38,7 @@ public class OnlineRoundStateMachineTests
         {
             RoomCode = room,
             ExpectedHoeingPlayers = expectedPlayers,
-            OnlineHoeingGroupNames = bindingNames?.ToList() ?? [],
+            OnlineHoeingGroupNames = bindingNames?.ToList() ?? ["默认组"],
             OnlineHoeingGroupTypes = bindingTypes?.ToList() ?? [],
         });
 
@@ -145,7 +148,7 @@ public class OnlineRoundStateMachineTests
     }
 
     [Fact]
-    public async Task TryStartRound_SingleReady_SendsAllReadyOnlyToReadyMember()
+    public async Task TryStartRound_SingleReady_SendsBatchStartOnlyToReadyMember()
     {
         var h = new GatewayTestHarness();
         var (room, pwd) = NewRoom();
@@ -159,17 +162,19 @@ public class OnlineRoundStateMachineTests
 
         await h.Ops.ReportOnlineEventAsync(Ctx(connA), 7, true);
 
-        // 定向发送：恰好 1 次 AllReady 到客户端连接；组广播通道不得出现 AllReady
+        // v2只向冻结参与成员定向发送开始；旧AllReady不再授予执行权。
+        Assert.Equal(new[] { "uidA" }, h.Ops.CurrentCoordinatedBatch(Ctx(connA))!.ParticipantUids);
+        Assert.Single(h.GatewayClientProxy.Invocations.Where(call => call.Arguments.Count >= 2
+            && call.Arguments[1] is object?[] { Length: > 0 } args
+            && args[0] is GatewayEnvelope { Name: GatewayProtocol.Events.ControlBatchStart }));
         h.LegacyClientProxy.Verify(p => p.SendCoreAsync("AllReady",
-            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
-        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("AllReady",
             It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
         Assert.True(Player(h, room, "uidA").OnlineEventConsumed);
         Assert.True(Player(h, room, "uidB").OnlineEventConsumed == false || Player(h, room, "uidB").OnlineEventGeneration == 0);
     }
 
     [Fact]
-    public async Task ConfirmRound_TwoMembersDifferentGen_AllConfirmedConsumesBoth()
+    public async Task StartRound_TwoMembersDifferentGen_FrozenIntentSnapshotConsumesBoth()
     {
         var h = new GatewayTestHarness();
         var (room, pwd) = NewRoom();
@@ -183,21 +188,11 @@ public class OnlineRoundStateMachineTests
         // A gen5、B gen2 先后上报 → 凑齐 2 人 → 进入确认阶段（后台 StartConfirmAsync，500ms 轮询）
         await h.Ops.ReportOnlineEventAsync(Ctx(connA), 5, true);
         await h.Ops.ReportOnlineEventAsync(Ctx(connB), 2, true);
-        Assert.True(h.RoomManager.IsStateConfirming(Group(room)));
-
-        // 双方确认回执
-        await h.Ops.ConfirmAllReadyAsync(Ctx(connA), 2);
-        await h.Ops.ConfirmAllReadyAsync(Ctx(connB), 2);
-
-        // 后台确认循环最长 500ms 检测到全员确认 → 消费 + 状态复位 idle
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (DateTime.UtcNow < deadline)
-        {
-            if (Player(h, room, "uidA").OnlineEventConsumed && Player(h, room, "uidB").OnlineEventConsumed)
-                break;
-            await Task.Delay(100);
-        }
-
+        var batch = h.Ops.CurrentCoordinatedBatch(Ctx(connA))!;
+        Assert.Equal("registering", batch.Phase);
+        Assert.Equal(5, batch.IntentGenerations["uidA"]);
+        Assert.Equal(2, batch.IntentGenerations["uidB"]);
+        Assert.False(h.RoomManager.IsStateConfirming(Group(room)));
         // 旧实现只消费 minGen(=2) 的 B，A 的 gen5 残留武装
         Assert.True(Player(h, room, "uidA").OnlineEventConsumed);
         Assert.True(Player(h, room, "uidB").OnlineEventConsumed);

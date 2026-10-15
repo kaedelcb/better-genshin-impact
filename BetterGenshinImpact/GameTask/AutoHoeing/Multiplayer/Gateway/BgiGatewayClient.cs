@@ -148,6 +148,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             // （缺省即不支持），客户端此前宣告空数组会导致 Enroll 100% 被 rerun_capability_required 拒绝。
             capabilities = new[]
             {
+                "hoeing.start.v2",
                 BetterGenshinImpact.Shared.CooperativeRerun.RerunProtocol.Capability,
                 // 路线边界锚点能力：服务端据此判断"是否全员支持"，部分客户端不支持时禁止激活（禁止半启用）
                 BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability,

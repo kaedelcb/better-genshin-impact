@@ -764,6 +764,7 @@ public class CoordinatorClient : IAsyncDisposable
                 roomCode,
                 playerName,
                 playerUid = playerUid ?? "",
+                hoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
             }, roomCode);
             var result = resp.GetBool("success");
@@ -998,6 +999,8 @@ public class CoordinatorClient : IAsyncDisposable
                 whitelist = whitelist ?? new List<string>(),
                 playerUid,
                 expectedPlayerCount,
+                hoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
+                expectedParticipantUids = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
             });
             var result = resp.GetString("roomCode");
@@ -1230,7 +1233,8 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task SetRoomConfigAsync(Models.RoomConfig config)
     {
-        if (_gateway == null || !IsConnected) return;
+        if (_gateway == null || !IsConnected)
+            throw new InvalidOperationException("房间配置上传时协调连接不可用");
         try
         {
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomSetConfig, new { config });
@@ -1339,17 +1343,20 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 上报已加入世界
     /// </summary>
-    public async Task ReportWorldJoinedAsync()
+    public async Task ReportWorldJoinedAsync(CancellationToken ct = default)
     {
-        if (_gateway == null || !IsConnected) return;
+        ct.ThrowIfCancellationRequested();
+        if (_gateway == null || !IsConnected)
+            throw new InvalidOperationException("进入世界上报时协调连接不可用");
         try
         {
-            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.WorldReportJoined, null);
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.WorldReportJoined, null, null, ct);
             _logger.LogInformation("[联机] 上报已加入世界");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "ReportWorldJoinedAsync 失败（静默忽略）");
+            _logger.LogWarning(ex, "ReportWorldJoinedAsync 失败");
+            throw;
         }
     }
 
@@ -1409,8 +1416,28 @@ public class CoordinatorClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// 查询房主是否就绪
+    /// 首线准入必须来自服务端同批次、固定成员全部进入世界的原子快照。
     /// </summary>
+    public async Task VerifyHoeingStartupAsync(string? batchId, IReadOnlyCollection<string> participants, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (_gateway == null || !IsConnected)
+            throw new Services.HoeingStartupException("固定成员就绪", "协调连接不可用");
+        var response = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
+            new { section = "hoeingStartupReady", batchId, participantUids = participants }, null, ct);
+        var snapshot = response.Get<HoeingStartupReadySnapshot>("value");
+        Services.HoeingStartupBoundary.RequireParticipants(batchId, participants, snapshot?.BatchId,
+            snapshot?.ParticipantUids ?? new(), snapshot?.WorldJoinedUids ?? new(), snapshot?.Ready == true, ct);
+    }
+
+    private sealed class HoeingStartupReadySnapshot
+    {
+        public string? BatchId { get; set; }
+        public List<string> ParticipantUids { get; set; } = new();
+        public List<string> WorldJoinedUids { get; set; } = new();
+        public bool Ready { get; set; }
+    }
+
     public async Task<bool> IsHostReadyAsync()
     {
         if (_gateway == null || !IsConnected) return false;

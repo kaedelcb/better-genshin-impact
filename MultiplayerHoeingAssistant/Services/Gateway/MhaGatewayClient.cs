@@ -143,7 +143,7 @@ public sealed class MhaGatewayClient : IAsyncDisposable
             clientKind = "assistant",
             clientVersion = typeof(MhaGatewayClient).Assembly.GetName().Version?.ToString() ?? "",
             protocolVersion = GatewayProtocol.ProtocolVersion,
-            capabilities = Array.Empty<string>(),
+            capabilities = new[] { "hoeing.start.v2" },
         }, null, ct);
 
         ServerCapabilities = resp.Get<string[]>("capabilities") ?? [];

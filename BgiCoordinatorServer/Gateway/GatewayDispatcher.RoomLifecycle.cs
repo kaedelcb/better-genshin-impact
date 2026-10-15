@@ -14,7 +14,8 @@ public sealed partial class GatewayDispatcher
                 GetStringList(env, "whitelist"),
                 GetString(env, "playerUid"),
                 GetInt(env, "expectedPlayerCount", 4),
-                GetString(env, "reportedVersion"));
+                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"),
+                GetStringList(env, "expectedParticipantUids"));
             return new { roomCode = code, roomProtocol = protocol };
         };
 
@@ -24,7 +25,7 @@ public sealed partial class GatewayDispatcher
                 env.RoomCode ?? GetString(env, "roomCode"),
                 GetString(env, "playerName"),
                 GetString(env, "playerUid"),
-                GetString(env, "reportedVersion"));
+                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"));
             return error != null
                 ? (object)new { success, roomProtocol = protocol, error }
                 : new { success, roomProtocol = protocol };

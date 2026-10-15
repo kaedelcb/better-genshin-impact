@@ -8,16 +8,23 @@ public class CoordinatedBatchStateTests
     private readonly DateTime _now = DateTime.UtcNow;
     private CoordinatedBatchState Create() => new(7, new[] { "a", "b", "c", "d" }, _now);
     private CoordinatedBatchSnapshot Send(CoordinatedBatchState s, string uid, string result = "", int index = 0,
-        int attempt = 0, int seconds = 0, string layout = "group,group", string? token = null)
-        => s.Apply(uid, token ?? uid, s.BatchId, layout, index, attempt, result, _now.AddSeconds(seconds));
+        int attempt = 0, int seconds = 0, string layout = "group,group", string? token = null, string stage = "registered")
+        => s.Apply(uid, token ?? uid, s.BatchId, layout, index, attempt, result, _now.AddSeconds(seconds), stage);
     private void Enroll(CoordinatedBatchState s)
-    { foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid); }
+    {
+        foreach (var stage in new[] { "registered", "prepared", "takeoverConfirmed" })
+            foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid, stage: stage);
+    }
 
     [Fact] public void DoesNotStartUntilAllFourEnroll()
     {
         var s = Create();
         foreach (var uid in new[] { "a", "b", "c" }) Assert.Equal("registering", Send(s, uid).Phase);
-        Assert.Equal("running", Send(s, "d").Phase);
+        Assert.Equal("preparing", Send(s, "d").Phase);
+        foreach (var uid in new[] { "a", "b", "c" }) Assert.Equal("preparing", Send(s, uid, stage: "prepared").Phase);
+        Assert.Equal("takeover", Send(s, "d", stage: "prepared").Phase);
+        foreach (var uid in new[] { "a", "b", "c" }) Assert.Equal("takeover", Send(s, uid, stage: "takeoverConfirmed").Phase);
+        Assert.Equal("running", Send(s, "d", stage: "takeoverConfirmed").Phase);
     }
     [Fact] public void DoesNotAdvanceUntilAllFourSucceed()
     {
@@ -55,7 +62,11 @@ public class CoordinatedBatchStateTests
         Assert.Equal("aborted", s.Phase); Assert.Equal(0, s.Index); Assert.Equal(0, s.Attempt);
     }
     [Fact] public void RestartedAssistantCannotAdoptOldExecution()
-    { var s = Create(); Enroll(s); Assert.Equal("aborted", Send(s, "a", token: "replacement").Phase); }
+    {
+        var s = Create(); Enroll(s);
+        Assert.Throws<InvalidOperationException>(() => Send(s, "a", token: "replacement"));
+        Assert.Equal("running", s.Phase);
+    }
     [Fact] public void MissingParticipantLeaseAbortsEvenWhenOthersKeepPolling()
     {
         var s = Create(); Enroll(s);
@@ -96,5 +107,33 @@ public class CoordinatedBatchStateTests
         foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid, seconds: 60);
         Assert.Equal("aborted", Send(s, "a", seconds: 91).Phase);
         Assert.Equal("cleanup_timeout", s.Reason);
+    }
+
+    [Fact] public void TakeoverCannotBeClaimedBeforeEveryMemberIsPrepared()
+    {
+        var s = Create();
+        Send(s, "a"); Send(s, "a", stage: "prepared");
+        Assert.Throws<InvalidOperationException>(() => Send(s, "a", stage: "takeoverConfirmed"));
+        Assert.Equal("registering", s.Phase);
+    }
+
+    [Fact] public void AbortedOwnershipPersistsUntilAllRegisteredMembersClean()
+    {
+        var s = Create(); Send(s, "a"); Send(s, "b");
+        s.Abort("preparation_failed");
+        Assert.False(s.IsTerminal);
+        Send(s, "a", stage: "cleaned");
+        Assert.False(s.IsTerminal);
+        Assert.True(Send(s, "b", stage: "cleaned").CleanupComplete);
+    }
+
+    [Fact] public void LateUnknownFromPreviousAttemptCannotAbortRecovery()
+    {
+        var s = Create(); Enroll(s);
+        Send(s, "a", "failed");
+        foreach (var uid in new[] { "b", "c", "d" }) Send(s, uid, "stopped");
+        Assert.Equal(1, s.Attempt);
+        Send(s, "a", "unknown", attempt: 0);
+        Assert.Equal("running", s.Phase);
     }
 }

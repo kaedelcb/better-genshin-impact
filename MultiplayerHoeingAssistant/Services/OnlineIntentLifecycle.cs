@@ -52,6 +52,8 @@ public sealed class OnlineIntentLifecycle
     // 不能把已完成的旧 generation 降级成“新边沿”，否则同一轮会再次收到 AllReady。
     private int _highestSeenOnlineGeneration;
     private int _lastProcessedAllReadyGeneration;
+    private int _armedIntentGeneration;
+    private string? _activeCoordinatedBatchId;
 
     /// <summary>[B157] 最近一次成功送达服务端的上线事件 generation（0=本会话未成功上报过）。重连补报与 AllReadyAbort 判定用。</summary>
     private int _lastReportedOnlineGen;
@@ -206,7 +208,7 @@ public sealed class OnlineIntentLifecycle
                 // [B157] 60s 防抖（替代旧 _isOnlineReady 永久守卫）：上线事件刚成功送达且本地仍处"已上线"，
                 // 短时间内的新边沿视为任务流重跑风暴（游戏反复关停重拉标记任务），只同步基线。
                 // 上报失败不会布防（_lastOnlineEventReportedAtUtc 只在送达后更新），用户重跑即刻重试。
-                else if (_state != OnlineIntentState.Idle
+                else if (_activeCoordinatedBatchId is not null || _state != OnlineIntentState.Idle
                     && (DateTime.UtcNow - _lastOnlineEventReportedAtUtc) < OnlineReportDebounce)
                 {
                     pendingLog = $"检测到上线标记重复执行（generation={gen}），60 秒内已上报，跳过重复上报";
@@ -217,6 +219,7 @@ public sealed class OnlineIntentLifecycle
                     // 意图被接受：置 Armed（命令模式）并清零 AllReady 执行守卫的旧轮次残留，
                     // 避免历史高 gen 压住本轮（守卫只应防同一轮重复执行，不应跨轮压制新轮）
                     transitionLog = TransitionLocked(OnlineIntentState.Armed, $"边沿上线意图 generation={gen}");
+                    _armedIntentGeneration = gen;
                     _onlineMode = "command";
                     _lastProcessedAllReadyGeneration = 0;
                     genToReport = gen;
@@ -241,7 +244,9 @@ public sealed class OnlineIntentLifecycle
         int gen;
         lock (_gate)
         {
+            if (_activeCoordinatedBatchId is not null) return _localOnlineGeneration;
             gen = ++_localOnlineGeneration;
+            _armedIntentGeneration = gen;
             // S3：自增后立即写盘，保证重启后单调递增。写盘失败仅记日志，不影响本次上线事件。
             PersistLocalGenerationLocked(gen);
             // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留
@@ -252,6 +257,33 @@ public sealed class OnlineIntentLifecycle
         }
         if (transitionLog != null) _log(transitionLog);
         return gen;
+    }
+
+    public bool TryBeginCoordinatedBatch(string batchId, int generation, bool manual, int? intentGeneration)
+    {
+        string? log;
+        lock (_gate)
+        {
+            if (_activeCoordinatedBatchId is not null) return _activeCoordinatedBatchId == batchId;
+            if (!manual && (_state != OnlineIntentState.Armed || intentGeneration != _armedIntentGeneration)) return false;
+            _activeCoordinatedBatchId = batchId;
+            _pendingOnlineReportGen = 0;
+            log = TransitionLocked(OnlineIntentState.Executing, $"联机批次已受理 {batchId}（{(manual ? "一键" : "上线")}）");
+        }
+        if (log != null) _log(log);
+        return true;
+    }
+
+    public void FinishCoordinatedBatch(string batchId, string reason)
+    {
+        string? log;
+        lock (_gate)
+        {
+            if (_activeCoordinatedBatchId != batchId) return;
+            _activeCoordinatedBatchId = null;
+            log = TransitionLocked(OnlineIntentState.Idle, reason);
+        }
+        if (log != null) _log(log);
     }
 
     // ================= 3. AllReady 守卫与批次收尾 =================

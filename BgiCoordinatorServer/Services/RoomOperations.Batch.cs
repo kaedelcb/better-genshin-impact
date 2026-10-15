@@ -8,57 +8,178 @@ public sealed partial class RoomOperations
     private readonly Dictionary<string, CoordinatedBatchState> _controlBatches = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CoordinatedBatchResetResult> _processedResetResults = new(StringComparer.Ordinal);
 
-    private bool BeginCoordinatedBatch(string group, int generation, IReadOnlyList<string> uids,
-        out string rejectionReason)
+    private static int _nextBatchGeneration = checked((int)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+    private readonly Dictionary<string, CoordinatedBatchState> _batchRequests = new(StringComparer.Ordinal);
+
+    public CoordinatedBatchSnapshot? CurrentCoordinatedBatch(GatewayHandlerContext ctx, string? batchId = null)
     {
-        rejectionReason = "";
+        var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_control_room_required");
         lock (_batchGate)
         {
-            if (_controlBatches.TryGetValue(group, out var old))
-            {
-                if (old.Generation == generation)
-                {
-                    // 同代已终局不可再次广播 AllReady；重复上报仍沿原批次身份观察。
-                    if (!old.IsTerminal) return true;
-                    rejectionReason = "generation_already_terminal";
-                    return false;
-                }
-                if (!old.IsTerminal)
-                {
-                    var previousPhase = old.Phase;
-                    old.Abort("superseded");
-                    _logger.LogWarning("联机批次由新轮取代：group={Group}, oldGeneration={OldGeneration}, oldBatch={OldBatch}, oldPhase={OldPhase}, newGeneration={NewGeneration}",
-                        group, old.Generation, old.BatchId, previousPhase, generation);
-                    // registering 尚未授予任何成员执行批次项的权限，可以创建新轮。
-                    // running/stopping 可能仍持游戏槽位；拒绝新轮，由调用方广播 AllReadyAbort。
-                    if (previousPhase != "registering")
-                    {
-                        rejectionReason = "previous_batch_active";
-                        return false;
-                    }
-                }
-            }
-            if (!_controlBatches.ContainsKey(group) && _controlBatches.Count >= 4096)
-                throw new InvalidOperationException("batch_capacity");
-            _controlBatches[group] = new CoordinatedBatchState(generation, uids, DateTime.UtcNow);
-            return true;
+            if (!_controlBatches.TryGetValue(group, out var state)) return null;
+            if (!string.IsNullOrEmpty(batchId) && state.BatchId != batchId)
+                throw new InvalidOperationException("batch_not_found");
+            return state.Snapshot();
         }
     }
 
-    public CoordinatedBatchSnapshot UpdateCoordinatedBatch(GatewayHandlerContext ctx, int generation,
-        string token, string batchId, string layout, int index, int attempt, string result)
+    public async Task<CoordinatedBatchSnapshot> BeginManualCoordinatedBatchAsync(GatewayHandlerContext ctx,
+        string requestId, IReadOnlyList<string> targetUids, DateTimeOffset? expiresAtUtc)
+    {
+        var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_control_room_required");
+        if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
+            throw new InvalidOperationException("hoeing_start_capability_required");
+        var senderUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
+            ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_identity_required");
+        CoordinatedBatchState batch;
+        bool created;
+        lock (_batchGate)
+        {
+            batch = BeginCoordinatedBatch(group, "manual", senderUid + ":" + requestId,
+                requestId, targetUids, null, expiresAtUtc, out created);
+            if (created) _roomManager.DisarmOnlineEvents(group, batch.ParticipantUids);
+        }
+        if (created) await PublishBatchStartAsync(group, batch);
+        lock (_batchGate) return batch.Snapshot();
+    }
+
+    // 只负责受理。拒绝新请求不得修改旧批次，包括尚未完成清理的终态批次。
+    private CoordinatedBatchState BeginCoordinatedBatch(string group, string source, string requestKey,
+        string requestId, IReadOnlyList<string> uids, IReadOnlyDictionary<string, int>? intentGenerations,
+        DateTimeOffset? expiresAtUtc, out bool created)
+    {
+        created = false;
+        if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
+            throw new InvalidOperationException("batch_request_id");
+        if (uids.Count is < 1 or > 4 || uids.Any(string.IsNullOrWhiteSpace)
+            || uids.Distinct(StringComparer.Ordinal).Count() != uids.Count)
+            throw new InvalidOperationException("batch_roster");
+        var key = group + "\0" + source + "\0" + requestKey;
+        if (_batchRequests.TryGetValue(key, out var repeated))
+        {
+            if (!repeated.ParticipantUids.Order(StringComparer.Ordinal).SequenceEqual(uids.Order(StringComparer.Ordinal)))
+                throw new InvalidOperationException("batch_request_identity_mismatch");
+            return repeated;
+        }
+        if (expiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
+            throw new InvalidOperationException("request_expired");
+        if (_controlBatches.TryGetValue(group, out var old))
+        {
+            if (!old.IsTerminal) throw new InvalidOperationException("previous_batch_active");
+        }
+        if (!_controlBatches.ContainsKey(group) && _controlBatches.Count >= 4096)
+            throw new InvalidOperationException("batch_capacity");
+        if (_batchRequests.Count >= 16384) throw new InvalidOperationException("batch_request_capacity");
+        var players = _roomManager.GetCoordinatedStartPlayers(group);
+        var selected = new List<Models.ControlRoomPlayer>();
+        foreach (var uid in uids)
+        {
+            var matches = players.Where(p => p.PlayerUid == uid && p.Online).ToArray();
+            if (matches.Length != 1) throw new InvalidOperationException("batch_participant_unavailable_or_ambiguous:" + uid);
+            var player = matches[0];
+            if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
+                throw new InvalidOperationException("hoeing_start_capability_required:" + uid);
+            if (player.OnlineHoeingGroupNames.Count == 0)
+                throw new InvalidOperationException("batch_binding_missing:" + uid);
+            selected.Add(player);
+        }
+        var bindingIssue = RoomManager.ValidateCoordinatedBindingLayout(selected);
+        if (bindingIssue is not null) throw new InvalidOperationException(bindingIssue);
+        var bindings = selected.ToDictionary(p => p.PlayerUid,
+            p => (IReadOnlyList<CoordinatedBatchBinding>)p.OnlineHoeingGroupNames.Select((name, i) =>
+                new CoordinatedBatchBinding(name, p.OnlineHoeingGroupTypes.Count == 0 ? "group" : p.OnlineHoeingGroupTypes[i])).ToArray(),
+            StringComparer.Ordinal);
+        var instances = selected.ToDictionary(p => p.PlayerUid, p => p.ClientInstanceId, StringComparer.Ordinal);
+        var generation = Interlocked.Increment(ref _nextBatchGeneration);
+        if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");
+        var batch = new CoordinatedBatchState(generation, uids, DateTime.UtcNow, source, requestId,
+            bindings, intentGenerations, instances);
+        _controlBatches[group] = batch;
+        _batchRequests[key] = batch;
+        created = true;
+        return batch;
+    }
+
+    private async Task PublishBatchStartAsync(string group, CoordinatedBatchState state)
+    {
+        CoordinatedBatchSnapshot snapshot;
+        lock (_batchGate) snapshot = state.Snapshot();
+        await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchStart);
+    }
+
+    private async Task PublishBatchSnapshotAsync(string group, CoordinatedBatchState state,
+        CoordinatedBatchSnapshot snapshot, string eventName)
+    {
+        foreach (var uid in snapshot.ParticipantUids)
+        {
+            var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.PlayerUid == uid && p.Online
+                && state.MatchesExecutor(uid, p.ClientInstanceId));
+            if (player is not null)
+                await _broadcaster.SendEventOnlyToConnectionAsync(player.ConnectionId,
+                    eventName, snapshot, group[5..]);
+        }
+    }
+
+    private void ValidateGameBatch(string? batchId, IReadOnlyList<string> expected, string hostUid)
+    {
+        // 控制与游戏协调器允许不同部署。授权在助手/BGI外部开始合同完成，
+        // 此处只冻结本游戏房间身份，不能要求控制批次存在于本进程。
+        if (string.IsNullOrWhiteSpace(batchId) || batchId.Length > 128 || expected.Count is < 1 or > 4
+            || expected.Any(string.IsNullOrWhiteSpace) || expected.Distinct(StringComparer.Ordinal).Count() != expected.Count
+            || !expected.Contains(hostUid, StringComparer.Ordinal))
+            throw new InvalidOperationException("hoeing_start_identity_mismatch");
+    }
+
+    public async Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchAsync(GatewayHandlerContext ctx, int generation,
+        string token, string batchId, string layout, int index, int attempt, string result,
+        string stage = "", string reason = "")
     {
         var group = _roomManager.GetControlRoomGroup(ctx.ConnectionId);
         if (group == null) throw new InvalidOperationException("batch_control_room_required");
-        var uid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId);
-        if (string.IsNullOrEmpty(uid)) throw new InvalidOperationException("batch_identity_required");
+        if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
+            throw new InvalidOperationException("hoeing_start_capability_required");
+        var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_identity_required");
+        CoordinatedBatchState state;
+        CoordinatedBatchSnapshot snapshot;
+        bool notifyAbort;
         lock (_batchGate)
         {
-            // Never reconstruct after server restart or from an arbitrary client request.
-            if (!_controlBatches.TryGetValue(group, out var state) || state.Generation != generation)
+            if (!_controlBatches.TryGetValue(group, out state!) || state.Generation != generation || state.BatchId != batchId)
                 throw new InvalidOperationException("batch_not_found");
-            return state.Apply(uid, token, batchId, layout, index, attempt, result, DateTime.UtcNow);
+            if (!state.MatchesExecutor(player.PlayerUid, player.ClientInstanceId))
+                throw new InvalidOperationException("batch_executor_instance_mismatch");
+            var previousPhase = state.Phase;
+            snapshot = state.Apply(player.PlayerUid, token, batchId, layout, index, attempt, result, DateTime.UtcNow, stage, reason);
+            notifyAbort = previousPhase != "aborted" && snapshot.Phase == "aborted";
         }
+        if (notifyAbort) await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
+        return snapshot;
+    }
+    public async Task<CoordinatedBatchSnapshot> ConfirmCoordinatedResetCleanedAsync(
+        GatewayHandlerContext ctx, string resetId, string batchId)
+    {
+        var group = _roomManager.GetControlRoomGroup(ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_control_room_required");
+        var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_identity_required");
+        CoordinatedBatchState state;
+        CoordinatedBatchSnapshot snapshot;
+        lock (_batchGate)
+        {
+            if (!_processedResetResults.TryGetValue(group + "\0" + resetId, out var reset)
+                || !reset.Found || reset.Reason == "stale_reset" || reset.BatchId != batchId
+                || !reset.TargetUids.Contains(player.PlayerUid, StringComparer.Ordinal)
+                || !_controlBatches.TryGetValue(group, out state!) || state.BatchId != batchId
+                || !state.MatchesExecutor(player.PlayerUid, player.ClientInstanceId))
+                throw new InvalidOperationException("batch_reset_cleanup_not_authorized");
+            snapshot = state.ConfirmResetCleaned(player.PlayerUid);
+        }
+        await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
+        return snapshot;
     }
 
     /// <summary>
@@ -79,6 +200,7 @@ public sealed partial class RoomOperations
         var requested = requestedTargets?.Where(static uid => !string.IsNullOrWhiteSpace(uid))
             .Distinct(StringComparer.Ordinal).ToArray() ?? [];
         CoordinatedBatchSnapshot? snapshot = null;
+        CoordinatedBatchState? resetBatch = null;
         IReadOnlyList<string> participants = [];
         var wasActive = false;
         var stale = false;
@@ -89,9 +211,11 @@ public sealed partial class RoomOperations
                 return processed;
             if (_controlBatches.TryGetValue(group, out var state))
             {
+                resetBatch = state;
                 participants = state.ParticipantUids;
                 snapshot = state.Snapshot();
-                stale = expectedGeneration.HasValue && expectedGeneration.Value != state.Generation
+                stale = string.IsNullOrWhiteSpace(expectedBatchId)
+                    || expectedGeneration.HasValue && expectedGeneration.Value != state.Generation
                     || !string.IsNullOrWhiteSpace(expectedBatchId)
                        && !string.Equals(expectedBatchId, state.BatchId, StringComparison.Ordinal);
                 if (!stale)
@@ -142,9 +266,8 @@ public sealed partial class RoomOperations
         if (wasActive)
         {
             _roomManager.MarkExhausted(group);
-            var generation = snapshot?.Generation ?? 0;
-            await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
-                new { generation, targetUids = participants, reason = "manual_reset", resetId }, generation);
+            if (resetBatch is not null && snapshot is not null)
+                await PublishBatchSnapshotAsync(group, resetBatch, snapshot, GatewayProtocol.Events.ControlBatchState);
         }
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 

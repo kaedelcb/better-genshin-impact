@@ -92,6 +92,9 @@ public class SignalRClient : IAsyncDisposable
     public bool ScreenshotRequestUnsupported => _screenshotRequestUnsupported;
     /// <summary>全员就绪确认完成事件（各助手据此启动中断流程）。带 generation 参数，用于幂等保护。</summary>
     public event Action<int>? OnAllReadyConfirmed;
+    public event Action<CoordinatedBatchSnapshot>? OnHoeingBatchStart;
+    public event Action<CoordinatedBatchSnapshot>? OnHoeingBatchState;
+    public event Action? OnCoordinatedAuthorityReady;
     /// <summary>收到 AllReadyConfirm 事件（服务端要求确认就绪，确认阶段用）。</summary>
     public event Action<int>? OnAllReadyConfirmReceived;
     /// <summary>确认超时耗尽、服务端放弃本轮开锄（缺人不开锄）。参数：generation + 本轮参与者 uid 列表。
@@ -101,6 +104,7 @@ public class SignalRClient : IAsyncDisposable
     public Action<string>? OnLog { get; set; }
 
     public bool IsConnected => _gateway?.IsConnected == true;
+    public bool SupportsCoordinatedStart => _gateway?.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal) == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
@@ -225,6 +229,7 @@ public class SignalRClient : IAsyncDisposable
         // 导致自愈循环里 closedGateway != _gateway 判断提前 return、放弃重连。
         var old = _gateway;
         _gateway = gateway;
+        await RestoreCoordinatedBatchAsync(gateway, cancellationToken);
         // 旧实例（上次失败/掉线残留）在新实例就位后释放，避免双连接并发收发
         if (old != null)
         {
@@ -290,6 +295,18 @@ public class SignalRClient : IAsyncDisposable
                     var generation = env.GetInt("generation");
                     OnLog?.Invoke("[探针助手] SignalRClient 收到 AllReady 事件, generation=" + generation);
                     OnAllReadyConfirmed?.Invoke(generation);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlBatchStart:
+                {
+                    var batch = env.DeserializePayload<CoordinatedBatchSnapshot>();
+                    if (batch != null) OnHoeingBatchStart?.Invoke(batch);
+                    break;
+                }
+                case GatewayProtocol.Events.ControlBatchState:
+                {
+                    var batch = env.DeserializePayload<CoordinatedBatchSnapshot>();
+                    if (batch != null) OnHoeingBatchState?.Invoke(batch);
                     break;
                 }
                 case GatewayProtocol.Events.ControlAllReadyConfirm:
@@ -422,6 +439,26 @@ public class SignalRClient : IAsyncDisposable
     {
         await gateway.HelloAsync();
         await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
+        await RestoreCoordinatedBatchAsync(gateway, CancellationToken.None);
+    }
+
+    private async Task RestoreCoordinatedBatchAsync(MhaGatewayClient gateway, CancellationToken ct)
+    {
+        if (!gateway.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal)) return;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            var response = await gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchCurrent, new { }, ct: timeout.Token);
+            var batch = response.DeserializePayload<CoordinatedBatchSnapshot>();
+            if (batch != null)
+            {
+                OnHoeingBatchStart?.Invoke(batch);
+                OnHoeingBatchState?.Invoke(batch);
+            }
+            OnCoordinatedAuthorityReady?.Invoke();
+        }
+        catch (Exception ex) { OnLog?.Invoke("[联机开始] 重连后批次状态补查未确认：" + ex.Message); }
     }
 
     /// <summary>
@@ -479,13 +516,31 @@ public class SignalRClient : IAsyncDisposable
     }
 
     public async Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchAsync(int generation, string token,
-        string batchId, string layout, int index, int attempt, string result, CancellationToken ct)
+        string batchId, string layout, int index, int attempt, string result, CancellationToken ct,
+        string stage = "", string reason = "")
     {
         if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间连接不可用");
         var response = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchUpdate,
-            new { generation, token, batchId, layout, index, attempt, result }, ct: ct);
+            new { generation, token, batchId, layout, index, attempt, result, stage, reason }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchSnapshot>()
             ?? throw new InvalidOperationException("全队批次响应为空");
+    }
+
+    public async Task<CoordinatedBatchSnapshot> BeginCoordinatedBatchAsync(string requestId,
+        IReadOnlyList<string> targetUids, DateTimeOffset expiresAtUtc, CancellationToken ct = default)
+    {
+        if (!SupportsCoordinatedStart) throw new InvalidOperationException("服务端不支持统一开锄，请更新配套服务端（未启动任务）");
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchBegin,
+            new { requestId, targetUids, expiresAtUtc }, ct: ct);
+        return response.DeserializePayload<CoordinatedBatchSnapshot>()
+            ?? throw new InvalidOperationException("服务端未返回联机批次身份");
+    }
+
+    public async Task<CoordinatedBatchSnapshot?> GetCurrentCoordinatedBatchAsync(CancellationToken ct = default)
+    {
+        if (!SupportsCoordinatedStart) return null;
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchCurrent, new { }, ct: ct);
+        return response.DeserializePayload<CoordinatedBatchSnapshot>();
     }
 
     public async Task<CoordinatedBatchResetResult> ResetCoordinatedBatchAsync(
@@ -512,6 +567,16 @@ public class SignalRClient : IAsyncDisposable
             // 发送瞬间断连等异常仅记日志不 throw：调用方多在 async void 事件处理器里，上抛会导致进程崩溃
             OnLog?.Invoke($"[探针助手] SendRemoteCommand({command.Cmd}) 调用失败: " + ex.Message);
         }
+    }
+
+    public async Task<CoordinatedBatchSnapshot> ConfirmCoordinatedResetCleanedAsync(
+        string resetId, string batchId, CancellationToken ct = default)
+    {
+        if (!SupportsCoordinatedStart) throw new InvalidOperationException("服务端不支持统一批次清理确认");
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchResetCleaned,
+            new { resetId, batchId }, ct: ct);
+        return response.DeserializePayload<CoordinatedBatchSnapshot>()
+            ?? throw new InvalidOperationException("服务端未确认批次重置清理");
     }
 
     /// <summary>远程中心要求发送错误可见；旧命令仍使用原有尽力发送语义。</summary>

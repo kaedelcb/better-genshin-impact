@@ -23,6 +23,7 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     private readonly AllConfig? previous = ConfigService.Config;
     private readonly AllConfig config = new();
     private readonly DateTime? previousStopTime = CancellationContext.Instance.LastManualCancelAtUtc;
+    private readonly long? previousStopTimestamp = ExecutionScope.GetManualStopFence().LastManualStopTimestamp;
     private readonly InstanceRequestHandler handler = new(null!, null!, null!, _ => { }, _ => { }, NullLogger.Instance);
     private static readonly PropertyInfo ConfigProperty = typeof(ConfigService).GetProperty(nameof(ConfigService.Config))!;
 
@@ -33,6 +34,7 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         CancellationContext.Instance.Set();
         ExecutionExitLedger.ResetForTest();
         typeof(CancellationContext).GetProperty(nameof(CancellationContext.LastManualCancelAtUtc))!.SetValue(CancellationContext.Instance, null);
+        typeof(ExecutionScope).GetField("_lastManualStopTimestamp", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, null);
     }
 
     [Fact]
@@ -415,11 +417,213 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         config.SuspendedTaskContext = null;
         ConfigProperty.SetValue(null, previous);
         typeof(CancellationContext).GetProperty(nameof(CancellationContext.LastManualCancelAtUtc))!.SetValue(CancellationContext.Instance, previousStopTime);
+        typeof(ExecutionScope).GetField("_lastManualStopTimestamp", BindingFlags.NonPublic | BindingFlags.Static)!.SetValue(null, previousStopTimestamp);
     }
 
-    private static InstanceIpcEnvelope Request(string op, string ticket, bool cancel = false)
-        => InstanceIpcEnvelope.Request(op, new { takeoverTicket = ticket, cancel,
+    private readonly Dictionary<string, ExecutionScopeSnapshot?> suspendTargets = new();
+    private InstanceIpcEnvelope Request(string op, string ticket, bool cancel = false)
+    {
+        if (op == "task.suspend" && !suspendTargets.ContainsKey(ticket))
+            suspendTargets[ticket] = ExecutionScope.GetActiveSnapshot();
+        suspendTargets.TryGetValue(ticket, out var target);
+        var data = Newtonsoft.Json.Linq.JObject.FromObject(new { takeoverTicket = ticket, cancel,
             bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc } });
+        // The envelope's legacy object serializer ignores C# null properties. An idle target
+        // must be explicit JSON null tokens, exactly as it is on the new client's wire payload.
+        data["expectedExecutionInstanceId"] = target is null ? Newtonsoft.Json.Linq.JValue.CreateNull()
+            : new Newtonsoft.Json.Linq.JValue(target.ExecutionInstanceId.ToString("N"));
+        data["expectedStateRevision"] = target is null ? Newtonsoft.Json.Linq.JValue.CreateNull()
+            : new Newtonsoft.Json.Linq.JValue(target.StateRevision);
+        return InstanceIpcEnvelope.Request(op, data);
+    }
+
+    [Fact]
+    public async Task Suspend_ExplicitIdleTargetAndReceiptSurviveActualIpcJsonFrames()
+    {
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        using var stream = new MemoryStream();
+        await InstanceIpcProtocol.WriteJsonAsync(stream, request, CancellationToken.None);
+        stream.Position = 0;
+        var decoded = InstanceIpcProtocol.ReadJson((await InstanceIpcProtocol.ReadFrameAsync(stream, CancellationToken.None))!.Value);
+        Assert.Equal(Newtonsoft.Json.Linq.JTokenType.Null, decoded.Data!["expectedExecutionInstanceId"]!.Type);
+        Assert.Equal(Newtonsoft.Json.Linq.JTokenType.Null, decoded.Data["expectedStateRevision"]!.Type);
+        var response = await handler.HandleTaskSuspend(null!, decoded);
+        Assert.True(response.Success);
+        using var replyStream = new MemoryStream();
+        await InstanceIpcProtocol.WriteJsonAsync(replyStream, response, CancellationToken.None);
+        replyStream.Position = 0;
+        var reply = InstanceIpcProtocol.ReadJson((await InstanceIpcProtocol.ReadFrameAsync(replyStream, CancellationToken.None))!.Value);
+        Assert.True(reply.Success);
+        Assert.True(reply.Data!["quiesceConfirmed"]!.ToObject<bool>());
+        Assert.Equal(Newtonsoft.Json.Linq.JTokenType.Null, reply.Data["expectedExecutionInstanceId"]!.Type);
+        Assert.Equal(Newtonsoft.Json.Linq.JTokenType.Null, reply.Data["expectedStateRevision"]!.Type);
+    }
+
+    [Fact]
+    public async Task Suspend_LegacyTicketWithoutExplicitTarget_CannotCancelActiveRoot()
+    {
+        using var root = ExecutionScope.Start(new(JobKind.Group, "现有锄地", JobSource.Ui));
+        var response = await handler.HandleTaskSuspend(null!, InstanceIpcEnvelope.Request("task.suspend", new
+        {
+            takeoverTicket = Guid.NewGuid().ToString("N"),
+            bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc }
+        }));
+        Assert.False(response.Success);
+        Assert.Equal("capability_required", response.ErrorCode);
+        Assert.False(root.Token.IsCancellationRequested);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_DelayedOldRootRequest_CannotCancelSuccessorOrOverwriteRecovery()
+    {
+        var old = ExecutionScope.Start(new(JobKind.Group, "旧根", JobSource.Ui));
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        old.Dispose();
+        using var successor = ExecutionScope.Start(new(JobKind.Group, "继任锄地", JobSource.Ui));
+        var recovery = new SuspendedTaskContext { GroupName = "原现场" };
+        config.SuspendedTaskContext = recovery;
+
+        var response = await handler.HandleTaskSuspend(null!, request);
+
+        Assert.Equal("not_current", response.ErrorCode);
+        Assert.False(successor.Token.IsCancellationRequested);
+        Assert.Same(recovery, config.SuspendedTaskContext);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_DelayedIdleRequest_CannotCancelNewRoot()
+    {
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        using var root = ExecutionScope.Start(new(JobKind.Group, "空闲采样后的新任务", JobSource.Ui));
+        var response = await handler.HandleTaskSuspend(null!, request);
+        Assert.Equal("not_current", response.ErrorCode);
+        Assert.False(root.Token.IsCancellationRequested);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_StaleRevision_IsRejectedBeforeArmingTicket()
+    {
+        using var root = ExecutionScope.Start(new(JobKind.Group, "修订已变化", JobSource.Ui));
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        root.Observe(TaskRunResult.Skipped);
+        var response = await handler.HandleTaskSuspend(null!, request);
+        Assert.Equal("not_current", response.ErrorCode);
+        Assert.False(root.Token.IsCancellationRequested);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_BusySlotWithoutRoot_IsNotAnIdleTarget()
+    {
+        Assert.True(await TaskControl.TaskSemaphore.WaitAsync(0));
+        try
+        {
+            var response = await handler.HandleTaskSuspend(null!, Request("task.suspend", Guid.NewGuid().ToString("N")));
+            Assert.Equal("execution_identity_unavailable", response.ErrorCode);
+            Assert.True(PreemptionGate.Authorize(null));
+        }
+        finally { TaskControl.TaskSemaphore.Release(); }
+    }
+
+    [Fact]
+    public async Task Suspend_ManualStopFencePrecedesLeafCooldown_DeniesFreshTakeover()
+    {
+        // Model the ManualCancel gap after StopActive(true), before the leaf wall-clock field
+        // is updated. The root admission lock must already reject a new idle reservation.
+        ExecutionScope.StopActive(true);
+        Assert.Null(CancellationContext.Instance.LastManualCancelAtUtc);
+        var response = await handler.HandleTaskSuspend(null!, Request("task.suspend", Guid.NewGuid().ToString("N")));
+        Assert.Equal("manual_stop_cooldown", response.ErrorCode);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_StoppedTicketCannotReplayIntoLaterRoot()
+    {
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        Assert.True((await handler.HandleTaskSuspend(null!, request)).Success);
+        CancellationContext.Instance.ManualCancel();
+        typeof(CancellationContext).GetProperty(nameof(CancellationContext.LastManualCancelAtUtc))!.SetValue(CancellationContext.Instance, null);
+        using var successor = ExecutionScope.Start(new(JobKind.Group, "停止后的新任务", JobSource.Ui));
+        var response = await handler.HandleTaskSuspend(null!, request);
+        Assert.Equal("stale_ticket", response.ErrorCode);
+        Assert.False(successor.Token.IsCancellationRequested);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public async Task Suspend_RepeatIdleTarget_ReturnsOriginalReceiptWhileSuccessorRuns()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        var request = Request("task.suspend", ticket);
+        var first = await handler.HandleTaskSuspend(null!, request);
+        Assert.True(first.Success);
+        using var successor = ExecutionScope.Start(new(JobKind.Group, "本票据锄地", JobSource.Ext, TakeoverTicket: ticket));
+        var duplicate = await handler.HandleTaskSuspend(null!, request).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(duplicate.Success);
+        Assert.True(duplicate.Data!["replayed"]!.ToObject<bool>());
+        Assert.True(duplicate.Data["quiesceConfirmed"]!.ToObject<bool>());
+        Assert.Equal(Newtonsoft.Json.Linq.JTokenType.Null, duplicate.Data["expectedExecutionInstanceId"]!.Type);
+        Assert.False(successor.Token.IsCancellationRequested);
+        var current = ExecutionScope.GetActiveSnapshot()!;
+        var changedTarget = InstanceIpcEnvelope.Request("task.suspend", new
+        {
+            takeoverTicket = ticket, expectedExecutionInstanceId = current.ExecutionInstanceId.ToString("N"),
+            expectedStateRevision = current.StateRevision,
+            bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc }
+        });
+        Assert.Equal("takeover_identity_mismatch", (await handler.HandleTaskSuspend(null!, changedTarget)).ErrorCode);
+        Assert.False(successor.Token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Suspend_CancellationCallbackAdmitsSuccessor_DoesNotCancelItsLeafContextOrWaitForIt()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        var old = ExecutionScope.Start(new(JobKind.Group, "被接管根", JobSource.Ui));
+        old.SetCheckpoint(new("group", "旧组", 1, "folder", "project", null, null, null, false));
+        var request = Request("task.suspend", ticket);
+        ExecutionScope? successor = null;
+        using var registration = old.Token.Register(() =>
+        {
+            old.Dispose();
+            successor = ExecutionScope.Start(new(JobKind.Group, "继任锄地", JobSource.Ext, TakeoverTicket: ticket));
+            CancellationContext.Instance.Set();
+        });
+        try
+        {
+            var response = await handler.HandleTaskSuspend(null!, request).WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(response.Success);
+            Assert.True(response.Data!["quiesceConfirmed"]!.ToObject<bool>());
+            Assert.NotNull(successor);
+            Assert.False(successor.Token.IsCancellationRequested);
+            Assert.False(CancellationContext.Instance.IsCancellationRequested);
+            Assert.Equal("旧组", config.SuspendedTaskContext!.GroupName);
+            var repeat = await handler.HandleTaskSuspend(null!, request).WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(repeat.Success);
+            Assert.False(successor.Token.IsCancellationRequested);
+        }
+        finally { successor?.Dispose(); old.Dispose(); }
+    }
+
+    [Theory]
+    [InlineData("null", "1")]
+    [InlineData("\"not-a-guid\"", "1")]
+    [InlineData("\"00000000000000000000000000000001\"", "null")]
+    [InlineData("\"00000000000000000000000000000001\"", "\"1\"")]
+    [InlineData("\"00000000000000000000000000000001\"", "0")]
+    public async Task Suspend_MalformedTarget_IsRejectedWithoutSideEffects(string rawId, string rawRevision)
+    {
+        var request = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        request.Data!["expectedExecutionInstanceId"] = Newtonsoft.Json.Linq.JToken.Parse(rawId);
+        request.Data["expectedStateRevision"] = Newtonsoft.Json.Linq.JToken.Parse(rawRevision);
+        var response = await handler.HandleTaskSuspend(null!, request);
+        Assert.Equal("invalid_request", response.ErrorCode);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
 
     [Fact]
     public async Task IdleSuspend_HasNoVictim_AndReleaseIsIdempotent()
@@ -511,6 +715,8 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     {
         var request = InstanceIpcEnvelope.Request("task.suspend", new { takeoverTicket = Guid.NewGuid().ToString("N"),
             bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc - 1 } });
+        request.Data!["expectedExecutionInstanceId"] = Newtonsoft.Json.Linq.JValue.CreateNull();
+        request.Data["expectedStateRevision"] = Newtonsoft.Json.Linq.JValue.CreateNull();
         var response = await handler.HandleTaskSuspend(null!, request);
         Assert.False(response.Success);
         Assert.Equal("stale_epoch", response.ErrorCode);

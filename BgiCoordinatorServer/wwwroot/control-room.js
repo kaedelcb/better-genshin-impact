@@ -5,6 +5,7 @@ const PROTOCOL_VERSION = 3;
 const WEB_CLIENT_VERSION = '1.0.0';  // 仅诊断用途（服务端握手日志记录），服务端不校验
 
 let connection = null;
+let serverCapabilities = [];
 let roomCode = '';
 let password = '';
 let playerName = '';
@@ -80,7 +81,11 @@ function makeEnvelope(type, name, payload) {
 // invoke 响应带 payload.error 即失败（handshake_required/bad_request 等），抛错落入既有 catch 提示路径
 function checkGatewayError(resp) {
     const err = resp && resp.payload && resp.payload.error;
-    if (err) throw new Error(err.message || err.code || '网关错误');
+    if (err) {
+        const rejected = new Error(err.message || err.code || '网关错误');
+        rejected.gatewayRejected = true;
+        throw rejected;
+    }
 }
 // session.hello 握手（§4.4 DAP 时序：连接后第一条消息必须是 hello，否则一律 handshake_required）
 async function sayHello() {
@@ -88,9 +93,10 @@ async function sayHello() {
         clientKind: 'web',
         clientVersion: WEB_CLIENT_VERSION,
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: []
+        capabilities: ['hoeing.start.v2']
     }));
     checkGatewayError(resp);
+    serverCapabilities = resp?.payload?.capabilities || [];
 }
 // control.joinRoom（旧 JoinControlRoom；payload 键名按服务器路由实读：旧参数 teamUids 的键名是 allowedUids，值恒 []）
 async function joinControlRoom() {
@@ -199,7 +205,7 @@ function joinRoom() {
             // payload 即 ack 本体 { commandId, deliveredTo, message }
             case 'control.remoteCommandAck': {
                 const ack = payload || {};
-                log(`送达 ${ack.deliveredTo} 个目标`);
+                log(`送达 ${ack.deliveredTo} 个目标${ack.message ? "：" + ack.message : ""}`);
                 break;
             }
             case 'control.joinRejected': {
@@ -293,10 +299,14 @@ function renderMembers() {
         // 在线圆点：online 绿，离线灰
         const online = !!p.online;
         const dotCls = online ? 'dot-online' : 'dot-offline';
+        const activeHoeing = !!p.hoeingBatchId && ['registering', 'preparing', 'takeover',
+            'running', 'stopping', 'cleaning', 'cleanupPending', 'aborted'].includes(p.hoeingStartPhase);
         // 状态文本：助手离线 / BGI 未运行 / 正在执行任务 / 未运行任务
         let statusHtml = '';
         if (!online) {
             statusHtml = '<span class="bgi-status" style="color:#FF3B30;">助手已离线</span>';
+        } else if (activeHoeing) {
+            statusHtml = '<span class="bgi-status hoeing-start-status" style="color:#FF9500;"></span>';
         } else if (!p.bgiStatus || p.bgiStatus === 'stopped') {
             statusHtml = '<span class="bgi-status" style="color:#6E6E73;">BGI 未运行</span>';
         } else {
@@ -325,16 +335,26 @@ function renderMembers() {
                 ${uid ? `<span class="bgi-status">(${uid})</span>` : ''}
                 ${statusHtml}
             </div>
+            ${p.hoeingBatchId && p.hoeingStartPhase && !activeHoeing ? '<div class="bgi-status hoeing-last-status"></div>' : ''}
             ${groups ? `<div class="tags tag-fold" data-maxlines="3" data-uid="${uid}" data-name="${name}" data-type="group">${groups}</div>` : ''}
             ${oneclicks ? `<div class="tags tag-fold" data-maxlines="2" data-uid="${uid}" data-name="${name}" data-type="oneclick">${oneclicks}</div>` : ''}
             <div class="actions">
-                <button class="action-btn danger" data-action="stop" data-uid="${uid}" data-name="${name}">停止</button>
+                <button class="action-btn danger" data-action="stop" data-uid="${uid}" data-name="${name}" data-hoeing-batch-id="${activeHoeing ? p.hoeingBatchId : ''}">停止</button>
                 <button class="action-btn primary" data-action="start-group" data-uid="${uid}" data-name="${name}">配置组</button>
                 <button class="action-btn primary" data-action="start-oneclick" data-uid="${uid}" data-name="${name}">一条龙</button>
                 <button class="action-btn primary" data-action="hotkey" data-uid="${uid}" data-name="${name}">快捷键</button>
                 <button class="action-btn primary" data-action="close-game" data-uid="${uid}" data-name="${name}">关闭游戏</button>
             </div>
         `;
+        const hoeingStatus = card.querySelector('.hoeing-start-status') || card.querySelector('.hoeing-last-status');
+        if (hoeingStatus) {
+            const phaseNames = { registering: '登记成员', preparing: '全队准备中', takeover: '接管原任务',
+                running: '联机批次执行中', stopping: '全队停止中', cleaning: '联机批次清理中',
+                cleanupPending: '联机批次清理待确认', aborted: '联机批次已中止，等待清理',
+                completed: '联机已完成', failed: '联机失败', cancelled: '联机已取消', unknown: '联机结果待确认' };
+            hoeingStatus.textContent = (activeHoeing ? '' : '上次联机：')
+                + (p.hoeingStartMessage || phaseNames[p.hoeingStartPhase] || '联机状态待确认');
+        }
         list.appendChild(card);
         applyTagFold(card);  // 真实行高折叠：配置组 3 行、一条龙 2 行，超出加"更多"按钮
     });
@@ -389,7 +409,7 @@ document.getElementById('memberList').addEventListener('click', e => {
         if (!uid) return;
 
         if (action === 'stop') {
-            const cmd = makeCmd('stop');
+            const cmd = makeCmd('stop', { hoeingBatchId: btn.dataset.hoeingBatchId || '' });
             cmd.target = [uid];
             sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
             log(`已对 ${memberName} 下发停止`);
@@ -530,7 +550,7 @@ document.getElementById('quickRow').addEventListener('click', e => {
     });
 });
 
-// 一键锄地复用 PC 端协议，由各助手执行自己的 OnlineHoeingGroupNames。
+// 一键锄地与PC共用服务端批次；全部成员准备完成后才允许接管和执行。
 function showQuickHoeingConfirmModal() {
     const targets = players.filter(p => p.online === true && p.playerUid);
     if (targets.length === 0) {
@@ -542,7 +562,7 @@ function showQuickHoeingConfirmModal() {
     overlay.innerHTML = `
         <div class="modal">
             <h3>确认下发一键锄地</h3>
-            <p>各在线成员将按顺序执行自己绑定的联机锄地配置组，未绑定的成员会跳过。</p>
+            <p>以下成员全部准备就绪后，按顺序执行各自绑定的联机任务。未绑定或版本不支持时整批不启动。</p>
             <div class="list-items" id="hoeingMembers"></div>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="hoeingCancel">取消</button>
@@ -554,7 +574,7 @@ function showQuickHoeingConfirmModal() {
         const row = document.createElement('div');
         row.className = 'list-item';
         const groups = p.onlineHoeingGroupNames || [];
-        row.textContent = `${p.playerName || p.playerUid}：${groups.length ? groups.join(' → ') : '未绑定联机锄地配置组（跳过）'}`;
+        row.textContent = `${p.playerName || p.playerUid}：${groups.length ? groups.join(' → ') : '未绑定联机任务（需先绑定）'}`;
         list.appendChild(row);
     });
     document.body.appendChild(overlay);
@@ -563,23 +583,52 @@ function showQuickHoeingConfirmModal() {
     cancel.addEventListener('click', () => overlay.remove());
     confirm.addEventListener('click', async () => {
         if (confirm.disabled) return;
-        // 只发送给确认列表中仍在线的成员，避免新入房成员被意外启动。
+        // 冻结确认列表；有人离线时整批不下发，不能悄悄缩成更少成员。
         const onlineUids = new Set(players.filter(p => p.online === true).map(p => p.playerUid));
-        const targetUids = targets.map(p => p.playerUid).filter(uid => onlineUids.has(uid));
-        if (targetUids.length === 0) {
-            log('所选成员已离线，未下发一键锄地');
+        const targetUids = [...new Set(targets.map(p => p.playerUid))];
+        if (targetUids.some(uid => !onlineUids.has(uid))) {
+            log('所选成员有人已离线，整批未下发一键锄地');
             overlay.remove();
             return;
         }
         confirm.disabled = true;
         cancel.disabled = true;
+        const requestId = 'web_hoeing_' + newRequestId();
         try {
-            const cmd = makeCmd('start_group', { groupName: '', startFromIndex: 0, key: '一键锄地' });
-            cmd.target = targetUids;
-            await sendRemoteCommand(cmd);
-            log(`已向 ${targetUids.length} 个在线成员发送一键锄地指令（各成员执行自己绑定的配置组）`);
+            if (!serverCapabilities.includes('hoeing.start.v2')) {
+                log('一键锄地未受理：服务器尚未支持统一联机开始，请升级配套服务器');
+                return;
+            }
+            const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
+                requestId, targetUids,
+                expiresAtUtc: new Date(Date.now() + 120000).toISOString()
+            }));
+            checkGatewayError(response);
+            const batch = response?.payload;
+            if (!batch?.batchId || batch.protocol !== 'hoeing.start.v2')
+                throw new Error('服务器未返回有效批次身份，受理结果待确认');
+            log(batch.phase === 'aborted'
+                ? `一键锄地已中止：${batch.reason || '准备失败'}（批次 ${batch.batchId}）`
+                : `一键锄地已受理：${targetUids.length} 名成员，正在全队准备（批次 ${batch.batchId}）；受理不代表已经起跑`);
         } catch (err) {
-            log('一键锄地发送失败：' + err.message);
+            if (err.gatewayRejected) {
+                const detail = err.message.includes('previous_batch_active')
+                    ? '已有联机批次正在执行或清理，请等待其结束'
+                    : err.message.includes('hoeing_start_capability_required')
+                        ? '有参与成员尚未支持统一联机开始，请升级配套助手'
+                        : err.message;
+                log('一键锄地未受理：' + detail);
+            } else {
+                let recovered = null;
+                try {
+                    const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
+                    checkGatewayError(current);
+                    if (current?.payload?.requestId === requestId) recovered = current.payload;
+                } catch { /* 传输未知保留待确认，不另造请求重发。 */ }
+                log(recovered
+                    ? `已按原请求确认一键锄地批次 ${recovered.batchId}，状态：${recovered.phase}`
+                    : '一键锄地受理结果待确认，未重复发送：' + err.message);
+            }
         } finally {
             overlay.remove();
         }

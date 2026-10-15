@@ -12,6 +12,9 @@ public class ControlStatus
     /// <summary>本机 BGI 的完整版本号（如 "0.64.2+lcb.22.7-NexusBGI-fix13"）。
     /// 优先取执行端快照 bgiVersion，BGI 未运行时回退读 BgiPath 的 ProductVersion。空串=未知。</summary>
     public string BgiVersion { get; set; } = string.Empty;
+    public string? HoeingBatchId { get; set; }
+    public string? HoeingStartPhase { get; set; }
+    public string? HoeingStartMessage { get; set; }
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];
     /// <summary>配置组名 → 该配置组内任务名列表（WEB 端"从此处开始执行"用）。</summary>

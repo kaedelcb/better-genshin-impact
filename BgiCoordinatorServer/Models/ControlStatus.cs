@@ -2,6 +2,9 @@
 
 public class ControlStatus
 {
+    public string? HoeingBatchId { get; set; }
+    public string? HoeingStartPhase { get; set; }
+    public string? HoeingStartMessage { get; set; }
     public string RoomCode { get; set; } = string.Empty;
     public string PlayerUid { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;

@@ -23,16 +23,17 @@ public partial class MainViewModel
 
     private async Task ConfirmAllReadyAndStartAsync(int generation)
     {
-        // 服务端先等确认回执，再决定是否发送 AllReady；执行守卫不能挡住回执。
-        if (_signalRClient != null)
-            await _signalRClient.ConfirmAllReadyAsync(generation);
-        if (generation <= _intentLifecycle.LastProcessedAllReadyGeneration) return;
         await OnAllReadyConfirmedInternal(generation);
     }
 
     /// <summary>[P1b] 策略收尾恰好一次守卫：已完成收尾的最高批次 generation（单调不减，代序号比对）。
     /// 新一轮 AllReady 不重置——重置会让旧轮次的 10s 恢复定时器在新一轮里重跑收尾。</summary>
     private int _teardownDoneGeneration;
+    private readonly HashSet<string> _settledHoeingBatchIds = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, TaskCompletionSource> _coordinatedTeardownTasks = new(StringComparer.Ordinal);
+    private string? _lastHoeingBatchId;
+    private string? _lastHoeingStartPhase;
+    private string? _lastHoeingStartMessage;
 
     /// <summary>互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）。</summary>
     private int _isAllReadyProcessing;
@@ -46,19 +47,79 @@ public partial class MainViewModel
     /// </summary>
     private async Task ApplyPolicyTeardownOnceAsync(OnlineHoeingBatch batch, string executedDesc, bool userCancelled, string? expectedTicket = null)
     {
+        // Per-item falling edges must not consume the whole-batch once guard.
+        if (batch.Start != null && !batch.CoordinatedSucceeded && !userCancelled) return;
+        if (batch.Start == null)
+        {
+            await ApplyPolicyTeardownCoreAsync(batch, executedDesc, userCancelled, expectedTicket);
+            return;
+        }
+        lock (_batchGate) { if (!ReferenceEquals(_activeBatch, batch)) return; }
+        TaskCompletionSource completion;
+        var leader = false;
+        lock (_teardownGate)
+        {
+            if (!_coordinatedTeardownTasks.TryGetValue(batch.BatchId, out completion!))
+            {
+                completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                _coordinatedTeardownTasks[batch.BatchId] = completion;
+                leader = true;
+                if (_coordinatedTeardownTasks.Count > 256)
+                {
+                    var retired = _coordinatedTeardownTasks.FirstOrDefault(p => p.Key != batch.BatchId && p.Value.Task.IsCompleted);
+                    if (retired.Key != null) _coordinatedTeardownTasks.Remove(retired.Key);
+                }
+            }
+        }
+        if (leader)
+        {
+            try
+            {
+                await ApplyPolicyTeardownCoreAsync(batch, executedDesc, userCancelled, expectedTicket ?? batch.TakeoverTicket);
+                completion.TrySetResult();
+            }
+            catch (Exception ex) { completion.TrySetException(ex); }
+        }
+        await completion.Task; // 其他收尾触发者必须等同一操作真正完成，不能仅见“已进入”就认定完成。
+    }
+
+    private async Task ApplyPolicyTeardownCoreAsync(OnlineHoeingBatch batch, string executedDesc, bool userCancelled, string? expectedTicket = null)
+    {
+        if (batch.Start is not null)
+        {
+            await ApplyCoordinatedPolicyTeardownAsync(batch, executedDesc, expectedTicket);
+            return;
+        }
         // Online batches are finalized only by the all-member authority, never by a per-task falling edge.
         if (!batch.CoordinatedSucceeded && !userCancelled) return;
         lock (_teardownGate)
         {
-            if (batch.Generation > 0 && _teardownDoneGeneration >= batch.Generation) return;
-            if (batch.Generation > _teardownDoneGeneration) _teardownDoneGeneration = batch.Generation;
+            if (batch.Start is null)
+            {
+                if (batch.Generation > 0 && _teardownDoneGeneration >= batch.Generation) return;
+                if (batch.Generation > _teardownDoneGeneration) _teardownDoneGeneration = batch.Generation;
+            }
         }
         if (_commandExecutor != null)
         {
             TaskCenterHost? host;
             lock (_taskCenterHostGate) host = _taskCenterHost;
             var managedRunId = host?.OnlineHoeingManagedRun(batch.Generation);
-            var policy = SnapshotOnlineHoeingPolicy();
+            var policy = batch.Policy ?? SnapshotOnlineHoeingPolicy();
+            async Task ApplyPolicyAsync()
+            {
+                var result = await _commandExecutor.ApplyPolicyTeardownAsync(policy, executedDesc,
+                    userCancelled, AddLog, expectedTicket,
+                    specifiedStartAdmission: batch.Start != null && host != null ? host.AdmitExternalStartAsync : null,
+                    beforeSpecifiedStart: batch.Start == null ? null : async () =>
+                    {
+                        if (host?.CanOpenOnlineSendAfterBatch != true)
+                            throw new InvalidOperationException("原计划接管责任未结清，未启动完成后指定任务");
+                        await host.OpenOnlineHoeingSendAsync();
+                    });
+                if (result.Status != "success")
+                    throw new InvalidOperationException("锄地收尾未完成：" + result.Message);
+            }
             if (host is not null && managedRunId is not null)
             {
                 var planAlreadyStopped = host.Runs.Load(managedRunId)?.StopRequested == true;
@@ -71,8 +132,7 @@ public partial class MainViewModel
                         if (!stop.Ok)
                         {
                             host.FailPlanResume(managedRunId, "计划表停止登记失败：" + stop.Message);
-                            AddLog("[任务中心] 计划表停止未确认，未释放原恢复现场：" + stop.Message);
-                            return;
+                            throw new InvalidOperationException("计划表停止未确认：" + stop.Message);
                         }
                     }
                     var stopped = false;
@@ -90,24 +150,21 @@ public partial class MainViewModel
                     if (!stopped)
                     {
                         host.FailPlanResume(managedRunId, "计划表停止终态未确认，不启动完成后指定任务");
-                        AddLog("[任务中心] 计划表停止终态未确认，保留恢复现场待核对");
-                        return;
+                        throw new InvalidOperationException("计划表停止终态未确认，保留恢复现场待核对");
                     }
                     if (!host.FinalizeStoppedOnlineHandoff(managedRunId))
                     {
-                        AddLog("[任务中心] 已停止但接管责任未能结清，保留恢复现场待核对");
-                        return;
+                        throw new InvalidOperationException("已停止但接管责任未能结清，保留恢复现场待核对");
                     }
                     if (planAlreadyStopped && !userCancelled && policy.Policy == TaskConflictPolicy.Resume)
                     {
                         var cleared = await _commandExecutor.ExecuteResumeAsync(cancel: true,
                             expectedTicket: expectedTicket ?? originalTicket);
                         if (cleared.Status != "success")
-                            AddLog("[任务中心] 手动停止后的接管票据未确认释放：" + cleared.Message);
+                            throw new InvalidOperationException("手动停止后的接管票据未确认释放：" + cleared.Message);
                     }
                     else
-                        await _commandExecutor.ApplyPolicyTeardownAsync(policy, executedDesc,
-                            userCancelled, AddLog, expectedTicket);
+                        await ApplyPolicyAsync();
                 }
                 else
                 {
@@ -153,293 +210,489 @@ public partial class MainViewModel
                 }
             }
             else
-                await _commandExecutor.ApplyPolicyTeardownAsync(policy, executedDesc, userCancelled, AddLog, expectedTicket);
+                await ApplyPolicyAsync();
+            if (batch.Start != null && host?.CanOpenOnlineSendAfterBatch == false)
+                throw new InvalidOperationException("原计划接管或恢复责任仍未确认");
             // 记录实际执行时间：10s 恢复定时器的无批次键直接路径据此跳过 30s 内的迟到边沿
             lock (_teardownGate) { _lastTeardownUtc = DateTime.UtcNow; }
         }
     }
 
-    private async Task OnAllReadyConfirmedInternal(int generation)
+    private async Task ApplyCoordinatedPolicyTeardownAsync(OnlineHoeingBatch batch, string description, string? ticket)
     {
-        // 互斥锁：防止两轮 AllReady 并发执行 OnAllReadyConfirmedInternal（patterns §31）
-        if (Interlocked.CompareExchange(ref _isAllReadyProcessing, 1, 0) != 0)
+        var executor = _commandExecutor ?? throw new InvalidOperationException("本批收尾执行器不可用");
+        TaskCenterHost? host;
+        lock (_taskCenterHostGate) host = _taskCenterHost;
+        var runId = host?.OnlineHoeingManagedRun(batch.Generation);
+        var token = batch.Cts.Token;
+        var policy = batch.Policy ?? SnapshotOnlineHoeingPolicy();
+        batch.ConfigurePolicyCancellation(executor.CancelHoeingPolicyExecutionAsync);
+        batch.ConfigurePolicyCleanup(async () =>
         {
-            AddLog("[上线探针] OnAllReadyConfirmedInternal 已在执行中，跳过");
-            return;
-        }
-        // [P1] 幂等保护收口进状态机：同一 generation 只处理一次（防止 async void 并发或重复广播）；
-        // 通过后状态 Armed → Executing
-        if (!_intentLifecycle.TryBeginAllReady(generation))
+            await FinishCancelledCoordinatedPolicyAsync(batch, executor, host, runId);
+            batch.LocalCleanupConfirmed = true;
+            if (batch.RunTask is { } running)
+                ObserveOnlineTask(running.ContinueWith(_ => RetryCoordinatedCleanupAsync(batch),
+                    CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default).Unwrap(),
+                    "停止后的批次清理回执");
+            return true;
+        });
+        async Task Accepted(CommandResult result, bool registered)
         {
-            _isAllReadyProcessing = 0;
-            return;
-        }
-
-        // [P1b] 新一轮到达而上一轮批次仍存活：先取消旧批次（CTS.Cancel + 短超时等退出）再启动新批次，
-        // 杜绝两轮 AllReady 批次并发交错（原 fire-and-forget 无句柄可寻，旧批次不可取消）
-        OnlineHoeingBatch? previous;
-        lock (_batchGate) { previous = _activeBatch; }
-        if (previous is { IsAlive: true })
-        {
-            AddLog($"新一轮 AllReady（generation={generation}）到达，取消上一轮未完成批次（generation={previous.Generation}）");
-            previous.Cancel();
-            if (previous.RunTask != null)
+            if (result.JobId is null || result.TargetProcessId is not { } pid
+                || !long.TryParse(result.TargetStartTicksUtc, out var ticks))
             {
-                try
-                {
-                    await previous.RunTask.WaitAsync(TimeSpan.FromSeconds(30));
-                }
-                catch (TimeoutException)
-                {
-                    _isAllReadyProcessing = 0;
-                    _intentLifecycle.OnBatchFinished(generation, "旧批次清理未完成，拒绝新批次");
-                    NotifyBatchLoud("联机批次未启动", "旧批次尚未退出清理，禁止启动新批次；请检查 BGI 状态。");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    AddLog("[全队批次] 旧批次已结束: " + ex.Message);
-                }
+                batch.PolicySendUnknown = true;
+                return;
             }
-        }
-        var batch = new OnlineHoeingBatch(generation);
-        lock (_batchGate) { _activeBatch = batch; }
-
-        // 获取绑定的联机配置组列表
-        var groupNames = _config?.OnlineHoeingGroupNames?.ToList() ?? [];
-        var groupIndex = _config?.OnlineHoeingGroupIndex ?? 0;
-        var groupName = (groupIndex >= 0 && groupIndex < groupNames.Count) ? groupNames[groupIndex] : null;
-
-        var bindingValidation = OnlineHoeingBindingValidator.Validate(
-            groupNames, _config?.OnlineHoeingGroupTypes);
-        if (!bindingValidation.IsValid)
-        {
-            _isAllReadyProcessing = 0;
-            var reason = string.Join("；", bindingValidation.Errors);
-            AddLog($"联机锄地绑定不规范，拒绝启动本轮（generation={generation}）：{reason}");
-            NotifyBatchLoud("联机锄地未启动", $"绑定不符合联机规则：{reason}");
-            _intentLifecycle.OnBatchFinished(generation, $"绑定校验失败，AllReady 批次未启动（generation={generation}）");
-            _ = ReportStatusAsync();
-            return;
-        }
-
-        if (string.IsNullOrEmpty(groupName))
-        {
-            _isAllReadyProcessing = 0;
-            AddLog("未绑定联机锄地配置组，无法启动联机锄地");
-            // [P1b] 早退也要复位状态机（Executing → Idle），否则生命周期卡在 Executing 永不回收
-            _intentLifecycle.OnBatchFinished(generation, "未绑定联机锄地配置组");
-            return;
-        }
-
-        // 检查 CommandExecutor 是否可用（依赖 BgiPath 配置）
-        if (_commandExecutor == null)
-        {
-            _isAllReadyProcessing = 0;
-            AddLog("CommandExecutor 不可用（BgiPath 未配置），无法通过 IPC 启动 BGI 配置组");
-            if (_processMonitor != null)
+            CommandExecutor.ExecutionIdentity? root = null;
+            if (!registered)
             {
-                // [A4.4] 废弃 --startGroups 命令行直启（对 ext 队列/注册表不可见的黑盒执行，
-                // 是"已下发当已完成"事故的温床）。只裸拉起 BGI；执行声明权回归 IPC/reconcile——
-                // 请配置 BGI 路径后重新触发，IPC 通道可用时批次循环会自动接管全部绑定组。
-                AddLog("尝试裸拉起 BGI（不带执行参数）；配置 BGI 路径启用 IPC 后，批次将由 reconcile 循环重新声明执行");
-                _processMonitor.RestartBgi(null);
+                var current = await executor.CaptureExecutionIdentityAsync();
+                if (current is { } identity && identity.ProcessId == pid && identity.StartTicksUtc == ticks
+                    && Guid.TryParse(result.JobId, out var job) && identity.JobId == job) root = identity;
             }
-            else
-            {
-                AddLog("_processMonitor 也为 null，无法启动 BGI。请在设置页配置 BGI 路径");
-            }
-            // [P1b] 批次未启动的统一复位出口（Executing → Idle）
-            _intentLifecycle.OnBatchFinished(generation, $"CommandExecutor 不可用，AllReady 批次未启动（generation={generation}）");
-            _ = ReportStatusAsync();
-            return;
+            batch.RecordPolicyExecution(new HoeingPolicyExecution(result.JobId,
+                new BgiEpoch { ProcessId = pid, StartTicksUtc = ticks }, registered, root));
         }
-
-        // [fix 2026-09-13] 冷启动快速通道：同会话 BGI 进程确定不在（IsBgiRunning 实时枚举，
-        // 仅看本进程会话）时，suspend/settle 没有对象可等——suspend 烧满 3s 连接超时、
-        // settle 兜底循环烧满 30×(1s+0.2s)≈36s，然后才轮到裸拉起，触发到 BGI 启动白等 ~40s。
-        // 进程不存在 = 没有任务可中断、没有槽位可等释放，直接落入批次循环由裸拉起回退接管。
-        // 误判风险可控：进程在但管道暂不可达（启动中/忙）时 IsBgiRunning 仍为 true，走原路径。
-        TaskCenterHost? onlinePlanHost = null;
-        var onlinePlanGateClosed = false;
-        // 抢占资格必须来自同一 BGI 端点的活动执行根身份，不能用“本会话存在任意 BGI 进程”代替。
-        // 多实例时后者会把无旧任务的首项误标成 preempt，重现 12:06 的交接竞态。
-        CommandExecutor.ExecutionIdentity? onlineBatchStopTarget = null;
+        async Task OpenForSpecified()
+        {
+            token.ThrowIfCancellationRequested();
+            if (host?.CanOpenOnlineSendAfterBatch != true)
+                throw new InvalidOperationException("原计划接管责任未结清，未启动完成后指定任务");
+            await host.OpenOnlineHoeingSendAsync();
+            token.ThrowIfCancellationRequested();
+        }
         try
         {
-            // 重启后即使用户尚未打开任务中心，也必须读取旧运行并自动结清可证明的旧接管。
-            if (IsExecutorMode) onlinePlanHost = TaskCenterHost;
-            if (onlinePlanHost is not null)
-                await onlinePlanHost.RecoverOnlineHandoffsBeforeStartAsync();
-        }
-        catch (Exception ex)
+        CommandResult? result = null;
+        if (runId is null)
         {
-            _isAllReadyProcessing = 0;
-            _intentLifecycle.OnBatchFinished(generation, "旧计划自动结清失败，联机批次未启动");
-            NotifyBatchLoud("联机锄地未启动", "旧计划自动结清失败：" + ex.Message);
-            return;
+            result = await executor.ApplyPolicyTeardownAsync(policy, description, batch.IsCancellationRequested,
+                AddLog, ticket, host is null ? null : host.AdmitExternalStartAsync,
+                host is null ? null : OpenForSpecified, token, Accepted);
+            if (result.Status == "success") batch.PolicyTicketReleased = true;
         }
-        if (_processMonitor?.IsBgiRunning == false)
+        else if (batch.IsCancellationRequested || policy.Policy != TaskConflictPolicy.Resume)
         {
-            AddLog("[上线探针] 同会话 BGI 未运行，跳过 suspend/settle 等待，直接走裸拉起批次流程");
+            var release = await executor.ExecuteResumeAsync(cancel: true, expectedTicket: ticket);
+            if (release.Status != "success") throw new InvalidOperationException("原上下文释放未确认：" + release.Message);
+            batch.PolicyTicketReleased = true;
+            if (!await host!.SettleFailedOnlineHoeingAsync(batch.Generation, runId, true, "本批结束后停止原计划"))
+                throw new InvalidOperationException("原计划停止责任尚未结清");
+            if (!batch.IsCancellationRequested && policy.Policy == TaskConflictPolicy.RunSpecified)
+                result = await executor.StartSpecifiedAfterReleasedAsync(policy, host.AdmitExternalStartAsync,
+                    OpenForSpecified, token, Accepted);
         }
         else
         {
-        // 先 task.suspend 中断当前任务
-        // [R5 批次 3] 先记原执行根身份：suspend 之后原根可能已消失，届时只能凭**退出凭证**判断"确已退出"。
-        OnlineHoeingPreparation? planPreparation = null;
-        CommandExecutor.ExecutionBoundarySnapshot planSnapshot = default;
-        if (onlinePlanHost is not null)
-        {
-            try
+            var handoff = host!.Runs.Load(runId)?.OnlineHoeingHandoff;
+            if (handoff?.Ticket is not { } planTicket)
+                throw new InvalidOperationException("原计划恢复票据缺失");
+            if (handoff.Phase == "gap")
             {
-                using var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                await onlinePlanHost.CloseOnlineHoeingSendAsync(gateBudget.Token);
-                onlinePlanGateClosed = true;
-                planSnapshot = await _commandExecutor.CaptureExecutionBoundarySnapshotAsync();
-                planPreparation = onlinePlanHost.PrepareOnlineHoeing(generation, planSnapshot);
-                if (!planPreparation.Ready)
+                var release = await executor.ExecuteResumeAsync(cancel: true, expectedTicket: planTicket);
+                if (release.Status != "success") throw new InvalidOperationException("原计划空隙执行权释放未确认");
+                batch.PolicyTicketReleased = true;
+                token.ThrowIfCancellationRequested();
+                if (!await host.FinishOnlineGapAfterReleaseAsync(runId, planTicket))
+                    throw new InvalidOperationException("原计划空隙接续未确认");
+            }
+            else
+            {
+                var continuation = await host.PreparePlanResumeAsync(runId, planTicket, token);
+                token.ThrowIfCancellationRequested();
+                if (continuation is null) throw new InvalidOperationException("原计划让位终态未确认");
+                result = await executor.ExecutePlanResumeAsync(planTicket, continuation, AddLog, token);
+                if (result.Status == "success" && result.JobId is not null)
                 {
-                    if (!onlinePlanHost.HasUnsettledOnlineHoeingHandoff)
-                        await onlinePlanHost.OpenOnlineHoeingSendAsync();
-                    _isAllReadyProcessing = 0;
-                    _intentLifecycle.OnBatchFinished(generation, "计划表接管前状态不可确认");
-                    NotifyBatchLoud("联机锄地未启动", planPreparation.Reason ?? "计划表接管前状态不可确认");
-                    return;
+                    batch.PolicyTicketReleased = true;
+                    await Accepted(result, true);
+                    if (!batch.IsCancellationRequested && !host.AcceptPlanResumeJob(runId, planTicket, result.JobId))
+                        throw new InvalidOperationException("恢复作业已受理但原计划关联未确认");
                 }
             }
-            catch (Exception ex)
+        }
+        if (result is { Status: "failed", JobId: null, ErrorCode: null or "result_unknown" }
+            && batch.PolicyExecution is null) batch.PolicySendUnknown = true;
+        if (batch.IsCancellationRequested)
+            return;
+        if (result is { Status: not "success" }) throw new InvalidOperationException("本批收尾未完成：" + result.Message);
+        if (host?.CanOpenOnlineSendAfterBatch == false) throw new InvalidOperationException("原计划接管责任尚未确认");
+        }
+        finally { batch.MarkPolicyPhaseFinished(); }
+    }
+
+    private async Task FinishCancelledCoordinatedPolicyAsync(OnlineHoeingBatch batch, CommandExecutor executor,
+        TaskCenterHost? host, string? runId)
+    {
+        var physical = await batch.WaitPolicyCancellationAsync() && !batch.PolicySendUnknown;
+        if (executor.TakeoverTicketSnapshot is { } held)
+        {
+            if (held != batch.TakeoverTicket) physical = false;
+            else
             {
-                if (onlinePlanGateClosed && !onlinePlanHost.HasUnsettledOnlineHoeingHandoff)
-                    await onlinePlanHost.OpenOnlineHoeingSendAsync();
-                _isAllReadyProcessing = 0;
-                _intentLifecycle.OnBatchFinished(generation, "任务中心发送闸门准备失败");
-                NotifyBatchLoud("联机锄地未启动", "任务中心发送闸门准备失败：" + ex.Message);
-                return;
+                var release = await executor.ExecuteResumeAsync(cancel: true, expectedTicket: held);
+                batch.PolicyTicketReleased = release.Status == "success";
+                physical &= batch.PolicyTicketReleased;
             }
         }
-        onlineBatchStopTarget = onlinePlanHost is null
-            ? await _commandExecutor.CaptureExecutionIdentityAsync() : planSnapshot.Active;
-        var suspendResult = await _commandExecutor.ExecuteSuspendAsync(groupName);
-        if (planPreparation?.ManagedRunId is { } managedRunId
-            && (suspendResult.Status != "success"
-                || !onlinePlanHost!.ConfirmOnlineHoeingSuspend(generation,
-                    _commandExecutor.TakeoverTicketSnapshot, suspendResult.RawData)))
+        else physical &= batch.PolicyTicketReleased || batch.CleanupConfirmed || !batch.TakenOver;
+        if (runId is not null)
         {
-            onlinePlanHost!.FailPlanResume(managedRunId, "联机接管未确认原计划与 BGI 挂起现场同身份");
-            var reset = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
-            if (reset.Status == "success") await onlinePlanHost.OpenOnlineHoeingSendAsync();
-            _isAllReadyProcessing = 0;
-            _intentLifecycle.OnBatchFinished(generation, "原计划让位未确认，联机批次未启动");
-            NotifyBatchLoud("联机锄地未启动", "原计划让位未确认，已保留计划记录待核对；锄地批次未下发。");
-            return;
+            if (physical)
+                physical = await host!.SettleCancelledOnlinePolicyAsync(batch.Generation, runId);
+            else host!.FailPlanResume(runId, "本批停止后的后继任务或票据退出未确认", batch.Generation);
         }
-        if (suspendResult.Status != "success")
-        {
-            // suspend 失败（典型场景：BGI 未运行，IPC 连接超时）。
-            // 不要在此 KillBgi + RestartBgi 单组并 return —— 那样冷启动只执行第一个绑定组就停，
-            // 其余绑定组永远不会执行（本 bug 根因）。直接落入下方批次循环：reconcile 路径由对账循环
-            // 逐拍重试声明；v2 老路径下首个 start_group 的 Connect 失败会在 CommandExecutor 内
-            // 触发裸拉起回退（A4.4：不带执行参数，拉起后本方法内重试 IPC）；
-            // 若 BGI 实际在运行而 suspend 仅业务失败，也不会误杀进程。
-            AddLog($"task.suspend 未成功（{suspendResult.Message}），继续走批次启动流程（IPC 不通时由批次回退统一裸拉起 BGI 后经 IPC 执行）");
-        }
+        if (!physical) throw new InvalidOperationException("本批停止后的精确作业或接管责任尚未清理");
+        batch.Outcome = "cancelled";
+        batch.CleanupConfirmed = true;
+    }
 
-        // 等待 BGI 内部的 CancellationContext 取消状态传播完毕，避免取消令牌残留影响后续 start_group
-        // [P1-C 止血] 固定 1500ms 盲等改为轮询 IPC task.status（200ms 间隔、上限 6s）：
-        // 确认 BGI 无任务在运行（或中断上下文已就位 hasSuspendedTaskContext=true）后再进入批次 task.start。
-        // [切片4/切片7] settle 判定已抽为 CommandExecutor.WaitTaskSlotSettledAsync 共享方法
-        // （ext slotReleased 事件 + 快照探测 + 200ms×30 轮询兜底），按键抢占路径复用同一实现。
-        // [A6 状态确认 ADR-2026-09-16] 超时后复核槽位仍忙 = 旧任务可能卡死：中止本批启动尝试并
-        // 响亮告警，不再静默进入批次 task.start（事故教训：每组一行执行失败然后无人知晓）。
-        if (!await _commandExecutor.WaitTaskSlotSettledAsync("[上线探针]", AddLog, onlineBatchStopTarget))
+    private Task OnAllReadyConfirmedInternal(int generation)
+    {
+        NotifyBatchLoud("联机锄地未启动", "服务端仍使用旧开锄协议，请更新配套服务端；当前任务保持执行。");
+        return Task.CompletedTask;
+    }
+
+    private sealed class HoeingStartPreparation
+    {
+        public CommandExecutor? Executor;
+        public TaskCenterHost? Host;
+        public bool SendGateClosed;
+        public OnlineHoeingPreparation? Plan;
+    }
+
+    private async Task OnCoordinatedBatchStartAsync(CoordinatedBatchSnapshot start)
+    {
+        var uid = _config?.PlayerUid;
+        if (string.IsNullOrWhiteSpace(uid) || !start.ParticipantUids.Contains(uid, StringComparer.Ordinal)) return;
+        if (!IsExecutorMode || start.Protocol != "hoeing.start.v2") return;
+        OnlineHoeingBatch? batch = null;
+        string? rejected = null;
+        var recoveryPending = false;
+        lock (_batchGate)
         {
-            if (planPreparation?.ManagedRunId is { } stalledRun)
-                onlinePlanHost!.FailPlanResume(stalledRun, "BGI 原执行根退出未确认，计划保持待核对");
-            if (onlinePlanGateClosed && onlinePlanHost is not null)
+            if (_settledHoeingBatchIds.Contains(start.BatchId) || start.CleanupComplete) return;
+            if (_activeBatch is { IsAlive: true } active)
             {
-                var reset = await _commandExecutor.ResetTakeoverStateAsync(AddLog);
-                if (reset.Status == "success") await onlinePlanHost.OpenOnlineHoeingSendAsync();
+                if (active.BatchId == start.BatchId) return;
+                rejected = "本机已有联机批次正在准备、执行或清理，未中断现有任务";
             }
-            _isAllReadyProcessing = 0;
-            NotifyBatchLoud("联机锄地批次中止",
-                "BGI 任务槽位在 suspend 后超时未释放（旧任务可能卡死），本批锄地未下发；请检查 BGI 状态（必要时手动停止 BGI 任务后重新触发）");
-            _intentLifecycle.OnBatchFinished(generation, $"settle 复核槽位仍忙，批次启动中止（generation={generation}）");
-            _ = ReportStatusAsync();
-            return;
-        }
-        }
-
-        // 只有实际捕获到目标执行根，才向 BGI 请求抢占式队列语义；
-        // 空闲/冷启动/身份不可考均走普通提交，交给 BGI 的明确 task_busy/拒绝终态处理。
-        var preemptExistingTask = onlineBatchStopTarget is not null;
-
-        // [P1b] 依次执行所有绑定的配置组（批次有主句柄：取消语义走 batch.Cts，原共享 bool 已废弃）
-        batch.RunTask = Task.Run(async () =>
-        {
-            try
+            else if (_localResetGate.CurrentCount == 0)
+                rejected = "本机状态重置尚未完成，未开始另一批次";
+            else if (_ordinaryStopInProgress > 0)
+                rejected = "本机停止请求尚未完成，未开始另一批次";
+            else if (start.Phase != "registering" || start.Members.Any(m => m.Uid == uid && m.Stage != "pending"))
             {
-                var anyItemStarted = await RunCoordinatedBatchAsync(batch, groupNames, preemptExistingTask);
-                if (!batch.CoordinatedSucceeded
-                    && onlinePlanHost?.OnlineHoeingManagedRun(batch.Generation) is { } incompleteRun)
-                    onlinePlanHost.FailPlanResume(incompleteRun, "全队锄地批次未确认完成，原计划禁止自动接续");
-                // [P1b] 批次正常结束的统一复位出口（Executing → Idle）
-                _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次执行完毕（generation={generation}）");
-
-                // 执行完所有绑定的配置组后，按"上线锄地策略"处置被中断的原任务
-                // （恢复 / 不恢复直接停止 / 不恢复并执行指定任务，收尾逻辑共享 CommandExecutor.ApplyPolicyTeardownAsync）。
-                // 此位置在 for 循环全部执行完后，天然覆盖两个场景：
-                //   场景A: 绑定配置组是联机锄地（AutoHoeingTask）
-                //   场景B: 绑定配置组是普通配置组（如"采集"）
-                // 注意：如果配置组已被用户取消（F11），已在 cancelled 分支中按"取消优先"清除中断上下文，
-                // 不需要再执行策略收尾（否则会打误导日志/误启动指定任务）
-                // [P1b] 走恰好一次守卫：与 10s 恢复定时器互斥（同一代序号只收尾一次）
-                if (!batch.IsCancellationRequested)
+                // 重启后没有原成员token，不能把旧作业冒认为新执行；显式重置按resetId结清。
+                recoveryPending = true;
+            }
+            else
+            {
+                try
                 {
-                    // [fix 2026-09-13] 空批次守卫：全部绑定组都未真正启动（被 BGI 拒绝/不存在）时，
-                    // "锄地完成"前提不成立，RunSpecified 收尾（启动指定任务）必须跳过——
-                    // 否则定时上线触发后组名失效会凭空启动指定任务（实机事故：空批次后"采集"自动开跑）。
-                    // Resume/Stop 不受影响：恢复原任务/清上下文是恢复现场语义，与批次是否空跑无关。
-                    // 10s 恢复定时器不会补刀：它由 autoHoeingRunning 边沿触发，空批次从未产生该边沿。
-                    if (SnapshotOnlineHoeingPolicy().Policy == TaskConflictPolicy.RunSpecified && !anyItemStarted)
-                    {
-                        await _commandExecutor.ResetTakeoverStateAsync(AddLog);
-                        AddLog("[任务冲突策略] 本批次所有绑定组均未启动成功（被 BGI 拒绝/不存在），未实际锄地，"
-                               + "跳过「完成后执行指定任务」收尾（防空批次误启动）；请检查绑定的配置组名是否在 BGI 中存在");
-                    }
-                    else
-                    {
-                        await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", userCancelled: false);
-                    }
+                    var manual = start.Source == "manual";
+                    var intent = start.IntentGenerations.TryGetValue(uid, out var value) ? (int?)value : null;
+                    var candidate = new OnlineHoeingBatch(start, uid,
+                        manual ? new TaskConflictPolicySettings() : SnapshotOnlineHoeingPolicy());
+                    batch = candidate;
+                    _activeBatch = batch; // 从这里起Preparing也是busy，而不是等待RunTask出现。
                 }
+                catch (Exception ex) { rejected = ex.Message; }
+            }
+        }
+        if (recoveryPending)
+        {
+            NotifyBatchLoud("联机批次待核对", "发现旧批次仍未清理，保留当前任务；请使用状态重置完成同批次核对。");
+            return;
+        }
+        if (rejected != null)
+        {
+            await RejectCoordinatedStartAsync(start, uid, rejected);
+            return;
+        }
+        if (batch == null) return;
+        var expectedIntent = start.IntentGenerations.TryGetValue(uid, out var ownIntent) ? (int?)ownIntent : null;
+        if (batch.IsCancellationRequested || !_intentLifecycle.TryBeginCoordinatedBatch(start.BatchId,
+                start.Generation, start.Source == "manual", expectedIntent))
+        {
+            await RejectCoordinatedStartAsync(start, uid, "本机上线意图已改变或已取消，本次开始未接受");
+            batch.MarkSettled();
+            lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
+            return;
+        }
+        UpdateHoeingBatchStatus(batch, "preparing", "正在准备联机锄地");
+        batch.RunTask = RunAcceptedHoeingBatchAsync(batch);
+        ObserveOnlineTask(batch.RunTask, "统一联机批次");
+    }
 
-                _ = ReportStatusAsync();
-            }
-            catch (Exception ex)
+    private void OnCoordinatedBatchState(CoordinatedBatchSnapshot state)
+    {
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        if (batch?.BatchId != state.BatchId) return;
+        if (batch.LocalCleanupConfirmed && batch.RunTask?.IsCompleted == true && _localResetGate.CurrentCount > 0)
+        {
+            ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "联机清理回执补报");
+            return;
+        }
+        if (state.Phase == "aborted")
+        {
+            batch.FailureReason = state.Reason;
+            batch.Outcome = state.Reason.Contains("cancel", StringComparison.Ordinal) || state.Reason == "manual_reset"
+                ? "cancelled" : state.Reason.Contains("unknown", StringComparison.Ordinal) ? "unknown" : "failed";
+            UpdateHoeingBatchStatus(batch, "stopping", "全队批次已中止：" + state.Reason);
+            batch.Cancel(userInitiated: false);
+        }
+    }
+
+    private async Task RejectCoordinatedStartAsync(CoordinatedBatchSnapshot start, string uid, string reason)
+    {
+        AddLog("[联机开始] 未接受：" + reason);
+        if (_signalRClient == null || !start.Bindings.TryGetValue(uid, out var items)) return;
+        var token = Guid.NewGuid().ToString("N");
+        var layout = string.Join(",", items.Select(i => i.Type));
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var state = await _signalRClient.UpdateCoordinatedBatchAsync(start.Generation, token, start.BatchId,
+                layout, 0, 0, "preparation_failed", timeout.Token, "registered", reason);
+            if (state.Phase == "aborted")
+                await _signalRClient.UpdateCoordinatedBatchAsync(start.Generation, token, start.BatchId,
+                    layout, state.Index, state.Attempt, "", timeout.Token, "cleaned");
+        }
+        catch (Exception ex) { AddLog("[联机开始] 拒绝回执未送达：" + ex.Message); }
+    }
+
+    private void UpdateHoeingBatchStatus(OnlineHoeingBatch batch, string phase, string message)
+    {
+        if (batch.Phase == phase && batch.Message == message) return;
+        batch.Phase = phase;
+        batch.Message = message;
+        AddLog($"[联机开始] {batch.BatchId} {message}");
+        ObserveOnlineTask(ReportStatusAsync(), "联机批次状态上报");
+    }
+
+    private async Task RunAcceptedHoeingBatchAsync(OnlineHoeingBatch batch)
+    {
+        var preparation = new HoeingStartPreparation();
+        try
+        {
+            var completed = await RunCoordinatedBatchAsync(batch,
+                ct => PrepareCoordinatedStartAsync(batch, preparation, ct),
+                ct => TakeOverForCoordinatedStartAsync(batch, preparation, ct));
+            if (completed)
             {
-                if (onlinePlanHost?.OnlineHoeingManagedRun(batch.Generation) is { } failedRun)
-                    onlinePlanHost.FailPlanResume(failedRun, "全队锄地批次异常，原计划禁止自动接续：" + ex.Message);
-                AddLog($"依次执行配置组异常: {ex.Message}");
-                // [P1b] 批次异常的统一复位出口（Executing → Idle）
-                _intentLifecycle.OnBatchFinished(batch.Generation, $"AllReady 批次异常（generation={generation}）");
-                _ = ReportStatusAsync();
+                UpdateHoeingBatchStatus(batch, "cleaning", "全队执行完成，正在处理原任务和执行权");
+                await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", false, batch.TakeoverTicket);
+                if (batch.IsCancellationRequested && !await batch.WaitCancelledPolicyCleanupAsync())
+                    throw new InvalidOperationException("停止后的策略作业或原计划责任尚未结清");
+                batch.CleanupConfirmed = true;
+                batch.Message = batch.IsCancellationRequested ? "联机锄地已取消，清理已确认" : "联机锄地已完整完成";
             }
-            finally
+            else
             {
-                if (onlinePlanGateClosed && onlinePlanHost is not null
-                    && onlinePlanHost.CanOpenOnlineSendAfterBatch)
-                    await onlinePlanHost.OpenOnlineHoeingSendAsync();
-                // [P1b] 批次完结后句柄归 null（仅当仍指向本批次）：否则已完结批次残留，
-                // 后续手动锄地结束的边沿捕获到旧批次，守卫因 _teardownDoneGeneration 已越代而
-                // 直接 return，手动会话的策略收尾被静默吞掉（RunSpecified 下指定任务不启动）
-                lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
+                if (preparation.Plan?.ManagedRunId is { } failedRun)
+                    batch.CleanupConfirmed = await preparation.Host!.SettleFailedOnlineHoeingAsync(
+                        batch.Generation, failedRun, batch.CleanupConfirmed,
+                        "联机批次未完整完成：" + batch.FailureReason);
+                batch.Message = batch.Outcome switch
+                {
+                    "cancelled" => "联机锄地已取消，正在确认清理",
+                    "failed" => "联机锄地失败：" + batch.FailureReason,
+                    _ => "联机锄地结果未确认：" + batch.FailureReason,
+                };
             }
-        });
-        ObserveOnlineTask(batch.RunTask, "联机批次收尾");
-        // 注意：互斥锁只覆盖启动窗口（suspend+settle+发起批次），Task.Run 启动后即释放是刻意的——
-        // 后台序列可能横跨整个锄地会话，锁全程持有会挡住后续合法轮次；并发第二轮的穿透风险由
-        // 服务端"参与者集合消费"（B157，不再残留武装事件幻影触发）+ [P1b] 批次句柄顶替取消兜底。
-        _isAllReadyProcessing = 0;
+        }
+        catch (Exception ex)
+        {
+            batch.CleanupConfirmed = false;
+            batch.Outcome = batch.IsCancellationRequested ? "cancelled" : "failed";
+            batch.FailureReason = ex.Message;
+            if (batch.IsCancellationRequested && batch.HasPolicyCleanup)
+                batch.CleanupConfirmed = await batch.WaitCancelledPolicyCleanupAsync();
+            else if (preparation.Plan?.ManagedRunId is { } failedRun)
+                preparation.Host!.FailPlanResume(failedRun, "全队锄地未完整完成：" + ex.Message);
+            batch.Message = batch.IsCancellationRequested ? "联机锄地已中止：" + ex.Message : "联机锄地失败：" + ex.Message;
+            AddLog("[联机开始] " + batch.Message);
+        }
+        finally
+        {
+            if (batch.IsCancellationRequested && batch.HasPolicyCleanup)
+                batch.CleanupConfirmed = await batch.WaitCancelledPolicyCleanupAsync();
+            if (preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch != true)
+                batch.CleanupConfirmed = false;
+            if (preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch == true)
+            {
+                try { await preparation.Host.OpenOnlineHoeingSendAsync(); }
+                catch (Exception ex) { batch.CleanupConfirmed = false; AddLog("[联机开始] 原计划发送闸门尚未恢复：" + ex.Message); }
+            }
+            batch.LocalCleanupConfirmed = batch.CleanupConfirmed;
+            if (batch.CleanupConfirmed && _localResetGate.CurrentCount > 0)
+            {
+                try
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var state = await _signalRClient!.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token,
+                        batch.BatchId, string.Join(",", batch.Bindings.Select(i => i.Type)),
+                        0, 0, "", timeout.Token, "cleaned");
+                    if (state.Phase is not ("aborted" or "completed")) throw new InvalidOperationException("批次终态未确认");
+                    if (batch.IsCancellationRequested && batch.HasPolicyCleanup
+                        && !await batch.WaitCancelledPolicyCleanupAsync())
+                        throw new InvalidOperationException("停止后的精确策略作业退出仍待确认");
+                    CompleteCoordinatedCleanup(batch);
+                }
+                catch (Exception ex)
+                {
+                    batch.CleanupConfirmed = false;
+                    UpdateHoeingBatchStatus(batch, "cleanupPending", "本端已结束，服务端清理回执待确认：" + ex.Message);
+                }
+            }
+            else UpdateHoeingBatchStatus(batch, "cleanupPending", "联机批次清理尚未确认，请核对状态；不会启动另一批次");
+            ObserveOnlineTask(ReportStatusAsync(), "联机批次终态上报");
+        }
+    }
+
+    private readonly SemaphoreSlim _coordinatedCleanupAckGate = new(1, 1);
+
+    private async Task RetryCoordinatedCleanupAsync(OnlineHoeingBatch batch)
+    {
+        if (!batch.LocalCleanupConfirmed || _localResetGate.CurrentCount == 0
+            || !await _coordinatedCleanupAckGate.WaitAsync(0)) return;
+        try
+        {
+            lock (_batchGate) { if (!ReferenceEquals(_activeBatch, batch)) return; }
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var state = await _signalRClient!.GetCurrentCoordinatedBatchAsync(timeout.Token);
+            if (state?.BatchId == batch.BatchId)
+            {
+                if (state.Phase is not ("completed" or "aborted")) return;
+                await _signalRClient.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token, batch.BatchId,
+                    string.Join(",", batch.Bindings.Select(i => i.Type)), state.Index, state.Attempt, "", timeout.Token, "cleaned");
+            }
+            // 同批清理被确认，或权威服务器明确旧批次已不存在；都不操作后继任务。
+            batch.CleanupConfirmed = true;
+            CompleteCoordinatedCleanup(batch);
+        }
+        catch (Exception ex) { AddLog("[联机开始] 清理回执仍待确认：" + ex.Message); }
+        finally { _coordinatedCleanupAckGate.Release(); }
+    }
+
+    private void CompleteCoordinatedCleanup(OnlineHoeingBatch batch)
+    {
+        lock (_batchGate)
+        {
+            if (!ReferenceEquals(_activeBatch, batch)
+                || batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
+        }
+        _intentLifecycle.FinishCoordinatedBatch(batch.BatchId, batch.Message);
+        lock (_batchGate)
+        {
+            if (!ReferenceEquals(_activeBatch, batch)
+                || batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
+            batch.MarkSettled();
+            _lastHoeingBatchId = batch.BatchId;
+            _lastHoeingStartPhase = batch.Outcome == "succeeded" ? "completed" : batch.Outcome;
+            _lastHoeingStartMessage = batch.Outcome switch
+            {
+                "succeeded" => "联机锄地已完整完成",
+                "cancelled" => "联机锄地已取消，清理已确认",
+                "failed" => batch.Message,
+                _ => "联机锄地执行结果未确认，已完成本端清理",
+            };
+            _settledHoeingBatchIds.Add(batch.BatchId);
+            if (_settledHoeingBatchIds.Count > 256) _settledHoeingBatchIds.Remove(_settledHoeingBatchIds.First());
+            _activeBatch = null;
+        }
+        AddLog("[联机开始] " + batch.Message + "；本端清理已确认");
+        ObserveOnlineTask(ReportStatusAsync(), "联机清理完成状态");
+    }
+
+    private async Task PrepareCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
+    {
+        var names = batch.Bindings.Select(i => i.Name).ToArray();
+        var types = batch.Bindings.Select(i => i.Type).ToArray();
+        var local = OnlineHoeingBindingValidator.Validate(_config?.OnlineHoeingGroupNames, _config?.OnlineHoeingGroupTypes);
+        if (!local.IsValid || !local.Names.SequenceEqual(names) || !local.Types.SequenceEqual(types))
+            throw new InvalidOperationException("绑定已改变或不合法，请重新开始以使用最新绑定");
+        var ready = await EnsureTaskCenterExecutionReadyAsync(ct);
+        if (ready != null) throw new InvalidOperationException(ready);
+        ct.ThrowIfCancellationRequested();
+        var ext = GetBoundTaskCenterClient() ?? throw new InvalidOperationException("BGI 通道身份未确认");
+        foreach (var capability in new[] { "task.queue", "hoeing.batchOutcome.v1", "hoeing.coordinatedStart.v1", "execution.targetedSuspend.v1", "config.applied" })
+            if (!ext.HasCapability(capability)) throw new InvalidOperationException("BGI 缺少统一开锄能力 " + capability + "，未中断原任务");
+        var cfg = await ext.SendCommandAsync("ext.config.list", null, TimeSpan.FromSeconds(10), ct);
+        if (!cfg.Success || string.IsNullOrWhiteSpace(cfg.Data)) throw new InvalidOperationException("无法读取 BGI 任务资源");
+        var available = ParseConfigListData(System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(cfg.Data));
+        var validation = OnlineHoeingBindingValidator.Validate(names, types, available.ConfigGroups, available.OneClickConfigs, true);
+        if (!validation.IsValid) throw new InvalidOperationException(string.Join("；", validation.Errors));
+        foreach (var binding in batch.Bindings)
+        {
+            ct.ThrowIfCancellationRequested();
+            var dragon = binding.Type == "onedragon";
+            var described = await ext.SendCommandAsync("ext.config.describe",
+                new { groupName = dragon ? null : binding.Name, configName = dragon ? binding.Name : null },
+                TimeSpan.FromSeconds(10), ct);
+            if (!described.Success || string.IsNullOrWhiteSpace(described.Data))
+                throw new InvalidOperationException("无法冻结任务配置：" + binding.Name + "；" + described.ErrorMessage);
+            var document = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(described.Data);
+            if (!CommandExecutor.TryParseEpoch(described.Data, out var pid, out var ticks)
+                || pid != ext.ServerEpoch?.ProcessId || ticks != ext.ServerEpoch.StartTicksUtc
+                || !document.TryGetProperty("configRevision", out var revision)
+                || revision.ValueKind != System.Text.Json.JsonValueKind.String)
+                throw new InvalidOperationException("配置与 BGI 身份未确认：" + binding.Name);
+            if (!document.TryGetProperty("tasks", out var tasks) || tasks.ValueKind != System.Text.Json.JsonValueKind.Array
+                || !tasks.EnumerateArray().Any(task => task.TryGetProperty("enabled", out var enabled)
+                    && enabled.ValueKind == System.Text.Json.JsonValueKind.True))
+                throw new InvalidOperationException("没有启用的任务：" + binding.Name);
+            batch.FreezeConfigurationRevision(binding.Name, dragon, revision.GetString()!);
+        }
+        context.Executor = _commandExecutor ?? throw new InvalidOperationException("本机执行器未配置");
+        context.Host = IsExecutorMode ? TaskCenterHost : null;
+        if (context.Host != null) await context.Host.RecoverOnlineHandoffsBeforeStartAsync();
+        ct.ThrowIfCancellationRequested();
+        var boundary = await context.Executor.CaptureExecutionBoundarySnapshotAsync();
+        if (!boundary.Known || boundary.SlotOccupied && boundary.Active is null)
+            throw new InvalidOperationException("BGI 执行身份未确认，保留原任务");
+        if (boundary.AutoHoeingRunning) throw new InvalidOperationException("BGI 已在执行联机锄地，普通开始不会打断它");
+        if (context.Executor.TakeoverTicketSnapshot != null)
+            throw new InvalidOperationException("原接管尚未结清，保留当前执行");
+    }
+
+    private async Task TakeOverForCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var executor = context.Executor ?? throw new InvalidOperationException("执行器未准备");
+        if (!ReferenceEquals(executor, _commandExecutor)) throw new InvalidOperationException("本机执行器已改变，未接管");
+        if (context.Host != null)
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            budget.CancelAfter(TimeSpan.FromSeconds(15));
+            await context.Host.CloseOnlineHoeingSendAsync(budget.Token);
+            context.SendGateClosed = true;
+        }
+        ct.ThrowIfCancellationRequested();
+        var boundary = await executor.CaptureExecutionBoundarySnapshotAsync();
+        if (!boundary.Known || boundary.AutoHoeingRunning)
+            throw new InvalidOperationException("BGI 状态未知或已有锄地在执行，未中断现有任务");
+        if (context.Host != null)
+        {
+            context.Plan = context.Host.PrepareOnlineHoeing(batch.Generation, boundary);
+            if (!context.Plan.Ready) throw new InvalidOperationException(context.Plan.Reason ?? "原计划不能接管");
+        }
+        ct.ThrowIfCancellationRequested();
+        CommandResult result;
+        try { result = await executor.ExecuteSuspendAsync("联机批次 " + batch.BatchId, boundary); }
+        finally { batch.TakeoverTicket = executor.TakeoverTicketSnapshot; }
+        if (result.Status != "success") throw new InvalidOperationException(result.Message ?? "原任务接管未完成");
+        ct.ThrowIfCancellationRequested();
+        if (context.Plan?.ManagedRunId is not null
+            && !context.Host!.ConfirmOnlineHoeingSuspend(batch.Generation, batch.TakeoverTicket, result.RawData))
+            throw new InvalidOperationException("原计划与挂起回执身份不一致");
+        if (!await executor.WaitTaskSlotSettledAsync("[联机开始]", AddLog, boundary.Active))
+            throw new InvalidOperationException("原执行根退出尚未确认");
+        ct.ThrowIfCancellationRequested();
     }
 
     /// <summary>[A6] 抢占链响亮告警收口（ADR-2026-09-16）：用户可见日志 + 托盘气泡。

@@ -1,17 +1,152 @@
+using MultiplayerHoeingAssistant.Models;
+
 namespace MultiplayerHoeingAssistant.Services;
+
+internal sealed record HoeingPolicyExecution(string JobId, BgiEpoch Epoch, bool RegisteredJob,
+    CommandExecutor.ExecutionIdentity? NativeRoot = null);
 
 /// <summary>
 /// [P1b] AllReady 批次句柄：收编原 OnAllReadyConfirmedInternal 的 fire-and-forget Task.Run 批次，
 /// 使其"有主可寻"——记录 generation、取消令牌（并入原共享 bool _isAllReadySequenceCancelled 的语义：
 /// 外部"用户手动停止"与批次内 F11 取消统一走 CTS）、后台任务引用与存活状态。
-/// 新一轮 AllReady 到达时 MainViewModel 先取消旧批次（Cancel + 短超时等退出）再启动新批次。
+/// v2 从准备、执行到最终清理始终占用 busy；普通新请求不会取消或取代旧批次。
 /// CTS 不 Dispose：批次任务退出路径仍可能读令牌，Dispose 后访问会抛 ObjectDisposedException，批次量少直接放弃回收。
 /// </summary>
 public sealed class OnlineHoeingBatch
 {
+    private int _settled;
+    private readonly Dictionary<string, string> _configRevisions = new(StringComparer.Ordinal);
+    private readonly object _policyGate = new();
+    private HoeingPolicyExecution? _policyExecution;
+    private Func<HoeingPolicyExecution, Task<bool>>? _cancelPolicy;
+    private Task<bool>? _policyCancellation;
+    private CancellationTokenRegistration _policyCancellationRegistration;
+    private readonly TaskCompletionSource _policyPhaseFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Task<bool>? _policyCleanup;
+    internal bool HasPolicyCleanup { get; private set; }
+    internal bool CancelledPolicyCleanupConfirmed => _policyCleanup is { IsCompletedSuccessfully: true } task && task.Result;
+    internal bool PolicySendUnknown { get; set; }
+    internal bool PolicyTicketReleased { get; set; }
+    internal HoeingPolicyExecution? PolicyExecution { get { lock (_policyGate) return _policyExecution; } }
+
+    internal void ConfigurePolicyCancellation(Func<HoeingPolicyExecution, Task<bool>> cancel)
+    {
+        lock (_policyGate) _cancelPolicy = cancel;
+        _policyCancellationRegistration = Cts.Token.Register(RequestPolicyCancellation);
+    }
+
+    internal void RecordPolicyExecution(HoeingPolicyExecution execution)
+    {
+        lock (_policyGate)
+        {
+            if (_policyExecution is { } previous && (previous.JobId != execution.JobId
+                || previous.Epoch.ProcessId != execution.Epoch.ProcessId
+                || previous.Epoch.StartTicksUtc != execution.Epoch.StartTicksUtc))
+                throw new InvalidOperationException("同批收尾出现不同后继身份，保留责任待核对");
+            _policyExecution = execution;
+        }
+        if (IsCancellationRequested) RequestPolicyCancellation();
+    }
+
+    private void RequestPolicyCancellation()
+    {
+        lock (_policyGate)
+        {
+            if (_policyCancellation is not null || _policyExecution is null || _cancelPolicy is null) return;
+            var execution = _policyExecution;
+            var cancel = _cancelPolicy;
+            _policyCancellation = Task.Run(async () =>
+            {
+                try { return await cancel(execution).ConfigureAwait(false); }
+                catch { return false; }
+            });
+        }
+    }
+
+    internal Task<bool> WaitPolicyCancellationAsync()
+    {
+        if (IsCancellationRequested) RequestPolicyCancellation();
+        lock (_policyGate) return _policyCancellation ?? Task.FromResult(!PolicySendUnknown);
+    }
+
+    internal void ConfigurePolicyCleanup(Func<Task<bool>> cleanup)
+    {
+        HasPolicyCleanup = true;
+        Cts.Token.Register(() =>
+        {
+            lock (_policyGate) _policyCleanup ??= Task.Run(async () =>
+            {
+                await _policyPhaseFinished.Task.ConfigureAwait(false);
+                try { return await cleanup().ConfigureAwait(false); }
+                catch { return false; }
+            });
+        });
+    }
+    internal void MarkPolicyPhaseFinished() => _policyPhaseFinished.TrySetResult();
+    internal async Task<bool> WaitCancelledPolicyCleanupAsync()
+    {
+        Task<bool>? cleanup;
+        lock (_policyGate) cleanup = _policyCleanup;
+        return cleanup is not null && await cleanup.ConfigureAwait(false);
+    }
     public OnlineHoeingBatch(int generation)
     {
         Generation = generation;
+    }
+
+    public OnlineHoeingBatch(CoordinatedBatchSnapshot start, string selfUid, TaskConflictPolicySettings policy)
+        : this(start.Generation)
+    {
+        if (start.Protocol != "hoeing.start.v2" || string.IsNullOrWhiteSpace(start.BatchId)
+            || !start.ParticipantUids.Contains(selfUid, StringComparer.Ordinal)
+            || !start.Bindings.TryGetValue(selfUid, out var bindings))
+            throw new InvalidOperationException("批次身份、成员或绑定快照无效");
+        Start = start with
+        {
+            ParticipantUids = start.ParticipantUids.ToArray(),
+            Bindings = start.Bindings.ToDictionary(p => p.Key,
+                p => (IReadOnlyList<CoordinatedHoeingBinding>)p.Value.ToArray(), StringComparer.Ordinal),
+            IntentGenerations = start.IntentGenerations.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal),
+            Members = start.Members.ToArray(),
+        };
+        SelfUid = selfUid;
+        Bindings = bindings.ToArray();
+        Policy = new TaskConflictPolicySettings
+        {
+            Policy = policy.Policy, SpecifiedTaskType = policy.SpecifiedTaskType,
+            SpecifiedTaskName = policy.SpecifiedTaskName, SpecifiedTaskPriority = policy.SpecifiedTaskPriority,
+        };
+    }
+
+    public CoordinatedBatchSnapshot? Start { get; }
+    public string SelfUid { get; } = "";
+    public string BatchId => Start?.BatchId ?? "legacy:" + Generation;
+    public string Token { get; } = Guid.NewGuid().ToString("N");
+    public IReadOnlyList<CoordinatedHoeingBinding> Bindings { get; } = [];
+    public TaskConflictPolicySettings? Policy { get; }
+    public IReadOnlyDictionary<string, string> ConfigRevisions => _configRevisions;
+    public static string ConfigurationKey(string name, bool oneDragon) => (oneDragon ? "onedragon:" : "group:") + name;
+    public void FreezeConfigurationRevision(string name, bool oneDragon, string revision)
+    {
+        if (string.IsNullOrWhiteSpace(revision)) throw new InvalidOperationException("配置修订缺失");
+        var key = ConfigurationKey(name, oneDragon);
+        if (_configRevisions.TryGetValue(key, out var frozen) && frozen != revision)
+            throw new InvalidOperationException("本批配置修订已冻结，不能在执行中替换");
+        _configRevisions[key] = revision;
+    }
+    public string Phase { get; set; } = "preparing";
+    public string Message { get; set; } = "正在准备联机锄地";
+    public string Outcome { get; set; } = "unknown";
+    public string? FailureReason { get; set; }
+    public string? TakeoverTicket { get; set; }
+    public bool CleanupConfirmed { get; set; }
+    public bool LocalCleanupConfirmed { get; set; }
+    public bool Prepared { get; set; }
+    public bool TakenOver { get; set; }
+    public void MarkSettled()
+    {
+        lock (_policyGate) Interlocked.Exchange(ref _settled, 1);
+        _policyCancellationRegistration.Dispose();
     }
 
     /// <summary>本轮 AllReady 的代序号（服务端广播值，兼做策略收尾恰好一次守卫的批次键）。</summary>
@@ -25,14 +160,18 @@ public sealed class OnlineHoeingBatch
     public Task? RunTask { get; set; }
 
     /// <summary>批次是否仍存活（后台任务已发起且未完结）。</summary>
-    public bool IsAlive => RunTask is { IsCompleted: false };
+    public bool IsAlive => Start is not null ? Volatile.Read(ref _settled) == 0 : RunTask is { IsCompleted: false };
 
     /// <summary>批次是否已被请求取消。</summary>
     public bool IsCancellationRequested => Cts.IsCancellationRequested;
 
     /// <summary>请求取消批次（幂等；批次循环在下一次迭代检查点退出）。</summary>
-    public void Cancel()
+    public void Cancel(bool userInitiated = true)
     {
+        lock (_policyGate)
+        {
+        if (Volatile.Read(ref _settled) != 0) return;
+        if (userInitiated) Outcome = "cancelled";
         try
         {
             Cts.Cancel();
@@ -40,6 +179,7 @@ public sealed class OnlineHoeingBatch
         catch (ObjectDisposedException)
         {
             // 防御：理论上不 Dispose 不会命中，保留兜底
+        }
         }
     }
 }

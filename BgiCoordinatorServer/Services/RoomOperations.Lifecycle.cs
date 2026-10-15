@@ -12,14 +12,22 @@ public sealed partial class RoomOperations
 {
     /// <summary>创建房间，返回房间码与房间协议（§4.7 锁定）。</summary>
     public async Task<(string Code, string Protocol)> CreateRoomAsync(GatewayHandlerContext ctx,
-        string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "")
+        string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
+        string? hoeingBatchId = null, List<string>? expectedParticipantUids = null)
     {
+        if (!string.IsNullOrWhiteSpace(hoeingBatchId) || expectedParticipantUids is { Count: > 0 })
+        {
+            if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
+                throw new InvalidOperationException("hoeing_start_capability_required");
+            ValidateGameBatch(hoeingBatchId, expectedParticipantUids ?? [], playerUid);
+        }
         _logger.LogInformation("CreateRoom 收到参数: playerName={Name}, playerUid={Uid}, expectedPlayerCount={Count}, whitelist={WL}",
             playerName, playerUid, expectedPlayerCount, whitelist != null ? string.Join(",", whitelist) : "null");
         // 多世界轮次切换：先离开所有旧 Group，避免旧房间广播串扰
         await LeaveAllGroupsAsync(ctx);
         // version-compatibility-check 改动 5：透传房主上报版本作为房间基准版本
-        var code = _roomManager.CreateRoom(ctx.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion);
+        var code = _roomManager.CreateRoom(ctx.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion,
+            hoeingBatchId, expectedParticipantUids);
         await _broadcaster.AddToGroupAsync(ctx, code);
         TrackGroup(ctx, code);
         _logger.LogInformation("连接 {ConnId}({Name}) 创建房间 {Code}", ctx.ConnectionId, playerName, code);
@@ -38,13 +46,18 @@ public sealed partial class RoomOperations
 
     /// <summary>加入房间，广播 PlayerListUpdated。返回 (是否成功, 房间协议, 失败原因)。</summary>
     public async Task<(bool Success, string? Protocol, string? Error)> JoinRoomAsync(GatewayHandlerContext ctx,
-        string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "")
+        string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "", string? hoeingBatchId = null)
     {
         var playerId = ctx.ConnectionId;
 
         var room0 = _roomManager.GetRoom(roomCode);
         if (room0 != null)
         {
+            if (!string.Equals(room0.HoeingBatchId ?? "", hoeingBatchId ?? "", StringComparison.Ordinal))
+                return (false, room0.Protocol, "hoeing_start_identity_mismatch");
+            if (room0.HoeingBatchId is not null
+                && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
+                return (false, room0.Protocol, "hoeing_start_capability_required");
             // §4.7 协议锁定校验：同一房间不允许新旧协议混用
             if (ctx.IsV3 && room0.Protocol != GatewayProtocol.RoomProtocols.V3)
             {

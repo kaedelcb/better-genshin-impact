@@ -6,7 +6,7 @@ namespace BgiCoordinatorServer.Services;
 /// <summary>
 /// 控制房间族（自 CoordinatorHub 逐字搬迁：JoinControlRoom/SendRemoteCommand/
 /// ReportControlStatus/ConfirmAllReady/ReportOnlineEvent/ClearOnlineHistory，
-/// 及 StartConfirmAsync/IsInControlRoomOrRemote 私有辅助）。
+/// 及统一联机开始/IsInControlRoomOrRemote 辅助）。
 /// 仅做 ctx 参数化与双发改造，业务逻辑不变。
 /// 控制房间 Group 名为 "CTRL_{roomCode}"，与锄地房间不同命名空间——
 /// RoomPhase 观测（只针对锄地房间）本族一律不加。
@@ -74,7 +74,7 @@ public sealed partial class RoomOperations
             {
                 _roomManager.AddToControlRoom(group, ctx.ConnectionId, playerUid, playerName, clientInstanceId, machineId);
             }
-            if (isRemote)
+            if (isRemote || isWebClient)
             {
                 _roomManager.RegisterRemoteConnection(group, ctx.ConnectionId, playerUid);
             }
@@ -85,7 +85,7 @@ public sealed partial class RoomOperations
 
             // 遥控端不接收命令（FR-3），故不下发离线缓存命令。WEB 端同样不入 _controlRooms，
             // 但既有行为会下发缓存——保持 WEB 端不变，仅对遥控端跳过。
-            if (!isRemote)
+            if (!isRemote && !isWebClient)
             {
                 var pending = _roomManager.GetAndClearPendingCommands(playerUid);
                 foreach (var cmd in pending)
@@ -127,11 +127,27 @@ public sealed partial class RoomOperations
             // 但它们已通过 JoinControlRoom 的密码校验并加入了 CTRL_ group，应放行发送。
             // PC 端助手（UID 为真实数字）走 _controlRooms 校验，行为不变。
             // 遥控端（isRemote，不在 _controlRooms）用 RegisterRemoteConnection 登记，也放行发送。
-            var isWebSender = !string.IsNullOrEmpty(command.SenderUid) && command.SenderUid.StartsWith("web_");
             var isRemoteSender = _roomManager.IsRemoteConnection(group, ctx.ConnectionId);
-            if (!isWebSender && !isRemoteSender && !_roomManager.IsInControlRoom(group, ctx.ConnectionId))
+            if (!isRemoteSender && !_roomManager.IsInControlRoom(group, ctx.ConnectionId))
             {
                 _logger.LogWarning("玩家 {Sender} 不在控制房间中，拒绝发送命令", command.Sender);
+                return;
+            }
+
+            // 旧控制页面仍可能发送快捷键包；不得再把它投递到各端独立foreach执行。
+            if (command.Cmd == "start_group" && command.Params?.GetValueOrDefault("key")?.ToString() == "一键锄地")
+            {
+                string message;
+                var accepted = false;
+                try
+                {
+                    var batch = await BeginManualCoordinatedBatchAsync(ctx, command.CommandId, command.Target, command.ExpiresAtUtc);
+                    accepted = true;
+                    message = "联机批次已受理：" + batch.BatchId;
+                }
+                catch (InvalidOperationException ex) { message = "联机批次未受理：" + ex.Message; }
+                var batchAck = new { commandId = command.CommandId, deliveredTo = 0, accepted, message };
+                await _broadcaster.SendToCallerAsync(ctx, "RemoteCommandAck", batchAck, batchAck);
                 return;
             }
 
@@ -175,9 +191,16 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
 
             var deliveredTo = 0;
+            var changedStopTargets = 0;
             foreach (var connectionId in targets)
             {
-                await _broadcaster.SendToConnectionAsync(connectionId, "RemoteCommand", new { command }, command);
+                var outgoing = command;
+                if (command.Cmd == "stop")
+                {
+                    outgoing = FreezeStopTarget(group, connectionId, command);
+                    if (outgoing is null) { changedStopTargets++; continue; }
+                }
+                await _broadcaster.SendToConnectionAsync(connectionId, "RemoteCommand", new { command = outgoing }, outgoing);
                 deliveredTo++;
             }
 
@@ -186,6 +209,7 @@ public sealed partial class RoomOperations
             if (!isRemoteConfigReply
                 && !isCenterRequest
                 && !string.Equals(command.Cmd, "reset_state", StringComparison.Ordinal)
+                && !string.Equals(command.Cmd, "stop", StringComparison.Ordinal)
                 && command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
             {
                 var players = _roomManager.GetControlRoomPlayers(group);
@@ -204,7 +228,8 @@ public sealed partial class RoomOperations
             {
                 commandId = command.CommandId,
                 deliveredTo,
-                message = deliveredTo == 0 ? "没有在线目标" : ""
+                message = changedStopTargets > 0 ? $"{changedStopTargets} 个停止目标已变化，未影响其当前任务"
+                    : deliveredTo == 0 ? "没有在线目标" : ""
             };
             await _broadcaster.SendToCallerAsync(ctx, "RemoteCommandAck", ack, ack);
         }
@@ -213,6 +238,50 @@ public sealed partial class RoomOperations
             _logger.LogError(ex, "SendRemoteCommand 失败");
             if (command.Cmd is "center.request" or "center.data") throw;
         }
+    }
+
+    private RemoteCommand? FreezeStopTarget(string group, string connectionId, RemoteCommand source)
+    {
+        var player = _roomManager.GetControlRoomPlayers(group).FirstOrDefault(p => p.ConnectionId == connectionId);
+        if (player is null) return null;
+        string batchId;
+        lock (_batchGate)
+        {
+            batchId = _controlBatches.TryGetValue(group, out var batch)
+                && batch.MatchesExecutor(player.PlayerUid, player.ClientInstanceId)
+                && batch.Snapshot().Members.Any(m => m.Uid == player.PlayerUid && m.Stage != "cleaned")
+                    ? batch.BatchId : "";
+            var hasExpected = TryReadStopExpectation(source, player.PlayerUid, out var expected);
+            if (!hasExpected && batchId.Length != 0) return null;
+            if (hasExpected && !string.Equals(batchId, expected, StringComparison.Ordinal)) return null;
+        }
+        var parameters = source.Params is null ? new Dictionary<string, object>() : new(source.Params);
+        parameters.Remove("hoeingBatchIds");
+        parameters["hoeingBatchId"] = batchId; // Empty is an explicit no-batch observation, never a wildcard.
+        return new RemoteCommand
+        {
+            RoomCode = source.RoomCode, Cmd = source.Cmd, Sender = source.Sender,
+            SenderUid = source.SenderUid, Target = [player.PlayerUid], TargetInstanceId = source.TargetInstanceId,
+            CommandId = source.CommandId, Timestamp = source.Timestamp, ExpiresAtUtc = source.ExpiresAtUtc,
+            Params = parameters
+        };
+    }
+
+    private static bool TryReadStopExpectation(RemoteCommand command, string uid, out string expected)
+    {
+        expected = "";
+        if (command.Params?.TryGetValue("hoeingBatchIds", out var map) == true && map is not null)
+        {
+            var element = map is System.Text.Json.JsonElement json ? json : System.Text.Json.JsonSerializer.SerializeToElement(map);
+            if (element.ValueKind == System.Text.Json.JsonValueKind.Object && element.TryGetProperty(uid, out var item))
+            {
+                expected = item.ValueKind == System.Text.Json.JsonValueKind.String ? item.GetString() ?? "" : "invalid_stop_target";
+                return true;
+            }
+        }
+        if (command.Params?.TryGetValue("hoeingBatchId", out var value) != true) return false;
+        expected = value?.ToString() ?? "";
+        return true;
     }
 
     /// <summary>
@@ -354,146 +423,51 @@ public sealed partial class RoomOperations
     }
 
     /// <summary>就绪检查并在凑齐时开一轮（广播 AllReady 或进入确认阶段）。
-    /// 由 ReportOnlineEventAsync 与 StartConfirmAsync 成功收尾后的补评估共用。</summary>
+    /// 上线意图只选择冻结成员；业务执行权由v2准备与接管阶段授予。</summary>
     private async Task TryStartRoundAsync(string group)
     {
-        if (!_roomManager.CheckAndTransition(group, out var readyGeneration)) return;
-
-        var onlinePlayers = _roomManager.GetControlRoomPlayers(group)
-            .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0)
-            .Select(p => p.PlayerUid)
-            .ToList();
-
-        // 在 AllReady/确认阶段之前拦截绑定结构问题：否则每个客户端会先进入批次注册，
-        // 第二个 layout 不一致才触发 batch_layout_mismatch，用户只能看到批次中止而不知道是哪位成员配置不规范。
-        var bindingIssue = _roomManager.ValidateCoordinatedBindingLayout(group, onlinePlayers);
-        if (bindingIssue != null)
+        CoordinatedBatchState? batch = null;
+        string? rejection = null;
+        List<string> participants;
+        int intentGeneration;
+        bool created = false;
+        lock (_batchGate)
         {
-            _logger.LogWarning("联机锄地绑定布局不一致，放弃本轮：group={Group}, generation={Generation}, reason={Reason}",
-                group, readyGeneration, bindingIssue);
-            _roomManager.MarkExhausted(group);
-            _roomManager.DisarmOnlineEvents(group, onlinePlayers);
+            if (!_roomManager.CheckAndTransition(group, out intentGeneration)) return;
+            var players = _roomManager.GetCoordinatedStartPlayers(group)
+                .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToArray();
+            participants = players.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).ToList();
+            var intents = players.GroupBy(p => p.PlayerUid).ToDictionary(g => g.Key, g => g.First().OnlineEventGeneration,
+                StringComparer.Ordinal);
+            var identity = string.Join("|", intents.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key + ":" + p.Value));
+            var requestId = "online_" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
+            try
+            {
+                batch = BeginCoordinatedBatch(group, "online", requestId, requestId, participants,
+                    intents, null, out created);
+                // 旧本地counter只用于消费上线意图；执行与重置使用服务端BatchId/generation。
+                _roomManager.ConsumeOnlineReady(group, intentGeneration, participants);
+            }
+            catch (InvalidOperationException ex)
+            {
+                rejection = ex.Message;
+                _roomManager.MarkExhausted(group);
+                _roomManager.DisarmOnlineEvents(group, participants);
+            }
+        }
+        if (rejection is not null)
+        {
+            _logger.LogWarning("联机开始被拒绝：group={Group}, intentGeneration={Generation}, reason={Reason}",
+                group, intentGeneration, rejection);
+            // 此通知只拒绝本次上线意图，绝不能中止另一BatchId的现有执行。
             await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
-                new { generation = readyGeneration, targetUids = onlinePlayers, reason = bindingIssue }, readyGeneration);
-            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-            return;
+                new { generation = intentGeneration, targetUids = participants, reason = rejection }, intentGeneration);
         }
-
-        if (!BeginCoordinatedBatch(group, readyGeneration, onlinePlayers, out var batchRejection))
-        {
-            // 不能在服务器未建立本代批次时发 AllReady；客户端随后只会得到 batch_not_found。
-            _roomManager.MarkExhausted(group);
-            _roomManager.DisarmOnlineEvents(group, onlinePlayers);
-            await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
-                new { generation = readyGeneration, targetUids = onlinePlayers, reason = batchRejection }, readyGeneration);
-            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-            return;
-        }
-
-        // 单人场景（≤1 人）：跳过确认阶段，直接广播 AllReady
-        // 确认阶段的设计目的是"等所有成员确认收到 AllReady"，
-        // 单人场景不存在"有人没收到"的问题，跳过可避免：
-        //   1. 断线重连后消息发到旧 connectionId 导致丢失
-        //   2. 30 秒超时等待，延迟开锄
-        if (onlinePlayers.Count <= 1)
-        {
-            _roomManager.ConsumeOnlineReady(group, readyGeneration, onlinePlayers);
-            // 定向只发给本轮就绪成员：全组广播会让房间里未上线的成员也收到 AllReady 并自动开锄
-            foreach (var uid in onlinePlayers)
-            {
-                var connId = _roomManager.GetConnectionIdByUid(group, uid);
-                if (!string.IsNullOrEmpty(connId))
-                {
-                    await _broadcaster.SendToConnectionAsync(connId, "AllReady", new { generation = readyGeneration }, readyGeneration);
-                }
-            }
-            // 消费后成员字段已变（OnlineReady 复位等）：全量广播最新列表
-            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-        }
-        else
-        {
-            _roomManager.BeginConfirming(group, readyGeneration, onlinePlayers);
-            _ = StartConfirmAsync(group, readyGeneration, onlinePlayers);
-        }
-    }
-
-    /// <summary>确认阶段主循环：发送 AllReadyConfirm → 等 ack → 超时重试 → 完成或耗尽。</summary>
-    private async Task StartConfirmAsync(string group, int generation, List<string> targetUids)
-    {
-        const int timeoutMs = 30_000;
-        const int maxAttempts = 3;
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            var players = _roomManager.GetControlRoomPlayers(group);
-            var pendingUids = _roomManager.GetPendingConfirmUids(group, targetUids)
-                .Where(uid => players.Any(p => p.PlayerUid == uid))
-                .ToList();
-            if (pendingUids.Count == 0) break;
-
-            foreach (var uid in pendingUids)
-            {
-                var connId = _roomManager.GetConnectionIdByUid(group, uid);
-                if (!string.IsNullOrEmpty(connId))
-                {
-                    await _broadcaster.SendToConnectionAsync(connId, "AllReadyConfirm", new { generation }, generation);
-                    _logger.LogInformation("确认阶段: 已向 {Uid} 发送 AllReadyConfirm(generation={Gen}), 第{Attempt}次", uid, generation, attempt);
-                }
-                else
-                {
-                    // 断线成员 ConnectionId=""：此前 null 检查放行导致向空连接静默发送、无日志
-                    _logger.LogWarning("确认阶段: 成员 {Uid} 无有效连接（可能断线未归），跳过本次发送", uid);
-                }
-            }
-
-            var waitStart = DateTime.UtcNow;
-            while ((DateTime.UtcNow - waitStart).TotalMilliseconds < timeoutMs)
-            {
-                if (!_roomManager.IsStateConfirming(group))
-                {
-                    _logger.LogInformation("确认阶段被中断，generation={Gen}", generation);
-                    // 中断时消费已确认成员，避免下次重复触发
-                    var confirmedUids = targetUids.Where(uid =>
-                        _roomManager.GetConfirmedUids(group).Contains(uid)).ToList();
-                    if (confirmedUids.Count > 0)
-                        _roomManager.ConsumeOnlineReady(group, generation, confirmedUids);
-                    return;
-                }
-                if (_roomManager.IsAllConfirmed(group, targetUids))
-                {
-                    _logger.LogInformation("全员确认完成, generation={Gen}", generation);
-                    _roomManager.ConsumeOnlineReady(group, generation, targetUids);
-                    // 状态机复位 idle（否则会残留 confirming 僵尸态，后续轮次被 CheckAndTransition 永久挡住）
-                    _roomManager.MarkRoundCompleted(group);
-                    // 确认完成：成员字段已变（OnlineReady 复位等），全量广播最新列表
-                    await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-                    // 补评估：确认窗口期间新 armed 的成员（迟到上报/30s 重试）在此接续新一轮
-                    await TryStartRoundAsync(group);
-                    return;
-                }
-                await Task.Delay(500);
-            }
-            _roomManager.IncrementConfirmAttempts(group);
-            _logger.LogWarning("确认阶段: 超时, 第{Attempt}次, generation={Gen}", attempt, generation);
-        }
-
-        // 确认超时耗尽：整轮放弃开锄——宁可不锄/漏锄，也不能缺人开锄（用户明确取舍，推翻 P2-G 降级开锄方案）。
-        // MarkExhausted 状态记录保留；日志明确标注未确认成员，便于排查是谁的客户端卡住。
-        var unconfirmedUids = _roomManager.GetUnconfirmedUids(group, targetUids);
-        _logger.LogWarning("确认超时，本轮放弃开锄（缺人不开锄）, generation={Gen}, 未确认成员={Uids}",
-            generation, string.Join(",", unconfirmedUids));
-        Console.WriteLine("[探针服务端] 确认超时，本轮放弃开锄（缺人不开锄）, group=" + group + " generation=" + generation + " 未确认成员=" + string.Join(",", unconfirmedUids));
-        _roomManager.MarkExhausted(group);
-        // 耗尽收尾：解除本轮参与者的武装事件（不记联机记录），避免残留事件被后续任意新上报幻影触发新一轮；
-        // 并显式广播 AllReadyAbort 让客户端复位本地"已上线"标记——否则客户端 _isOnlineReady 永久残留，
-        // 后续命令上线全被客户端守卫吞掉，表现为"执行了上线但再也没反应"。
-        _roomManager.DisarmOnlineEvents(group, targetUids);
-        await _broadcaster.BroadcastGroupAsync(group, "AllReadyAbort",
-            new { generation, targetUids, unconfirmedUids, reason = "confirmation_timeout" }, generation);
-        // 超时耗尽：成员字段已复位，全量广播最新列表
+        else if (created && batch is not null)
+            await PublishBatchStartAsync(group, batch);
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
     }
-
     /// <summary>客户端确认收到 AllReadyConfirm。由客户端收到 AllReadyConfirm 事件后调用。</summary>
     public async Task ConfirmAllReadyAsync(GatewayHandlerContext ctx, int generation)
     {

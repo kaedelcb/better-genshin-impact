@@ -590,6 +590,7 @@ public class AutoHoeingTask : ISoloTask
         catch (Exception ex)
         {
             executionFailure = ex;
+            if (ex is HoeingStartupException) MarkPartyFailed(ex.Message);
             _logger.LogError(ex, "锄地一条龙任务异常终止");
         }
         finally
@@ -668,7 +669,7 @@ public class AutoHoeingTask : ISoloTask
             }
 
             // 联机中断时通知用户并退出世界
-            if (!string.IsNullOrEmpty(_stopReason) && _config.MultiplayerEnabled)
+            if (!string.IsNullOrEmpty(_stopReason) && _config.MultiplayerEnabled && !ct.IsCancellationRequested)
             {
                 // 房主和成员都退出联机世界回到单人世界
                 try
@@ -679,7 +680,8 @@ public class AutoHoeingTask : ISoloTask
                     // 使用 60 秒超时，给 LeaveWorldAsync 的 5 次重试留出充足时间。
                     // 每次重试约需 25-30 秒（回主界面 10s + 开F2 + 弹窗 8s + 等待加载 10s + 复核 1.5s），
                     // 60 秒足够 2 次完整重试。15 秒太紧，一次弹窗处理稍慢就超时，后续重试全浪费。
-                    using var leaveWorldCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    using var leaveWorldCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    leaveWorldCts.CancelAfter(TimeSpan.FromSeconds(60));
                     var autoParty = new AutoPartyTask();
                     var left = await autoParty.LeaveWorldAsync(leaveWorldCts.Token);
                     if (!left)
@@ -818,6 +820,7 @@ public class AutoHoeingTask : ISoloTask
                     _isGuardRestartRun = true
                 };
                 await restart.Start(ct);   // 复用原始外部 ct；重开的运行 isGuardRestartRun=true → 结束时不再重开（R3）
+                executionFailure = null; // 有限重开已经实际成功，原启动失败已恢复。
             }
             catch (OperationCanceledException)
             {
@@ -825,7 +828,8 @@ public class AutoHoeingTask : ISoloTask
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[联机][守护] 守护重开执行异常（忽略，不影响本次任务收尾）");
+                executionFailure = ex;
+                _logger.LogError(ex, "[联机][守护] 守护重开执行异常");
             }
         }
         else if (_config.MultiplayerEnabled)
@@ -835,6 +839,7 @@ public class AutoHoeingTask : ISoloTask
                 "[联机][守护] 判定不重开：guardMode={GuardMode} userCancelled={UserCancelled} expCap={ExpCap} isRestartRun={IsRestart} completedNormally={Completed} partyFailed={PartyFailed} coordinatedRestart={Coordinated} stopReason={Reason} 未执行线路数={Unexec} 阈值={Threshold}",
                 _config.HoeingGuardMode && !_restrictionStopTriggered, ct.IsCancellationRequested, _expCapStopTriggered, _isGuardRestartRun, _completedNormally, _partyFailed, _coordinatedRestartRequired, _stopReason ?? "(空)", guardUnexecuted, Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold));
         }
+        HoeingStartupBoundary.RethrowAfterCleanup(executionFailure, ct);
     }
 
     /// <summary>
@@ -868,6 +873,23 @@ public class AutoHoeingTask : ISoloTask
         _coordinatedRestartRequired = true;
     }
 
+    private static async Task RequireStartupAdmissionAsync(CoordinatorClient? client, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var scope = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current;
+        if (scope == null) return;
+        if (client == null) throw new HoeingStartupException("固定成员就绪", "协调连接不存在");
+        await client.VerifyHoeingStartupAsync(scope.BatchId, scope.ExpectedParticipantUids, ct);
+    }
+
+    private static void RequireMatchingRoomBatch(RoomConfig room)
+    {
+        var scope = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current;
+        if (scope == null) return;
+        HoeingStartupBoundary.RequireParticipants(scope.BatchId, scope.ExpectedParticipantUids,
+            room.HoeingBatchId, room.ExpectedParticipantUids, room.ExpectedParticipantUids, true, CancellationToken.None);
+    }
+
     private async Task InitializeMultiplayerAsync()
     {
         // 进入即置 false；仅在成功走到方法末尾时置 true（见字段注释）。
@@ -875,12 +897,15 @@ public class AutoHoeingTask : ISoloTask
         try
         {
             var client = new CoordinatorClient();
+            // 从创建起由 Start.finally 持有清理责任，查房/连接期间取消也必须释放心跳和连接。
+            _coordinatorClientRef = client;
             // 隐藏服务器地址前半部分
             var maskedUrl = MaskServerUrl(_config.CoordinatorServerUrl);
             _logger.LogInformation("[联机] 开始连接协调服务器: {Url}", maskedUrl);
             var connected = await client.ConnectAsync(_config.CoordinatorServerUrl, _ct);
             if (!connected)
             {
+                _ct.ThrowIfCancellationRequested();
                 _logger.LogWarning("[联机] 连接协调服务器失败，降级为单机模式");
                 MarkPartyFailed("连接协调服务器失败");
                 return;
@@ -950,7 +975,6 @@ public class AutoHoeingTask : ISoloTask
                     {
                         _logger.LogError("[联机] 等待超时（{T}s），未能加入任何可用房间，停止联机锄地", _config.PartyTimeoutSeconds);
                         MarkPartyFailed("加入房间超时（随机模式）");
-                        await client.DisposeAsync();
                         return;
                     }
                 }
@@ -981,7 +1005,6 @@ public class AutoHoeingTask : ISoloTask
                     {
                         _logger.LogError("[联机] 等待超时（{T}s），未找到房主 [{Host}] 的房间，停止联机锄地", _config.PartyTimeoutSeconds, targetHost);
                         MarkPartyFailed("加入房间超时（指定房主）");
-                        await client.DisposeAsync();
                         return;
                     }
                 }
@@ -1017,7 +1040,6 @@ public class AutoHoeingTask : ISoloTask
                     _logger.LogError("[联机] 无法加入房间 {Code}（{Reason}），停止联机锄地",
                         roomCodeToJoin, roomClosed ? "房间已关闭" : "重试耗尽");
                     MarkPartyFailed("无法加入房间");
-                    await client.DisposeAsync();
                     return;
                 }
                 // 加入房间后立刻发心跳，确保服务器知道成员在线
@@ -1042,7 +1064,6 @@ public class AutoHoeingTask : ISoloTask
                 {
                     _logger.LogWarning("[联机] 创建房间失败，降级为单机模式");
                     MarkPartyFailed("创建房间失败");
-                    await client.DisposeAsync();
                     return;
                 }
             }
@@ -1058,6 +1079,8 @@ public class AutoHoeingTask : ISoloTask
             {
                 var roomConfig = new Multiplayer.Models.RoomConfig
                 {
+                    HoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
+                    ExpectedParticipantUids = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids.ToList() ?? new(),
                     SyncPointMinDistance = _config.SyncPointMinDistance,
                     StartRouteIndex = _config.StartRouteIndex,
                     RouteFilterKeywords = _config.RouteFilterKeywords,
@@ -1147,12 +1170,10 @@ public class AutoHoeingTask : ISoloTask
                 }
                 
                 // 多世界模式下配置上传失败是严重错误，必须终止
-                if (!uploadSuccess && _config.MultiWorldEnabled)
+                if (!uploadSuccess && (_config.MultiWorldEnabled || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive))
                 {
                     _logger.LogError("[联机] 多世界模式：房主配置上传失败，终止多世界模式");
                     MarkPartyFailed("房主配置上传失败");
-                    await client.DisposeAsync();
-                    _multiplayerCoordinator = null;
                     return;
                 }
                 
@@ -1237,7 +1258,6 @@ public class AutoHoeingTask : ISoloTask
 
             // 路线一致性验证（延迟到路线筛选后执行，只验证本次要跑的路线）
             _consistencyChecker = new RouteConsistencyChecker();
-            _coordinatorClientRef = client;
 
             // 启动世界状态监测（需求 2）
             // 注入单人调试模式标志（纯本地，显式依赖）：为 true 时 WorldStateMonitor 跳过
@@ -1372,6 +1392,7 @@ public class AutoHoeingTask : ISoloTask
             var autoParty = new AutoPartyTask();
             if (isHost)
             {
+                var allowCurrentParty = false;
                 // 上报房主就绪，通知成员可以开始申请
                 await client.ReportHostReadyAsync();
 
@@ -1391,8 +1412,6 @@ public class AutoHoeingTask : ISoloTask
                     _logger.LogError("[联机] 自动组队初始化失败，停止联机锄地");
                     _worldStateMonitor.IsPartyPhase = false;
                     MarkPartyFailed("自动组队初始化失败");
-                    await client.DisposeAsync();
-                    _multiplayerCoordinator = null;
                     return;
                 }
                 else if (actualCount == 0)
@@ -1404,14 +1423,13 @@ public class AutoHoeingTask : ISoloTask
                         var currentCount = client.CurrentRoomPlayerCount;
                         _logger.LogWarning("[联机] 组队超时，以当前 {N} 人开始锄地", currentCount);
                         _config.ExpectedPlayerCount = currentCount > 0 ? currentCount : 1;
+                        allowCurrentParty = true;
                     }
                     else
                     {
                         _logger.LogError("[联机] 组队超时，停止联机锄地");
                         _worldStateMonitor.IsPartyPhase = false;
                         MarkPartyFailed("组队超时");
-                        await client.DisposeAsync();
-                        _multiplayerCoordinator = null;
                         return;
                     }
                 }
@@ -1420,6 +1438,7 @@ public class AutoHoeingTask : ISoloTask
                     // 房主手动跳过（ESC），以实际人数开始
                     _logger.LogInformation("[联机] 房主跳过等待，以实际 {N} 人开始锄地", actualCount);
                     _config.ExpectedPlayerCount = actualCount;
+                    allowCurrentParty = true;
                 }
                 else
                 {
@@ -1433,17 +1452,17 @@ public class AutoHoeingTask : ISoloTask
                 client.AllWorldJoined += hostAllJoinedHandler;
                 try
                 {
-                    await client.ReportWorldJoinedAsync();
-                    _logger.LogInformation("[联机] 房主已上报就绪，等待所有成员就绪...");
-
-                    using var allJoinedCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.PartyTimeoutSeconds));
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_ct, allJoinedCts.Token);
-                    using var reg = linkedCts.Token.Register(() => hostAllJoinedTcs.TrySetResult(false));
-                    var allJoined = await hostAllJoinedTcs.Task;
-                    if (allJoined)
-                        _logger.LogInformation("[联机] 所有成员已就绪，开始锄地");
-                    else
-                        _logger.LogWarning("[联机] 等待所有成员就绪超时，继续执行");
+                    await HoeingStartupBoundary.WaitForWorldReadyAsync(hostAllJoinedTcs,
+                        token => client.ReportWorldJoinedAsync(token),
+                        TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                    _logger.LogInformation("[联机] 所有成员已就绪，开始锄地");
+                }
+                catch (HoeingStartupException ex) when (allowCurrentParty && client.IsConnected
+                    && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive
+                    && ex.Stage == "全员进入世界")
+                {
+                    _ct.ThrowIfCancellationRequested();
+                    _logger.LogWarning("[联机] 按用户选择，以当前 {Count} 人开始；不声明原预期成员全员就绪", _config.ExpectedPlayerCount);
                 }
                 finally
                 {
@@ -1490,8 +1509,6 @@ public class AutoHoeingTask : ISoloTask
                     _logger.LogError("[联机] 无法获取房主 UID，组队失败，停止联机锄地");
                     _worldStateMonitor.IsPartyPhase = false;
                     MarkPartyFailed("无法获取房主 UID");
-                    await client.DisposeAsync();
-                    _multiplayerCoordinator = null;
                     return;
                 }
                 else
@@ -1535,8 +1552,6 @@ public class AutoHoeingTask : ISoloTask
                                 _logger.LogError("[联机] 等待房主就绪超时，停止联机锄地");
                                 _worldStateMonitor.IsPartyPhase = false;
                                 MarkPartyFailed("等待房主就绪超时");
-                                await client.DisposeAsync();
-                                _multiplayerCoordinator = null;
                                 return;
                             }
                             _logger.LogInformation("[联机] 房主已就绪");
@@ -1566,6 +1581,7 @@ public class AutoHoeingTask : ISoloTask
 
                     if (hostConfig != null)
                     {
+                        RequireMatchingRoomBatch(hostConfig);
                         _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
                         _config.StartRouteIndex = hostConfig.StartRouteIndex;
                         _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
@@ -1634,13 +1650,11 @@ public class AutoHoeingTask : ISoloTask
                     else
                     {
                         // 多世界模式下配置同步失败是严重错误，必须终止
-                        if (_config.MultiWorldEnabled)
+                        if (_config.MultiWorldEnabled || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
                         {
                             _logger.LogError("[联机] 多世界模式：无法获取房主配置（重试3次后仍失败），终止多世界模式");
                             _worldStateMonitor.IsPartyPhase = false;
                             MarkPartyFailed("无法获取房主配置");
-                            await client.DisposeAsync();
-                            _multiplayerCoordinator = null;
                             return;
                         }
                         _logger.LogWarning("[联机] 无法获取房主配置，使用本地配置");
@@ -1661,46 +1675,13 @@ public class AutoHoeingTask : ISoloTask
                         client.AllWorldJoined += handler;
                         try
                         {
-                            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.PartyTimeoutSeconds));
-                            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_ct, timeoutCts.Token);
-                            using var reg = linkedCts.Token.Register(() =>
-                            {
-                                if (_ct.IsCancellationRequested)
-                                    waitTcs.TrySetCanceled(_ct);
-                                else
-                                    waitTcs.TrySetResult(false);
-                            });
-
-                            // 周期性确认在房 + 重报已加入世界（每 5s），杜绝单次上报因网络抖动丢失。
-                            // 循环内首次立即执行一次（无初始延迟），收到 AllWorldJoined 或超时/取消即停止。
-                            _ = Task.Run(async () =>
-                            {
-                                try
+                            await HoeingStartupBoundary.WaitForWorldReadyAsync(waitTcs,
+                                async token =>
                                 {
-                                    while (!waitTcs.Task.IsCompleted && !linkedCts.Token.IsCancellationRequested)
-                                    {
-                                        await client.EnsureInRoomAsync(linkedCts.Token);
-                                        await client.ReportWorldJoinedAsync();
-                                        await Task.Delay(5000, linkedCts.Token);
-                                    }
-                                }
-                                catch (OperationCanceledException) { /* 正常结束（就绪或超时） */ }
-                                catch (Exception ex) { _logger.LogWarning(ex, "[联机] 周期上报已加入世界异常（忽略）"); }
-                            }, linkedCts.Token);
-
-                            var allReady = await waitTcs.Task;
-                            if (allReady)
-                            {
-                                _logger.LogInformation("[联机] 所有人已就绪，开始锄地");
-                            }
-                            else
-                            {
-                                _logger.LogWarning("[联机] 等待组队超时，退出房间，结束任务");
-                                _worldStateMonitor.IsPartyPhase = false;
-                                MarkPartyFailed("等待组队超时");
-                                _multiplayerCoordinator?.Degrade("组队超时");
-                                return;
-                            }
+                                    HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(token), "房间成员登记", token);
+                                    await client.ReportWorldJoinedAsync(token);
+                                }, TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                            _logger.LogInformation("[联机] 所有人已就绪，开始锄地");
                         }
                         finally
                         {
@@ -1718,6 +1699,8 @@ public class AutoHoeingTask : ISoloTask
                     }
                 }
             }
+
+            await RequireStartupAdmissionAsync(client, _ct);
 
             // 注入到执行引擎
             _executionEngine?.SetCoordinator(_multiplayerCoordinator);
@@ -1744,14 +1727,17 @@ public class AutoHoeingTask : ISoloTask
                 AutoHoeingProgress.IsRunning = true;
             }
         }
+        catch (OperationCanceledException) when (_ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[联机] 初始化异常，降级为单机模式");
+            _logger.LogError(ex, "[联机] 初始化失败");
             if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
             // 手动停止（OperationCanceledException）不标记组队失败——Start 尾部 userCancelled 会兜底不重开。
             if (ex is not OperationCanceledException)
-                MarkPartyFailed("初始化异常");
-            _multiplayerCoordinator = null;
+                MarkPartyFailed(ex.Message);
         }
     }
 
@@ -2089,25 +2075,14 @@ public class AutoHoeingTask : ISoloTask
             // 注意：房主主动"立即开始(当前人数)" / ESC 跳过 / 超时按现有人数锄地 这三条属于人为选择，
             // 它们走的是 WaitForMembersAsync 正常返回 + 成功走到 InitializeMultiplayerAsync 末尾，
             // _multiplayerPartyReady 为 true，不受本守卫影响。
-            if (!_multiplayerPartyReady && !_config.SoloDebugMode)
+            if (!_multiplayerPartyReady && (!_config.SoloDebugMode
+                || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive))
             {
                 _logger.LogError("[联机] 组队未成功（未达到满员/就绪条件），停止锄地，不在自己世界单独运行");
                 if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
-                try
-                {
-                    if (_coordinatorClientRef != null)
-                    {
-                        await _coordinatorClientRef.DisposeAsync();
-                        _coordinatorClientRef = null;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // 清理连接失败可恢复：任务即将结束，连接终会随进程释放，仅记日志不阻断退出。
-                    _logger.LogWarning(ex, "[联机] 组队失败后释放协调连接异常（忽略）");
-                }
-                _multiplayerCoordinator = null;
-                return;
+                _ct.ThrowIfCancellationRequested();
+                // Start.finally 统一按监测、协调器、连接的顺序释放，不能在这里丢失清理责任。
+                throw new HoeingStartupException("联机初始化", _stopReason ?? "未达到全员就绪条件");
             }
 
             // kazuha-declare-after-team-switch: 合法声明窗口
@@ -2690,6 +2665,7 @@ public class AutoHoeingTask : ISoloTask
                 
                 if (hostConfig != null)
                 {
+                    RequireMatchingRoomBatch(hostConfig);
                     _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
                     _config.StartRouteIndex = hostConfig.StartRouteIndex;
                     _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
@@ -2772,35 +2748,12 @@ public class AutoHoeingTask : ISoloTask
                 client.AllWorldJoined += allJoinedHandler;
                 try
                 {
-                    using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.PartyTimeoutSeconds));
-                    using var linked = CancellationTokenSource.CreateLinkedTokenSource(_ct, timeoutCts.Token);
-                    using var reg = linked.Token.Register(() => allJoinedTcs.TrySetResult(false));
-
-                    // 周期性确认在房 + 重报已加入世界（每 5s），杜绝单次上报因网络抖动丢失。
-                    // 循环内首次立即执行一次（无初始延迟），收到 AllWorldJoined 或超时/取消即停止。
-                    _ = Task.Run(async () =>
-                    {
-                        try
+                    await HoeingStartupBoundary.WaitForWorldReadyAsync(allJoinedTcs,
+                        async token =>
                         {
-                            while (!allJoinedTcs.Task.IsCompleted && !linked.Token.IsCancellationRequested)
-                            {
-                                await client.EnsureInRoomAsync(linked.Token);
-                                await client.ReportWorldJoinedAsync();
-                                await Task.Delay(5000, linked.Token);
-                            }
-                        }
-                        catch (OperationCanceledException) { /* 正常结束（就绪或超时） */ }
-                        catch (Exception ex) { _logger.LogWarning(ex, "[联机] 周期上报已加入世界异常（忽略）"); }
-                    }, linked.Token);
-
-                    if (!await allJoinedTcs.Task)
-                    {
-                        // 组队守卫（方案A）：本轮未达全员就绪，成员不在自己/房主世界单跑，终止本轮。
-                        // （finally 会 -= allJoinedHandler，此处不重复解绑）
-                        _logger.LogError("[多世界] 等待全员就绪超时，未满员，终止本轮不开锄");
-                        MarkPartyFailed("等待全员就绪超时");
-                        return RoundSetupOutcome.Abort;
-                    }
+                            HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(token), "房间成员登记", token);
+                            await client.ReportWorldJoinedAsync(token);
+                        }, TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
                 }
                 finally { client.AllWorldJoined -= allJoinedHandler; }
             }
@@ -3528,8 +3481,8 @@ public class AutoHoeingTask : ISoloTask
                                     return;
                                 }
 
-                                _logger.LogError("[联机] 等待房主上传路线列表超时（90秒，房主未上传），停止本轮锄地");
-                                return;
+                                _ct.ThrowIfCancellationRequested();
+                                throw new HoeingStartupException("房主路线列表", "等待90秒仍未确认房主上传，不能按空轮完成");
                             }
                         }
                     }
@@ -3611,8 +3564,8 @@ public class AutoHoeingTask : ISoloTask
                     if (missing.Count > 0)
                         _logger.LogWarning("[联机] 成员本地缺少以下路线文件（路线一致性验证将检测到差异）: {Files}", string.Join(", ", missing));
                 }
-                if (cooperative != null && found.Count != hostRouteNames.Count)
-                    throw new InvalidOperationException("共同重跑计划不完整：成员本地缺少房主路线文件，禁止建立空计划");
+                HoeingStartupBoundary.RequireRouteCoverage(hostRouteNames.Count, found.Count,
+                    cooperative != null, _ct);
                 groupRoutes = found;
                 _logger.LogInformation("[联机] 成员已同步房主路线列表，共 {Count} 条", groupRoutes.Count);
             }
@@ -3634,23 +3587,16 @@ public class AutoHoeingTask : ISoloTask
                 _logger.LogWarning("[联机] 路线列表为空（可能全部在CD中），跳过本轮执行");
                 return;
             }
-            try
-            {
-                _logger.LogInformation("[联机] 等待所有玩家完成路线同步...");
-                _ = await _multiplayerCoordinator.WaitForAllPlayers("route_sync_done", _ct);
-                _logger.LogInformation("[联机] 所有玩家路线同步完成，开始验证");
-            }
-            catch (OperationCanceledException)
-            {
-                if (_ct.IsCancellationRequested) throw;
-                _logger.LogWarning("[联机] 路线同步等待超时，继续执行");
-            }
+            _logger.LogInformation("[联机] 等待所有玩家完成路线同步...");
+            HoeingStartupBoundary.RequireConfirmed(
+                await _multiplayerCoordinator.WaitForAllPlayers("route_sync_done", _ct), "路线同步", _ct);
+            _logger.LogInformation("[联机] 所有玩家路线同步完成，开始验证");
         }
 
         // 步骤2：路线一致性验证（在同步后的路线集合上验证）
         if (_multiplayerCoordinator != null && _consistencyChecker != null && _coordinatorClientRef != null)
         {
-            if (_config.DebugMode)
+            if (_config.DebugMode && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
             {
                 _logger.LogInformation("[联机] 调试模式：跳过路线一致性验证，共 {Count} 条路线", groupRoutes.Count);
             }
@@ -3680,29 +3626,32 @@ public class AutoHoeingTask : ISoloTask
                                 retryVerifyCts.Token);
                             if (retryVerified == false)
                             {
-                                _logger.LogError("[联机] 重试后路线一致性验证仍失败，两端路线不一致，停止锄地");
-                                return;
+                                throw new HoeingStartupException("路线一致性", "更新后仍不一致");
                             }
                             else if (retryVerified == null)
-                                _logger.LogWarning("[联机] 重试后路线一致性验证超时，继续执行");
+                                HoeingStartupBoundary.RequireConfirmed(retryVerified, "路线一致性重试", _ct);
                             else
                                 _logger.LogInformation("[联机] 重试后路线一致性验证通过");
                         }
                         catch (OperationCanceledException)
                         {
                             if (_ct.IsCancellationRequested) throw;
-                            _logger.LogWarning("[联机] 重试后路线一致性验证超时，继续执行");
+                            throw new HoeingStartupException("路线一致性重试", "等待确认超时");
                         }
                     }
                     else if (verified == null)
-                        _logger.LogWarning("[联机] 路线一致性验证超时，继续执行");
+                        HoeingStartupBoundary.RequireConfirmed(verified, "路线一致性", _ct);
                     else
                         _logger.LogInformation("[联机] 路线一致性验证通过");
                 }
                 catch (OperationCanceledException)
                 {
                     if (_ct.IsCancellationRequested) throw;
-                    _logger.LogWarning("[联机] 路线一致性验证超时，继续执行");
+                    throw new HoeingStartupException("路线一致性", "等待确认超时");
+                }
+                catch (Exception ex) when (ex is not HoeingStartupException && ex is not OperationCanceledException)
+                {
+                    throw new HoeingStartupException("路线一致性", "校验请求失败", ex);
                 }
             }
         }
@@ -3740,8 +3689,8 @@ public class AutoHoeingTask : ISoloTask
                 // 跳过它继续其余路线，避免空占位 JSON 终止整任务。
                 if (actualTask == null)
                 {
-                    if (cooperative != null)
-                        throw new InvalidOperationException("共同重跑路线加载失败: " + route.FileName);
+                    if (cooperative != null || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
+                        throw new HoeingStartupException("路线加载", route.FileName);
                     _logger.LogWarning("[变体] 路线 {File} 加载失败，已从本场执行列表剔除", route.FileName);
                     failedRoutes.Add(route);
                     continue;
@@ -3764,7 +3713,7 @@ public class AutoHoeingTask : ISoloTask
             }
 
             // 调试模式跳过网络校验（与 MD5 校验的 DebugMode 跳过一致），但变体替换已完成
-            if (_config.DebugMode)
+            if (_config.DebugMode && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
             {
                 _logger.LogInformation("[变体校验] 调试模式：跳过跨玩家 schema 网络校验（变体替换已完成）");
             }
@@ -3779,12 +3728,11 @@ public class AutoHoeingTask : ISoloTask
                 {
                     _logger.LogError(ex, "[变体校验] 服务端版本不支持变体功能，停止本场联机锄地");
                     try { Wpf.Ui.Violeta.Controls.Toast.Warning("服务端版本不支持变体功能，请升级 BgiCoordinatorServer"); } catch { }
-                    return;
+                    throw new HoeingStartupException("路线变体校验", "服务端不支持变体功能", ex);
                 }
                 if (!variantOk)
                 {
-                    _logger.LogError("[变体校验] 跨玩家 schema 校验失败，停止本场联机锄地");
-                    return;
+                    HoeingStartupBoundary.RequireConfirmed(false, "路线变体校验", _ct);
                 }
                 _logger.LogInformation("[变体校验] 跨玩家 schema 校验通过");
             }
@@ -3873,6 +3821,8 @@ public class AutoHoeingTask : ISoloTask
             }
             catch (Exception ex) when (IsCooperativeDowngradeSignal(ex))
             {
+                if (BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
+                    throw new HoeingStartupException("共同重跑登记", "固定成员会话被拒绝，未执行首条线路", ex);
                 // 兼容门控（关键补全）：本端只看得到**服务端**是否宣告能力，看不到房间内其他参与者是否宣告；
                 // 而服务端要求"固定全员都宣告 hoeing.rerun.v1"。因此房间里只要有一个成员的客户端是旧版本，
                 // Enroll 就会被拒绝。此时必须降级回旧的轮末重跑路径，而不是把整轮锄地判失败。
@@ -3883,6 +3833,8 @@ public class AutoHoeingTask : ISoloTask
                     RerunProtocol.Capability);
             }
         }
+
+        await RequireStartupAdmissionAsync(_coordinatorClientRef, _ct);
 
         // === 路线外层循环：索引驱动（route-anchor 阶段 4 第一步）===
         // 由 foreach+Skip 改为显式索引循环，**行为等价**（routeIndex 恒等于原 entry.Index）。

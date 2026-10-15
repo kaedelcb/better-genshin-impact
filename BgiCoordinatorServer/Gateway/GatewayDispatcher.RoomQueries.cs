@@ -36,6 +36,8 @@ public sealed partial class GatewayDispatcher
                 "hostRouteList" => await _ops.GetHostRouteListAsync(ctx),
                 "hostRouteListStatus" => await _ops.GetHostRouteListStatusAsync(ctx),
                 "worldJoinedCount" => await _ops.GetWorldJoinedCountAsync(ctx),
+                "hoeingStartupReady" => await _ops.GetHoeingStartupReadyAsync(ctx,
+                    GetString(env, "batchId"), GetStringList(env, "participantUids") ?? []),
                 "memberProgress" => await _ops.GetMemberProgressAsync(ctx, GetString(env, "playerUid")),
                 _ => null,
             };

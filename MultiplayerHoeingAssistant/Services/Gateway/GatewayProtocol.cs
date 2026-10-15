@@ -50,7 +50,10 @@ public static class GatewayProtocol
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";
         public const string ControlBatchUpdate = "control.batch.update";
+        public const string ControlBatchBegin = "control.batch.begin";
+        public const string ControlBatchCurrent = "control.batch.current";
         public const string ControlBatchReset = "control.batch.reset";
+        public const string ControlBatchResetCleaned = "control.batch.resetCleaned";
         public const string ControlReportOnlineEvent = "control.reportOnlineEvent";
         public const string ControlClearOnlineHistory = "control.clearOnlineHistory";
         /// <summary>远端任务下发结果回执（纯加法；旧服务端回 unsupported_operation，客户端据此降级停发）。</summary>
@@ -75,6 +78,8 @@ public static class GatewayProtocol
     /// </summary>
     public static class Events
     {
+        public const string ControlBatchStart = "control.batch.start";
+        public const string ControlBatchState = "control.batch.state";
         public const string ControlPlayersUpdated = "control.playersUpdated";       // ← ControlRoomPlayersUpdated
         public const string ControlRemoteCommand = "control.remoteCommand";         // ← RemoteCommand
         public const string ControlJoinRejected = "control.joinRejected";           // ← JoinRejected

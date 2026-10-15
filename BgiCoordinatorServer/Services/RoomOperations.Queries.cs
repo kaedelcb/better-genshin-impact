@@ -11,6 +11,21 @@ namespace BgiCoordinatorServer.Services;
 /// </summary>
 public sealed partial class RoomOperations
 {
+    public Task<HoeingStartupReadySnapshot> GetHoeingStartupReadyAsync(GatewayHandlerContext ctx,
+        string batchId, IReadOnlyList<string> participantUids)
+    {
+        var (room, _) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (room is null) throw new InvalidOperationException("room_not_found");
+        lock (room)
+        {
+            if (room.HoeingBatchId != batchId || string.IsNullOrWhiteSpace(batchId)
+                || participantUids.Count != room.ExpectedParticipantUids.Count
+                || !participantUids.Order(StringComparer.Ordinal).SequenceEqual(room.ExpectedParticipantUids.Order(StringComparer.Ordinal)))
+                throw new InvalidOperationException("hoeing_start_identity_mismatch");
+            var snapshot = RoomManager.GetHoeingStartupReadyLocked(room);
+            return Task.FromResult(snapshot);
+        }
+    }
     /// <summary>获取在线房间列表</summary>
     public Task<List<RoomSummary>> GetOnlineRoomsAsync(GatewayHandlerContext ctx)
     {

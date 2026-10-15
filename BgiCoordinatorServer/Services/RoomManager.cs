@@ -46,8 +46,15 @@ public class RoomManager
     }
 
     /// <summary>创建房间，返回唯一6位字母数字房间码。同一 UID 只保留最新房间。</summary>
-    public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "")
+    public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
+        string? hoeingBatchId = null, IReadOnlyList<string>? expectedParticipantUids = null)
     {
+        var fixedUids = expectedParticipantUids?.ToArray() ?? [];
+        if ((!string.IsNullOrWhiteSpace(hoeingBatchId) || fixedUids.Length > 0)
+            && (string.IsNullOrWhiteSpace(hoeingBatchId) || fixedUids.Length is < 1 or > 4
+                || fixedUids.Any(string.IsNullOrWhiteSpace) || fixedUids.Distinct(StringComparer.Ordinal).Count() != fixedUids.Length
+                || !fixedUids.Contains(playerUid, StringComparer.Ordinal)))
+            throw new InvalidOperationException("hoeing_start_roster_invalid");
         if (_rooms.Count >= _maxRooms)
             throw new InvalidOperationException("服务器房间数已达上限");
 
@@ -81,11 +88,13 @@ public class RoomManager
         {
             Code = code,
             HostConnectionId = hostConnectionId,
+            HoeingBatchId = string.IsNullOrWhiteSpace(hoeingBatchId) ? null : hoeingBatchId,
+            ExpectedParticipantUids = fixedUids,
             CreatedAt = DateTime.UtcNow,
             // 服务端生成的会话身份（route-anchor）：区分房间实例，避免房间码复用导致跨实例串状态
             SessionId = $"{code}-{Guid.NewGuid():N}",
             Whitelist = whitelist ?? [],
-            ExpectedPlayerCount = expectedPlayerCount,
+            ExpectedPlayerCount = fixedUids.Length > 0 ? fixedUids.Length : expectedPlayerCount,
             HostBaselineVersion = reportedVersion ?? "",
             Players =
             [
@@ -114,12 +123,18 @@ public class RoomManager
 
         lock (room)
         {
+            if (room.HoeingBatchId is not null && !room.ExpectedParticipantUids.Contains(playerUid, StringComparer.Ordinal))
+                return (false, "hoeing_start_not_participant");
+            if (room.HoeingBatchId is not null && room.Players.Any(p => p.PlayerUid == playerUid
+                && p.ConnectionId != connectionId && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
+                && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
+                return (false, "hoeing_start_duplicate_participant");
             // === 宽限期内重连复用（resilience-framework §2c）===
             // 检查是否是宽限期内重连（同 playerUid 或同 playerName）
             var graceMember = room.Players.FirstOrDefault(p =>
                 room.GracePendingMembers.ContainsKey(p.ConnectionId) &&
                 ((!string.IsNullOrEmpty(playerUid) && p.PlayerUid == playerUid) ||
-                 (!string.IsNullOrEmpty(playerName) && p.PlayerName == playerName)));
+                 (room.HoeingBatchId is null && !string.IsNullOrEmpty(playerName) && p.PlayerName == playerName)));
             if (graceMember != null)
             {
                 // 复用：更新 ConnectionId，清除宽限期标记
@@ -160,7 +175,7 @@ public class RoomManager
             // === 重连判定：现有玩家集合中存在同名 / 同 UID 即视为重连（spec lock-room-after-start §3.1）===
             // 重连场景必须绕过 IsStarted / ExpectedPlayerCount / MaxPlayers 三个限制，
             // 走下方"替换 ConnectionId"分支放行（bugfix §2.4 / §3.2）。
-            var reconnectByName = !string.IsNullOrEmpty(playerName)
+            var reconnectByName = room.HoeingBatchId is null && !string.IsNullOrEmpty(playerName)
                 ? room.Players.FirstOrDefault(p => p.PlayerName == playerName)
                 : null;
             var reconnectByUid = !string.IsNullOrEmpty(playerUid)
@@ -179,7 +194,8 @@ public class RoomManager
             if (room.Players.Count >= MaxPlayers)
             {
                 // Allow replacement if same playerName already exists
-                var existing = room.Players.FirstOrDefault(p => p.PlayerName == playerName && !string.IsNullOrEmpty(playerName));
+                var existing = room.Players.FirstOrDefault(p => room.HoeingBatchId is not null
+                    ? p.PlayerUid == playerUid : p.PlayerName == playerName && !string.IsNullOrEmpty(playerName));
                 if (existing == null)
                     return (false, "房间已满（最多4人）");
 
@@ -207,7 +223,8 @@ public class RoomManager
             }
 
             // Replace existing player with same name (reconnect scenario)
-            var existingByName = room.Players.FirstOrDefault(p => p.PlayerName == playerName && !string.IsNullOrEmpty(playerName));
+            var existingByName = room.Players.FirstOrDefault(p => room.HoeingBatchId is not null
+                ? p.PlayerUid == playerUid : p.PlayerName == playerName && !string.IsNullOrEmpty(playerName));
             if (existingByName != null)
             {
                 _connectionRoomMap.TryRemove(existingByName.ConnectionId, out _);
@@ -683,7 +700,10 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.Players.Any(p => p.ConnectionId == connectionId)) return false;
             room.WorldJoinedSet.Add(connectionId);
+            if (room.HoeingBatchId is not null)
+                return GetHoeingStartupReadyLocked(room).Ready;
             return AllOnlineMembersReported(room, room.WorldJoinedSet);
         }
     }
@@ -693,6 +713,17 @@ public class RoomManager
         if (!_rooms.TryGetValue(roomCode, out var room))
             return;
         lock (room) { room.WorldJoinedSet.Clear(); }
+    }
+
+    internal static HoeingStartupReadySnapshot GetHoeingStartupReadyLocked(Room room)
+    {
+        var expected = room.ExpectedParticipantUids.ToArray();
+        var joined = expected.Where(uid => room.Players.Count(p => p.PlayerUid == uid
+            && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
+            && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)
+            && room.WorldJoinedSet.Contains(p.ConnectionId)) == 1).ToArray();
+        return new HoeingStartupReadySnapshot(room.HoeingBatchId ?? "", expected, joined,
+            room.HoeingBatchId is not null && expected.Length > 0 && expected.Length == joined.Length);
     }
 
     public int GetWorldJoinedCount(string roomCode)
@@ -1219,6 +1250,20 @@ public class RoomManager
         return [];
     }
 
+    internal List<ControlRoomPlayer> GetCoordinatedStartPlayers(string group)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return [];
+        lock (players)
+            return players.Select(p => new ControlRoomPlayer
+            {
+                PlayerUid = p.PlayerUid, PlayerName = p.PlayerName, ConnectionId = p.ConnectionId,
+                ClientInstanceId = p.ClientInstanceId, Online = p.Online,
+                OnlineEventConsumed = p.OnlineEventConsumed, OnlineEventGeneration = p.OnlineEventGeneration,
+                OnlineHoeingGroupNames = p.OnlineHoeingGroupNames?.ToList() ?? [],
+                OnlineHoeingGroupTypes = p.OnlineHoeingGroupTypes?.ToList() ?? [],
+            }).ToList();
+    }
+
     /// <summary>管理员只读快照：在控制房间锁内复制字段，不暴露可变成员对象。</summary>
     internal List<RoomMonitorControlRoom> GetControlRoomMonitorRooms()
     {
@@ -1453,6 +1498,9 @@ public class RoomManager
                     }
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
                     player.AutoHoeingProgress = status.AutoHoeingProgress;
+                    player.HoeingBatchId = status.HoeingBatchId;
+                    player.HoeingStartPhase = status.HoeingStartPhase;
+                    player.HoeingStartMessage = status.HoeingStartMessage;
                     player.OnlineReady = status.OnlineReady;
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;
@@ -1675,6 +1723,11 @@ public class RoomManager
             .GroupBy(p => p.PlayerUid, StringComparer.Ordinal)
             .Select(g => g.First())
             .ToList();
+        return ValidateCoordinatedBindingLayout(participants);
+    }
+
+    internal static string? ValidateCoordinatedBindingLayout(IReadOnlyList<ControlRoomPlayer> participants)
+    {
         if (participants.Count == 0) return "没有找到本轮参与成员";
 
         var bound = participants.Where(p => p.OnlineHoeingGroupNames.Count > 0).ToList();

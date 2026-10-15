@@ -2,6 +2,8 @@ namespace BgiCoordinatorServer.Models;
 
 public class Room
 {
+    public string? HoeingBatchId { get; init; }
+    public IReadOnlyList<string> ExpectedParticipantUids { get; init; } = [];
     public string Code { get; set; } = "";
     public string HostConnectionId { get; set; } = "";
 

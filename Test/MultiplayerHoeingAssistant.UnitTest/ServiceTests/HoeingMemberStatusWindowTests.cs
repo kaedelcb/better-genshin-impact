@@ -1,0 +1,198 @@
+using System.IO;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.ViewModels;
+using MultiplayerHoeingAssistant.Views;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
+
+/// <summary>生产成员卡片的实际 WPF 布局；截图仅证明窗口显示，不代表游戏线路执行。</summary>
+public sealed class HoeingMemberStatusWindowTests
+{
+    [Fact]
+    public async Task MemberCards_ShowLiveHoeingPhases_WithoutOverlappingOldResult_AndCollapseEmptyResult()
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "必须先为本进程设置隔离 NEXUSBGI_DATA_ROOT。");
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            Application? app = null;
+            try
+            {
+                Assert.Null(Application.Current); // 此类必须单独 testhost 运行，不借用其他窗口的 Application。
+                app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+                app.Dispatcher.InvokeAsync(async () =>
+                {
+                    MainWindow? window = null;
+                    MainViewModel? vm = null;
+                    try
+                    {
+                        vm = new MainViewModel();
+                        var isolatedBgi = Path.Combine(AssistantDataDirectory.Root, "nonexistent-bgi", "BetterGI.exe");
+                        typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm,
+                            new AssistConfig
+                            {
+                                ObserverMode = true, StandaloneMode = true, BgiPath = isolatedBgi,
+                                PlayerUid = "100000001", PlayerName = "隔离布局验收", DisclaimerAccepted = true,
+                            });
+                        Assert.Equal(Path.Combine(Path.GetDirectoryName(isolatedBgi)!, "log"),
+                            BgiLogTailService.ResolveBgiLogDir(isolatedBgi));
+                        var preparing = Member("100000001", "准备中的成员", "preparing", "正在准备联机锄地");
+                        var running = Member("100000002", "执行中的成员", "running", "第 1/2 项：联机锄地（恢复 0/1）");
+                        var cleanup = Member("100000003", "清理待确认的成员", "cleanupPending", "本端已结束，服务端清理回执待确认");
+                        vm.Members.Add(preparing); vm.Members.Add(running); vm.Members.Add(cleanup);
+                        vm.CurrentPage = AppPage.Home;
+                        window = new MainWindow(vm)
+                        {
+                            ShowActivated = false, ShowInTaskbar = false,
+                            WindowStartupLocation = WindowStartupLocation.Manual,
+                            Left = -20000, Top = -20000, Width = 1000, Height = 850,
+                        };
+                        // MainWindow 构造会建桌宠只读轮询；立即关闭，不等待、不依赖任何真实执行端。
+                        window.Pet.Shutdown();
+                        window.Show();
+                        await LayoutAsync(window);
+
+                        foreach (var member in new[] { preparing, running, cleanup })
+                        {
+                            var text = BoundText(window, member, nameof(MemberViewModel.HoeingStartMessage));
+                            Assert.Equal(member.HoeingStartMessage, text.Text);
+                            Assert.True(text.IsVisible);
+                            Assert.True(text.ActualWidth > 0 && text.ActualHeight > 0);
+                            Assert.Equal(Visibility.Visible, text.Visibility);
+                        }
+                        var cleanupText = BoundText(window, cleanup, nameof(MemberViewModel.HoeingStartMessage));
+                        Assert.Equal(((SolidColorBrush)window.FindResource("Pyro")).Color,
+                            Assert.IsType<SolidColorBrush>(cleanupText.Foreground).Color);
+
+                        // 旧远程任务结果保留在独立行，不能占据或覆盖当前联机批次状态行。
+                        const string previousError = "旧任务回执：启动失败，BGI 状态未确认";
+                        preparing.RemoteStartResult = previousError;
+                        preparing.RemoteStartResultState = "failed";
+                        await LayoutAsync(window);
+                        var live = BoundText(window, preparing, nameof(MemberViewModel.HoeingStartMessage));
+                        var previous = BoundText(window, preparing, nameof(MemberViewModel.RemoteStartResult));
+                        Assert.Equal("正在准备联机锄地", live.Text);
+                        Assert.Equal(previousError, previous.Text);
+                        Assert.True(previous.IsVisible);
+                        var liveBounds = Bounds(live, window);
+                        var previousBounds = Bounds(previous, window);
+                        Assert.True(previousBounds.Top >= liveBounds.Bottom,
+                            $"旧结果覆盖了联机状态：current={liveBounds} previous={previousBounds}");
+
+                        // 改变同一个生产成员对象，确认 INPC 会更新实际卡片，不保留旧阶段文字。
+                        preparing.HoeingStartPhase = "running";
+                        preparing.HoeingStartMessage = "正在执行本批第 1 项";
+                        await LayoutAsync(window);
+                        Assert.Equal("正在执行本批第 1 项", live.Text);
+                        Assert.Equal(previousError, previous.Text);
+                        preparing.HoeingStartPhase = "preparing";
+                        preparing.HoeingStartMessage = "正在准备联机锄地";
+                        preparing.RemoteStartResult = "";
+                        preparing.RemoteStartResultState = "";
+                        await LayoutAsync(window);
+                        foreach (var member in new[] { preparing, running, cleanup })
+                        {
+                            var emptyResult = BoundText(window, member, nameof(MemberViewModel.RemoteStartResult));
+                            Assert.Equal(Visibility.Collapsed, emptyResult.Visibility);
+                            Assert.Equal(0, emptyResult.DesiredSize.Height);
+                            Assert.False(emptyResult.IsVisible);
+                        }
+
+                        SaveWindow(window, Path.Combine(AssistantDataDirectory.Root, "hoeing-member-status-window.png"));
+                        Assert.Null(vm.SignalR);
+                    }
+                    catch (Exception error) { done.TrySetException(error); }
+                    finally
+                    {
+                        try
+                        {
+                            if (window != null)
+                            {
+                                window.Pet.Shutdown();
+                                window.Mistletoe.TaskCenter.StopAutoRefresh();
+                                StopTimer(window.Mistletoe, "_bgiStatusRefresh");
+                                StopTimer(window.Mistletoe, "_saveDebounce");
+                                if (vm != null)
+                                {
+                                    typeof(MainViewModel).GetField("_disposing", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm, true);
+                                    await vm.TaskCenterHost.ShutdownAsync();
+                                }
+                                window.Close();
+                            }
+                        }
+                        catch (Exception cleanupError) { done.TrySetException(cleanupError); }
+                        finally
+                        {
+                            // Dodoco 在 Application.Exit 已接线统一 Dispose：关闭 tail、监控、录像、共享同步及子页定时器。
+                            try { app.Shutdown(); }
+                            catch (Exception shutdownError) { done.TrySetException(shutdownError); }
+                            done.TrySetResult();
+                        }
+                    }
+                });
+                app.Run();
+            }
+            catch (Exception error) { done.TrySetException(error); }
+        }) { IsBackground = true, Name = "HoeingMemberStatusWindow" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "隔离窗口 Dispatcher 尚未退出。");
+        Assert.True(File.Exists(Path.Combine(AssistantDataDirectory.Root, "hoeing-member-status-window.png")));
+    }
+
+    private static MemberViewModel Member(string uid, string name, string phase, string message) => new()
+    {
+        PlayerUid = uid, PlayerName = name, Online = true, IsSelected = true,
+        BgiStatus = "running", BgiVersion = "隔离窗口布局", IsObserverMode = true,
+        HoeingBatchId = "window-only-" + uid, HoeingStartPhase = phase, HoeingStartMessage = message,
+    };
+
+    private static async Task LayoutAsync(Window window)
+    {
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
+    }
+
+    private static TextBlock BoundText(DependencyObject root, MemberViewModel member, string path) =>
+        Assert.Single(VisualChildren<TextBlock>(root).Where(text => ReferenceEquals(text.DataContext, member)
+            && BindingOperations.GetBindingExpression(text, TextBlock.TextProperty)?.ParentBinding.Path?.Path == path));
+
+    private static IEnumerable<T> VisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T match) yield return match;
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+            foreach (var child in VisualChildren<T>(VisualTreeHelper.GetChild(root, index))) yield return child;
+    }
+
+    private static Rect Bounds(FrameworkElement element, Visual root) =>
+        element.TransformToAncestor(root).TransformBounds(new Rect(new Point(), element.RenderSize));
+
+    private static void StopTimer(object owner, string field)
+    {
+        if (owner.GetType().GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(owner) is DispatcherTimer timer)
+            timer.Stop();
+    }
+
+    private static void SaveWindow(FrameworkElement window, string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth), (int)Math.Ceiling(window.ActualHeight),
+            96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(window);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+}

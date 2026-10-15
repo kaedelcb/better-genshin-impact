@@ -21,6 +21,7 @@ public sealed class ExecutionScope : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly System.Collections.Generic.Dictionary<string, string> _configurationRevisions = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private TargetedSuspendTarget? _suspendTarget;
     /// <summary>本次执行根已**被接纳并交给调用方**（Start 成功返回）。只有这类根的生命周期结束才产生退出凭证。</summary>
     private bool _admitted;
     private bool _stopRequested;
@@ -313,6 +314,97 @@ public sealed class ExecutionScope : IDisposable
         try { active?._stop.Cancel(); } catch (AggregateException) { }
         return checkpoint;
     }
+
+    /// <summary>
+    /// Compare and reserve under the same lock as root admission. A delayed request may only
+    /// suspend its sampled root; explicit null/null reserves an actually idle execution boundary.
+    /// Recovery is committed before cancellation, so neither a successor nor a manual stop can
+    /// be overwritten by a late save. Cancellation callbacks only receive the captured root token.
+    /// </summary>
+    internal static bool TrySuspendTarget(string ticket, Guid? expectedInstanceId, long? expectedStateRevision,
+        long expectedStopVersion, TimeSpan manualStopCooldown, Action<SuspendContextCapture.Snapshot?, long> saveRecovery,
+        out TargetedSuspendTarget? target, out string? errorCode)
+    {
+        ExecutionScope? victim;
+        target = null;
+        errorCode = null;
+        lock (Sync)
+        {
+            // ManualCancel publishes this timestamp together with its stop version before
+            // revoking the lease or updating the leaf context's wall-clock cooldown field.
+            if (_lastManualStopTimestamp is { } stoppedAt
+                && System.Diagnostics.Stopwatch.GetElapsedTime(stoppedAt) < manualStopCooldown)
+            {
+                errorCode = "manual_stop_cooldown";
+                return false;
+            }
+            if (expectedStopVersion != _stopVersion)
+            {
+                errorCode = "manual_stop_version_conflict";
+                return false;
+            }
+            victim = _active;
+            if (expectedInstanceId is { } instanceId)
+            {
+                if (victim is null || victim.ExecutionInstanceId != instanceId
+                    || victim.StateRevision != expectedStateRevision || !victim.IsCurrentOwner)
+                {
+                    errorCode = victim is null && GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0
+                        ? "execution_identity_unavailable" : "not_current";
+                    return false;
+                }
+            }
+            else if (victim is not null || expectedStateRevision is not null)
+            {
+                errorCode = "not_current";
+                return false;
+            }
+            else if (GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0)
+            {
+                errorCode = "execution_identity_unavailable";
+                return false;
+            }
+
+            PreemptionGate.Arm(ticket);
+            if (!PreemptionGate.TryMarkContextSaved())
+            {
+                // A ticket without its original request receipt cannot be rebound to another root.
+                errorCode = "takeover_identity_mismatch";
+                return false;
+            }
+            try { saveRecovery(victim?.Checkpoint, _stopVersion); }
+            catch { PreemptionGate.Release(ticket); throw; }
+            target = new TargetedSuspendTarget(victim);
+            if (victim is not null)
+            {
+                victim._suspendTarget = target;
+                victim.Observe(TaskRunResult.Preempted);
+                victim.MarkStopRequestedLocked("suspend");
+            }
+        }
+        // The leaf cancellation context is linked to this root. Never cancel the process-global
+        // context here: the old root's callback can already have admitted a same-ticket successor.
+        try { victim?._stop.Cancel(); } catch (AggregateException) { }
+        return true;
+    }
+
+    internal sealed class TargetedSuspendTarget
+    {
+        private readonly ExecutionScope? _victim;
+        private bool _quiesced;
+        internal TargetedSuspendTarget(ExecutionScope? victim) { _victim = victim; _quiesced = victim is null; }
+
+        internal bool ObserveQuiescence()
+        {
+            lock (Sync)
+            {
+                if (!_quiesced && _victim!._disposed && _active is null
+                    && GameTask.Common.TaskControl.TaskSemaphore.CurrentCount > 0)
+                    _quiesced = true;
+                return _quiesced;
+            }
+        }
+    }
     public static void StopActive(bool manual)
     {
         ExecutionScope? active;
@@ -364,6 +456,9 @@ public sealed class ExecutionScope : IDisposable
             {
                 _disposed = true;
                 if (ReferenceEquals(_active, this)) _active = null;
+                // Keep the original target's empty boundary even if a same-ticket successor
+                // starts before the suspend response or its duplicate request is delivered.
+                _suspendTarget?.ObserveQuiescence();
                 // [R5 A4 第二步] 被接纳的执行根在生命周期结束时留下**一次性退出凭证**（未接生产门）。
                 // 它只声明"这一颗执行根已结束"，不声明叶子／逃逸任务已退出，也不构成任务槽释放凭证。
                 if (_admitted)

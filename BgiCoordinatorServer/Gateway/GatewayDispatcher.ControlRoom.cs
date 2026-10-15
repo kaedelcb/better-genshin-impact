@@ -57,10 +57,23 @@ public sealed partial class GatewayDispatcher
             return new { ack = true, delivered };
         };
 
-        _commands[GatewayProtocol.Names.ControlBatchUpdate] = (env, ctx) => Task.FromResult<object?>(
-            _ops.UpdateCoordinatedBatch(ctx, GetInt(env, "generation"), GetString(env, "token") ?? "",
+        _commands[GatewayProtocol.Names.ControlBatchBegin] = async (env, ctx) =>
+        {
+            DateTimeOffset? expiry = null;
+            if (env.Payload?["expiresAtUtc"] is { } node)
+                expiry = node.GetValue<DateTimeOffset>();
+            return await _ops.BeginManualCoordinatedBatchAsync(ctx, GetString(env, "requestId"),
+                GetStringList(env, "targetUids") ?? [], expiry);
+        };
+
+        _commands[GatewayProtocol.Names.ControlBatchCurrent] = (env, ctx) => Task.FromResult<object?>(
+            _ops.CurrentCoordinatedBatch(ctx, GetString(env, "batchId")));
+
+        _commands[GatewayProtocol.Names.ControlBatchUpdate] = async (env, ctx) =>
+            await _ops.UpdateCoordinatedBatchAsync(ctx, GetInt(env, "generation"), GetString(env, "token") ?? "",
                 GetString(env, "batchId") ?? "", GetString(env, "layout") ?? "",
-                GetInt(env, "index"), GetInt(env, "attempt"), GetString(env, "result") ?? ""));
+                GetInt(env, "index"), GetInt(env, "attempt"), GetString(env, "result") ?? "",
+                GetString(env, "stage"), GetString(env, "reason"));
 
         _commands[GatewayProtocol.Names.ControlBatchReset] = async (env, ctx) =>
         {
@@ -82,6 +95,9 @@ public sealed partial class GatewayDispatcher
                 return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = ex.Message } };
             }
         };
+
+        _commands[GatewayProtocol.Names.ControlBatchResetCleaned] = async (env, ctx) =>
+            await _ops.ConfirmCoordinatedResetCleanedAsync(ctx, GetString(env, "resetId"), GetString(env, "batchId"));
 
         _commands[GatewayProtocol.Names.ControlConfirmAllReady] = async (env, ctx) =>
         {
