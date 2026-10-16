@@ -611,6 +611,15 @@ public partial class MainViewModel
         ObserveOnlineTask(ReportStatusAsync(), "联机清理完成状态");
     }
 
+    /// <summary>单机锄地可按原流程让位；实际联机和无法确认模式的锄地均保留。</summary>
+    internal static void EnsureHoeingAllowsCoordinatedStart(CommandExecutor.ExecutionBoundarySnapshot boundary)
+    {
+        if (boundary.AutoHoeingMultiplayer == true)
+            throw new InvalidOperationException("BGI 已在执行联机锄地，普通开始不会打断它");
+        if (boundary.AutoHoeingRunning && boundary.AutoHoeingMultiplayer is null)
+            throw new InvalidOperationException("BGI 正在锄地，但单机/联机模式未确认，保留当前任务");
+    }
+
     private async Task PrepareCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
     {
         var names = batch.Bindings.Select(i => i.Name).ToArray();
@@ -657,7 +666,7 @@ public partial class MainViewModel
         var boundary = await context.Executor.CaptureExecutionBoundarySnapshotAsync();
         if (!boundary.Known || boundary.SlotOccupied && boundary.Active is null)
             throw new InvalidOperationException("BGI 执行身份未确认，保留原任务");
-        if (boundary.AutoHoeingRunning) throw new InvalidOperationException("BGI 已在执行联机锄地，普通开始不会打断它");
+        EnsureHoeingAllowsCoordinatedStart(boundary);
         if (context.Executor.TakeoverTicketSnapshot != null)
             throw new InvalidOperationException("原接管尚未结清，保留当前执行");
     }
@@ -676,8 +685,9 @@ public partial class MainViewModel
         }
         ct.ThrowIfCancellationRequested();
         var boundary = await executor.CaptureExecutionBoundarySnapshotAsync();
-        if (!boundary.Known || boundary.AutoHoeingRunning)
-            throw new InvalidOperationException("BGI 状态未知或已有锄地在执行，未中断现有任务");
+        if (!boundary.Known)
+            throw new InvalidOperationException("BGI 状态未知，未中断现有任务");
+        EnsureHoeingAllowsCoordinatedStart(boundary);
         if (context.Host != null)
         {
             context.Plan = context.Host.PrepareOnlineHoeing(batch.Generation, boundary);

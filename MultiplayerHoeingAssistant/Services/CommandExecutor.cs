@@ -121,7 +121,8 @@ public class CommandExecutor
     internal readonly record struct ExecutionIdentity(Guid InstanceId, int ProcessId, long StartTicksUtc,
         Guid? RunId = null, Guid? JobId = null, long StateRevision = 0);
     internal readonly record struct ExecutionBoundarySnapshot(bool Known, bool SlotOccupied,
-        int ProcessId, long StartTicksUtc, ExecutionIdentity? Active, bool AutoHoeingRunning = false);
+        int ProcessId, long StartTicksUtc, ExecutionIdentity? Active, bool AutoHoeingRunning = false,
+        bool? AutoHoeingMultiplayer = null);
 
     /// <summary>
     /// 助手侧"执行根已退出"的**证据**：只由 BGI 的按身份退出查询产生，**不等于**"看到空闲"。
@@ -2600,7 +2601,10 @@ public class CommandExecutor
             var identity = available.GetBoolean() ? ParseExecutionIdentity(resp.Data) : null;
             if (available.GetBoolean() && identity is null) return default;
             var hoeing = data.TryGetProperty("autoHoeingRunning", out var hoeingEl) && hoeingEl.ValueKind == System.Text.Json.JsonValueKind.True;
-            return new ExecutionBoundarySnapshot(true, occupied.GetBoolean(), processId, startTicksUtc, identity, hoeing);
+            bool? multiplayer = data.TryGetProperty("autoHoeingMultiplayer", out var mode)
+                && mode.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False
+                    ? mode.GetBoolean() : null;
+            return new ExecutionBoundarySnapshot(true, occupied.GetBoolean(), processId, startTicksUtc, identity, hoeing, multiplayer);
         }
         catch (System.Text.Json.JsonException) { return default; }
     }

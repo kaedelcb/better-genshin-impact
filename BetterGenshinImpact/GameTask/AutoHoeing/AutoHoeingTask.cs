@@ -571,6 +571,8 @@ public class AutoHoeingTask : ISoloTask
 
         try
         {
+            // 此配置已经应用配置组覆盖；单机锄地也使用相同进度标记，模式必须单独上报。
+            AutoHoeingProgress.BeginExecution(_config.MultiplayerEnabled);
             // 清空联机锄地队伍识别稳定性缓冲（每次任务启动重置一次）
             // 详见 .kiro/specs/combat-scenes-recognition-stability-buffer/design.md §2.3
             BetterGenshinImpact.GameTask.AutoFight.AutoFightTask.ResetRecognitionStabilityBuffer();

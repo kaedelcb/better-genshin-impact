@@ -159,8 +159,11 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         await host.CloseOnlineHoeingSendAsync();
         var active = new CommandExecutor.ExecutionIdentity(Guid.NewGuid(), 42, 99,
             Guid.Parse(run.WireRunId), original);
-        var prepared = host.PrepareOnlineHoeing(7,
-            new CommandExecutor.ExecutionBoundarySnapshot(true, true, 42, 99, active));
+        // 9:00 故障中的原任务来自计划表：单机锄地有进度，但必须放行并绑定同一计划作业。
+        var soloBoundary = new CommandExecutor.ExecutionBoundarySnapshot(true, true, 42, 99, active,
+            AutoHoeingRunning: true, AutoHoeingMultiplayer: false);
+        MainViewModel.EnsureHoeingAllowsCoordinatedStart(soloBoundary);
+        var prepared = host.PrepareOnlineHoeing(7, soloBoundary);
         Assert.True(prepared.Ready);
         Assert.Equal(run.RunId, prepared.ManagedRunId);
         Assert.False(host.ConfirmOnlineHoeingSuspend(7, "ticket-7",

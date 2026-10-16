@@ -61,7 +61,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
         await using var server = await IsolatedCoordinator.StartAsync();
         await using var pipe = new BgiInstancePipeDouble();
-        var script = new IdleOwnedBatchPeer(groupName);
+        var script = new OwnedBatchPeer(groupName);
         pipe.BodyForTest = script.Reply;
         pipe.Start();
         IpcClient.PipeNameOverrideForTest = pipe.PipeName;
@@ -107,6 +107,10 @@ public sealed class UnifiedHoeingNativeEntryTests
             await WaitAsync(() => script.StartCount == 1 && Active(vm)?.BatchId == first.BatchId,
                 () => Diagnostics(vm, pipe, server));
             var firstActive = Active(vm)!;
+            Assert.Equal(1, script.SoloTakeovers);
+            var soloSuspend = Assert.Single(pipe.Received.Where(r => r.Operation == "task.suspend")).Data!.Value;
+            Assert.Equal(script.SoloRoot.ToString("N"), soloSuspend.GetProperty("expectedExecutionInstanceId").GetString());
+            Assert.Equal(1, soloSuspend.GetProperty("expectedStateRevision").GetInt64());
             Assert.Equal(TaskConflictPolicy.Stop, firstActive.Policy!.Policy);
             Assert.True(firstActive.Prepared);
             Assert.True(firstActive.TakenOver);
@@ -163,8 +167,11 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.Equal(0, pipe.CountOf("ext.task.stop"));
             Assert.Null(executor.TakeoverTicketSnapshot);
 
-            // 上线按钮与一键开始必须进入同一生产批次入口，并携带本机刚武装的精确意图。
-            Assert.True(await (Task<bool>)Call(vm, "MarkOnlineAsync", "command")!);
+            // 上线时也复现“单机锄地仍在跑”，不能只覆盖空闲上线。
+            script.StartAnotherSolo();
+            var onlineSoloRoot = script.SoloRoot;
+            // 定时上线与一键开始必须进入同一生产批次入口，并携带本机刚武装的精确意图。
+            Assert.True(await (Task<bool>)Call(vm, "MarkOnlineAsync", "scheduled")!);
             await WaitAsync(() => script.StartCount == 3 && Active(vm)?.Start?.Source == "online",
                 () => Diagnostics(vm, pipe, server));
             var onlineActive = Active(vm)!;
@@ -177,6 +184,9 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.Equal(online.IntentGenerations[uid], onlineStart.IntentGenerations[uid]);
             Assert.True(onlineActive.Prepared);
             Assert.True(onlineActive.TakenOver);
+            Assert.Equal(2, script.SoloTakeovers);
+            var onlineSuspend = pipe.Received.Last(r => r.Operation == "task.suspend").Data!.Value;
+            Assert.Equal(onlineSoloRoot.ToString("N"), onlineSuspend.GetProperty("expectedExecutionInstanceId").GetString());
 
             // 只在这一小段注入已接收旧帧：复用生产反序列化/分发器验证退休批次事件不会重入。
             // 其余开始、推进、停止、清理都经过前面的实际 SignalR 网络连接。
@@ -257,7 +267,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         + string.Join(",", pipe.Received.Select(r => r.Operation)) + "\nserver=" + server.Output;
 
     /// <summary>真实帧传输的保守协议替身：作业一直 running，只有自己的 ownedOnly cancel 才进入终态。</summary>
-    private sealed class IdleOwnedBatchPeer(string groupName)
+    private sealed class OwnedBatchPeer(string groupName)
     {
         private sealed record Job(string Id, string Key, string Name, string BatchId)
         {
@@ -265,6 +275,11 @@ public sealed class UnifiedHoeingNativeEntryTests
         }
         private readonly object _gate = new();
         private readonly List<Job> _jobs = [];
+        // 复现 9 点故障：首批开始时正在运行原生单机锄地，而不是空闲。
+        public Guid SoloRoot { get; private set; } = Guid.NewGuid();
+        private Guid _soloJob = Guid.NewGuid();
+        private bool _soloRunning = true;
+        public int SoloTakeovers { get; private set; }
         private string? _ticket;
         private int _cancelCount;
         private readonly int _pid = Environment.ProcessId;
@@ -272,6 +287,18 @@ public sealed class UnifiedHoeingNativeEntryTests
         private object Epoch => new { processId = _pid, startTicksUtc = _ticks };
         public int StartCount { get { lock (_gate) return _jobs.Count; } }
         public int CancelCount { get { lock (_gate) return _cancelCount; } }
+        public void StartAnotherSolo()
+        {
+            lock (_gate)
+            {
+                Assert.Null(_ticket);
+                Assert.DoesNotContain(_jobs, j => !j.Cancelled);
+                SoloRoot = Guid.NewGuid();
+                _soloJob = Guid.NewGuid();
+                _soloRunning = true;
+            }
+        }
+
         private static string? Value(JsonElement? data, string name) => data is { } d && d.TryGetProperty(name, out var v)
             && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
@@ -298,11 +325,19 @@ public sealed class UnifiedHoeingNativeEntryTests
                     case "ext.task.status":
                         return (true, null, null, new
                         {
-                            running = active != null, taskRunning = active != null, autoHoeingRunning = active != null,
-                            slotOccupied = active != null, executionSlotOccupied = active != null,
-                            executionIdentityAvailable = active != null, executionInstanceId = active?.Id,
-                            executionStateRevision = 1, stateRevision = 1, executionIdle = active == null,
-                            executionExitConfirmed = false, executionExitReason = active == null ? "no_active_root" : "not_exited",
+                            running = active != null || _soloRunning, taskRunning = active != null || _soloRunning,
+                            autoHoeingRunning = active != null || _soloRunning,
+                            autoHoeingMultiplayer = _soloRunning ? false : active != null ? (bool?)true : null,
+                            slotOccupied = active != null || _soloRunning, executionSlotOccupied = active != null || _soloRunning,
+                            executionIdentityAvailable = active != null || _soloRunning,
+                            executionInstanceId = _soloRunning ? SoloRoot.ToString("N") : active?.Id,
+                            executionJobId = _soloRunning ? _soloJob.ToString("N") : active?.Id,
+                            executionStateRevision = 1, stateRevision = 1, executionIdle = active == null && !_soloRunning,
+                            executionExitConfirmed = !_soloRunning && Value(data, "executionInstanceId") == SoloRoot.ToString("N"),
+                            executionExitQueryInstanceId = Value(data, "executionInstanceId"),
+                            executionExitAtUtc = DateTime.UtcNow, executionExitOrder = 1L,
+                            executionExitReason = !_soloRunning && Value(data, "executionInstanceId") == SoloRoot.ToString("N")
+                                ? "confirmed" : active == null && !_soloRunning ? "no_active_root" : "not_exited",
                             bgiEpoch = Epoch, takeoverActive = _ticket != null, hasSuspendedTaskContext = false,
                         });
                     case "ext.config.list":
@@ -320,6 +355,17 @@ public sealed class UnifiedHoeingNativeEntryTests
                     case "task.suspend":
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
                             return (false, "not_current", "替身拒绝非空闲接管", null);
+                        if (_soloRunning)
+                        {
+                            if (Value(data, "expectedExecutionInstanceId") != SoloRoot.ToString("N")
+                                || data?.GetProperty("expectedStateRevision").GetInt64() != 1)
+                                return (false, "not_current", "单机执行身份或修订不匹配", null);
+                            _soloRunning = false;
+                            SoloTakeovers++;
+                            _ticket = ticket;
+                            return (true, null, null, new { takeoverTicket = ticket, quiesceConfirmed = true,
+                                liveTask = true, expectedExecutionInstanceId = SoloRoot.ToString("N"), expectedStateRevision = 1L });
+                        }
                         _ticket = ticket;
                         return (true, null, null, new { takeoverTicket = ticket, quiesceConfirmed = true,
                             liveTask = false, expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });

@@ -1030,7 +1030,13 @@ internal sealed class InstanceRequestHandler
             var isCancelled = !BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsDisposed
                 && BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
 
-            var hoeing = AutoHoeingProgress.IsRunning;
+            bool hoeing;
+            bool? hoeingMultiplayer;
+            lock (AutoHoeingProgress.Sync)
+            {
+                hoeing = AutoHoeingProgress.IsRunning;
+                hoeingMultiplayer = AutoHoeingProgress.MultiplayerMode;
+            }
             var executionSnapshot = BetterGenshinImpact.Service.Execution.ExecutionScope.GetActiveSnapshot();
             var taskSlotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0;
 
@@ -1270,6 +1276,7 @@ internal sealed class InstanceRequestHandler
                 taskName,
                 groupName,
                 autoHoeingRunning = hoeing,
+                autoHoeingMultiplayer = hoeingMultiplayer,
                 autoHoeingProgress = hoeingProgress,
                 // SignalR 房间当前人数（0=未知/未在房间）；桌宠"已联机"chip 显示用
                 roomPlayerCount = AutoHoeingProgress.RoomPlayerCount,
@@ -1362,6 +1369,7 @@ internal sealed class InstanceRequestHandler
             // 任务详情字段（监控端桌宠面板按执行端显示完整信息用；旧客户端忽略未知字段无兼容风险）
             wasCancelled = data["wasCancelled"]?.ToObject<bool>() ?? false,
             autoHoeingRunning = data["autoHoeingRunning"]?.ToObject<bool>() ?? false,
+            autoHoeingMultiplayer = data["autoHoeingMultiplayer"]?.ToObject<bool?>(),
             autoHoeingProgress = data["autoHoeingProgress"]?.ToObject<string>(),
             roomPlayerCount = data["roomPlayerCount"]?.ToObject<int>() ?? 0,
             currentRouteDisplay = data["currentRouteDisplay"]?.ToObject<string>(),
