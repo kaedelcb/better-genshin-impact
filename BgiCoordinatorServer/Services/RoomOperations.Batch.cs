@@ -90,6 +90,8 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("hoeing_start_capability_required:" + uid);
             if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.LocalFinishCapability) != true)
                 throw new InvalidOperationException("hoeing_local_finish_capability_required:" + uid);
+            if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.LocalTaskFailureCapability) != true)
+                throw new InvalidOperationException("hoeing_local_task_failure_capability_required:" + uid);
             if (player.OnlineHoeingGroupNames.Count == 0)
                 throw new InvalidOperationException("batch_binding_missing:" + uid);
             if (useCompletionActions)
@@ -154,6 +156,9 @@ public sealed partial class RoomOperations
         if (group == null) throw new InvalidOperationException("batch_control_room_required");
         if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
             throw new InvalidOperationException("hoeing_start_capability_required");
+        if (result == "local_tasks_failed"
+            && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.LocalTaskFailureCapability) != true)
+            throw new InvalidOperationException("hoeing_local_task_failure_capability_required");
         var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId)
             ?? throw new InvalidOperationException("batch_identity_required");
         CoordinatedBatchState state;

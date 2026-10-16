@@ -47,6 +47,9 @@ public sealed class CoordinatedBatchState
         public string Reason = "";
         public DateTime LastSeen = now;
     }
+    private static bool HasEndedCurrentItem(Member member)
+        => member.Result is "succeeded" or "local_tasks_failed";
+
     private readonly Dictionary<string, Member> _members;
     private readonly DateTime _created;
     private DateTime _phaseStarted;
@@ -132,7 +135,7 @@ public sealed class CoordinatedBatchState
         else if (Phase == "preparing" && now - _phaseStarted > TimeSpan.FromMinutes(3)) Abort("preparation_timeout");
         else if (Phase == "takeover" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("takeover_timeout");
         else if (Phase == "stopping" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("cleanup_timeout");
-        else if ((Phase is "running" or "stopping") && _members.Values.Any(m => m.Result != "succeeded" && now - m.LastSeen > TimeSpan.FromSeconds(90)))
+        else if ((Phase is "running" or "stopping") && _members.Values.Any(m => !HasEndedCurrentItem(m) && now - m.LastSeen > TimeSpan.FromSeconds(90)))
             Abort("participant_lease_expired");
     }
 
@@ -152,7 +155,7 @@ public sealed class CoordinatedBatchState
         if (batchId != BatchId) throw new InvalidOperationException("batch_identity");
         if (member.Token.Length > 0 && member.Token != token) throw new InvalidOperationException("batch_participant_token_mismatch");
         if (reason.Length > 512) throw new InvalidOperationException("batch_reason");
-        if (result is not ("" or "succeeded" or "failed" or "stopped" or "cancelled" or "unknown" or "preparation_failed" or "takeover_failed" or "local_failed"))
+        if (result is not ("" or "succeeded" or "failed" or "stopped" or "cancelled" or "unknown" or "preparation_failed" or "takeover_failed" or "local_failed" or "local_tasks_failed"))
             throw new InvalidOperationException("batch_result");
         if (stage is not ("" or "registered" or "prepared" or "takeoverConfirmed" or "cleaned"))
             throw new InvalidOperationException("batch_stage");
@@ -186,11 +189,13 @@ public sealed class CoordinatedBatchState
         if ((Phase is "running" or "stopping") && (index != Index || attempt != Attempt)) return Snapshot();
         // A confirmed result belongs to this item/attempt, not to the continued life of its BGI process.
         // Explicit room stop/reset still call Abort directly; late telemetry cannot revoke success.
-        if (member.Result == "succeeded" && result.Length > 0 && result != "succeeded")
+        if (HasEndedCurrentItem(member) && result.Length > 0 && result != member.Result)
         {
             if (reason.Length > 0 && member.Reason != reason) { member.Reason = reason; Revision++; }
             return Snapshot();
         }
+        if (result == "local_tasks_failed" && Phase is not ("running" or "stopping"))
+            throw new InvalidOperationException("batch_not_started");
         if (result == "local_failed")
         {
             member.Result = result;
@@ -229,10 +234,12 @@ public sealed class CoordinatedBatchState
             if (member.Result.Length > 0 && member.Result != result)
             { Abort("conflicting_terminal_result"); return Snapshot(); }
             if (result == "stopped" && Phase != "stopping") { Abort("unexpected_stop"); return Snapshot(); }
+            if (result == "local_tasks_failed" && member.Result != result) Revision++;
             member.Result = result;
+            if (result == "local_tasks_failed") member.Reason = reason;
             if (result == "failed" && Phase == "running")
             {
-                if (_members.Values.Any(m => m.Result == "succeeded"))
+                if (_members.Values.Any(HasEndedCurrentItem))
                 {
                     Abort("participant_failed_after_peer_completed:" + uid);
                     return Snapshot();
@@ -241,8 +248,16 @@ public sealed class CoordinatedBatchState
                 SetPhase("stopping", now);
             }
         }
-        if (Phase == "running" && _members.Values.All(m => m.Result == "succeeded"))
+        if (Phase == "running" && _members.Values.All(HasEndedCurrentItem))
         {
+            var localFailures = _members.Where(p => p.Value.Result == "local_tasks_failed").Select(p => p.Key).ToArray();
+            if (localFailures.Length > 0)
+            {
+                // Every participant has exited this item. Do not cancel peers to obtain this boundary,
+                // invent success, replay completed hoeing, or advance to a later binding.
+                Abort("local_tasks_failed:" + string.Join(",", localFailures));
+                return Snapshot();
+            }
             Index++;
             Attempt = 0;
             if (Index < _count)
@@ -251,7 +266,7 @@ public sealed class CoordinatedBatchState
         }
         else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0))
         {
-            if (_members.Values.Any(m => m.Result == "succeeded"))
+            if (_members.Values.Any(HasEndedCurrentItem))
             {
                 Abort("partial_completion_no_replay");
                 return Snapshot();

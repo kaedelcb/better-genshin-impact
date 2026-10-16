@@ -44,6 +44,7 @@ public sealed class FourMemberFinishEntryTests
                         // scenarios use this STA, each with its own server, room and private pipe.
                         await RunEntryAsync(peerFails: true, reconnectAfterLocalFinish: false);
                         await RunEntryAsync(peerFails: false, reconnectAfterLocalFinish: true);
+                        await RunLocalTaskFailureEntryAsync();
                         finished.TrySetResult();
                     }
                     catch (Exception error) { finished.TrySetException(error); }
@@ -55,7 +56,7 @@ public sealed class FourMemberFinishEntryTests
         }) { IsBackground = true, Name = "FourMemberFinishEntry" };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await finished.Task.WaitAsync(TimeSpan.FromMinutes(4));
+        await finished.Task.WaitAsync(TimeSpan.FromMinutes(5));
         Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "隔离 Dispatcher 未退出。");
     }
 
@@ -265,6 +266,287 @@ public sealed class FourMemberFinishEntryTests
         }
     }
 
+    private static async Task RunLocalTaskFailureEntryAsync()
+    {
+        string[] uids = ["100000021", "100000022", "100000023", "100000024"];
+        const string group = "隔离联机及两个神像";
+        const string next = "失败后禁止开始的第二联机项";
+        const string manual = "后置失败清理后的手动任务";
+        var previousIpc = IpcClient.PipeNameOverrideForTest;
+        var previousExt = BgiExternalClient.PipeNameOverrideForTest;
+        await using var server = await IsolatedCoordinator.StartAsync("local-task-failure-isolation");
+        await using var pipe = new BgiInstancePipeDouble();
+        var bgi = new FinishBgiPeer(group, manual, next);
+        pipe.BodyForTest = bgi.Reply;
+        pipe.Start();
+        IpcClient.PipeNameOverrideForTest = pipe.PipeName;
+        BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
+        using var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
+        using var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
+        await using var originalLocal = new SignalRClient();
+        SignalRClient local = originalLocal;
+        SignalRClient? reconnected = null;
+        await using var zeroTailClient = new SignalRClient();
+        await using var failedClient = new SignalRClient();
+        await using var waitingClient = new SignalRClient();
+        using var stopPeers = new CancellationTokenSource();
+        var zeroTail = new ControlledPeer(zeroTailClient, uids[1], false);
+        var waitingTail = new ControlledPeer(waitingClient, uids[3], true);
+        var failedPeer = new LocalFailureLoopPeer(failedClient, uids[2]);
+        Task[] peerTasks = [];
+        MainViewModel? vm = null;
+        try
+        {
+            Assert.Equal(BgiExternalLinkState.Ready, await external.StartAsync());
+            vm = new MainViewModel();
+            var config = new AssistConfig
+            {
+                ServerUrl = server.Url, PlayerUid = uids[0], PlayerName = "两个普通后置任务的生产端",
+                TeamUids = uids.ToList(), ControlRoomPassword = "isolated-local-failure",
+                ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
+                OnlineHoeingGroupNames = [group, next], OnlineHoeingGroupTypes = ["group", "group"],
+                ExpectedHoeingPlayers = 4, DisclaimerAccepted = true,
+            };
+            var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
+                isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("禁止触碰真实进程");
+            Set(vm, "_config", config);
+            Set(vm, "_externalClient", external);
+            Set(vm, "_processMonitor", monitor);
+            Set(vm, "_commandExecutor", executor);
+            Set(vm, "_signalRClient", local);
+            Call(vm, "WireSignalRClient", local);
+            var room = "LOCAL-FAIL-" + Guid.NewGuid().ToString("N")[..8];
+            SignalRClient[] clients = [local, zeroTailClient, failedClient, waitingClient];
+            for (var i = 0; i < clients.Length; i++)
+            {
+                await clients[i].ConnectAsync(server.Url, room, config.ControlRoomPassword,
+                    uids[i], "隔离不同后置成员" + i, uids.ToList(),
+                    clientInstanceId: i == 0 ? config.ClientInstanceId : Guid.NewGuid().ToString("N"),
+                    bypassSystemProxy: true);
+                await clients[i].ReportControlStatusAsync(new ControlStatus
+                {
+                    PlayerUid = uids[i], PlayerName = "隔离不同后置成员" + i, BgiStatus = "running",
+                    ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
+                    OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
+                    HoeingCompletionAction = new("stop", "group", "", 0),
+                });
+            }
+            peerTasks = [zeroTail.RunAsync(stopPeers.Token), failedPeer.RunAsync(stopPeers.Token),
+                waitingTail.RunAsync(stopPeers.Token)];
+            Func<string> diagnostics = () => Diagnostics(vm, bgi, [zeroTail, waitingTail], server)
+                + "\nproduction-loop-peer=" + failedPeer.Last?.Phase + "/" + failedPeer.Error;
+            var started = await local.BeginCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), uids,
+                DateTimeOffset.UtcNow.AddMinutes(1), useCompletionActions: false);
+            await WaitAsync(() => bgi.CooperativeStarts == 1 && Active(vm)?.Phase == "running"
+                && failedPeer.SubmitCount == 1, diagnostics);
+            var ownBatch = Active(vm)!;
+
+            // Native has finished; two ordinary local steps still belong to the same running group.
+            bgi.CompleteCooperativeBody();
+            await WaitAsync(() => pipe.Received.Count(r => r.Operation == "ext.task.queueStatus") > 1, diagnostics);
+            var duringTail = await external.QueryTaskQueueStatusAsync(bgi.CooperativeJobId!);
+            Assert.Equal("running", duringTail!.Status);
+            Assert.Equal(1, duringTail.HoeingEvidence!.Completed);
+            Assert.Equal(0, duringTail.HoeingEvidence.Active);
+            Assert.False(duringTail.HoeingEvidence.Sealed);
+            Assert.True(bgi.CooperativeTailRunning);
+            Assert.False(ownBatch.LocalSucceeded);
+            Assert.True(vm.HasLocalCoordinatedExecutionResponsibility);
+            Assert.Equal(0, bgi.TailSteps);
+
+            // A different member's real production loop observes a sealed ordinary-task failure.
+            failedPeer.FailTail = true;
+            await WaitAsync(() => failedPeer.Last?.Members.Single(m => m.Uid == uids[2]).Result
+                == "local_tasks_failed", diagnostics);
+            var peerFailed = (await local.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal("running", peerFailed.Phase);
+            Assert.Equal(0, peerFailed.Index);
+            Assert.Equal(0, peerFailed.Attempt);
+            Assert.True(bgi.CooperativeTailRunning);
+            Assert.False(ownBatch.IsCancellationRequested);
+            Assert.Equal(0, bgi.CancelCount);
+            Assert.Equal(0, failedPeer.CancelCount);
+
+            bgi.CompleteTailStep();
+            await Task.Delay(350);
+            Assert.True(bgi.CooperativeTailRunning);
+            Assert.Equal(1, bgi.TailSteps);
+            Assert.False(ownBatch.IsCancellationRequested);
+            var disconnectedBeforeAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            bgi.BeforeFailedJobIdentityReply = () =>
+            {
+                // The old control transport is actually gone before BGI's identity reply arrives.
+                // Thus the production loop can classify the failure but cannot ACK it next round.
+                originalLocal.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                disconnectedBeforeAck.TrySetResult();
+            };
+            bgi.CompleteTailStep(failed: true);
+            await WaitAsync(() => disconnectedBeforeAck.Task.IsCompleted && ownBatch.LocalTasksFailed
+                && ownBatch.RunTask?.IsCompleted == true && ownBatch.LocalCleanupConfirmed
+                && !vm.HasLocalCoordinatedExecutionResponsibility && executor.TakeoverTicketSnapshot == null, diagnostics);
+            Assert.Equal(2, bgi.TailSteps);
+            Assert.False(ownBatch.LocalSucceeded);
+            Assert.False(ownBatch.LocalTasksFailureAccepted);
+            Assert.True(ownBatch.LocalCleanupConfirmed);
+            Assert.Equal("failed", ownBatch.Outcome);
+            Assert.Null(external.TakeoverTicket);
+            Assert.True(pipe.CountOf("ext.job.status") > 0); // Exact job/epoch/key/exit confirmation was exercised.
+            var unacknowledged = (await zeroTailClient.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal("running", unacknowledged.Phase);
+            Assert.Equal("", unacknowledged.Members.Single(m => m.Uid == uids[0]).Result);
+            Assert.Equal(0, unacknowledged.Index);
+            Assert.Equal(0, unacknowledged.Attempt);
+
+            reconnected = new SignalRClient();
+            local = reconnected;
+            Set(vm, "_signalRClient", local);
+            Call(vm, "WireSignalRClient", local);
+            await local.ConnectAsync(server.Url, room, config.ControlRoomPassword,
+                uids[0], config.PlayerName, uids.ToList(), clientInstanceId: config.ClientInstanceId,
+                bypassSystemProxy: true);
+            await local.ReportControlStatusAsync(new ControlStatus
+            {
+                PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
+                ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
+                OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
+                HoeingCompletionAction = new("stop", "group", "", 0),
+            });
+            await WaitAsync(() => ownBatch.LocalTasksFailureAccepted
+                && waitingTail.Last?.Members.Single(m => m.Uid == uids[0]).Result == "local_tasks_failed", diagnostics);
+            var acknowledged = (await local.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal("running", acknowledged.Phase);
+            Assert.Equal(0, acknowledged.Index);
+            Assert.Equal(0, acknowledged.Attempt);
+            Assert.True(ownBatch.RunTask!.IsCompleted); // No replacement loop or repeated BGI submission.
+
+            await zeroTailClient.SendRemoteCommandAsync(new RemoteCommand
+            {
+                Cmd = "start_group", Target = [uids[0]], CommandId = Guid.NewGuid().ToString("N"),
+                Params = new() { ["groupName"] = manual }, ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(30),
+            });
+            await WaitAsync(() => bgi.ManualStarts == 1, diagnostics);
+            var manualJob = bgi.ManualJobId;
+            Assert.True(bgi.ManualRunning);
+            var resumesBeforeTerminal = pipe.CountOf("task.resume");
+
+            waitingTail.CompleteTail = true;
+            await WaitAsync(() => waitingTail.Last?.Phase == "aborted" && Active(vm) == null, diagnostics);
+            var terminal = (await local.GetCurrentCoordinatedBatchAsync())!;
+            Assert.StartsWith("local_tasks_failed:", terminal.Reason);
+            Assert.Contains(uids[0], terminal.Reason);
+            Assert.Contains(uids[2], terminal.Reason);
+            Assert.Equal(0, terminal.Index);
+            Assert.Equal(0, terminal.Attempt);
+            Assert.Equal(1, failedPeer.SubmitCount);
+            Assert.Equal(1, bgi.CooperativeStarts);
+            Assert.DoesNotContain(pipe.Received, r => r.Operation == "ext.task.start"
+                && r.Data is { } d && d.TryGetProperty("groupName", out var name) && name.GetString() == next);
+            await waitingTail.SendDelayedCleanupAsync(terminal);
+            Replay(local, GatewayProtocol.Events.ControlBatchState, terminal);
+            Replay(local, GatewayProtocol.Events.ControlBatchState, terminal with { CleanupComplete = true });
+            Replay(local, GatewayProtocol.Events.ControlBatchStart, started);
+            await Task.Delay(1300);
+            Assert.True(bgi.ManualRunning);
+            Assert.Equal(manualJob, bgi.ManualJobId);
+            Assert.Equal(0, bgi.CancelCount);
+            Assert.Equal(0, failedPeer.CancelCount);
+            Assert.Equal(0, pipe.CountOf("ext.task.stop"));
+            Assert.Equal(resumesBeforeTerminal, pipe.CountOf("task.resume"));
+            bgi.CompleteManual();
+            await Task.Delay(300);
+        }
+        finally
+        {
+            stopPeers.Cancel();
+            try { await Task.WhenAll(peerTasks).WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
+            if (vm != null)
+            {
+                Active(vm)?.Cancel();
+                if (Active(vm)?.RunTask is { } pending)
+                    try { await pending.WaitAsync(TimeSpan.FromSeconds(45)); } catch { }
+                var host = (TaskCenterHost?)typeof(MainViewModel)
+                    .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm);
+                Set(vm, "_disposing", true);
+                if (host != null) await host.ShutdownAsync();
+            }
+            IpcClient.PipeNameOverrideForTest = previousIpc;
+            BgiExternalClient.PipeNameOverrideForTest = previousExt;
+            if (reconnected != null) await reconnected.DisposeAsync();
+        }
+    }
+
+    /// <summary>Real batch loop and real gateway transport; only its BGI observation/action IO is controlled.</summary>
+    private sealed class LocalFailureLoopPeer(SignalRClient client, string uid)
+    {
+        private readonly BgiEpoch _epoch = new() { ProcessId = 8, StartTicksUtc = 80 };
+        private string? _jobId, _requestKey;
+        public volatile bool FailTail;
+        public int SubmitCount, CancelCount;
+        public CoordinatedBatchSnapshot? Last { get; private set; }
+        public string? Error { get; private set; }
+        public async Task RunAsync(CancellationToken ct)
+        {
+            try
+            {
+                CoordinatedBatchSnapshot? start = null;
+                while (start == null)
+                { start = await client.GetCurrentCoordinatedBatchAsync(ct); if (start == null) await Task.Delay(100, ct); }
+                var batch = new OnlineHoeingBatch(start, uid, new TaskConflictPolicySettings());
+                using var cancellation = ct.Register(() => batch.Cancel());
+                var loop = new CoordinatedBatchLoop(batch, new CoordinatedBatchRuntime
+                {
+                    Prepare = _ => Task.CompletedTask,
+                    Takeover = _ => { batch.TakeoverTicket = "owned-test-loop-" + uid; return Task.CompletedTask; },
+                    Exchange = async (stage, result, reason, index, attempt, token) => Last =
+                        await client.UpdateCoordinatedBatchAsync(start.Generation, batch.Token, start.BatchId,
+                            "group,group", index, attempt, result, token, stage, reason),
+                    ReadJobs = _ => Task.FromResult<BgiJobListSnapshot?>(new()
+                    {
+                        Epoch = _epoch, Jobs = _jobId == null ? [] : [new BgiJobInfo
+                        {
+                            JobId = _jobId, IdempotencyKey = _requestKey, Epoch = _epoch,
+                            State = FailTail ? "failed" : "running", ExecutionExitConfirmed = FailTail,
+                            ExecutionExitDisposition = FailTail ? "terminal" : null,
+                        }]
+                    }),
+                    ReadTerminal = (_, _) => Task.FromResult<BgiTaskQueueStatus?>(new()
+                    {
+                        Status = FailTail ? "failed" : "running", ErrorCode = FailTail ? "task_start_failed" : null,
+                        HoeingEvidence = new() { Started = 1, Completed = 1, Active = 0, Sealed = FailTail,
+                            JobResult = FailTail ? "Failed" : null, Revision = FailTail ? 4 : 3 },
+                    }),
+                    Submit = (item, _, _) =>
+                    {
+                        SubmitCount++; _jobId = Guid.NewGuid().ToString("N"); _requestKey = item.RequestKey;
+                        return Task.FromResult(new BgiTaskSubmitResult { Success = true, Status = "queued", TaskHandle = _jobId });
+                    },
+                    ConfirmLocalTasksFailure = (id, epoch, key, _) => Task.FromResult<bool?>(FailTail
+                        && Guid.TryParse(id, out var requested) && Guid.TryParse(_jobId, out var actual) && requested == actual
+                        && CoordinatedBatchLoop.SameEpoch(epoch, _epoch) && key == _requestKey),
+                    CancelOwned = (_, _) => { CancelCount++; return Task.CompletedTask; },
+                    ReleaseTicket = (_, _, _) => Task.FromResult(true),
+                    RequireFinishEvidence = true, RequireLocalTaskFailureIsolation = true,
+                    PollInterval = TimeSpan.FromMilliseconds(100),
+                });
+                await loop.RunAsync();
+                while (!ct.IsCancellationRequested)
+                {
+                    var current = await client.GetCurrentCoordinatedBatchAsync(ct);
+                    if (current?.Phase is "completed" or "aborted")
+                    {
+                        Last = await client.UpdateCoordinatedBatchAsync(start.Generation, batch.Token, start.BatchId,
+                            "group,group", current.Index, current.Attempt, "", ct, "cleaned");
+                        return;
+                    }
+                    await Task.Delay(100, ct);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            catch (Exception error) { Error = error.ToString(); throw; }
+        }
+    }
+
     private sealed class ControlledPeer(SignalRClient client, string uid, bool hasLongTail)
     {
         private readonly string _token = Guid.NewGuid().ToString("N");
@@ -295,7 +577,8 @@ public sealed class FourMemberFinishEntryTests
                             if (current.Phase is "completed" or "aborted") stage = "cleaned";
                         }
                         Last = await client.UpdateCoordinatedBatchAsync(current.Generation, _token, current.BatchId,
-                            "group", current.Index, current.Attempt, result, ct, stage,
+                            string.Join(",", current.Bindings[uid].Select(b => b.Type)),
+                            current.Index, current.Attempt, result, ct, stage,
                             ReportUnknown ? "controlled_peer_after_body_failed" : "");
                         registered = true;
                     }
@@ -307,27 +590,65 @@ public sealed class FourMemberFinishEntryTests
         }
         public Task<CoordinatedBatchSnapshot> SendDelayedCleanupAsync(CoordinatedBatchSnapshot snapshot)
             => client.UpdateCoordinatedBatchAsync(snapshot.Generation, _token, snapshot.BatchId,
-                "group", snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
+                string.Join(",", snapshot.Bindings[uid].Select(b => b.Type)),
+                snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
     }
 
-    private sealed class FinishBgiPeer(string boundGroup, string manualGroup)
+    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null)
     {
         private sealed record Job(string Id, string Key, string Name, bool Cooperative)
-        { public bool Completed; public bool Cancelled; }
+        {
+            public bool Completed, Cancelled, Failed, BodyCompleted, NativeFailed;
+            public int TailSteps, Revision = 1;
+        }
         private readonly object _gate = new();
         private readonly List<Job> _jobs = [];
         private string? _ticket;
         private int _cancelCount;
         private readonly int _pid = Environment.ProcessId;
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
+        public Action? BeforeFailedJobIdentityReply;
         private object Epoch => new { processId = _pid, startTicksUtc = _ticks };
         public int CooperativeStarts { get { lock (_gate) return _jobs.Count(j => j.Cooperative); } }
         public int ManualStarts { get { lock (_gate) return _jobs.Count(j => !j.Cooperative); } }
         public string? CooperativeJobId { get { lock (_gate) return _jobs.FirstOrDefault(j => j.Cooperative)?.Id; } }
         public string? ManualJobId { get { lock (_gate) return _jobs.FirstOrDefault(j => !j.Cooperative)?.Id; } }
-        public bool ManualRunning { get { lock (_gate) return _jobs.Any(j => !j.Cooperative && !j.Completed && !j.Cancelled); } }
+        public bool ManualRunning { get { lock (_gate) return _jobs.Any(j => !j.Cooperative && !j.Completed && !j.Cancelled && !j.Failed); } }
+        public bool CooperativeTailRunning { get { lock (_gate) return _jobs.Any(j => j.Cooperative && j.BodyCompleted && !j.Completed && !j.Cancelled && !j.Failed); } }
+        public int TailSteps { get { lock (_gate) return _jobs.FirstOrDefault(j => j.Cooperative)?.TailSteps ?? 0; } }
         public int CancelCount { get { lock (_gate) return _cancelCount; } }
-        public void CompleteCooperative() { lock (_gate) _jobs.Single(j => j.Cooperative).Completed = true; }
+        public void CompleteCooperative()
+        {
+            lock (_gate)
+            {
+                var job = _jobs.Single(j => j.Cooperative);
+                job.BodyCompleted = job.Completed = true;
+                job.Revision++;
+            }
+        }
+        public void CompleteCooperativeBody()
+        { lock (_gate) { var job = _jobs.Single(j => j.Cooperative); job.BodyCompleted = true; job.Revision++; } }
+        public void CompleteTailStep(bool failed = false)
+        {
+            lock (_gate)
+            {
+                var job = _jobs.Single(j => j.Cooperative);
+                Assert.True(job.BodyCompleted && !job.Completed && !job.Cancelled && !job.Failed);
+                job.TailSteps++;
+                job.Failed = failed;
+                job.Revision++;
+            }
+        }
+        public void FailCooperativeNative()
+        {
+            lock (_gate)
+            {
+                var job = _jobs.Single(j => j.Cooperative);
+                job.Failed = job.NativeFailed = true;
+                job.BodyCompleted = false;
+                job.Revision++;
+            }
+        }
         public void CompleteManual() { lock (_gate) _jobs.Single(j => !j.Cooperative).Completed = true; }
         private static string? Value(JsonElement? data, string name) => data is { } d && d.TryGetProperty(name, out var v)
             && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
@@ -336,7 +657,7 @@ public sealed class FourMemberFinishEntryTests
         {
             lock (_gate)
             {
-                var active = _jobs.LastOrDefault(j => !j.Completed && !j.Cancelled);
+                var active = _jobs.LastOrDefault(j => !j.Completed && !j.Cancelled && !j.Failed);
                 switch (operation)
                 {
                     case "ext.hello":
@@ -355,7 +676,7 @@ public sealed class FourMemberFinishEntryTests
                     case "task.status":
                     case "ext.task.status":
                         var queriedRoot = Value(data, "executionInstanceId");
-                        var exited = _jobs.Any(j => j.Id == queriedRoot && (j.Completed || j.Cancelled));
+                        var exited = _jobs.Any(j => j.Id == queriedRoot && (j.Completed || j.Cancelled || j.Failed));
                         return (true, null, null, new
                         {
                             running = active != null, taskRunning = active != null,
@@ -371,17 +692,34 @@ public sealed class FourMemberFinishEntryTests
                             queueDepth = 0, currentTaskHandle = active?.Id,
                         });
                     case "ext.config.list":
-                        return (true, null, null, new { configGroups = new[] { boundGroup, manualGroup }, oneClickConfigs = Array.Empty<string>() });
+                        return (true, null, null, new { configGroups = new[] { boundGroup, manualGroup, nextBoundGroup }
+                            .Where(n => n != null).ToArray(), oneClickConfigs = Array.Empty<string>() });
                     case "ext.config.describe":
                         return (true, null, null, new { bgiEpoch = Epoch, configRevision = "finish-entry-r1",
-                            tasks = new[] { new { name = "隔离协议任务", enabled = true } } });
+                            tasks = nextBoundGroup != null && Value(data, "groupName") == boundGroup
+                                ? new[] { new { name = "联机native", enabled = true }, new { name = "回神像1", enabled = true }, new { name = "回神像2", enabled = true } }
+                                : new[] { new { name = "隔离协议任务", enabled = true } } });
                     case "ext.job.list":
                         return (true, null, null, new { bgiEpoch = Epoch, jobs = _jobs.Select(j => new
                         {
                             jobId = j.Id, idempotencyKey = j.Key, name = j.Name, kind = "group",
-                            state = j.Cancelled ? "cancelled" : j.Completed ? "succeeded" : "running", wasCancelled = j.Cancelled,
-                            exitConfirmed = j.Completed || j.Cancelled, exitDisposition = j.Completed || j.Cancelled ? "terminal" : null,
+                            state = j.Cancelled ? "cancelled" : j.Failed ? "failed" : j.Completed ? "succeeded" : "running", wasCancelled = j.Cancelled,
+                            exitConfirmed = j.Completed || j.Cancelled || j.Failed, exitDisposition = j.Completed || j.Cancelled || j.Failed ? "terminal" : null,
                         }).ToArray() });
+                    case "ext.job.status":
+                        var exactJob = _jobs.SingleOrDefault(j => Guid.TryParse(j.Id, out var known)
+                            && Guid.TryParse(Value(data, "jobId"), out var requested) && known == requested);
+                        if (exactJob is { Cooperative: true, Failed: true, BodyCompleted: true, NativeFailed: false })
+                            Interlocked.Exchange(ref BeforeFailedJobIdentityReply, null)?.Invoke();
+                        return (true, null, null, new { status = exactJob == null ? "not_found"
+                                : exactJob.Cancelled ? "cancelled" : exactJob.Failed ? "failed" : exactJob.Completed ? "succeeded" : "running", bgiEpoch = Epoch,
+                            job = exactJob == null ? null : new
+                            {
+                                jobId = exactJob.Id, idempotencyKey = exactJob.Key, name = exactJob.Name, kind = "group",
+                                state = exactJob.Cancelled ? "cancelled" : exactJob.Failed ? "failed" : exactJob.Completed ? "succeeded" : "running",
+                                wasCancelled = exactJob.Cancelled, exitConfirmed = exactJob.Completed || exactJob.Cancelled || exactJob.Failed,
+                                exitDisposition = exactJob.Completed || exactJob.Cancelled || exactJob.Failed ? "terminal" : null,
+                            } });
                     case "task.suspend":
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
                             return (false, "not_current", "替身只接受空闲接管", null);
@@ -401,14 +739,14 @@ public sealed class FourMemberFinishEntryTests
                         var queried = _jobs.SingleOrDefault(j => j.Id == Value(data, "taskHandle"));
                         return queried == null ? (false, "not_found", "未知句柄", null) : (true, null, null, new
                         {
-                            status = queried.Completed || queried.Cancelled ? "completed" : "running",
-                            cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : null,
+                            status = queried.Failed ? "failed" : queried.Completed || queried.Cancelled ? "completed" : "running",
+                            cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : queried.Failed ? "task_start_failed" : null,
                             hoeingEvidence = queried.Cooperative ? new
                             {
-                                started = 1, completed = queried.Completed ? 1 : 0, failed = 0,
-                                cancelled = queried.Cancelled ? 1 : 0, active = queried.Completed || queried.Cancelled ? 0 : 1,
-                                @sealed = queried.Completed || queried.Cancelled,
-                                jobResult = queried.Completed ? "Ran" : queried.Cancelled ? "Cancelled" : null, revision = 3,
+                                started = 1, completed = queried.BodyCompleted ? 1 : 0, failed = queried.NativeFailed ? 1 : 0,
+                                cancelled = queried.Cancelled && !queried.BodyCompleted ? 1 : 0, active = queried.BodyCompleted || queried.Completed || queried.Cancelled || queried.Failed ? 0 : 1,
+                                @sealed = queried.Completed || queried.Cancelled || queried.Failed,
+                                jobResult = queried.Completed ? "Ran" : queried.Cancelled ? "Cancelled" : queried.Failed ? "Failed" : null, revision = queried.Revision,
                             } : null,
                         });
                     case "ext.task.cancel":

@@ -8,6 +8,7 @@ namespace BgiCoordinatorServer.Gateway;
 /// </summary>
 public static class GatewayProtocol
 {
+    public const string LocalTaskFailureCapability = "hoeing.localTaskFailure.v1";
     public const string LocalFinishCapability = "hoeing.localFinish.v1";
     public const string CompletionChoiceCapability = "hoeing.completionChoice.v1";
     public const string HoeingStartCapability = "hoeing.start.v2";
@@ -19,7 +20,7 @@ public static class GatewayProtocol
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
     public static readonly string[] ServerCapabilities =
-        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, LocalFinishCapability];
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, LocalFinishCapability, LocalTaskFailureCapability];
 
     public static class MessageTypes
     {

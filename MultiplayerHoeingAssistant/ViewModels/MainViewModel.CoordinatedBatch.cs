@@ -34,7 +34,10 @@ public partial class MainViewModel
             {
                 var ext = _externalClient is { State: BgiExternalLinkState.Ready } ready ? ready
                     : throw new BgiNotSentException(BgiNotSentException.ChannelNotReady, "BGI 通道不可用，启动未发送");
-                if (!ext.HasCapability("hoeing.batchOutcome.v1") || !ext.HasCapability("hoeing.coordinatedStart.v1"))
+                if (_signalRClient?.SupportsLocalTaskFailure != true)
+                    throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "服务端缺少普通任务失败隔离能力，启动未发送");
+                if (!ext.HasCapability("hoeing.batchOutcome.v1") || !ext.HasCapability("hoeing.coordinatedStart.v1")
+                    || !ext.HasCapability("hoeing.finishEvidence.v1"))
                     throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "BGI 缺少统一联机启动/结果能力，启动未发送");
                 if (string.IsNullOrEmpty(batch.TakeoverTicket) || owner == null
                     || !ReferenceEquals(owner, _commandExecutor) || owner.TakeoverTicketSnapshot != batch.TakeoverTicket
@@ -62,6 +65,22 @@ public partial class MainViewModel
                     && await owner.ConfirmTakeoverRevokedAsync(epoch, batch.TakenOver, ct);
             },
             RequireFinishEvidence = true,
+            RequireLocalTaskFailureIsolation = true,
+            ConfirmLocalTasksFailure = async (jobId, epoch, requestKey, ct) =>
+            {
+                var ext = External();
+                if (!CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+                    throw new InvalidOperationException("普通任务失败核对前 BGI 纪元已变化");
+                var (_, job) = await ext.QueryJobStatusAsync(jobId, ct);
+                if (!ReferenceEquals(ext, _externalClient) || ext.State != BgiExternalLinkState.Ready
+                    || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+                    throw new InvalidOperationException("普通任务失败核对期间 BGI 身份或通道已变化");
+                if (job is null) return null;
+                return Guid.TryParse(jobId, out var expectedJob) && Guid.TryParse(job.JobId, out var observedJob)
+                    && expectedJob == observedJob && CoordinatedBatchLoop.SameEpoch(epoch, job.Epoch)
+                    && job.IdempotencyKey == requestKey && job.State == "failed" && !job.WasCancelled
+                    && job.ExecutionExitConfirmed;
+            },
             FinalizeLocal = (epoch, ct) => FinalizeLocalCoordinatedBatchAsync(batch,
                 owner ?? throw new InvalidOperationException("本批收尾执行器不可用"), epoch, ct),
             OriginalProcessAlive = CommandExecutor.ProbeOriginalBgiProcess,
@@ -103,6 +122,8 @@ internal sealed class CoordinatedBatchRuntime
     internal TimeSpan ObservationReconcileTimeout { get; init; } = TimeSpan.FromSeconds(30);
     internal TimeSpan AuthorityContactTimeout { get; init; } = TimeSpan.FromSeconds(30);
     internal bool RequireFinishEvidence { get; init; }
+    internal bool RequireLocalTaskFailureIsolation { get; init; }
+    internal Func<string, BgiEpoch, string, CancellationToken, Task<bool?>>? ConfirmLocalTasksFailure { get; init; }
 }
 
 internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedBatchRuntime io)
@@ -207,6 +228,22 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     await Task.Delay(io.PollInterval, ct);
                     continue; // 没有权威回应时只能续等，不能启动或推进。
                 }
+                if (_result == "local_tasks_failed" && batch.ObserveLocalTasksFailureAccepted(team))
+                {
+                    batch.Outcome = "failed";
+                    io.Status("cleaning", "联机锄地已完成，本机普通任务失败；正在释放本机执行权，队友继续当前项");
+                    return false; // Cleanup only releases this exact job/ticket. No success policy is run.
+                }
+                if (team.Phase == "aborted" && team.Reason.StartsWith("local_tasks_failed:", StringComparison.Ordinal)
+                    && batch.CurrentBindingSucceeded && !batch.LocalSucceeded && !batch.IsCancellationRequested)
+                {
+                    batch.PendingBindingsSkipped = true;
+                    batch.Outcome = "partial_completed";
+                    batch.TeamFailureReason = team.Reason;
+                    batch.Message = "当前绑定已完成；因成员普通任务失败，后续绑定未启动";
+                    io.Status("cleaning", batch.Message);
+                    return false;
+                }
                 if (team.Phase == "aborted" && batch.PreserveLocalSuccess(team.Reason))
                 {
                     batch.TeamFailureReason = team.Reason;
@@ -224,7 +261,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 {
                     batch.Outcome = team.Reason.Contains("cancel", StringComparison.Ordinal) || team.Reason == "manual_reset"
                         ? "cancelled" : team.Reason.Contains("unknown", StringComparison.Ordinal) ? "unknown" : "failed";
-                    if (_result != "local_failed") _result = batch.Outcome;
+                    if (_result is not ("local_failed" or "local_tasks_failed")) _result = batch.Outcome;
                     _reason = LimitReason(team.Reason);
                     throw new InvalidOperationException("全队批次中止: " + team.Reason);
                 }
@@ -305,9 +342,9 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 return false;
             }
             if (batch.IsCancellationRequested) _result = batch.Outcome is "failed" or "cancelled" ? batch.Outcome : "unknown";
-            else if (_result is not ("preparation_failed" or "takeover_failed" or "unknown" or "failed" or "local_failed" or "cancelled"))
+            else if (_result is not ("preparation_failed" or "takeover_failed" or "unknown" or "failed" or "local_failed" or "local_tasks_failed" or "cancelled"))
                 _result = !batch.Prepared ? "preparation_failed" : !batch.TakenOver ? "takeover_failed" : "unknown";
-            batch.Outcome = _result is "failed" or "local_failed" or "preparation_failed" or "takeover_failed" ? "failed" : _result;
+            batch.Outcome = _result is "failed" or "local_failed" or "local_tasks_failed" or "preparation_failed" or "takeover_failed" ? "failed" : _result;
             _reason = LimitReason(_reason.Length == 0 ? ex.Message : _reason);
             batch.FailureReason ??= _reason;
             io.Log($"[全队批次] {batch.BatchId} {_result}: {_reason}");
@@ -352,6 +389,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 throw new InvalidOperationException("本项已有联机锄地完成证据，不整组重跑");
             _index = team.Index; _attempt = team.Attempt;
             _item = null; _result = ""; _reason = ""; _cancelSent = false; _completedNative = 0;
+            batch.MarkCurrentBindingStarted();
         }
         if (_index >= batch.Bindings.Count) throw new InvalidOperationException("运行项越过冻结绑定范围");
         var binding = batch.Bindings[_index];
@@ -390,11 +428,28 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 ObservationUnavailable("本批整组终态与联机执行证据未完整对齐");
                 return;
             }
-            _observationUnavailableSince = null;
             if (terminal.HoeingEvidence is { IsValid: true } evidence)
                 _completedNative = Math.Max(_completedNative, evidence.Completed);
-            _result = CoordinatedBatchOutcome.Classify(terminal, team.Phase == "stopping");
-            if (_completedNative > 0 && (terminal?.Status == "failed" || _result == "stopped"))
+            var localTasksFailure = io.RequireLocalTaskFailureIsolation
+                && terminal.HoeingEvidence?.IsLocalTasksFailure(terminal) == true;
+            if (localTasksFailure)
+            {
+                bool? identityConfirmed = null;
+                if (io.ConfirmLocalTasksFailure is not null)
+                {
+                    try { identityConfirmed = await io.ConfirmLocalTasksFailure(_item.JobId, _epoch!, _item.RequestKey, rpc.Token); }
+                    catch (Exception ex) when (!batch.IsCancellationRequested
+                        && ex is IOException or TimeoutException or OperationCanceledException) { }
+                }
+                if (identityConfirmed != true)
+                {
+                    ObservationUnavailable("本机普通任务失败的原作业身份尚未确认");
+                    return;
+                }
+            }
+            _observationUnavailableSince = null;
+            _result = localTasksFailure ? "local_tasks_failed" : CoordinatedBatchOutcome.Classify(terminal, team.Phase == "stopping");
+            if (!localTasksFailure && _completedNative > 0 && (terminal?.Status == "failed" || _result == "stopped"))
                 _result = "local_failed"; // The group failed after real hoeing work; restarting it would repeat that work.
             if (!string.IsNullOrWhiteSpace(terminal?.ErrorCode))
                 _reason = LimitReason(terminal.ErrorCode + ": " + terminal.ErrorMessage);
@@ -402,10 +457,17 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 _item.State = BatchItemState.TerminalConfirmed;
             if (_result == "local_failed")
                 _reason = LimitReason($"联机锄地已完成 {_completedNative} 次，本机配置组后续失败，禁止整组重跑；" + _reason);
+            if (_result == "local_tasks_failed")
+            {
+                _reason = LimitReason($"本机普通任务失败；本项全部 {_completedNative} 次联机锄地已完成，不重跑且不执行成功完成动作；" + _reason);
+                batch.RecordLocalTasksFailure(_epoch!, _reason, _index, _attempt, _item.JobId!, _item.RequestKey);
+            }
             if (_result == "unknown") throw new InvalidOperationException("本批任务终态未知");
-            if (_item.State == BatchItemState.TerminalConfirmed && _result == "succeeded"
-                && _index == batch.Bindings.Count - 1)
-                batch.MarkLocalSuccess(_epoch!);
+            if (_item.State == BatchItemState.TerminalConfirmed && _result == "succeeded")
+            {
+                batch.MarkCurrentBindingSucceeded();
+                if (_index == batch.Bindings.Count - 1) batch.MarkLocalSuccess(_epoch!);
+            }
         }
         if (team.Phase != "running" || _result.Length != 0 || _item.State != BatchItemState.PendingSubmit) return;
         _observationUnavailableSince = null;

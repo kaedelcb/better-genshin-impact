@@ -4,6 +4,8 @@ namespace MultiplayerHoeingAssistant.Services;
 
 internal sealed record HoeingPolicyExecution(string JobId, BgiEpoch Epoch, bool RegisteredJob,
     CommandExecutor.ExecutionIdentity? NativeRoot = null);
+internal sealed record LocalTaskFailureReport(int Index, int Attempt, string JobId, string RequestKey,
+    BgiEpoch Epoch, string Reason);
 
 /// <summary>
 /// [P1b] AllReady 批次句柄：收编原 OnAllReadyConfirmedInternal 的 fire-and-forget Task.Run 批次，
@@ -17,6 +19,54 @@ public sealed class OnlineHoeingBatch
     private int _settled;
     private int _localSucceeded;
     private int _localExecutionReleased;
+    private int _localTasksFailed;
+    private int _currentBindingSucceeded;
+    internal bool LocalTasksFailed => Volatile.Read(ref _localTasksFailed) != 0;
+    internal bool CurrentBindingSucceeded => Volatile.Read(ref _currentBindingSucceeded) != 0;
+    internal bool PendingBindingsSkipped { get; set; }
+    internal bool LocalTasksFailureAccepted { get; private set; }
+    private LocalTaskFailureReport? _localTaskFailureReport;
+    internal LocalTaskFailureReport? LocalTaskFailureReport { get { lock (_policyGate) return _localTaskFailureReport; } }
+
+    internal bool ObserveLocalTasksFailureAccepted(CoordinatedBatchSnapshot state)
+    {
+        lock (_policyGate)
+        {
+            if (_localTaskFailureReport is not { } report || state.BatchId != BatchId || state.Generation != Generation
+                || state.Index != report.Index || state.Attempt != report.Attempt
+                || !state.Members.Any(member => member.Uid == SelfUid && member.Result == "local_tasks_failed")) return false;
+            LocalTasksFailureAccepted = true;
+            return true;
+        }
+    }
+
+    internal LocalTaskFailureReport? PendingLocalTaskFailureReport(CoordinatedBatchSnapshot state)
+    {
+        lock (_policyGate) return !IsCancellationRequested && !LocalTasksFailureAccepted
+            && state.BatchId == BatchId && state.Generation == Generation && (state.Phase is "running" or "stopping")
+            && _localTaskFailureReport is { } report && state.Index == report.Index && state.Attempt == report.Attempt
+                ? report : null;
+    }
+
+    internal void MarkCurrentBindingStarted() => Volatile.Write(ref _currentBindingSucceeded, 0);
+    internal void MarkCurrentBindingSucceeded() => Volatile.Write(ref _currentBindingSucceeded, 1);
+    internal void RecordLocalTasksFailure(BgiEpoch epoch, string reason, int index, int attempt, string jobId, string requestKey)
+    {
+        lock (_policyGate)
+        {
+            if (IsCancellationRequested) return;
+            var report = new LocalTaskFailureReport(index, attempt, jobId, requestKey, epoch, reason);
+            if (_localTaskFailureReport is { } previous && (previous.Index != index || previous.Attempt != attempt
+                || previous.JobId != jobId || previous.RequestKey != requestKey
+                || previous.Epoch.ProcessId != epoch.ProcessId || previous.Epoch.StartTicksUtc != epoch.StartTicksUtc))
+                throw new InvalidOperationException("普通任务失败回执身份冲突，禁止替换原上报对象");
+            _localTaskFailureReport ??= report;
+            ExecutionEpoch ??= epoch;
+            Volatile.Write(ref _localTasksFailed, 1);
+            Outcome = "failed";
+            FailureReason ??= reason;
+        }
+    }
     private Task? _localFinalization;
     internal bool LocalSucceeded => Volatile.Read(ref _localSucceeded) != 0;
     internal bool LocalExecutionReleased => Volatile.Read(ref _localExecutionReleased) != 0;

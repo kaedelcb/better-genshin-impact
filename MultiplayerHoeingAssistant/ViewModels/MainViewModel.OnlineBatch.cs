@@ -441,6 +441,21 @@ public partial class MainViewModel
             ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "联机清理回执补报");
             return;
         }
+        if (state.Phase == "aborted" && !batch.IsCancellationRequested
+            && (batch.LocalTasksFailed || batch.CurrentBindingSucceeded && !batch.LocalSucceeded
+                && state.Reason.StartsWith("local_tasks_failed:", StringComparison.Ordinal)))
+        {
+            batch.TeamFailureReason = state.Reason;
+            if (!batch.LocalTasksFailed)
+            {
+                batch.PendingBindingsSkipped = true;
+                batch.Outcome = "partial_completed";
+                batch.Message = "当前绑定已完成；因成员普通任务失败，后续绑定未启动";
+            }
+            UpdateHoeingBatchStatus(batch, "cleaning", batch.LocalTasksFailed
+                ? "联机锄地已完成，本机普通任务失败；仅清理本端，不中断队友" : batch.Message);
+            return; // The loop consumes the authoritative result; this notification does not cancel completed local work.
+        }
         if (state.Phase == "aborted" && batch.PreserveLocalSuccess(state.Reason))
         {
             batch.TeamFailureReason = state.Reason;
@@ -512,7 +527,10 @@ public partial class MainViewModel
                 batch.Message = batch.Outcome switch
                 {
                     "cancelled" => "联机锄地已取消，正在确认清理",
-                    "failed" => "联机锄地失败：" + batch.FailureReason,
+                    "failed" => batch.LocalTasksFailed
+                        ? "联机锄地已完成，本机普通任务失败：" + batch.FailureReason
+                        : "联机锄地失败：" + batch.FailureReason,
+                    "partial_completed" => "当前绑定已完成；因成员普通任务失败，后续绑定未启动",
                     _ => "联机锄地结果未确认：" + batch.FailureReason,
                 };
             }
@@ -543,6 +561,9 @@ public partial class MainViewModel
                 catch (Exception ex) { batch.CleanupConfirmed = false; AddLog("[联机开始] 原计划发送闸门尚未恢复：" + ex.Message); }
             }
             batch.LocalCleanupConfirmed |= batch.CleanupConfirmed;
+            if (batch.LocalCleanupConfirmed && (batch.LocalTasksFailed || batch.PendingBindingsSkipped))
+                UpdateHoeingBatchStatus(batch, batch.LocalTasksFailed ? "failed" : "partialCompleted",
+                    batch.Message + "；本端清理已完成，可手动执行，等待队友收口");
             if (batch.LocalCleanupConfirmed && _localResetGate.CurrentCount > 0)
                 await RetryCoordinatedCleanupAsync(batch);
             else UpdateHoeingBatchStatus(batch, "cleanupPending", batch.LocalSucceeded
@@ -643,12 +664,13 @@ public partial class MainViewModel
         if (oldProcessExited)
         {
             if (!await AbandonExitedCoordinatedBatchOwnershipAsync(batch, executor, batch.TakeoverTicket, epoch, ct)) return false;
-            if (batch.Policy?.Policy is TaskConflictPolicy.Resume or TaskConflictPolicy.RunSpecified)
+            if (batch.LocalSucceeded && (batch.Policy?.Policy is TaskConflictPolicy.Resume or TaskConflictPolicy.RunSpecified))
                 batch.CompletionActionWarning ??= "原 BGI 已退出，绑定完成动作结果未确认；未向新进程重放";
         }
         else
         {
-            if (!batch.LocalSucceeded || batch.PolicySendUnknown) return false;
+            if ((!batch.LocalSucceeded && !batch.LocalTasksFailed && !batch.PendingBindingsSkipped)
+                || batch.PolicySendUnknown) return false;
             if (batch.PolicyExecution is { } policyExecution)
             {
                 // A known policy successor is observed by its own identity; cleanup never stops it.
@@ -708,6 +730,22 @@ public partial class MainViewModel
                 throw new IOException("控制房间查询期间已断线或更换，保留旧批次清理回执");
             if (state?.BatchId == batch.BatchId)
             {
+                if (batch.LocalTasksFailed)
+                {
+                    batch.ObserveLocalTasksFailureAccepted(state);
+                    if (batch.PendingLocalTaskFailureReport(state) is { } report)
+                    {
+                        if (!authority.SupportsLocalTaskFailure)
+                            throw new IOException("服务端普通任务失败隔离能力尚未确认，保留原回执");
+                        state = await authority.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token, batch.BatchId,
+                            string.Join(",", batch.Bindings.Select(i => i.Type)), report.Index, report.Attempt,
+                            "local_tasks_failed", timeout.Token, "takeoverConfirmed", report.Reason);
+                        if (!ReferenceEquals(authority, _signalRClient) || !authority.IsConnected
+                            || state.BatchId != batch.BatchId)
+                            throw new IOException("失败回执补报期间控制房间已变化，保留原身份");
+                        batch.ObserveLocalTasksFailureAccepted(state);
+                    }
+                }
                 if (state.Phase is not ("completed" or "aborted")) return;
                 await authority.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token, batch.BatchId,
                     string.Join(",", batch.Bindings.Select(i => i.Type)), state.Index, state.Attempt, "", timeout.Token, "cleaned");
@@ -719,7 +757,10 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             if (batch.LocalExecutionReleased || batch.LocalCleanupConfirmed)
-                UpdateHoeingBatchStatus(batch, "localCompleted", "本端已结束，可手动执行；服务端清理回执待补报");
+                UpdateHoeingBatchStatus(batch, batch.LocalTasksFailed ? "failed" : batch.PendingBindingsSkipped ? "partialCompleted" : "localCompleted",
+                    batch.LocalTasksFailed ? batch.Message + "；本端已清理，服务端回执待补报"
+                    : batch.PendingBindingsSkipped ? "当前绑定已完成；后续绑定未启动，本端已清理，服务端回执待补报"
+                    : "本端已结束，可手动执行；服务端清理回执待补报");
             AddLog("[联机开始] 清理回执仍待确认：" + ex.Message);
         }
         finally { _coordinatedCleanupAckGate.Release(); }
@@ -748,6 +789,7 @@ public partial class MainViewModel
                     ? "本端联机锄地已完成；完成动作未确认，未重发：" + batch.FailureReason
                     : batch.CoordinatedSucceeded ? "联机锄地已完整完成" : "本端联机锄地已完成",
                 "cancelled" => "联机锄地已取消，清理已确认",
+                "partial_completed" => "当前绑定已完成；因成员普通任务失败，后续绑定未启动",
                 "failed" => batch.Message,
                 _ => "联机锄地执行结果未确认，已完成本端清理",
             };
@@ -770,8 +812,8 @@ public partial class MainViewModel
 
     private async Task PrepareCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
     {
-        if (_signalRClient?.SupportsLocalFinish != true)
-            throw new InvalidOperationException("服务端缺少本端独立收尾能力，未中断当前任务");
+        if (_signalRClient?.SupportsLocalFinish != true || !_signalRClient.SupportsLocalTaskFailure)
+            throw new InvalidOperationException("服务端缺少本端独立收尾或普通任务失败隔离能力，未中断当前任务");
         var names = batch.Bindings.Select(i => i.Name).ToArray();
         var types = batch.Bindings.Select(i => i.Type).ToArray();
         var local = OnlineHoeingBindingValidator.Validate(_config?.OnlineHoeingGroupNames, _config?.OnlineHoeingGroupTypes);

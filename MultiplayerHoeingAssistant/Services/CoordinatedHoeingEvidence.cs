@@ -15,6 +15,11 @@ public sealed record CoordinatedHoeingEvidence
     public bool IsValid => Started >= 0 && Completed >= 0 && Failed >= 0 && Cancelled >= 0 && Active >= 0
         && Revision >= 0 && (long)Completed + Failed + Cancelled + Active <= Started;
 
+    /// <summary>Every native invocation in this failed job was a confirmed successful cooperative invocation.</summary>
+    public bool IsLocalTasksFailure(BgiTaskQueueStatus terminal) => terminal.Status == "failed"
+        && !terminal.Cancelled && IsValid && Sealed && JobResult == "Failed"
+        && Started == Completed && Completed > 0 && Failed == 0 && Cancelled == 0 && Active == 0;
+
     public bool MatchesTerminal(BgiTaskQueueStatus terminal)
     {
         if (!IsValid || !Sealed || Active != 0 || string.IsNullOrWhiteSpace(JobResult)) return false;
