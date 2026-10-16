@@ -5,7 +5,7 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
-public class CommandExecutor
+public partial class CommandExecutor
 {
     private readonly BgiProcessMonitor _monitor;
     private readonly string _bgiPath;
@@ -662,6 +662,8 @@ public class CommandExecutor
     public async Task<CommandResult> ExecuteAsync(RemoteCommand command)
     {
         var previous = _requestContext.Value;
+        var previousStopVersion = _commandStopVersion.Value;
+        _commandStopVersion.Value ??= Volatile.Read(ref _allStopVersion);
         _requestContext.Value = command;
         try
         {
@@ -670,6 +672,11 @@ public class CommandExecutor
             if (GetStringParam(command.Params, "expectedConfigRevision") != null
                 && _externalClientProvider?.Invoke()?.HasCapability("config.applied") != true)
                 return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 不支持配置应用合同，未启动任务" };
+            if (command.Cmd is "start_group" or "start_oneclick" or "start_bgi")
+            {
+                ThrowIfStartStopped();
+                _monitor.ResumeAutomaticRestartForUserStart();
+            }
             if ((command.Cmd is "start_group" or "start_oneclick") && _recoverOnlineHandoff is not null)
                 await _recoverOnlineHandoff().ConfigureAwait(false);
             switch (command.Cmd)
@@ -714,7 +721,7 @@ public class CommandExecutor
         {
             return new CommandResult { Status = "failed", Message = ex.Message };
         }
-        finally { _requestContext.Value = previous; }
+        finally { _requestContext.Value = previous; _commandStopVersion.Value = previousStopVersion; }
     }
 
     /// <summary>
@@ -828,6 +835,7 @@ public class CommandExecutor
     /// </summary>
     private Task<CommandResult> StartBgiAsync(string? args = null)
     {
+        ThrowIfStartStopped();
         var started = _monitor.RestartBgi(args);
         if (!started)
         {
@@ -875,6 +883,7 @@ public class CommandExecutor
 
             Log($"[任务启动] {target}：本会话 BGI 未运行，正在启动并等待任务状态就绪…");
             // RestartBgi 是纯启动；不得使用会终止现有进程的 RestartBgiControlledAsync。
+            ThrowIfStartStopped();
             if (!(TaskStartBgiLaunchOverride?.Invoke() ?? _monitor.RestartBgi()))
                 return new CommandResult { Status = "failed", ErrorCode = "bgi_start_failed",
                     Message = "BGI 自动启动失败，请检查 BGI 路径与权限（未发送任务）" };
@@ -905,7 +914,9 @@ public class CommandExecutor
     }
 
     private CommandResult? ExpiredTaskStart()
-        => _requestContext.Value?.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow
+        => _commandStopVersion.Value is { } version && version != Volatile.Read(ref _allStopVersion)
+            ? new CommandResult { ErrorCode = "cancelled_user", Message = "启动请求已被全停止撤销，未发送任务" }
+            : _requestContext.Value?.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow
             ? new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期（未发送任务）" }
             : null;
 
@@ -1017,6 +1028,7 @@ public class CommandExecutor
                     };
                 }
                 ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartGroupAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）groupName={groupName}");
+                ThrowIfStartStopped();
                 if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
                 {
                     Log($"[进程仲裁] 配置组「{groupName}」回退裸拉起未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
@@ -1033,6 +1045,7 @@ public class CommandExecutor
                 var blocked = CheckCrossSessionBlock(ipcClient, $"task.start 配置组「{groupName}」");
                 if (blocked != null) return blocked;
                 var payload = System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation));
+                ThrowIfStartStopped();
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] task_already_running = BGI 明确应答的业务拒绝（非传输失败），
                 // 多半是 suspend 后旧任务退场慢（任务锁未释放）。等 1s 重发，最多 6 次
@@ -1042,6 +1055,7 @@ public class CommandExecutor
                 {
                     ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）groupName={groupName}");
                     await Task.Delay(1000);
+                    ThrowIfStartStopped();
                     response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 }
                 if (response.Success)
@@ -1186,6 +1200,7 @@ public class CommandExecutor
                     };
                 }
                 ProbeLog($"[DUPLAUNCH_PROBE][CommandExecutor.StartOneClickAsync] IPC 不可达，回退裸拉起 BGI（不带执行参数）configName={configName}");
+                ThrowIfStartStopped();
                 if (!await _monitor.RestartBgiControlledAsync(null, "IPC回退-裸拉起"))
                 {
                     Log($"[进程仲裁] 一条龙「{configName}」回退裸拉起未完成：旧进程未退净（可能提权运行）或启动调用失败，详见上方日志");
@@ -1204,12 +1219,14 @@ public class CommandExecutor
                 var payload = batchGroupNamesRaw != null
                     ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, batchGroupNamesRaw, startFromTaskId))
                     : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, 0, generation, startFromTaskId: startFromTaskId));
+                ThrowIfStartStopped();
                 var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 // [无损拒绝适配 b5386005] 同 StartGroupAsync：业务拒绝（任务运行中）等锁重试，最多 6 次
                 for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < ConflictRetryLimit(allowPreemption); retry++)
                 {
                     ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）configName={configName}");
                     await Task.Delay(1000);
+                    ThrowIfStartStopped();
                     response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
                 }
                 if (response.Success)
@@ -1364,6 +1381,7 @@ public class CommandExecutor
         BgiTaskSubmitResult submit;
         try
         {
+            ThrowIfStartStopped();
             submit = await ext.SubmitTaskStartAsync(groupName, configName, startFromIndex, generation, batchGroupNames,
                 startFromTaskId: startFromTaskId,
                 cancellationToken: cancellationToken,
@@ -1832,6 +1850,7 @@ public class CommandExecutor
             var blocked = CheckCrossSessionBlock(ipcClient, $"快捷键「{hotkeyConfigName}」");
             if (blocked != null) return blocked;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { hotkeyConfigName });
+            ThrowIfStartStopped();
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "action.execute_hotkey", Payload = payload });
             if (response.Success)
                 return new CommandResult { Status = "success", Message = $"快捷键 {hotkeyConfigName} 已执行" };
@@ -3026,37 +3045,8 @@ public class CommandExecutor
         }
     }
 
-    /// <summary>
-    /// [任务策略] 停止键闭环（固定行为：立即执行 + 执行完停止，无配置项）。
-    /// 本机忙：suspend 即停止（绝不杀进程），再清上下文（不恢复）。
-    /// 上线锄地批次进行中（已有中断上下文）：不二次抢占，走无损拒绝。
-    /// 空闲或状态未知：保持原"停止 BGI"语义（IPC task.stop → 杀进程兜底）。
-    /// </summary>
-    private async Task<CommandResult> StopWithKeyPolicyAsync()
-    {
-        var status = await QueryTaskStatusAsync();
-        if (status is null)
-            return new CommandResult { Status = "failed", ErrorCode = "status_unknown", Message = "BGI 任务状态未确认，停止键未执行" };
-        if (status is { Running: true, HasContext: true })
-        {
-            Log("[任务策略] 检测到 BGI 已有中断上下文（联机锄地批次进行中），停止键不二次抢占，走无损拒绝");
-            return new CommandResult { Status = "failed", Message = "停止未执行：联机锄地批次进行中（已有中断上下文），按无损拒绝语义不打断，请等批次结束后再试" };
-        }
-        if (status is not { Running: true })
-        {
-            return await StopBgiAsync(); // 空闲/状态未知：原语义
-        }
-
-        Log("[任务策略] 本机任务运行中，停止键以 task.suspend 中断当前任务（固定行为：执行完停止，不恢复）");
-        var suspendResult = await ExecuteSuspendAsync("停止键");
-        if (suspendResult.Status != "success")
-        {
-            Log($"[任务策略] task.suspend 失败/被阻断：{suspendResult.Message}；按键路径不回退杀进程，直接失败");
-            return new CommandResult { Status = "failed", Message = $"停止失败：{suspendResult.Message}（按键路径绝不杀进程，请稍后重试）" };
-        }
-        await ApplyPolicyTeardownAsync(FixedKeyPolicy, "停止键中断的原任务", userCancelled: false);
-        return new CommandResult { Status = "success", Message = "当前任务已中断（suspend），中断上下文已清除（固定行为：执行完停止）" };
-    }
+    /// <summary>用户停止不经过启动冲突策略，不依赖任务状态或中断现场。</summary>
+    private Task<CommandResult> StopWithKeyPolicyAsync() => StopAllExecutionAsync();
 
     /// <summary>
     /// [任务策略] 启动BGI 键闭环：BGI 未运行时纯启动；
@@ -3362,11 +3352,13 @@ public class CommandExecutor
             var payload = groupName != null
                 ? System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(groupName, null, startFromIndex, generation))
                 : System.Text.Json.JsonSerializer.Serialize(BuildStartPayload(null, configName, startFromIndex, generation, startFromTaskId: startFromTaskId));
+            ThrowIfStartStopped();
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             for (var retry = 0; !response.Success && response.ErrorCode == "task_already_running" && retry < 6; retry++)
             {
                 ProbeLog($"[CommandExecutor] task.start 被无损拒绝（任务运行中），1s 后重试（{retry + 1}/6）{desc}");
                 await Task.Delay(1000);
+                ThrowIfStartStopped();
                 response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.start", Payload = payload }, V2TaskStartCommandTimeout);
             }
             if (response.Success)

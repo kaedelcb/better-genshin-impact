@@ -377,7 +377,8 @@ public partial class MainViewModel
         var recoveryPending = false;
         lock (_batchGate)
         {
-            if (_settledHoeingBatchIds.Contains(start.BatchId) || start.CleanupComplete) return;
+            if (start.Generation <= _resetFenceGeneration
+                || _settledHoeingBatchIds.Contains(start.BatchId) || start.CleanupComplete) return;
             if (_activeBatch is { IsAlive: true } active)
             {
                 if (active.BatchId == start.BatchId) return;
@@ -442,7 +443,7 @@ public partial class MainViewModel
         if (state.Phase == "aborted")
         {
             batch.FailureReason = state.Reason;
-            batch.Outcome = state.Reason.Contains("cancel", StringComparison.Ordinal) || state.Reason == "manual_reset"
+            batch.Outcome = state.Reason.Contains("cancel", StringComparison.Ordinal) || state.Reason is "manual_reset" or "user_stop_all"
                 ? "cancelled" : state.Reason.Contains("unknown", StringComparison.Ordinal) ? "unknown" : "failed";
             UpdateHoeingBatchStatus(batch, "stopping", "全队批次已中止：" + state.Reason);
             batch.Cancel(userInitiated: false);

@@ -2060,37 +2060,13 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void OnStop(object? parameter)
     {
         // 停止前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
-        var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认停止 BGI", "确定要停止 BGI 吗？");
+        var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认全部停止", "停止当前执行、待执行任务和自动续跑？");
         if (!confirmed) return; // 用户取消
 
         if (broadcastAll)
         {
-            // 缓存问题：不在线成员收不到广播命令，弹窗提醒（缓存数据可能过时）
-            if (!WarnOfflineMembers())
-            {
-                AddLog("没有在线成员，未发送停止命令");
-                return;
-            }
-            // 发送给所有人执行：广播 Target=[*]（含本机，各自通过 OnRemoteCommand 执行）
-            if (_signalRClient != null)
-            {
-                var cmd = new RemoteCommand
-                {
-                    Cmd = "stop",
-                    Sender = _config?.PlayerName ?? "",
-                    SenderUid = _config?.PlayerUid ?? "",
-                    Target = ["*"],
-                    CommandId = "remote_" + DateTime.Now.Ticks,
-                    Params = FreezeStopTargets(Members.Where(m => m.Online).Select(m => m.PlayerUid)
-                        .Append(_config?.PlayerUid ?? ""))
-                };
-                AddLog("已发送停止 BGI 命令给所有成员");
-                _ = _signalRClient.SendRemoteCommandAsync(cmd);
-            }
-            else
-            {
-                AddLog("SignalR 未连接，无法发送停止命令给所有成员");
-            }
+            // 本机先执行；远端投递与本机停止并行，不以房间在线快照决定能否停止自己。
+            _ = ExecuteUserStopAsync(null, broadcastAll: true);
             return;
         }
 
@@ -2100,7 +2076,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
         else
         {
-            _ = ExecuteLocalCommandAsync("stop", null, null);
+            _ = ExecuteUserStopAsync(GetSelectedTargets().Append(_config?.PlayerUid ?? "").ToList());
         }
     }
 
@@ -5351,7 +5327,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
             }
 
-            if (_commandExecutor != null)
+            if (_commandExecutor != null || IsAllStop(cmd) && IsExecutorMode)
             {
                 var result = await ExecuteCommandWithHoeingStopAsync(cmd);
                 await SendAckAsync(cmd, result.Status, result.Message);
@@ -5731,6 +5707,11 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task ExecuteLocalCommandAsync(string cmd, Dictionary<string, object>? param, List<string>? targetUids)
     {
+        if (cmd == "stop")
+        {
+            await ExecuteUserStopAsync(targetUids ?? GetSelectedTargets());
+            return;
+        }
         var selfUid = _config?.PlayerUid ?? "";
         var targets = (targetUids ?? GetSelectedTargets())
             .Where(t => !string.IsNullOrEmpty(t)).Distinct().ToList();

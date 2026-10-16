@@ -194,7 +194,8 @@ internal static class ExternalInterfaceCommandPlane
         InstanceIpcEnvelope request,
         Func<BgiTaskCoordinator> coordinatorFactory)
     {
-        if (!InstanceRequestHandler.HasDirectionalStopIntent(request)
+        if (request.Data?["stopScope"]?.ToString() != "all"
+            && !InstanceRequestHandler.HasDirectionalStopIntent(request)
             && (request.Data?["clearQueue"]?.ToObject<bool?>() ?? true))
         {
             coordinatorFactory().ClearQueue();

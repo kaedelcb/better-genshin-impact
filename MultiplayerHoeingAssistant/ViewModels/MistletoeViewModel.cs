@@ -73,6 +73,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     {
         _mainVm = mainVm;
         _remoteTarget = remoteTarget;
+        if (remoteTarget is null) mainVm.StopAllAutomationRequested += StopAllAutomation;
         if (remoteTarget is not null)
         {
             try { _remoteStartupPending = _mainVm.PendingCenterOperation(remoteTarget)?.Operation == "startup.run"; }
@@ -308,6 +309,15 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     /// 为 CLI 连续一条龙让出启动执行上下文。
     /// CLI 是用户明确指定的计划入口，不能与助手初始化的自动启动流程并发。
     /// </summary>
+    private void StopAllAutomation()
+    {
+        RunOnUi(() =>
+        {
+            _runCts?.Cancel();
+            RevokeAllArmedTriggers();
+        });
+    }
+
     internal void CancelStartupFlowForCli()
     {
         if (!IsRunning) return;

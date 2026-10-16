@@ -17,6 +17,16 @@ public class BgiProcessMonitor : IDisposable
     /// （RestartBgi，含回退重启/启动中心启动）；②轮询观察到进程存在（用户自己又把它开起来了）。
     /// 跨线程：仲裁器线程写、守护轮询线程读 → volatile。</summary>
     private volatile bool _guardSuspended;
+    private volatile bool _userStopHeld;
+    private long _userStopVersion;
+
+    internal void ResumeAutomaticRestartForUserStart() => _userStopHeld = false;
+
+    internal void HoldAutomaticRestartForUserStop()
+    {
+        Interlocked.Increment(ref _userStopVersion);
+        _userStopHeld = true;
+    }
     /// <summary>[P2 仲裁] 杀/启操作串行化信号量：回退重启/崩溃守护/kill_bgi 节点三个并发写入者全部经此收编，
     /// 杜绝"有意杀进程的 2s 真空被守护误判崩溃、再拉一个实例抢单实例管道"的双实例事故。</summary>
     private readonly SemaphoreSlim _processGate = new(1, 1);
@@ -268,7 +278,7 @@ public class BgiProcessMonitor : IDisposable
     /// </summary>
     private void CheckBgiStatus(object? state)
     {
-        if (!_isRunning) return;
+        if (!_isRunning || _userStopHeld) return;
 
         try
         {
@@ -332,6 +342,7 @@ public class BgiProcessMonitor : IDisposable
     /// </summary>
     public bool RestartBgi(string? args = null)
     {
+        _userStopHeld = false;
         _guardSuspended = false;
         _guardSuppressUntilUtc = DateTime.UtcNow + StartupGrace;
 
@@ -404,9 +415,12 @@ public class BgiProcessMonitor : IDisposable
     /// <returns>true = 已杀净并完成拉起；false = 旧进程杀不掉（未启动新实例）或启动调用失败。</returns>
     public async Task<bool> RestartBgiControlledAsync(string? args, string reason)
     {
+        var stopVersion = Volatile.Read(ref _userStopVersion);
+        if (_userStopHeld && reason == "崩溃守护") return false;
         await _processGate.WaitAsync();
         try
         {
+            if (stopVersion != Volatile.Read(ref _userStopVersion)) return false;
             // 让路窗口覆盖整个杀+等退出过程（最坏 10s）
             _guardSuppressUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(15);
             _log?.Invoke($"[进程仲裁] 受控重启开始（{reason}），args={args ?? "(无)"}");
@@ -420,6 +434,7 @@ public class BgiProcessMonitor : IDisposable
             }
 
             // RestartBgi 内部会解除"有意关闭"豁免并给出 20s 冷启动宽限期
+            if (stopVersion != Volatile.Read(ref _userStopVersion)) return false;
             var started = RestartBgi(args);
             if (!started)
             {

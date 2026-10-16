@@ -100,4 +100,27 @@ public sealed class CoordinatedStopRoutingTests
         Assert.Empty(Delivered(h));
         Assert.Empty(h.RoomManager.GetAndClearPendingCommands("u1"));
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UserAllStop_IsDeliveredDespiteStaleBatchOrUnavailableState(bool broadcast)
+    {
+        var (h, clients, room) = await Setup();
+        var batch = await h.Ops.BeginManualCoordinatedBatchAsync(clients[0], "current", ["u0"], DateTimeOffset.UtcNow.AddMinutes(1));
+        var stop = Stop(room, broadcast ? ["*"] : ["u0"], new()
+        {
+            ["stopScope"] = System.Text.Json.JsonSerializer.SerializeToElement("all"),
+            ["hoeingBatchIds"] = new Dictionary<string, string> { ["u0"] = "obsolete", ["u1"] = "unknown" }
+        });
+        await h.Ops.SendRemoteCommandAsync(clients[0], stop);
+        Assert.Equal(broadcast ? 2 : 1, Delivered(h).Length);
+        Assert.All(Delivered(h), sent => Assert.Equal("all", sent.Params!["stopScope"].ToString()));
+        Assert.All(Delivered(h), sent => Assert.Equal(batch.Generation, sent.Params!["hoeingStopGeneration"]));
+        Assert.False(stop.Params!.ContainsKey("hoeingStopGeneration"));
+        var state = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        Assert.Equal(batch.BatchId, state.BatchId);
+        Assert.Equal("aborted", state.Phase);
+        Assert.Equal("user_stop_all", state.Reason);
+    }
 }

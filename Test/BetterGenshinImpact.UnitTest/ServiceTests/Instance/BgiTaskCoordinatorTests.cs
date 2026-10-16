@@ -293,6 +293,33 @@ public class BgiTaskCoordinatorTests
     }
 
     [Fact]
+    public async Task UserAllStop_CancelsDispatchedToken_AndRemovesPendingWork()
+    {
+        using var h = new Harness(slotFree: true);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var running = h.Coordinator.Submit(new BgiTaskCoordinator.TaskSubmission(
+            0, "尚未建立原生执行根", null, 0, async (_, token) =>
+            {
+                entered.TrySetResult();
+                try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+                finally { exited.TrySetResult(); }
+                return true;
+            }));
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var queued = h.Submit("不得在停止后启动", 0);
+        Assert.Equal(1, h.Coordinator.QueueDepth);
+        Assert.Equal(1, h.Coordinator.StopAll());
+        await exited.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.True(Harness.WaitFor(() => h.Coordinator.CurrentTaskHandle is null));
+        Assert.Equal(0, h.Coordinator.QueueDepth);
+        Assert.Empty(h.ExecutedOrder);
+        Assert.Equal("queueCancelled", h.Coordinator.QueryItemStatus(queued.TaskHandle).Status);
+        Assert.NotEqual(Guid.Empty, running.TaskHandle);
+    }
+
+    [Fact]
     public void Submit_Dedup_SameGenerationAndNameInQueue_ReturnsAdopted()
     {
         using var h = new Harness(slotFree: false); // 槽位占用，项停在队中

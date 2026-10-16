@@ -629,6 +629,8 @@ internal sealed class InstanceRequestHandler
                 });
             }
 
+            if (request.Data?["stopScope"]?.ToString() == "all" && BgiTaskCoordinator.IsCreated)
+                BgiTaskCoordinator.Instance.StopAll();
             var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
             cancellationContext.ManualCancel();
             return InstanceIpcEnvelope.Response(request, new { status = "stopped" });

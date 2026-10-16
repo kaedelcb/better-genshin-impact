@@ -213,6 +213,27 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.Null(Active(vm));
             Assert.Equal(3, script.StartCount);
             Assert.Equal(3, script.CancelCount);
+
+            // 用户全停止走真实房间路由，即使观察到的是上一批 ID 也必须停止当前批次。
+            var fourth = await BeginAsync(client, uid, useActions: true);
+            await WaitAsync(() => script.StartCount == 4 && Active(vm)?.BatchId == fourth.BatchId,
+                () => Diagnostics(vm, pipe, server));
+            executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止触碰真实 BGI 进程");
+            await client.SendRemoteCommandAsync(new RemoteCommand
+            {
+                Cmd = "stop", Target = ["*"], CommandId = Guid.NewGuid().ToString("N"),
+                Params = new() { ["stopScope"] = "all", ["hoeingBatchId"] = first.BatchId }
+            });
+            await WaitAsync(() => pipe.CountOf("ext.task.stop") == 1 && Active(vm) == null,
+                () => Diagnostics(vm, pipe, server));
+            Assert.Equal(4, script.CancelCount);
+            Assert.True((await client.GetCurrentCoordinatedBatchAsync())!.CleanupComplete);
+            Assert.Null(executor.TakeoverTicketSnapshot);
+            Assert.Equal(4, script.StartCount);
+            ReplayEvent(client, GatewayProtocol.Events.ControlBatchStart, fourth);
+            await Task.Delay(400);
+            Assert.Null(Active(vm));
+            Assert.Equal(4, script.StartCount);
         }
         finally
         {
@@ -339,6 +360,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                             executionExitReason = !_soloRunning && Value(data, "executionInstanceId") == SoloRoot.ToString("N")
                                 ? "confirmed" : active == null && !_soloRunning ? "no_active_root" : "not_exited",
                             bgiEpoch = Epoch, takeoverActive = _ticket != null, hasSuspendedTaskContext = false,
+                            queueDepth = 0, currentTaskHandle = active?.Id,
                         });
                     case "ext.config.list":
                         return (true, null, null, new { configGroups = new[] { groupName }, oneClickConfigs = Array.Empty<string>() });
@@ -387,6 +409,17 @@ public sealed class UnifiedHoeingNativeEntryTests
                             return (false, "invalid_request", "只能取消本句柄", null);
                         if (!owned.Cancelled) { owned.Cancelled = true; _cancelCount++; }
                         return (true, null, null, new { status = "cancel_requested" });
+                    case "ext.task.stop":
+                        if (Value(data, "stopScope") != "all")
+                            return (false, "invalid_request", "此入口要求全停止语义", null);
+                        foreach (var pending in _jobs.Where(j => !j.Cancelled))
+                        {
+                            pending.Cancelled = true;
+                            _cancelCount++;
+                        }
+                        _soloRunning = false;
+                        _ticket = null;
+                        return (true, null, null, new { status = "stop_requested" });
                     case "task.resume":
                         if (active != null || Value(data, "takeoverTicket") != _ticket || _ticket == null)
                             return (false, "stale_ticket", "替身执行权尚未匹配收口", null);

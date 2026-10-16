@@ -475,6 +475,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
         return CancelOutcome.CancelledQueued;
     }
 
+    /// <summary>用户全停止同时取消已派发但尚未建立执行根的在途项。</summary>
+    public int StopAll()
+    {
+        lock (_submitLock)
+        {
+            _current?.Cts.Cancel();
+            return ClearQueue();
+        }
+    }
+
     /// <summary>清空在队项（ext.task.stop clearQueue=true）：逐项取消 + task.queueCancelled。返回清退数量。</summary>
     public int ClearQueue()
     {

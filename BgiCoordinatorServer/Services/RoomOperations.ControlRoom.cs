@@ -190,12 +190,45 @@ public sealed partial class RoomOperations
             if (isCenterRequest && targets.Count != 1)
                 throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
 
+            var allStopGeneration = 0;
+            // 用户全停止也撤销服务端的准备/重试来源；不把广播或批次终态当作成员已退出。
+            if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all")
+            {
+                CoordinatedBatchState? stoppedBatch = null;
+                CoordinatedBatchSnapshot? stoppedSnapshot = null;
+                lock (_batchGate)
+                {
+                    if (_controlBatches.TryGetValue(group, out var observed)) allStopGeneration = observed.Generation;
+                    if (_controlBatches.TryGetValue(group, out var current) && !current.IsTerminal
+                        && (command.Target.Contains("*") || current.ParticipantUids.Intersect(command.Target).Any()))
+                    {
+                        current.Abort("user_stop_all");
+                        stoppedBatch = current;
+                        stoppedSnapshot = current.Snapshot();
+                    }
+                }
+                if (stoppedBatch is not null)
+                    await PublishBatchSnapshotAsync(group, stoppedBatch, stoppedSnapshot!, GatewayProtocol.Events.ControlBatchState);
+            }
+
             var deliveredTo = 0;
             var changedStopTargets = 0;
             foreach (var connectionId in targets)
             {
                 var outgoing = command;
-                if (command.Cmd == "stop")
+                if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all")
+                {
+                    var parameters = new Dictionary<string, object>(command.Params);
+                    parameters["hoeingStopGeneration"] = allStopGeneration;
+                    outgoing = new RemoteCommand
+                    {
+                        RoomCode = command.RoomCode, Cmd = command.Cmd, Sender = command.Sender,
+                        SenderUid = command.SenderUid, Target = command.Target.ToList(), TargetInstanceId = command.TargetInstanceId,
+                        CommandId = command.CommandId, Timestamp = command.Timestamp, ExpiresAtUtc = command.ExpiresAtUtc,
+                        Params = parameters
+                    };
+                }
+                if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() != "all")
                 {
                     outgoing = FreezeStopTarget(group, connectionId, command);
                     if (outgoing is null) { changedStopTargets++; continue; }
