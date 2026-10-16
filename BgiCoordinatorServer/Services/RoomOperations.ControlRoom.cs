@@ -524,15 +524,17 @@ public sealed partial class RoomOperations
            || _roomManager.IsRemoteConnection(group, ctx.ConnectionId);
 
     /// <summary>
-    /// 是否为"请求/应答族"的回复命令（发起方发起 pull → 目标回 data/push_result）。
+    /// 是否为"请求/应答族"的回复命令（配置 data/push_result，以及执行确认 ack）。
     /// 这类命令由发起方的等待会话按 CommandId 消费，因此必须投递给发起方连接本身；
     /// 而遥控/监控端不在 _controlRooms，ResolveTargets 匹配不到，必须额外按 UID 回投，
     /// 且不能进离线缓存（只对实时等待中的会话有意义，缓存冲刷出来的是迟到噪音）。
-    /// 判定 = 命令名以 ".data" / ".push_result" 结尾（覆盖 remote_config.* 与 task_policy.*，
+    /// ack 包含状态重置的完成确认，必须回投监控发起端，否则已完成的复位仍会等待超时。
+    /// 其余按命令名以 ".data" / ".push_result" 结尾判定（覆盖 remote_config.* 与 task_policy.*，
     /// 以及后续新增的同类命令，避免再次出现"漏登记一条导致监控模式永久超时"）。
     /// 执行类命令不匹配，维持 FR-3（遥控端不接收）。
     /// </summary>
     private static bool IsRequestReplyCommand(string cmd)
-        => cmd.EndsWith(".data", StringComparison.Ordinal)
+        => string.Equals(cmd, "ack", StringComparison.Ordinal)
+           || cmd.EndsWith(".data", StringComparison.Ordinal)
            || cmd.EndsWith(".push_result", StringComparison.Ordinal);
 }

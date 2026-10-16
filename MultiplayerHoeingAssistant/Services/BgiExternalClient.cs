@@ -582,9 +582,23 @@ public sealed class BgiExternalClient : IDisposable
         string? startFromTaskId = null, string? hoeingBatchId = null,
         IReadOnlyList<string>? hoeingParticipantUids = null)
     {
-        var payload = preempt
-            ? (object)new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, preempt = true, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null, hoeingBatchId, hoeingParticipantUids }
-            : new { groupName, configName, startFromIndex, startFromTaskId, generation, batchGroupNames, idempotencyKey, expectedConfigRevision, bgiEpoch, expiresAtUtc, coordinatedHoeing = coordinatedHoeing ? "v1" : null, hoeingBatchId, hoeingParticipantUids };
+        var payload = new Dictionary<string, object?>
+        {
+            ["groupName"] = groupName, ["configName"] = configName,
+            ["startFromIndex"] = startFromIndex, ["startFromTaskId"] = startFromTaskId,
+            ["generation"] = generation, ["batchGroupNames"] = batchGroupNames,
+            ["idempotencyKey"] = idempotencyKey, ["expectedConfigRevision"] = expectedConfigRevision,
+            ["bgiEpoch"] = bgiEpoch, ["expiresAtUtc"] = expiresAtUtc,
+        };
+        if (preempt) payload["preempt"] = true;
+        // 协调身份按字段是否存在校验；普通启动必须省略这些字段，不能发送 null 占位。
+        // 显式误传批次身份仍交给 BGI 拒绝，避免悄悄降为普通任务。
+        if (coordinatedHoeing || hoeingBatchId != null || hoeingParticipantUids != null)
+        {
+            payload["coordinatedHoeing"] = coordinatedHoeing ? "v1" : null;
+            payload["hoeingBatchId"] = hoeingBatchId;
+            payload["hoeingParticipantUids"] = hoeingParticipantUids;
+        }
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,

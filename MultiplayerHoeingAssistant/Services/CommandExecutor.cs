@@ -667,6 +667,8 @@ public partial class CommandExecutor
         _requestContext.Value = command;
         try
         {
+            if (IsManualResetActive && command.Cmd is ("start_group" or "start_oneclick" or "start_bgi" or "hotkey_execute"))
+                return ResetInProgress();
             if (command.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
                 return new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期，未执行" };
             if (GetStringParam(command.Params, "expectedConfigRevision") != null
@@ -675,7 +677,7 @@ public partial class CommandExecutor
             if (command.Cmd is "start_group" or "start_oneclick" or "start_bgi")
             {
                 ThrowIfStartStopped();
-                _monitor.ResumeAutomaticRestartForUserStart();
+                _monitor?.ResumeAutomaticRestartForUserStart();
             }
             if ((command.Cmd is "start_group" or "start_oneclick") && _recoverOnlineHandoff is not null)
                 await _recoverOnlineHandoff().ConfigureAwait(false);
@@ -1931,20 +1933,30 @@ public partial class CommandExecutor
     /// <summary>中断当前任务并保存上下文：IPC 发 task.suspend</summary>
     public async Task<CommandResult> ExecuteSuspendAsync(string hoeingGroupName)
     {
+        var resetVersion = Volatile.Read(ref _resetVersion);
+        if (IsManualResetActive) return ResetInProgress();
         await _suspendGate.WaitAsync();
-        try { return await ExecuteSuspendCoreAsync(hoeingGroupName, await CaptureExecutionBoundarySnapshotAsync()); }
+        try
+        {
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
+            var expected = await CaptureExecutionBoundarySnapshotAsync();
+            return await ExecuteSuspendCoreAsync(hoeingGroupName, expected, resetVersion);
+        }
         finally { _suspendGate.Release(); }
     }
 
     internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected)
     {
+        var resetVersion = Volatile.Read(ref _resetVersion);
+        if (IsManualResetActive) return ResetInProgress();
         await _suspendGate.WaitAsync();
-        try { return await ExecuteSuspendCoreAsync(description, expected); }
+        try { return await ExecuteSuspendCoreAsync(description, expected, resetVersion); }
         finally { _suspendGate.Release(); }
     }
 
-    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected)
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected, int resetVersion)
     {
+        if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
         if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
             || !capable.HasCapability("task.takeover") || !capable.HasCapability("execution.targetedSuspend.v1"))
             return new CommandResult { Status = "failed", ErrorCode = "capability_required", Message = "BGI 尚未就绪或不支持可靠接管，请更新配套版本" };
@@ -1954,29 +1966,38 @@ public partial class CommandExecutor
         try
         {
             await ReconcileTakeoverEpochAsync();
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             using var ipcClient = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await ipcClient.ConnectAsync(3000);
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             var blocked = CheckCrossSessionBlock(ipcClient, "task.suspend");
             if (blocked != null) return blocked;
 
             // 发 task.suspend（35s：A6 有界退出契约下 BGI 持响应等槽位确认，上限 QuiesceBound=30s，
             // 客户端必须留余量覆盖该上界才能读到 quiesceConfirmed 字段，否则"超时但实际挂起成功"
             // ——超时≠未执行，2026-09-12 分层超时）
-            var createdTicket = _takeoverTicket == null;
-            if (_takeoverTicket == null)
+            bool createdTicket;
+            string? ticket;
+            lock (_resetStateGate)
             {
-                _takeoverEpoch = new BgiEpoch { ProcessId = expected.ProcessId, StartTicksUtc = expected.StartTicksUtc };
-                _takeoverTicket = Guid.NewGuid().ToString("N");
+                if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
+                createdTicket = _takeoverTicket == null;
+                if (_takeoverTicket == null)
+                {
+                    _takeoverEpoch = new BgiEpoch { ProcessId = expected.ProcessId, StartTicksUtc = expected.StartTicksUtc };
+                    _takeoverTicket = Guid.NewGuid().ToString("N");
+                }
+                if (_takeoverEpoch?.ProcessId != expected.ProcessId || _takeoverEpoch.StartTicksUtc != expected.StartTicksUtc)
+                    return new CommandResult { Status = "failed", ErrorCode = "stale_epoch", Message = "原任务进程身份已改变，未执行接管" };
+                ticket = _takeoverTicket;
+                if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
             }
-            if (_takeoverEpoch?.ProcessId != expected.ProcessId || _takeoverEpoch.StartTicksUtc != expected.StartTicksUtc)
-                return new CommandResult { Status = "failed", ErrorCode = "stale_epoch", Message = "原任务进程身份已改变，未执行接管" };
-            var ticket = _takeoverTicket;
-            if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
             var payload = System.Text.Json.JsonSerializer.Serialize(new { takeoverTicket = ticket,
                 expectedExecutionInstanceId = expected.Active?.InstanceId.ToString("N"),
                 expectedStateRevision = expected.Active?.StateRevision,
-                bgiEpoch = new { processId = _takeoverEpoch?.ProcessId, startTicksUtc = _takeoverEpoch?.StartTicksUtc } });
+                bgiEpoch = new { processId = expected.ProcessId, startTicksUtc = expected.StartTicksUtc } });
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             if (response.Success)
             {
                 // [A6] 解析加法字段（可空读取：老 BGI 无此字段 → null，行为与原逻辑逐字一致）
@@ -2067,6 +2088,8 @@ public partial class CommandExecutor
     public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null,
         IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default)
     {
+        var resetVersion = Volatile.Read(ref _resetVersion);
+        if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
         if (!cancel && cancellationToken.IsCancellationRequested)
             return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未发送恢复请求" };
         var ticket = _takeoverTicket;
@@ -2077,6 +2100,7 @@ public partial class CommandExecutor
         {
             using var client = new IpcClient(System.IO.Path.GetDirectoryName(_bgiPath));
             await client.ConnectAsync(3000);
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             var blocked = CheckCrossSessionBlock(client, "task.resume");
             if (blocked != null) return blocked;
             if (expectedTicket is not null && !string.Equals(_takeoverTicket, expectedTicket, StringComparison.Ordinal))
@@ -2085,6 +2109,7 @@ public partial class CommandExecutor
                 return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未发送恢复请求" };
             var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket, planContinuation });
             var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
+            if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             if (!response.Success)
             {
                 if (response.ErrorCode is "stale_ticket" or "stale_context")
@@ -2124,10 +2149,13 @@ public partial class CommandExecutor
 
     private void ClearTicket(string? ticket)
     {
-        if (_takeoverTicket != ticket) return;
-        _takeoverTicket = null;
-        _takeoverEpoch = null;
-        if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
+        lock (_resetStateGate)
+        {
+            if (_takeoverTicket != ticket) return;
+            _takeoverTicket = null;
+            _takeoverEpoch = null;
+            if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
+        }
     }
 
     internal async Task<bool> ConfirmTakeoverRevokedAsync(BgiEpoch expectedEpoch,
@@ -2204,13 +2232,16 @@ public partial class CommandExecutor
         IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default)
     {
         const int maxAttempts = 3;
+        var resetVersion = Volatile.Read(ref _resetVersion);
         var busySeen = false;
         try
         {
             for (var attempt = 1; ; attempt++)
             {
+                if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
                 var result = await ExecuteResumeAsync(cancel: cancel, expectedTicket: expectedTicket,
                     planContinuation: planContinuation, cancellationToken: cancellationToken);
+                if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
                 if (result.Status == "success" || result.ErrorCode != "task_busy" || attempt >= maxAttempts)
                 {
                     return result;
@@ -2232,7 +2263,7 @@ public partial class CommandExecutor
         finally
         {
             // 覆盖从首个 task_busy 到重试终结的整个窗口（含在途 IPC），不只 10s 等待段
-            if (busySeen)
+            if (busySeen && resetVersion == Volatile.Read(ref _resetVersion))
             {
                 Interlocked.Exchange(ref _resumeRetryInFlight, 0);
             }
@@ -2339,70 +2370,8 @@ public partial class CommandExecutor
     /// 受控重建一次 BGI 后再确认执行槽为空。这个入口明确表示用户已经放弃当前运行，
     /// 不沿用“停止键不杀进程”的普通策略；但仍只操作当前 Windows 会话的 BGI。
     /// </summary>
-    public async Task<CommandResult> ForceResetAllAsync(Action<string>? log = null)
-    {
-        await _suspendGate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (_monitor is null)
-                return new CommandResult { Status = "failed", ErrorCode = "monitor_unavailable", Message = "BGI 进程监控器不可用，未执行全局重置" };
-
-            log?.Invoke("[状态重置] 用户确认全局复位：停止本会话全部 BGI 任务并清空队列");
-            var restarted = await _monitor.RestartBgiControlledAsync(null, "状态重置全局复位").ConfigureAwait(false);
-            if (!restarted)
-            {
-                return new CommandResult
-                {
-                    Status = "failed",
-                    ErrorCode = "bgi_reset_failed",
-                    Message = "BGI 未能完成受控重建，无法确认全部任务已停止"
-                };
-            }
-
-            // 旧进程已经由受控重启确认退出；旧票据只属于旧纪元，不能带进新进程。
-            _takeoverTicket = null;
-            _takeoverEpoch = null;
-            if (_externalClientProvider?.Invoke() is { } ext)
-                ext.TakeoverTicket = null;
-
-            await WaitForBgiIpcReadyAsync().ConfigureAwait(false);
-            for (var i = 0; i < 20; i++)
-            {
-                if (await IsExecutionIdleAsync().ConfigureAwait(false))
-                {
-                    log?.Invoke("[状态重置] BGI 新执行纪元已就绪，执行槽确认空闲");
-                    return new CommandResult
-                    {
-                        Status = "success",
-                        ErrorCode = "global_reset_complete",
-                        Message = "本机会话全部 BGI 任务已停止、队列已清空，执行环境已复位"
-                    };
-                }
-
-                await Task.Delay(500).ConfigureAwait(false);
-            }
-
-            return new CommandResult
-            {
-                Status = "failed",
-                ErrorCode = "bgi_reset_not_idle",
-                Message = "BGI 已重建但执行槽状态仍未确认空闲"
-            };
-        }
-        catch (Exception ex)
-        {
-            return new CommandResult
-            {
-                Status = "failed",
-                ErrorCode = "bgi_reset_exception",
-                Message = "全局复位异常：" + ex.Message
-            };
-        }
-        finally
-        {
-            _suspendGate.Release();
-        }
-    }
+    public Task<CommandResult> ForceResetAllAsync(Action<string>? log = null)
+        => ForceResetExecutionCoreAsync(log);
 
     /// <summary>在新的 task.suspend 前对账旧票据，避免 BGI 重启后复用旧 ticket。</summary>
     private async Task ReconcileTakeoverEpochAsync()

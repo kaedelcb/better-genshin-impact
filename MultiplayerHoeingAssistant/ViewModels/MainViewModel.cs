@@ -2456,6 +2456,17 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task ResetStateAsync(object? parameter)
     {
+        if (!await _resetRequestGate.WaitAsync(0))
+        {
+            AddLog("[状态重置] 正在恢复执行环境，请等待本轮结果");
+            return;
+        }
+        try { await ResetStateRequestAsync(parameter); }
+        finally { _resetRequestGate.Release(); }
+    }
+
+    private async Task ResetStateRequestAsync(object? parameter)
+    {
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
@@ -2498,7 +2509,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var missing = reset.MissingRegistrationUids.Count == 0
                     ? "无"
                     : string.Join(",", reset.MissingRegistrationUids);
-                AddLog($"[状态重置] 服务端已处理 resetId={resetId}，批次={reset.Phase}/{reset.Reason}，未登记成员={missing}");
+                AddLog($"[状态重置] 服务端已撤销旧批次并清除就绪标记 resetId={resetId}，批次={reset.BatchId}，未登记成员={missing}");
             }
             catch (Exception ex)
             {
@@ -2531,26 +2542,22 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         if (resetAll)
         {
-            // 执行模式先本地全局复位（包含单机任务、BGI 队列和受控重建）；遥控器把自己交给同 UID 执行端。
-            var localResetSucceeded = !isSelf || _config.ObserverMode == true;
-            if (isSelf && _config.ObserverMode != true)
-                localResetSucceeded = (await ResetLocalExecutionStateAsync(resetId, expectedBatchId)).Status == "success";
-            if (_signalRClient != null)
-            {
-                var missing = await SendAndWaitResetAcksAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId);
-                AddLog(serverResetConfirmed && localResetSucceeded && missing.Count == 0
-                    ? "[状态重置] 所有在线执行端已返回全局复位成功，可重新组织联机锄地"
-                    : "[状态重置] 全局复位未完全确认：服务端="
-                        + (serverResetConfirmed ? "已处理" : "未确认") + "；本机="
-                        + (localResetSucceeded ? "已复位" : "未复位")
-                        + (missing.Count == 0 ? "" : "；未确认成员=" + string.Join(",", missing)));
-            }
-            else if (!localResetSucceeded)
-                AddLog("[状态重置] 本机全局复位未完成，不能报告可重新联机");
-            else if (remoteTargets.Count == 0)
-                AddLog("[状态重置] 本机复位完成；服务端未连接，联机重新布防仍未确认");
-            else
-                AddLog("[状态重置] 本机已复位，但 SignalR 不可用，远端成员未确认");
+            AddLog("[状态重置] 正在并行恢复本机和所有在线成员的执行环境");
+            // 所有人包含本机，与从哪张成员卡进入无关；不让一个成员的冷启动拖住其他成员。
+            var localReset = _config.ObserverMode != true
+                ? ResetLocalExecutionStateAsync(resetId, expectedBatchId)
+                : Task.FromResult(new CommandResult { Status = "success", Message = "遥控端无需本机复位" });
+            var remoteReset = _signalRClient != null
+                ? SendAndWaitResetAcksAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId)
+                : Task.FromResult<IReadOnlyList<string>>(remoteTargets);
+            var localResult = await localReset;
+            var missing = await remoteReset;
+            AddLog(serverResetConfirmed && localResult.Status == "success" && missing.Count == 0
+                ? "[状态重置] 所有在线执行端已恢复，可以重新发起联机锄地"
+                : "[状态重置] 尚有恢复未完成：服务端="
+                    + (serverResetConfirmed ? "已处理" : "未连接或未确认") + "；本机="
+                    + (localResult.Status == "success" ? "已恢复" : localResult.Message)
+                    + (missing.Count == 0 ? "" : "；未确认成员=" + string.Join(",", missing)));
             return;
         }
 
@@ -2645,21 +2652,27 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         try
         {
-            await Task.WhenAll(waiters.Select(w => w.Task)).WaitAsync(TimeSpan.FromSeconds(30));
+            await Task.WhenAll(waiters.Select(w => w.Task)).WaitAsync(TimeSpan.FromSeconds(90));
         }
         catch (TimeoutException) { }
         catch (Exception ex) { AddLog("[状态重置] 等待远端复位回执异常：" + ex.Message); }
 
         var missing = new List<string>();
+        var failures = new List<string>();
         lock (_resetAckGate)
         {
             foreach (var waiter in waiters)
             {
                 if (!waiter.Task.IsCompletedSuccessfully || waiter.Task.Result.Status != "success")
+                {
                     missing.Add(waiter.Uid);
+                    failures.Add(waiter.Uid + "：" + (waiter.Task.IsCompletedSuccessfully
+                        ? waiter.Task.Result.Message : "等待恢复结果超时，未冒认恢复成功"));
+                }
                 _pendingResetAcks.Remove($"{resetId}\0{waiter.Uid}");
             }
         }
+        foreach (var failure in failures) AddLog("[状态重置] " + failure);
         return missing;
     }
 
@@ -2962,10 +2975,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 本机“重置状态”收口：取消当前批次、清理上线边沿，再按 BGI 纪元安全释放接管权。
     /// 释放失败时保留票据并把不确定性显示出来，禁止静默当作成功。
     /// </summary>
-    private async Task<CommandResult> ResetLocalExecutionStateAsync(string? resetId = null, string? expectedBatchId = null)
+    private async Task<CommandResult> ResetLocalExecutionStateCoreAsync(string? resetId, string? expectedBatchId)
     {
         if (!await _localResetGate.WaitAsync(0))
             return new CommandResult { Status = "failed", ErrorCode = "reset_in_progress", Message = "本机已有一轮状态重置正在执行" };
+        Interlocked.Increment(ref _ordinaryStopInProgress);
         try
         {
             if (_commandExecutor == null)
@@ -2976,30 +2990,36 @@ public partial class MainViewModel : INotifyPropertyChanged
                 return unavailable;
             }
 
-            // 重置与已观察批次绑定；迟到重置不能取消后继批次。
+            OnlineHoeingBatch? batchToWait;
             lock (_batchGate)
             {
                 if (_activeBatch is { Start: not null } current
                     && !string.Equals(current.BatchId, expectedBatchId, StringComparison.Ordinal))
                     return new CommandResult { Status = "failed", ErrorCode = "stale_reset", Message = "批次身份已改变，未影响当前任务" };
-                _activeBatch?.Cancel();
+                batchToWait = _activeBatch;
             }
+            _intentLifecycle.OnResetCleared();
+            _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
+            _resumeTimeoutTimer?.Dispose();
+            _resumeTimeoutTimer = null;
             var resetHost = TaskCenterHost;
-            using (var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
-                await resetHost.BeginManualResetAsync(gateBudget.Token);
-
-            OnlineHoeingBatch? batchToWait;
-            lock (_batchGate) { batchToWait = _activeBatch; }
-            if (batchToWait?.RunTask is { } runTask)
+            // 先封住新发送，再并行打断物理执行与旧驱动。不能先等旧批次自行退出才重置它。
+            using var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            var closeGate = resetHost.BeginManualResetAsync(gateBudget.Token);
+            var physicalReset = _commandExecutor.ForceResetAllAsync(AddLog);
+            var stopDrivers = resetHost.StopAllRunsForUserAsync();
+            var cancelBatch = batchToWait is null ? Task.CompletedTask : Task.Run(() => batchToWait.Cancel());
+            try { StopAllAutomationRequested?.Invoke(); }
+            catch (Exception ex) { AddLog("[状态重置] 自动流程取消异常：" + ex.Message); }
+            var result = await physicalReset;
+            await stopDrivers;
+            await closeGate;
+            try { await cancelBatch.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (Exception ex)
             {
-                try { await runTask.WaitAsync(TimeSpan.FromSeconds(10)); }
-                catch (TimeoutException) { AddLog("[状态重置] 旧联机批次 10 秒内未退出，将由 BGI 受控重建打断"); }
-                catch (Exception ex) { AddLog("[状态重置] 旧联机批次退出时异常：" + ex.Message); }
+                result.Status = "failed"; result.ErrorCode = "reset_cancel_pending";
+                result.Message = "BGI 已处理，但旧批次取消回调尚未退出：" + ex.Message;
             }
-
-            // 全局人工复位明确停止本机所有 BGI 任务（包括单机任务）并清空队列；
-            // 旧票据在受控重建确认旧进程退出后统一废弃，不再把“无票据”误报成物理空闲。
-            var result = await _commandExecutor.ForceResetAllAsync(AddLog);
             await ClearLocalOnline(preserveScheduledOnline: true);
             var taskCenterReset = await resetHost.ForceAbandonOnlineHoeingForManualResetAsync(
                 "全局状态重置", openSendGate: result.Status == "success");
@@ -3065,7 +3085,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("[状态重置] 本机停止或任务中心收口未确认：" + ex);
             return new CommandResult { Status = "failed", ErrorCode = "reset_unconfirmed", Message = "本机停止或任务中心收口未确认：" + ex.Message };
         }
-        finally { _localResetGate.Release(); }
+        finally
+        {
+            Interlocked.Decrement(ref _ordinaryStopInProgress);
+            _localResetGate.Release();
+        }
     }
 
     private void ClearLog()
@@ -5239,6 +5263,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 服务端 resetId 已先失效共享批次；这里不再回调服务端 reset，避免命令回环。
             if (cmd.Cmd == "reset_state")
             {
+                if (cmd.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+                {
+                    await SendAckAsync(cmd, "failed", "重置命令已过期，未影响当前任务");
+                    return;
+                }
                 if (_config != null)
                 {
                     var resetId = cmd.Params?.GetValueOrDefault("resetId")?.ToString() ?? cmd.CommandId;
