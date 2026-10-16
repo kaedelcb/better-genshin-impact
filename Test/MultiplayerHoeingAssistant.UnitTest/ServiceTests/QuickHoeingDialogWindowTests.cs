@@ -16,6 +16,7 @@ public sealed class QuickHoeingDialogWindowTests
     public async Task ActualConfirmationDisplaysBoundActionsAndReturnsOnlyTheSelectedSwitch()
     {
         Assert.True(AssistantDataDirectory.IsExplicit);
+        Directory.CreateDirectory(AssistantDataDirectory.Root);
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
@@ -55,8 +56,9 @@ public sealed class QuickHoeingDialogWindowTests
                             }
                             catch (Exception error) { failure = error; dialog.Close(); }
                         }));
-                        Assert.True(dialog.ShowDialog());
+                        var dialogResult = dialog.ShowDialog();
                         if (failure != null) throw failure;
+                        Assert.True(dialogResult);
                         Assert.True(dialog.Confirmed);
                         Assert.Equal(selected, dialog.UseCompletionActions);
                     }

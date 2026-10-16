@@ -162,12 +162,27 @@ internal static class ExternalInterfaceQueryPlane
         }
 
         var status = BgiTaskCoordinator.Instance.QueryItemStatus(handle);
-        return InstanceIpcEnvelope.Response(request, new
+        return MapTaskQueueStatusResponse(request, status);
+    }
+
+    internal static InstanceIpcEnvelope MapTaskQueueStatusResponse(InstanceIpcEnvelope request,
+        BgiTaskCoordinator.QueueItemStatusResult status)
+        => InstanceIpcEnvelope.Response(request, new
         {
             status = status.Status,
             cancelled = status.Cancelled,
             errorCode = status.ErrorCode,
             message = status.Message,
+            hoeingEvidence = status.HoeingEvidence is { } evidence ? new
+            {
+                started = evidence.Started,
+                completed = evidence.Completed,
+                failed = evidence.Failed,
+                cancelled = evidence.Cancelled,
+                active = evidence.Active,
+                @sealed = evidence.Sealed,
+                jobResult = evidence.JobResult?.ToString(),
+                revision = evidence.Revision,
+            } : null,
         });
-    }
 }

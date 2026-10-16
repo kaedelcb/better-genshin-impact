@@ -17,7 +17,10 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
 }
 
 public sealed record CoordinatedHoeingBinding(string Name, string Type);
-public sealed record CoordinatedHoeingMember(string Uid, string Stage, string Reason);
+public sealed record CoordinatedHoeingMember(string Uid, string Stage, string Reason)
+{
+    public string Result { get; init; } = "";
+}
 
 public sealed record CoordinatedBatchResetResult
 {

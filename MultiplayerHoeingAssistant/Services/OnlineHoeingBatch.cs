@@ -15,6 +15,44 @@ internal sealed record HoeingPolicyExecution(string JobId, BgiEpoch Epoch, bool 
 public sealed class OnlineHoeingBatch
 {
     private int _settled;
+    private int _localSucceeded;
+    private int _localExecutionReleased;
+    private Task? _localFinalization;
+    internal bool LocalSucceeded => Volatile.Read(ref _localSucceeded) != 0;
+    internal bool LocalExecutionReleased => Volatile.Read(ref _localExecutionReleased) != 0;
+    internal BgiEpoch? ExecutionEpoch { get; set; }
+    internal BgiEpoch? LocalSuccessEpoch { get; private set; }
+    internal string? TeamFailureReason { get; set; }
+    internal Task? LocalFinalizationTask { get { lock (_policyGate) return _localFinalization; } }
+
+    // A final binding has completed as a whole. Native-body progress alone cannot enter this state.
+    internal void MarkLocalSuccess(BgiEpoch epoch)
+    {
+        lock (_policyGate)
+        {
+            if (IsCancellationRequested) return;
+            LocalSuccessEpoch ??= epoch;
+            Volatile.Write(ref _localSucceeded, 1);
+            Outcome = "succeeded";
+        }
+    }
+
+    internal Task BeginLocalFinalization(Func<Task> finalize)
+    {
+        lock (_policyGate)
+            return _localFinalization ??= Task.Run(finalize, CancellationToken.None);
+    }
+
+    internal void MarkLocalExecutionReleased()
+    {
+        lock (_policyGate)
+        {
+            if (!IsCancellationRequested) Volatile.Write(ref _localExecutionReleased, 1);
+        }
+    }
+
+    // A team reason cannot revoke another endpoint's completed result. An explicit local stop cancels Cts first.
+    internal bool PreserveLocalSuccess(string reason) => LocalSucceeded && !IsCancellationRequested;
     private readonly Dictionary<string, string> _configRevisions = new(StringComparer.Ordinal);
     private readonly object _policyGate = new();
     private HoeingPolicyExecution? _policyExecution;
@@ -138,6 +176,7 @@ public sealed class OnlineHoeingBatch
     public string Message { get; set; } = "正在准备联机锄地";
     public string Outcome { get; set; } = "unknown";
     public string? FailureReason { get; set; }
+    internal string? CompletionActionWarning { get; set; }
     public string? TakeoverTicket { get; set; }
     public bool CleanupConfirmed { get; set; }
     public bool LocalCleanupConfirmed { get; set; }
@@ -170,7 +209,7 @@ public sealed class OnlineHoeingBatch
     {
         lock (_policyGate)
         {
-        if (Volatile.Read(ref _settled) != 0) return;
+        if (Volatile.Read(ref _settled) != 0 || !userInitiated && LocalExecutionReleased) return;
         if (userInitiated) Outcome = "cancelled";
         try
         {

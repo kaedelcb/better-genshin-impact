@@ -88,6 +88,8 @@ public sealed partial class RoomOperations
             var player = matches[0];
             if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
                 throw new InvalidOperationException("hoeing_start_capability_required:" + uid);
+            if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.LocalFinishCapability) != true)
+                throw new InvalidOperationException("hoeing_local_finish_capability_required:" + uid);
             if (player.OnlineHoeingGroupNames.Count == 0)
                 throw new InvalidOperationException("batch_binding_missing:" + uid);
             if (useCompletionActions)
@@ -156,7 +158,7 @@ public sealed partial class RoomOperations
             ?? throw new InvalidOperationException("batch_identity_required");
         CoordinatedBatchState state;
         CoordinatedBatchSnapshot snapshot;
-        bool notifyAbort;
+        bool notifyTerminal;
         lock (_batchGate)
         {
             if (!_controlBatches.TryGetValue(group, out state!) || state.Generation != generation || state.BatchId != batchId)
@@ -165,9 +167,9 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("batch_executor_instance_mismatch");
             var previousPhase = state.Phase;
             snapshot = state.Apply(player.PlayerUid, token, batchId, layout, index, attempt, result, DateTime.UtcNow, stage, reason);
-            notifyAbort = previousPhase != "aborted" && snapshot.Phase == "aborted";
+            notifyTerminal = previousPhase != snapshot.Phase && snapshot.Phase is ("completed" or "aborted");
         }
-        if (notifyAbort) await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
+        if (notifyTerminal) await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
         return snapshot;
     }
     public async Task<CoordinatedBatchSnapshot> ConfirmCoordinatedResetCleanedAsync(

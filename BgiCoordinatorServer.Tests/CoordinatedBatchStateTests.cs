@@ -41,7 +41,7 @@ public class CoordinatedBatchStateTests
     {
         var s = Create(); Enroll(s);
         Assert.Equal("stopping", Send(s, "a", "failed").Phase);
-        Send(s, "b", "stopped"); Send(s, "c", "succeeded");
+        Send(s, "b", "stopped"); Send(s, "c", "stopped");
         Assert.Equal(0, s.Attempt);
         Assert.Equal(1, Send(s, "d", "stopped").Attempt);
         Assert.Equal(0, s.Index);
@@ -99,8 +99,8 @@ public class CoordinatedBatchStateTests
         Assert.Throws<InvalidOperationException>(() => s.Apply("a", "a", "old-batch", "group,group", 0, 0, "failed", _now));
         Assert.Equal("running", s.Phase);
     }
-    [Fact] public void ConflictingTerminalResultAborts()
-    { var s = Create(); Enroll(s); Send(s, "a", "succeeded"); Assert.Equal("aborted", Send(s, "a", "failed").Phase); }
+    [Fact] public void ConfirmedSuccessSurvivesLaterConflictingObservation()
+    { var s = Create(); Enroll(s); Send(s, "a", "succeeded"); Assert.Equal("running", Send(s, "a", "failed").Phase); Assert.Equal("succeeded", s.Snapshot().Members.Single(m => m.Uid == "a").Result); }
     [Fact] public void CleanupCannotWaitForeverEvenWithLiveParticipants()
     {
         var s = Create(); Enroll(s); Send(s, "a", "failed");

@@ -55,6 +55,7 @@ public sealed class UnifiedHoeingNativeEntryTests
 
     private static async Task RunEntryAsync()
     {
+        Directory.CreateDirectory(AssistantDataDirectory.Root);
         const string uid = "100000001";
         const string groupName = "隔离开锄入口";
         var previousIpc = IpcClient.PipeNameOverrideForTest;
@@ -339,6 +340,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                             {
                                 ["event.push"] = true, ["task.queue"] = true, ["task.takeover"] = true,
                                 ["hoeing.batchOutcome.v1"] = true, ["hoeing.coordinatedStart.v1"] = true,
+                                ["hoeing.finishEvidence.v1"] = true,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
                             }
                         });

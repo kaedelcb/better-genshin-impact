@@ -471,6 +471,28 @@ public class AutoHoeingTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
+        using var attempt = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BeginNative();
+        try
+        {
+            await StartCore(ct, attempt);
+            if (attempt != null) ct.ThrowIfCancellationRequested();
+            attempt?.Complete();
+        }
+        catch (OperationCanceledException)
+        {
+            attempt?.Cancel();
+            throw;
+        }
+        catch
+        {
+            attempt?.Fail();
+            throw;
+        }
+    }
+
+    private async Task StartCore(CancellationToken ct,
+        BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.NativeAttempt? attempt)
+    {
         Exception? executionFailure = null;
         var teamManaged = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive;
         _taskStartTime = DateTime.Now;
@@ -552,6 +574,9 @@ public class AutoHoeingTask : ISoloTask
 
             ApplySettingsOverride();
         }
+
+        // Only the final configuration used by this invocation can prove a multiplayer success.
+        attempt?.SetMultiplayerMode(_config.MultiplayerEnabled);
 
         // 数据目录：使用JS脚本原有的pathing目录
         _dataDir = Path.Combine(Global.UserRoot, "JsScript", "AutoHoeingOneDragon");

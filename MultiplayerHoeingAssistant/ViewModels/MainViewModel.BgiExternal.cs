@@ -467,7 +467,11 @@ public partial class MainViewModel
                 }
             }
             AddLog($"[ext] BGI 外部接口通道状态 → {state}");
-            if (state == BgiExternalConnectionState.Ready) _ = RefreshTaskCenterCatalogAfterConnectionAsync();
+            if (state == BgiExternalConnectionState.Ready)
+            {
+                _ = RefreshTaskCenterCatalogAfterConnectionAsync();
+                RetryPendingCoordinatedCleanupAfterConnection();
+            }
         }
         catch
         {
@@ -487,8 +491,28 @@ public partial class MainViewModel
             _latestExtStatusObservedAtUtc = null;
             _taskCenterRequiredStatusRevision = 0;
         }
-        if (_commandExecutor?.TakeoverTicketSnapshot == null) return;
-        _ = ResetTakeoverAfterEpochChangedAsync(epoch);
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        if (batch?.ExecutionEpoch is not null)
+        {
+            RetryPendingCoordinatedCleanupAfterConnection();
+            return; // A coordinated owner is reconciled by its original epoch, never a generic reset on the new BGI.
+        }
+        if (_commandExecutor?.TakeoverTicketSnapshot != null)
+            _ = ResetTakeoverAfterEpochChangedAsync(epoch);
+    }
+
+    private void RetryPendingCoordinatedCleanupAfterConnection()
+    {
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        if (batch is null) return;
+        if (batch.RunTask?.IsCompleted == true)
+            ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "BGI 重连后的本端批次清理");
+        else if (batch.RunTask is { } running)
+            ObserveOnlineTask(running.ContinueWith(_ => RetryCoordinatedCleanupAsync(batch),
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default).Unwrap(),
+                "BGI 重连后的旧批次退出及清理");
     }
 
     private async Task ResetTakeoverAfterEpochChangedAsync(BgiEpoch epoch)

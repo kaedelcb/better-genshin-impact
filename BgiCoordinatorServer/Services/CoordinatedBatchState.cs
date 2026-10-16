@@ -3,7 +3,10 @@ namespace BgiCoordinatorServer.Services;
 public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority);
 
 public sealed record CoordinatedBatchBinding(string Name, string Type);
-public sealed record CoordinatedBatchMemberSnapshot(string Uid, string Stage, string Reason);
+public sealed record CoordinatedBatchMemberSnapshot(string Uid, string Stage, string Reason)
+{
+    public string Result { get; init; } = "";
+}
 
 public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, int Index, int Attempt,
     long Revision, string Phase, string Reason)
@@ -106,7 +109,7 @@ public sealed class CoordinatedBatchState
         IntentGenerations = _intentGenerations,
         Bindings = _bindings,
         UseCompletionActions = UseCompletionActions,
-        Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason)).ToArray(),
+        Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason) { Result = p.Value.Result }).ToArray(),
         MissingRegistrationUids = Reason == "registration_timeout"
             ? _members.Where(p => p.Value.Token.Length == 0).Select(p => p.Key).ToArray() : [],
         CleanupComplete = IsTerminal,
@@ -129,7 +132,7 @@ public sealed class CoordinatedBatchState
         else if (Phase == "preparing" && now - _phaseStarted > TimeSpan.FromMinutes(3)) Abort("preparation_timeout");
         else if (Phase == "takeover" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("takeover_timeout");
         else if (Phase == "stopping" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("cleanup_timeout");
-        else if ((Phase is "running" or "stopping") && _members.Values.Any(m => now - m.LastSeen > TimeSpan.FromSeconds(90)))
+        else if ((Phase is "running" or "stopping") && _members.Values.Any(m => m.Result != "succeeded" && now - m.LastSeen > TimeSpan.FromSeconds(90)))
             Abort("participant_lease_expired");
     }
 
@@ -149,7 +152,7 @@ public sealed class CoordinatedBatchState
         if (batchId != BatchId) throw new InvalidOperationException("batch_identity");
         if (member.Token.Length > 0 && member.Token != token) throw new InvalidOperationException("batch_participant_token_mismatch");
         if (reason.Length > 512) throw new InvalidOperationException("batch_reason");
-        if (result is not ("" or "succeeded" or "failed" or "stopped" or "cancelled" or "unknown" or "preparation_failed" or "takeover_failed"))
+        if (result is not ("" or "succeeded" or "failed" or "stopped" or "cancelled" or "unknown" or "preparation_failed" or "takeover_failed" or "local_failed"))
             throw new InvalidOperationException("batch_result");
         if (stage is not ("" or "registered" or "prepared" or "takeoverConfirmed" or "cleaned"))
             throw new InvalidOperationException("batch_stage");
@@ -181,6 +184,20 @@ public sealed class CoordinatedBatchState
         }
         member.LastSeen = now;
         if ((Phase is "running" or "stopping") && (index != Index || attempt != Attempt)) return Snapshot();
+        // A confirmed result belongs to this item/attempt, not to the continued life of its BGI process.
+        // Explicit room stop/reset still call Abort directly; late telemetry cannot revoke success.
+        if (member.Result == "succeeded" && result.Length > 0 && result != "succeeded")
+        {
+            if (reason.Length > 0 && member.Reason != reason) { member.Reason = reason; Revision++; }
+            return Snapshot();
+        }
+        if (result == "local_failed")
+        {
+            member.Result = result;
+            member.Reason = reason;
+            Abort($"participant_local_failed:{uid}:{Phase}" + (reason.Length > 0 ? ":" + reason : ""));
+            return Snapshot(); // Completed native work must never be replayed as a whole-group recovery.
+        }
         if (result is "cancelled" or "unknown" or "preparation_failed" or "takeover_failed")
         {
             member.Reason = reason;
@@ -215,6 +232,11 @@ public sealed class CoordinatedBatchState
             member.Result = result;
             if (result == "failed" && Phase == "running")
             {
+                if (_members.Values.Any(m => m.Result == "succeeded"))
+                {
+                    Abort("participant_failed_after_peer_completed:" + uid);
+                    return Snapshot();
+                }
                 Reason = "participant_failed:" + uid;
                 SetPhase("stopping", now);
             }
@@ -223,11 +245,17 @@ public sealed class CoordinatedBatchState
         {
             Index++;
             Attempt = 0;
-            foreach (var m in _members.Values) m.Result = "";
+            if (Index < _count)
+                foreach (var m in _members.Values) m.Result = "";
             SetPhase(Index == _count ? "completed" : "running", now);
         }
         else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0))
         {
+            if (_members.Values.Any(m => m.Result == "succeeded"))
+            {
+                Abort("partial_completion_no_replay");
+                return Snapshot();
+            }
             if (Attempt >= 1) Abort("recovery_budget_exhausted");
             else
             {

@@ -126,6 +126,7 @@ internal static class ExternalInterfaceCommandPlane
                 executionRequest: request))
         {
             Preempt = preempt,
+            CoordinatedHoeing = InstanceIpcProtocol.GetStringOrNull(request.Data, "coordinatedHoeing") == "v1",
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
             PayloadFingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request),
             RequestOperation = request.Operation,

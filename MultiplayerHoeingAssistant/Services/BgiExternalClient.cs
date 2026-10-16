@@ -105,6 +105,8 @@ public sealed class BgiTaskSubmitResult
 /// <summary>[终态可拉取] ext.task.queueStatus 响应投影：pending/running/completed/failed/queueCancelled/not_found。</summary>
 public sealed class BgiTaskQueueStatus
 {
+    public CoordinatedHoeingEvidence? HoeingEvidence { get; init; }
+
     public string? Status { get; init; }
 
     /// <summary>completed 专用：执行中被取消（F11 等）。</summary>
@@ -655,8 +657,21 @@ public sealed class BgiExternalClient : IDisposable
 
         using var doc = JsonDocument.Parse(response.Data);
         var root = doc.RootElement;
+        CoordinatedHoeingEvidence? evidence = null;
+        if (root.TryGetProperty("hoeingEvidence", out var evidenceElement)
+            && evidenceElement.ValueKind == JsonValueKind.Object)
+        {
+            try
+            {
+                var parsed = evidenceElement.Deserialize<CoordinatedHoeingEvidence>(
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (parsed?.IsValid == true) evidence = parsed;
+            }
+            catch (JsonException) { /* Invalid optional evidence must not create a completion fact. */ }
+        }
         return new BgiTaskQueueStatus
         {
+            HoeingEvidence = evidence,
             Status = root.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
                 ? stEl.GetString()
                 : null,

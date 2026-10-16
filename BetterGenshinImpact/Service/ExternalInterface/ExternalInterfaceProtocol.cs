@@ -169,6 +169,7 @@ internal static class ExternalInterfaceProtocol
                 ["task.takeover"] = true,
                 ["execution.targetedSuspend.v1"] = true,
                 ["hoeing.coordinatedStart.v1"] = true,
+                ["hoeing.finishEvidence.v1"] = true,
                 ["execution.contract.v1"] = true,
                 ["execution.exit.confirmed.v1"] = true,
                 ["execution.manualStopFence.v1"] = true,

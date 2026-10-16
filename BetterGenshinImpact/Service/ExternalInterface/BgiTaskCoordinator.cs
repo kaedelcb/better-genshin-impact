@@ -100,6 +100,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public string? RegistryName { get; init; }
         /// <summary>前置／收尾入口显式启用作业结果投影；普通 Task&lt;bool&gt; 执行体保持旧合同。</summary>
         public bool ProjectRegistryOutcome { get; init; }
+        /// <summary>Set by the trusted task.start route, never inferred from a name or a generic exception.</summary>
+        public bool CoordinatedHoeing { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -111,7 +113,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// 对调用方意味着 BGI 已重启、任务随进程终止，或句柄从未存在）。
     /// </summary>
     public readonly record struct QueueItemStatusResult(
-        string Status, bool Cancelled, string? ErrorCode, string? Message);
+        string Status, bool Cancelled, string? ErrorCode, string? Message,
+        CoordinatedHoeingEvidence? HoeingEvidence = null);
 
     /// <summary>[终态可拉取] 终态登记表条目。</summary>
     private sealed record TerminalRecord(string Status, bool Cancelled, string? ErrorCode, string? Message);
@@ -180,6 +183,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// 每项终态唯一（取消/执行路径互斥），覆盖写安全。
     /// </summary>
     private readonly ConcurrentDictionary<Guid, TerminalRecord> _terminals = new();
+    /// <summary>Native outcome evidence uses the same handle and retention as its queue result.</summary>
+    private readonly ConcurrentDictionary<Guid, CoordinatedHoeingEvidence> _hoeingEvidence = new();
     /// <summary>结果未明的编号必须持续可查询，不能被终态历史 FIFO 淘汰。</summary>
     private readonly ConcurrentDictionary<Guid, TerminalRecord> _unresolved = new();
     /// <summary>同键未决请求采用原句柄，阻止进程内再次执行；由 _submitLock 串行。</summary>
@@ -282,10 +287,45 @@ internal sealed class BgiTaskCoordinator : IDisposable
             _terminalOrder.Enqueue(taskHandle);
             while (_terminalOrder.Count > TerminalRegistryCapacity)
             {
-                _terminals.TryRemove(_terminalOrder.Dequeue(), out _);
+                var expired = _terminalOrder.Dequeue();
+                _terminals.TryRemove(expired, out _);
+                _hoeingEvidence.TryRemove(expired, out _);
             }
         }
 
+    }
+
+    /// <summary>Only an existing job can publish evidence; stale callbacks cannot resurrect old handles.</summary>
+    internal bool RecordHoeingEvidence(Guid taskHandle, CoordinatedHoeingEvidence evidence)
+    {
+        lock (_submitLock)
+        {
+            if (_disposed || !(_current?.TaskHandle == taskHandle || _pending.ContainsKey(taskHandle)
+                    || _terminals.ContainsKey(taskHandle) || _unresolved.ContainsKey(taskHandle))) return false;
+            if (evidence.Revision < 0 || evidence.Started < 0 || evidence.Completed < 0
+                || evidence.Failed < 0 || evidence.Cancelled < 0 || evidence.Active < 0
+                || (long)evidence.Completed + evidence.Failed + evidence.Cancelled + evidence.Active > evidence.Started
+                || !evidence.Sealed && evidence.JobResult != null) return false;
+            if (_hoeingEvidence.TryGetValue(taskHandle, out var previous)
+                && (previous.Sealed || evidence.Revision <= previous.Revision
+                    || evidence.Started < previous.Started || evidence.Completed < previous.Completed
+                    || evidence.Failed < previous.Failed || evidence.Cancelled < previous.Cancelled)) return false;
+            _hoeingEvidence[taskHandle] = evidence;
+            return true;
+        }
+    }
+
+    /// <summary>Only callers with exact never-started proof may supply a zero-native terminal snapshot.</summary>
+    private void RecordNeverStartedHoeingEvidence(PendingTask item, GameTask.TaskRunResult result)
+    {
+        if (!item.Submission.CoordinatedHoeing) return;
+        lock (_submitLock)
+        {
+            // A real scope (including an unknown sealed result) always owns its own evidence.
+            // The item may already have left _pending, so this path cannot use the live-handle API.
+            if (_hoeingEvidence.ContainsKey(item.TaskHandle)) return;
+            _hoeingEvidence[item.TaskHandle] = new(0, 0, 0, 0, 0, true, result, 1);
+        }
     }
 
     /// <summary>
@@ -297,17 +337,18 @@ internal sealed class BgiTaskCoordinator : IDisposable
     {
         lock (_submitLock)
         {
+            _hoeingEvidence.TryGetValue(taskHandle, out var evidence);
             // 与 _current 清理及未决登记共用锁；同一查询不能先漏看未决、后漏看当前。
             if (_unresolved.TryGetValue(taskHandle, out var unresolved))
-                return new QueueItemStatusResult(unresolved.Status, unresolved.Cancelled, unresolved.ErrorCode, unresolved.Message);
+                return new QueueItemStatusResult(unresolved.Status, unresolved.Cancelled, unresolved.ErrorCode, unresolved.Message, evidence);
             if (_terminals.TryGetValue(taskHandle, out var terminal))
-                return new QueueItemStatusResult(terminal.Status, terminal.Cancelled, terminal.ErrorCode, terminal.Message);
+                return new QueueItemStatusResult(terminal.Status, terminal.Cancelled, terminal.ErrorCode, terminal.Message, evidence);
             if (_current is { } current && current.TaskHandle == taskHandle)
             {
-                return new QueueItemStatusResult("running", false, null, null);
+                return new QueueItemStatusResult("running", false, null, null, evidence);
             }
             if (_pending.ContainsKey(taskHandle))
-                return new QueueItemStatusResult("pending", false, null, null);
+                return new QueueItemStatusResult("pending", false, null, null, evidence);
         }
 
         return new QueueItemStatusResult("not_found", false, null, null);
@@ -465,6 +506,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
         if (queued.TryMarkTerminalEventPublished())
         {
+            RecordNeverStartedHoeingEvidence(queued, GameTask.TaskRunResult.Cancelled);
             RecordTerminal(taskHandle, "queueCancelled");
             PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = taskHandle.ToString("N") });
         }
@@ -503,6 +545,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Cancelled);
                 RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
@@ -572,6 +615,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Cancelled);
                 RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
@@ -597,12 +641,14 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 if (item.TryMarkTerminalEventPublished())
                 {
+                    RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Cancelled);
                     RecordTerminal(item.TaskHandle, "queueCancelled");
                     PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
                 }
             }
             else if (item.TryMarkTerminalEventPublished())
             {
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Failed);
                 RecordTerminal(item.TaskHandle, "failed", errorCode: "task_busy", message: "等待任务槽位释放超时（15s），旧任务可能卡死");
                 PublishSafe(ExternalInterfaceEventNames.TaskFailed, new
                 {
@@ -635,6 +681,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         {
             if (item.TryMarkTerminalEventPublished())
             {
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Cancelled);
                 RecordTerminal(item.TaskHandle, "queueCancelled");
                 PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
             }
@@ -690,7 +737,28 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 var refusal = (ExecutionNotStartedException)exception;
                 JobRegistry.Instance.TryMarkTerminal(item.TaskHandle, JobState.Rejected,
                     refusal.ReasonCode, exception.Message, false);
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Failed);
                 RecordTerminal(item.TaskHandle, "failed", errorCode: refusal.ReasonCode, message: exception.Message);
+                return;
+            }
+            if (exception is OperationCanceledException && item.Submission.CoordinatedHoeing
+                && _hoeingEvidence.TryGetValue(item.TaskHandle, out var cancelledEvidence)
+                && cancelledEvidence.Sealed && cancelledEvidence.Active == 0
+                && cancelledEvidence.JobResult == GameTask.TaskRunResult.Cancelled)
+            {
+                // A real dispatcher scope confirmed cancellation. Keep the existing completed+cancelled
+                // wire vocabulary; do not turn a user cancellation into a retryable group failure.
+                if (item.TryMarkTerminalEventPublished())
+                {
+                    RecordTerminal(item.TaskHandle, "completed", cancelled: true);
+                    PublishSafe(ExternalInterfaceEventNames.TaskCompleted, new
+                    {
+                        taskHandle = item.TaskHandle.ToString("N"),
+                        groupName = item.Submission.GroupName,
+                        cancelled = true,
+                        durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds,
+                    });
+                }
                 return;
             }
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);

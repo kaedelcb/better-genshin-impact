@@ -5041,7 +5041,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             OnlineHoeingBatch? pending;
             lock (_batchGate) pending = _activeBatch;
-            if (pending?.LocalCleanupConfirmed == true && pending.RunTask?.IsCompleted == true)
+            if (pending?.RunTask?.IsCompleted == true)
                 ObserveOnlineTask(RetryCoordinatedCleanupAsync(pending), "重连后批次清理确认");
         };
 
@@ -6050,7 +6050,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             _commandExecutor = new CommandExecutor(_processMonitor, _config.BgiPath, () => _externalClient,
                 AddLog, () =>
                 {
-                    lock (_batchGate) if (_activeBatch?.IsAlive == true) return true;
+                    if (HasLocalCoordinatedExecutionResponsibility) return true;
+                    if (HasReleasedLocalCoordinatedBatch) return false;
                     TaskCenterHost? host;
                     lock (_taskCenterHostGate) host = _taskCenterHost;
                     return host?.HasUnsettledOnlineHoeingHandoff == true;

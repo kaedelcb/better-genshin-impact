@@ -7,6 +7,7 @@ namespace MultiplayerHoeingAssistant.Services.Gateway;
 /// </summary>
 public static class GatewayProtocol
 {
+    public const string LocalFinishCapability = "hoeing.localFinish.v1";
     public const string CompletionChoiceCapability = "hoeing.completionChoice.v1";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;

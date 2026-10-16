@@ -6,19 +6,28 @@ namespace MultiplayerHoeingAssistant.Services;
 public partial class CommandExecutor
 {
     private int _allStopVersion;
+    private int _allStopInProgress;
     private readonly AsyncLocal<int?> _commandStopVersion = new();
     internal Func<string, Task<bool>>? StopProcessOverrideForTest { get; set; }
 
     private void ThrowIfStartStopped()
     {
-        if (_commandStopVersion.Value is { } version && version != Volatile.Read(ref _allStopVersion))
+        if (Volatile.Read(ref _allStopInProgress) > 0
+            || _commandStopVersion.Value is { } version && version != Volatile.Read(ref _allStopVersion))
             throw new OperationCanceledException("启动请求已被用户全停止撤销");
     }
 
     // A stop request is an action, never a status-dependent conflict policy.
     private async Task<CommandResult> StopAllExecutionAsync()
     {
+        Interlocked.Increment(ref _allStopInProgress);
         Interlocked.Increment(ref _allStopVersion);
+        try { return await StopAllExecutionCoreAsync(); }
+        finally { Interlocked.Decrement(ref _allStopInProgress); }
+    }
+
+    private async Task<CommandResult> StopAllExecutionCoreAsync()
+    {
         _monitor.HoldAutomaticRestartForUserStop();
         Log("[全停止] 正在取消当前执行、清空队列并撤销恢复现场");
         var sent = false;

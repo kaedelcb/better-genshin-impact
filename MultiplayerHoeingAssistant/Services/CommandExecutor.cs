@@ -669,6 +669,9 @@ public partial class CommandExecutor
         {
             if (IsManualResetActive && command.Cmd is ("start_group" or "start_oneclick" or "start_bgi" or "hotkey_execute"))
                 return ResetInProgress();
+            if (Volatile.Read(ref _allStopInProgress) > 0
+                && command.Cmd is ("start_group" or "start_oneclick" or "start_bgi" or "hotkey_execute"))
+                return new CommandResult { ErrorCode = "stop_in_progress", Message = "正在完成全停止，本次启动未发送" };
             if (command.ExpiresAtUtc is { } expiry && expiry <= DateTimeOffset.UtcNow)
                 return new CommandResult { Status = "failed", ErrorCode = "request_expired", Message = "命令已过期，未执行" };
             if (GetStringParam(command.Params, "expectedConfigRevision") != null

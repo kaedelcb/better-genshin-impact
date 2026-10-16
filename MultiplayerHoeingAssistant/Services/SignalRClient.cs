@@ -105,6 +105,7 @@ public class SignalRClient : IAsyncDisposable
 
     public bool IsConnected => _gateway?.IsConnected == true;
     public bool SupportsCoordinatedStart => _gateway?.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal) == true;
+    public bool SupportsLocalFinish => _gateway?.ServerCapabilities.Contains(GatewayProtocol.LocalFinishCapability, StringComparer.Ordinal) == true;
     public bool SupportsCompletionChoice => _gateway?.ServerCapabilities.Contains(GatewayProtocol.CompletionChoiceCapability, StringComparer.Ordinal) == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,

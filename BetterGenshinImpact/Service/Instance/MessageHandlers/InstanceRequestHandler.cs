@@ -901,12 +901,10 @@ internal sealed class InstanceRequestHandler
         var completion = new TaskCompletionSource<BetterGenshinImpact.GameTask.TaskRunResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var dispatch = Application.Current!.Dispatcher.InvokeAsync(async () =>
         {
-            using var coordinatedHoeing = new CoordinatedHoeingScope(executionRequest != null
-                && InstanceIpcProtocol.GetStringOrNull(executionRequest.Data, "coordinatedHoeing") == "v1",
-                InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "hoeingBatchId"),
-                (executionRequest?.Data?["hoeingParticipantUids"] as Newtonsoft.Json.Linq.JArray)?.Values<string>()!);
+            using var coordinatedHoeing = CreateCoordinatedHoeingScope(executionRequest, jobId);
             void FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult result)
             {
+                coordinatedHoeing.Seal(result);
                 if (result == BetterGenshinImpact.GameTask.TaskRunResult.Failed && coordinatedHoeing.Incomplete)
                     completion.TrySetException(new HoeingIncompleteException());
                 else completion.TrySetResult(result);
@@ -993,7 +991,21 @@ internal sealed class InstanceRequestHandler
                     FinishCoordinated(await vm.ExecuteOneDragonAsync(descriptor));
                 }
             }
-            catch (Exception ex) { completion.TrySetException(ex); }
+            catch (ExecutionNotStartedException ex)
+            {
+                coordinatedHoeing.Seal(BetterGenshinImpact.GameTask.TaskRunResult.Failed);
+                completion.TrySetException(ex);
+            }
+            catch (OperationCanceledException ex)
+            {
+                coordinatedHoeing.Seal(BetterGenshinImpact.GameTask.TaskRunResult.Cancelled);
+                completion.TrySetException(ex);
+            }
+            catch (Exception ex)
+            {
+                coordinatedHoeing.Seal(BetterGenshinImpact.GameTask.TaskRunResult.Failed);
+                completion.TrySetException(ex);
+            }
         });
         // Await the dispatcher delegate too: its root scope and cancellation registration
         // must be disposed before the queue can expose a terminal result to the team.
@@ -1004,6 +1016,17 @@ internal sealed class InstanceRequestHandler
         throw new InvalidOperationException(result == BetterGenshinImpact.GameTask.TaskRunResult.Preempted
             ? "preempted: 原流程已让位" : "task_start_failed: 任务未成功完成: " + result);
     }
+
+    internal static CoordinatedHoeingScope CreateCoordinatedHoeingScope(InstanceIpcEnvelope? request,
+        Guid? jobId, Action<Guid, CoordinatedHoeingEvidence>? observe = null)
+        => new(request != null && InstanceIpcProtocol.GetStringOrNull(request.Data, "coordinatedHoeing") == "v1",
+            InstanceIpcProtocol.GetStringOrNull(request?.Data, "hoeingBatchId"),
+            (request?.Data?["hoeingParticipantUids"] as Newtonsoft.Json.Linq.JArray)?.Values<string>()!,
+            jobId is { } handle ? evidence =>
+            {
+                if (observe != null) observe(handle, evidence);
+                else if (BgiTaskCoordinator.IsCreated) BgiTaskCoordinator.Instance.RecordHoeingEvidence(handle, evidence);
+            } : null);
 
     // This configuration read happens before ExecutionScope.Start. A rejection here has
     // exact never-started proof for this job; an untyped failure would leave its exit unconfirmed.

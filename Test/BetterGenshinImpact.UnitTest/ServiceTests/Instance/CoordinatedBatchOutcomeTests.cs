@@ -17,7 +17,7 @@ public class CoordinatedBatchOutcomeTests
     [InlineData("failed", false, "hoeing_incomplete", true, "failed")]
     [InlineData("failed", false, "task_cancelled", true, "stopped")]
     [InlineData("failed", false, "task_cancelled", false, "unknown")]
-    [InlineData("failed", false, "task_start_failed", true, "unknown")]
+    [InlineData("failed", false, "task_start_failed", true, "failed")]
     [InlineData("not_found", false, null, true, "unknown")]
     [InlineData("future_status", false, null, false, "unknown")]
     public void ClassifiesOnlyConfirmedTerminals(string status, bool cancelled, string? error, bool stopping, string expected)
