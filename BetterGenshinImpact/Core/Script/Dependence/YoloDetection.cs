@@ -157,5 +157,9 @@ public sealed class YoloDetector : IDisposable
 public class YoloRegion(int x, int y, int width, int height, YoloPrediction detection, Region owner)
     : Region(x, y, width, height, owner, new TranslationConverter(x, y), owner.DrawingBoard)
 {
-    public YoloPrediction Detection { get; } = detection;
+    public int Id { get; } = detection.Name.Id;
+
+    public string Name { get; } = detection.Name.Name;
+
+    public float Confidence { get; } = detection.Confidence;
 }
