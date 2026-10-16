@@ -569,10 +569,10 @@ public class AutoHoeingTask : ISoloTask
             _logger.LogInformation("锄地一条龙任务启动，数据目录: {Dir}", _dataDir);
         }
 
+        // 查询当前任务直接读取这份实际配置；配置引用跟随本次执行，包含收尾阶段。
+        using var currentHoeing = BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.UseHoeingConfig(_config);
         try
         {
-            // 此配置已经应用配置组覆盖；单机锄地也使用相同进度标记，模式必须单独上报。
-            AutoHoeingProgress.BeginExecution(_config.MultiplayerEnabled);
             // 清空联机锄地队伍识别稳定性缓冲（每次任务启动重置一次）
             // 详见 .kiro/specs/combat-scenes-recognition-stability-buffer/design.md §2.3
             BetterGenshinImpact.GameTask.AutoFight.AutoFightTask.ResetRecognitionStabilityBuffer();

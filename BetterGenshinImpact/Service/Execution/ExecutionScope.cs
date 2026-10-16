@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoHoeing;
 
 namespace BetterGenshinImpact.Service.Execution;
 
@@ -21,6 +22,7 @@ public sealed class ExecutionScope : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly System.Collections.Generic.Dictionary<string, string> _configurationRevisions = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
+    private AutoHoeingConfig? _hoeingConfig; // 当前锄地任务实际使用的配置引用，不复制模式开关。
     private TargetedSuspendTarget? _suspendTarget;
     /// <summary>本次执行根已**被接纳并交给调用方**（Start 成功返回）。只有这类根的生命周期结束才产生退出凭证。</summary>
     private bool _admitted;
@@ -73,7 +75,36 @@ public sealed class ExecutionScope : IDisposable
             if (active is null || active._disposed) return null;
             return new ExecutionScopeSnapshot(active.ExecutionInstanceId, active.StateRevision, active.RunId,
                 active.Descriptor.JobId, active.Descriptor.Kind, active.Descriptor.Source,
-                active.Descriptor.Name, active._stopRequested, active.Result);
+                active.Descriptor.Name, active._stopRequested, active.Result, active._hoeingConfig?.MultiplayerEnabled);
+        }
+    }
+
+    /// <summary>当前任务使用实际配置；读取模式与执行身份共用根锁，退出后自动解除引用。</summary>
+    internal IDisposable UseHoeingConfig(AutoHoeingConfig config)
+    {
+        lock (Sync)
+        {
+            ThrowIfStopped();
+            var previous = _hoeingConfig;
+            _hoeingConfig = config;
+            AdvanceStateRevisionLocked();
+            return new HoeingConfigBinding(this, config, previous);
+        }
+    }
+
+    private sealed class HoeingConfigBinding(ExecutionScope owner, AutoHoeingConfig config, AutoHoeingConfig? previous) : IDisposable
+    {
+        private bool _released;
+        public void Dispose()
+        {
+            lock (Sync)
+            {
+                if (_released) return;
+                _released = true;
+                if (!ReferenceEquals(owner._hoeingConfig, config)) return;
+                owner._hoeingConfig = previous;
+                if (!owner._disposed) owner.AdvanceStateRevisionLocked();
+            }
         }
     }
 
@@ -455,6 +486,7 @@ public sealed class ExecutionScope : IDisposable
             if (!_disposed)
             {
                 _disposed = true;
+                _hoeingConfig = null;
                 if (ReferenceEquals(_active, this)) _active = null;
                 // Keep the original target's empty boundary even if a same-ticket successor
                 // starts before the suspend response or its duplicate request is delivered.
@@ -604,7 +636,8 @@ public sealed record ExecutionScopeSnapshot(
     JobSource Source,
     string Name,
     bool StopRequested,
-    TaskRunResult Result);
+    TaskRunResult Result,
+    bool? AutoHoeingMultiplayer = null);
 
 /// <summary>只由建根前的明确拒绝产生，绑定拒绝的job；普通OCE不代表零执行。</summary>
 internal sealed class ExecutionNotStartedException : OperationCanceledException

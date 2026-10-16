@@ -1030,14 +1030,9 @@ internal sealed class InstanceRequestHandler
             var isCancelled = !BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsDisposed
                 && BetterGenshinImpact.Core.Script.CancellationContext.Instance.IsCancellationRequested;
 
-            bool hoeing;
-            bool? hoeingMultiplayer;
-            lock (AutoHoeingProgress.Sync)
-            {
-                hoeing = AutoHoeingProgress.IsRunning;
-                hoeingMultiplayer = AutoHoeingProgress.MultiplayerMode;
-            }
+            var hoeing = AutoHoeingProgress.IsRunning;
             var executionSnapshot = BetterGenshinImpact.Service.Execution.ExecutionScope.GetActiveSnapshot();
+            var hoeingMultiplayer = executionSnapshot?.AutoHoeingMultiplayer;
             var taskSlotOccupied = BetterGenshinImpact.GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0;
 
             // 从 RunnerContext 获取当前脚本项目信息

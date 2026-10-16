@@ -11,16 +11,6 @@ public static class AutoHoeingProgress
     /// <summary>是否已进入锄地进度；单机和联机共用，不能据此判断联机身份。</summary>
     public static volatile bool IsRunning;
 
-    private static bool? _multiplayerMode;
-    /// <summary>当前实际执行配置的模式；null 表示没有已确认的原生锄地模式。</summary>
-    public static bool? MultiplayerMode { get { lock (Sync) return _multiplayerMode; } }
-
-    /// <summary>在进入组队/路线阶段前记录覆盖配置后的实际模式，不改变原有进度信号时机。</summary>
-    public static void BeginExecution(bool multiplayerEnabled)
-    {
-        lock (Sync) _multiplayerMode = multiplayerEnabled;
-    }
-
     /// <summary>轮次前缀，如 "[第 1/4 轮 茶包s] "。</summary>
     public static string RoundPrefix = string.Empty;
 
@@ -47,7 +37,6 @@ public static class AutoHoeingProgress
         lock (Sync)
         {
             IsRunning = false;
-            _multiplayerMode = null;
             RoundPrefix = string.Empty;
             CurrentRouteIndex = 0;
             TotalRoutes = 0;
