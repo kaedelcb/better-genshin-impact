@@ -197,7 +197,7 @@ internal static class WindowsAutoStartupRegistration
         }
     }
 
-    private static string? ReadTaskXml(object folder, string taskName)
+    internal static string? ReadTaskXml(object folder, string taskName)
     {
         object? task = null;
         try
@@ -205,7 +205,9 @@ internal static class WindowsAutoStartupRegistration
             task = ((dynamic)folder).GetTask(taskName);
             return (string)((dynamic)task).Xml;
         }
-        catch (COMException ex) when (ex.HResult is unchecked((int)0x80070002) or unchecked((int)0x80070003))
+        // COM 互操作会把缺失任务的 HRESULT 映射为 FileNotFoundException/DirectoryNotFoundException。
+        // 仅将任务不存在视为无登记；权限、服务及其他读取失败仍向上传播。
+        catch (Exception ex) when (ex.HResult is unchecked((int)0x80070002) or unchecked((int)0x80070003))
         {
             return null;
         }

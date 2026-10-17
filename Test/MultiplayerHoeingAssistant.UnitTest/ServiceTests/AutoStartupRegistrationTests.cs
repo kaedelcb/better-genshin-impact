@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Xml.Linq;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -29,6 +30,71 @@ public class AutoStartupRegistrationTests
     public void HistoricalValueNames_ContainsOnlyTheKnownLegacyAssistantValue()
     {
         Assert.Equal([AutoStartupRegistration.LegacyValueName], AutoStartupRegistration.HistoricalValueNames);
+    }
+
+    [Theory]
+    [InlineData("managed-file")]
+    [InlineData("managed-directory")]
+    [InlineData("com-file")]
+    [InlineData("com-directory")]
+    public void ReadTaskXml_MissingTaskReturnsNullForManagedAndComExceptionMappings(string failureKind)
+    {
+        Exception failure = failureKind switch
+        {
+            "managed-file" => new FileNotFoundException("任务不存在"),
+            "managed-directory" => new DirectoryNotFoundException("任务目录不存在"),
+            "com-file" => new COMException("任务不存在", unchecked((int)0x80070002)),
+            "com-directory" => new COMException("任务目录不存在", unchecked((int)0x80070003)),
+            _ => throw new ArgumentException(nameof(failureKind))
+        };
+
+        Assert.Null(WindowsAutoStartupRegistration.ReadTaskXml(new ThrowingTaskFolder(failure), "missing-task"));
+    }
+
+    [Theory]
+    [InlineData("managed-access-denied")]
+    [InlineData("com-access-denied")]
+    [InlineData("other-io")]
+    public void ReadTaskXml_DoesNotTreatAccessDeniedOrOtherFailuresAsAMissingTask(string failureKind)
+    {
+        Exception failure = failureKind switch
+        {
+            "managed-access-denied" => new UnauthorizedAccessException("禁止读取任务"),
+            "com-access-denied" => new COMException("禁止读取任务", unchecked((int)0x80070005)),
+            "other-io" => new IOException("其他读取失败"),
+            _ => throw new ArgumentException(nameof(failureKind))
+        };
+
+        var actual = Assert.ThrowsAny<Exception>(() =>
+            WindowsAutoStartupRegistration.ReadTaskXml(new ThrowingTaskFolder(failure), "unreadable-task"));
+
+        Assert.Same(failure, actual);
+    }
+
+    [Fact]
+    [Trait("Category", "WindowsTaskSchedulerReadOnly")]
+    public void ReadTaskXml_NativeWindowsSchedulerMissingTaskReturnsNullWithoutRegisteringAnything()
+    {
+        Assert.True(OperatingSystem.IsWindows(), "此只读原生回归需要 Windows 任务计划服务。");
+        object? service = null;
+        object? folder = null;
+        try
+        {
+            var schedulerType = Type.GetTypeFromProgID("Schedule.Service", throwOnError: true)!;
+            service = Activator.CreateInstance(schedulerType)!;
+            ((dynamic)service).Connect();
+            folder = ((dynamic)service).GetFolder("\\");
+
+            var result = WindowsAutoStartupRegistration.ReadTaskXml(folder,
+                "NexusBGI_ReadOnlyMissing_" + Guid.NewGuid().ToString("N"));
+
+            Assert.Null(result);
+        }
+        finally
+        {
+            if (folder is not null && Marshal.IsComObject(folder)) Marshal.FinalReleaseComObject(folder);
+            if (service is not null && Marshal.IsComObject(service)) Marshal.FinalReleaseComObject(service);
+        }
     }
 
     [Fact]
@@ -311,5 +377,10 @@ public class AutoStartupRegistrationTests
         typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
             .SetValue(viewModel, config);
         return (viewModel, config);
+    }
+
+    public sealed class ThrowingTaskFolder(Exception failure)
+    {
+        public object GetTask(string taskName) => throw failure;
     }
 }
