@@ -17,11 +17,11 @@ public partial class App : Application
     /// 单例互斥体，按会话隔离：不同 Windows 用户会话的助手互不干扰。
     /// 不加 SessionId 过滤时，多用户下会话 B 的助手会阻止会话 A 的助手启动。
     /// </summary>
-    private static readonly Mutex _instanceMutex = new(true,
-        $"NexusBGI_InstanceMutex_{AssistantInstanceScope.CurrentSuffix}");
+    private static readonly Lazy<Mutex> _instanceMutex = new(() => new Mutex(true,
+        $"NexusBGI_InstanceMutex_{AssistantInstanceScope.CurrentSuffix}"));
     /// <summary>跨进程弹窗通知事件：第二个实例启动时触发，第一个实例收到后弹窗到前台。</summary>
-    private static readonly EventWaitHandle _showWindowEvent = new(false, EventResetMode.AutoReset,
-        $"NexusBGI_ShowWindowEvent_{AssistantInstanceScope.CurrentSuffix}");
+    private static readonly Lazy<EventWaitHandle> _showWindowEvent = new(() => new EventWaitHandle(false, EventResetMode.AutoReset,
+        $"NexusBGI_ShowWindowEvent_{AssistantInstanceScope.CurrentSuffix}"));
     private TaskbarIcon? _trayIcon;
     private bool _startMinimized;
     private MainWindow? _mainWindow;
@@ -39,13 +39,20 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // 配置提权进程只处理当前账户的登录任务，不进入单例、配置或业务初始化。
+        if (WindowsAutoStartupRegistration.TryHandleConfigurationArguments(e.Args, out var configurationExitCode))
+        {
+            Shutdown(configurationExitCode);
+            return;
+        }
+
         LaunchIntent = StartupLaunchIntent.FromArguments(e.Args);
         // 单例检测：第二个实例时触发事件让第一个实例弹窗，然后退出
-        if (!_instanceMutex.WaitOne(TimeSpan.Zero, true))
+        if (!_instanceMutex.Value.WaitOne(TimeSpan.Zero, true))
         {
             try
             {
-                _showWindowEvent.Set();
+                _showWindowEvent.Value.Set();
             }
             catch
             {
@@ -76,10 +83,9 @@ public partial class App : Application
         // 注意：开机自启动注册时根据 AutoLaunchOnBootMinimized 决定是否带 --minimized 参数，
         // _startMinimized 始终由命令行参数 --minimized 决定（开机自启动时自动带此参数），
         // 这里不再重复覆盖 _startMinimized，避免手动启动时被误设为静默。
+        AutoStartupRegistrationResult? autoStartupResult = null;
         if (_appConfig.AutoLaunchOnBoot && !e.Args.Contains("--no-auto-launch"))
-        {
-            RegisterAutoStartup(_appConfig.AutoLaunchOnBootMinimized);
-        }
+            autoStartupResult = RegisterAutoStartup(_appConfig.AutoLaunchOnBootMinimized);
 
         // 全局异常处理
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -137,6 +143,13 @@ public partial class App : Application
         {
             // 弹窗启动：正常显示
             _mainWindow.Show();
+        }
+
+        if (autoStartupResult is { Success: false })
+        {
+            RuntimeLog.WriteLine("[登录自启动] " + autoStartupResult.Message);
+            MessageBox.Show(autoStartupResult.Message, "登录自启动未完成",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
 
         // 窗口关闭时最小化到托盘而不是退出
@@ -245,64 +258,13 @@ public partial class App : Application
         catch { }
     }
 
-    /// <summary>
-    /// 注册开机自启动到当前 Windows 用户的 Run 键。
-    /// 每次登记都以当前运行的助手路径为准，并清理旧版本留下的值名，
-    /// 避免迁移后同一用户同时启动旧目录和新目录。
-    /// 静态方法：供设置页即时生效调用。
-    /// </summary>
-    /// <param name="minimized">是否带 --minimized 参数静默启动</param>
-    internal static void RegisterAutoStartup(bool minimized = true)
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                AutoStartupRegistration.RunKeyPath, true);
-            if (key == null) return;
+    /// <summary>为当前 Windows 账户登记最高可用权限的登录启动任务。</summary>
+    internal static AutoStartupRegistrationResult RegisterAutoStartup(bool minimized = true, bool allowElevation = true)
+        => WindowsAutoStartupRegistration.Apply(true, minimized, allowElevation);
 
-            var exePath = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exePath)) return;
-
-            var targetValue = AutoStartupRegistration.BuildCommand(exePath, minimized);
-            var existing = key.GetValue(AutoStartupRegistration.ValueName) as string;
-
-            if (existing != targetValue)
-            {
-                key.SetValue(AutoStartupRegistration.ValueName, targetValue,
-                    Microsoft.Win32.RegistryValueKind.String);
-            }
-
-            // 旧版本曾使用 MultiplayerHoeingAssistant 作为值名；只清理本助手明确拥有的历史值，
-            // 其他用户启动项和其他程序启动项保持不变。
-            foreach (var legacyName in AutoStartupRegistration.HistoricalValueNames)
-                key.DeleteValue(legacyName, false);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"注册开机自启动失败: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// 取消开机自启动注册。静态方法：供设置页即时生效调用。
-    /// </summary>
-    internal static void UnregisterAutoStartup()
-    {
-        try
-        {
-            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                AutoStartupRegistration.RunKeyPath, true);
-            if (key == null) return;
-
-            key.DeleteValue(AutoStartupRegistration.ValueName, false);
-            foreach (var legacyName in AutoStartupRegistration.HistoricalValueNames)
-                key.DeleteValue(legacyName, false);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"取消开机自启动失败: {ex.Message}");
-        }
-    }
+    /// <summary>移除当前 Windows 账户的登录任务和本助手历史 Run 登记。</summary>
+    internal static AutoStartupRegistrationResult UnregisterAutoStartup(bool allowElevation = true)
+        => WindowsAutoStartupRegistration.Apply(false, false, allowElevation);
 
     /// <summary>
     /// 检测 BGI 进程是否正在运行（仅统计当前 Windows 会话，避免多用户下误判别会话的 BGI）。
@@ -442,11 +404,7 @@ public partial class App : Application
         _mainViewModel?.Shutdown();
         _mainViewModel = null;
 
-        // 重新检查开机自启动注册：如果用户关闭了开关，取消注册
-        if (_appConfig != null && !_appConfig.AutoLaunchOnBoot)
-        {
-            UnregisterAutoStartup();
-        }
+        // 设置入口已即时登记或移除；退出时不能使用启动时的旧配置反向删除登记。
 
         base.OnExit(e);
     }
@@ -554,7 +512,7 @@ public partial class App : Application
             {
                 while (true)
                 {
-                    _showWindowEvent.WaitOne();
+                    _showWindowEvent.Value.WaitOne();
                     Application.Current.Dispatcher.Invoke(ShowWindow);
                 }
             }

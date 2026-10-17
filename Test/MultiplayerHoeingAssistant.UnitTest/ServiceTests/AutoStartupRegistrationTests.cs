@@ -1,10 +1,18 @@
+using System.Reflection;
+using System.Xml.Linq;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.ViewModels;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 public class AutoStartupRegistrationTests
 {
+    private const string UserSid = "S-1-5-21-123456789-234567890-345678901-1001";
+    private const string OtherUserSid = "S-1-5-21-123456789-234567890-345678901-1002";
+    private static readonly XNamespace TaskNamespace = "http://schemas.microsoft.com/windows/2004/02/mit/task";
+
     [Theory]
     [InlineData(true, " --minimized --no-auto-launch")]
     [InlineData(false, " --no-auto-launch")]
@@ -21,5 +29,242 @@ public class AutoStartupRegistrationTests
     public void HistoricalValueNames_ContainsOnlyTheKnownLegacyAssistantValue()
     {
         Assert.Equal([AutoStartupRegistration.LegacyValueName], AutoStartupRegistration.HistoricalValueNames);
+    }
+
+    [Fact]
+    public void BuildTaskName_IsStableForOneUserAndSeparateForDifferentUsers()
+    {
+        var taskName = AutoStartupRegistration.BuildTaskName(UserSid);
+
+        Assert.Equal(taskName, AutoStartupRegistration.BuildTaskName(UserSid));
+        Assert.NotEqual(taskName, AutoStartupRegistration.BuildTaskName(OtherUserSid));
+        Assert.DoesNotContain('\\', taskName);
+        Assert.DoesNotContain('/', taskName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("汐")]
+    [InlineData("S-1-5-21-123456789-234567890-345678901-1001\\OtherTask")]
+    public void BuildTaskName_RejectsNonSidTaskIdentity(string userSid)
+    {
+        Assert.ThrowsAny<ArgumentException>(() => AutoStartupRegistration.BuildTaskName(userSid));
+    }
+
+    [Fact]
+    public void BuildTaskXml_UsesTheSameAccountForLogonTriggerAndElevatedInteractiveProcess()
+    {
+        var task = ParseTask(minimized: false);
+        var trigger = Assert.Single(task.Element(TaskNamespace + "Triggers")!.Elements());
+        var principal = Assert.Single(task.Element(TaskNamespace + "Principals")!.Elements());
+
+        Assert.Equal(TaskNamespace + "LogonTrigger", trigger.Name);
+        Assert.Equal(UserSid, trigger.Element(TaskNamespace + "UserId")?.Value);
+        Assert.Equal(UserSid, principal.Element(TaskNamespace + "UserId")?.Value);
+        Assert.Equal("InteractiveToken", principal.Element(TaskNamespace + "LogonType")?.Value);
+        Assert.Equal("HighestAvailable", principal.Element(TaskNamespace + "RunLevel")?.Value);
+        Assert.Equal(AutoStartupRegistration.TaskOwnershipMarker,
+            task.Element(TaskNamespace + "RegistrationInfo")?.Element(TaskNamespace + "Source")?.Value);
+    }
+
+    [Fact]
+    public void BuildTaskXml_StandardAccountUsesItsOwnInteractiveTokenWithoutElevation()
+    {
+        var task = XDocument.Parse(AutoStartupRegistration.BuildTaskXml(
+            Path.GetFullPath(Path.Combine("bin", "MultiplayerHoeingAssistant.exe")), UserSid,
+            minimized: false, highestAvailable: false)).Root!;
+        var principal = Assert.Single(task.Element(TaskNamespace + "Principals")!.Elements());
+
+        Assert.Equal(UserSid, principal.Element(TaskNamespace + "UserId")?.Value);
+        Assert.Equal("InteractiveToken", principal.Element(TaskNamespace + "LogonType")?.Value);
+        Assert.Equal("LeastPrivilege", principal.Element(TaskNamespace + "RunLevel")?.Value);
+    }
+
+    [Theory]
+    [InlineData(false, "--no-auto-launch")]
+    [InlineData(true, "--minimized --no-auto-launch")]
+    public void BuildTaskXml_PreservesTheExecutableWorkingDirectoryAndWindowPreference(bool minimized,
+        string expectedArguments)
+    {
+        var executablePath = Path.Combine(Path.GetTempPath(), "汐 & BGI", "Tools", "MultiplayerHoeingAssistant.exe");
+        var task = XDocument.Parse(AutoStartupRegistration.BuildTaskXml(executablePath, UserSid, minimized)).Root!;
+        var action = Assert.Single(task.Element(TaskNamespace + "Actions")!.Elements());
+
+        Assert.Equal(TaskNamespace + "Exec", action.Name);
+        Assert.Equal(Path.GetFullPath(executablePath), action.Element(TaskNamespace + "Command")?.Value);
+        Assert.Equal(Path.GetDirectoryName(Path.GetFullPath(executablePath)),
+            action.Element(TaskNamespace + "WorkingDirectory")?.Value);
+        Assert.Equal(expectedArguments, action.Element(TaskNamespace + "Arguments")?.Value);
+    }
+
+    [Fact]
+    public void BuildTaskXml_AllowsLongRunningAssistantsAcrossRdpSessionsAndOnBattery()
+    {
+        var settings = ParseTask(minimized: false).Element(TaskNamespace + "Settings")!;
+
+        Assert.Equal("Parallel", settings.Element(TaskNamespace + "MultipleInstancesPolicy")?.Value);
+        Assert.Equal("PT0S", settings.Element(TaskNamespace + "ExecutionTimeLimit")?.Value);
+        Assert.Equal("false", settings.Element(TaskNamespace + "DisallowStartIfOnBatteries")?.Value);
+        Assert.Equal("false", settings.Element(TaskNamespace + "StopIfGoingOnBatteries")?.Value);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConfigurationArguments_RoundTripTheRequestedSettingForTheSameAccount(bool enabled, bool minimized)
+    {
+        var arguments = AutoStartupRegistration.BuildConfigurationArguments(enabled, minimized, UserSid);
+
+        Assert.True(AutoStartupRegistration.TryParseConfigurationArguments(arguments, UserSid,
+            out var parsedEnabled, out var parsedMinimized));
+        Assert.Equal(enabled, parsedEnabled);
+        Assert.Equal(minimized, parsedMinimized);
+        Assert.False(AutoStartupRegistration.TryParseConfigurationArguments(arguments, OtherUserSid, out _, out _));
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidConfigurationArguments))]
+    public void TryParseConfigurationArguments_RejectsMalformedHelperRequests(string[] arguments)
+    {
+        Assert.False(AutoStartupRegistration.TryParseConfigurationArguments(arguments, UserSid, out _, out _));
+    }
+
+    [Theory]
+    [InlineData(false, true, true, 0, true)]
+    [InlineData(true, false, false, 0, true)]
+    [InlineData(true, false, true, 1, false)]
+    public void ConfigureAutoStartup_FailedRegistrationPreservesThePreviousSettingAndRefreshesBindings(
+        bool previouslyEnabled, bool previouslyMinimized, bool requestedEnabled, int requestedMode,
+        bool allowElevation)
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "设置入口测试必须使用隔离 NEXUSBGI_DATA_ROOT。");
+        var config = new AssistConfig
+        {
+            AutoLaunchOnBoot = previouslyEnabled,
+            AutoLaunchOnBootMinimized = previouslyMinimized
+        };
+        var viewModel = new MainViewModel();
+        typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(viewModel, config);
+        var requests = new List<(bool Enabled, bool Minimized, bool AllowElevation)>();
+        viewModel.AutoStartupApply = (enabled, minimized, elevation) =>
+        {
+            requests.Add((enabled, minimized, elevation));
+            return new AutoStartupRegistrationResult(false, "测试拒绝登记");
+        };
+        var changedProperties = new List<string?>();
+        viewModel.PropertyChanged += (_, change) => changedProperties.Add(change.PropertyName);
+
+        var result = viewModel.ConfigureAutoStartup(requestedEnabled, requestedMode, allowElevation);
+
+        Assert.False(result.Success);
+        Assert.Equal("测试拒绝登记", result.Message);
+        Assert.Equal((requestedEnabled, requestedMode == 1, allowElevation), Assert.Single(requests));
+        Assert.Equal(previouslyEnabled, config.AutoLaunchOnBoot);
+        Assert.Equal(previouslyMinimized, config.AutoLaunchOnBootMinimized);
+        Assert.Equal(previouslyEnabled, viewModel.AutoLaunchOnBoot);
+        Assert.Equal(previouslyMinimized ? 1 : 0, viewModel.AutoLaunchOnBootModeIndex);
+        Assert.Contains(nameof(MainViewModel.AutoLaunchOnBoot), changedProperties);
+        Assert.Contains(nameof(MainViewModel.AutoLaunchOnBootModeIndex), changedProperties);
+    }
+
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void ConfigureAutoStartup_FailedSaveRestoresPreviousSettingsAndReportsIncompleteRecovery(
+        bool configurationRestored, bool registrationRestored)
+    {
+        var (viewModel, config) = ConfiguredViewModel(enabled: false, minimized: true);
+        var requests = new List<(bool Enabled, bool Minimized, bool AllowElevation)>();
+        viewModel.AutoStartupApply = (enabled, minimized, elevation) =>
+        {
+            requests.Add((enabled, minimized, elevation));
+            return new AutoStartupRegistrationResult(requests.Count == 1 || registrationRestored,
+                "测试登记恢复结果");
+        };
+        var saves = new List<(bool Enabled, bool Minimized)>();
+        viewModel.AutoStartupPersist = () =>
+        {
+            saves.Add((config.AutoLaunchOnBoot, config.AutoLaunchOnBootMinimized));
+            return saves.Count == 1
+                ? new AutoStartupRegistrationResult(false, "测试首次保存失败")
+                : new AutoStartupRegistrationResult(configurationRestored, "测试配置恢复结果");
+        };
+
+        var result = viewModel.ConfigureAutoStartup(enabled: true, modeIndex: 0, allowElevation: false);
+
+        Assert.False(result.Success);
+        Assert.Contains("测试首次保存失败", result.Message);
+        if (configurationRestored && registrationRestored)
+        {
+            Assert.Contains("已恢复原来的自启动设置", result.Message);
+            Assert.DoesNotContain("实际自启动状态未确认", result.Message);
+        }
+        else Assert.Contains("实际自启动状态未确认", result.Message);
+        Assert.Equal(new[] { (true, false, false), (false, true, false) }, requests);
+        Assert.Equal(new[] { (true, false), (false, true) }, saves);
+        Assert.False(config.AutoLaunchOnBoot);
+        Assert.True(config.AutoLaunchOnBootMinimized);
+        Assert.False(viewModel.AutoLaunchOnBoot);
+        Assert.Equal(1, viewModel.AutoLaunchOnBootModeIndex);
+    }
+
+    [Fact]
+    public void ConfigureAutoStartup_SucceedsOnlyAfterRegistrationAndPersistenceAreConfirmed()
+    {
+        var (viewModel, config) = ConfiguredViewModel(enabled: false, minimized: true);
+        var operations = new List<string>();
+        viewModel.AutoStartupApply = (enabled, minimized, elevation) =>
+        {
+            Assert.True(enabled);
+            Assert.False(minimized);
+            Assert.False(elevation);
+            Assert.False(config.AutoLaunchOnBoot);
+            Assert.True(config.AutoLaunchOnBootMinimized);
+            operations.Add("registration");
+            return new AutoStartupRegistrationResult(true, "测试登记成功");
+        };
+        viewModel.AutoStartupPersist = () =>
+        {
+            Assert.Equal(new[] { "registration" }, operations);
+            Assert.True(config.AutoLaunchOnBoot);
+            Assert.False(config.AutoLaunchOnBootMinimized);
+            operations.Add("persistence");
+            return new AutoStartupRegistrationResult(true, "测试保存确认成功");
+        };
+
+        var result = viewModel.ConfigureAutoStartup(enabled: true, modeIndex: 0, allowElevation: false);
+
+        Assert.True(result.Success);
+        Assert.Equal(new[] { "registration", "persistence" }, operations);
+        Assert.True(viewModel.AutoLaunchOnBoot);
+        Assert.Equal(0, viewModel.AutoLaunchOnBootModeIndex);
+    }
+
+    public static IEnumerable<object[]> InvalidConfigurationArguments()
+    {
+        yield return [Array.Empty<string>()];
+        yield return [new[] { AutoStartupRegistration.ConfigurationArgument, "enable", "popup" }];
+        yield return [new[] { "--another-command", "enable", "popup", UserSid }];
+        yield return [new[] { AutoStartupRegistration.ConfigurationArgument, "unknown", "popup", UserSid }];
+        yield return [new[] { AutoStartupRegistration.ConfigurationArgument, "enable", "unknown", UserSid }];
+        yield return [new[] { AutoStartupRegistration.ConfigurationArgument, "enable", "popup", "汐" }];
+        yield return [new[] { AutoStartupRegistration.ConfigurationArgument, "enable", "popup", UserSid, "extra" }];
+    }
+
+    private static XElement ParseTask(bool minimized) => XDocument.Parse(AutoStartupRegistration.BuildTaskXml(
+        Path.GetFullPath(Path.Combine("bin", "MultiplayerHoeingAssistant.exe")), UserSid, minimized)).Root!;
+
+    private static (MainViewModel ViewModel, AssistConfig Config) ConfiguredViewModel(bool enabled, bool minimized)
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "设置入口测试必须使用隔离 NEXUSBGI_DATA_ROOT。");
+        var config = new AssistConfig { AutoLaunchOnBoot = enabled, AutoLaunchOnBootMinimized = minimized };
+        var viewModel = new MainViewModel();
+        typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(viewModel, config);
+        return (viewModel, config);
     }
 }

@@ -343,8 +343,8 @@
                             <StackPanel Grid.Column="1" Margin="0,0,14,0">
                                 <TextBlock Text="开机自启动" FontSize="13" FontWeight="Medium"
                                            Foreground="{DynamicResource White}"/>
-                                <TextBlock Text="系统启动时自动启动助手"
-                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                                <TextBlock Text="登录后以当前账户的最高可用权限启动；首次设置可能需要管理员授权"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <ComboBox Grid.Column="2" Width="150"
                                       IsEnabled="{Binding AutoLaunchOnBoot}"

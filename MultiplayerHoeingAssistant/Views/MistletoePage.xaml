@@ -1370,7 +1370,8 @@
                                      导出发给其他机器、导入兼容单方案与整库两种文件，导入只入方案库不改动当前配置） -->
                                 <WrapPanel>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
-                                        <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
+                                        <CheckBox IsChecked="{Binding AutoLaunchOnBoot, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
+                                                  ToolTip="登录后以当前账户的最高可用权限启动；首次设置可能需要管理员授权"/>
                                         <TextBlock Text="开机启动" FontSize="12" Foreground="{DynamicResource White}" VerticalAlignment="Center"
                                                    ToolTip="助手随系统开机自启动；与「设置 → 启动策略」是同一个开关，两边实时同步"
                                                    ToolTipService.InitialShowDelay="0"/>

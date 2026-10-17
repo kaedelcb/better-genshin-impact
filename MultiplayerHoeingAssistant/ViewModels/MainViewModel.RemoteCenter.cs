@@ -210,8 +210,10 @@ public partial class MainViewModel
                 using var json = JsonDocument.Parse(request.PayloadJson ?? "{}");
                 var enabled = json.RootElement.GetProperty("enabled").GetBoolean();
                 var mode = json.RootElement.GetProperty("modeIndex").GetInt32();
-                mistletoe.AutoLaunchOnBootModeIndex = mode;
-                mistletoe.AutoLaunchOnBoot = enabled;
+                // 远程请求不能代替目标账户确认 UAC；无权限时明确返回失败。
+                var registration = ConfigureAutoStartup(enabled, mode, allowElevation: false);
+                if (!registration.Success)
+                    return RemoteCenterReply.Rejected(registration.Message);
                 return RemoteCenterReply.Ok(revision: AutoLaunchRevision(mistletoe),
                     message: "执行端开机自启动设置已应用");
             }

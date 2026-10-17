@@ -6321,26 +6321,83 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>开机自启动（开关，切换即保存 + 即时生效）</summary>
+    /// <summary>开机自启动：系统登记成功后才更新设置。</summary>
     public bool AutoLaunchOnBoot
     {
         get => _config?.AutoLaunchOnBoot ?? false;
         set
         {
-            if (_config != null && _config.AutoLaunchOnBoot != value)
+            if (_config is null || _config.AutoLaunchOnBoot == value) return;
+            var result = ConfigureAutoStartup(value, AutoLaunchOnBootModeIndex);
+            if (!result.Success) ReportAutoStartupFailure(result);
+        }
+    }
+
+    internal Func<bool, bool, bool, AutoStartupRegistrationResult> AutoStartupApply { get; set; }
+        = (enabled, minimized, allowElevation) => enabled
+            ? App.RegisterAutoStartup(minimized, allowElevation)
+            : App.UnregisterAutoStartup(allowElevation);
+
+    internal AutoStartupRegistrationResult ConfigureAutoStartup(bool enabled, int modeIndex, bool allowElevation = true)
+    {
+        if (_config is null) return new(false, "助手配置尚未加载，请稍后重试。");
+        if (modeIndex is not (0 or 1)) return new(false, "启动方式无效，请重新选择弹窗或托盘。");
+        var previousEnabled = _config.AutoLaunchOnBoot;
+        var previousMinimized = _config.AutoLaunchOnBootMinimized;
+        var result = AutoStartupApply(enabled, modeIndex == 1, allowElevation);
+        if (result.Success)
+        {
+            _config.AutoLaunchOnBoot = enabled;
+            _config.AutoLaunchOnBootMinimized = modeIndex == 1;
+            var persistence = PersistAutoStartupSettings();
+            if (!persistence.Success)
             {
-                _config.AutoLaunchOnBoot = value;
-                SaveConfig();
-                OnPropertyChanged();
-                // 即时生效：开关切换立即注册/取消注册。
-                // 注册命令行里是否带 --minimized 必须跟随模式下拉（AutoLaunchOnBootMinimized），
-                // 不能用默认值——否则永远注册成静默启动，弹窗模式不生效
-                if (value)
-                    App.RegisterAutoStartup(_config.AutoLaunchOnBootMinimized);
-                else
-                    App.UnregisterAutoStartup();
+                _config.AutoLaunchOnBoot = previousEnabled;
+                _config.AutoLaunchOnBootMinimized = previousMinimized;
+                var restoreConfiguration = PersistAutoStartupSettings();
+                var restoreRegistration = AutoStartupApply(previousEnabled, previousMinimized, allowElevation);
+                var restored = restoreConfiguration.Success && restoreRegistration.Success;
+                result = new(false, persistence.Message + (restored
+                    ? " 已恢复原来的自启动设置。"
+                    : " 原设置未能完整恢复，实际自启动状态未确认："
+                        + restoreConfiguration.Message + " " + restoreRegistration.Message)) { StateUnconfirmed = !restored };
             }
         }
+        // 失败时通知绑定读回旧值，不能把取消授权显示为已开启。
+        OnPropertyChanged(nameof(AutoLaunchOnBoot));
+        OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
+        return result;
+    }
+
+    internal Func<AutoStartupRegistrationResult>? AutoStartupPersist { get; set; }
+
+    private AutoStartupRegistrationResult PersistAutoStartupSettings()
+    {
+        try
+        {
+            if (AutoStartupPersist is not null) return AutoStartupPersist();
+            if (_configManager is null || _config is null)
+                return new(false, "助手配置尚未加载，无法保存登录自启动设置。");
+            SaveConfig();
+            using var document = System.Text.Json.JsonDocument.Parse(_configManager.ReadRawJson());
+            var root = document.RootElement;
+            if (root.TryGetProperty("autoLaunchOnBoot", out var enabled)
+                && enabled.GetBoolean() == _config.AutoLaunchOnBoot
+                && root.TryGetProperty("autoLaunchOnBootMinimized", out var minimized)
+                && minimized.GetBoolean() == _config.AutoLaunchOnBootMinimized)
+                return new(true, "登录自启动设置已保存并读回确认。");
+            return new(false, "登录自启动设置保存后的读回不一致。");
+        }
+        catch (Exception ex)
+        {
+            return new(false, "登录自启动设置保存失败：" + ex.GetBaseException().Message);
+        }
+    }
+
+    private void ReportAutoStartupFailure(AutoStartupRegistrationResult result)
+    {
+        AddLog("[登录自启动] " + result.Message);
+        MessageBox.Show(result.Message, "登录自启动设置未完成", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
     /// <summary>守护 BGI（开关，切换即保存 + 即时生效）</summary>
@@ -6394,12 +6451,14 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var minimized = value == 1;
                 if (_config.AutoLaunchOnBootMinimized != minimized)
                 {
+                    if (_config.AutoLaunchOnBoot)
+                    {
+                        var result = ConfigureAutoStartup(true, value);
+                        if (!result.Success) ReportAutoStartupFailure(result);
+                        return;
+                    }
                     _config.AutoLaunchOnBootMinimized = minimized;
                     SaveConfig();
-                    // 模式烤在开机启动的注册表命令行里（--minimized 参数），
-                    // 开关开着时改模式必须立即重注册，否则要等下次助手启动才会纠正
-                    if (_config.AutoLaunchOnBoot)
-                        App.RegisterAutoStartup(minimized);
                 }
                 // 必须通知：启动中心与设置页绑同一属性，靠它跨页实时刷新
                 OnPropertyChanged();
