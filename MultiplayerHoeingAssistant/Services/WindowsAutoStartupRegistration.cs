@@ -291,7 +291,7 @@ internal static class WindowsAutoStartupRegistration
             && IsSameUser(triggers[0].Element(ns + "UserId")?.Value, sid);
     }
 
-    private static bool MatchesTask(string xml, string sid, string executablePath, bool minimized, bool highestAvailable)
+    internal static bool MatchesTask(string xml, string sid, string executablePath, bool minimized, bool highestAvailable)
     {
         if (!IsOwnedTask(xml, sid)) return false;
         var task = ParseTask(xml);
@@ -307,7 +307,7 @@ internal static class WindowsAutoStartupRegistration
         return principal.Element(ns + "LogonType")?.Value == "InteractiveToken"
             && principal.Element(ns + "RunLevel")?.Value == (highestAvailable ? "HighestAvailable" : "LeastPrivilege")
             && (string?)actions!.Attribute("Context") == (string?)principal.Attribute("id")
-            && IsTrue(trigger.Element(ns + "Enabled"))
+            && IsTrue(trigger.Element(ns + "Enabled"), defaultValue: true)
             && IsUnlimited(trigger.Element(ns + "ExecutionTimeLimit"))
             && trigger.Element(ns + "StartBoundary") is null
             && trigger.Element(ns + "EndBoundary") is null
@@ -317,15 +317,15 @@ internal static class WindowsAutoStartupRegistration
             && action.Element(ns + "Arguments")?.Value == AutoStartupRegistration.BuildArguments(minimized)
             && SamePath(action.Element(ns + "WorkingDirectory")?.Value, Path.GetDirectoryName(executablePath)!)
             && settings.Element(ns + "MultipleInstancesPolicy")?.Value == "Parallel"
-            && IsFalse(settings.Element(ns + "DisallowStartIfOnBatteries"))
-            && IsFalse(settings.Element(ns + "StopIfGoingOnBatteries"))
-            && IsFalse(settings.Element(ns + "RunOnlyIfNetworkAvailable"))
-            && IsFalse(settings.Element(ns + "RunOnlyIfIdle"))
-            && IsTrue(settings.Element(ns + "StartWhenAvailable"))
-            && IsFalse(settings.Element(ns + "AllowHardTerminate"))
-            && IsFalse(settings.Element(ns + "IdleSettings")?.Element(ns + "StopOnIdleEnd"))
-            && IsFalse(settings.Element(ns + "DisallowStartOnRemoteAppSession"))
-            && IsTrue(settings.Element(ns + "Enabled"))
+            && IsFalse(settings.Element(ns + "DisallowStartIfOnBatteries"), defaultValue: true)
+            && IsFalse(settings.Element(ns + "StopIfGoingOnBatteries"), defaultValue: true)
+            && IsFalse(settings.Element(ns + "RunOnlyIfNetworkAvailable"), defaultValue: false)
+            && IsFalse(settings.Element(ns + "RunOnlyIfIdle"), defaultValue: false)
+            && IsTrue(settings.Element(ns + "StartWhenAvailable"), defaultValue: false)
+            && IsFalse(settings.Element(ns + "AllowHardTerminate"), defaultValue: true)
+            && IsFalse(settings.Element(ns + "IdleSettings")?.Element(ns + "StopOnIdleEnd"), defaultValue: true)
+            && IsFalse(settings.Element(ns + "DisallowStartOnRemoteAppSession"), defaultValue: false)
+            && IsTrue(settings.Element(ns + "Enabled"), defaultValue: true)
             && IsUnlimited(settings.Element(ns + "ExecutionTimeLimit"));
     }
 
@@ -356,8 +356,11 @@ internal static class WindowsAutoStartupRegistration
             && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(actualPath)),
                 Path.TrimEndingDirectorySeparator(Path.GetFullPath(expectedPath)), StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsTrue(XElement? value) => value?.Value is "true" or "1";
-    private static bool IsFalse(XElement? value) => value?.Value is "false" or "0";
+    // 任务计划程序可省略等于 schema 默认值的节点；显式值必须仍是合法且符合目标的布尔值。
+    private static bool IsTrue(XElement? value, bool defaultValue)
+        => value is null ? defaultValue : value.Value is "true" or "1";
+    private static bool IsFalse(XElement? value, bool defaultValue)
+        => value is null ? !defaultValue : value.Value is "false" or "0";
     private static bool IsUnlimited(XElement? value)
         => value is not null && XmlConvert.ToTimeSpan(value.Value) == TimeSpan.Zero;
 

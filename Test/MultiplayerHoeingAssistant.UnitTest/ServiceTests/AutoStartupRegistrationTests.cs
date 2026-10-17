@@ -108,6 +108,46 @@ public class AutoStartupRegistrationTests
         Assert.Equal("false", settings.Element(TaskNamespace + "StopIfGoingOnBatteries")?.Value);
     }
 
+    [Fact]
+    public void MatchesTask_AcceptsWindowsOmittingSchemaDefaultsThatPreserveTheRequestedBehavior()
+    {
+        var task = ParseTask(minimized: false);
+        Assert.True(MatchesConstructedTask(task));
+        task.Element(TaskNamespace + "Triggers")!.Element(TaskNamespace + "LogonTrigger")!
+            .Element(TaskNamespace + "Enabled")!.Remove();
+        var settings = task.Element(TaskNamespace + "Settings")!;
+        foreach (var name in new[] { "Enabled", "RunOnlyIfNetworkAvailable", "RunOnlyIfIdle", "DisallowStartOnRemoteAppSession" })
+            settings.Element(TaskNamespace + name)!.Remove();
+
+        Assert.True(MatchesConstructedTask(task));
+    }
+
+    [Theory]
+    [InlineData("Settings", "DisallowStartIfOnBatteries")]
+    [InlineData("Settings", "ExecutionTimeLimit")]
+    [InlineData("LogonTrigger", "ExecutionTimeLimit")]
+    [InlineData("Settings", "MultipleInstancesPolicy")]
+    public void MatchesTask_RejectsOmittedValuesWhoseDefaultsWouldRestrictTheAssistant(string parent, string name)
+    {
+        var task = ParseTask(minimized: false);
+        task.Descendants(TaskNamespace + parent).Single().Element(TaskNamespace + name)!.Remove();
+
+        Assert.False(MatchesConstructedTask(task));
+    }
+
+    [Theory]
+    [InlineData("LogonTrigger", "Enabled", "false")]
+    [InlineData("Settings", "RunOnlyIfNetworkAvailable", "true")]
+    [InlineData("Settings", "DisallowStartIfOnBatteries", "true")]
+    public void MatchesTask_RejectsExplicitBooleanSettingsThatChangeTheRequestedBehavior(string parent,
+        string name, string value)
+    {
+        var task = ParseTask(minimized: false);
+        task.Descendants(TaskNamespace + parent).Single().Element(TaskNamespace + name)!.Value = value;
+
+        Assert.False(MatchesConstructedTask(task));
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
@@ -257,6 +297,11 @@ public class AutoStartupRegistrationTests
 
     private static XElement ParseTask(bool minimized) => XDocument.Parse(AutoStartupRegistration.BuildTaskXml(
         Path.GetFullPath(Path.Combine("bin", "MultiplayerHoeingAssistant.exe")), UserSid, minimized)).Root!;
+
+    private static bool MatchesConstructedTask(XElement task) => WindowsAutoStartupRegistration.MatchesTask(
+        task.ToString(SaveOptions.DisableFormatting), UserSid,
+        Path.GetFullPath(Path.Combine("bin", "MultiplayerHoeingAssistant.exe")), minimized: false,
+        highestAvailable: true);
 
     private static (MainViewModel ViewModel, AssistConfig Config) ConfiguredViewModel(bool enabled, bool minimized)
     {
