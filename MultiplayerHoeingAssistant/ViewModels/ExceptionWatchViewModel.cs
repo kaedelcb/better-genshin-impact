@@ -110,14 +110,16 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
     /// <summary>同机对端改了共享规则文件（KeywordWatchService watcher 后台线程触发）：
     /// 切 UI 线程整体重建规则列表绑定（与构造时同样的填充方式），不反向 PersistRules 防回环。</summary>
+    internal void ReloadConfigTransferSettings()
+    {
+        Rules.Clear();
+        foreach (var r in _service.GetRules()) Rules.Add(new WatchRuleItem(r, PersistRules));
+        RebuildRuleFilterItems();
+    }
+
     private void OnRulesExternallyChanged()
     {
-        Application.Current.Dispatcher.BeginInvoke(() =>
-        {
-            Rules.Clear();
-            foreach (var r in _service.GetRules()) Rules.Add(new WatchRuleItem(r, PersistRules));
-            RebuildRuleFilterItems();
-        });
+        Application.Current.Dispatcher.BeginInvoke(() => ReloadConfigTransferSettings());
     }
 
     // ========== 异常记录列表 ==========

@@ -33,8 +33,8 @@ public sealed class LocalPeerSyncService : IDisposable
     /// <summary>助手 exe 目录（与 LogFileBrowser.AssistantLogDir 同一取法）。</summary>
     public static string ExeDir => Path.GetDirectoryName(Environment.ProcessPath) ?? ".";
 
-    /// <summary>同机共享目录（exe 目录 shared/）。</summary>
-    public static string SharedDir => Path.Combine(ExeDir, "shared");
+    /// <summary>同机共享目录；显式隔离数据根使用其 shared/，普通运行仍使用 exe 目录。</summary>
+    public static string SharedDir => Path.Combine(AssistantDataDirectory.IsExplicit ? AssistantDataDirectory.Root : ExeDir, "shared");
 
     /// <summary>执行端信标文件路径。</summary>
     public static string BeaconPath => Path.Combine(SharedDir, "executor_beacon.json");

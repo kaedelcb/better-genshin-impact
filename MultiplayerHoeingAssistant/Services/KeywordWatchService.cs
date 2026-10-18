@@ -55,6 +55,62 @@ public sealed class KeywordWatchService : IDisposable
     private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
 
     private WatchConfig _config = new();
+    private bool _configTransferActive;
+    private int _configTransferGeneration;
+
+    internal sealed record ConfigTransferState(byte[] Rules, string? SharedRulesTargetPath);
+
+    internal byte[] ExportConfigTransferSnapshot()
+    {
+        lock (_lock) return JsonSerializer.SerializeToUtf8Bytes(_config, IndentedOptions);
+    }
+
+    internal ConfigTransferState BeginConfigTransfer()
+    {
+        lock (_lock)
+        {
+            if (_configTransferActive) throw new InvalidOperationException("设置迁移正在进行");
+            var state = new ConfigTransferState(ExportConfigTransferSnapshot(),
+                _peerSync is null ? null : LocalPeerSyncService.SharedRulesPath);
+            _configTransferActive = true;
+            Interlocked.Increment(ref _configTransferGeneration);
+            return state;
+        }
+    }
+
+    internal void ReloadConfigTransferSettings()
+    {
+        lock (_lock)
+        {
+            _config = File.Exists(_configPath)
+                ? JsonSerializer.Deserialize<WatchConfig>(File.ReadAllText(_configPath),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? throw new InvalidDataException("导入的监控规则为空")
+                : new WatchConfig();
+            _regexCache.Clear();
+        }
+    }
+
+    internal void EndConfigTransfer(ConfigTransferState state, bool restore)
+    {
+        lock (_lock)
+        {
+            try
+            {
+                if (restore)
+                {
+                    _config = JsonSerializer.Deserialize<WatchConfig>(state.Rules)
+                        ?? throw new InvalidDataException("原监控规则快照为空");
+                    _regexCache.Clear();
+                }
+            }
+            finally
+            {
+                Interlocked.Increment(ref _configTransferGeneration);
+                _configTransferActive = false;
+            }
+        }
+    }
     private readonly Dictionary<string, Regex?> _regexCache = new(); // 规则 Id → 编译后的正则（null=非法）
     /// <summary>限流窗口：分桶键（规则 Id|来源桶）→ 窗口内命中时间戳列表。
     /// 中危3：远程成员行（SourceFile 形如 "远程:玩家名"）与本机分桶，远程风暴不挤压本机告警配额。</summary>
@@ -253,6 +309,7 @@ public sealed class KeywordWatchService : IDisposable
     /// 监控端但无活信标（本机没有执行端）：回落旧行为写主副本。</summary>
     private void SaveLocked()
     {
+        if (_configTransferActive) return;
         var json = JsonSerializer.Serialize(_config, IndentedOptions);
         if (IsObserver() && _peerSync?.IsLocalExecutorAlive() == true)
         {
@@ -286,6 +343,7 @@ public sealed class KeywordWatchService : IDisposable
     /// RulesExternallyChanged；执行端额外把新内容写回 %APPDATA% 主副本（执行端主副本权威）。</summary>
     private void ApplySharedRules(object? state)
     {
+        var generation = Volatile.Read(ref _configTransferGeneration);
         try
         {
             var path = LocalPeerSyncService.SharedRulesPath;
@@ -309,6 +367,7 @@ public sealed class KeywordWatchService : IDisposable
             var changed = false;
             lock (_lock)
             {
+                if (_configTransferActive || generation != _configTransferGeneration) return;
                 var cfg = JsonSerializer.Deserialize<WatchConfig>(json,
                     new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
                 if (cfg == null) return;

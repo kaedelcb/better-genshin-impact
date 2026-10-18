@@ -253,6 +253,18 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
         <StackPanel Margin="0,0,0,24">
+            <TextBlock Text="{Binding ConfigurationTransferStatusMessage}" Foreground="#F0B77A"
+                       TextWrapping="Wrap" Margin="0,0,0,12">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ConfigurationTransferStatusMessage}" Value="">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
 
             <!-- ========== 顶栏（返回按钮） ========== -->
             <Grid Margin="0,0,0,16">
@@ -615,8 +627,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="配置迁移" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                        <TextBlock Text="一键导出/导入全部助手设置：房间、启动策略、启动流程方案、嘟嘟可、监控规则、桌宠、成员配置；导入自动备份原设置"
+                        <TextBlock Text="迁移房间、启动策略、槲寄生启动流程与方案、任务中心计划、嘟嘟可、监控规则、桌宠和成员缓存，以及一条龙、配置组、JS、路线等 BGI 资源；导入前自动备份，运行记录与本机身份保留"
                                    FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                        <TextBlock Text="BGI 全局设置和外部程序沿用目标机配置。"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
                                    MaxWidth="400" HorizontalAlignment="Left"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

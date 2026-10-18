@@ -201,7 +201,7 @@ public partial class PetStatusPanelWindow : Window
 
     private void NotifyLayout()
     {
-        if (double.IsNaN(Left) || double.IsNaN(ActualWidth)) return;
+        if (!IsLoaded || double.IsNaN(Left) || double.IsNaN(ActualWidth)) return;
         _vm.NotifyPanelLayoutChanged(Left, Top, ActualWidth, ActualHeight);
     }
 

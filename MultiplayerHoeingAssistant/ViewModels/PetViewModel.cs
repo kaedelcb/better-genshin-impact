@@ -129,6 +129,31 @@ public class PetViewModel : ViewModelBase
         StartLocalExecutorPoll();
     }
 
+    internal void SetConfigTransferActive(bool active) => _settings.SetConfigTransferActive(active);
+
+    internal byte[] ExportConfigTransferSnapshot() => _settings.ExportConfigTransferSnapshot();
+
+    internal void FlushConfigTransferEdits()
+    {
+        if (_savePosTimer.IsEnabled) { _savePosTimer.Stop(); SavePositionNow(); }
+        if (_panelSaveTimer.IsEnabled) { _panelSaveTimer.Stop(); SavePanelLayoutNow(); }
+    }
+
+    internal void ReloadConfigTransferSettings()
+    {
+        _savePosTimer.Stop();
+        _panelSaveTimer.Stop();
+        // 关闭旧窗口避免其异步尺寸回调携旧坐标覆盖导入设置，随后按新设置重建。
+        _window?.Close();
+        _window = null;
+        _panelWindow?.Close();
+        _panelWindow = null;
+        _settings.ReloadConfigTransferSettings();
+        ApplyPanelVisibility();
+        _savePosTimer.Stop();
+        _panelSaveTimer.Stop();
+    }
+
     // ========== 设置项（改即持久化）==========
 
     private bool _enabled;

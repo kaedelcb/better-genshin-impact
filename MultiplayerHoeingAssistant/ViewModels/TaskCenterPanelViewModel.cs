@@ -88,6 +88,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>页面重新 Loaded 时恢复刷新（幂等；与 StopAutoRefresh 配对）。</summary>
     public void StartAutoRefresh()
     {
+        if (_configTransferPaused) return;
         _timer?.Start();
         _remoteTimer?.Start();
         if (_remoteTarget is not null) _ = RefreshRemoteAsync();
@@ -710,7 +711,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private void QueueAutoSave()
     {
-        if (_suppressAutoSave || Editing is null) return;
+        if (_configTransferPaused || _suppressAutoSave || Editing is null) return;
         _autoSavePending = true;
         _autoSaveTimer.Stop();
         if (!HasPlanSyncConflict) _autoSaveTimer.Start();
@@ -719,7 +720,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     private async void AutoSaveTick()
     {
         _autoSaveTimer.Stop();
-        if (!_autoSavePending || _autoSaveInProgress || Editing is null) return;
+        if (_configTransferPaused || !_autoSavePending || _autoSaveInProgress || Editing is null) return;
         if (_remoteTarget is not null)
         {
             await SaveRemoteFlowAsync(auto: true);
@@ -1012,6 +1013,54 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     }
 
     // ================= 刷新（展示快照；一轮 S1：不重建编辑草稿、不承担调度） =================
+
+    private bool _configTransferPaused;
+    private bool _configTransferRefreshWasEnabled;
+    internal void SetConfigTransferActive(bool active)
+    {
+        if (_configTransferPaused == active) return;
+        _configTransferPaused = active;
+        if (active)
+        {
+            _configTransferRefreshWasEnabled = _timer?.IsEnabled == true;
+            _timer?.Stop();
+            _autoSaveTimer.Stop();
+        }
+        else if (_configTransferRefreshWasEnabled) _timer?.Start();
+    }
+
+    internal void EnsureConfigTransferIdle()
+    {
+        if (_remoteTarget is not null) return;
+        if (_autoSaveInProgress || _remoteSaving || _startResumeInFlight)
+            throw new InvalidOperationException("任务中心仍在保存设置，请稍后重试");
+    }
+
+    internal void FlushConfigTransferEdits()
+    {
+        if (_remoteTarget is not null) return;
+        EnsureConfigTransferIdle();
+        if (_autoSavePending || Editing?.HasUnsavedChanges == true)
+        {
+            SaveFlowNow(isAutoSave: false);
+            if (_autoSavePending || Editing?.HasUnsavedChanges == true)
+                throw new InvalidOperationException("任务中心草稿尚未保存成功，请先处理页面提示");
+        }
+        _autoSaveTimer.Stop();
+    }
+
+    internal void ReloadConfigTransferSettings()
+    {
+        if (_remoteTarget is not null) return;
+        EnsureConfigTransferIdle();
+        _autoSaveTimer.Stop();
+        _autoSavePending = false;
+        Editing = null;
+        Previewing = null;
+        SelectedWorkflowId = null;
+        Refresh();
+        if (HasPlanSyncConflict) ClearPlanSyncConflict();
+    }
 
     public void Refresh()
     {

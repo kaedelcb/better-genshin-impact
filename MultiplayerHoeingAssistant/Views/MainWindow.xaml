@@ -1178,7 +1178,7 @@
                         </Grid>
 
                         <!-- 设置页面（CurrentPage==Settings 时显示） -->
-                        <views:SettingsPage>
+                        <views:SettingsPage IsEnabled="{Binding DataContext.CanEditConfiguration, RelativeSource={RelativeSource AncestorType=Window}}">
                             <views:SettingsPage.Style>
                                 <Style TargetType="views:SettingsPage">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -1194,7 +1194,7 @@
                         <!-- 嘟嘟可页面（CurrentPage==Dodoco 时显示；DataContext 用 MainWindow 持有的 DodocoViewModel。
                              注意：本元素的 Style 触发器解析于自身 DataContext（已被改为 DodocoViewModel），
                              所以 CurrentPage 必须显式从 Window 的 DataContext 取） -->
-                        <views:DodocoPage DataContext="{Binding Dodoco, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <views:DodocoPage DataContext="{Binding Dodoco, RelativeSource={RelativeSource AncestorType=Window}}" IsEnabled="{Binding DataContext.CanEditConfiguration, RelativeSource={RelativeSource AncestorType=Window}}">
                             <views:DodocoPage.Style>
                                 <Style TargetType="views:DodocoPage">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -1209,7 +1209,7 @@
 
                         <!-- 槲寄生页面（CurrentPage==Mistletoe 时显示；DataContext 用 MainWindow 持有的 MistletoeViewModel，
                              CurrentPage 同样必须显式从 Window 的 DataContext 取，原因同上方 DodocoPage 注释） -->
-                        <views:MistletoePage DataContext="{Binding ActiveMistletoe, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <views:MistletoePage DataContext="{Binding ActiveMistletoe, RelativeSource={RelativeSource AncestorType=Window}}" IsEnabled="{Binding DataContext.CanEditConfiguration, RelativeSource={RelativeSource AncestorType=Window}}">
                             <views:MistletoePage.Style>
                                 <Style TargetType="views:MistletoePage">
                                     <Setter Property="Visibility" Value="Collapsed"/>

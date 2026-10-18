@@ -766,6 +766,8 @@ public sealed partial class TaskCenterHost
     private async Task<AdmissionResult> SubmitExternalStartViaAdmissionCoreAsync(
         ExternalStartAdmissionRequest request, CancellationToken sendToken)
     {
+        using var configurationOperation = TryBeginConfigurationOperation();
+        if (configurationOperation is null) return AdmissionResult.Of(AdmissionResultKind.Error, "config_transfer_in_progress", "配置迁移尚未结束，未发送", "");
         request.HostLifetimeToken = _shutdownCts.Token;
         // §7.1-1：F11 判定先于租约获取。
         if (CurrentArbitrationFacts().F11Active)

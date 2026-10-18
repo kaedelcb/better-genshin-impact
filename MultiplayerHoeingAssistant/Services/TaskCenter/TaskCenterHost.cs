@@ -497,6 +497,8 @@ public sealed partial class TaskCenterHost
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId, string? entryNodeId = null, string? expectedRevision = null,
         string? stopAfterNodeId = null)
     {
+        using var configurationOperation = TryBeginConfigurationOperation();
+        if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
         var explicitIntentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         var explicitIntentId = Guid.NewGuid().ToString("N");
         // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
@@ -599,6 +601,8 @@ public sealed partial class TaskCenterHost
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
     public async Task<HostActionResult> ResumeRunAsync(string runId)
     {
+        using var configurationOperation = TryBeginConfigurationOperation();
+        if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
         // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
         lock (_gate)
         {
@@ -739,7 +743,7 @@ public sealed partial class TaskCenterHost
         lock (_gate)
         {
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
-            if (CapabilityBlockReason() is { } blocked) return HostActionResult.Unavailable(blocked);
+            if (CapabilityBlockReason(action == WorkflowRunAction.Stop) is { } blocked) return HostActionResult.Unavailable(blocked);
         }
         if (IsExecutionResetReleased(run))
             return action == WorkflowRunAction.Stop
@@ -1255,8 +1259,9 @@ public sealed partial class TaskCenterHost
 
     /// <summary>本地执行能力守卫（R4.9 §6.2 + ASTRA 二轮 I2：先于恢复屏障与台账写入等一切副作用；绕过 VM 的调用同样被拦；
     /// 提交临界区内复核——能力可能在两次检查间动态变化）。</summary>
-    private string? CapabilityBlockReason()
-        => _localExecutionCapability is { } cap && !cap()
+    private string? CapabilityBlockReason(bool allowConfigTransfer = false)
+        => _configurationTransfer && !allowConfigTransfer ? "配置迁移或恢复尚未结束，暂停新的执行与配置写入"
+            : _localExecutionCapability is { } cap && !cap()
             ? "当前为监控端（无本地执行能力），任务中心执行入口由能力守卫统一拒绝"
             : null;
 
@@ -1435,6 +1440,8 @@ public sealed partial class TaskCenterHost
     /// </summary>
     public async Task<HandoffRegisterResult> RegisterHandoffAsync(StartupHandoffRequest request, CancellationToken ct = default)
     {
+        using var configurationOperation = TryBeginConfigurationOperation();
+        if (configurationOperation is null) return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, "配置迁移尚未结束，暂停新的移交");
         ArgumentNullException.ThrowIfNull(request);
         if (!StartupHandoffModes.IsKnown(request.Mode))
             return HandoffRegisterResult.Rejected(HandoffReasonCodes.UnsupportedMode,

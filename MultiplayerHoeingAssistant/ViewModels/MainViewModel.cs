@@ -790,6 +790,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private async Task ReportStatusAsync()
 
     {
+        if (!CanEditConfiguration) return;
         // 防重入：多源并发触发时只跑一轮（详见 _reportStatusRunning 注释）
         if (Interlocked.CompareExchange(ref _reportStatusRunning, 1, 0) != 0) return;
         try
@@ -1448,6 +1449,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// [P1] 连接就绪判定留在本方法（依赖 SignalRClient）；gen 自增+写盘+清零守卫+置 Armed 收口进状态机。</summary>
     private async Task<bool> MarkOnlineAsync(string mode)
     {
+        if (!TryEnterConfigTransferOperation("online", out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage); return false;
+        }
+        using var configTransferOperation = transferOperation;
         // 上报上线事件，驱动服务端 AllReady（全员就绪）检查
         if (_signalRClient == null)
         {
@@ -1570,6 +1576,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             // S4：async void 回调整体兜底——未处理异常会杀进程，这里捕获后仅记日志。
             try
             {
+                if (!TryEnterConfigTransferOperation("scheduled_online", out var transferOperation)) return;
+                using var configTransferOperation = transferOperation;
                 if (_config == null) return;
                 // 监控模式：本机不占成员名额也不参与上线（服务端成员表无本端条目，上报是 no-op），
                 // 跳过避免本地误打"已上线(scheduled)"日志误导；给执行端设定时上线走弹窗远程下发，不经本定时器
@@ -1748,6 +1756,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void OnOpenUpdateBgi(object? parameter)
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (parameter is MemberViewModel m && !m.IsSelf) return;
         var window = new UpdateBgiWindow(this) { Owner = Application.Current.MainWindow };
         window.ShowDialog();
@@ -3331,6 +3340,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 设定新时间时重置按天去重标记，让新设定能正常触发。</summary>
     private void ApplyScheduledOnlineTime(string time)
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         _config!.ScheduledOnlineTime = time;
         _configManager?.Save(_config);
 
@@ -4790,6 +4800,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task RefreshAsync()
     {
+        if (!TryEnterConfigTransferOperation("connection_refresh", out var transferOperation)) return;
+        using var configTransferOperation = transferOperation;
         // 离线优先：单机模式下不发起连接，刷新无意义（本地状态采集循环独立运行，不靠刷新驱动）
         if (IsStandaloneMode)
         {
@@ -5104,6 +5116,16 @@ public partial class MainViewModel : INotifyPropertyChanged
                 AddLog($"确认: {cmd.Sender} - {msg}");
                 return;
             }
+
+            var transferCommand = cmd.Cmd is "remote_config.data" or "remote_config.push_result"
+                or "task_policy.data" or "task_policy.push_result" ? "stop" : cmd.Cmd;
+            if (!TryEnterConfigTransferOperation(transferCommand, out var transferOperation))
+            {
+                await SendAckAsync(cmd, "failed", ConfigTransferBlockedMessage);
+                await MaybeSendCommandResultAsync(cmd, "failed", "config_transfer_in_progress", ConfigTransferBlockedMessage);
+                return;
+            }
+            using var configTransferOperation = transferOperation;
 
             // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1）：4 个新 Cmd =====
             // remote_config.data / remote_config.push_result：转给远程编辑会话状态机（不刷日志，结果由流程方法统一报）
@@ -5736,6 +5758,11 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task ExecuteLocalCommandAsync(string cmd, Dictionary<string, object>? param, List<string>? targetUids)
     {
+        if (!TryEnterConfigTransferOperation(cmd, out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage); return;
+        }
+        using var configTransferOperation = transferOperation;
         if (cmd == "stop")
         {
             await ExecuteUserStopAsync(targetUids ?? GetSelectedTargets());
@@ -5921,6 +5948,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     internal async Task<CommandResult> ExecuteLocalBgiCommandAsync(string cmd, Dictionary<string, object>? param)
     {
+        if (!TryEnterConfigTransferOperation(cmd, out var transferOperation))
+        {
+            return ConfigTransferRejectedResult();
+        }
+        using var configTransferOperation = transferOperation;
         if (_config?.ObserverMode == true)
         {
             return new CommandResult { Status = "failed", Message = "监控端无本地 BGI，该节点已跳过" };
@@ -6062,6 +6094,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>切换执行/监控模式。点击右上角连接徽章触发。</summary>
     private async Task SwitchModeAsync()
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null) return;
         var targetObserver = !_config.ObserverMode;
         var modeName = targetObserver ? "监控" : "执行";
@@ -6189,6 +6222,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开房间设置弹窗（复用 SettingsWindow）。</summary>
     private void OpenRoomSettings()
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
         if (newConfig != null)
@@ -6206,57 +6240,6 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>设置迁移服务（打包/解包 %APPDATA%/NexusBGI 全部设置 JSON）。</summary>
     private readonly ConfigTransferService _configTransfer = new();
-
-    /// <summary>一键导出全部助手设置为 zip（设置迁移）。</summary>
-    private void ExportAllSettings()
-    {
-        var dialog = new Microsoft.Win32.SaveFileDialog
-        {
-            Title = "导出助手设置",
-            Filter = "NexusBGI 助手设置包 (*.zip)|*.zip",
-            FileName = $"NexusBGI助手设置_{DateTime.Now:yyyyMMdd_HHmmss}.zip",
-        };
-        if (dialog.ShowDialog() != true) return;
-
-        var result = _configTransfer.Export(dialog.FileName);
-        MessageBox.Show(result.Message, result.Success ? "导出成功" : "导出失败",
-            MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
-    }
-
-    /// <summary>一键导入全部助手设置（覆盖前自动备份；主配置立即重载进内存，多数设置建议重启生效）。</summary>
-    private void ImportAllSettings()
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog
-        {
-            Title = "导入助手设置",
-            Filter = "NexusBGI 助手设置包 (*.zip)|*.zip",
-        };
-        if (dialog.ShowDialog() != true) return;
-
-        if (MessageBox.Show("导入将覆盖本机全部助手设置（覆盖前自动备份）。\n确定继续吗？",
-                "导入助手设置", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-            return;
-
-        var result = _configTransfer.Import(dialog.FileName);
-        if (!result.Success)
-        {
-            MessageBox.Show(result.Message, "导入失败", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
-        // 导入的主配置立即重载进内存并刷新设置页绑定：防止导入后界面上的旧内存态被
-        // 某个开关保存动作写回磁盘，把导入值覆盖掉
-        _config = _configManager?.Load();
-        RefreshSetupBindings();
-        if (_config != null)
-            RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
-
-        if (MessageBox.Show(result.Message + "\n\n多数设置需要重启助手才能完全生效，现在重启吗？",
-                "导入成功", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
-        {
-            RestartAssistant();
-        }
-    }
 
     /// <summary>退出本进程并延时拉起新实例：单实例互斥体按进程存在，必须等旧进程退出后新进程才能启动成功。</summary>
     private static void RestartAssistant()
@@ -6340,6 +6323,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     internal AutoStartupRegistrationResult ConfigureAutoStartup(bool enabled, int modeIndex, bool allowElevation = true)
     {
+        if (_configTransferInProgress) return new(false, ConfigTransferBlockedMessage);
         if (_config is null) return new(false, "助手配置尚未加载，请稍后重试。");
         if (modeIndex is not (0 or 1)) return new(false, "启动方式无效，请重新选择弹窗或托盘。");
         var previousEnabled = _config.AutoLaunchOnBoot;
@@ -6541,6 +6525,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OpenSettings()
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
         if (newConfig != null)
@@ -7004,6 +6989,9 @@ public partial class MainViewModel : INotifyPropertyChanged
     internal async Task ExecuteBoundQuickCommandAsync(string key, IReadOnlyList<MemberViewModel> onlineMembers,
         bool useCompletionActions)
     {
+        if (!TryEnterConfigTransferOperation("bound_quick_start", out var transferOperation))
+        { AddLog(ConfigTransferBlockedMessage); return; }
+        using var configTransferOperation = transferOperation;
         if (useCompletionActions)
         {
             var selected = onlineMembers.Where(m => m.IsSelected && m.Online
@@ -7084,6 +7072,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙。</summary>
     private async Task SendQuickStartAsync(string key, bool isOneClick, string value, List<string> targets)
     {
+        if (!TryEnterConfigTransferOperation("quick_start", out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage); return;
+        }
+        using var configTransferOperation = transferOperation;
         if (_signalRClient == null) return;
         var remoteCmd = new RemoteCommand
         {
@@ -7106,6 +7099,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>一键锄地：向所有选中成员下发执行他们各自绑定的联机锄地配置组。</summary>
     private async Task ExecuteQuickHoeingAsync()
     {
+        if (!TryEnterConfigTransferOperation("quick_hoeing", out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage); return;
+        }
+        using var configTransferOperation = transferOperation;
         var targets = GetSelectedTargets();
         if (targets.Count == 0)
         {

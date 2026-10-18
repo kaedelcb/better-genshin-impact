@@ -11,6 +11,11 @@ public class AssistConfigManager
 {
     private readonly string _configPath;
     private readonly object _configWriteGate = new();
+    private bool _configTransferActive;
+    internal void SetConfigTransferActive(bool active)
+    {
+        lock (_configWriteGate) _configTransferActive = active;
+    }
     /// <summary>旧版配置路径（基于 exe 目录）。用于首次运行时迁移到新的用户隔离目录，防止同电脑不同 Windows 用户共享配置、以及旧配置丢失。</summary>
     private readonly string _legacyConfigPath;
 
@@ -19,6 +24,7 @@ public class AssistConfigManager
         // 配置路径改为"按 Windows 用户隔离"：不同用户有独立 %APPDATA%，同电脑不同 Windows 用户在各自目录各存一份配置，互不覆盖。
         // 这也是同 UID 双端（执行端 + 遥控端，可能在同一台电脑的不同 Windows 用户）的前提——每端配置独立。
         var dir = AssistantDataDirectory.Root;
+        ConfigTransferService.RecoverInterruptedImport(dir);
         System.IO.Directory.CreateDirectory(dir);
         _configPath = System.IO.Path.Combine(dir, "assistant-config.json");
 
@@ -88,6 +94,7 @@ public class AssistConfigManager
     {
         lock (_configWriteGate)
         {
+            if (_configTransferActive) return;
             var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
             if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json))
             {
@@ -119,6 +126,7 @@ public class AssistConfigManager
     {
         lock (_configWriteGate)
         {
+            if (_configTransferActive) return (false, null, "设置迁移尚未完成，配置写入已暂停");
             if (string.IsNullOrWhiteSpace(expectedRevision))
                 return (false, null, "缺少执行端设置修订，请重新读取");
             var raw = ReadRawJson();
@@ -148,16 +156,20 @@ public class AssistConfigManager
     /// <summary>校验并保存用户编辑的 JSON。成功返回 true，JSON 无效返回 false。</summary>
     public bool WriteRawJson(string json)
     {
-        try
+        lock (_configWriteGate)
         {
-            var obj = JsonSerializer.Deserialize<AssistConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (obj == null) return false;
-            // [A0 容错] 同 Save：原子写，杜绝半截写入
-            return LocalPeerSyncService.WriteFileAtomic(_configPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
-        }
-        catch
-        {
-            return false;
+            if (_configTransferActive) return false;
+            try
+            {
+                var obj = JsonSerializer.Deserialize<AssistConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (obj == null) return false;
+                // [A0 容错] 同 Save：原子写，杜绝半截写入
+                return LocalPeerSyncService.WriteFileAtomic(_configPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 

@@ -370,6 +370,11 @@ public partial class MainViewModel
 
     private async Task OnCoordinatedBatchStartAsync(CoordinatedBatchSnapshot start)
     {
+        if (!TryEnterConfigTransferOperation("coordinated_start", out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage); return;
+        }
+        using var configTransferOperation = transferOperation;
         var uid = _config?.PlayerUid;
         if (string.IsNullOrWhiteSpace(uid) || !start.ParticipantUids.Contains(uid, StringComparer.Ordinal)) return;
         if (!IsExecutorMode || start.Protocol != "hoeing.start.v2") return;

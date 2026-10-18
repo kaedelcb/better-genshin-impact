@@ -86,6 +86,8 @@ public partial class App : Application
         AutoStartupRegistrationResult? autoStartupResult = null;
         if (_appConfig.AutoLaunchOnBoot && !e.Args.Contains("--no-auto-launch"))
             autoStartupResult = RegisterAutoStartup(_appConfig.AutoLaunchOnBootMinimized);
+        else if (ConfigTransferService.RecoveredInterruptedImport)
+            autoStartupResult = UnregisterAutoStartup(allowElevation: false);
 
         // 全局异常处理
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>

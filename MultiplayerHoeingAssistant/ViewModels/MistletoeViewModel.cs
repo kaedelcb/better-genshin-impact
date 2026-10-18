@@ -158,6 +158,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         _bgiStatusRefresh = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _bgiStatusRefresh.Tick += (_, _) =>
         {
+            if (_configTransferPaused) return;
             if (IsRemoteMode) _ = RefreshRemoteStartupStatusAsync();
             else
             {
@@ -691,6 +692,9 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     /// <summary>执行启动流程（delaySeconds&gt;0 时先延时，可被取消）。重入守卫：执行中直接忽略。</summary>
     private async Task<HostActionResult> RunFlowAsync(int delaySeconds, string reason)
     {
+        if (!_mainVm.TryEnterConfigTransferOperation("startup.run", out var transferOperation))
+            return HostActionResult.Unavailable("设置迁移或恢复尚未完成，启动流程未执行");
+        using var configTransferOperation = transferOperation;
         if (IsRunning) return HostActionResult.Unavailable("启动流程已在运行");
         IsRunning = true;
         _runCts?.Dispose();
@@ -1179,6 +1183,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     private async Task CaptureConfiguredSourceAsync(StartupSourceIntent source)
     {
+        if (_configTransferPaused) return;
         if (Interlocked.Exchange(ref _automaticCaptureBusy, 1) != 0) return;
         try { await source.GetOrCheckAsync(RefreshStartupSourceAsync, false, CancellationToken.None); }
         catch (Exception ex) { _mainVm.AddLog("[槲寄生] 自动启动来源尚未确认：" + ex.Message); }
@@ -1806,6 +1811,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     private void PersistSchemes()
     {
+        if (_configTransferPaused) return;
         if (IsRemoteMode)
         {
             // 固定本次排队保存的内容，后续同名覆盖不能修改在途快照。
@@ -1900,11 +1906,63 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         return revision;
     }
 
+    private bool _configTransferPaused;
+    internal void SetConfigTransferActive(bool active)
+    {
+        _configTransferPaused = active;
+        if (active) _saveDebounce.Stop();
+        TaskCenter.SetConfigTransferActive(active);
+    }
+
+    internal void EnsureConfigTransferIdle()
+    {
+        if (IsRemoteMode) return;
+        if (IsRunning || ArmedTimersMutable.Count != 0 || ArmedWatchdogsMutable.Count != 0
+            || ArmedLogTriggersMutable.Count != 0 || Volatile.Read(ref _automaticCaptureBusy) != 0)
+            throw new InvalidOperationException("启动中心正在执行、挂载触发器或确认自动执行许可，暂不能导入设置");
+        TaskCenter.EnsureConfigTransferIdle();
+    }
+
+    internal Dictionary<string, byte[]> ExportConfigTransferSnapshots() => new()
+    {
+        ["startup-flow.json"] = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(_config),
+        ["startup-flow-schemes.json"] = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(Schemes.Select(s => s.Scheme).ToList()),
+    };
+
+    internal void FlushConfigTransferEdits()
+    {
+        if (IsRemoteMode) return;
+        if (_saveDebounce.IsEnabled) SaveNow();
+        if (_automaticSaveFailed) throw new InvalidOperationException("启动中心设置尚未保存成功");
+        TaskCenter.FlushConfigTransferEdits();
+    }
+
+    internal void ReloadConfigTransferSettings()
+    {
+        if (IsRemoteMode) return;
+        EnsureConfigTransferIdle();
+        _saveDebounce.Stop();
+        var config = _store.LoadChecked().Config;
+        var schemes = _schemeStore.LoadChecked().Schemes;
+        _config.AutomaticAuthorization = config.AutomaticAuthorization;
+        _config.AutomaticStopAuthority = config.AutomaticStopAuthority;
+        UseConfiguredStartupSource(null);
+        _automaticSaveFailed = false;
+        ApplyConfig(config, save: false);
+        ResetRunStates();
+        ReplaceSchemes(schemes);
+        TaskCenter.ReloadConfigTransferSettings();
+        RefreshTaskCenterFlowChoices(null);
+        OnPropertyChanged(nameof(AutoLaunchOnBoot));
+        OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
+    }
+
     // ================= 保存 =================
 
     /// <summary>防抖保存（节点参数逐键编辑时走这里）。</summary>
     internal void RequestSave()
     {
+        if (_configTransferPaused) return;
         if (IsRemoteMode && _remoteSaveFailed) return;
         _saveDebounce.Stop();
         _saveDebounce.Start();
@@ -1913,6 +1971,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     internal void SaveNow()
     {
         _saveDebounce.Stop();
+        if (_configTransferPaused) return;
         if (IsRemoteMode) QueueRemoteConfigSave();
         else
         {

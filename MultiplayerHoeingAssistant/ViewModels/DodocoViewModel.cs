@@ -144,6 +144,40 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         Application.Current.Exit += (_, _) => Dispose();
     }
 
+    internal KeywordWatchService.ConfigTransferState BeginConfigTransfer()
+    {
+        var state = _watchService.BeginConfigTransfer();
+        _settingsService.SetConfigTransferActive(true);
+        return state;
+    }
+
+    internal Dictionary<string, byte[]> ExportConfigTransferSnapshots() => new()
+    {
+        ["dodoco_watch_rules.json"] = _watchService.ExportConfigTransferSnapshot(),
+        ["dodoco_settings.json"] = _settingsService.ExportConfigTransferSnapshot(),
+    };
+
+    internal void ReloadConfigTransferSettings(bool reloadRules = true)
+    {
+        _settingsService.ReloadConfigTransferSettings();
+        if (reloadRules) _watchService.ReloadConfigTransferSettings();
+        Watch.ReloadConfigTransferSettings();
+        Monitor.ReloadConfigTransferSettings();
+        Stats.ReloadConfigTransferSettings();
+        OnPropertyChanged(nameof(MuteAll));
+        OnPropertyChanged(nameof(IncidentSnapshotEnabled));
+        OnPropertyChanged(nameof(ShareRealtimeLog));
+        OnPropertyChanged(nameof(ShareLogInfoOnly));
+        OnPropertyChanged(nameof(ShareLogFiles));
+    }
+
+    internal void EndConfigTransfer(KeywordWatchService.ConfigTransferState state, bool restore)
+    {
+        try { _watchService.EndConfigTransfer(state, restore); }
+        finally { _settingsService.SetConfigTransferActive(false); }
+        Watch.ReloadConfigTransferSettings();
+    }
+
     // ========== 子页 ViewModel ==========
 
     /// <summary>日志浏览 Tab（P2 / F2）。</summary>

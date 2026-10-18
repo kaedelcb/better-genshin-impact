@@ -73,6 +73,13 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         _mainVm.MemberOnlineChanged += OnMemberOnlineChanged;
     }
 
+    internal void ReloadConfigTransferSettings()
+    {
+        OnPropertyChanged(nameof(AutoRefresh));
+        OnPropertyChanged(nameof(IntervalIndex));
+        ApplyTimerState();
+    }
+
     // ========== 当前帧 ==========
 
     private BitmapImage? _currentImage;

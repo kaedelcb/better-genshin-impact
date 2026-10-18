@@ -124,6 +124,12 @@ public partial class MainViewModel
     private async Task<RemoteCenterReply> ExecuteRemoteCenterOperationAsync(string requestId,
         RemoteCenterRequest request, string fingerprint)
     {
+        var isStop = request.Operation is "startup.cancel" or "startup.trigger.cancel"
+            || request.Operation == "task.run.action"
+                && Decode<RunActionArgs>(request.PayloadJson).Action == nameof(WorkflowRunAction.Stop);
+        if (!TryEnterConfigTransferOperation(isStop ? "stop" : request.Operation, out var transferOperation))
+            return RemoteCenterReply.Rejected(ConfigTransferBlockedMessage);
+        using var configTransferOperation = transferOperation;
         var mistletoe = (Application.Current.MainWindow as MainWindow)?.Mistletoe
             ?? throw new InvalidOperationException("执行端启动中心尚未就绪");
         var host = TaskCenterHost;

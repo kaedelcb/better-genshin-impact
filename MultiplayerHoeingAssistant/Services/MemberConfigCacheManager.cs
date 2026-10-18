@@ -12,6 +12,13 @@ namespace MultiplayerHoeingAssistant.Services;
 public class MemberConfigCacheManager
 {
     private readonly string _cachePath;
+    private readonly object _gate = new();
+    private bool _configTransferActive;
+
+    internal void SetConfigTransferActive(bool active)
+    {
+        lock (_gate) _configTransferActive = active;
+    }
 
     public MemberConfigCacheManager()
     {
@@ -44,19 +51,23 @@ public class MemberConfigCacheManager
     /// <summary>将缓存写入磁盘。</summary>
     public void Save(MemberConfigCache cache)
     {
-        try
+        lock (_gate)
         {
-            var json = JsonSerializer.Serialize(cache, new JsonSerializerOptions
+            if (_configTransferActive) return;
+            try
             {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            });
-            File.WriteAllText(_cachePath, json);
-        }
-        catch (Exception ex)
-        {
-            // 写缓存失败不应影响主流程，记日志即可
-            System.Diagnostics.Debug.WriteLine($"保存配置缓存失败: {ex.Message}");
+                var json = JsonSerializer.Serialize(cache, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+                File.WriteAllText(_cachePath, json);
+            }
+            catch (Exception ex)
+            {
+                // 写缓存失败不应影响主流程，记日志即可
+                System.Diagnostics.Debug.WriteLine($"保存配置缓存失败: {ex.Message}");
+            }
         }
     }
 }

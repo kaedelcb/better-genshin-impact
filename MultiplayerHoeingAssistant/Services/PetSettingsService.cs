@@ -56,6 +56,11 @@ public sealed class PetSettingsService
 {
     private readonly string _path;
     private readonly object _lock = new();
+    private bool _configTransferActive;
+    internal void SetConfigTransferActive(bool active)
+    {
+        lock (_lock) _configTransferActive = active;
+    }
     private PetSettings _settings = new();
 
     /// <summary>设置变更通知（UI 线程订阅后自行刷新绑定）。</summary>
@@ -103,11 +108,33 @@ public sealed class PetSettingsService
     {
         lock (_lock)
         {
+            if (_configTransferActive) return;
             mutate(_settings);
             NormalizeLocked();
             SaveLocked();
         }
         SettingsChanged?.Invoke();
+    }
+
+    /// <summary>导入事务中只重载内存，不回写默认值或旧配置。</summary>
+    internal void ReloadConfigTransferSettings()
+    {
+        lock (_lock)
+        {
+            _settings = File.Exists(_path)
+                ? JsonSerializer.Deserialize<PetSettings>(File.ReadAllText(_path),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? throw new InvalidDataException("导入设置为空")
+                : new PetSettings();
+            NormalizeLocked();
+        }
+        SettingsChanged?.Invoke();
+    }
+
+    internal byte[] ExportConfigTransferSnapshot()
+    {
+        lock (_lock)
+            return JsonSerializer.SerializeToUtf8Bytes(_settings, new JsonSerializerOptions { WriteIndented = true });
     }
 
     private void Load()

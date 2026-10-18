@@ -45,6 +45,12 @@ public sealed class HoeingStatsViewModel : ViewModelBase, IDisposable
         _refreshTimer.Start();
     }
 
+    internal void ReloadConfigTransferSettings()
+    {
+        OnPropertyChanged(nameof(StallThresholdMinutes));
+        OnPropertyChanged(nameof(StallBannerText));
+    }
+
     // ========== 成员实时状态墙（直接复用主 VM 成员集合） ==========
 
     /// <summary>成员列表（含 TaskRunning/CurrentTaskGroupName/CurrentRouteDisplay/CurrentScriptRouteName/AutoHoeingProgress）。</summary>

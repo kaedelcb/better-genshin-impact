@@ -180,6 +180,11 @@ public partial class MainViewModel
 
     private async Task<CommandResult> ExecuteCommandWithHoeingStopAsync(RemoteCommand command)
     {
+        if (!TryEnterConfigTransferOperation(command.Cmd, out var transferOperation))
+        {
+            return ConfigTransferRejectedResult();
+        }
+        using var configTransferOperation = transferOperation;
         if (command.Cmd is ("start_group" or "start_oneclick" or "start_bgi" or "hotkey_execute")
             && _localResetGate.CurrentCount == 0)
             return new CommandResult { ErrorCode = "reset_in_progress", Message = "正在完成状态重置，恢复完成后可重新启动联机" };

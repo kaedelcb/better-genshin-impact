@@ -84,6 +84,8 @@ public partial class MainViewModel
         _retryTimer?.Dispose();
         _retryTimer = new Timer(async _ =>
         {
+            if (!TryEnterConfigTransferOperation("connection_retry", out var transferOperation)) return;
+            using var configTransferOperation = transferOperation;
             // 上次重试的 StartAsync 可能还挂着（假死服务器协商超时 ~100s），不叠加（详见 _retryRunning 注释）
             if (Interlocked.CompareExchange(ref _retryRunning, 1, 0) != 0) return;
             SignalRClient? client = null;
@@ -188,6 +190,7 @@ public partial class MainViewModel
     /// </summary>
     private async Task ToggleStandaloneModeAsync()
     {
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         if (IsStandaloneMode)
         {
@@ -253,7 +256,7 @@ public partial class MainViewModel
     /// </summary>
     private void ScheduleSignalRRecovery(SignalRClient expected)
     {
-        if (_disposing || IsStandaloneMode) return;
+        if (_disposing || IsStandaloneMode || !CanEditConfiguration) return;
         _connectionRecoveryTimer?.Dispose();
         _connectionRecoveryTimer = new Timer(async _ =>
         {

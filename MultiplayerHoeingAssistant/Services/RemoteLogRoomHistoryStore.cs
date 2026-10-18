@@ -32,6 +32,8 @@ public sealed class RemoteLogRoomHistoryStore
         roomCode = roomCode.Trim();
         var record = Read().FirstOrDefault(r => r.ServerUrl == server && r.RoomCode == roomCode);
         if (record == null) return null;
+        if (string.IsNullOrEmpty(record.ProtectedPassword))
+            throw new InvalidOperationException("迁移的房间书签未包含密码，请重新输入密码授权连接");
         var bytes = ProtectedData.Unprotect(Convert.FromBase64String(record.ProtectedPassword),
             Entropy(server, roomCode), DataProtectionScope.CurrentUser);
         try { return Encoding.UTF8.GetString(bytes); }
