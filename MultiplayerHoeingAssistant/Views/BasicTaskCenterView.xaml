@@ -613,14 +613,23 @@
         </Popup>
         <Popup x:Name="NodeSettingsPopup" Placement="Right" AllowsTransparency="True" StaysOpen="False"
                PopupAnimation="Fade" HorizontalOffset="8" VerticalOffset="-20">
-            <Border Style="{DynamicResource QuestCard}" Width="480" MaxHeight="560" Padding="12">
+            <Border Style="{StaticResource BasicPopupCard}" Width="480" MaxHeight="560" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
                     <Grid Grid.Row="0" Margin="0,0,0,10">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
+                                    VerticalAlignment="Top" Margin="12,0,0,0">
                             <Button Content="读取刚才的修改" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="10.5"
                                     Command="{Binding DataContext.RefreshResourceReferenceCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     CommandParameter="{Binding Editing.SelectedNode}"
@@ -628,12 +637,13 @@
                             <Button Content="×" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="13"
                                     Margin="6,0,0,0" Click="CloseNodeSettingsClick" />
                         </StackPanel>
-                        <StackPanel Margin="0,0,42,0">
+                        <StackPanel Grid.Row="0" Grid.Column="0">
                             <TextBlock Text="配置单设置" Foreground="{DynamicResource GoldText}" FontSize="16" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding Editing.SelectedNode.DisplayName}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,3,0,0" />
-                            <TextBlock Text="点击日期或账号值即可直接修改；失败处理可在此配置单单独覆盖计划设置。"
-                                       Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding Editing.SelectedNode.DisplayName}" Foreground="{DynamicResource Dim}" FontSize="11"
+                                       Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
                         </StackPanel>
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="点击日期或账号值即可直接修改；失败处理可在此配置单单独覆盖计划设置。"
+                                   Foreground="{DynamicResource Dim}" FontSize="10.5" TextWrapping="Wrap" Margin="0,4,0,0" />
                     </Grid>
                     <ScrollViewer Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" VerticalScrollBarVisibility="Auto">
                         <views:ScheduleNodeStrategiesView DataContext="{Binding Editing.SelectedNode}" />

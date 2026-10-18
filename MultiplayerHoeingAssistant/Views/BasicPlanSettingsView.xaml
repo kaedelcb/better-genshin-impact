@@ -24,15 +24,20 @@
             <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="完成后立即开始下一轮" />
             <ComboBoxItem Style="{DynamicResource GoldComboItem}" Content="沿用已有自定义循环" />
         </ComboBox>
-        <TextBlock Text="每轮开始时间（每天到点）" Margin="0,7,0,4" />
+        <TextBlock Text="每轮开始时间（仅每天到点循环）" Margin="0,7,0,4" />
         <views:TimeOfDayPicker x:Name="PlanLoopTimePicker" Value="{Binding LoopTimeText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                               IsEnabled="{Binding CanEditLoopTime}" ToolTipService.ShowOnDisabled="True"
                                ShowSeconds="False" AllowEmpty="True" CommitOnSubmit="True"
-                               EmptyText="选择时间" Height="30" FontSize="12" />
-        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过本轮时间后等到次日" IsChecked="{Binding SkipAcrossDays}" Margin="3,7,3,0" />
-        <TextBlock Text="计划截止时间（可留空）" Margin="0,7,0,4" />
+                               EmptyText="{Binding LoopTimePlaceholder}" Height="30" FontSize="12"
+                               ToolTip="先选择「每天到点开始下一轮」，再设置每轮开始时间。" />
+        <CheckBox Style="{DynamicResource GuildCheckBox}" Content="错过本轮时间后等到次日" IsChecked="{Binding SkipAcrossDays}"
+                  IsEnabled="{Binding CanEditLoopTime}" Margin="3,7,3,0" />
+        <TextBlock Text="计划截止时间（循环时可选）" Margin="0,7,0,4" />
         <views:TimeOfDayPicker x:Name="PlanDeadlineTimePicker" Value="{Binding LoopDeadlineText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                               IsEnabled="{Binding CanEditLoopDeadline}" ToolTipService.ShowOnDisabled="True"
                                ShowSeconds="False" AllowEmpty="True" CommitOnSubmit="True"
-                               EmptyText="不设截止" Height="30" FontSize="12" />
+                               EmptyText="{Binding LoopDeadlinePlaceholder}" Height="30" FontSize="12"
+                               ToolTip="截止时间用于循环计划；先选择每天到点循环或完成后立即循环。" />
 
         <TextBlock Text="任务失败时" Margin="0,14,0,4" />
         <ComboBox Style="{DynamicResource GoldComboBox}" SelectedIndex="{Binding FailureModeIndex}">

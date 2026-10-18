@@ -159,9 +159,24 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         set
         {
             if (value < 0 || value > LoopPreserveIndex || !SetProperty(ref _loopModeIndex, value)) return;
+            OnPropertyChanged(nameof(CanEditLoopTime));
+            OnPropertyChanged(nameof(CanEditLoopDeadline));
+            OnPropertyChanged(nameof(LoopTimePlaceholder));
+            OnPropertyChanged(nameof(LoopDeadlinePlaceholder));
             OnPropertyChanged(nameof(PlanSettingsSummary));
         }
     }
+    public bool CanEditLoopTime => LoopModeIndex == 1;
+    public bool CanEditLoopDeadline => LoopModeIndex is 1 or 2;
+    public string LoopTimePlaceholder => LoopModeIndex switch
+    {
+        1 => "选择时间",
+        2 => "每轮完成后立即开始",
+        LoopPreserveIndex => "沿用自定义循环设置",
+        _ => "仅每天到点循环可设置",
+    };
+    public string LoopDeadlinePlaceholder => CanEditLoopDeadline ? "不设截止" : "仅循环模式可设置";
+
     public string LoopNote => _loopCustomPreserved
         ? "既有循环模式为自定义（默认「保留自定义」不修改；显式改选才覆盖 mode，其余参数保留）"
         : "不循环、每天到点开始下一轮，或完成后立即接续；已有参数保持。";

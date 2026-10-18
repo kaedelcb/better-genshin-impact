@@ -94,7 +94,6 @@ public sealed class PlanSettingsTimePickerTests
             saved = host.Workflows.LoadSnapshot("wf-time-picker").Document;
             Assert.Null(saved.Loop!.GetString("deadline"));
             panel.Editing!.LoopModeIndex = 0;
-            await Clear(loop, window);
             panel.SaveFlowCommand.Execute(null);
             await Until(window, () => host.Workflows.LoadSnapshot("wf-time-picker").Document.Loop is null);
 
@@ -106,11 +105,45 @@ public sealed class PlanSettingsTimePickerTests
             Assert.Equal("", loop.Value);
             Assert.Equal("", deadline.Value);
             Assert.Equal("立即开始", Display(start));
-            Assert.Equal("不设截止", Display(deadline));
+            Assert.Equal("仅循环模式可设置", Display(deadline));
             await Select(start, 0, 0, window, parentPopup);
             panel.SaveFlowCommand.Execute(null);
             await Until(window, () => host.Workflows.LoadSnapshot("wf-time-picker").Document.Triggers.Count == 1);
             Assert.Equal("00:00", host.Workflows.LoadSnapshot("wf-time-picker").Document.Triggers[0].GetString("time"));
+
+            // Single-round plans cannot persist loop-only fields. The UI must explain and prevent discarded edits.
+            Assert.False(loop.IsEnabled);
+            Assert.False(deadline.IsEnabled);
+            Assert.Equal("仅每天到点循环可设置", Display(loop));
+            Assert.Equal("仅循环模式可设置", Display(deadline));
+            var loopMode = Descendants<ComboBox>(form).Single(combo =>
+                BindingOperations.GetBindingExpression(combo, Selector.SelectedIndexProperty)?.ParentBinding.Path?.Path
+                    == nameof(WorkflowEditVm.LoopModeIndex));
+            loopMode.SelectedIndex = 1;
+            await Layout(window);
+            Assert.True(loop.IsEnabled);
+            Assert.True(deadline.IsEnabled);
+            await Select(loop, 14, 35, window, parentPopup);
+            await Select(deadline, 21, 5, window, parentPopup);
+            panel.SaveFlowCommand.Execute(null);
+            await Until(window, () => host.Workflows.LoadSnapshot("wf-time-picker").Document.Loop?.GetString("time") == "14:35");
+            saved = host.Workflows.LoadSnapshot("wf-time-picker").Document;
+            Assert.Equal("scheduled", saved.Loop!.Mode);
+            Assert.Equal("21:05", saved.Loop.GetString("deadline"));
+            parentPopup.IsOpen = false;
+            Click(open);
+            await Until(window, () => parentPopup.IsOpen);
+            await Layout(window);
+            Assert.Equal("14:35", loop.Value);
+            Assert.Equal("21:05", deadline.Value);
+            loopMode.SelectedIndex = 2;
+            await Layout(window);
+            Assert.False(loop.IsEnabled);
+            Assert.True(deadline.IsEnabled);
+            await Select(deadline, 22, 10, window, parentPopup);
+            panel.SaveFlowCommand.Execute(null);
+            await Until(window, () => host.Workflows.LoadSnapshot("wf-time-picker").Document.Loop?.Mode == "immediate");
+            Assert.Equal("22:10", host.Workflows.LoadSnapshot("wf-time-picker").Document.Loop!.GetString("deadline"));
         }
         finally
         {
@@ -165,9 +198,20 @@ public sealed class PlanSettingsTimePickerTests
     private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static async Task Open(TimeOfDayPicker picker, Window window)
     {
+        // Supply a marker resource to prove the list's internal viewer consumes the shared theme key.
+        var theme = new Style(typeof(ScrollViewer));
+        theme.Setters.Add(new Setter(FrameworkElement.TagProperty, "shared-gold-scroll-viewer"));
+        var names = picker.ShowSeconds ? new[] { "HourList", "MinuteList", "SecondList" } : new[] { "HourList", "MinuteList" };
+        foreach (var name in names) ((ListBox)picker.FindName(name)).Resources["GoldScrollViewer"] = theme;
         ((ToggleButton)picker.FindName("DropButton")).IsChecked = true;
         await Until(window, () => ((Popup)picker.FindName("PickerPopup")).IsOpen);
         await Layout(window);
+        foreach (var name in names)
+        {
+            var list = (ListBox)picker.FindName(name);
+            var viewer = Assert.IsType<ScrollViewer>(list.Template.FindName("TimeListScrollViewer", list));
+            Assert.Same(theme, viewer.Style);
+        }
     }
 
     private static async Task Select(TimeOfDayPicker picker, int hour, int minute, Window window, Popup parent)

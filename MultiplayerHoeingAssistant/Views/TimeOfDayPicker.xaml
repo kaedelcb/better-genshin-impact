@@ -9,6 +9,23 @@
          全程不需要键盘输入。 -->
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="PickerBoolToVis"/>
+        <Style x:Key="PickerTimeList" TargetType="ListBox">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBox">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="TimeListScrollViewer" Focusable="False"
+                                          Style="{DynamicResource GoldScrollViewer}" CanContentScroll="True"
+                                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                          Padding="{TemplateBinding Padding}">
+                                <ItemsPresenter/>
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <ToggleButton x:Name="DropButton" Cursor="Hand" Background="Transparent" BorderThickness="0"
@@ -46,6 +63,9 @@
                             <Setter TargetName="Bd" Property="Background" Value="#3B2E1A40"/>
                             <Setter TargetName="Bd" Property="BorderBrush" Value="#F0E8C96D"/>
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.5"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </ToggleButton.Template>
@@ -66,7 +86,7 @@
                         <!-- 三列滚选：时(00-23) / 分(00-59) / 秒(00-59) -->
                         <StackPanel Grid.Column="0">
                             <TextBlock Text="时" FontSize="10" Foreground="#9C97C0" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                            <ListBox x:Name="HourList" Width="46" MaxHeight="150" Background="Transparent"
+                            <ListBox x:Name="HourList" Style="{StaticResource PickerTimeList}" Width="46" MaxHeight="150" Background="Transparent"
                                      BorderThickness="1" BorderBrush="#40D4AF37"
                                      FontSize="12" Foreground="#F4F2FA" SelectionChanged="List_SelectionChanged">
                                 <ListBox.ItemTemplate>
@@ -102,7 +122,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="1" Margin="6,0,0,0">
                             <TextBlock Text="分" FontSize="10" Foreground="#9C97C0" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                            <ListBox x:Name="MinuteList" Width="46" MaxHeight="150" Background="Transparent"
+                            <ListBox x:Name="MinuteList" Style="{StaticResource PickerTimeList}" Width="46" MaxHeight="150" Background="Transparent"
                                      BorderThickness="1" BorderBrush="#40D4AF37"
                                      FontSize="12" Foreground="#F4F2FA" SelectionChanged="List_SelectionChanged">
                                 <ListBox.ItemTemplate>
@@ -139,7 +159,7 @@
                         <StackPanel x:Name="SecondsColumn" Grid.Column="2" Margin="6,0,0,0"
                                     Visibility="{Binding ShowSeconds, ElementName=PickerRoot, Converter={StaticResource PickerBoolToVis}}">
                             <TextBlock Text="秒" FontSize="10" Foreground="#9C97C0" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                            <ListBox x:Name="SecondList" Width="46" MaxHeight="150" Background="Transparent"
+                            <ListBox x:Name="SecondList" Style="{StaticResource PickerTimeList}" Width="46" MaxHeight="150" Background="Transparent"
                                      BorderThickness="1" BorderBrush="#40D4AF37"
                                      FontSize="12" Foreground="#F4F2FA" SelectionChanged="List_SelectionChanged">
                                 <ListBox.ItemTemplate>
