@@ -13,7 +13,7 @@ public partial class MainWindow : Window
     public MainViewModel ViewModel { get; }
     private readonly System.Windows.Threading.DispatcherTimer _roomCodeCopyHintTimer = new()
     {
-        Interval = TimeSpan.FromSeconds(2),
+        Interval = TimeSpan.FromSeconds(1.5),
     };
 
     private void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)

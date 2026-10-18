@@ -721,9 +721,9 @@
                             </Border>
                         </StackPanel>
                         <!-- Row 0 Col 1：设置 + 退出 -->
-                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="⚙ 设置" Style="{StaticResource BtnGold}" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
-                            <Button Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
+                        <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
+                            <Button x:Name="HeaderExitButton" Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                     ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>
                         </StackPanel>
                         <!-- Row 1 Col 0：副标题 + 导航按钮（同行，与Row 0的标题+信息结构一致） -->
@@ -779,11 +779,16 @@
                             </Button>
                         </StackPanel>
                         <!-- Row 1 Col 1：房间号 + 刷新按钮（在设置+退出正下方） -->
-                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,3,0,0">
-                            <Border x:Name="RoomCodeCopyBorder" Height="20" Padding="5,0" Margin="0,0,2,0" VerticalAlignment="Center"
+                        <Grid x:Name="RoomCodeActions" Grid.Row="1" Grid.Column="1" Width="{Binding ActualWidth, ElementName=HeaderActions}"
+                              VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,3,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="RoomCodeCopyBorder" Height="20" Padding="2,0" VerticalAlignment="Center"
                                     Background="{StaticResource Card}" BorderBrush="{StaticResource GoldDeep}" BorderThickness="1" CornerRadius="4"
                                     Cursor="Hand" ToolTip="点击复制房间号" MouseLeftButtonUp="CopyRoomCodeClick">
-                                <TextBlock x:Name="RoomCodeCopyText" Text="{Binding RoomCode, StringFormat='房间 {0}'}" FontSize="11" Foreground="{StaticResource GoldText}" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="RoomCodeCopyText" Text="{Binding RoomCode, StringFormat='房间 {0}'}" FontSize="10" Foreground="{StaticResource GoldText}" VerticalAlignment="Center"/>
                             </Border>
                             <Popup x:Name="RoomCodeCopyHint" Placement="Bottom" PlacementTarget="{Binding ElementName=RoomCodeCopyBorder}" VerticalOffset="4"
                                    AllowsTransparency="True" StaysOpen="True" IsHitTestVisible="False">
@@ -791,9 +796,10 @@
                                     <TextBlock Text="房间号已复制到粘贴板。" FontSize="11" Foreground="{StaticResource GoldText}"/>
                                 </Border>
                             </Popup>
-                            <Button Content="⟳" Style="{StaticResource TextAction}" FontSize="14" Margin="0,0,0,3" VerticalAlignment="Center"
+                            <Button x:Name="HeaderRefreshButton" Grid.Column="1" Width="{Binding ActualWidth, ElementName=HeaderExitButton}"
+                                    Content="⟳" Style="{StaticResource TextAction}" FontSize="14" Margin="6,0,0,3" VerticalAlignment="Center"
                                     ToolTip="刷新助手所有状态" Command="{Binding RefreshCommand}"/>
-                        </StackPanel>
+                        </Grid>
                     </Grid>
                 </Grid>
 
