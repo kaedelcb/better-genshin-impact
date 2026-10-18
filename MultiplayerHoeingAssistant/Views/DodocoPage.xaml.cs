@@ -32,6 +32,10 @@ public partial class DodocoPage : UserControl
     private int _renderVersion;
     private bool _rendering;
     private bool _renderDirty;
+    private bool _syncQueued;
+    private bool _restoringScroll;
+    private int _scrollVersion;
+    private readonly List<LogEntry> _renderedEntries = new();
 
     public DodocoPage()
     {
@@ -74,32 +78,50 @@ public partial class DodocoPage : UserControl
 
     // ========== 实时日志：RichTextBox 渲染 ==========
 
-    /// <summary>VM 可见集合变化 → 段落增删。约定：新增只发生在尾部、裁剪只发生在头部、筛选/切来源是 Reset。</summary>
+    /// <summary>实时变化合帧增量同步；只有筛选/切来源等显式 Reset 才重建文档。</summary>
     private void OnVisibleEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (DataContext is not DodocoViewModel vm) return;
-        var doc = RealtimeLog.Document;
-        switch (e.Action)
+        if (e.Action == NotifyCollectionChangedAction.Reset && !vm.VisibleEntries.IsLiveRefresh)
         {
-            case NotifyCollectionChangedAction.Reset:
-                if (_rendering && vm.VisibleEntries.IsLiveRefresh) { _renderDirty = true; break; }
-                RebuildRealtimeDocument(vm);
-                break;
-            case NotifyCollectionChangedAction.Add:
-                if (_rendering) { _renderDirty = true; break; }
-                if (e.NewItems != null)
-                    foreach (var item in e.NewItems)
-                        if (item is LogEntry entry) doc.Blocks.Add(RenderEntry(entry));
-                FollowTailIfNeeded(vm);
-                break;
-            case NotifyCollectionChangedAction.Remove:
-                if (_rendering) { _renderDirty = true; break; }
-                // 环形缓冲超容从头部裁剪（RemoveAt(0)），同步摘掉开头段落
-                var removeCount = e.OldItems?.Count ?? 0;
-                for (var i = 0; i < removeCount && doc.Blocks.FirstBlock != null; i++)
-                    doc.Blocks.Remove(doc.Blocks.FirstBlock);
-                break;
+            RebuildRealtimeDocument(vm);
+            return;
         }
+        if (_rendering) { _renderDirty = true; return; }
+        if (_syncQueued) return;
+        _syncQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        {
+            _syncQueued = false;
+            if (_rendering) { _renderDirty = true; return; }
+            SyncRealtimeDocument(vm);
+        });
+    }
+
+    /// <summary>保留窗口重叠部分的段落和选区，只摘掉过期头部、分批追加新尾部。</summary>
+    private void SyncRealtimeDocument(DodocoViewModel vm)
+    {
+        var version = ++_renderVersion;
+        var entries = vm.VisibleEntries.ToArray();
+        var first = entries.Length == 0 ? -1
+            : _renderedEntries.FindIndex(entry => ReferenceEquals(entry, entries[0]));
+        var retained = first < 0 ? 0 : _renderedEntries.Count - first;
+        if (retained > entries.Length || Enumerable.Range(0, retained)
+                .Any(i => !ReferenceEquals(_renderedEntries[first + i], entries[i])))
+            retained = 0;
+        var removeCount = _renderedEntries.Count - retained;
+        var anchor = CaptureRealtimeScrollAnchor(vm);
+        var doc = RealtimeLog.Document;
+        _renderDirty = false;
+        _rendering = true;
+        RealtimeLog.BeginChange();
+        try
+        {
+            for (var i = 0; i < removeCount; i++) doc.Blocks.Remove(doc.Blocks.FirstBlock!);
+            _renderedEntries.RemoveRange(0, removeCount);
+        }
+        finally { RealtimeLog.EndChange(); }
+        RenderRealtimeChunk(vm, doc, entries, retained, version, anchor);
     }
 
     private void RebuildRealtimeDocument(DodocoViewModel vm)
@@ -108,6 +130,7 @@ public partial class DodocoPage : UserControl
         var entries = vm.VisibleEntries.ToArray();
         var doc = new FlowDocument { PagePadding = new Thickness(0) };
         RealtimeLog.Document = doc;
+        _renderedEntries.Clear();
         _renderDirty = false;
         _rendering = entries.Length > 0;
         vm.LogLoadProgress = entries.Length == 0 ? 100 : 0;
@@ -118,23 +141,63 @@ public partial class DodocoPage : UserControl
     }
 
     /// <summary>每轮只排版少量段落，让 WPF 在批次之间处理输入、绘制进度和新日志。</summary>
-    private void RenderRealtimeChunk(DodocoViewModel vm, FlowDocument doc, LogEntry[] entries, int start, int version)
+    private void RenderRealtimeChunk(DodocoViewModel vm, FlowDocument doc, LogEntry[] entries, int start, int version,
+        (TextPointer Position, double Top, int ScrollVersion)? anchor = null)
     {
         if (version != _renderVersion) return;
         var end = Math.Min(start + 12, entries.Length);
-        for (var i = start; i < end; i++) doc.Blocks.Add(RenderEntry(entries[i]));
-        vm.LogLoadProgress = end * 100 / entries.Length;
+        RealtimeLog.BeginChange();
+        try
+        {
+            for (var i = start; i < end; i++)
+            {
+                doc.Blocks.Add(RenderEntry(entries[i]));
+                _renderedEntries.Add(entries[i]);
+            }
+        }
+        finally { RealtimeLog.EndChange(); }
+        if (vm.IsLogLoading) vm.LogLoadProgress = entries.Length == 0 ? 100 : end * 100 / entries.Length;
         if (end < entries.Length)
         {
             Dispatcher.BeginInvoke(DispatcherPriority.Background,
-                () => RenderRealtimeChunk(vm, doc, entries, end, version));
+                () => RenderRealtimeChunk(vm, doc, entries, end, version, anchor));
             return;
         }
         _rendering = false;
         vm.IsLogLoading = false;
         FollowTailIfNeeded(vm);
-        // 排版期间若收到实时行或窗口裁剪，按最新窗口再同步一次；当前批次已经显示且 UI 始终可操作。
-        if (_renderDirty) RebuildRealtimeDocument(vm);
+        RestoreRealtimeScrollAnchor(vm, anchor, version);
+        // 初次排版期间到达的新日志也只增量追平，不能再次清文档、重启加载。
+        if (_renderDirty) SyncRealtimeDocument(vm);
+    }
+
+    private (TextPointer Position, double Top, int ScrollVersion)? CaptureRealtimeScrollAnchor(DodocoViewModel vm)
+    {
+        if (vm.AutoFollow) return null;
+        var position = RealtimeLog.GetPositionFromPoint(new Point(4, 4), snapToText: true);
+        if (position == null) return null;
+        var rect = position.GetCharacterRect(LogicalDirection.Forward);
+        return rect.IsEmpty ? null : (position, rect.Top, _scrollVersion);
+    }
+
+    private void RestoreRealtimeScrollAnchor(DodocoViewModel vm,
+        (TextPointer Position, double Top, int ScrollVersion)? anchor, int version)
+    {
+        if (anchor is not { } saved) return;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
+        {
+            if (version != _renderVersion || vm.AutoFollow || saved.ScrollVersion != _scrollVersion) return;
+            _restoringScroll = true;
+            try
+            {
+                RealtimeLog.UpdateLayout();
+                var rect = saved.Position.GetCharacterRect(LogicalDirection.Forward);
+                if (!rect.IsEmpty)
+                    RealtimeLog.ScrollToVerticalOffset(RealtimeLog.VerticalOffset + rect.Top - saved.Top);
+                RealtimeLog.UpdateLayout();
+            }
+            finally { _restoringScroll = false; }
+        });
     }
 
     /// <summary>渲染一条日志为段落：时间（暗）+ 级别 + [实例]（水色）+ 来源与消息（按级别上色）。</summary>
@@ -158,16 +221,17 @@ public partial class DodocoPage : UserControl
     /// <summary>实时日志滚动：新内容到达且跟尾开启时滚到底；用户上翻暂停跟尾，滚回底部恢复。</summary>
     private void RealtimeLog_ScrollChanged(object sender, ScrollChangedEventArgs e)
     {
-        if (DataContext is not DodocoViewModel vm) return;
+        if (_restoringScroll || DataContext is not DodocoViewModel vm) return;
         var sv = e.OriginalSource as ScrollViewer ?? _realtimeScroller;
         if (sv == null) return;
 
-        if (e.ExtentHeightChange > 0)
+        if (e.ExtentHeightChange != 0)
         {
             if (vm.AutoFollow) RealtimeLog.ScrollToEnd();
         }
-        else if (e.VerticalChange != 0 || e.ViewportHeightChange != 0)
+        else if (e.VerticalChange != 0 && e.ViewportHeightChange == 0)
         {
+            _scrollVersion++;
             var atBottom = sv.VerticalOffset >= sv.ScrollableHeight - 2;
             if (vm.AutoFollow != atBottom) vm.AutoFollow = atBottom;
         }

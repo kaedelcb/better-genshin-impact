@@ -78,11 +78,14 @@ public sealed partial class RemoteLogRoomTests
             await selfDelivery.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await Until(() => logs.VisibleEntries.Any(e => e.Message.Contains(marker)));
             Assert.DoesNotContain(executionWindow.Dodoco.LogSources, s => s.Key == uid);
+            await VerifyRealtimeWindowRefreshAsync(monitorWindow, executor, uid, suffix);
             executor.OnMemberLogBatch -= ReceiveSelf;
             await executor.UnsubscribeMemberLogAsync(uid);
             logs.SelectedSource = logs.LogSources.Single(s => s.Key == DodocoViewModel.LocalSourceKey);
             await Until(() => manager.GetLogSubscriberCount("CTRL_" + room, uid) == 0);
             Assert.DoesNotContain(logs.VisibleEntries, e => e.Message.Contains(marker));
+            await VerifyLocalRealtimeTailAsync(monitorWindow,
+                Path.Combine(monitorRoot, "log", "better-genshin-impact20991017.log"), suffix);
 
             // 监控电脑本机目录不同；必须经成员列表请求同 UID 执行端的文件并下载。
             logs.SelectedTabIndex = 1;
