@@ -116,6 +116,7 @@ public sealed partial class TaskCenterPanelViewModel
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
             OnPropertyChanged(nameof(CurrentPlanRunsHeight));
             OnPropertyChanged(nameof(CanStartSelectedPlan));
+            NotifyResetExecutionStateAvailability();
             await ReconcileRemoteEditingRevisionAsync(entries);
             if (Previewing is { } preview && entries.FirstOrDefault(entry => entry.WorkflowId == preview.WorkflowId) is { } currentPreview
                 && currentPreview.Revision != preview.Revision)

@@ -414,6 +414,7 @@ public partial class ScheduleListView : UserControl
         menu.Items.Add(new MenuItem {Header="导出整份调度列表…",Command=host.ExportScheduleCommand});
         menu.Items.Add(new Separator());
         menu.Items.Add(new MenuItem {Header="删除当前计划…",Command=host.DeleteFlowCommand,CommandParameter=FlowChoice.SelectedItem,IsEnabled=FlowChoice.SelectedItem is WorkflowListItemVm {IsQuarantined:false}});
+        menu.Items.Add(new MenuItem {Header="重置执行状态…",Command=host.ResetExecutionStateCommand});
         var restore=new MenuItem {Header="恢复已删除的计划"};
         foreach(var receipt in host.DeletedFlows)
         {

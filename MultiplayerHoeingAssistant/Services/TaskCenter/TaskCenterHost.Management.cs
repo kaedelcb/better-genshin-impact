@@ -34,7 +34,7 @@ public sealed partial class TaskCenterHost
                         return 0;
                     }
                     var responsible = snapshot.Records.FirstOrDefault(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase) &&
-                        (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)));
+                        (!IsExecutionResetReleased(run) && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run))));
                     if (responsible is not null)
                     {
                         // BGI 的 job 表是进程内的；进程重启后旧 Unknown 可能永远无法再命中。
@@ -42,7 +42,7 @@ public sealed partial class TaskCenterHost
                         // 保留原运行记录，不把未知结果改写成成功/失败，也不触发任何重发。
                         var unknownOnly = snapshot.Records
                             .Where(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase)
-                                && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
+                                && (!IsExecutionResetReleased(run) && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run))))
                             .All(run => run.State == WorkflowRunState.Unknown);
                         if (!acknowledgeUnknownRuns || !unknownOnly)
                         {
@@ -104,10 +104,10 @@ public sealed partial class TaskCenterHost
                         snapshot.Records.Any(run => string.IsNullOrWhiteSpace(run.WorkflowId)))
                         return HostActionResult.Unavailable("有运行记录无法确认所属计划，不能安全删除；原件已保留。");
                     var responsible = snapshot.Records.FirstOrDefault(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase) &&
-                        (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)));
+                        (!IsExecutionResetReleased(run) && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run))));
                     if (responsible is not null && (!acknowledgeUnknownRuns || snapshot.Records
                         .Where(run => string.Equals(run.WorkflowId, workflowId, StringComparison.OrdinalIgnoreCase)
-                            && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
+                            && (!IsExecutionResetReleased(run) && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run))))
                         .Any(run => run.State != WorkflowRunState.Unknown)))
                         return HostActionResult.Unavailable("计划仍有运行或未确认责任，请先停止并结清；未删除计划。");
                     var receipt = _workflows.Delete(workflowId, expectedRevision);
@@ -146,6 +146,8 @@ public sealed partial class TaskCenterHost
         try
         {
             var current = _workflows.LoadSnapshot(workflowId);
+            if (!string.Equals(current.Document.WorkflowId, workflowId, StringComparison.Ordinal))
+                return "计划身份大小写或内容不一致，未启动；请刷新后使用原计划入口。";
             return current.Revision.Equals(revision, StringComparison.OrdinalIgnoreCase)
                 ? null : "计划在准备启动期间已修改，请刷新后重新开始。";
         }

@@ -471,6 +471,7 @@ public sealed partial class WorkflowRunner
         bool armTriggerLaunch = false)
     {
         var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
+        if (TaskCenterHost.IsExecutionResetReleased(run)) throw new InvalidOperationException("此运行已重置执行状态，禁止重新驱动旧任务。");
         if (run.State is not WorkflowRunState.Planned)
             throw new InvalidOperationException($"仅 Planned 新运行可经移交入口驱动（当前 {run.State}）。");
 
@@ -527,6 +528,7 @@ public sealed partial class WorkflowRunner
         {
             // 先取得本 Runner 的运行控制，再读取与修改记录；控制冲突不得先写 Running/修订。
             var run = _runs.Load(runId) ?? throw new FileNotFoundException("运行记录不存在：" + runId);
+            if (TaskCenterHost.IsExecutionResetReleased(run)) throw new InvalidOperationException("此运行已重置执行状态，禁止重新驱动旧任务。");
             if (run.State == WorkflowRunState.Unknown)
                 throw new InvalidOperationException("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复。");
             if (run.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused

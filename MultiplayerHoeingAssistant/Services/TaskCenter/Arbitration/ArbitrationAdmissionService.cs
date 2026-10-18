@@ -626,7 +626,7 @@ public sealed class ArbitrationAdmissionService
     /// 操作移入追加式行政隔离区。原操作快照完整保留，不伪造远端成功/失败，也不允许自动重发；
     /// 这样旧 Unknown 历史不会永久堵死新的启动入口。
     /// </summary>
-    public int RetireUnknownOperations(string runBinding, string reason)
+    public int RetireUnknownOperations(string runBinding, string reason, bool includeRetryableRejected = false)
     {
         using var ownerResponsibility = BeginOwnerResponsibility();
         if (string.IsNullOrWhiteSpace(runBinding) || OwnerEntryReject() is not null)
@@ -648,7 +648,8 @@ public sealed class ArbitrationAdmissionService
                         or OperationRequestState.Granted
                         or OperationRequestState.Sending
                         or OperationRequestState.Reconciling
-                        or OperationRequestState.Accepted)
+                        or OperationRequestState.Accepted
+                        || includeRetryableRejected && operation.RequestState == OperationRequestState.RetryableRejected)
                     && operation.ExecutionResult is null
                     && operation.PendingTerminal is null
                     && !operation.ConflictPending)

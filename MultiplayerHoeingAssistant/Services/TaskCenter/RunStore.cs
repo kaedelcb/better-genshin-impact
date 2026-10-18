@@ -534,6 +534,7 @@ public sealed partial class RunStore
         var recovered = new List<WorkflowRunRecord>();
         foreach (var rec in List())
         {
+            if (ExecutionResetEvidence.Valid(rec)) continue;
             if (rec.PendingCompletion is { TerminalEffectToken: not null })
             {
                 try { BgiWorkflowTerminalExecutor.ReconcileDurableEffect(this, rec, TerminalEffectObserverForTest); }
@@ -645,7 +646,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null)
+    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null)
     {
         lock (_gate)
         {
@@ -709,6 +710,8 @@ public sealed partial class RunStore
             throw new RunRecordConflictException("新记录不能补造已消费的迁移入口。");
         if (currentText is null && rec.AdmissionMappings is not null)
             throw new RunRecordConflictException("新记录不能补造原准入映射。");
+        if (currentText is null && rec.ExecutionResetRelease is not null)
+            throw new RunRecordConflictException("新运行不得补造执行重置释放证据。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)
@@ -729,7 +732,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed, authorizedReset);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

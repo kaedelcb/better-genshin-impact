@@ -108,6 +108,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <!--
@@ -152,6 +153,23 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
+
+        <Expander Grid.Row="2" Header="当前计划的运行历史" Margin="0,8,0,0"
+                  Visibility="{Binding HasCurrentPlanHistory, Converter={StaticResource Visible}}">
+            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding CurrentPlanHistory}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="8,5">
+                                <TextBlock Text="{Binding StateBadge}" Foreground="{DynamicResource GoldText}" />
+                                <TextBlock Text="{Binding Summary}" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" FontSize="11" />
+                                <TextBlock Text="{Binding NoteText}" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" FontSize="11" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Expander>
 
         <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="0">
             <Grid>
@@ -312,6 +330,9 @@
                                             Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
                                     <Button Content="导出全部配置" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
+                                    <Button x:Name="ResetExecutionStateButton" Content="重置执行状态" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
+                                            Command="{Binding ResetExecutionStateCommand}" IsEnabled="{Binding CanResetExecutionState}"
+                                            ToolTip="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动" />
                                     <Button Content="▶ 启动单个任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的任务" />
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Padding="9,3" Margin="0" Click="StartContinuousClick"

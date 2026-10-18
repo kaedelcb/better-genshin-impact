@@ -104,6 +104,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         {
             if (!SetProperty(ref _selectedWorkflowId, value)) return;
             PersistCurrentWorkflowSelection(value);
+            NotifyResetExecutionStateAvailability();
             OnPropertyChanged(nameof(CanStartSelectedPlan));
             OnPropertyChanged(nameof(CurrentPlanRuns));
             OnPropertyChanged(nameof(HasCurrentPlanRuns));
@@ -1089,6 +1090,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
                 else if (first is not null) BeginPreview(first.WorkflowId);
             }
             NotifyWorkspace();
+            NotifyResetExecutionStateAvailability();
             SnapshotRefreshed?.Invoke();
             OnPropertyChanged(nameof(SelectedWorkflowId));
         }
@@ -1323,6 +1325,12 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         CanResume = run.OnlineHoeingHandoff is null
             && (run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
                 || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting));
+        if (TaskCenterHost.IsExecutionResetReleased(run))
+        {
+            StateText = $"已重置执行状态（原状态：{run.State}）";
+            ActionHintText = "旧执行已放弃，原始历史保留；可手动启动新运行。";
+            BlocksNewStart = CanStop = CanSkip = CanPause = CanReload = CanResume = false;
+        }
         _renderedRecordRevision = run.RecordRevision;
         _renderedFlowRevision = currentFlowRevision ?? flowSnapshot?.Revision;
         _renderedDriving = driving;
@@ -1381,10 +1389,13 @@ public sealed class HistoryRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeye
     internal HistoryRunVm(WorkflowRunRecord run) => _run = run;
 
     public string RunId => _run.RunId;
+    public string WorkflowId => _run.WorkflowId;
+    public string? NoteText => _run.Note;
 
     public string Key => _run.RunId;
     public string RunIdShort => _run.RunId.Length > 8 ? _run.RunId[..8] : _run.RunId;
-    public string StateBadge => _run.State.ToString();
+    public string StateBadge => TaskCenterHost.IsExecutionResetReleased(_run)
+        ? $"已重置执行状态（原状态：{_run.State}）" : _run.State.ToString();
     public string Summary
     {
         get

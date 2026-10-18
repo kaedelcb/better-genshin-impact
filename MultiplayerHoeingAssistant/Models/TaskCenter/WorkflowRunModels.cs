@@ -258,6 +258,11 @@ public sealed class WorkflowRunRecord
     [JsonPropertyName("stopRequested")]
     public bool StopRequested { get; set; }
 
+    /// <summary>显式重置的追加释放证据；不改变原状态和失败事实，不代表业务成功。</summary>
+    [JsonPropertyName("executionResetRelease")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ExecutionResetReleaseRecord? ExecutionResetRelease { get; set; }
+
     [JsonPropertyName("stopAuthority")]
     public WorkflowStopAuthorityRecord? StopAuthority { get; set; }
 

@@ -117,6 +117,7 @@ public partial class MainViewModel
             "startup.run" or "task.catalog.connect" or "task.flow.import" or "task.schedule.import"
             or "task.migration.prepare" or "task.migration.activate" or "task.migration.rollback"
             or "task.migration.rehearsal" or "task.run.start" or "task.run.resume"
+            or "task.flow.resetExecutionState"
         || request.Operation == "task.run.action"
             && Decode<RunActionArgs>(request.PayloadJson).Action != nameof(WorkflowRunAction.Stop);
 
@@ -440,6 +441,12 @@ public partial class MainViewModel
                 return result.Status == HostActionStatus.Unavailable
                     ? RemoteCenterReply.Rejected(result.Message)
                     : RemoteCenterReply.Ok(message: result.Message);
+            }
+            case "task.flow.resetExecutionState":
+            {
+                var workflowId = Decode<string>(request.PayloadJson);
+                return BeginTrackedOperation(requestId, fingerprint,
+                    () => host.ResetWorkflowExecutionStateAsync(workflowId));
             }
             case "task.migration.prepare":
             {

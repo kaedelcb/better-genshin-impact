@@ -44,7 +44,7 @@ public sealed partial class TaskCenterHost
     {
         var currentEpoch = WorkflowStopAuthority.Epoch(
             _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch);
-        var before = _runs.List();
+        IReadOnlyList<WorkflowRunRecord> before = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList();
         var pendingTerminal = (_admissionWired ? before : Array.Empty<WorkflowRunRecord>()).Where(r => r.State == WorkflowRunState.Cancelled
             && r.StopRequested && r.TerminalRelease is null
             && r.OnlineHoeingHistory.Any(h => h.Phase == "stopped"
@@ -58,7 +58,7 @@ public sealed partial class TaskCenterHost
         await EnsureRecoveredAsync().ConfigureAwait(false);
         // 同一助手进程中 BGI 单独退出时，启动恢复扫描已执行过；无驱动的旧停驻记录
         // 仍需在原身份下标 Unknown，随后才可按已确认的取消/退出事实结清。
-        foreach (var run in _runs.List())
+        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
         {
             if (run.State != WorkflowRunState.OnlineHoeingParking
                 || run.OnlineHoeingHandoff is not { } old
@@ -79,7 +79,7 @@ public sealed partial class TaskCenterHost
             }
         }
         var settled = new List<string>();
-        foreach (var run in _runs.List())
+        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
         {
             if (run.OnlineHoeingHandoff is not { } handoff
                 || !OriginalOnlineHandoffProcessExited(handoff, currentEpoch)) continue;
@@ -136,7 +136,7 @@ public sealed partial class TaskCenterHost
                     + runId + " " + result.Message);
             }
         }
-        var remaining = _runs.List().Count(r => r.OnlineHoeingHandoff is not null);
+        var remaining = _runs.List().Where(run => !IsExecutionResetReleased(run)).Count(r => r.OnlineHoeingHandoff is not null);
         return new OnlineHandoffRecoveryResult(settled.Count, remaining, pendingReconciliations);
     }
 
@@ -170,7 +170,7 @@ public sealed partial class TaskCenterHost
             {
                 var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
                 var epoch = WorkflowStopAuthority.Epoch(current);
-                return _runs.List().Any(r => BlocksCurrentOnlineBatch(r, epoch));
+                return _runs.List().Where(run => !IsExecutionResetReleased(run)).Any(r => BlocksCurrentOnlineBatch(r, epoch));
             }
             catch { return true; } // 运行台账不可读不等于没有待恢复责任。
         }
@@ -185,7 +185,7 @@ public sealed partial class TaskCenterHost
             {
                 var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
                 var epoch = WorkflowStopAuthority.Epoch(current);
-                return _runs.List().All(r => !BlocksCurrentOnlineBatch(r, epoch)
+                return _runs.List().Where(run => !IsExecutionResetReleased(run)).All(r => !BlocksCurrentOnlineBatch(r, epoch)
                     || r.OnlineHoeingHandoff?.Phase is "resumeAccepted" or "observing" or "terminal");
             }
             catch { return false; }
@@ -220,7 +220,7 @@ public sealed partial class TaskCenterHost
             return new OnlineHoeingPreparation(false, null, "BGI 进程纪元在接管前发生变化");
 
         WorkflowRunRecord? target = null;
-        var currentRuns = _runs.List();
+        var currentRuns = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList();
         if (currentRuns.Any(r => BlocksCurrentOnlineBatch(r, epoch)))
             return new OnlineHoeingPreparation(false, null, "上一轮计划接管或恢复作业尚未结清");
         var runs = currentRuns.Where(r => !r.IsTerminal).ToList();
@@ -351,7 +351,7 @@ public sealed partial class TaskCenterHost
     {
         if (Volatile.Read(ref _manualResetActive) != 0) return;
         await _onlineSendGate.OpenAsync().ConfigureAwait(false);
-        foreach (var parked in _runs.List().Where(r => r.OnlineHoeingGateParked
+        foreach (var parked in _runs.List().Where(run => !IsExecutionResetReleased(run)).Where(r => r.OnlineHoeingGateParked
                      && r.OnlineHoeingHandoff is null && r.State == WorkflowRunState.LocalWaitParking
                      && r.RunId != skipAutoRunId))
         {
@@ -396,7 +396,7 @@ public sealed partial class TaskCenterHost
 
         // 先给所有当前有驱动/等待状态的任务登记 Stop；BGI 随后由全局复位受控重建，
         // 这样普通单机/一条龙的宿主驱动也不会在复位后继续发下一项。
-        var activeRunIds = _runs.List()
+        var activeRunIds = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList()
             .Where(r => ActiveStates.Contains(r.State))
             .Select(r => r.RunId)
             .Where(static id => !string.IsNullOrWhiteSpace(id))
@@ -419,7 +419,7 @@ public sealed partial class TaskCenterHost
         }
 
         var abandoned = 0;
-        foreach (var run in _runs.List())
+        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
         {
             if (run.OnlineHoeingHandoff is null && !run.OnlineHoeingGateParked)
                 continue;
@@ -469,7 +469,7 @@ public sealed partial class TaskCenterHost
 
             // 只看进程内驱动数量会漏掉未驱动但仍处于活动态的耐久运行。
             // 这些运行必须至少已落盘停止意图，否则不能宣称任务中心复位完成。
-            var unstoppedRuns = _runs.List()
+            var unstoppedRuns = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList()
                 .Where(r => ActiveStates.Contains(r.State) && !r.StopRequested)
                 .Select(r => r.RunId).ToArray();
             if (driversSettled && unstoppedRuns.Length == 0)

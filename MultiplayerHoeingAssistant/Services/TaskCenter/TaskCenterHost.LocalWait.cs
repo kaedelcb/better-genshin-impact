@@ -125,7 +125,7 @@ public sealed partial class TaskCenterHost
         var snapshot = _runs.ListWithIntegrity("local-wait-select");
         if (snapshot.UnknownFiles.Count != 0) return;
         var currentEpoch = CurrentBgiEpoch();
-        if (snapshot.Records.Any(run => RunStore.HasUnresolvedExternalFact(run)
+        if (snapshot.Records.Any(run => !IsExecutionResetReleased(run) && RunStore.HasUnresolvedExternalFact(run)
             && (run.AdmissionSourceScope == "bgi:local:" + currentEpoch
                 || run.StopAuthority?.Epoch == currentEpoch
                 || run.CurrentSubmission?.Epoch == currentEpoch
@@ -194,6 +194,7 @@ public sealed partial class TaskCenterHost
         var matches = records.Where(r => r.LocalWaitDecision?.Binding?.ItemId == item.ItemId).ToList();
         if (matches.Count != 1) return null;
         var run = matches[0];
+        if (IsExecutionResetReleased(run)) return null;
         lock (_gate)
         {
             if (_shutdown || _drives.ContainsKey(run.WorkflowId) || _reservedWorkflows.Contains(run.WorkflowId)

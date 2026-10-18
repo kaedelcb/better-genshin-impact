@@ -381,6 +381,7 @@ public partial class BasicTaskCenterView : UserControl
         if (current is not null)
         {
             menu.Items.Add(Menu("导出当前计划表…", Host.ExportFlowCommand, current));
+            menu.Items.Add(Menu("重置执行状态…", Host.ResetExecutionStateCommand));
             menu.Items.Add(new Separator());
             menu.Items.Add(Menu("删除当前计划表…", Host.DeleteFlowCommand, current));
         }
