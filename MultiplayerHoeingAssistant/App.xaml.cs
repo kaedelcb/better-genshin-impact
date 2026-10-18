@@ -402,6 +402,10 @@ public partial class App : Application
         try { _mainWindow?.Pet?.Shutdown(); }
         catch { /* 退出路径不影响关进程 */ }
 
+        // 正常退出只撤下进程内来源；先于宿主关闭，避免晚到查询误撤销持久自动许可。
+        try { _mainWindow?.Mistletoe.PrepareForApplicationExit(); }
+        catch (Exception ex) { RuntimeLog.WriteLine("[槲寄生] 退出清理失败：" + ex.Message); }
+
         // 释放 ViewModel 后台资源（SignalR 连接 / 业务定时器 / 进程监控），避免进程残留
         _mainViewModel?.Shutdown();
         _mainViewModel = null;

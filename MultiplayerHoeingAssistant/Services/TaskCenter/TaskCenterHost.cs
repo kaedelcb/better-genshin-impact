@@ -469,7 +469,10 @@ public sealed partial class TaskCenterHost
         lock (_gate)
         {
             if (_shutdown) throw new InvalidOperationException("宿主已关闭，不能挂载来源");
-            if (CapabilityBlockReason() is { } blocked) throw new InvalidOperationException(blocked);
+            // 配置迁移、未知与停止仍按原安全边界拒绝；仅已知角色变化不代表许可被停止。
+            if (_configurationTransfer) throw new InvalidOperationException(CapabilityBlockReason());
+            if (_localExecutionCapability is { } capability && !capability())
+                throw new StartupModeUnavailableException("当前为监控端（无本地执行能力），任务中心执行入口由能力守卫统一拒绝");
         }
         if (source.Authority is { } original && _runs.IsStartupSourceRevoked(original))
             throw new InvalidOperationException("原来源已经耐久停止，自动回调不得以新 runId 恢复旧意图。");

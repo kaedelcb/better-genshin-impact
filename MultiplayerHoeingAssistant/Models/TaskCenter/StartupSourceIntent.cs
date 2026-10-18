@@ -14,6 +14,7 @@ public sealed class StartupSourceIntent
     public long IntentTimestamp { get; }
     public WorkflowStopAuthorityRecord? Authority => Volatile.Read(ref _authority);
     public bool Revoked => _revoked;
+    internal void Revoke() => _revoked = true;
     /// <summary>监控端本地动作来源：永不获取本机 BGI 停止权威，切到执行端后也不能升级旧回调。</summary>
     public bool LocalOnly { get; }
 
@@ -80,6 +81,7 @@ public sealed class StartupSourceIntent
                 return null;
             }
             var current = await refresh(this, required, ct).ConfigureAwait(false);
+            if (_revoked) throw new OperationCanceledException("来源已撤销，不能接收在途授权", ct);
             if (current is null)
             {
                 if (required || _authority is not null)
@@ -101,3 +103,6 @@ public sealed class StartupSourceIntent
         finally { _gate.Release(); }
     }
 }
+
+/// <summary>角色暂时不允许本机执行；中止旧来源，但不能据此永久撤销用户的自动启动许可。</summary>
+internal sealed class StartupModeUnavailableException(string message) : InvalidOperationException(message);

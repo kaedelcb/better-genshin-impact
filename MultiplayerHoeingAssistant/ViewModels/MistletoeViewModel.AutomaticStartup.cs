@@ -86,15 +86,24 @@ public sealed partial class MistletoeViewModel
 
     private void RetryPendingAutomaticSource()
     {
-        if (_config.Enabled && !_automaticSaveFailed && _config.AutomaticAuthorization?.Revoked != true
+        if (_mainVm.IsExecutorMode && _config.Enabled && !_automaticSaveFailed && _config.AutomaticAuthorization?.Revoked != true
             && _configuredAutoSource is { LocalOnly: false, Revoked: false, Authority: null } source)
             _ = CaptureConfiguredSourceAsync(source);
     }
 
     private void RevokeCurrentAutomaticAuthorization(StartupSourceIntent source)
     {
-        if (!_config.Enabled || source.IntentId != _currentExplicitSourceId
-            || _config.AutomaticAuthorization is not { Revoked: false } authorization) return;
+        if (source.IntentId != _currentExplicitSourceId) return;
+        RevokeAutomaticStartupAuthorization();
+    }
+
+    private void RevokeAutomaticStartupAuthorization()
+    {
+        if (!_config.Enabled) return;
+        // 明确全停即使发生在尚未确认来源或监控模式，也必须留存拒绝标记。
+        var authorization = _config.AutomaticAuthorization
+            ?? new StartupAutomaticAuthorization(_config.AutomaticStopAuthority?.IntentId ?? Guid.NewGuid().ToString("N"),
+                _config.AutomaticStopAuthority?.IntentTimestamp ?? System.Diagnostics.Stopwatch.GetTimestamp());
         _config.AutomaticAuthorization = authorization with { Revoked = true };
         try { _store.SaveConfirmed(_config); }
         catch { _automaticSaveFailed = true; throw; }

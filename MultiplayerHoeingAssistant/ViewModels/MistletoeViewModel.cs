@@ -186,6 +186,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
         // 开机自启动两个参数直接代理 MainViewModel（与设置页同一份），
         // 设置页改完后经 PropertyChanged 转发刷新本页绑定（2026-09-08 修复跨页面显示陈旧）。
+        var previousExecutorMode = _mainVm.IsExecutorMode;
         if (!IsRemoteMode) _mainVm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(MainViewModel.AutoLaunchOnBoot))
@@ -200,6 +201,14 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             }
             else if (e.PropertyName is nameof(MainViewModel.IsExecutorMode))
             {
+                // 设置保存也会发同名通知；只有实际切角色才中止本轮执行和挂载。
+                if (previousExecutorMode != _mainVm.IsExecutorMode)
+                {
+                    previousExecutorMode = _mainVm.IsExecutorMode;
+                    _runCts?.Cancel();
+                    _configuredAutoSource?.Revoke();
+                    RevokeAllArmedTriggers();
+                }
                 OnPropertyChanged(nameof(CanShowTaskCenter));
                 if (!CanShowTaskCenter && SelectedTabIndex == 1) SelectedTabIndex = 0;
             }
@@ -315,8 +324,19 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         RunOnUi(() =>
         {
             _runCts?.Cancel();
-            RevokeAllArmedTriggers();
+            _configuredAutoSource?.Revoke();
+            try { RevokeAllArmedTriggers(); }
+            finally { RevokeAutomaticStartupAuthorization(); }
         });
+    }
+
+    internal void PrepareForApplicationExit()
+    {
+        _bgiStatusRefresh.Stop();
+        TaskCenter.StopAutoRefresh();
+        _configuredAutoSource?.Revoke();
+        try { _runCts?.Cancel(); }
+        finally { RevokeAllArmedTriggers(); }
     }
 
     internal void CancelStartupFlowForCli()
@@ -749,10 +769,10 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     internal static StartupSourceIntent? ResolveAutomaticStartupSource(
         StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved, bool isExecutorMode,
         StartupAutomaticAuthorization? authorization = null)
-        => !isExecutorMode
-            ? configured is { LocalOnly: true } local ? local : StartupSourceIntent.LocalOnlyExplicit()
-            : authorization?.Revoked == true
-                ? throw new OperationCanceledException("自动启动许可已停止；请明确重新开启或手动运行")
+        => authorization?.Revoked == true
+            ? throw new OperationCanceledException("自动启动许可已停止；请明确重新开启或手动运行")
+            : !isExecutorMode
+                ? configured is { LocalOnly: true } local ? local : StartupSourceIntent.LocalOnlyExplicit()
                 : configured ?? (authorization is not null ? StartupSourceIntent.Automatic(authorization, saved)
                     : saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
 
@@ -1194,11 +1214,14 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     {
         WorkflowStopAuthorityRecord? authority;
         try { authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct); }
-        catch (Exception) when (!ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            RevokeCurrentAutomaticAuthorization(source);
+            // 监控端拒绝表示当前角色不能执行；未知、停止和基线冲突继续持久拒绝。
+            if (!source.Revoked && ex is not StartupModeUnavailableException) RevokeCurrentAutomaticAuthorization(source);
             throw;
         }
+        // 模式切换或明确全停后，旧的在途查询也不能回写来源基线。
+        if (source.Revoked) throw new OperationCanceledException("来源已撤销，忽略在途授权结果", ct);
         if (_config.Enabled && authority is not null && source.IntentId == _currentExplicitSourceId
             && _config.AutomaticStopAuthority != authority)
         {
