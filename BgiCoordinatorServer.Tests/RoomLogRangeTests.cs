@@ -101,9 +101,8 @@ public class RoomLogRangeTests
     [InlineData("2026-10-15T09:00+08:00", "2026-10-15T10:00")]
     [InlineData("2026-02-30T09:00", "2026-10-15T10:00")]
     [InlineData("2026-10-15T10:01", "2026-10-15T10:00")]
-    [InlineData("2026-10-01T23:59", "2026-11-01T00:00")]
     [InlineData("9999-12-31T23:59", "9999-12-31T23:59")]
-    public void RejectsMissingMalformedReversedOrOverlongRanges(string? start, string? end)
+    public void RejectsMissingMalformedReversedOrUnrepresentableRanges(string? start, string? end)
     {
         Assert.False(RoomLogRange.TryParse(start, end, out var range, out var error));
         Assert.Null(range);
@@ -111,7 +110,7 @@ public class RoomLogRangeTests
     }
 
     [Fact]
-    public void AllowsOneMinuteOrAtMost31CalendarDates()
+    public void AllowsOneMinuteAndArbitraryCalendarDateRanges()
     {
         var minute = Parse("2026-10-15T10:00", "2026-10-15T10:00");
         Assert.Equal(TimeSpan.FromMinutes(1), minute.EndExclusive - minute.StartInclusive);
@@ -119,6 +118,9 @@ public class RoomLogRangeTests
         var month = Parse("2026-10-01T00:00", "2026-10-31T23:59");
         Assert.Equal(new DateOnly(2026, 10, 1), month.FirstDate);
         Assert.Equal(new DateOnly(2026, 10, 31), month.LastDate);
+        var year = Parse("2025-01-01T00:00", "2026-12-31T23:59");
+        Assert.Equal(new DateOnly(2025, 1, 1), year.FirstDate);
+        Assert.Equal(new DateOnly(2026, 12, 31), year.LastDate);
     }
 
     [Fact]

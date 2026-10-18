@@ -22,6 +22,7 @@ public sealed partial class RoomOperations
     private readonly ILogger<RoomOperations> _logger;
     private readonly GatewayBroadcaster _broadcaster;
     private readonly RoomPhaseObserver _phaseObserver;
+    private readonly RoomLogContext? _roomLogContext;
 
     /// <summary>客户端能力查询（route-anchor 门控用）。为 null 时按"不支持"处理：
     /// 宁可拒绝激活，也不允许"忘记接线导致静默半启用"。</summary>
@@ -32,13 +33,22 @@ public sealed partial class RoomOperations
         ILogger<RoomOperations> logger,
         GatewayBroadcaster broadcaster,
         RoomPhaseObserver phaseObserver,
-        IClientCapabilityLookup? capabilityLookup = null)
+        IClientCapabilityLookup? capabilityLookup = null,
+        RoomLogContext? roomLogContext = null)
     {
         _roomManager = roomManager;
         _logger = logger;
         _broadcaster = broadcaster;
         _phaseObserver = phaseObserver;
         _capabilityLookup = capabilityLookup;
+        _roomLogContext = roomLogContext;
+    }
+
+    private void ObserveRoomLog(Action<RoomLogContext> observation)
+    {
+        if (_roomLogContext is null) return;
+        try { observation(_roomLogContext); }
+        catch (Exception exception) { _logger.LogWarning(exception, "房间日志历史观察失败（不影响业务）"); }
     }
 
     // ====== 连接 Group 跟踪（自 CoordinatorHub 搬迁，语义不变）======

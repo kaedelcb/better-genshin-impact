@@ -14,6 +14,7 @@
     .metric{padding:18px 20px;border:1px solid #30444c;border-radius:14px;background:#1a2931}.metric strong{display:block;margin-top:8px;font-size:31px;line-height:1.1}
     .metric span{color:#a9babe;font-size:13px}.metric.active strong{color:#85d8b3}.metric.warn strong{color:#f4b38c}
     .toolbar{display:flex;gap:10px;justify-content:space-between;align-items:center;margin-bottom:14px}.filters{display:flex;gap:10px;flex-wrap:wrap}
+    .archive-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 18px}.archive-toolbar select{max-width:100%}.archive-toolbar input{min-width:150px;width:170px}.archive-note{width:100%;font-size:12px;color:#a9babe}
     input,select{border:1px solid #3d545c;border-radius:9px;padding:10px 12px;background:#192830;color:#edf3f1;outline:none}
     input{min-width:260px}input:focus,select:focus{border-color:#79d5af}.updated{font-size:13px;color:#a9babe;text-align:right}
     .notice{padding:11px 14px;border:1px solid #5c4f32;border-radius:9px;background:#30291d;color:#f4d7a2;margin-bottom:14px;display:none}
@@ -33,7 +34,7 @@
     dialog::backdrop{background:#071016bc}.log-head{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.log-head h2{margin:0;font-size:20px}.log-actions{display:flex;gap:8px;flex-wrap:wrap}.button:disabled{cursor:wait;opacity:.65}
     .log-hint{color:#a9babe;font-size:12px;margin:9px 0 15px}.log-lines{max-height:58vh;overflow:auto;border-top:1px solid #31464f}.log-line{padding:10px 2px;border-bottom:1px solid #2b3e46;font-size:13px}
     .log-range{margin:0 0 14px;padding:13px;border:1px solid #38515b;border-radius:10px;background:#142129}.range-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-    .range-row>span{width:42px;color:#b5c8ca;font-size:13px}.range-row select{padding:8px;border-radius:7px}.range-date{min-width:155px}.range-time{min-width:65px}.range-presets{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.range-presets .button{padding:6px 10px;font-size:12px}.range-note{font-size:12px;color:#9fb5b9}.range-status{font-size:13px;min-height:20px;margin:7px 0;color:#bad4d6}
+    .range-row>span{width:42px;color:#b5c8ca;font-size:13px}.range-row select,.range-row input{padding:8px;border-radius:7px}.range-row .range-date{min-width:155px;width:165px}.range-time{min-width:65px}.range-presets{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.range-presets .button{padding:6px 10px;font-size:12px}.range-note{font-size:12px;color:#9fb5b9}.range-status{font-size:13px;min-height:20px;margin:7px 0;color:#bad4d6}
     .log-meta{color:#8eacb2;font-size:12px;margin-bottom:5px}.log-message{white-space:pre-wrap;overflow-wrap:anywhere}.log-line.warning .log-meta{color:#f4c08c}.log-line.error .log-meta,.log-line.critical .log-meta{color:#ffaaa0}
     @media(max-width:850px){.metrics{grid-template-columns:repeat(2,1fr)}.room-head{grid-template-columns:1fr 1fr 1fr}.top{align-items:flex-start}.toolbar{align-items:flex-start;flex-direction:column}.updated{text-align:left}}
     @media(max-width:560px){.shell{padding:20px 14px 50px}.top h1{font-size:24px}.top{flex-direction:column}.metrics{gap:8px}.metric{padding:14px}.metric strong{font-size:25px}
@@ -56,16 +57,23 @@
       <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="connected">已连接</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
       <div id="updated" class="updated" aria-live="polite">正在连接服务器…</div>
     </div>
+    <div class="archive-toolbar" role="group" aria-label="历史房间日志">
+      <select id="archiveRoom" aria-label="已保存日志的历史房间"><option value="">正在读取历史房间…</option></select>
+      <input id="archiveCode" type="text" maxlength="6" placeholder="或输入房间码" aria-label="历史房间码">
+      <button id="archiveOpen" class="button" type="button">查询历史日志</button>
+      <span id="archiveStatus" class="archive-note" role="status">房间已结束或服务器重启后，仍可从这里下载已保存的日志。</span>
+    </div>
     <div id="notice" class="notice" role="status"></div>
     <section id="rooms" class="rooms" aria-label="房间列表"></section>
   </main>
   <dialog id="logDialog" aria-labelledby="logTitle">
     <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logDownload" class="button" type="button">下载所选日志</button><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
-    <div class="log-hint">下方预览本次启动后的最近 200 条。下载按所选时间筛选此房间已保存的完整日志，不受预览条数限制；旧版未保存的日志无法补回。</div>
+    <div class="log-hint">下载按所选时间读取持久保存的服务器日志，包含已确认关联的历史锄地房间，不受预览的 200 条限制。下方仅是本次启动后的实时预览。旧版漏存或关联不明的内容会提示缺口，不包含成员本机日志。</div>
     <div class="log-range" role="group" aria-label="日志下载时间范围（北京时间）">
-      <div class="range-row"><span>开始</span><select id="logStartDate" class="range-date" aria-label="开始日期"></select><select id="logStartHour" class="range-time" aria-label="开始小时"></select><span style="width:auto">时</span><select id="logStartMinute" class="range-time" aria-label="开始分钟"></select><span style="width:auto">分</span></div>
-      <div class="range-row"><span>结束</span><select id="logEndDate" class="range-date" aria-label="结束日期"></select><select id="logEndHour" class="range-time" aria-label="结束小时"></select><span style="width:auto">时</span><select id="logEndMinute" class="range-time" aria-label="结束分钟"></select><span style="width:auto">分</span></div>
-      <div class="range-presets"><button id="logToday" class="button" type="button">今天全天</button><button id="logLastHour" class="button" type="button">最近一小时</button><span class="range-note">北京时间 · 包含结束分钟整分钟 · 最多跨 31 个自然日</span></div>
+      <div class="range-row"><span>开始</span><input id="logStartDate" type="date" class="range-date" aria-label="开始日期"><select id="logStartHour" class="range-time" aria-label="开始小时"></select><span style="width:auto">时</span><select id="logStartMinute" class="range-time" aria-label="开始分钟"></select><span style="width:auto">分</span></div>
+      <div class="range-row"><span>结束</span><input id="logEndDate" type="date" class="range-date" aria-label="结束日期"><select id="logEndHour" class="range-time" aria-label="结束小时"></select><span style="width:auto">时</span><select id="logEndMinute" class="range-time" aria-label="结束分钟"></select><span style="width:auto">分</span></div>
+      <div class="range-presets"><button id="logToday" class="button" type="button">今天全天</button><button id="logLastHour" class="button" type="button">最近一小时</button><span class="range-note">北京时间 · 日期可点击日历选择 · 包含结束分钟整分钟</span></div>
+      <div id="logAvailableDates" class="range-note" role="status"></div>
       <div id="logRangeStatus" class="range-status" role="status"></div>
     </div>
     <div id="logDownloadStatus" class="range-status" role="status"></div>
@@ -92,41 +100,50 @@
       }
       return summary;
     }
-    let activeLogCode=null,logRequest=0,logDateRequest=0,logDatesReady=false,logDownloading=false;
+    let activeLogCode=null,logRequest=0,logDateRequest=0,logDownloading=false;
     const rangeControls=['logStartDate','logStartHour','logStartMinute','logEndDate','logEndHour','logEndMinute'];
     function beijingMinute(time=Date.now()){return new Date(time+8*60*60*1000).toISOString().slice(0,16);}
-    function addLogDate(date){for(const id of ['logStartDate','logEndDate']){const select=$(id);if(![...select.options].some(option=>option.value===date))select.add(new Option(date,date));}}
     function setLogRange(start,end){
-      addLogDate(start.slice(0,10));addLogDate(end.slice(0,10));
       $('logStartDate').value=start.slice(0,10);$('logStartHour').value=start.slice(11,13);$('logStartMinute').value=start.slice(14,16);
       $('logEndDate').value=end.slice(0,10);$('logEndHour').value=end.slice(11,13);$('logEndMinute').value=end.slice(14,16);updateLogRange();
     }
     function selectedLogRange(){return {start:`${$('logStartDate').value}T${$('logStartHour').value}:${$('logStartMinute').value}`,end:`${$('logEndDate').value}T${$('logEndHour').value}:${$('logEndMinute').value}`};}
     function updateLogRange(){
       const {start,end}=selectedLogRange();let error='';
-      if(start>end)error='结束时间不能早于开始时间，请从下拉框重新选择';
-      else if((Date.parse(end.slice(0,10)+'T00:00:00+08:00')-Date.parse(start.slice(0,10)+'T00:00:00+08:00'))/86400000>30)error='每次最多下载跨 31 个自然日的日志，请缩小范围';
-      $('logRangeStatus').textContent=error||(logDatesReady?`${start.replace('T',' ')} 至 ${end.replace('T',' ')}（北京时间）`:'正在读取可选日期…');
-      $('logDownload').disabled=logDownloading||!logDatesReady||!!error;
+      if(!$('logStartDate').value||!$('logEndDate').value)error='请点击日历选择开始和结束日期';
+      else if(start>end)error='结束时间不能早于开始时间，请重新选择';
+      $('logRangeStatus').textContent=error||`${start.replace('T',' ')} 至 ${end.replace('T',' ')}（北京时间）`;
+      $('logDownload').disabled=logDownloading||!!error;
       return !error;
     }
     function todayLogRange(){const today=beijingMinute().slice(0,10);setLogRange(today+'T00:00',today+'T23:59');}
     async function loadLogDates(code){
       const request=++logDateRequest;
+      $('logAvailableDates').textContent='正在读取已保存日期…';
       try{
         const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/dates`,{credentials:'same-origin',cache:'no-store'});
         if(response.status===401){location.replace('/admin/login');return;}
         if(!response.ok)throw new Error();
         const data=await response.json();if(request!==logDateRequest||activeLogCode!==code)return;
-        const current=selectedLogRange(),dates=[...new Set([...data.dates,current.start.slice(0,10),current.end.slice(0,10)])].sort().reverse();
-        for(const id of ['logStartDate','logEndDate']){$(id).replaceChildren(...dates.map(date=>new Option(date,date)));}
-        logDatesReady=true;setLogRange(current.start,current.end);
-      }catch{if(request===logDateRequest&&activeLogCode===code)$('logRangeStatus').textContent='可选日期读取失败，请关闭后重新打开日志窗口';}
+        const dates=data.dates||[];
+        $('logAvailableDates').textContent=dates.length?`已保存日期：${dates.at(-1)} 至 ${dates[0]}；可用日历选择任意时间范围`:'暂无已保存日期，可直接选择时间查询';
+      }catch{if(request===logDateRequest&&activeLogCode===code)$('logAvailableDates').textContent='已保存日期读取失败，仍可选择时间直接下载';}
+    }
+    async function loadArchiveRooms(){
+      const selected=$('archiveRoom').value;
+      try{
+        const response=await fetch('/api/admin/logs/rooms',{credentials:'same-origin',cache:'no-store'});
+        if(response.status===401){location.replace('/admin/login');return;}
+        if(!response.ok)throw new Error();
+        const data=await response.json();$('archiveRoom').replaceChildren(new Option('选择已保存日志的历史房间',''));
+        for(const room of data.rooms){const dates=room.dates||[];$('archiveRoom').add(new Option(`${room.code}${room.kind==='control'?' · 控制房间':''}${dates.length?' · '+dates.at(-1)+' 至 '+dates[0]:''}`,room.code));}
+        $('archiveRoom').value=selected;$('archiveStatus').textContent='房间已结束或服务器重启后，仍可查询已保存日志；控制房间下载会合并已确认关联的历史锄地房间。';
+      }catch{$('archiveRoom').replaceChildren(new Option('历史房间读取失败，可输入房间码',''));$('archiveStatus').textContent='历史列表读取失败，可输入房间码直接查询。';}
     }
     function logButton(code){const action=node('div','room-action'),button=node('button','button log-button','服务器日志');button.type='button';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code);});action.append(button);return action;}
-    function openLogs(code){activeLogCode=code;logDatesReady=false;$('logDownloadStatus').textContent='';$('logTitle').textContent=`房间 ${code} · 服务器日志`;for(const id of ['logStartDate','logEndDate'])$(id).replaceChildren();todayLogRange();$('logDialog').showModal();loadLogs();loadLogDates(code);}
+    function openLogs(code){activeLogCode=code;$('logDownloadStatus').textContent='';$('logTitle').textContent=`房间 ${code} · 服务器日志`;todayLogRange();$('logDialog').showModal();loadLogs();loadLogDates(code);}
     async function downloadLogs(){
-      const code=activeLogCode,view=logDateRequest;if(!code||!logDatesReady||logDownloading||!updateLogRange())return;
+      const code=activeLogCode,view=logDateRequest;if(!code||logDownloading||!updateLogRange())return;
       const {start,end}=selectedLogRange(),button=$('logDownload');logDownloading=true;button.disabled=true;button.textContent='正在下载…';
       $('logDownloadStatus').textContent='正在准备所选时段的日志…';
       try{
@@ -135,10 +152,15 @@
         if(response.status===401){location.replace('/admin/login');return;}
         if(!response.ok){const problem=await response.json().catch(()=>({}));throw new Error(problem.detail||'下载失败，请稍后重试');}
         const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
+        if(activeLogCode!==code||view!==logDateRequest){URL.revokeObjectURL(url);return;}
         const disposition=response.headers.get('Content-Disposition')||'';
         link.href=url;link.download=(disposition.match(/filename="?([^";]+)"?/i)||[])[1]||`room-${code}-${start.replace(/[:T]/g,'-')}.txt`;
         document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-        if(activeLogCode===code&&view===logDateRequest)$('logDownloadStatus').textContent=`已发起 ${start.replace('T',' ')} 至 ${end.replace('T',' ')} 的日志下载（北京时间，TXT 文件）`;
+        const count=response.headers.get('X-Room-Log-Count'),sources=response.headers.get('X-Room-Log-Sources'),sourceCount=Number(response.headers.get('X-Room-Log-Source-Count')||0);
+        const first=response.headers.get('X-Room-Log-First-Utc'),last=response.headers.get('X-Room-Log-Last-Utc');
+        const format=time=>new Date(time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
+        let warnings=[];try{warnings=JSON.parse(decodeURIComponent(response.headers.get('X-Room-Log-Warnings')||'%5B%5D'));}catch{warnings=['下载摘要读取失败，请查看TXT文件内的保存说明'];}
+        $('logDownloadStatus').textContent=`已发起下载${count!==null?'，共 '+count+' 条':''}${sources?'，来源房间 '+sources+(sourceCount>20?' 等 '+sourceCount+' 个（完整列表见TXT）':''):''}${first&&last?'；实际记录 '+format(first)+' 至 '+format(last)+'（北京时间）':''}${warnings.length?'。保存说明：'+warnings.join('；'):''}`;
       }catch(error){if(activeLogCode===code&&view===logDateRequest)$('logDownloadStatus').textContent=error.message||'下载失败，请稍后重试';}
       finally{logDownloading=false;button.textContent='下载所选日志';updateLogRange();}
     }
@@ -152,7 +174,7 @@
         if(!response.ok)throw new Error('HTTP '+response.status);
         const data=await response.json();
         if(request!==logRequest||!$('logDialog').open)return;
-        $('logStatus').textContent=data.entries.length?`最近 ${data.entries.length} 条`:'这个房间暂无可关联的服务器日志';
+        $('logStatus').textContent=data.entries.length?`实时预览：最近 ${data.entries.length} 条（下载条数另行统计）`:'本次启动暂无此房间的实时预览；历史日志仍可下载';
         for(const entry of data.entries){
           const line=node('div','log-line '+entry.level.toLowerCase());
           line.append(node('div','log-meta',`${new Date(entry.timestampUtc).toLocaleString('zh-CN')} · ${entry.level} · ${entry.category}`));
@@ -233,14 +255,16 @@
       }
     }
     $('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('refresh').addEventListener('click',load);
+    $('archiveRoom').addEventListener('change',()=>{$('archiveCode').value='';});
+    $('archiveOpen').addEventListener('click',()=>{const code=($('archiveCode').value.trim()||$('archiveRoom').value).toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code)){$('archiveStatus').textContent='请选择历史房间，或输入六位房间码。';return;}openLogs(code);});
     $('logout').addEventListener('click',async()=>{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin'});location.replace('/admin/login');});
     $('logDownload').addEventListener('click',downloadLogs);$('logRefresh').addEventListener('click',loadLogs);$('logClose').addEventListener('click',()=>$('logDialog').close());
     for(const id of ['logStartHour','logEndHour','logStartMinute','logEndMinute']){const max=id.endsWith('Hour')?24:60;for(let index=0;index<max;index++){const value=String(index).padStart(2,'0');$(id).add(new Option(value,value));}}
     for(const id of rangeControls)$(id).addEventListener('change',()=>{$('logDownloadStatus').textContent='';updateLogRange();});
     $('logToday').addEventListener('click',()=>{$('logDownloadStatus').textContent='';todayLogRange();});
     $('logLastHour').addEventListener('click',()=>{$('logDownloadStatus').textContent='';setLogRange(beijingMinute(Date.now()-3600000),beijingMinute());});
-    $('logDialog').addEventListener('close',()=>{activeLogCode=null;logRequest++;logDateRequest++;logDatesReady=false;});
-    load();setInterval(load,10000);
+    $('logDialog').addEventListener('close',()=>{activeLogCode=null;logRequest++;logDateRequest++;});
+    load();loadArchiveRooms();setInterval(load,10000);
   </script>
 </body>
 </html>

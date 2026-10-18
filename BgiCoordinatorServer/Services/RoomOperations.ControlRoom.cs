@@ -73,6 +73,7 @@ public sealed partial class RoomOperations
             if (!isWebClient && !isRemote)
             {
                 _roomManager.AddToControlRoom(group, ctx.ConnectionId, playerUid, playerName, clientInstanceId, machineId);
+                ObserveRoomLog(context => context.RegisterControlRoster(roomCode, playerUid, uidWhitelist));
             }
             if (isRemote || isWebClient)
             {

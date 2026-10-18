@@ -155,6 +155,7 @@ public sealed partial class RoomOperations
     {
         CoordinatedBatchSnapshot snapshot;
         lock (_batchGate) snapshot = state.Snapshot();
+        ObserveRoomLog(context => context.RegisterBatch(group, snapshot.BatchId, snapshot.ParticipantUids));
         await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchStart);
     }
 

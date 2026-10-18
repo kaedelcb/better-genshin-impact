@@ -99,6 +99,26 @@ public static class AdminMonitorRoutes
             return Results.Json(new { code = normalizedCode, entries = logs.Read(normalizedCode) });
         }).RequireAuthorization();
 
+        app.MapGet("/api/admin/logs/rooms", (HttpContext context, RoomLogArchive archive) =>
+        {
+            NoStore(context);
+            try
+            {
+                var rooms = archive.GetAvailableRooms(RoomLogArchive.GetDate(DateTime.UtcNow));
+                return Results.Json(new { rooms = rooms.Select(room => new
+                {
+                    room.Code,
+                    room.Kind,
+                    Dates = room.Dates.Select(date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
+                    room.Warnings
+                }) });
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return Results.Problem("日志存储不可用，无法读取历史房间。请检查服务器日志目录。", statusCode: 503);
+            }
+        }).RequireAuthorization();
+
         app.MapGet("/api/admin/rooms/{code}/logs/dates", (string code, HttpContext context, RoomLogArchive archive) =>
         {
             NoStore(context);
@@ -128,6 +148,19 @@ public static class AdminMonitorRoutes
                 var download = await archive.OpenRangeAsync(normalizedCode, range!, context.RequestAborted);
                 if (download is null)
                     return Results.Problem("所选时间段暂无已保存的房间日志；旧版未保存的日志无法补回。", statusCode: 404);
+                var metadata = download.Metadata;
+                context.Response.Headers["X-Room-Log-Count"] = metadata.Count.ToString(CultureInfo.InvariantCulture);
+                context.Response.Headers["X-Room-Log-Sources"] = string.Join(",", metadata.Sources.Take(20));
+                context.Response.Headers["X-Room-Log-Source-Count"] = metadata.Sources.Length.ToString(CultureInfo.InvariantCulture);
+                context.Response.Headers["X-Room-Log-First-Utc"] = metadata.FirstTimestampUtc?.ToString("O", CultureInfo.InvariantCulture);
+                context.Response.Headers["X-Room-Log-Last-Utc"] = metadata.LastTimestampUtc?.ToString("O", CultureInfo.InvariantCulture);
+                // 完整说明保留在TXT中，响应头只放有界摘要，避免多年历史触发代理响应头上限。
+                var warningSummary = metadata.Warnings.Take(1)
+                    .Select(warning => warning.Length <= 120 ? warning : warning[..120] + "…").ToList();
+                if (metadata.Warnings.Length > 1)
+                    warningSummary.Add($"另有 {metadata.Warnings.Length - 1} 项保存说明，详见 TXT 文件开头。");
+                context.Response.Headers["X-Room-Log-Warnings"] = Uri.EscapeDataString(
+                    System.Text.Json.JsonSerializer.Serialize(warningSummary));
                 return Results.Stream(async output =>
                 {
                     await using (download)

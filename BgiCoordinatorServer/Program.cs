@@ -3,6 +3,7 @@ using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +13,8 @@ var playerTimeoutSeconds = int.TryParse(
     Environment.GetEnvironmentVariable("PLAYER_TIMEOUT_SECONDS"), out var pts) ? pts : 120;
 
 // 注册服务
-builder.Services.AddSingleton(_ => new RoomManager(maxRooms));
+var roomManager = new RoomManager(maxRooms);
+builder.Services.AddSingleton(roomManager);
 builder.Services.AddSingleton(new AdminMonitorAccess(builder.Configuration["ADMIN_MONITOR_PASSWORD"]));
 var roomLogRoot = builder.Configuration["ROOM_LOG_ROOT"];
 var roomLogArchive = new RoomLogArchive(string.IsNullOrWhiteSpace(roomLogRoot)
@@ -21,7 +23,9 @@ var roomLogArchive = new RoomLogArchive(string.IsNullOrWhiteSpace(roomLogRoot)
 builder.Services.AddSingleton(roomLogArchive);
 var roomLogStore = new RoomLogStore(roomLogArchive);
 builder.Services.AddSingleton(roomLogStore);
-builder.Logging.AddProvider(new RoomLogProvider(roomLogStore));
+builder.Logging.AddProvider(new RoomLogProvider(roomLogStore, roomManager));
+builder.Services.AddSingleton<RoomLogContext>();
+builder.Services.AddSingleton<RoomLogHubFilter>();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
     options.Cookie.Name = "BgiAdminMonitor";
@@ -74,6 +78,7 @@ builder.Services.AddSingleton<RoomOperations>();
 builder.Services.AddSingleton<GatewayDispatcher>();
 builder.Services.AddSignalR(options =>
 {
+    options.AddFilter<RoomLogHubFilter>();
     options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10MB，支持大量路线文件上报
 });
 
@@ -89,6 +94,8 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+// 先接上房间生命周期观察，保证首个连接建房前即可保存历史关联。
+_ = app.Services.GetRequiredService<RoomLogContext>();
 
 app.UseRouting();
 app.UseCors();

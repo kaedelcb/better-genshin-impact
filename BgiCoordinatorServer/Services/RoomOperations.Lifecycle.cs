@@ -108,6 +108,7 @@ public sealed partial class RoomOperations
         _logger.LogInformation("连接 {ConnId} 加入房间 {Code}", ctx.ConnectionId, roomCode);
 
         var room = _roomManager.GetRoom(roomCode)!;
+        ObserveRoomLog(context => context.ObserveGameRoom(room));
         ObservePhase(room, roomCode, "room.join");
         await _broadcaster.BroadcastGroupAsync(roomCode, "PlayerListUpdated", new { players = room.Players }, room.Players);
         return (true, room.Protocol, null);
@@ -134,6 +135,7 @@ public sealed partial class RoomOperations
     /// <summary>离开房间，广播 PlayerListUpdated</summary>
     public async Task LeaveRoomAsync(GatewayHandlerContext ctx)
     {
+        using var logScope = _roomLogContext?.BeginSnapshotScope(_logger, _roomLogContext.SnapshotConnection(ctx.ConnectionId));
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         var affectedCodes = _roomManager.LeaveRoom(ctx.ConnectionId);
 

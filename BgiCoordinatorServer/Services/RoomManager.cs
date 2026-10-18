@@ -22,6 +22,28 @@ public class RoomManager
     private readonly int _maxRooms;
     private readonly ILogger<RoomManager>? _logger;
 
+    internal event Action<RoomLogGameSession>? RoomLogSessionCreated;
+    internal event Action<RoomLogGameSession, DateTime>? RoomLogSessionEnded;
+
+    private void NotifyRoomLogCreated(Room room)
+    {
+        var snapshot = RoomLogGameSession.Capture(room);
+        if (RoomLogSessionCreated is not { } observers) return;
+        foreach (Action<RoomLogGameSession> observer in observers.GetInvocationList())
+            try { observer(snapshot); }
+            catch (Exception exception) { _logger?.LogWarning(exception, "房间 {Code} 日志创建观察失败", room.Code); }
+    }
+
+    private void NotifyRoomLogEnded(Room room)
+    {
+        var snapshot = RoomLogGameSession.Capture(room);
+        var endedAtUtc = DateTime.UtcNow;
+        if (RoomLogSessionEnded is not { } observers) return;
+        foreach (Action<RoomLogGameSession, DateTime> observer in observers.GetInvocationList())
+            try { observer(snapshot, endedAtUtc); }
+            catch (Exception exception) { _logger?.LogWarning(exception, "房间 {Code} 日志结束观察失败", room.Code); }
+    }
+
     // 控制房间相关（multiplayer-hoeing-assistant）
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
     // 控制房间广播快照（带宽优化）：group → (uid → 上次广播时该成员的规范化 JSON 串)。
@@ -49,6 +71,7 @@ public class RoomManager
     public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, IReadOnlyList<string>? expectedParticipantUids = null)
     {
+        var endedRooms = new List<Room>();
         var fixedUids = expectedParticipantUids?.ToArray() ?? [];
         if ((!string.IsNullOrWhiteSpace(hoeingBatchId) || fixedUids.Length > 0)
             && (string.IsNullOrWhiteSpace(hoeingBatchId) || fixedUids.Length is < 1 or > 4
@@ -76,6 +99,7 @@ public class RoomManager
                         foreach (var p in oldRoom.Players)
                             _connectionRoomMap.TryRemove(p.ConnectionId, out _);
                     }
+                    endedRooms.Add(oldRoom);
                 }
             }
         }
@@ -112,6 +136,8 @@ public class RoomManager
         }));
 
         _connectionRoomMap[hostConnectionId] = code;
+        foreach (var endedRoom in endedRooms) NotifyRoomLogEnded(endedRoom);
+        if (_rooms.TryGetValue(code, out var createdRoom)) NotifyRoomLogCreated(createdRoom);
         return code;
     }
 
@@ -272,6 +298,7 @@ public class RoomManager
     public List<string> LeaveRoom(string connectionId)
     {
         var affected = new List<string>();
+        Room? endedRoom = null;
 
         if (_connectionRoomMap.TryRemove(connectionId, out var roomCode))
         {
@@ -292,12 +319,13 @@ public class RoomManager
 
                     // 房间空了则删除
                     if (room.Players.Count == 0)
-                        _rooms.TryRemove(roomCode, out _);
+                        _rooms.TryRemove(roomCode, out endedRoom);
                 }
                 affected.Add(roomCode);
             }
         }
 
+        if (endedRoom is not null) NotifyRoomLogEnded(endedRoom);
         return affected;
     }
 
@@ -797,6 +825,7 @@ public class RoomManager
                     _connectionRoomMap.TryRemove(p.ConnectionId, out _);
             }
         }
+        NotifyRoomLogEnded(room);
     }
 
     public (Room? Room, string? RoomCode) GetRoomByConnectionId(string connectionId)
@@ -984,6 +1013,7 @@ public class RoomManager
 
         foreach (var (code, room) in _rooms)
         {
+            Room? endedRoom = null;
             List<string> deadConnections;
             lock (room)
             {
@@ -1014,9 +1044,10 @@ public class RoomManager
                 {
                     affected.Add(code);
                     if (room.Players.Count == 0)
-                        _rooms.TryRemove(code, out _);
+                        _rooms.TryRemove(code, out endedRoom);
                 }
             }
+            if (endedRoom is not null) NotifyRoomLogEnded(endedRoom);
         }
 
         return affected;

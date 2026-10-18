@@ -10,17 +10,18 @@ public sealed class RoomLogStore(RoomLogArchive? archive = null, TimeProvider? t
     private readonly Queue<StoredRoomLog> _entries = new();
     private readonly object _gate = new();
 
-    internal void Append(IEnumerable<string> roomCodes, LogLevel level, string category, string message)
+    internal void Append(IEnumerable<string> roomCodes, LogLevel level, string category, string message,
+        string? gameSessionId = null)
     {
         var codes = roomCodes.Select(NormalizeCode).Where(code => code is not null)
             .Select(code => code!).ToHashSet(StringComparer.Ordinal);
         if (codes.Count == 0) return;
 
         var timestamp = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
-        archive?.Append(codes, new RoomServerLogEntry(timestamp, level.ToString(), category, message));
+        archive?.Append(codes, new RoomServerLogEntry(timestamp, level.ToString(), category, message, gameSessionId));
         var entry = new RoomServerLogEntry(timestamp, level.ToString(),
             category.Length > 120 ? category[^120..] : category,
-            message.Length > MaxMessageLength ? message[..MaxMessageLength] + "…" : message);
+            message.Length > MaxMessageLength ? message[..MaxMessageLength] + "…" : message, gameSessionId);
         lock (_gate)
         {
             _entries.Enqueue(new StoredRoomLog(codes, entry));
@@ -54,32 +55,51 @@ public sealed class RoomLogStore(RoomLogArchive? archive = null, TimeProvider? t
     private sealed record StoredRoomLog(HashSet<string> RoomCodes, RoomServerLogEntry Entry);
 }
 
-public sealed record RoomServerLogEntry(DateTime TimestampUtc, string Level, string Category, string Message);
+public sealed record RoomServerLogEntry(DateTime TimestampUtc, string Level, string Category, string Message,
+    string? GameSessionId = null);
 
-public sealed class RoomLogProvider(RoomLogStore store) : ILoggerProvider
+public sealed class RoomLogProvider(RoomLogStore store, RoomManager? manager = null) : ILoggerProvider, ISupportExternalScope
 {
-    public ILogger CreateLogger(string categoryName) => new RoomLogger(store, categoryName);
+    private IExternalScopeProvider _scopes = new LoggerExternalScopeProvider();
+    public ILogger CreateLogger(string categoryName) => new RoomLogger(this, store, categoryName, manager);
+    public void SetScopeProvider(IExternalScopeProvider scopeProvider) => _scopes = scopeProvider;
     public void Dispose() { }
 
-    private sealed class RoomLogger(RoomLogStore store, string category) : ILogger
+    private sealed class RoomLogger(RoomLogProvider provider, RoomLogStore store, string category, RoomManager? manager) : ILogger
     {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel level) => level >= LogLevel.Information && level != LogLevel.None;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => provider._scopes.Push(state);
+        public bool IsEnabled(LogLevel level) => level != LogLevel.None;
 
         public void Log<TState>(LogLevel level, EventId eventId, TState state,
             Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (!IsEnabled(level) || state is not IEnumerable<KeyValuePair<string, object?>> fields) return;
+            if (!IsEnabled(level)) return;
             try
             {
-                var codes = fields
+                var fields = state as IEnumerable<KeyValuePair<string, object?>> ?? [];
+                var fieldCodes = fields
                     .Where(field => IsRoomField(field.Key))
                     .Select(field => field.Value?.ToString() ?? "")
                     .ToArray();
-                if (codes.Length == 0) return;
+                RoomLogScopeSnapshot? scope = null;
+                provider._scopes.ForEachScope((value, _) =>
+                {
+                    if (value is IRoomLogScope roomScope)
+                        scope = exception is null ? roomScope.Resolve() : roomScope.ResolveFailure();
+                }, (object?)null);
+                // Hub 调用只信服务端已登记的身份；信封/参数里的 RoomCode 不能向其它房间注入记录。
+                var codes = scope?.RoomCodes ?? fieldCodes;
+                if (codes.Count == 0) return;
+                var sessionId = scope?.GameSessionId;
+                if (scope is null && manager is not null)
+                {
+                    var sessions = codes.Select(RoomLogStore.NormalizeCode).Where(code => code is not null)
+                        .Select(code => manager.GetRoom(code!)?.SessionId).Where(id => id is not null).Distinct().ToArray();
+                    if (sessions.Length == 1) sessionId = sessions[0];
+                }
                 var message = formatter(state, exception);
                 if (exception is not null) message += Environment.NewLine + exception;
-                store.Append(codes, level, category, message);
+                store.Append(codes, level, category, message, sessionId);
             }
             catch
             {

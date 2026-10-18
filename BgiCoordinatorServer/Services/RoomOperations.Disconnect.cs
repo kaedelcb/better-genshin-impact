@@ -14,6 +14,7 @@ public sealed partial class RoomOperations
     /// <summary>连接断线清理。两个 Hub 的 OnDisconnectedAsync 共用。</summary>
     public async Task HandleDisconnectAsync(GatewayHandlerContext ctx, Exception? exception)
     {
+        using var logScope = _roomLogContext?.BeginSnapshotScope(_logger, _roomLogContext.SnapshotConnection(ctx.ConnectionId));
         // 获取断线玩家所在的房间信息
         var (disconnectedRoom, disconnectedRoomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         var wasHost = disconnectedRoom?.HostConnectionId == ctx.ConnectionId;
