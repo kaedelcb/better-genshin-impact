@@ -93,7 +93,7 @@ async function sayHello() {
         clientKind: 'web',
         clientVersion: WEB_CLIENT_VERSION,
         protocolVersion: PROTOCOL_VERSION,
-        capabilities: ['hoeing.start.v2', 'hoeing.completionChoice.v1']
+        capabilities: ['hoeing.start.v2', 'hoeing.completionChoice.v1', 'hoeing.quickCommandCompletion.v1']
     }));
     checkGatewayError(resp);
     serverCapabilities = resp?.payload?.capabilities || [];
@@ -507,48 +507,51 @@ document.getElementById('quickRow').addEventListener('click', e => {
         showQuickHoeingConfirmModal();
         return;
     }
-    const bindings = loadBindings();
-    const binding = bindings[key];
+    showQuickCommandConfirm(key);
+});
 
-    if (!binding) {
-        // 未绑定：弹绑定弹窗
-        showBindModal(key, newBind => {
-            if (newBind) {
-                bindings[key] = newBind;
-                saveBindings(bindings);
-                log(`${key} 已绑定: ${newBind}`);
-            }
-        });
-        return;
-    }
-
-    // 已绑定：确认弹窗（含修改）
+function parseQuickCommandBinding(binding) {
+    if (typeof binding !== 'string') return null;
     const isOneClick = binding.startsWith('ONEDRAGON:');
-    const value = isOneClick ? binding.slice(10) : binding.slice(6);
-    showConfirmModal(key, value, isOneClick, ok => {
-        if (ok === 'confirm') {
-            // 从成员列表找该配置的任务列表，弹"从此处开始执行"让用户选起点，对全员下发
+    if (!isOneClick && !binding.startsWith('GROUP:')) return null;
+    const name = binding.slice(isOneClick ? 10 : 6);
+    return name.trim() && name === name.trim() && name.length <= 1024 ? { name, isOneClick } : null;
+}
+
+function showQuickCommandConfirm(key) {
+    const parsed = parseQuickCommandBinding(loadBindings()[key]);
+    showConfirmModal(key, parsed?.name || '', parsed?.isOneClick || false, result => {
+        if (result === 'confirm' && parsed) {
+            // 不勾选仍保留网页原来的统一任务、起点及启用状态选择。
             let tasks = null;
             let tasksWithStatus = null;
             for (const p of players) {
-                const dict = isOneClick ? (p.oneClickTasks || {}) : (p.configGroupTasks || {});
-                if (dict && Array.isArray(dict[value])) { tasks = dict[value]; }
-                const dictWs = isOneClick ? (p.oneClickTasksWithStatus || {}) : (p.configGroupTasksWithStatus || {});
-                if (dictWs && Array.isArray(dictWs[value])) { tasksWithStatus = dictWs[value]; }
+                const dict = parsed.isOneClick ? (p.oneClickTasks || {}) : (p.configGroupTasks || {});
+                if (Array.isArray(dict[parsed.name])) tasks = dict[parsed.name];
+                const dictWs = parsed.isOneClick ? (p.oneClickTasksWithStatus || {}) : (p.configGroupTasksWithStatus || {});
+                if (Array.isArray(dictWs[parsed.name])) tasksWithStatus = dictWs[parsed.name];
                 if (tasks && tasksWithStatus) break;
             }
-            showTaskListSelect('*', '全部在线成员', value, isOneClick, tasks || null, ['*'], tasksWithStatus || null);
-        } else if (ok === 'modify') {
+            showTaskListSelect('*', '全部在线成员', parsed.name, parsed.isOneClick, tasks, ['*'], tasksWithStatus);
+        } else if (result === 'modify') {
             showBindModal(key, newBind => {
-                if (newBind) {
-                    bindings[key] = newBind;
-                    saveBindings(bindings);
-                    log(`${key} 已绑定: ${newBind}`);
-                }
+                if (!newBind) return;
+                const bindings = loadBindings();
+                bindings[key] = newBind;
+                saveBindings(bindings);
+                log(`${key} 已绑定: ${newBind}`);
+                showQuickCommandConfirm(key);
             });
         }
     });
-});
+}
+
+function isValidCompletionAction(action) {
+    return action && ['resume', 'stop', 'runSpecified'].includes(action.policy)
+        && ['group', 'onedragon'].includes(action.taskType)
+        && typeof action.taskName === 'string' && action.taskName.length <= 1024
+        && (action.policy !== 'runSpecified' || action.taskName.trim().length > 0);
+}
 
 // 成员已有绑定动作的只读说明；开关不会创建或修改配置。
 function hoeingCompletionDescription(action) {
@@ -576,7 +579,7 @@ function showQuickHoeingConfirmModal() {
             <p>以下成员全部准备就绪后，按顺序执行各自绑定的联机任务。未绑定或版本不支持时整批不启动。</p>
             <div class="list-items" id="hoeingMembers"></div>
             <label style="display:block;margin:14px 0 6px"><input type="checkbox" id="hoeingCompletionActions"> 执行各成员在“绑定”中设置的锄地后动作</label>
-            <p id="hoeingCompletionHint" style="font-size:12px">不勾选：本次锄完停止。勾选后仅全队正常完成才执行已有动作，失败或手动停止不触发。</p>
+            <p id="hoeingCompletionHint" style="font-size:12px">不勾选：本次锄完停止。勾选后正常完成才执行已有动作，失败或手动停止不触发。</p>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="hoeingCancel">取消</button>
                 <button class="btn btn-primary" id="hoeingOk">确认下发</button>
@@ -604,57 +607,76 @@ function showQuickHoeingConfirmModal() {
     cancel.addEventListener('click', () => overlay.remove());
     confirm.addEventListener('click', async () => {
         if (confirm.disabled) return;
-        // 冻结确认列表；有人离线时整批不下发，不能悄悄缩成更少成员。
-        const onlineUids = new Set(players.filter(p => p.online === true).map(p => p.playerUid));
-        const targetUids = [...new Set(targets.map(p => p.playerUid))];
-        if (targetUids.some(uid => !onlineUids.has(uid))) {
-            log('所选成员有人已离线，整批未下发一键锄地');
-            overlay.remove();
-            return;
-        }
         confirm.disabled = true;
         cancel.disabled = true;
-        const requestId = 'web_hoeing_' + newRequestId();
         try {
-            if (!serverCapabilities.includes('hoeing.start.v2')) {
-                log('一键锄地未受理：服务器尚未支持统一联机开始，请升级配套服务器');
-                return;
-            }
-            const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
-                requestId, targetUids,
-                useCompletionActions: !completionOption.disabled && completionOption.checked,
-                expiresAtUtc: new Date(Date.now() + 120000).toISOString()
-            }));
-            checkGatewayError(response);
-            const batch = response?.payload;
-            if (!batch?.batchId || batch.protocol !== 'hoeing.start.v2')
-                throw new Error('服务器未返回有效批次身份，受理结果待确认');
-            log(batch.phase === 'aborted'
-                ? `一键锄地已中止：${batch.reason || '准备失败'}（批次 ${batch.batchId}）`
-                : `一键锄地已受理：${targetUids.length} 名成员，正在全队准备（批次 ${batch.batchId}）；受理不代表已经起跑`);
-        } catch (err) {
-            if (err.gatewayRejected) {
-                const detail = err.message.includes('previous_batch_active')
-                    ? '已有联机批次正在执行或清理，请等待其结束'
-                    : err.message.includes('hoeing_start_capability_required')
-                        ? '有参与成员尚未支持统一联机开始，请升级配套助手'
-                        : err.message;
-                log('一键锄地未受理：' + detail);
-            } else {
-                let recovered = null;
-                try {
-                    const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
-                    checkGatewayError(current);
-                    if (current?.payload?.requestId === requestId) recovered = current.payload;
-                } catch { /* 传输未知保留待确认，不另造请求重发。 */ }
-                log(recovered
-                    ? `已按原请求确认一键锄地批次 ${recovered.batchId}，状态：${recovered.phase}`
-                    : '一键锄地受理结果待确认，未重复发送：' + err.message);
-            }
-        } finally {
-            overlay.remove();
-        }
+            await beginCoordinatedQuickCommand(targets, !completionOption.disabled && completionOption.checked, '', '一键锄地');
+        } finally { overlay.remove(); }
     });
+}
+
+// 确认后的精确成员快照；已受理、拒绝和传输未知分别处理，不重发开始。
+async function beginCoordinatedQuickCommand(targets, useCompletionActions, quickCommandKey, label) {
+    // 冻结确认列表；有人离线时整批不下发，不能悄悄缩成更少成员。
+    const onlineUids = new Set(players.filter(p => p.online === true).map(p => p.playerUid));
+    const targetUids = [...new Set(targets.map(p => p.playerUid))];
+    if (targetUids.some(uid => !onlineUids.has(uid))) {
+        log(label + '未下发：有成员已离线，请重新确认');
+        return;
+    }
+    if (quickCommandKey && targets.some(p => {
+        const current = players.find(latest => latest.playerUid === p.playerUid);
+        return current?.quickCommands?.[quickCommandKey] !== p.quickCommands?.[quickCommandKey]
+            || JSON.stringify(current?.hoeingCompletionAction) !== JSON.stringify(p.hoeingCompletionAction);
+    })) {
+        log(label + '未下发：成员绑定或锄地后动作已改变，请重新确认');
+        return;
+    }
+    if (useCompletionActions && (!serverCapabilities.includes('hoeing.completionChoice.v1')
+        || targets.some(p => !isValidCompletionAction(p.hoeingCompletionAction)))
+        || quickCommandKey && !serverCapabilities.includes('hoeing.quickCommandCompletion.v1')) {
+        log(label + '未下发：服务端或成员尚不支持完成动作，或绑定动作不完整');
+        return;
+    }
+    const requestId = 'web_hoeing_' + newRequestId();
+    try {
+        if (!serverCapabilities.includes('hoeing.start.v2')) {
+            log(label + '未受理：服务器尚未支持统一联机开始，请升级配套服务器');
+            return;
+        }
+        const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
+            requestId, targetUids,
+            ...(quickCommandKey ? { quickCommandKey } : {}),
+            useCompletionActions: useCompletionActions,
+            expiresAtUtc: new Date(Date.now() + 120000).toISOString()
+        }));
+        checkGatewayError(response);
+        const batch = response?.payload;
+        if (!batch?.batchId || batch.protocol !== 'hoeing.start.v2')
+            throw new Error('服务器未返回有效批次身份，受理结果待确认');
+        log(batch.phase === 'aborted'
+            ? `${label}已中止：${batch.reason || '准备失败'}（批次 ${batch.batchId}）`
+            : `${label}已受理：${targetUids.length} 名成员，正在全队准备（批次 ${batch.batchId}）；受理不代表已经起跑`);
+    } catch (err) {
+        if (err.gatewayRejected) {
+            const detail = err.message.includes('previous_batch_active')
+                ? '已有联机批次正在执行或清理，请等待其结束'
+                : err.message.includes('hoeing_start_capability_required')
+                    ? '有参与成员尚未支持统一联机开始，请升级配套助手'
+                    : err.message;
+            log(label + '未受理：' + detail);
+        } else {
+            let recovered = null;
+            try {
+                const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
+                checkGatewayError(current);
+                if (current?.payload?.requestId === requestId) recovered = current.payload;
+            } catch { /* 传输未知保留待确认，不另造请求重发。 */ }
+            log(recovered
+                ? `已按原请求确认${label}批次 ${recovered.batchId}，状态：${recovered.phase}`
+                : label + '受理结果待确认，未重复发送：' + err.message);
+        }
+    }
 }
 
 // ---------- 弹窗：绑定 ----------
@@ -711,25 +733,75 @@ function showBindModal(key, callback) {
 
 // ---------- 弹窗：确认（含修改按钮） ----------
 function showConfirmModal(key, value, isOneClick, callback) {
+    const quickCommandKey = '一键' + key;
+    const members = players.filter(p => p.online === true && p.playerUid).map(p => ({
+        ...p, quickCommands: { ...p.quickCommands },
+        hoeingCompletionAction: p.hoeingCompletionAction ? { ...p.hoeingCompletionAction } : null
+    }));
+    // 与桌面端一致：未绑定的成员只作说明，不下发该快捷指令。
+    const targets = members.filter(p => parseQuickCommandBinding(p.quickCommands[quickCommandKey]));
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
         <div class="modal">
-            <h3>确认下发</h3>
-            <p style="font-size:14px;color:#1D1D1F;margin-bottom:16px;">
-                确认对全部在线成员下发「${key}」→ 本机${isOneClick ? '一条龙' : '配置组'}「${value}」？
-            </p>
-            <div class="btn-row">
+            <h3></h3>
+            <p id="quickSummary" style="font-size:14px;margin-bottom:12px"></p>
+            <label style="display:block;margin:14px 0 6px"><input type="checkbox" id="quickCompletionActions"> 执行各成员在“绑定”中设置的锄地后动作</label>
+            <p id="quickCompletionHint" style="font-size:12px"></p>
+            <div class="list-items" id="quickMembers" hidden></div>
+            <div class="btn-row" style="flex-wrap:wrap">
                 <button class="btn btn-secondary" id="confCancel">取消</button>
-                <button class="btn btn-secondary" id="confModify">修改</button>
+                <button class="btn btn-secondary" id="confModify">修改网页任务</button>
                 <button class="btn btn-primary" id="confOk">确认</button>
             </div>
         </div>`;
+    overlay.querySelector('h3').textContent = `确认下发「${key}」`;
+    const summary = overlay.querySelector('#quickSummary');
+    const completionOption = overlay.querySelector('#quickCompletionActions');
+    const hint = overlay.querySelector('#quickCompletionHint');
+    const list = overlay.querySelector('#quickMembers');
+    const confirm = overlay.querySelector('#confOk');
+    const modify = overlay.querySelector('#confModify');
+    const cancel = overlay.querySelector('#confCancel');
+    members.forEach(p => {
+        const row = document.createElement('div');
+        row.className = 'list-item';
+        row.style.whiteSpace = 'pre-line';
+        const task = parseQuickCommandBinding(p.quickCommands[quickCommandKey]);
+        row.textContent = `${p.playerName || p.playerUid}：${task ? (task.isOneClick ? '一条龙「' : '配置组「') + task.name + '」' : '未绑定，本次不下发'}\n锄地后动作：${hoeingCompletionDescription(p.hoeingCompletionAction)}`;
+        list.appendChild(row);
+    });
+    completionOption.disabled = !serverCapabilities.includes('hoeing.quickCommandCompletion.v1')
+        || !serverCapabilities.includes('hoeing.completionChoice.v1') || targets.length === 0
+        || targets.some(p => !isValidCompletionAction(p.hoeingCompletionAction));
+    function updateChoice() {
+        const useActions = !completionOption.disabled && completionOption.checked;
+        summary.textContent = useActions
+            ? `从头执行以下 ${targets.length} 个成员各自为「${key}」绑定的任务。`
+            : value ? `对全部在线成员执行网页任务：${isOneClick ? '一条龙' : '配置组'}「${value}」。`
+                : '尚未设置网页任务，请选择“修改网页任务”；也可勾选使用成员已有快捷绑定。';
+        list.hidden = !useActions;
+        hint.textContent = completionOption.disabled
+            ? '服务端尚不支持此选项、成员未绑定该快捷指令，或锄地后动作尚未上报完整；不勾选仍可执行网页任务。'
+            : useActions ? '正常完成后执行各成员已有动作；失败或手动停止不触发。'
+                : '不勾选：本次锄完停止。';
+        confirm.disabled = !useActions && !value;
+    }
+    completionOption.addEventListener('change', updateChoice);
+    updateChoice();
     document.body.appendChild(overlay);
-
-    overlay.querySelector('#confOk').addEventListener('click', () => { callback('confirm'); overlay.remove(); });
-    overlay.querySelector('#confModify').addEventListener('click', () => { callback('modify'); overlay.remove(); });
-    overlay.querySelector('#confCancel').addEventListener('click', () => { callback('cancel'); overlay.remove(); });
+    confirm.addEventListener('click', async () => {
+        if (confirm.disabled) return;
+        const useActions = !completionOption.disabled && completionOption.checked;
+        if (!useActions) { overlay.remove(); callback('confirm'); return; }
+        confirm.disabled = true;
+        modify.disabled = true;
+        cancel.disabled = true;
+        try { await beginCoordinatedQuickCommand(targets, true, quickCommandKey, key); }
+        finally { overlay.remove(); }
+    });
+    modify.addEventListener('click', () => { overlay.remove(); callback('modify'); });
+    cancel.addEventListener('click', () => { overlay.remove(); callback('cancel'); });
 }
 
 // ---------- 弹窗：确认对指定成员下发配置组/一条龙（含"从此处开始执行"任务列表） ----------
