@@ -11,17 +11,26 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
+    private readonly System.Windows.Threading.DispatcherTimer _roomCodeCopyHintTimer = new()
+    {
+        Interval = TimeSpan.FromSeconds(2),
+    };
 
     private void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         e.Handled = true;
+        _roomCodeCopyHintTimer.Stop();
+        RoomCodeCopyHint.IsOpen = false;
         var roomCode = ViewModel.RoomCode;
         if (string.IsNullOrWhiteSpace(roomCode)) return;
         try { Clipboard.SetText(roomCode); }
         catch (System.Runtime.InteropServices.ExternalException)
         {
             ViewModel.AddLog("复制房间号失败：剪贴板正忙，请稍后重试。");
+            return;
         }
+        RoomCodeCopyHint.IsOpen = true;
+        _roomCodeCopyHintTimer.Start();
     }
 
     /// <summary>嘟嘟可（日志与监控系统）ViewModel。手动组装（参照 App.xaml.cs 风格），
@@ -146,6 +155,16 @@ public partial class MainWindow : Window
         Pet = new PetViewModel(viewModel, Dodoco, new PetSettingsService(), ShowToForeground, Dodoco.LogTail);
         DataContext = ViewModel;
         InitializeComponent();
+        _roomCodeCopyHintTimer.Tick += (_, _) =>
+        {
+            _roomCodeCopyHintTimer.Stop();
+            RoomCodeCopyHint.IsOpen = false;
+        };
+        Closed += (_, _) =>
+        {
+            _roomCodeCopyHintTimer.Stop();
+            RoomCodeCopyHint.IsOpen = false;
+        };
         // 动态设置标题：Nexus-BGI · 版本号
         Title = GetVersionedTitle();
         // 用户缩放窗口 → 行数可能变化 → 解锁并重新计算折叠
