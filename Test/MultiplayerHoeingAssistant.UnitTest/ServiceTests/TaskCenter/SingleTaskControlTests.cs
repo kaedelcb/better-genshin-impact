@@ -110,7 +110,7 @@ public sealed class SingleTaskControlTests
                 Pump(view, () => panel.Editing is not null);
                 panel.Editing!.SelectedNode = panel.Editing.Nodes[0];
                 Layout(view);
-                ButtonOf(view, "▶ 启动单个任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                ButtonOf(view, "启动单任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Pump(view, () => action == "preparing" ? boundary.AuthorityEntered.Task.IsCompleted : boundary.BodyEntered.Task.IsCompleted);
                 Pump(view, () => panel.CurrentPlanRuns.Count == 1);
                 var run = host.Runs.List().Single();

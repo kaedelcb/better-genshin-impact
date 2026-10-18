@@ -1212,20 +1212,24 @@
 
         <!-- ========== 顶栏：返回 + 标题 + 子页 Tab ========== -->
         <Grid x:Name="MistletoeHeader" Grid.Row="0" Margin="0,0,0,8">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="←  返回" Style="{DynamicResource BtnGhost}" Padding="12,5"
                         Command="{Binding BackCommand}"/>
                 <TextBlock Text="槲寄生 · 调度器" FontSize="15" FontWeight="SemiBold"
                            Foreground="{DynamicResource GoldText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <WrapPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
                 <StackPanel x:Name="RemoteCenterToolbar" Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center"
                             Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                    <ComboBox x:Name="RemoteCenterTargetChoice" Width="170" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
+                    <ComboBox x:Name="RemoteCenterTargetChoice" Width="Auto" MaxWidth="360" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
                               ItemsSource="{Binding DataContext.RemoteCenterTargets, RelativeSource={RelativeSource AncestorType=Window}}"
                               DisplayMemberPath="Label" Style="{StaticResource GoldComboBox}"
                               ItemContainerStyle="{StaticResource GoldComboItem}"
-                              ToolTip="选择要操作的执行端实例" />
+                              ToolTip="{Binding SelectedItem.Label, RelativeSource={RelativeSource Self}, TargetNullValue=选择要操作的执行端实例, FallbackValue=选择要操作的执行端实例}" />
                     <Button Content="扫描同机" Click="ScanLocalCenterClick" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
                             Style="{DynamicResource BtnGhost}" Padding="8,3" />
                     <Button Content="重新读取" Click="ReloadRemoteCenterClick" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
@@ -1234,62 +1238,64 @@
                     <Button x:Name="RemoteCenterSwitchButton" Content="连接执行端" Click="SwitchRemoteCenterClick" Height="24" VerticalAlignment="Center"
                             Style="{DynamicResource BtnGold}" Padding="9,3" />
                 </StackPanel>
-                <Button Content="启动中心" Command="{Binding SelectTabCommand}" CommandParameter="0">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
-                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <!-- 连接执行端后沿用执行端的整排入口；未连接的监控端仍只显示本机启动中心。 -->
-                <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding CanShowTaskCenter}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
-                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <Button Content="执行策略" Command="{Binding SelectTabCommand}" CommandParameter="2"
-                        Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
-                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-                <Button Content="三方接入" Command="{Binding SelectTabCommand}" CommandParameter="3"
-                        Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
-                    <Button.Style>
-                        <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
-                                    <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
-                                    <Setter Property="FontWeight" Value="SemiBold"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Button.Style>
-                </Button>
-            </StackPanel>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="启动中心" Command="{Binding SelectTabCommand}" CommandParameter="0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedTabIndex}" Value="0">
+                                        <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <!-- 连接执行端后沿用执行端的整排入口；未连接的监控端仍只显示本机启动中心。 -->
+                    <Button Content="任务中心" Command="{Binding SelectTabCommand}" CommandParameter="1">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CanShowTaskCenter}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding SelectedTabIndex}" Value="1">
+                                        <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="执行策略" Command="{Binding SelectTabCommand}" CommandParameter="2"
+                            Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedTabIndex}" Value="2">
+                                        <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="三方接入" Command="{Binding SelectTabCommand}" CommandParameter="3"
+                            Visibility="{Binding CanShowTaskCenter, Converter={StaticResource BoolToVis}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource MistletoeTabButton}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedTabIndex}" Value="3">
+                                        <Setter Property="Foreground" Value="{DynamicResource GoldText}"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </StackPanel>
+            </WrapPanel>
         </Grid>
 
         <!-- ========== 内容区 ========== -->

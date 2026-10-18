@@ -53,14 +53,14 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 RenderSnapshotIfRequested(view);
 
                 var texts = Descendants(view).OfType<Button>().Select(button => button.Content?.ToString()).ToArray();
-                Assert.Contains("▶ 启动单个任务", texts);
+                Assert.Contains("启动单任务", texts);
                 Assert.Contains("⏵⏵ 连续一条龙", texts);
-                Assert.Contains("＋ 新增任务", texts);
+                Assert.Contains("+任务", texts);
                 Assert.Contains("复制", texts);
                 Assert.Contains("修改", texts);
                 Assert.Contains("删除", texts);
-                Assert.Contains("导入全部配置", texts);
-                Assert.Contains("导出全部配置", texts);
+                Assert.Contains("导入配置", texts);
+                Assert.Contains("导出配置", texts);
                 Assert.DoesNotContain("设置", texts);
                 Assert.DoesNotContain("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
@@ -70,7 +70,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.DoesNotContain("下移", texts);
                 Assert.All(Descendants(view).OfType<ComboBox>(), combo => Assert.False(combo.IsVisible));
 
-                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务"));
+                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "启动单任务"));
                 Assert.Same(vm.Editing!.Nodes[0], vm.Editing.SelectedNode);
                 Assert.Single(vm.ResourceNodes);
                 Assert.Equal(1, vm.ResourceNodes[0].ResourceIndex);
@@ -341,7 +341,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 window = new Window { Content = view, Width = 1200, Height = 800,
                     ShowActivated = false, Left = -20000, Top = -20000 };
                 window.Show(); window.UpdateLayout();
-                var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "＋ 新增任务"));
+                var button = Descendants(view).OfType<Button>().First(b => Equals(b.Content, "+任务"));
                 var before = vm.ResourceNodes.Count;
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
@@ -391,7 +391,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 var goldViewer = new Style(typeof(ScrollViewer));
                 window.Resources["GoldScrollViewer"] = goldViewer;
                 window.Show(); window.UpdateLayout();
-                Descendants(view).OfType<Button>().First(button => Equals(button.Content, "＋ 新增任务"))
+                Descendants(view).OfType<Button>().First(button => Equals(button.Content, "+任务"))
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
                 PumpUntil(view, () => popup.IsOpen);
@@ -467,7 +467,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 window = new Window { Content = view, Width = 1000, Height = 650,
                     ShowActivated = false, Left = 20, Top = 20 };
                 window.Show(); window.UpdateLayout();
-                var add = Descendants(view).OfType<Button>().First(button => Equals(button.Content, "＋ 新增任务"));
+                var add = Descendants(view).OfType<Button>().First(button => Equals(button.Content, "+任务"));
                 var popup = Assert.IsType<Popup>(view.FindName("AddTaskPopup"));
                 var choices = Assert.IsType<ListBox>(view.FindName("AddTaskChoices"));
                 add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -853,7 +853,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 vm.Editing!.SelectedNode = vm.Editing.Nodes[0];
                 view.UpdateLayout();
 
-                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务"));
+                var single = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "启动单任务"));
                 Assert.True(single.IsEnabled);
                 single.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(view, () => host.Runs.List().Count == 1 && host.Runs.List()[0].IsTerminal);
@@ -903,7 +903,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 view.UpdateLayout();
 
                 Assert.False(vm.CanStartSelectedPlan);
-                Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "▶ 启动单个任务")).IsEnabled);
+                Assert.False(Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "启动单任务")).IsEnabled);
                 var continuous = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "⏵⏵ 连续一条龙"));
                 Assert.True(continuous.IsEnabled);
                 continuous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -982,7 +982,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 // 生产壳层也走一次真实按钮事件，确保 MainWindow → MistletoePage → BasicTaskCenterView
                 // 不是只把 UserControl 单独渲染出来。
                 var productionAdd = Descendants(basic).OfType<Button>()
-                    .First(button => Equals(button.Content, "＋ 新增任务"));
+                    .First(button => Equals(button.Content, "+任务"));
                 Assert.True(productionAdd.IsEnabled);
                 productionAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 var addPopup = Assert.IsType<Popup>(basic.FindName("AddTaskPopup"));
