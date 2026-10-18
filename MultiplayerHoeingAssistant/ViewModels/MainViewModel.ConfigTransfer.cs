@@ -21,8 +21,10 @@ public partial class MainViewModel
         ? "设置迁移恢复尚未完成，配置编辑与新任务已暂停。停止仍可使用；请退出后重新打开助手以恢复原设置。" : "";
     public string ConfigurationDeferredMessage => _configTransferDeferred
         ? "迁移已完成，连接设置待重新打开助手后生效。新任务和配置编辑已暂停；停止与退出仍可使用。" : "";
+    public string ConfigurationScheduledOnlineMessage => _config?.ScheduledOnlineRequiresConfirmation == true
+        ? "导入的定时上线尚未启用，重新打开助手也不会自动上线。请在本机成员卡片的“定时上线”中确认时间后启用；其他功能可照常使用。" : "";
     public string ConfigurationTransferStatusMessage => _configTransferRecoveryRequired
-        ? ConfigurationRecoveryMessage : ConfigurationDeferredMessage;
+        ? ConfigurationRecoveryMessage : _configTransferDeferred ? ConfigurationDeferredMessage : ConfigurationScheduledOnlineMessage;
     private string ConfigTransferBlockedMessage => _configTransferRecoveryRequired
         ? ConfigurationRecoveryMessage : _configTransferDeferred ? ConfigurationDeferredMessage
             : "正在迁移设置，本次命令未发送，请稍后重试";
@@ -86,10 +88,22 @@ public partial class MainViewModel
         lock (_configTransferGate)
         {
             if (_configTransferInProgress) return false;
+            if (command == "scheduled_online" && _config?.ScheduledOnlineRequiresConfirmation == true) return false;
             _configTransferOperations++;
             operation = new ConfigTransferOperation(this);
             return true;
         }
+    }
+
+    // Shared by the explicit local dialog and an explicitly received schedule command.
+    // Other settings saves cannot clear this persisted import authorization boundary.
+    internal void SetConfirmedScheduledOnlineTime(string time)
+    {
+        var config = _config ?? throw new InvalidOperationException("助手配置尚未初始化");
+        config.ScheduledOnlineTime = time;
+        config.ScheduledOnlineRequiresConfirmation = false;
+        OnPropertyChanged(nameof(ConfigurationScheduledOnlineMessage));
+        OnPropertyChanged(nameof(ConfigurationTransferStatusMessage));
     }
 
     private CommandResult ConfigTransferRejectedResult() => new()
@@ -111,16 +125,7 @@ public partial class MainViewModel
         if (dialog.ShowDialog() != true) return;
         try
         {
-            var window = RequireConfigTransferWindow();
-            window.Mistletoe.FlushConfigTransferEdits();
-            window.Pet.FlushConfigTransferEdits();
-            var snapshots = window.Dodoco.ExportConfigTransferSnapshots();
-            foreach (var snapshot in window.Mistletoe.ExportConfigTransferSnapshots())
-                snapshots[snapshot.Key] = snapshot.Value;
-            snapshots["pet_settings.json"] = window.Pet.ExportConfigTransferSnapshot();
-            snapshots["assistant-config.json"] = JsonSerializer.SerializeToUtf8Bytes(_config
-                ?? throw new InvalidOperationException("助手配置尚未初始化"));
-            var result = _configTransfer.Export(dialog.FileName, snapshots);
+            var result = ExportSettingsWithRuntime(dialog.FileName);
             MessageBox.Show(result.Message, result.Success ? "导出成功" : "导出失败",
                 MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
@@ -128,6 +133,20 @@ public partial class MainViewModel
         {
             MessageBox.Show("导出失败：" + ex.Message, "导出失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    internal ConfigTransferService.ExportResult ExportSettingsWithRuntime(string zipPath)
+    {
+        var window = RequireConfigTransferWindow();
+        window.Mistletoe.FlushConfigTransferEdits();
+        window.Pet.FlushConfigTransferEdits();
+        var snapshots = window.Dodoco.ExportConfigTransferSnapshots();
+        foreach (var snapshot in window.Mistletoe.ExportConfigTransferSnapshots())
+            snapshots[snapshot.Key] = snapshot.Value;
+        snapshots["pet_settings.json"] = window.Pet.ExportConfigTransferSnapshot();
+        snapshots["assistant-config.json"] = JsonSerializer.SerializeToUtf8Bytes(_config
+            ?? throw new InvalidOperationException("助手配置尚未初始化"));
+        return _configTransfer.Export(zipPath, snapshots);
     }
 
     private void ImportAllSettings()
@@ -193,7 +212,8 @@ public partial class MainViewModel
         window.Pet.SetConfigTransferActive(true);
         window.Mistletoe.SetConfigTransferActive(true);
         var recoveryRequired = false;
-        var runtimeAttempted = false;
+        var runtimeRestored = false;
+        var rulesEnded = false;
         var restoreRules = true;
         try
         {
@@ -201,25 +221,56 @@ public partial class MainViewModel
                 ? new Dictionary<string, string> { ["dodoco_watch_rules.json"] = shared } : null;
             var result = _configTransfer.Import(zipPath, () =>
             {
-                runtimeAttempted = true;
                 ReloadConfigTransferRuntime(window, reloadRules);
             }, additionalTargets, () =>
             {
-                if (runtimeAttempted) ReloadConfigTransferRuntime(window, reloadRules);
+                // A conflict may precede our first publication. The current disk can still
+                // contain a legitimate peer save; never resume an older in-memory copy.
+                ReloadConfigTransferRuntime(window, reloadRules);
+                runtimeRestored = true;
             });
             if (result.Success)
             {
                 restoreRules = false;
                 if (DeferChangedConfigTransferRuntimeBindings(transferScope, originalBindings))
                     return result with { Message = result.Message + "\n\n" + ConfigurationDeferredMessage };
-                return result;
+            }
+            else if (!result.RecoveryRequired)
+            {
+                try
+                {
+                    if (!runtimeRestored) ReloadConfigTransferRuntime(window, reloadRules);
+                    if (_config is { } current)
+                        current.ScheduledOnlineRequiresConfirmation |= ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(originalBindings, current);
+                    if (DeferChangedConfigTransferRuntimeBindings(transferScope, originalBindings))
+                        result = result with { Message = result.Message + "\n\n" + ConfigurationDeferredMessage };
+                }
+                catch (Exception ex)
+                {
+                    result = result with { RecoveryRequired = true,
+                        Message = result.Message + "\n当前落盘设置的运行时恢复未完成，继续暂停写入：" + ex.Message };
+                }
             }
             recoveryRequired = result.RecoveryRequired;
+            if (!recoveryRequired && !_configTransferDeferred)
+            {
+                try
+                {
+                    window.Dodoco.EndConfigTransfer(rules, restoreRules);
+                    rulesEnded = true;
+                }
+                catch (Exception ex)
+                {
+                    recoveryRequired = true;
+                    result = result with { RecoveryRequired = true,
+                        Message = result.Message + "\n有效监控规则未能恢复，继续暂停写入：" + ex.Message };
+                }
+            }
             return result;
         }
         finally
         {
-            if (recoveryRequired)
+            if (recoveryRequired || !rulesEnded && !_configTransferDeferred)
             {
                 transferScope.RetainForRecovery();
                 _retainedConfigTransferHostAdmission = admission;
@@ -233,27 +284,18 @@ public partial class MainViewModel
             }
             else
             {
-                try { window.Dodoco.EndConfigTransfer(rules, restoreRules); }
-                finally
-                {
-                    window.Pet.SetConfigTransferActive(false);
-                    window.Mistletoe.SetConfigTransferActive(false);
-                    _configManager?.SetConfigTransferActive(false);
-                    _cacheManager?.SetConfigTransferActive(false);
-                    admission.Dispose();
-                }
+                window.Pet.SetConfigTransferActive(false);
+                window.Mistletoe.SetConfigTransferActive(false);
+                _configManager?.SetConfigTransferActive(false);
+                _cacheManager?.SetConfigTransferActive(false);
+                admission.Dispose();
             }
         }
     }
 
-    private static AssistConfig CaptureConfigTransferRuntimeBindings(AssistConfig config) => new()
-    {
-        ServerUrl = config.ServerUrl, ControlRoomPassword = config.ControlRoomPassword,
-        PlayerUid = config.PlayerUid, ClientInstanceId = config.ClientInstanceId,
-        TeamUids = [.. config.TeamUids], ObserverMode = config.ObserverMode,
-        StandaloneMode = config.StandaloneMode, BgiPath = config.BgiPath,
-        GuardBgi = config.GuardBgi, BypassSystemProxy = config.BypassSystemProxy,
-    };
+    private static AssistConfig CaptureConfigTransferRuntimeBindings(AssistConfig config)
+        => JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.SerializeToUtf8Bytes(config))
+            ?? throw new InvalidDataException("无法保存导入前的运行绑定快照");
 
     internal static bool ConfigTransferRuntimeBindingsChanged(AssistConfig previous, AssistConfig imported)
         => previous.ServerUrl != imported.ServerUrl || previous.ControlRoomPassword != imported.ControlRoomPassword

@@ -16,7 +16,8 @@ internal sealed class ConfigTransferTransaction
     private readonly HashSet<string> _requiredNew;
     internal string BackupDirectory { get; }
     internal bool RecoveryRequired { get; private set; }
-    internal sealed record Item(string Target, string Backup, bool Existed, string BeforeHash, string AfterHash);
+    internal sealed record Item(string Target, string Backup, bool Existed, string BeforeHash, string AfterHash,
+        string? PublishedIdentity = null, string? StagedPath = null);
     internal sealed record Journal(string Schema, string DataRoot, string BackupDirectory, string? BgiRoot,
         string[] AdditionalTargets, List<Item> Items, bool Committed = false);
     private sealed record Pending(string Schema, string BackupDirectory);
@@ -47,50 +48,75 @@ internal sealed class ConfigTransferTransaction
 
     internal void Commit(Action? applyRuntime, Action<string, int>? beforeWrite, Action? restoreRuntime = null)
     {
+        foreach (var target in _targets.Keys) ValidateTarget(_journal, target);
+        using var writing = ConfigFileWriteGate.AcquireMany(_targets.Keys);
         CheckPath(BackupDirectory);
         Directory.CreateDirectory(BackupDirectory);
-        // 所有原文件备份和校验结束后才发布 pending；备份失败不会改动目标。
-        foreach (var target in _targets)
-        {
-            ValidateTarget(_journal, target.Key);
-            CheckPath(target.Key);
-            var exists = File.Exists(target.Key);
-            var original = exists ? File.ReadAllBytes(target.Key) : [];
-            if (_requiredNew.Contains(target.Key) && exists)
-                throw new IOException("计划或资源目标已由其他写者创建，原文件未覆盖：" + target.Key);
-            if (_expectedVersions.TryGetValue(target.Key, out var expected) && expected != (exists ? Hash(original) : null))
-                throw new IOException("本机配置在导入规划期间被修改，原文件未覆盖：" + target.Key);
-            var backup = Path.Combine(BackupDirectory, _journal.Items.Count.ToString("D6") + ".original");
-            WriteAtomic(backup, original);
-            if (!File.ReadAllBytes(backup).AsSpan().SequenceEqual(original)) throw new IOException("配置备份读回不一致。");
-            _journal.Items.Add(new(Path.GetFullPath(target.Key), Path.GetFileName(backup), exists, Hash(original), Hash(target.Value)));
-        }
-        WriteAtomic(Path.Combine(BackupDirectory, "transaction.json"), JsonSerializer.SerializeToUtf8Bytes(_journal, Options));
-        WriteAtomic(Path.Combine(_root, PendingName), JsonSerializer.SerializeToUtf8Bytes(new Pending(_journal.Schema, BackupDirectory), Options));
+        var published = new List<Item>();
+        var staged = new List<(string Path, string Identity)>();
         try
         {
-            for (var index = 0; index < _journal.Items.Count; index++)
+            // 所有原文件备份和校验结束后才发布 pending；备份失败不会改动目标。
+            foreach (var target in _targets)
             {
-                var item = _journal.Items[index];
-                beforeWrite?.Invoke(item.Target, index);
-                if (File.Exists(item.Target) != item.Existed || (item.Existed && Hash(File.ReadAllBytes(item.Target)) != item.BeforeHash))
-                    throw new IOException("配置在迁移期间被其他写者修改，已取消覆盖：" + item.Target);
-                WriteAtomic(item.Target, _targets[item.Target], overwrite: item.Existed);
-                if (Hash(File.ReadAllBytes(item.Target)) != item.AfterHash) throw new IOException("配置写入后读回不一致：" + item.Target);
+                ValidateTarget(_journal, target.Key);
+                CheckPath(target.Key);
+                var exists = File.Exists(target.Key);
+                var original = exists ? File.ReadAllBytes(target.Key) : [];
+                if (_requiredNew.Contains(target.Key) && exists)
+                    throw new IOException("计划或资源目标已由其他写者创建，原文件未覆盖：" + target.Key);
+                if (_expectedVersions.TryGetValue(target.Key, out var expected) && expected != (exists ? Hash(original) : null))
+                    throw new IOException("本机配置在导入规划期间被修改，原文件未覆盖：" + target.Key);
+                var backup = Path.Combine(BackupDirectory, _journal.Items.Count.ToString("D6") + ".original");
+                WriteAtomic(backup, original);
+                if (!File.ReadAllBytes(backup).AsSpan().SequenceEqual(original)) throw new IOException("配置备份读回不一致。");
+                // Publish from the same volume. Persist its physical identity before exposing any target.
+                var stage = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target.Key))!, ".config-transfer-" + Guid.NewGuid().ToString("N") + ".tmp");
+                WriteAtomic(stage, target.Value, overwrite: false);
+                var identity = ConfigTransferFileIdentity.Read(stage);
+                staged.Add((stage, identity));
+                _journal.Items.Add(new(Path.GetFullPath(target.Key), Path.GetFileName(backup), exists, Hash(original), Hash(target.Value), identity, stage));
             }
-            applyRuntime?.Invoke();
-            WriteAtomic(Path.Combine(BackupDirectory, "transaction.json"), JsonSerializer.SerializeToUtf8Bytes(_journal with { Committed = true }, Options));
-            try { File.Delete(Path.Combine(_root, PendingName)); } catch (IOException) { /* committed marker is durable; next startup only removes the pointer. */ }
+            WriteAtomic(Path.Combine(BackupDirectory, "transaction.json"), JsonSerializer.SerializeToUtf8Bytes(_journal, Options));
+            WriteAtomic(Path.Combine(_root, PendingName), JsonSerializer.SerializeToUtf8Bytes(new Pending(_journal.Schema, BackupDirectory), Options));
+            try
+            {
+                for (var index = 0; index < _journal.Items.Count; index++)
+                {
+                    var item = _journal.Items[index];
+                    beforeWrite?.Invoke(item.Target, index);
+                    if (File.Exists(item.Target) != item.Existed || (item.Existed && Hash(File.ReadAllBytes(item.Target)) != item.BeforeHash))
+                        throw new IOException("配置在迁移期间被其他写者修改，已取消覆盖：" + item.Target);
+                    File.Move(item.StagedPath!, item.Target, overwrite: item.Existed);
+                    published.Add(item);
+                    if (!IsOwnedVersion(item)) throw new IOException("配置写入后身份或读回不一致：" + item.Target);
+                }
+                applyRuntime?.Invoke();
+                WriteAtomic(Path.Combine(BackupDirectory, "transaction.json"), JsonSerializer.SerializeToUtf8Bytes(_journal with { Committed = true }, Options));
+                try { File.Delete(Path.Combine(_root, PendingName)); } catch (IOException) { /* committed marker is durable; next startup only removes the pointer. */ }
+            }
+            catch (Exception original)
+            {
+                try { Rollback(_journal, published); restoreRuntime?.Invoke(); File.Delete(Path.Combine(_root, PendingName)); }
+                catch (Exception rollback)
+                {
+                    RecoveryRequired = true;
+                    throw new IOException("导入未完成，回滚也未确认：" + rollback.Message, original);
+                }
+                throw new IOException("本次导入未完成，本事务写入已回滚，其他写者文件保留：" + original.Message, original);
+            }
         }
-        catch (Exception original)
+        finally
         {
-            try { Rollback(_journal); restoreRuntime?.Invoke(); File.Delete(Path.Combine(_root, PendingName)); }
-            catch (Exception rollback)
-            {
-                RecoveryRequired = true;
-                throw new IOException("导入未完成，回滚也未确认：" + rollback.Message, original);
-            }
-            throw new IOException("本次导入未完成，已恢复全部原文件：" + original.Message, original);
+            // Preparation failure may leave only our private staging files; never remove a target here.
+            foreach (var stage in staged)
+                try
+                {
+                    if (File.Exists(stage.Path) && ConfigTransferFileIdentity.Read(stage.Path) == stage.Identity)
+                        File.Delete(stage.Path);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
         }
     }
 
@@ -120,15 +146,17 @@ internal sealed class ConfigTransferTransaction
             if (!File.Exists(original) || Hash(File.ReadAllBytes(original)) != item.BeforeHash)
                 throw new InvalidDataException("原配置备份缺失或校验失败，禁止自动覆盖：" + item.Target);
         }
+        using var writing = ConfigFileWriteGate.AcquireMany(journal.Items.Select(item => item.Target));
         if (!journal.Committed) Rollback(journal);
+        foreach (var item in journal.Items) CleanupStaging(item);
         File.Delete(pendingPath);
         return !journal.Committed;
     }
 
-    private static void Rollback(Journal journal)
+    private static void Rollback(Journal journal, IEnumerable<Item>? published = null)
     {
         var failures = new List<string>();
-        foreach (var item in journal.Items.AsEnumerable().Reverse())
+        foreach (var item in (published ?? journal.Items).Reverse())
         {
             try
             {
@@ -137,8 +165,9 @@ internal sealed class ConfigTransferTransaction
                 var present = File.Exists(item.Target);
                 var hash = present ? Hash(File.ReadAllBytes(item.Target)) : null;
                 if ((item.Existed && hash == item.BeforeHash) || (!item.Existed && !present)) continue;
-                // 只恢复本事务写出的版本；绝不为回滚覆盖另外一个写者的新成果。
-                if (hash != item.AfterHash) throw new IOException("目标已被其他写者修改，原件和备份均保留");
+                // Old journals have no physical ownership. Equal bytes alone cannot authorize deletion.
+                if (hash != item.AfterHash || !IsOwnedVersion(item))
+                    throw new IOException("无法确认目标属于本事务，可能已有其他写者；原件和备份均保留");
                 if (item.Existed)
                 {
                     var bytes = File.ReadAllBytes(BackupPath(journal, item));
@@ -151,6 +180,26 @@ internal sealed class ConfigTransferTransaction
             catch (Exception ex) { failures.Add(item.Target + "：" + ex.Message); }
         }
         if (failures.Count > 0) throw new IOException(string.Join("\n", failures));
+    }
+
+    private static bool IsOwnedVersion(Item item)
+    {
+        if (item.PublishedIdentity is null || !File.Exists(item.Target)) return false;
+        using var stream = new FileStream(item.Target, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (ConfigTransferFileIdentity.Read(stream.SafeFileHandle) != item.PublishedIdentity) return false;
+        return Convert.ToHexString(SHA256.HashData(stream)) == item.AfterHash;
+    }
+
+    private static void CleanupStaging(Item item)
+    {
+        if (item.StagedPath is null || item.PublishedIdentity is null) return;
+        var stage = Path.GetFullPath(item.StagedPath);
+        var name = Path.GetFileName(stage);
+        if (!string.Equals(Path.GetDirectoryName(stage), Path.GetDirectoryName(item.Target), StringComparison.OrdinalIgnoreCase)
+            || !name.StartsWith(".config-transfer-", StringComparison.Ordinal) || !name.EndsWith(".tmp", StringComparison.Ordinal))
+            throw new InvalidDataException("迁移暂存路径身份无效，未删除文件。");
+        CheckPath(stage);
+        if (File.Exists(stage) && ConfigTransferFileIdentity.Read(stage) == item.PublishedIdentity) File.Delete(stage);
     }
 
     private static string BackupPath(Journal journal, Item item)
@@ -181,6 +230,7 @@ internal sealed class ConfigTransferTransaction
     }
     internal static void WriteAtomic(string path, byte[] bytes, bool overwrite = true)
     {
+        using var writing = ConfigFileWriteGate.Acquire(path);
         CheckPath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

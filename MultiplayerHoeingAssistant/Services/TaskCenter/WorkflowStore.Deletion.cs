@@ -29,6 +29,7 @@ public sealed partial class WorkflowStore
     // one fixed physical lock. Different Store instances cannot pass the same revision.
     private IDisposable AcquireWriteWindow()
     {
+        var configWriting = ConfigFileWriteGate.Acquire(Path.Combine(_flowsDir, ".workflow-write-scope"));
         Monitor.Enter(_gate);
         try
         {
@@ -45,12 +46,12 @@ public sealed partial class WorkflowStore
                     new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
             }
             _writeState.Depth++;
-            return new WorkflowWriteWindow(_writeState);
+            return new WorkflowWriteWindow(_writeState, configWriting);
         }
-        catch { Monitor.Exit(_gate); throw; }
+        catch { Monitor.Exit(_gate); configWriting.Dispose(); throw; }
     }
 
-    private sealed class WorkflowWriteWindow(WorkflowWriteState state) : IDisposable
+    private sealed class WorkflowWriteWindow(WorkflowWriteState state, IDisposable configWriting) : IDisposable
     {
         private WorkflowWriteState? _state = state;
         public void Dispose()
@@ -65,7 +66,7 @@ public sealed partial class WorkflowStore
                     current.Publication = null;
                 }
             }
-            finally { Monitor.Exit(current.Gate); }
+            finally { Monitor.Exit(current.Gate); configWriting.Dispose(); }
         }
     }
 

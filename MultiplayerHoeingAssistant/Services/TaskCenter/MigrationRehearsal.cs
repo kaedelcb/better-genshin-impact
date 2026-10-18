@@ -149,6 +149,7 @@ public static class MigrationRehearsal
             if (!rollback.Success) return Abort(tx, steps, root, configRoot, transactionRoot, txId);
             // 全文件集比对：**完整文件集合 + 逐字节**（含被修改与未被修改者；新增文件须不存在）
             var after = Directory.EnumerateFiles(configRoot, "*", SearchOption.AllDirectories)
+                .Where(f => !Path.GetFileName(f).Equals(ConfigFileWriteGate.LockFileName, StringComparison.OrdinalIgnoreCase))
                 .Select(f => Path.GetRelativePath(configRoot, f).Replace(Path.DirectorySeparatorChar, '/'))
                 .OrderBy(p => p, StringComparer.Ordinal).ToList();
             var identical = after.Count == 2 && after[0] == "a.json" && after[1] == "sub/b.json"

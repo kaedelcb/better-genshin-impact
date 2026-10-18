@@ -131,6 +131,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(workflowId)) return;
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(CurrentWorkflowSelectionPath);
             var root = Path.GetDirectoryName(_host.Workflows.RootDirectory) ?? AssistantDataDirectory.Root;
             Directory.CreateDirectory(root);
             var temp = CurrentWorkflowSelectionPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -143,7 +144,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     internal void ClearCurrentWorkflowSelection()
     {
         if (_remoteTarget is not null) return;
-        try { if (File.Exists(CurrentWorkflowSelectionPath)) File.Delete(CurrentWorkflowSelectionPath); }
+        try
+        {
+            using var writing = ConfigFileWriteGate.Acquire(CurrentWorkflowSelectionPath);
+            if (File.Exists(CurrentWorkflowSelectionPath)) File.Delete(CurrentWorkflowSelectionPath);
+        }
         catch { }
     }
 

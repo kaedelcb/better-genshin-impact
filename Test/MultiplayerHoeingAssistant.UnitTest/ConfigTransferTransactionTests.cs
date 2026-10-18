@@ -173,9 +173,109 @@ public sealed class ConfigTransferTransactionTests
 
         Assert.ThrowsAny<IOException>(() => transaction.Commit(null, (_, _) => File.WriteAllBytes(target, foreign)));
 
-        Assert.True(transaction.RecoveryRequired);
+        Assert.False(transaction.RecoveryRequired);
         Assert.Equal(foreign, File.ReadAllBytes(target));
+        Assert.False(File.Exists(fixture.Pending));
+    }
+
+    [Fact]
+    public void IdenticalForeignNewFileIsPreservedWhenOurPublicationNeverHappened()
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("pet_settings.json");
+        var after = Bytes("{\"sizePx\":225}");
+        var transaction = new ConfigTransferTransaction(fixture.DataRoot,
+            new Dictionary<string, byte[]> { [target] = after }, requiredNew: [target]);
+
+        Assert.ThrowsAny<IOException>(() => transaction.Commit(null, (_, _) => File.WriteAllBytes(target, after)));
+
+        Assert.Equal(after, File.ReadAllBytes(target));
+        Assert.False(transaction.RecoveryRequired);
+        Assert.False(File.Exists(fixture.Pending));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RecoveryPreservesAnIdenticalForeignFileInsteadOfGuessingOwnershipFromBytes(bool existed)
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("pet_settings.json");
+        var after = Bytes("{\"sizePx\":225}");
+        byte[] before = existed ? Bytes("{\"sizePx\":180}") : [];
+        if (existed) File.WriteAllBytes(target, before);
+        fixture.Publish(false, null, (target, existed, before, after));
+        File.WriteAllBytes(target, after); // Own staging identity is already durable, but we never renamed it.
+
+        Assert.ThrowsAny<IOException>(() => ConfigTransferService.RecoverInterruptedImport(fixture.DataRoot));
+
+        Assert.Equal(after, File.ReadAllBytes(target));
         Assert.True(File.Exists(fixture.Pending));
+    }
+
+    [Fact]
+    public void LegacyJournalWithoutPhysicalOwnershipNeverDeletesAnAfterHashMatch()
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("pet_settings.json");
+        var after = Bytes("{\"sizePx\":225}");
+        File.WriteAllBytes(target, after);
+        fixture.Publish(false, null, (target, false, [], after));
+        var path = Path.Combine(fixture.Backup, "transaction.json");
+        var journal = JsonSerializer.Deserialize<ConfigTransferTransaction.Journal>(File.ReadAllBytes(path))!;
+        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(journal with
+        { Items = journal.Items.Select(item => item with { PublishedIdentity = null, StagedPath = null }).ToList() }));
+
+        Assert.ThrowsAny<IOException>(() => ConfigTransferService.RecoverInterruptedImport(fixture.DataRoot));
+
+        Assert.Equal(after, File.ReadAllBytes(target));
+        Assert.True(File.Exists(fixture.Pending));
+    }
+
+    [Fact]
+    public void StagingIdentityIsDurableBeforePublishingAndSurvivesTheRename()
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("pet_settings.json");
+        var transaction = new ConfigTransferTransaction(fixture.DataRoot,
+            new Dictionary<string, byte[]> { [target] = Bytes("{\"sizePx\":225}") });
+        string? identity = null;
+
+        transaction.Commit(null, (_, _) =>
+        {
+            var journal = JsonSerializer.Deserialize<ConfigTransferTransaction.Journal>(
+                File.ReadAllBytes(Path.Combine(transaction.BackupDirectory, "transaction.json")))!;
+            var item = Assert.Single(journal.Items);
+            Assert.False(File.Exists(target));
+            Assert.True(File.Exists(fixture.Pending));
+            Assert.NotNull(item.PublishedIdentity);
+            Assert.Equal(ConfigTransferFileIdentity.Read(item.StagedPath!), item.PublishedIdentity);
+            identity = item.PublishedIdentity;
+        });
+
+        Assert.Equal(identity, ConfigTransferFileIdentity.Read(target));
+        Assert.False(File.Exists(fixture.Pending));
+    }
+
+    [Fact]
+    public void SharedTargetPermitAlsoExcludesANormalPeerWriterFromAnotherDataRoot()
+    {
+        using var fixture = new Fixture();
+        var shared = Path.Combine(fixture.Root, "shared", "watch_rules.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(shared)!);
+        File.WriteAllText(shared, "before");
+        var transaction = new ConfigTransferTransaction(fixture.DataRoot,
+            new Dictionary<string, byte[]> { [shared] = Bytes("imported") }, additionalTargets: [shared]);
+
+        transaction.Commit(() =>
+        {
+            var saved = Task.Run(() => LocalPeerSyncService.WriteFileAtomic(shared, "peer-edit")).GetAwaiter().GetResult();
+            Assert.False(saved);
+            Assert.Equal("imported", File.ReadAllText(shared));
+        }, null);
+
+        Assert.True(Task.Run(() => LocalPeerSyncService.WriteFileAtomic(shared, "peer-edit")).GetAwaiter().GetResult());
+        Assert.Equal("peer-edit", File.ReadAllText(shared));
     }
 
     private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
@@ -198,7 +298,14 @@ public sealed class ConfigTransferTransactionTests
             {
                 var name = items.Count.ToString("D6") + ".original";
                 File.WriteAllBytes(Path.Combine(Backup, name), snapshot.Before);
-                items.Add(new(snapshot.Target, name, snapshot.Existed, Hash(snapshot.Before), Hash(snapshot.After)));
+                // Model the actual durable staging identity, including items not yet published.
+                var stage = Path.Combine(Path.GetDirectoryName(snapshot.Target)!, ".config-transfer-" + Guid.NewGuid().ToString("N") + ".tmp");
+                Directory.CreateDirectory(Path.GetDirectoryName(stage)!);
+                File.WriteAllBytes(stage, snapshot.After);
+                var identity = ConfigTransferFileIdentity.Read(stage);
+                if (File.Exists(snapshot.Target) && File.ReadAllBytes(snapshot.Target).AsSpan().SequenceEqual(snapshot.After))
+                    File.Move(stage, snapshot.Target, overwrite: true);
+                items.Add(new(snapshot.Target, name, snapshot.Existed, Hash(snapshot.Before), Hash(snapshot.After), identity, stage));
             }
             var journal = new ConfigTransferTransaction.Journal("NexusBGI.configTransfer.2", DataRoot, Backup, bgiRoot, [], items, committed);
             File.WriteAllBytes(Path.Combine(Backup, "transaction.json"), JsonSerializer.SerializeToUtf8Bytes(journal));

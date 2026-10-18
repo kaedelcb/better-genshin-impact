@@ -1,6 +1,7 @@
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace MultiplayerHoeingAssistant.Services;
@@ -11,7 +12,7 @@ public sealed record ResourceImportPreparation(
     IReadOnlyList<string> Warnings);
 
 /// <summary>Builds a transfer plan only. The caller owns backup, atomic publication and rollback.</summary>
-public static class ConfigTransferResources
+public static partial class ConfigTransferResources
 {
     public const string Prefix = "bgi-user/";
     // JS can enumerate pathing/strategy files dynamically. Preserve these business roots together,
@@ -25,6 +26,8 @@ public static class ConfigTransferResources
     {
         var root = CheckedRoot(bgiUserDir);
         var files = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        const long maximumResourceBytes = 512L * 1024 * 1024;
+        long resourceBytes = 0;
         foreach (var directory in Roots.OrderBy(x => x, StringComparer.Ordinal))
         {
             var source = Path.Combine(root, directory);
@@ -40,19 +43,40 @@ public static class ConfigTransferResources
             foreach (var file in Directory.EnumerateFiles(directory).OrderBy(x => x, StringComparer.Ordinal))
             {
                 RejectLink(file);
-                // A suffix alone cannot prove this is disposable output: JS may read it.
-                // Do not silently make an incomplete package, or export potentially live locks/logs.
-                if (IgnoredFile(file))
-                    throw new InvalidDataException("业务资源中存在无法自动区分的运行输出/依赖，未生成不完整包：" + Path.GetRelativePath(root, file));
+                // Only the host's exact sidecar name is disposable. Scripts may use .log,
+                // .lock and .tmp as ordinary inputs; preserve their original bytes as well.
+                if (IsHostWriteLock(file)) continue;
                 var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
                 ValidateRelative(relative);
-                if (!files.TryAdd(Prefix + relative, File.ReadAllBytes(file)))
+                if (!files.TryAdd(Prefix + relative, ReadSnapshot(file, relative)))
                     throw new InvalidDataException("资源路径大小写冲突：" + relative);
             }
             foreach (var sub in Directory.EnumerateDirectories(directory).OrderBy(x => x, StringComparer.Ordinal))
             {
                 RejectLink(sub);
                 if (!IgnoredDirectories.Contains(Path.GetFileName(sub))) Collect(sub);
+            }
+        }
+
+        byte[] ReadSnapshot(string file, string relative)
+        {
+            try
+            {
+                // Scripts may keep logs open for writing. Capture only the length observed
+                // on this handle; appends cannot turn this into an unbounded stream read.
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
+                var length = stream.Length;
+                if (length > maximumResourceBytes - resourceBytes)
+                    throw new InvalidDataException("业务资源超过设置包备份上限（512 MiB），未生成不完整包：" + relative);
+                var snapshot = new byte[checked((int)length)];
+                stream.ReadExactly(snapshot);
+                resourceBytes += length;
+                return snapshot;
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && ex is not InvalidDataException)
+            {
+                throw new InvalidDataException("业务资源快照未完整读取，文件可能已截断或不可读，未生成不完整包：" + relative, ex);
             }
         }
     }
@@ -177,18 +201,14 @@ public static class ConfigTransferResources
         for (var path = target; path != null; path = Path.GetDirectoryName(path))
             if (File.Exists(path) || Directory.Exists(path)) RejectLink(path);
     }
-    private static bool IgnoredFile(string file)
-    {
-        var name = Path.GetFileName(file);
-        return name.EndsWith(".log", StringComparison.OrdinalIgnoreCase)
-            || name.EndsWith(".lock", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsHostWriteLock(string file)
+        => Path.GetFileName(file).Equals(".nexus-config-write.lock", StringComparison.OrdinalIgnoreCase);
     private static void ValidateRelative(string relative)
     {
         var parts = relative.Split('/');
         if (parts.Length < 2 || !Roots.Contains(parts[0]) || relative.Contains('\\')
             || parts.Any(p => p.Length == 0 || p is "." or ".." || p.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-                || p.EndsWith('.') || p.EndsWith(' ') || IgnoredDirectories.Contains(p) || DeviceName(p)) || IgnoredFile(parts[^1]))
+                || p.EndsWith('.') || p.EndsWith(' ') || IgnoredDirectories.Contains(p) || DeviceName(p)) || IsHostWriteLock(parts[^1]))
             throw new InvalidDataException("非法资源路径：" + relative);
     }
     private static bool DeviceName(string part)
@@ -199,7 +219,11 @@ public static class ConfigTransferResources
             && name[3] is >= '0' and <= '9';
     }
     private static JsonNode Parse(byte[] bytes)
-        => JsonNode.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF')) ?? throw new InvalidDataException("JSON 配置为空");
+        => JsonNode.Parse(Encoding.UTF8.GetString(bytes).TrimStart('\uFEFF'), documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip,
+        }) ?? throw new InvalidDataException("JSON 配置为空");
     private static byte[] Bytes(JsonNode node) => Encoding.UTF8.GetBytes(node.ToJsonString(new() { WriteIndented = true }));
     private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
     private static JsonNode? Get(JsonNode? node, string key)
@@ -223,9 +247,9 @@ public static class ConfigTransferResources
                 var type = Text(Get(project, "type"));
                 string? dependency = type.ToLowerInvariant() switch
                 {
-                    "javascript" => "JsScript/" + folder.Replace('\\', '/') + "/manifest.json",
-                    "pathing" => "AutoPathing/" + (string.IsNullOrEmpty(folder) ? "" : folder.Replace('\\', '/') + "/") + name,
-                    "keymouse" => "KeyMouseScript/" + name,
+                    "javascript" => ReferencePath(ReferencePath("JsScript", folder), "manifest.json"),
+                    "pathing" => ReferencePath(string.IsNullOrEmpty(folder) ? "AutoPathing" : ReferencePath("AutoPathing", folder), name),
+                    "keymouse" => ReferencePath("KeyMouseScript", name),
                     _ => null
                 };
                 if (dependency == null) continue;
@@ -235,16 +259,17 @@ public static class ConfigTransferResources
                 {
                     var manifest = Parse(resources[Prefix + dependency]);
                     var main = Text(Get(manifest, "main"));
-                    var mainPath = ReferencePath("JsScript/" + folder.Replace('\\', '/'), main);
+                    var scriptDirectory = ReferencePath("JsScript", folder);
+                    var mainPath = ReferencePath(scriptDirectory, main);
                     ValidateRelative(mainPath);
                     if (!resources.ContainsKey(Prefix + mainPath)) throw new InvalidDataException("JS 缺少入口：" + mainPath);
-                    foreach (var field in new[] { "settingsUi" })
+                    foreach (var field in new[] { "settings_ui" })
                     {
                         var declared = Get(manifest, field);
                         var names = declared is JsonArray list ? list.Select(Text) : new[] { Text(declared) };
                         foreach (var declaredName in names.Where(x => !string.IsNullOrEmpty(x)))
                         {
-                            var path = ReferencePath("JsScript/" + folder.Replace('\\', '/'), declaredName);
+                            var path = ReferencePath(scriptDirectory, declaredName);
                             ValidateRelative(path);
                             if (!resources.ContainsKey(Prefix + path) && !resources.Keys.Any(k => k.StartsWith(Prefix + path.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)))
                                 throw new InvalidDataException("JS 缺少声明资源：" + path);
@@ -253,7 +278,7 @@ public static class ConfigTransferResources
                     if (Get(manifest, "library") is JsonArray libraries)
                         foreach (var library in libraries.Select(Text))
                         {
-                            var path = ReferencePath("JsScript/" + folder.Replace('\\', '/'), library);
+                            var path = ReferencePath(scriptDirectory, library);
                             ValidateRelative(path);
                             if (!resources.ContainsKey(Prefix + path) && !resources.Keys.Any(k => k.StartsWith(Prefix + path.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase)))
                                 throw new InvalidDataException("JS 缺少声明库目录：" + path);
@@ -314,59 +339,4 @@ public static class ConfigTransferResources
         return changed;
     }
 
-    private static bool RewriteAssistant(JsonNode root, Dictionary<string, string> groups, Dictionary<string, string> dragons,
-        IReadOnlyDictionary<string, byte[]> resources)
-    {
-        var changed = false;
-        Visit(root);
-        return changed;
-        void Visit(JsonNode? node)
-        {
-            if (node is JsonArray array) { foreach (var child in array) Visit(child); return; }
-            if (node is not JsonObject obj) return;
-            var kind = Text(Get(obj, "kind"));
-            if (Get(obj, "ref") is JsonObject reference)
-            {
-                var map = kind is "resource.oneDragonConfig" or "resource.singleTask" ? dragons : groups;
-                var old = Text(Get(reference, "config"));
-                if (old.Length == 0) old = Text(Get(reference, "configKey")).Split('#')[0];
-                var name = map.GetValueOrDefault(old, old);
-                if (name != old) { Set(reference, "config", name); changed = true; }
-                var directory = ReferenceEquals(map, dragons) ? "OneDragon" : "ScriptGroup";
-                if (resources.TryGetValue(Prefix + directory + "/" + old + ".json", out var bytes))
-                {
-                    Set(reference, "revision", Hash(bytes)); changed = true;
-                    var configKey = Text(Get(reference, "configKey"));
-                    // ConfigKey is Name#sourceHash8, a migration mapping identity. Its source
-                    // hash is provenance, not the current revision of the transformed bytes.
-                    if (name != old && configKey.StartsWith(old + "#", StringComparison.Ordinal))
-                        Set(reference, "configKey", name + configKey[old.Length..]);
-                }
-            }
-            if (Get(obj, "onlineHoeingGroupNames") is JsonArray names)
-            {
-                var types = Get(obj, "onlineHoeingGroupTypes") as JsonArray;
-                for (var i = 0; i < names.Count; i++)
-                {
-                    var map = types != null && i < types.Count && Text(types[i]) == "onedragon" ? dragons : groups;
-                    if (map.TryGetValue(Text(names[i]), out var renamed)) { names[i] = renamed; changed = true; }
-                }
-            }
-            var specifiedMap = Text(Get(obj, "onlineHoeingSpecifiedTaskType")) == "onedragon" ? dragons : groups;
-            if (specifiedMap.TryGetValue(Text(Get(obj, "onlineHoeingSpecifiedTaskName")), out var specified))
-            { Set(obj, "onlineHoeingSpecifiedTaskName", specified); changed = true; }
-            var startupMap = kind == "startOneClick" ? dragons : groups;
-            if (kind is "startGroup" or "startOneClick" && startupMap.TryGetValue(Text(Get(obj, "taskName")), out var startupName))
-            { Set(obj, "taskName", startupName); changed = true; }
-            if (Get(obj, "quickCommands") is JsonObject quick)
-                foreach (var binding in quick.ToArray())
-                {
-                    var text = Text(binding.Value); var oneDragon = text.StartsWith("ONEDRAGON:", StringComparison.Ordinal);
-                    var prefix = oneDragon ? "ONEDRAGON:" : "GROUP:";
-                    if (text.StartsWith(prefix, StringComparison.Ordinal) && (oneDragon ? dragons : groups).TryGetValue(text[prefix.Length..], out var renamed))
-                    { quick[binding.Key] = prefix + renamed; changed = true; }
-                }
-            foreach (var field in obj.ToArray()) Visit(field.Value);
-        }
-    }
 }

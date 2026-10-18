@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MultiplayerHoeingAssistant.Models;
+using OneDragonMigration.Core;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -112,13 +113,13 @@ public class ConfigTransferService
             var existing = ReadFlows();
             var startup = Path.Combine(_configDir, "startup-flow.json");
             var files = ConfigTransferMistletoe.NormalizeForExport(incoming);
-            if (files.TryGetValue("assistant-config.json", out var config)) files["assistant-config.json"] = PreserveMachineSpecificFields(config);
             var warnings = new List<string>();
             if (legacy) warnings.Add("旧版设置包不含任务中心计划；本机已有计划保持，缺失引用不会自动执行。");
             var targets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-            var bgiRoot = ResolveBgiUserRoot(files, localOnly: true);
+            string? bgiRoot = null;
             if (incoming.Keys.Any(k => k.StartsWith(ConfigTransferResources.Prefix, StringComparison.Ordinal)))
             {
+                bgiRoot = ResolveBgiUserRoot(files, localOnly: true);
                 if (bgiRoot is null) throw new InvalidDataException("请先在助手设置中选定本机 BetterGI.exe，再导入 BGI 配置资源；尚未修改任何设置。");
                 var resources = ConfigTransferResources.PlanImport(files, bgiRoot);
                 files = new(resources.AssistantFiles, StringComparer.OrdinalIgnoreCase);
@@ -133,6 +134,21 @@ public class ConfigTransferService
                     ? File.ReadAllText(Path.Combine(_configDir, "startup-flow-schemes.json")) : null);
             files = prepared.Files;
             warnings.AddRange(prepared.Warnings);
+            // Resource aliases are final here. Recalculate local execution intent only after
+            // every imported group reference has been restored, never before that rewrite.
+            if (files.TryGetValue("assistant-config.json", out var config))
+            {
+                var normalized = PreserveMachineSpecificFields(config);
+                files["assistant-config.json"] = normalized;
+                if (JsonSerializer.Deserialize<AssistConfig>(normalized, Options)?.ScheduledOnlineRequiresConfirmation == true)
+                    warnings.Add("导入的定时上线安排等待确认，请在定时上线入口确认时间和任务后启用；导入本身不会自动上线。");
+            }
+            if (files.TryGetValue("member-config-cache.json", out var cache))
+            {
+                var localCache = Path.Combine(_configDir, "member-config-cache.json");
+                files["member-config-cache.json"] = ConfigTransferResources.MergeMemberCache(cache,
+                    File.Exists(localCache) ? ReadChecked(localCache) : null);
+            }
             if (files.Remove(ConfigTransferRoomHistory.EntryName, out var bookmarks))
             {
                 var path = Path.Combine(_configDir, "remote-log-rooms.json");
@@ -276,6 +292,9 @@ public class ConfigTransferService
         Set("clientInstanceId", imported.ClientInstanceId);
         Set("bgiPath", imported.BgiPath);
         Set("bgiPackageDir", imported.BgiPackageDir);
+        var confirmationKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineRequiresConfirmation", StringComparison.OrdinalIgnoreCase))
+            ?? "scheduledOnlineRequiresConfirmation";
+        document[confirmationKey] = ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(local, imported);
         return JsonSerializer.SerializeToUtf8Bytes(document, Options);
         void Set(string key, string value)
         {
@@ -292,7 +311,7 @@ public class ConfigTransferService
         if (bytes is null && File.Exists(local)) bytes = ReadChecked(local);
         var path = bytes is null ? null : JsonSerializer.Deserialize<AssistConfig>(bytes, Options)?.BgiPath;
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || !File.Exists(path)) return null;
-        return Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, "User");
+        return InstallationPipeScope.ResolveUserRoot(Path.GetDirectoryName(Path.GetFullPath(path))!);
     }
     private static void ValidatePlanReferences(IReadOnlyDictionary<string, byte[]> files, IReadOnlyDictionary<string, byte[]> existing, bool legacy, List<string> warnings)
     {

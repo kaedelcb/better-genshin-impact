@@ -61,6 +61,23 @@ public sealed class R56MigrationSwitchTransactionTests : IDisposable
     }
 
     [Fact]
+    public void SnapshotSkipsOnlyTheReservedHostPermitAndPreservesOrdinaryLockFiles()
+    {
+        Seed("a.json", "{\"v\":1}");
+        Seed("ordinary.lock", "用户业务文件");
+        using var writing = ConfigFileWriteGate.Acquire(Full("a.json"));
+        using var tx = NewTx();
+        Assert.True(tx.BeginTransaction("reserved-config-permit").Success);
+        var snapshot = tx.TakeSnapshot();
+        Assert.True(snapshot.Success, snapshot.Reason);
+        var manifest = tx.LoadManifest()!;
+        Assert.DoesNotContain(ConfigFileWriteGate.LockFileName, manifest.FileHashes.Keys);
+        Assert.Contains("ordinary.lock", manifest.FileHashes.Keys);
+        Assert.Equal(File.ReadAllBytes(Full("ordinary.lock")), File.ReadAllBytes(Path.Combine(manifest.SnapshotPath, "ordinary.lock")));
+        Assert.Equal("", tx.VerifySnapshot());
+    }
+
+    [Fact]
     public void Gate_Uncommitted_ProductionNotInvoked()
     {
         using var tx = ArrangeActivated();

@@ -57,6 +57,7 @@ public class StartupFlowSchemeStore
     {
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(_schemesPath);
             var json = JsonSerializer.Serialize(schemes, JsonOptions);
             File.WriteAllText(_schemesPath, json);
         }
@@ -80,6 +81,7 @@ public class StartupFlowSchemeStore
 
     public string SaveAllChecked(IReadOnlyList<StartupFlowScheme> schemes, string? expectedRevision)
     {
+        using var writing = ConfigFileWriteGate.Acquire(_schemesPath);
         lock (_gate)
         {
             var exists = File.Exists(_schemesPath);
@@ -109,6 +111,7 @@ public class StartupFlowSchemeStore
     /// </summary>
     public static void ExportScheme(StartupFlowScheme scheme, string filePath)
     {
+        using var writing = ConfigFileWriteGate.Acquire(filePath);
         File.WriteAllText(filePath, JsonSerializer.Serialize(scheme, JsonOptions));
     }
 

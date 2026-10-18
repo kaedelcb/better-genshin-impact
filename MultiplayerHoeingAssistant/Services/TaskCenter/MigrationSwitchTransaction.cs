@@ -4311,7 +4311,8 @@ public sealed class MigrationSwitchTransaction : IDisposable
         return true;
     }
 
-    private static IEnumerable<string> EnumerateFiles(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories);
+    private static IEnumerable<string> EnumerateFiles(string root) => Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+        .Where(path => !Path.GetFileName(path).Equals(ConfigFileWriteGate.LockFileName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>安全枚举（**先拒绝重解析点再进入子目录**）；用于快照验证读端。</summary>
     private static List<string> EnumerateFilesSafe(string root)
@@ -4335,6 +4336,7 @@ public sealed class MigrationSwitchTransaction : IDisposable
             {
                 if (File.GetAttributes(f).HasFlag(FileAttributes.ReparsePoint))
                     throw new InvalidOperationException("snapshot_file_reparse_point:" + f);
+                if (Path.GetFileName(f).Equals(ConfigFileWriteGate.LockFileName, StringComparison.OrdinalIgnoreCase)) continue;
                 result.Add(Rel(f, root));
             }
         }

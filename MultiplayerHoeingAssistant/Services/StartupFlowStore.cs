@@ -58,6 +58,7 @@ public class StartupFlowStore
     /// <summary>本机关键设置必须原子保存并读回确认；失败交给界面回报。</summary>
     public void SaveConfirmed(StartupFlowConfig config)
     {
+        using var writing = ConfigFileWriteGate.Acquire(_configPath);
         lock (_gate)
         {
             var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(config,
@@ -92,6 +93,7 @@ public class StartupFlowStore
     /// <summary>远程保存的修订保护与原子写入口；失败抛出，供调用方明确回执。</summary>
     public string SaveChecked(StartupFlowConfig config, string? expectedRevision)
     {
+        using var writing = ConfigFileWriteGate.Acquire(_configPath);
         lock (_gate)
         {
             var exists = File.Exists(_configPath);

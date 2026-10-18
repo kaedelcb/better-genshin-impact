@@ -130,6 +130,7 @@ public sealed class LocalPeerSyncService : IDisposable
     {
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(path);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var tmp = $"{path}.{Environment.ProcessId}.tmp";
             File.WriteAllText(tmp, content);

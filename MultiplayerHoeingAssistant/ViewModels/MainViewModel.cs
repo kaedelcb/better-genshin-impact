@@ -3341,7 +3341,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void ApplyScheduledOnlineTime(string time)
     {
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
-        _config!.ScheduledOnlineTime = time;
+        SetConfirmedScheduledOnlineTime(time);
         _configManager?.Save(_config);
 
         // 手动设定/清除定时上线 = 用户主动操作，清除"已手动清除上线"抑制标志，允许重新上线
@@ -6501,6 +6501,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private void RefreshSetupBindings()
     {
+        OnPropertyChanged(nameof(ConfigurationScheduledOnlineMessage));
+        OnPropertyChanged(nameof(ConfigurationTransferStatusMessage));
         // 触发三个 CheckBox 和两个 ComboBox 的 UI 刷新
         OnPropertyChanged(nameof(AutoLaunchWithBgi));
         OnPropertyChanged(nameof(AutoLaunchOnBoot));

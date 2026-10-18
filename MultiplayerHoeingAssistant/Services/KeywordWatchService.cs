@@ -58,7 +58,7 @@ public sealed class KeywordWatchService : IDisposable
     private bool _configTransferActive;
     private int _configTransferGeneration;
 
-    internal sealed record ConfigTransferState(byte[] Rules, string? SharedRulesTargetPath);
+    internal sealed record ConfigTransferState(byte[] Rules, string? SharedRulesTargetPath, bool EffectiveFileExisted);
 
     internal byte[] ExportConfigTransferSnapshot()
     {
@@ -71,7 +71,7 @@ public sealed class KeywordWatchService : IDisposable
         {
             if (_configTransferActive) throw new InvalidOperationException("设置迁移正在进行");
             var state = new ConfigTransferState(ExportConfigTransferSnapshot(),
-                _peerSync is null ? null : LocalPeerSyncService.SharedRulesPath);
+                _peerSync is null ? null : LocalPeerSyncService.SharedRulesPath, File.Exists(EffectiveConfigPath));
             _configTransferActive = true;
             Interlocked.Increment(ref _configTransferGeneration);
             return state;
@@ -95,20 +95,24 @@ public sealed class KeywordWatchService : IDisposable
     {
         lock (_lock)
         {
-            try
+            if (restore)
             {
-                if (restore)
-                {
-                    _config = JsonSerializer.Deserialize<WatchConfig>(state.Rules)
-                        ?? throw new InvalidDataException("原监控规则快照为空");
-                    _regexCache.Clear();
-                }
+                var path = EffectiveConfigPath;
+                using var reading = ConfigFileWriteGate.Acquire(path);
+                byte[] bytes;
+                try { bytes = File.ReadAllBytes(path); }
+                catch (Exception ex) when (!state.EffectiveFileExisted && (ex is FileNotFoundException or DirectoryNotFoundException))
+                { bytes = state.Rules; }
+                var current = JsonSerializer.Deserialize<WatchConfig>(bytes,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (current?.Rules is null || current.Rules.Any(rule => rule is null))
+                    throw new InvalidDataException("当前有效监控规则无法恢复，配置写入保持暂停。");
+                _config = current;
+                _regexCache.Clear();
             }
-            finally
-            {
-                Interlocked.Increment(ref _configTransferGeneration);
-                _configTransferActive = false;
-            }
+            // Failure above deliberately retains both the pause and the generation fence.
+            Interlocked.Increment(ref _configTransferGeneration);
+            _configTransferActive = false;
         }
     }
     private readonly Dictionary<string, Regex?> _regexCache = new(); // 规则 Id → 编译后的正则（null=非法）
@@ -140,12 +144,16 @@ public sealed class KeywordWatchService : IDisposable
 
     public KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider = null,
         Func<bool>? observerModeProvider = null, LocalPeerSyncService? peerSync = null)
+        : this(tail, muteProvider, observerModeProvider, peerSync, AssistantDataDirectory.Root) { }
+
+    internal KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider,
+        Func<bool>? observerModeProvider, LocalPeerSyncService? peerSync, string configDir)
     {
         _tail = tail;
         _muteProvider = muteProvider;
         _observerModeProvider = observerModeProvider;
         _peerSync = peerSync;
-        var dir = AssistantDataDirectory.Root;
+        var dir = configDir;
         Directory.CreateDirectory(dir);
         _configPath = Path.Combine(dir, "dodoco_watch_rules.json");
 
@@ -320,6 +328,7 @@ public sealed class KeywordWatchService : IDisposable
         }
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(_configPath);
             File.WriteAllText(_configPath, json);
         }
         catch (Exception ex)
@@ -385,7 +394,11 @@ public sealed class KeywordWatchService : IDisposable
                 // 执行端主副本权威：对端（监控端）的变更同时写回 %APPDATA%（不再镜像共享——内容已在对端写的共享文件里）
                 if (!IsObserver())
                 {
-                    try { File.WriteAllText(_configPath, JsonSerializer.Serialize(_config, IndentedOptions)); }
+                    try
+                    {
+                        using var writing = ConfigFileWriteGate.Acquire(_configPath);
+                        File.WriteAllText(_configPath, JsonSerializer.Serialize(_config, IndentedOptions));
+                    }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"[KeywordWatchService] 外部规则回写主副本失败: {ex.Message}");

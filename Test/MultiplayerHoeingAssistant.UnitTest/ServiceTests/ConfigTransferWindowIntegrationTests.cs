@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
@@ -43,8 +45,20 @@ public sealed class ConfigTransferWindowIntegrationTests
                 var source = Path.Combine(fixture, "source");
                 var package = Path.Combine(fixture, "settings.zip");
                 var failedPackage = Path.Combine(fixture, "registration-failure.zip");
-                Seed(root, "local", "local-instance", 480, 140);
-                Seed(source, "imported", "foreign-instance", 1920, 225);
+                var windowPackage = Path.Combine(fixture, "formal-window-export.zip");
+                var bgiPackage = Path.Combine(fixture, "bgi-package");
+                var bgiUserRoot = Path.Combine(fixture, "external-bgi-user");
+                Directory.CreateDirectory(bgiPackage);
+                Directory.CreateDirectory(bgiUserRoot);
+                var fakeBgi = Path.Combine(bgiPackage, "BetterGI.exe");
+                File.WriteAllText(fakeBgi, "Non-executable fixture; never launched.");
+                Write(bgiPackage, "mistletoe-package.json", new
+                {
+                    schema = "mistletoe.local-package", schemaVersion = 1, ipcIsolation = true, userRoot = bgiUserRoot,
+                });
+                var bgiResources = SeedBgiResources(bgiUserRoot);
+                Seed(root, "local", "local-instance", 480, 140, fakeBgi);
+                Seed(source, "imported", "foreign-instance", 1920, 225, fakeBgi);
                 var exported = new ConfigTransferService(source).Export(package);
                 Assert.True(exported.Success, exported.Message);
                 var manager = new AssistConfigManager();
@@ -68,6 +82,40 @@ public sealed class ConfigTransferWindowIntegrationTests
                 var button = Find<Button>(window, b => Equals(b.Content, "导入全部设置"));
                 Assert.NotNull(button);
                 Assert.True(button!.IsVisible && button.IsEnabled);
+
+                var exportButton = Find<Button>(window, b => Equals(b.Content, "导出全部设置"));
+                Assert.NotNull(exportButton);
+                Assert.True(exportButton!.IsVisible && exportButton.IsEnabled);
+                // Exercise the exact export implementation used by the formal button,
+                // including UI snapshots and pending startup edits, without a file dialog.
+                main.Config!.PlayerName = "unsaved-main-draft";
+                window.Mistletoe.RootChain.Steps[0].WaitSecondsText = "11";
+                Assert.Equal("local", Read(root, "assistant-config.json")["playerName"]!.GetValue<string>());
+                Assert.Equal(7, Read(root, "startup-flow.json")["steps"]![0]!["waitSeconds"]!.GetValue<int>());
+                exported = main.ExportSettingsWithRuntime(windowPackage);
+                Assert.True(exported.Success, exported.Message);
+                using (var zip = ZipFile.OpenRead(windowPackage))
+                {
+                    foreach (var resource in bgiResources)
+                        Assert.Equal(resource.Value, ReadZipEntry(zip, "bgi-user/" + resource.Key));
+                    Assert.Equal("unsaved-main-draft", JsonNode.Parse(ReadZipEntry(zip, "assistant-config.json"))!["playerName"]!.GetValue<string>());
+                    Assert.Equal(11, JsonNode.Parse(ReadZipEntry(zip, "startup-flow.json"))!["steps"]![0]!["waitSeconds"]!.GetValue<int>());
+                }
+                Assert.False(Directory.Exists(Path.Combine(bgiPackage, "User")));
+                foreach (var resource in bgiResources)
+                    Assert.Equal(resource.Value, File.ReadAllBytes(Path.Combine(bgiUserRoot, resource.Key.Replace('/', Path.DirectorySeparatorChar))));
+
+                // Import this same formal-window export into the same window. Its local
+                // BGI binding stays stable; the next edit must remain usable immediately.
+                var roundTrip = main.ImportSettingsWithRuntime(windowPackage);
+                Assert.True(roundTrip.Success, roundTrip.Message);
+                Assert.True(main.CanEditConfiguration, main.ConfigurationTransferStatusMessage);
+                Assert.Equal(fakeBgi, main.Config.BgiPath);
+                Assert.Equal("unsaved-main-draft", main.Config.PlayerName);
+                Assert.Equal("11", Assert.Single(window.Mistletoe.RootChain.Steps).WaitSecondsText);
+                window.Mistletoe.RootChain.Steps[0].WaitSecondsText = "13";
+                window.Mistletoe.SaveNow();
+                Assert.Equal(13, Read(root, "startup-flow.json")["steps"]![0]!["waitSeconds"]!.GetValue<int>());
 
                 var imported = main.ImportSettingsWithRuntime(package);
                 Assert.True(imported.Success, imported.Message);
@@ -123,8 +171,44 @@ public sealed class ConfigTransferWindowIntegrationTests
                 var after = Snapshot(root);
                 Assert.Equal(before.Keys.OrderBy(n => n), after.Keys.OrderBy(n => n));
                 foreach (var item in before) Assert.Equal(item.Value, after[item.Key]);
+                foreach (var resource in bgiResources)
+                    Assert.Equal(resource.Value, File.ReadAllBytes(Path.Combine(bgiUserRoot, resource.Key.Replace('/', Path.DirectorySeparatorChar))));
+                Assert.False(Directory.Exists(Path.Combine(bgiPackage, "User")));
                 window.Dodoco.ShareLogInfoOnly = true;
                 Assert.Equal(1920, Read(root, "dodoco_settings.json")["thumbnailWidth"]!.GetValue<int>());
+
+                // A peer wins the revision race before our assistant config is published.
+                // applyRuntime has not started, but the formal import must reload that
+                // legitimate disk version before normal configuration writers resume.
+                var transfer = (ConfigTransferService)typeof(MainViewModel)
+                    .GetField("_configTransfer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(main)!;
+                var configPath = Path.Combine(root, "assistant-config.json");
+                byte[]? peerBytes = null;
+                transfer.BeforeWrite = (target, _) =>
+                {
+                    if (peerBytes is not null || !string.Equals(target, configPath, StringComparison.OrdinalIgnoreCase)) return;
+                    var peer = JsonSerializer.Deserialize<AssistConfig>(File.ReadAllBytes(configPath))!;
+                    Assert.False(peer.AutoLaunchOnBoot);
+                    peer.PlayerName = "peer-saved";
+                    peerBytes = JsonSerializer.SerializeToUtf8Bytes(peer, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllBytes(configPath, peerBytes);
+                };
+                ConfigTransferService.ImportResult conflicted;
+                try { conflicted = main.ImportSettingsWithRuntime(package); }
+                finally { transfer.BeforeWrite = null; }
+                Assert.NotNull(peerBytes);
+                Assert.False(conflicted.Success);
+                Assert.False(conflicted.RecoveryRequired, conflicted.Message);
+                Assert.True(main.CanEditConfiguration, main.ConfigurationTransferStatusMessage);
+                Assert.Equal("peer-saved", main.Config!.PlayerName);
+                Assert.False(main.Config.AutoLaunchOnBoot);
+                Assert.Equal(peerBytes, File.ReadAllBytes(configPath));
+                Assert.False(File.Exists(Path.Combine(root, ".config-transfer-pending.json")));
+                Assert.Equal(new[] { true, false }, registrationCalls);
+                manager.Save(main.Config);
+                Assert.Equal("peer-saved", Read(root, "assistant-config.json")["playerName"]!.GetValue<string>());
+                Assert.Equal(peerBytes, File.ReadAllBytes(configPath));
+                Assert.False(File.Exists(Path.Combine(root, ".config-transfer-pending.json")));
                 main.CurrentPage = AppPage.Settings;
                 window.UpdateLayout();
                 RenderIfRequested(window);
@@ -158,12 +242,12 @@ public sealed class ConfigTransferWindowIntegrationTests
         await done.Task.WaitAsync(TimeSpan.FromSeconds(45));
     }
 
-    private static void Seed(string root, string name, string instance, int width, int petSize)
+    private static void Seed(string root, string name, string instance, int width, int petSize, string bgiPath)
     {
         var startup = new StartupFlowConfig { Enabled = false, DelaySeconds = 33,
             Steps = [new StartupStep { Id = name + "-step", Name = name, Kind = StartupStepKinds.Wait, WaitSeconds = 7 }] };
         Write(root, "assistant-config.json", new AssistConfig { PlayerName = name, PlayerUid = "123456789",
-            ClientInstanceId = instance, StandaloneMode = true, ServerUrl = "", GuardBgi = false,
+            ClientInstanceId = instance, BgiPath = bgiPath, StandaloneMode = true, ServerUrl = "", GuardBgi = false,
             AutoLaunchOnBoot = false, AutoLaunchWithBgi = false, TeamUids = ["123456789"], DisclaimerAccepted = true });
         Write(root, "startup-flow.json", startup);
         Write(root, "startup-flow-schemes.json", new[] { new StartupFlowScheme { Name = name, Config = startup } });
@@ -176,6 +260,34 @@ public sealed class ConfigTransferWindowIntegrationTests
         Write(root, "flows/wf-" + name + ".flow.json", new WorkflowDocument { WorkflowId = "wf-" + name,
             Name = name + "-plan", Nodes = [new WorkflowNode { NodeId = "end", Kind = "control.end" }] });
         File.WriteAllText(Path.Combine(root, ConfigTransferMistletoe.CurrentWorkflowFileName), "wf-" + name);
+    }
+    private static Dictionary<string, byte[]> SeedBgiResources(string root)
+    {
+        var resources = new Dictionary<string, byte[]>
+        {
+            ["ScriptGroup/日常.json"] = Encoding.UTF8.GetBytes("{ // BGI allows config comments\n\"name\":\"日常\",\"projects\":[{\"type\":\"Pathing\",\"folderName\":\".\",\"name\":\"沙漠tp测试.json\"},{\"type\":\"Javascript\",\"folderName\":\"日常JS\"},],}\r\n"),
+            ["AutoPathing/沙漠tp测试.json"] = Encoding.UTF8.GetBytes("{\"positions\":[]}\r\n"),
+            ["JsScript/日常JS/manifest.json"] = Encoding.UTF8.GetBytes("\uFEFF{ /* official snake_case with comments and trailing comma */ \"name\":\"日常JS\",\"version\":\"1.0\",\"main\":\"./main.js\",\"settings_ui\":\"ui/settings.json\",}\r\n"),
+            ["JsScript/日常JS/main.js"] = Encoding.UTF8.GetBytes("// Third-party fixture bytes: do not execute or rewrite.\r\n"),
+            ["JsScript/日常JS/ui/settings.json"] = Encoding.UTF8.GetBytes("[ /* user settings UI */ ]\r\n"),
+            ["JsScript/日常JS/run.log"] = Encoding.UTF8.GetBytes("用户脚本正常生成的业务记录\r\n"),
+        };
+        foreach (var resource in resources)
+        {
+            var path = Path.Combine(root, resource.Key.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, resource.Value);
+        }
+        return resources;
+    }
+    private static byte[] ReadZipEntry(ZipArchive zip, string name)
+    {
+        var entry = zip.GetEntry(name);
+        Assert.NotNull(entry);
+        using var source = entry!.Open();
+        using var snapshot = new MemoryStream();
+        source.CopyTo(snapshot);
+        return snapshot.ToArray();
     }
     private static void Write<T>(string root, string name, T value)
     {

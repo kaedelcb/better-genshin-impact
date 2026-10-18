@@ -47,6 +47,7 @@ public sealed class RemoteLogRoomHistoryStore
         roomCode = roomCode.Trim();
         if (string.IsNullOrEmpty(roomCode) || string.IsNullOrEmpty(password))
             throw new ArgumentException("房间号和密码不能为空");
+        using var writing = ConfigFileWriteGate.Acquire(_path);
         var records = Read(); // 损坏的历史不能被静默覆盖。
         var bytes = Encoding.UTF8.GetBytes(password);
         string protectedPassword;
@@ -64,6 +65,7 @@ public sealed class RemoteLogRoomHistoryStore
     public void Forget(string serverUrl, string roomCode)
     {
         var server = NormalizeServer(serverUrl);
+        using var writing = ConfigFileWriteGate.Acquire(_path);
         var records = Read();
         if (records.RemoveAll(r => r.ServerUrl == server && r.RoomCode == roomCode.Trim()) > 0) Write(records);
     }

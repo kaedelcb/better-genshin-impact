@@ -38,6 +38,7 @@ public class AssistConfigManager
     {
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(_configPath);
             if (System.IO.File.Exists(_legacyConfigPath) && !System.IO.File.Exists(_configPath))
             {
                 // 迁移到新路径
@@ -124,6 +125,7 @@ public class AssistConfigManager
     public (bool Saved, string? Revision, string Message) SaveBgiPathChecked(
         string path, string? expectedRevision)
     {
+        using var writing = ConfigFileWriteGate.Acquire(_configPath);
         lock (_configWriteGate)
         {
             if (_configTransferActive) return (false, null, "设置迁移尚未完成，配置写入已暂停");

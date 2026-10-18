@@ -43,10 +43,11 @@ public sealed class ConfigTransferResourcesTests : IDisposable
     }
 
     [Fact]
-    public void UnclassifiedRuntimeLookingInputFailsInsteadOfSilentlyDroppingPotentialDependency()
+    public void RuntimeLookingBusinessInputPreservesOriginalBytesInsteadOfBlockingBackup()
     {
         Write("JsScript/Daily/log/input.log", "may be a real JS dependency");
-        Assert.Throws<InvalidDataException>(() => ConfigTransferResources.PlanExport(_root));
+        var files = ConfigTransferResources.PlanExport(_root);
+        Assert.Equal(B("may be a real JS dependency"), files["bgi-user/JsScript/Daily/log/input.log"]);
     }
 
     [Fact]

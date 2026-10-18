@@ -88,6 +88,10 @@ public class AssistConfig
     [JsonPropertyName("scheduledOnlineTime")]
     public string ScheduledOnlineTime { get; set; } = "";
 
+    /// <summary>迁入的闹钟或其执行目标尚未经本机确认；重启和普通设置保存均不能自动武装。</summary>
+    [JsonPropertyName("scheduledOnlineRequiresConfirmation")]
+    public bool ScheduledOnlineRequiresConfirmation { get; set; }
+
     /// <summary>联机锄地配置组名称列表（多个，如传奇/精英/小怪）</summary>
     [JsonPropertyName("onlineHoeingGroupNames")]
     public List<string> OnlineHoeingGroupNames { get; set; } = [];

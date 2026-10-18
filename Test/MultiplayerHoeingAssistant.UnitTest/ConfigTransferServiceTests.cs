@@ -58,7 +58,10 @@ public sealed class ConfigTransferServiceTests
         Assert.False(Read(fixture.Target, "dodoco_watch_rules.json")["muteAll"]!.GetValue<bool>());
         Assert.True(Read(fixture.Target, "pet_settings.json")["showTaskLabel"]!.GetValue<bool>());
         Assert.Equal(225, Read(fixture.Target, "pet_settings.json")["sizePx"]!.GetValue<double>());
-        Assert.Equal("来源", Read(fixture.Target, "member-config-cache.json")["configGroups"]![0]!.GetValue<string>());
+        var restoredGroups = Read(fixture.Target, "member-config-cache.json")["configGroups"]!.AsArray()
+            .Select(value => value!.GetValue<string>()).ToArray();
+        Assert.Contains("来源", restoredGroups);
+        Assert.Contains("本机", restoredGroups);
         Assert.Equal("wf-source", File.ReadAllText(Path.Combine(fixture.Target, ConfigTransferMistletoe.CurrentWorkflowFileName)).Trim());
         var restoredPlan = Read(fixture.Target, "flows/wf-source.flow.json");
         Assert.Equal("来源", restoredPlan["name"]!.GetValue<string>());

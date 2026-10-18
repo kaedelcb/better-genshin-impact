@@ -116,6 +116,7 @@ public partial class SettingsWindow : Window
             BypassSystemProxy = BypassSystemProxyCheckBox.IsChecked == true,
             ExpectedHoeingPlayers = int.TryParse(ExpectedPlayersBox.Text.Trim(), out var ep) && ep >= 1 && ep <= 4 ? ep : 4,
             ScheduledOnlineTime = _configCopy?.ScheduledOnlineTime ?? "",
+            ScheduledOnlineRequiresConfirmation = _configCopy?.ScheduledOnlineRequiresConfirmation ?? false,
             OnlineHoeingGroupNames = _configCopy?.OnlineHoeingGroupNames ?? [],
             OnlineHoeingGroupIndex = _configCopy?.OnlineHoeingGroupIndex ?? 0,
             DisclaimerAccepted = _configCopy?.DisclaimerAccepted ?? false,

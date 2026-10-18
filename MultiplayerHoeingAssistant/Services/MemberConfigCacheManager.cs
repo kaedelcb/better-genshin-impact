@@ -56,6 +56,7 @@ public class MemberConfigCacheManager
             if (_configTransferActive) return;
             try
             {
+                using var writing = ConfigFileWriteGate.Acquire(_cachePath);
                 var json = JsonSerializer.Serialize(cache, new JsonSerializerOptions
                 {
                     WriteIndented = true,

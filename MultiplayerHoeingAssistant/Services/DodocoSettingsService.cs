@@ -179,6 +179,7 @@ public sealed class DodocoSettingsService
     {
         try
         {
+            using var writing = ConfigFileWriteGate.Acquire(_path);
             File.WriteAllText(_path,
                 JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true }));
         }
