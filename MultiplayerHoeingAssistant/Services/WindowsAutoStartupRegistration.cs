@@ -15,7 +15,7 @@ internal sealed record AutoStartupRegistrationResult(bool Success, string Messag
     internal bool StateUnconfirmed { get; init; }
 }
 
-/// <summary>只操作当前 Windows 账号的助手登录任务；不会运行任务或修改 UAC/兼容性设置。</summary>
+/// <summary>事务配置当前账号的会话登录入口和助手任务；不会运行任务或修改 UAC/兼容性设置。</summary>
 internal static class WindowsAutoStartupRegistration
 {
     private const int TaskCreate = 2;
@@ -36,6 +36,15 @@ internal static class WindowsAutoStartupRegistration
             sid = GetCurrentUserSid();
             executablePath = GetExecutablePath();
             highestAvailable = IsAdministratorAccount();
+            if (enabled)
+            {
+                var launcherPath = AutoStartupRegistration.GetLauncherPath(executablePath);
+                if (!File.Exists(launcherPath))
+                    return new(false, "助手登录入口缺失，未更改自启动设置。请使用包含 NexusBGI.Startup.exe 的完整助手文件。");
+                if (RequiresAdministratorCompatibility(launcherPath))
+                    return new(false, "登录入口 NexusBGI.Startup.exe 被强制设为管理员运行，无法由 Windows 登录启动；管理员兼容性设置仅应应用于助手主程序。");
+                _ = AutoStartupRegistration.BuildLauncherCommand(executablePath);
+            }
             if (enabled && !highestAvailable && RequiresAdministratorCompatibility(executablePath))
                 return new(false, "当前 Windows 账号是标准账号，但助手被兼容性设置强制以管理员身份运行，无法在本账号内自动提权。请取消助手的此项兼容性设置，不能改用其他账号的凭据。");
         }
@@ -98,15 +107,15 @@ internal static class WindowsAutoStartupRegistration
         return true;
     }
 
-    private sealed record RunValueSnapshot(string Name, object Value, RegistryValueKind Kind);
+    internal sealed record RunValueSnapshot(string Name, object Value, RegistryValueKind Kind);
 
-    private sealed class RegistrationChange(string? taskXml, IReadOnlyList<RunValueSnapshot> runValues)
+    internal sealed class RegistrationChange(string? taskXml, IReadOnlyList<RunValueSnapshot> runValues)
     {
         internal string? BeforeTaskXml { get; } = taskXml;
         internal IReadOnlyList<RunValueSnapshot> BeforeRunValues { get; } = runValues;
         internal string OperationMarker { get; } = OperationMarkerPrefix + Guid.NewGuid().ToString("N");
         internal bool TaskMutationAttempted { get; set; }
-        internal HashSet<string> RunDeletionAttempted { get; } = new(StringComparer.OrdinalIgnoreCase);
+        internal Dictionary<string, RunValueSnapshot?> RunWritesAttempted { get; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed class RegistrationRollbackException(string message, Exception innerException)
@@ -126,11 +135,11 @@ internal static class WindowsAutoStartupRegistration
                 return new RegistrationChange(taskXml, ReadOwnedRunValues());
             });
             ApplyTask(enabled, minimized, sid, executablePath, highestAvailable, change);
-            ClearOwnedRunValues(change);
+            ApplyRunValues(change, enabled, executablePath);
         }
         catch (Exception failure)
         {
-            if (change is null || (!change.TaskMutationAttempted && change.RunDeletionAttempted.Count == 0)) throw;
+            if (change is null || (!change.TaskMutationAttempted && change.RunWritesAttempted.Count == 0)) throw;
             var restoreErrors = new List<string>();
             try { RestoreRunValues(change); }
             catch (Exception ex) { restoreErrors.Add("启动项恢复：" + ex.GetBaseException().Message); }
@@ -309,7 +318,7 @@ internal static class WindowsAutoStartupRegistration
         return principal.Element(ns + "LogonType")?.Value == "InteractiveToken"
             && principal.Element(ns + "RunLevel")?.Value == (highestAvailable ? "HighestAvailable" : "LeastPrivilege")
             && (string?)actions!.Attribute("Context") == (string?)principal.Attribute("id")
-            && IsTrue(trigger.Element(ns + "Enabled"), defaultValue: true)
+            && IsFalse(trigger.Element(ns + "Enabled"), defaultValue: true)
             && IsUnlimited(trigger.Element(ns + "ExecutionTimeLimit"))
             && trigger.Element(ns + "StartBoundary") is null
             && trigger.Element(ns + "EndBoundary") is null
@@ -319,6 +328,7 @@ internal static class WindowsAutoStartupRegistration
             && action.Element(ns + "Arguments")?.Value == AutoStartupRegistration.BuildArguments(minimized)
             && SamePath(action.Element(ns + "WorkingDirectory")?.Value, Path.GetDirectoryName(executablePath)!)
             && settings.Element(ns + "MultipleInstancesPolicy")?.Value == "Parallel"
+            && IsTrue(settings.Element(ns + "AllowStartOnDemand"), defaultValue: true)
             && IsFalse(settings.Element(ns + "DisallowStartIfOnBatteries"), defaultValue: true)
             && IsFalse(settings.Element(ns + "StopIfGoingOnBatteries"), defaultValue: true)
             && IsFalse(settings.Element(ns + "RunOnlyIfNetworkAvailable"), defaultValue: false)
@@ -369,10 +379,12 @@ internal static class WindowsAutoStartupRegistration
     private static IReadOnlyList<RunValueSnapshot> ReadOwnedRunValues()
     {
         using var key = Registry.CurrentUser.OpenSubKey(AutoStartupRegistration.RunKeyPath, writable: false);
-        if (key is null) return [];
-        return new[] { AutoStartupRegistration.ValueName }.Concat(AutoStartupRegistration.HistoricalValueNames)
-            .Select(name => ReadRunValue(key, name)).OfType<RunValueSnapshot>().ToArray();
+        return ReadOwnedRunValues(key);
     }
+
+    internal static IReadOnlyList<RunValueSnapshot> ReadOwnedRunValues(RegistryKey? key)
+        => key is null ? [] : new[] { AutoStartupRegistration.ValueName }.Concat(AutoStartupRegistration.HistoricalValueNames)
+            .Select(name => ReadRunValue(key, name)).OfType<RunValueSnapshot>().ToArray();
 
     private static RunValueSnapshot? ReadRunValue(RegistryKey key, string name)
     {
@@ -392,50 +404,85 @@ internal static class WindowsAutoStartupRegistration
         };
     }
 
-    private static void ClearOwnedRunValues(RegistrationChange change)
+    private static RunValueSnapshot? DesiredRunValue(string name, bool enabled, string executablePath)
+        => enabled && name == AutoStartupRegistration.ValueName
+            ? new(name, AutoStartupRegistration.BuildLauncherCommand(executablePath), RegistryValueKind.String)
+            : null;
+
+    private static void ApplyRunValues(RegistrationChange change, bool enabled, string executablePath)
     {
-        // 没有本助手旧值时只读结束，不为不存在的值申请 Run 键写权限。
-        if (change.BeforeRunValues.Count == 0)
-        {
-            if (ReadOwnedRunValues().Count != 0)
-                throw new InvalidOperationException("助手启动项在设置过程中被其他进程新增，已保留当前启动项。");
-            return;
-        }
-        using var key = Registry.CurrentUser.OpenSubKey(AutoStartupRegistration.RunKeyPath, writable: true);
-        if (key is null) throw new InvalidOperationException("启动项所在键在设置过程中消失，未清理其他内容。");
-        foreach (var before in change.BeforeRunValues)
-        {
-            if (!SameRunValue(ReadRunValue(key, before.Name), before))
+        using var readKey = Registry.CurrentUser.OpenSubKey(AutoStartupRegistration.RunKeyPath, writable: false);
+        if (GetRunMutations(readKey, change, enabled, executablePath).Length == 0) return;
+        using var key = Registry.CurrentUser.CreateSubKey(AutoStartupRegistration.RunKeyPath, writable: true);
+        ApplyRunValues(key, change, enabled, executablePath);
+    }
+
+    private static string[] GetRunMutations(RegistryKey? key, RegistrationChange change, bool enabled, string executablePath)
+    {
+        var names = new[] { AutoStartupRegistration.ValueName }.Concat(AutoStartupRegistration.HistoricalValueNames).ToArray();
+        var before = change.BeforeRunValues.ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names)
+            if (!SameRunValue(key is null ? null : ReadRunValue(key, name), before.GetValueOrDefault(name)))
                 throw new InvalidOperationException("助手启动项在设置过程中被其他进程改变，未覆盖当前内容。");
-            change.RunDeletionAttempted.Add(before.Name);
-            key.DeleteValue(before.Name, throwOnMissingValue: true);
+        return names.Where(name => !SameRunValue(before.GetValueOrDefault(name),
+            DesiredRunValue(name, enabled, executablePath))).ToArray();
+    }
+
+    internal static void ApplyRunValues(RegistryKey key, RegistrationChange change, bool enabled, string executablePath)
+    {
+        var before = change.BeforeRunValues.ToDictionary(value => value.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var name in GetRunMutations(key, change, enabled, executablePath))
+        {
+            if (!SameRunValue(ReadRunValue(key, name), before.GetValueOrDefault(name)))
+                throw new InvalidOperationException("助手启动项在设置过程中被其他进程改变，未覆盖当前内容。");
+            var desired = DesiredRunValue(name, enabled, executablePath);
+            change.RunWritesAttempted.Add(name, desired);
+            if (desired is null) key.DeleteValue(name, throwOnMissingValue: false);
+            else key.SetValue(name, desired.Value, desired.Kind);
         }
-        if (ReadOwnedRunValues().Count != 0)
-            throw new InvalidOperationException("助手旧启动项清理后的读回不匹配，登录启动设置未完成。");
+        VerifyRunState(key, enabled, executablePath);
+    }
+
+    private static void VerifyRunState(bool enabled, string executablePath)
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(AutoStartupRegistration.RunKeyPath, writable: false);
+        VerifyRunState(key, enabled, executablePath);
+    }
+
+    private static void VerifyRunState(RegistryKey? key, bool enabled, string executablePath)
+    {
+        var actual = ReadOwnedRunValues(key);
+        var expected = DesiredRunValue(AutoStartupRegistration.ValueName, enabled, executablePath);
+        if (expected is null ? actual.Count != 0 : actual.Count != 1 || !string.Equals(actual[0].Name, expected.Name, StringComparison.OrdinalIgnoreCase)
+            || !SameRunValue(actual[0], expected))
+            throw new InvalidOperationException("登录入口登记后的值或类型读回不匹配，设置未完成。");
     }
 
     private static void RestoreRunValues(RegistrationChange change)
     {
-        if (change.RunDeletionAttempted.Count == 0) return;
-        using var readKey = Registry.CurrentUser.OpenSubKey(AutoStartupRegistration.RunKeyPath, writable: false);
-        var restore = change.BeforeRunValues.Where(before => change.RunDeletionAttempted.Contains(before.Name)
-            && !SameRunValue(readKey is null ? null : ReadRunValue(readKey, before.Name), before)).ToArray();
-        if (restore.Length == 0) return;
+        if (change.RunWritesAttempted.Count == 0) return;
         using var key = Registry.CurrentUser.CreateSubKey(AutoStartupRegistration.RunKeyPath, writable: true);
+        RestoreRunValues(key, change);
+    }
+
+    internal static void RestoreRunValues(RegistryKey key, RegistrationChange change)
+    {
         var restoreErrors = new List<string>();
-        foreach (var before in restore)
+        foreach (var (name, written) in change.RunWritesAttempted)
         {
             try
             {
-                var current = ReadRunValue(key, before.Name);
+                var before = change.BeforeRunValues.FirstOrDefault(value => string.Equals(value.Name, name, StringComparison.OrdinalIgnoreCase));
+                var current = ReadRunValue(key, name);
                 if (SameRunValue(current, before)) continue;
-                if (current is not null)
+                if (!SameRunValue(current, written))
                     throw new InvalidOperationException("助手启动项出现并发修改，未覆盖当前值。");
-                key.SetValue(before.Name, before.Value, before.Kind);
-                if (!SameRunValue(ReadRunValue(key, before.Name), before))
+                if (before is null) key.DeleteValue(name, throwOnMissingValue: false);
+                else key.SetValue(name, before.Value, before.Kind);
+                if (!SameRunValue(ReadRunValue(key, name), before))
                     throw new InvalidOperationException("启动项恢复后的值或类型与变更前不一致。");
             }
-            catch (Exception ex) { restoreErrors.Add(before.Name + "：" + ex.GetBaseException().Message); }
+            catch (Exception ex) { restoreErrors.Add(name + "：" + ex.GetBaseException().Message); }
         }
         if (restoreErrors.Count != 0) throw new InvalidOperationException(string.Join("；", restoreErrors));
     }
@@ -472,8 +519,7 @@ internal static class WindowsAutoStartupRegistration
             if (GetCurrentUserSid() != expectedSid)
                 return new(false, "实际登记未确认：当前 Windows 账号身份变化。") { StateUnconfirmed = true };
             VerifyTaskState(enabled, minimized, expectedSid, executablePath, highestAvailable);
-            if (ReadOwnedRunValues().Count != 0)
-                throw new InvalidOperationException("配置助手返回后仍存在助手旧启动项。");
+            VerifyRunState(enabled, executablePath);
             return Success(enabled, highestAvailable);
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223 && !helperStarted)
@@ -575,8 +621,8 @@ internal static class WindowsAutoStartupRegistration
 
     private static AutoStartupRegistrationResult Success(bool enabled, bool highestAvailable)
         => new(true, !enabled ? "已关闭当前账号的登录自启动。"
-            : highestAvailable ? "已启用当前账号的登录自启动（支持管理员权限）。"
-            : "已启用当前账号的普通权限登录自启动。");
+            : highestAvailable ? "已启用当前账号各登录会话的自启动（支持管理员权限）。"
+            : "已启用当前账号各登录会话的普通权限自启动。");
 
     private static void ReleaseComObject(object? value)
     {

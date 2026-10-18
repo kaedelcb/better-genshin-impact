@@ -9,6 +9,7 @@ internal static class AutoStartupRegistration
 {
     internal const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     internal const string ValueName = "NexusBGI";
+    internal const string LauncherFileName = "NexusBGI.Startup.exe";
     internal const string LegacyValueName = "MultiplayerHoeingAssistant";
     internal const string ConfigurationArgument = "--configure-login-startup";
     internal const string TaskOwnershipMarker = "NexusBGI.LoginStartup/v1";
@@ -23,6 +24,18 @@ internal static class AutoStartupRegistration
 
         var fullPath = Path.GetFullPath(executablePath);
         return $"\"{fullPath}\" {BuildArguments(minimized)}";
+    }
+
+    internal static string GetLauncherPath(string executablePath)
+        => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(executablePath))!, LauncherFileName);
+
+    internal static string BuildLauncherCommand(string executablePath)
+    {
+        // Run 启动的是普通权限入口；管理员权限只由同账号的计划任务授予。
+        var command = $"\"{GetLauncherPath(executablePath)}\"";
+        if (command.Length > 260)
+            throw new InvalidOperationException("助手路径过长，超出 Windows 登录启动项的命令长度限制。");
+        return command;
     }
 
     internal static string BuildArguments(bool minimized)
@@ -49,10 +62,11 @@ internal static class AutoStartupRegistration
                 Element("URI", "\\" + BuildTaskName(sid)),
                 Element("Source", TaskOwnershipMarker),
                 Element("Author", sid),
-                Element("Description", "NexusBGI 助手：仅在此 Windows 账号登录时启动。")),
+                Element("Description", "NexusBGI 助手：由登录入口指定当前 Windows 会话启动。")),
             new XElement(ns + "Triggers",
                 new XElement(ns + "LogonTrigger",
-                    Element("Enabled", true),
+                    // 只保留账号归属；登录入口通过 RunEx 显式指定会话，避免同账号串会话。
+                    Element("Enabled", false),
                     Element("ExecutionTimeLimit", "PT0S"),
                     Element("UserId", sid))),
             new XElement(ns + "Principals",
@@ -62,6 +76,7 @@ internal static class AutoStartupRegistration
                     Element("RunLevel", highestAvailable ? "HighestAvailable" : "LeastPrivilege"))),
             new XElement(ns + "Settings",
                 Element("MultipleInstancesPolicy", "Parallel"),
+                Element("AllowStartOnDemand", true),
                 Element("DisallowStartIfOnBatteries", false),
                 Element("StopIfGoingOnBatteries", false),
                 Element("AllowHardTerminate", false),

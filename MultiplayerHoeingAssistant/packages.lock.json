@@ -181,6 +181,9 @@
         "type": "Transitive",
         "resolved": "0.8.1",
         "contentHash": "19tNz33kn2EkyViFXuxfVn338UJaRmkwBphVqP2dVJIYQUQgFrgG5h061mxkRRg1Ax6r+6WOj1FxaFZ5qaWqqg=="
+      },
+      "NexusBGI.Startup": {
+        "type": "Project"
       }
     }
   }

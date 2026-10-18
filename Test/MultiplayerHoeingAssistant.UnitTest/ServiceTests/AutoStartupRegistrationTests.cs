@@ -27,6 +27,17 @@ public class AutoStartupRegistrationTests
     }
 
     [Fact]
+    public void BuildLauncherCommand_UsesAnIndependentExecutableSoMainProgramElevationCannotBlockLogon()
+    {
+        var executable = Path.GetFullPath(Path.Combine("助手 目录", "MultiplayerHoeingAssistant.exe"));
+        Assert.Equal($"\"{Path.Combine(Path.GetDirectoryName(executable)!, "NexusBGI.Startup.exe")}\"",
+            AutoStartupRegistration.BuildLauncherCommand(executable));
+        Assert.DoesNotContain("MultiplayerHoeingAssistant.exe", AutoStartupRegistration.BuildLauncherCommand(executable));
+        Assert.Throws<InvalidOperationException>(() => AutoStartupRegistration.BuildLauncherCommand(
+            Path.Combine(Path.GetPathRoot(executable)!, new string('a', 250), "MultiplayerHoeingAssistant.exe")));
+    }
+
+    [Fact]
     public void HistoricalValueNames_ContainsOnlyTheKnownLegacyAssistantValue()
     {
         Assert.Equal([AutoStartupRegistration.LegacyValueName], AutoStartupRegistration.HistoricalValueNames);
@@ -125,6 +136,7 @@ public class AutoStartupRegistrationTests
         var principal = Assert.Single(task.Element(TaskNamespace + "Principals")!.Elements());
 
         Assert.Equal(TaskNamespace + "LogonTrigger", trigger.Name);
+        Assert.Equal("false", trigger.Element(TaskNamespace + "Enabled")?.Value);
         Assert.Equal(UserSid, trigger.Element(TaskNamespace + "UserId")?.Value);
         Assert.Equal(UserSid, principal.Element(TaskNamespace + "UserId")?.Value);
         Assert.Equal("InteractiveToken", principal.Element(TaskNamespace + "LogonType")?.Value);
@@ -169,6 +181,7 @@ public class AutoStartupRegistrationTests
         var settings = ParseTask(minimized: false).Element(TaskNamespace + "Settings")!;
 
         Assert.Equal("Parallel", settings.Element(TaskNamespace + "MultipleInstancesPolicy")?.Value);
+        Assert.Equal("true", settings.Element(TaskNamespace + "AllowStartOnDemand")?.Value);
         Assert.Equal("PT0S", settings.Element(TaskNamespace + "ExecutionTimeLimit")?.Value);
         Assert.Equal("false", settings.Element(TaskNamespace + "DisallowStartIfOnBatteries")?.Value);
         Assert.Equal("false", settings.Element(TaskNamespace + "StopIfGoingOnBatteries")?.Value);
@@ -179,16 +192,15 @@ public class AutoStartupRegistrationTests
     {
         var task = ParseTask(minimized: false);
         Assert.True(MatchesConstructedTask(task));
-        task.Element(TaskNamespace + "Triggers")!.Element(TaskNamespace + "LogonTrigger")!
-            .Element(TaskNamespace + "Enabled")!.Remove();
         var settings = task.Element(TaskNamespace + "Settings")!;
-        foreach (var name in new[] { "Enabled", "RunOnlyIfNetworkAvailable", "RunOnlyIfIdle", "DisallowStartOnRemoteAppSession" })
+        foreach (var name in new[] { "Enabled", "AllowStartOnDemand", "RunOnlyIfNetworkAvailable", "RunOnlyIfIdle", "DisallowStartOnRemoteAppSession" })
             settings.Element(TaskNamespace + name)!.Remove();
 
         Assert.True(MatchesConstructedTask(task));
     }
 
     [Theory]
+    [InlineData("LogonTrigger", "Enabled")]
     [InlineData("Settings", "DisallowStartIfOnBatteries")]
     [InlineData("Settings", "ExecutionTimeLimit")]
     [InlineData("LogonTrigger", "ExecutionTimeLimit")]
@@ -202,7 +214,8 @@ public class AutoStartupRegistrationTests
     }
 
     [Theory]
-    [InlineData("LogonTrigger", "Enabled", "false")]
+    [InlineData("LogonTrigger", "Enabled", "true")]
+    [InlineData("Settings", "AllowStartOnDemand", "false")]
     [InlineData("Settings", "RunOnlyIfNetworkAvailable", "true")]
     [InlineData("Settings", "DisallowStartIfOnBatteries", "true")]
     public void MatchesTask_RejectsExplicitBooleanSettingsThatChangeTheRequestedBehavior(string parent,
