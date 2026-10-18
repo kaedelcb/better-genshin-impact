@@ -538,13 +538,17 @@ public partial class MainWindowViewModel : ObservableObject, IViewModel
         // 预热OCR
         await OcrPreheating();
 
+        // 随 BGI 启动助手同时适用于双击和命令行启动，必须在命令行提前返回前执行。
+        // 连续一条龙由专用入口带 --manual-start 拉起助手，避免默认自动流程与 CLI 计划竞争。
+        if (CommandLineOptions.Instance.Action != CommandLineAction.StartContinuousOneDragon)
+        {
+            TryAutoLaunchAssistant();
+        }
+
         if (Environment.GetCommandLineArgs().Length > 1)
         {
             return;
         }
-
-        // 随 BGI 启动联机锄地助手：BGI 主程序启动时，若助手配置了 autoLaunchWithBgi 则自动拉起助手
-        TryAutoLaunchAssistant();
 
         // 自动处理目录配置
         await Patch1();
