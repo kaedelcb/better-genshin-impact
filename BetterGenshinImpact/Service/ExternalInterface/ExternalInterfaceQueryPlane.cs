@@ -183,6 +183,7 @@ internal static class ExternalInterfaceQueryPlane
                 @sealed = evidence.Sealed,
                 jobResult = evidence.JobResult?.ToString(),
                 revision = evidence.Revision,
+                plannedNativeCount = evidence.PlannedNativeCount,
             } : null,
         });
 }

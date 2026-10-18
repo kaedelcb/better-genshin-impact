@@ -14,6 +14,18 @@ public partial class MainViewModel
         CommandExecutor? owner = null;
         BgiExternalClient External() => _externalClient is { State: BgiExternalLinkState.Ready } ext
             ? ext : throw new IOException("BGI 外部接口尚未就绪");
+        async Task<bool?> ConfirmLocalTaskExit(string jobId, BgiEpoch epoch, string requestKey,
+            bool cancelled, CancellationToken ct)
+        {
+            var ext = External();
+            if (!CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+                throw new InvalidOperationException("普通任务终态核对前 BGI 纪元已变化");
+            var (_, job) = await ext.QueryJobStatusAsync(jobId, ct);
+            if (!ReferenceEquals(ext, _externalClient) || ext.State != BgiExternalLinkState.Ready
+                || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+                throw new InvalidOperationException("普通任务终态核对期间 BGI 身份或通道已变化");
+            return job is null ? null : CoordinatedBatchLoop.ConfirmsLocalTaskExit(job, jobId, epoch, requestKey, cancelled);
+        }
         var io = new CoordinatedBatchRuntime
         {
             Prepare = prepare,
@@ -66,21 +78,10 @@ public partial class MainViewModel
             },
             RequireFinishEvidence = true,
             RequireLocalTaskFailureIsolation = true,
-            ConfirmLocalTasksFailure = async (jobId, epoch, requestKey, ct) =>
-            {
-                var ext = External();
-                if (!CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
-                    throw new InvalidOperationException("普通任务失败核对前 BGI 纪元已变化");
-                var (_, job) = await ext.QueryJobStatusAsync(jobId, ct);
-                if (!ReferenceEquals(ext, _externalClient) || ext.State != BgiExternalLinkState.Ready
-                    || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
-                    throw new InvalidOperationException("普通任务失败核对期间 BGI 身份或通道已变化");
-                if (job is null) return null;
-                return Guid.TryParse(jobId, out var expectedJob) && Guid.TryParse(job.JobId, out var observedJob)
-                    && expectedJob == observedJob && CoordinatedBatchLoop.SameEpoch(epoch, job.Epoch)
-                    && job.IdempotencyKey == requestKey && job.State == "failed" && !job.WasCancelled
-                    && job.ExecutionExitConfirmed;
-            },
+            ConfirmLocalTasksFailure = (jobId, epoch, requestKey, ct) =>
+                ConfirmLocalTaskExit(jobId, epoch, requestKey, false, ct),
+            ConfirmLocalTasksCancellation = (jobId, epoch, requestKey, ct) =>
+                ConfirmLocalTaskExit(jobId, epoch, requestKey, true, ct),
             FinalizeLocal = (epoch, ct) => FinalizeLocalCoordinatedBatchAsync(batch,
                 owner ?? throw new InvalidOperationException("本批收尾执行器不可用"), epoch, ct),
             OriginalProcessAlive = CommandExecutor.ProbeOriginalBgiProcess,
@@ -124,6 +125,7 @@ internal sealed class CoordinatedBatchRuntime
     internal bool RequireFinishEvidence { get; init; }
     internal bool RequireLocalTaskFailureIsolation { get; init; }
     internal Func<string, BgiEpoch, string, CancellationToken, Task<bool?>>? ConfirmLocalTasksFailure { get; init; }
+    internal Func<string, BgiEpoch, string, CancellationToken, Task<bool?>>? ConfirmLocalTasksCancellation { get; init; }
 }
 
 internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedBatchRuntime io)
@@ -148,6 +150,13 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
 
     internal static bool SameEpoch(BgiEpoch? expected, BgiEpoch? actual) => expected != null && actual != null
         && expected.ProcessId == actual.ProcessId && expected.StartTicksUtc == actual.StartTicksUtc;
+
+    internal static bool ConfirmsLocalTaskExit(BgiJobInfo job, string jobId, BgiEpoch epoch,
+        string requestKey, bool cancelled) => Guid.TryParse(jobId, out var expectedJob)
+        && Guid.TryParse(job.JobId, out var observedJob) && expectedJob == observedJob
+        && SameEpoch(epoch, job.Epoch) && job.IdempotencyKey == requestKey
+        && job.State == (cancelled ? "cancelled" : "failed") && job.WasCancelled == cancelled
+        && job.ExecutionExitConfirmed;
 
     internal static string RequestKey(string batchId, string uid, int index, int attempt) => "hoeing.v2/"
         + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{batchId}\n{uid}\n{index}\n{attempt}"))).ToLowerInvariant();
@@ -430,14 +439,17 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             }
             if (terminal.HoeingEvidence is { IsValid: true } evidence)
                 _completedNative = Math.Max(_completedNative, evidence.Completed);
+            var localTasksCancellation = !batch.IsCancellationRequested && !_cancelSent && team.Phase == "running"
+                && terminal.HoeingEvidence?.IsLocalTasksCancellation(terminal) == true;
             var localTasksFailure = io.RequireLocalTaskFailureIsolation
-                && terminal.HoeingEvidence?.IsLocalTasksFailure(terminal) == true;
+                && (terminal.HoeingEvidence?.IsLocalTasksFailure(terminal) == true || localTasksCancellation);
             if (localTasksFailure)
             {
                 bool? identityConfirmed = null;
-                if (io.ConfirmLocalTasksFailure is not null)
+                var confirm = localTasksCancellation ? io.ConfirmLocalTasksCancellation : io.ConfirmLocalTasksFailure;
+                if (confirm is not null)
                 {
-                    try { identityConfirmed = await io.ConfirmLocalTasksFailure(_item.JobId, _epoch!, _item.RequestKey, rpc.Token); }
+                    try { identityConfirmed = await confirm(_item.JobId, _epoch!, _item.RequestKey, rpc.Token); }
                     catch (Exception ex) when (!batch.IsCancellationRequested
                         && ex is IOException or TimeoutException or OperationCanceledException) { }
                 }
@@ -447,6 +459,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     return;
                 }
             }
+            ct.ThrowIfCancellationRequested();
             _observationUnavailableSince = null;
             _result = localTasksFailure ? "local_tasks_failed" : CoordinatedBatchOutcome.Classify(terminal, team.Phase == "stopping");
             if (!localTasksFailure && _completedNative > 0 && (terminal?.Status == "failed" || _result == "stopped"))
@@ -459,7 +472,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 _reason = LimitReason($"联机锄地已完成 {_completedNative} 次，本机配置组后续失败，禁止整组重跑；" + _reason);
             if (_result == "local_tasks_failed")
             {
-                _reason = LimitReason($"本机普通任务失败；本项全部 {_completedNative} 次联机锄地已完成，不重跑且不执行成功完成动作；" + _reason);
+                var outcome = localTasksCancellation ? "已完成锄地后的本机任务已取消或切换" : "本机普通任务失败";
+                _reason = LimitReason($"{outcome}；本项全部 {_completedNative} 次联机锄地已完成，不重跑且不执行成功完成动作；" + _reason);
                 batch.RecordLocalTasksFailure(_epoch!, _reason, _index, _attempt, _item.JobId!, _item.RequestKey);
             }
             if (_result == "unknown") throw new InvalidOperationException("本批任务终态未知");

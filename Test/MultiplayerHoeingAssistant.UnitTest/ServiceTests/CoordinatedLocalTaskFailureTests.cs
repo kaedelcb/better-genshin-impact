@@ -326,6 +326,57 @@ public sealed class CoordinatedLocalTaskFailureTests
         Assert.Equal(expected, evidence.IsLocalTasksFailure(new() { Status = status, Cancelled = cancelled, HoeingEvidence = evidence }));
     }
 
+    [Theory]
+    [InlineData(null, 1, 1, 0, 0, 0, false)]
+    [InlineData(1, 1, 1, 0, 0, 0, true)]
+    [InlineData(2, 1, 1, 0, 0, 0, false)]
+    [InlineData(1, 2, 2, 0, 0, 0, false)]
+    [InlineData(1, 1, 0, 0, 1, 0, false)]
+    [InlineData(1, 1, 0, 1, 0, 0, false)]
+    [InlineData(1, 1, 0, 0, 0, 1, false)]
+    public void CancelledTailNeedsTheEntireFrozenNativePlanToHaveCompleted(int? planned,
+        int started, int completed, int failed, int cancelled, int active, bool expected)
+    {
+        var evidence = new CoordinatedHoeingEvidence
+        {
+            PlannedNativeCount = planned, Started = started, Completed = completed, Failed = failed,
+            Cancelled = cancelled, Active = active, Sealed = true, JobResult = "Cancelled"
+        };
+        var terminal = new BgiTaskQueueStatus { Status = "completed", Cancelled = true, HoeingEvidence = evidence };
+        Assert.Equal(expected, evidence.IsLocalTasksCancellation(terminal));
+        Assert.False((evidence with { Sealed = false }).IsLocalTasksCancellation(terminal));
+        Assert.False((evidence with { JobResult = "Ran" }).IsLocalTasksCancellation(terminal));
+        Assert.False(evidence.IsLocalTasksCancellation(new() { Status = "queueCancelled", Cancelled = true }));
+    }
+
+    [Theory]
+    [InlineData("identity")]
+    [InlineData("epoch")]
+    [InlineData("request")]
+    [InlineData("exit")]
+    [InlineData("state")]
+    [InlineData("cancellation")]
+    public void CancellationIsolationRequiresTheOriginalCancelledJobToHaveExited(string mismatch)
+    {
+        var jobId = Guid.NewGuid().ToString("N");
+        var epoch = new BgiEpoch { ProcessId = 17, StartTicksUtc = 170 };
+        var valid = new BgiJobInfo
+        {
+            JobId = jobId, Epoch = epoch, IdempotencyKey = "original", State = "cancelled",
+            WasCancelled = true, ExecutionExitConfirmed = true
+        };
+        Assert.True(CoordinatedBatchLoop.ConfirmsLocalTaskExit(valid, jobId, epoch, "original", true));
+        var wrong = new BgiJobInfo
+        {
+            JobId = mismatch == "identity" ? Guid.NewGuid().ToString("N") : jobId,
+            Epoch = mismatch == "epoch" ? new() { ProcessId = 18, StartTicksUtc = 180 } : epoch,
+            IdempotencyKey = mismatch == "request" ? "successor" : "original",
+            State = mismatch == "state" ? "running" : "cancelled",
+            WasCancelled = mismatch != "cancellation", ExecutionExitConfirmed = mismatch != "exit"
+        };
+        Assert.False(CoordinatedBatchLoop.ConfirmsLocalTaskExit(wrong, jobId, epoch, "original", true));
+    }
+
     private static CoordinatedHoeingEvidence AllNativeSucceeded() =>
         new() { Started = 1, Completed = 1, Sealed = true, JobResult = "Failed", Revision = 3 };
     private static BgiTaskQueueStatus Failed(CoordinatedHoeingEvidence evidence) =>

@@ -1,10 +1,129 @@
+using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.Service;
 using BetterGenshinImpact.Service.Execution;
+using BetterGenshinImpact.Service.ExternalInterface;
+using BetterGenshinImpact.Service.Instance;
+using BetterGenshinImpact.Service.Instance.MessageHandlers;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
 
 public class CoordinatedHoeingEvidenceTests
 {
+    [Theory]
+    [InlineData(TaskRunResult.Cancelled)]
+    [InlineData(TaskRunResult.Preempted)]
+    [InlineData(TaskRunResult.Ran)]
+    public void FrozenNativePlanKeepsTheActualWholeJobOutcome(TaskRunResult result)
+    {
+        var observations = new List<CoordinatedHoeingEvidence>();
+        using var scope = new CoordinatedHoeingScope(true, observer: observations.Add);
+        Assert.True(scope.TryRegisterNativePlan(1));
+        using (var native = scope.BeginNative())
+        {
+            native.SetMultiplayerMode(true);
+            native.Complete();
+        }
+        var final = scope.Seal(result);
+        Assert.Equal(1, final.PlannedNativeCount);
+        Assert.Equal(final.PlannedNativeCount, final.Started);
+        Assert.Equal(final.Started, final.Completed);
+        Assert.Equal(result, final.JobResult);
+        Assert.True(final.Sealed);
+        Assert.True(observations.Zip(observations.Skip(1), (a, b) => a.Revision < b.Revision).All(x => x));
+
+        var response = ExternalInterfaceQueryPlane.MapTaskQueueStatusResponse(
+            InstanceIpcEnvelope.Request("ext.task.queueStatus"), new("completed", result != TaskRunResult.Ran,
+                null, null, final));
+        Assert.Equal(1, (int?)response.Data!["hoeingEvidence"]!["plannedNativeCount"]);
+        Assert.Equal(result.ToString(), (string?)response.Data["hoeingEvidence"]!["jobResult"]);
+    }
+
+    [Fact]
+    public void LaterNativeAndUnexpectedExtraNativeDoNotMatchACompletedPlan()
+    {
+        using var scope = new CoordinatedHoeingScope(true);
+        Assert.True(scope.TryRegisterNativePlan(2));
+        using (var first = scope.BeginNative())
+        {
+            first.SetMultiplayerMode(true);
+            first.Complete();
+        }
+        Assert.NotEqual(scope.Snapshot.PlannedNativeCount, scope.Snapshot.Completed);
+        using (var second = scope.BeginNative())
+        {
+            second.SetMultiplayerMode(true);
+            second.Complete();
+        }
+        using (var unexpected = scope.BeginNative())
+        {
+            unexpected.SetMultiplayerMode(true);
+            unexpected.Complete();
+        }
+        var final = scope.Seal(TaskRunResult.Cancelled);
+        Assert.Equal(2, final.PlannedNativeCount);
+        Assert.Equal(3, final.Completed);
+        Assert.NotEqual(final.PlannedNativeCount, final.Started);
+    }
+
+    [Fact]
+    public void PlanCannotBeReplacedRegisteredLateOrRestoredAfterDynamicWork()
+    {
+        using var scope = new CoordinatedHoeingScope(true);
+        Assert.True(scope.TryRegisterNativePlan(2));
+        Assert.False(scope.TryRegisterNativePlan(1));
+        Assert.Equal(2, scope.Snapshot.PlannedNativeCount);
+        scope.InvalidateNativePlan();
+        Assert.Null(scope.Snapshot.PlannedNativeCount);
+        Assert.False(scope.TryRegisterNativePlan(1));
+        var sealedResult = scope.Seal(TaskRunResult.Cancelled);
+        scope.InvalidateNativePlan();
+        Assert.False(scope.TryRegisterNativePlan(3));
+        Assert.Equal(sealedResult, scope.Snapshot);
+
+        using var late = new CoordinatedHoeingScope(true);
+        using var active = late.BeginNative();
+        Assert.False(late.TryRegisterNativePlan(1));
+        active.SetMultiplayerMode(true);
+        active.Complete();
+        Assert.False(late.TryRegisterNativePlan(1));
+        Assert.Null(late.Snapshot.PlannedNativeCount);
+    }
+
+    [Fact]
+    public void DirectGroupPlanCountsEnabledRemainingNativeRepeatsAndAllowsAnOrdinaryJsTail()
+    {
+        var enabled = ScriptGroupProject.BuildSoloTaskProject("锄地一条龙（联机）");
+        enabled.RunNum = 2;
+        var legacy = ScriptGroupProject.BuildSoloTaskProject("锄地一条龙");
+        var disabled = ScriptGroupProject.BuildSoloTaskProject("锄地一条龙（联机）");
+        disabled.Status = "Disabled";
+        var beforeResumeCursor = ScriptGroupProject.BuildSoloTaskProject("锄地一条龙（联机）");
+        beforeResumeCursor.SkipFlag = true;
+        var ordinaryJs = new ScriptGroupProject("老王妙妙屋", "ordinary-js", "Javascript");
+        ScriptGroupProject[] list = [beforeResumeCursor, enabled, disabled, legacy, ordinaryJs];
+        Assert.Equal(3, ScriptService.CountPlannedCoordinatedNatives(list, rootGroup: true));
+        Assert.Equal(0, ScriptService.CountPlannedCoordinatedNatives([ordinaryJs], rootGroup: true));
+        Assert.Null(ScriptService.CountPlannedCoordinatedNatives(list, rootGroup: false));
+    }
+
+    [Fact]
+    public void PriorityGroupsAndAnUnrepresentablePlanStayUnknown()
+    {
+        var project = ScriptGroupProject.BuildSoloTaskProject("锄地一条龙（联机）");
+        var group = new ScriptGroup();
+        group.Config.PathingConfig.Enabled = true;
+        group.Config.PathingConfig.PreExecutionPriorityConfig.Enabled = true;
+        project.GroupInfo = group;
+        Assert.Null(ScriptService.CountPlannedCoordinatedNatives([project], rootGroup: true));
+        group.Config.PathingConfig.Enabled = false;
+        Assert.Equal(1, ScriptService.CountPlannedCoordinatedNatives([project], rootGroup: true));
+        project.RunNum = -1;
+        Assert.Null(ScriptService.CountPlannedCoordinatedNatives([project], rootGroup: true));
+        project.RunNum = int.MaxValue;
+        Assert.Null(ScriptService.CountPlannedCoordinatedNatives([project, project], rootGroup: true));
+    }
+
     [Fact]
     public void CompletedNativeDoesNotSealGroupOrHideTheNextNative()
     {

@@ -159,6 +159,13 @@ public partial class ScriptService : IScriptService
         CancellationContext.Instance.Set();
 
         var list = ReloadScriptProjects(projectList);
+        if (CoordinatedHoeingScope.Current is { } coordinatedHoeing)
+        {
+            var rootGroup = scope.Descriptor.Kind == JobKind.Group && ReferenceEquals(scope.Descriptor, job)
+                && !RunnerContext.Instance.IsPreExecution;
+            if (!coordinatedHoeing.TryRegisterNativePlan(CountPlannedCoordinatedNatives(list, rootGroup)))
+                coordinatedHoeing.InvalidateNativePlan();
+        }
         
         //恢复临时的跳过标志
         foreach (var scriptGroupProject in projectList)
@@ -284,6 +291,7 @@ public partial class ScriptService : IScriptService
                             // 存在优先执行的项目，则优先执行
                             if (preExecutionProjects.Count > 0)
                             {
+                                CoordinatedHoeingScope.Current?.InvalidateNativePlan();
    
                                 _logger.LogInformation($"存在{preExecutionProjects.Count}个需优先执行的任务！");
                                 // 设置执行状态，进入优先执行任务
@@ -552,6 +560,27 @@ public partial class ScriptService : IScriptService
             taskProgress.Next = null;
         }
         return runResult;
+    }
+
+    /// <summary>The list already carries the execution start/skip cursor; ordinary JS has no native hoeing API.</summary>
+    internal static int? CountPlannedCoordinatedNatives(IEnumerable<ScriptGroupProject> projects, bool rootGroup)
+    {
+        if (!rootGroup) return null; // One-dragon roots and nested groups have no complete direct-group plan.
+        long count = 0;
+        foreach (var project in projects)
+        {
+            // Priority groups can be inserted even before a disabled/skipped ordinary project is checked.
+            if (project.GroupInfo?.Config.PathingConfig is { Enabled: true, PreExecutionPriorityConfig.Enabled: true })
+                return null;
+            if (project.Status != "Enabled" || project.SkipFlag == true) continue;
+            if (project.Type == "SoloTask" && project.Name is "锄地一条龙（联机）" or "锄地一条龙")
+            {
+                if (project.RunNum < 0) return null;
+                count += project.RunNum;
+                if (count > int.MaxValue) return null;
+            }
+        }
+        return (int)count;
     }
 
     private List<ScriptGroupProject> ReloadScriptProjects(IEnumerable<ScriptGroupProject> projectList)

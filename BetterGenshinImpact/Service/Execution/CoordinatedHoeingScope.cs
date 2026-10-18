@@ -9,11 +9,11 @@ namespace BetterGenshinImpact.Service.Execution;
 /// <summary>
 /// Evidence belonging to one dispatched job. Started/Active cover every native hoeing invocation;
 /// Completed counts only invocations whose actual multiplayer setting was true and which returned
-/// successfully. These counts never claim that a configuration group has no future native tasks.
+/// successfully. Only a frozen root-group plan can additionally bound future native invocations.
 /// JobResult is the independent result of the complete group/one-dragon invocation.
 /// </summary>
 public sealed record CoordinatedHoeingEvidence(int Started, int Completed, int Failed, int Cancelled,
-    int Active, bool Sealed, TaskRunResult? JobResult, long Revision = 0);
+    int Active, bool Sealed, TaskRunResult? JobResult, long Revision = 0, int? PlannedNativeCount = null);
 
 /// <summary>Flows with one dispatched job, including nested script/one-dragon tasks; never a process switch.</summary>
 public sealed class CoordinatedHoeingScope : IDisposable
@@ -25,6 +25,7 @@ public sealed class CoordinatedHoeingScope : IDisposable
     private readonly Action<CoordinatedHoeingEvidence>? _observer;
     private CoordinatedHoeingEvidence _evidence = new(0, 0, 0, 0, 0, false, null);
     private long _publishedRevision = -1;
+    private bool _nativePlanRegistered;
     private bool _incomplete;
     private bool _disposed;
     public bool Incomplete { get { lock (_gate) return _incomplete; } }
@@ -50,6 +51,42 @@ public sealed class CoordinatedHoeingScope : IDisposable
     }
 
     public CoordinatedHoeingEvidence Snapshot { get { lock (_gate) return _evidence; } }
+
+    /// <summary>Freeze only the first root-group plan, before any native invocation starts.</summary>
+    public bool TryRegisterNativePlan(int? plannedNativeCount)
+    {
+        CoordinatedHoeingEvidence snapshot;
+        lock (_gate)
+        {
+            if (_disposed || _evidence.Sealed || _nativePlanRegistered || _evidence.Started != 0
+                || _evidence.Active != 0 || plannedNativeCount is < 0) return false;
+            _nativePlanRegistered = true;
+            if (_evidence.PlannedNativeCount == plannedNativeCount) return true;
+            snapshot = _evidence = _evidence with
+            {
+                PlannedNativeCount = plannedNativeCount, Revision = _evidence.Revision + 1
+            };
+        }
+        Publish(snapshot);
+        return true;
+    }
+
+    /// <summary>Dynamic/nested work cannot replace a root plan or restore its former certainty.</summary>
+    public void InvalidateNativePlan()
+    {
+        CoordinatedHoeingEvidence snapshot;
+        lock (_gate)
+        {
+            if (_disposed || _evidence.Sealed) return;
+            _nativePlanRegistered = true;
+            if (_evidence.PlannedNativeCount is null) return;
+            snapshot = _evidence = _evidence with
+            {
+                PlannedNativeCount = null, Revision = _evidence.Revision + 1
+            };
+        }
+        Publish(snapshot);
+    }
 
     /// <summary>Open before configuration/resource validation, so an early failure cannot disappear.</summary>
     public NativeAttempt BeginNative()
