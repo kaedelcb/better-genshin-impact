@@ -12,6 +12,18 @@ public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
 
+    private void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        var roomCode = ViewModel.RoomCode;
+        if (string.IsNullOrWhiteSpace(roomCode)) return;
+        try { Clipboard.SetText(roomCode); }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            ViewModel.AddLog("复制房间号失败：剪贴板正忙，请稍后重试。");
+        }
+    }
+
     /// <summary>嘟嘟可（日志与监控系统）ViewModel。手动组装（参照 App.xaml.cs 风格），
     /// 构造时即启动日志 tail/异常监控后台服务，告警红点不依赖页面打开。</summary>
     public DodocoViewModel Dodoco { get; }

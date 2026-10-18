@@ -22,13 +22,25 @@
                         <DockPanel>
                             <ToggleButton x:Name="HeaderSite" DockPanel.Dock="Top"
                                           IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}}"
-                                          Focusable="False" Background="Transparent" BorderThickness="0"
+                                          Focusable="False" Background="Transparent" BorderThickness="0" Foreground="{TemplateBinding Foreground}"
                                           HorizontalContentAlignment="Left" Padding="0">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="HeaderChrome" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="HeaderChrome" Property="Background" Value="#18D4AF37" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
                                 <StackPanel Orientation="Horizontal">
                                     <Path x:Name="Arrow" Data="M 0,0 L 7,5 L 0,10 Z"
                                           Fill="{DynamicResource Gold}" Width="7" Height="10"
-                                          Stretch="Fill" VerticalAlignment="Center" Margin="0,0,7,0" />
-                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" />
+                                          Stretch="Fill" VerticalAlignment="Center" Margin="0,0,7,0" RenderTransformOrigin="0.5,0.5" />
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
                                 </StackPanel>
                             </ToggleButton>
                             <ContentPresenter x:Name="ExpandSite" ContentSource="Content"
@@ -154,9 +166,10 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <Expander Grid.Row="2" Header="当前计划的运行历史" Margin="0,8,0,0"
+        <Expander x:Name="CurrentPlanHistoryExpander" Grid.Row="2" Header="当前计划的运行历史" Margin="0,8,0,0"
+                  Style="{StaticResource BasicPlanExpander}"
                   Visibility="{Binding HasCurrentPlanHistory, Converter={StaticResource Visible}}">
-            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto" Style="{DynamicResource GoldScrollViewer}">
                 <ItemsControl ItemsSource="{Binding CurrentPlanHistory}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
