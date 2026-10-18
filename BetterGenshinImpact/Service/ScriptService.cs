@@ -60,8 +60,11 @@ public partial class ScriptService : IScriptService
         // 如果输入非数字或不合法，返回 false
         return false;
     }
-    public bool ShouldSkipTask(ScriptGroupProject project)
+    public bool ShouldSkipTask(ScriptGroupProject project) => ShouldSkipTask(project, out _);
+
+    private bool ShouldSkipTask(ScriptGroupProject project, out bool skippedByCycle)
     {
+        skippedByCycle = false;
         // 独立任务不参与路径相关的跳过检查
         if (project.Type == "SoloTask")
         {
@@ -86,6 +89,7 @@ public partial class ScriptService : IScriptService
                 }
                 else if (index != tcc.Index)
                 {
+                    skippedByCycle = true;
                     _logger.LogInformation($"{project.Name}任务已经不在执行周期（当前值${index}!=配置值${tcc.Index}），将跳过此任务！");
                     return true;
                 }
@@ -158,7 +162,8 @@ public partial class ScriptService : IScriptService
         // 上下文存活时说明有任务在跑，保持原状；拿锁成功后 RunCurrentAsync 内部仍会 Set()。
         CancellationContext.Instance.Set();
 
-        var list = ReloadScriptProjects(projectList);
+        var requestedProjects = projectList.ToList();
+        var list = ReloadScriptProjects(requestedProjects);
         if (CoordinatedHoeingScope.Current is { } coordinatedHoeing)
         {
             var rootGroup = scope.Descriptor.Kind == JobKind.Group && ReferenceEquals(scope.Descriptor, job)
@@ -168,7 +173,7 @@ public partial class ScriptService : IScriptService
         }
         
         //恢复临时的跳过标志
-        foreach (var scriptGroupProject in projectList)
+        foreach (var scriptGroupProject in requestedProjects)
         {
             scriptGroupProject.SkipFlag = false;
         }
@@ -206,6 +211,9 @@ public partial class ScriptService : IScriptService
         
         bool fisrt = true;
         var executedProjects = 0;
+        var cycleSkippedProjects = 0;
+        // 重载过滤了未知类型时，不能用剩余项目的周期跳过解释整个请求。
+        var onlyCycleSkipped = list.Count == requestedProjects.Count;
         
         
         //非优先执行配置下，清空执行计数
@@ -218,6 +226,7 @@ public partial class ScriptService : IScriptService
         var runResult = await new TaskRunner()
             .RunThreadAsync(async () =>
             {
+                var failuresBefore = scope.FailureCount;
                 var stopwatch = new Stopwatch();
                 int projectIndex = -1;
                 for (int x = 0; x < list.Count; x++)
@@ -331,10 +340,28 @@ public partial class ScriptService : IScriptService
                             continue;
                         }
 
-                        if (ShouldSkipTask(exeProject))
+                        // 优先插入项目不经过 ReloadScriptProjects，也必须核对实际项目类型。
+                        var knownProjectType = exeProject.Type is "Javascript" or "KeyMouse" or "Pathing" or "Shell" or "SoloTask";
+                        var enabledProject = exeProject.Status == "Enabled";
+                        if (!knownProjectType || (enabledProject && exeProject.RunNum <= 0))
                         {
+                            onlyCycleSkipped = false;
+                        }
+
+                        if (ShouldSkipTask(exeProject, out var skippedByCycle))
+                        {
+                            if (enabledProject)
+                            {
+                                if (knownProjectType && exeProject.RunNum > 0 && skippedByCycle)
+                                    cycleSkippedProjects++;
+                                else
+                                    onlyCycleSkipped = false;
+                            }
                             continue;
                         }
+
+                        if (enabledProject)
+                            onlyCycleSkipped = false;
 
                         //月卡检测
                         await _blessingOfTheWelkinMoonTask.Start(CancellationContext.Instance.Cts.Token);
@@ -501,7 +528,17 @@ public partial class ScriptService : IScriptService
                     }
                 }
                 if (executedProjects == 0)
-                    throw new InvalidOperationException("no_work: 没有任何配置组项目实际完成");
+                {
+                    // 最后一次快速跳过后也可能收到停止；不能让 no_work 把停止改记成失败。
+                    scope.ThrowIfStopped();
+                    if (CancellationContext.Instance.IsCancellationRequested)
+                        throw new OperationCanceledException("配置组在零完成收尾前已取消");
+
+                    if (!onlyCycleSkipped || cycleSkippedProjects == 0 || scope.FailureCount > failuresBefore)
+                        throw new InvalidOperationException("no_work: 没有任何配置组项目实际完成");
+
+                    _logger.LogInformation("配置组 {Name} 的 {Cnt} 个项目全部按执行周期跳过，本组正常结束", groupName, cycleSkippedProjects);
+                }
             }, job: job);
         
 
