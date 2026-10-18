@@ -7,6 +7,8 @@ description: 为 BetterGI 茶包版开发、跨端排障和接力定位当前源
 
 先核实际仓库和项目 AGENTS，按[当前交付流程](../../../_workflow/usable-delivery-20261003/DELIVERY-FIRST-POLICY.md)选工作。用户当前目标和取舍优先；旧 Spec、报告、事故规程和未勾选清单只供相关事实检索，不启动其历史任务。
 
+开发写入前、分支或 HEAD 改变后及提交前，先按 [分支外取代码预检](E:/CodexData/home/skills/bgi-source-intake/SKILL.md) 检查必需输入与已验证源码基线；不自动合并用户选定的旧分支。规则/说明校对不因此构建产品。
+
 ## 历史资料查询门
 
 - 先确认当前工作根、HEAD 和工作区；当前源码仓库是唯一写入根。普通功能、UI、构建和测试任务跳过旧历史扫描。

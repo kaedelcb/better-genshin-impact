@@ -1,0 +1,36 @@
+<Project>
+  <!-- 源码中的 User 是随程序提供的默认文件；构建不能覆盖运行目录中的用户修改。 -->
+  <PropertyGroup>
+    <!-- 导入时固定默认文件所在的源码目录。 -->
+    <_MistletoeUserDefaultsSourceRoot>$(MSBuildThisFileDirectory)User\</_MistletoeUserDefaultsSourceRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="User\**\*" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
+  <Target Name="MistletoeSeedBuildUserDefaults" AfterTargets="Build">
+    <Error Condition="'$(TargetDir)' == ''" Text="TargetDir 为空，拒绝复制 User 默认文件。" />
+    <PropertyGroup>
+      <_MistletoeBuildUserRoot>$([MSBuild]::EnsureTrailingSlash('$(TargetDir)'))User\</_MistletoeBuildUserRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MistletoeBuildUserDefault Include="$(_MistletoeUserDefaultsSourceRoot)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="%(_MistletoeBuildUserDefault.Identity)"
+          DestinationFiles="$(_MistletoeBuildUserRoot)%(_MistletoeBuildUserDefault.RecursiveDir)%(_MistletoeBuildUserDefault.Filename)%(_MistletoeBuildUserDefault.Extension)"
+          Condition="'%(_MistletoeBuildUserDefault.Identity)' != '' And !Exists('$(_MistletoeBuildUserRoot)%(_MistletoeBuildUserDefault.RecursiveDir)%(_MistletoeBuildUserDefault.Filename)%(_MistletoeBuildUserDefault.Extension)')" />
+  </Target>
+
+  <Target Name="MistletoeSeedPublishUserDefaults" AfterTargets="Publish">
+    <Error Condition="'$(PublishDir)' == ''" Text="PublishDir 为空，拒绝复制 User 默认文件。" />
+    <PropertyGroup>
+      <_MistletoePublishUserRoot>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))User\</_MistletoePublishUserRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <_MistletoePublishUserDefault Include="$(_MistletoeUserDefaultsSourceRoot)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="%(_MistletoePublishUserDefault.Identity)"
+          DestinationFiles="$(_MistletoePublishUserRoot)%(_MistletoePublishUserDefault.RecursiveDir)%(_MistletoePublishUserDefault.Filename)%(_MistletoePublishUserDefault.Extension)"
+          Condition="'%(_MistletoePublishUserDefault.Identity)' != '' And !Exists('$(_MistletoePublishUserRoot)%(_MistletoePublishUserDefault.RecursiveDir)%(_MistletoePublishUserDefault.Filename)%(_MistletoePublishUserDefault.Extension)')" />
+  </Target>
+</Project>

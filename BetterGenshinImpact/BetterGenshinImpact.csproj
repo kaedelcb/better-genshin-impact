@@ -459,4 +459,7 @@
 	<ItemGroup>
 		<None Update="Assets\Model\Domain\test_petrified_trees.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
+
+	<!-- User 默认文件只补缺，不覆盖现有用户数据。 -->
+	<Import Project="UserDefaults.targets" />
 </Project>

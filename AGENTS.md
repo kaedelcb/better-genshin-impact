@@ -28,6 +28,7 @@
 
 ## 开工与技术边界
 
+- 取代码采用“源码及版本管理的默认资源默认包含、历史材料明确排除”；新增目录不能靠 git add --sparse 掩盖未检出。开发写入前、分支或 HEAD 改变后及提交前，按 [分支外预检入口](E:/CodexData/home/skills/bgi-source-intake/SKILL.md) 检查；纯问答不运行。现有用户文件与第三方输入不得覆盖。
 - 先核对当前分支、HEAD、相关工作区及在途写者；“我的版本”包括未提交成果，茶包主分支动态确认。“公版”默认核实 `origin-lcb/main`。
 - 项目开发、跨端排障和接力使用[项目开发技能](.agents/skills/bgi-project-development/SKILL.md)，按当前问题读取资料；不全量加载旧规格、历史审查或任务清单。
 - BGI、MultiplayerHoeingAssistant 和 BgiCoordinatorServer 是独立项目。战斗与传送存在双实现，修改前核实际路由、配置消费和单机/联机调用方。
