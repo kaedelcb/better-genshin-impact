@@ -1211,7 +1211,7 @@
         </Grid.RowDefinitions>
 
         <!-- ========== 顶栏：返回 + 标题 + 子页 Tab ========== -->
-        <Grid Grid.Row="0" Margin="0,0,0,4">
+        <Grid x:Name="MistletoeHeader" Grid.Row="0" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Content="←  返回" Style="{DynamicResource BtnGhost}" Padding="12,5"
                         Command="{Binding BackCommand}"/>
@@ -1219,19 +1219,19 @@
                            Foreground="{DynamicResource GoldText}" Margin="16,0,0,0" VerticalAlignment="Center"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Margin="0,0,12,0"
+                <StackPanel x:Name="RemoteCenterToolbar" Orientation="Horizontal" Margin="0,0,12,0" VerticalAlignment="Center"
                             Visibility="{Binding DataContext.IsObserverMode, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
-                    <ComboBox x:Name="RemoteCenterTargetChoice" Width="170" Margin="0,0,5,0"
+                    <ComboBox x:Name="RemoteCenterTargetChoice" Width="170" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
                               ItemsSource="{Binding DataContext.RemoteCenterTargets, RelativeSource={RelativeSource AncestorType=Window}}"
                               DisplayMemberPath="Label" Style="{StaticResource GoldComboBox}"
                               ItemContainerStyle="{StaticResource GoldComboItem}"
                               ToolTip="选择要操作的执行端实例" />
-                    <Button Content="扫描同机" Click="ScanLocalCenterClick" Margin="0,0,5,0"
+                    <Button Content="扫描同机" Click="ScanLocalCenterClick" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
                             Style="{DynamicResource BtnGhost}" Padding="8,3" />
-                    <Button Content="重新读取" Click="ReloadRemoteCenterClick" Margin="0,0,5,0"
+                    <Button Content="重新读取" Click="ReloadRemoteCenterClick" Height="24" VerticalAlignment="Center" Margin="0,0,5,0"
                             Style="{DynamicResource BtnGhost}" Padding="8,3"
                             Visibility="{Binding IsRemoteMode, Converter={StaticResource BoolToVis}}" />
-                    <Button x:Name="RemoteCenterSwitchButton" Content="连接执行端" Click="SwitchRemoteCenterClick"
+                    <Button x:Name="RemoteCenterSwitchButton" Content="连接执行端" Click="SwitchRemoteCenterClick" Height="24" VerticalAlignment="Center"
                             Style="{DynamicResource BtnGold}" Padding="9,3" />
                 </StackPanel>
                 <Button Content="启动中心" Command="{Binding SelectTabCommand}" CommandParameter="0">

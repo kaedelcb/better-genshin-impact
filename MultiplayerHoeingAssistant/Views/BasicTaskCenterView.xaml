@@ -124,10 +124,10 @@
                             <DockPanel LastChildFill="True">
                                 <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center" HorizontalAlignment="Right"
                                             MaxWidth="500" Margin="10,0,0,0">
-                                    <Button Content="暂停" Style="{DynamicResource BtnGhost}" ToolTip="当前节点结束后暂停计划"
+                                    <Button Content="暂停" Style="{DynamicResource BtnGhost}" Margin="0,0,8,0" ToolTip="当前节点结束后暂停计划"
                                             Command="{Binding DataContext.PauseRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}" Visibility="{Binding CanPause, Converter={StaticResource Visible}}" />
-                                    <Button Content="恢复" Style="{DynamicResource BtnGhost}"
+                                    <Button Content="恢复" Style="{DynamicResource BtnGhost}" Margin="0,0,8,0"
                                             Command="{Binding DataContext.ResumeRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                             CommandParameter="{Binding}" Visibility="{Binding CanResume, Converter={StaticResource Visible}}" />
                                     <Button Content="{Binding StopActionText}" Style="{DynamicResource BtnGhost}"
