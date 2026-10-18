@@ -1,0 +1,18 @@
+<Project>
+  <!-- 缺失的 ProjectReference 默认仅告警；完整助手必须包含登录入口。 -->
+  <Target Name="EnsureLoginStartupProject" BeforeTargets="PrepareForBuild;ResolveProjectReferences"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)StartupLauncher\MultiplayerHoeingAssistant.Startup.csproj')"
+           Text="助手登录启动器源码缺失，无法生成完整助手：$(MSBuildThisFileDirectory)StartupLauncher\MultiplayerHoeingAssistant.Startup.csproj" />
+  </Target>
+
+  <!-- SDK 完成正常复制后校验，禁止将缺少运行组件的助手继续部署到 Tools。 -->
+  <Target Name="VerifyLoginStartupOutput" AfterTargets="CopyFilesToOutputDirectory"
+          BeforeTargets="DeployAssistantToBgiTools" Condition="'$(DesignTimeBuild)' != 'true'">
+    <ItemGroup>
+      <_LoginStartupRuntimeFile Include="$(TargetDir)NexusBGI.Startup.exe;$(TargetDir)NexusBGI.Startup.dll;$(TargetDir)NexusBGI.Startup.deps.json;$(TargetDir)NexusBGI.Startup.runtimeconfig.json" />
+    </ItemGroup>
+    <Error Condition="!Exists('%(_LoginStartupRuntimeFile.Identity)')"
+           Text="助手构建缺少登录启动运行文件：%(_LoginStartupRuntimeFile.Identity)。已阻止复制不完整助手。" />
+  </Target>
+</Project>
