@@ -62,23 +62,39 @@ public partial class MainViewModel
         AddLog("[任务中心] 已自动关联同套 BetterGI，已有配置和资源将直接读取。");
     }
 
-    /// <summary>Epoch plus actual image path binds resources and execution to the configured installation.</summary>
+    /// <summary>同一进程纪元、Windows 会话及真实映像路径共同绑定执行目标。</summary>
     private BgiExternalClient? GetBoundTaskCenterClient()
+        => InspectTaskCenterClientBinding().Client;
+
+    /// <summary>读取失败和路径不符分别返回原因；重连期间的旧快照只作未就绪处理。</summary>
+    private (BgiExternalClient? Client, string? Failure) InspectTaskCenterClientBinding()
     {
         var client = _externalClient;
-        if (client is not { State: BgiExternalLinkState.Ready } || client.ServerEpoch is not { } epoch) return null;
+        if (client is not { State: BgiExternalLinkState.Ready }) return (null, null);
+        // SDK 重连会先清空纪元、随后撤销 Ready，短暂缺失时继续等待连接恢复。
+        if (client.ServerEpoch is not { } epoch) return (null, null);
+        var configuredPath = Config?.BgiPath;
+        BgiProcessBindingResult binding;
         try
         {
-            using var process = System.Diagnostics.Process.GetProcessById(epoch.ProcessId);
             using var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
-            if (process.StartTime.ToUniversalTime().Ticks != epoch.StartTicksUtc ||
-                process.SessionId != currentProcess.SessionId ||
-                !PathIdentity.TryCanonicalizeForComparison(process.MainModule?.FileName ?? "", out var actual) ||
-                !PathIdentity.TryCanonicalizeForComparison(Config?.BgiPath ?? "", out var configured) ||
-                !string.Equals(actual, configured, StringComparison.OrdinalIgnoreCase)) return null;
-            return client;
+            binding = BgiProcessBinding.Verify(epoch, configuredPath, currentProcess.SessionId);
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            return (null, $"无法读取 BGI 执行身份：{ex.Message}（未发送任务）");
+        }
+
+        // 路径查询可能与后台重连或配置切换并发，旧快照既不能放行，也不能误报路径不符。
+        if (!ReferenceEquals(client, _externalClient)
+            || client.State != BgiExternalLinkState.Ready
+            || client.ServerEpoch is not { } currentEpoch
+            || currentEpoch.ProcessId != epoch.ProcessId
+            || currentEpoch.StartTicksUtc != epoch.StartTicksUtc
+            || !string.Equals(configuredPath, Config?.BgiPath, StringComparison.Ordinal))
+            return (null, null);
+
+        return binding.Success ? (client, null) : (null, binding.Message);
     }
 
     /// <summary>准入只用当前同套 BGI 的 ext 快照；缺失、过期或纪元不符时保持事实未知。</summary>
@@ -323,12 +339,17 @@ public partial class MainViewModel
     /// </summary>
     private async Task<string?> EnsureTaskCenterExecutionReadyAsync(CancellationToken ct)
     {
-        if (GetBoundTaskCenterClient() != null)
+        ct.ThrowIfCancellationRequested();
+        var binding = InspectTaskCenterClientBinding();
+        if (binding.Client != null)
             return null;
 
         EnsureSamePackageBgiPath();
-        if (_externalClient?.State == BgiExternalLinkState.Ready && GetBoundTaskCenterClient() == null)
-            return $"当前连接的 BGI 不是这套程序（当前配置：{_config?.BgiPath ?? "未配置"}）。请点击任务中心的「配置 BGI」选择正在使用的 BetterGI.exe，或从同套目录启动；未发送任务";
+        binding = InspectTaskCenterClientBinding();
+        if (binding.Client != null)
+            return null;
+        if (binding.Failure != null)
+            return binding.Failure;
 
         // 统一预算从进入即计时（会诊二轮 重要4：排队等待计入同一 150s 预算，并发请求不累积超时）
         var deadline = DateTime.UtcNow.AddSeconds(150);
@@ -339,8 +360,11 @@ public partial class MainViewModel
             return "等待执行环境确保排队超时（前序请求的就绪等待未在预算内完成；未发送任何任务）";
         try
         {
-            if (GetBoundTaskCenterClient() != null)
+            binding = InspectTaskCenterClientBinding();
+            if (binding.Client != null)
                 return null;
+            if (binding.Failure != null)
+                return binding.Failure;
             if (_config?.ObserverMode == true)
                 return "观察者模式不提供本地执行通道（BGI 未连接，未启动；未发送任何任务）";
 
@@ -369,11 +393,14 @@ public partial class MainViewModel
                     probeState = null; // 单轮探测失败不终止等待（BGI 冷启动中管道未就绪是常态），下一轮再试；取消不吞
                 }
 
-                if (GetBoundTaskCenterClient() != null)
+                binding = InspectTaskCenterClientBinding();
+                if (binding.Client != null)
                 {
                     AddLog("[任务中心] BGI 外部接口通道已就绪，继续执行");
                     return null;
                 }
+                if (binding.Failure != null)
+                    return binding.Failure;
                 if (probeState == BgiExternalLinkState.Legacy)
                     return "对端 BGI 版本过旧（不支持 ext 外部接口），请升级 BGI 后重试（未发送任何任务）";
 
