@@ -816,9 +816,18 @@ public partial class MainViewModel
             throw new InvalidOperationException("服务端缺少本端独立收尾或普通任务失败隔离能力，未中断当前任务");
         var names = batch.Bindings.Select(i => i.Name).ToArray();
         var types = batch.Bindings.Select(i => i.Type).ToArray();
-        var local = OnlineHoeingBindingValidator.Validate(_config?.OnlineHoeingGroupNames, _config?.OnlineHoeingGroupTypes);
-        if (!local.IsValid || !local.Names.SequenceEqual(names) || !local.Types.SequenceEqual(types))
-            throw new InvalidOperationException("绑定已改变或不合法，请重新开始以使用最新绑定");
+        if (batch.Start?.QuickCommandKey is { Length: > 0 } quickKey)
+        {
+            var local = ParseQuickCommandBinding(_config?.QuickCommands?.GetValueOrDefault(quickKey));
+            if (local == null || batch.Bindings.Count != 1 || batch.Bindings[0] != local)
+                throw new InvalidOperationException("快捷指令绑定已改变或不合法，请重新开始以使用最新绑定");
+        }
+        else
+        {
+            var local = OnlineHoeingBindingValidator.Validate(_config?.OnlineHoeingGroupNames, _config?.OnlineHoeingGroupTypes);
+            if (!local.IsValid || !local.Names.SequenceEqual(names) || !local.Types.SequenceEqual(types))
+                throw new InvalidOperationException("绑定已改变或不合法，请重新开始以使用最新绑定");
+        }
         var ready = await EnsureTaskCenterExecutionReadyAsync(ct);
         if (ready != null) throw new InvalidOperationException(ready);
         ct.ThrowIfCancellationRequested();

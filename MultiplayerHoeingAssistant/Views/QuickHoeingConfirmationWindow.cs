@@ -47,22 +47,9 @@ public sealed class QuickHoeingConfirmationWindow : Window
         Grid.SetRow(scroll, 1);
         grid.Children.Add(scroll);
 
-        var options = new StackPanel();
-        CompletionOption = new CheckBox
-        {
-            Content = "执行各成员在“绑定”中设置的锄地后动作",
-            IsChecked = false,
-            IsEnabled = supportsCompletionChoice && members.All(m => m.CompletionAction?.IsValid() == true),
-            Foreground = Brush(0xF4, 0xF2, 0xFA), FontSize = 13, Margin = new Thickness(0, 8, 0, 6)
-        };
-        options.Children.Add(CompletionOption);
-        var explanation = Text("不勾选：本次锄完停止。", 12, Brush(0xB8, 0xB1, 0xD4));
-        CompletionOption.Checked += (_, _) => explanation.Text = "全队正常完成后执行各成员已有动作；失败或手动停止不触发。";
-        CompletionOption.Unchecked += (_, _) => explanation.Text = "不勾选：本次锄完停止。";
-        options.Children.Add(explanation);
-        if (!CompletionOption.IsEnabled)
-            options.Children.Add(Text(supportsCompletionChoice ? "有成员的动作尚未上报或配置不完整，请检查该成员的“绑定”。"
-                : "服务端尚不支持此选项；不勾选仍可按原方式开始。", 11, Brush(0xD9, 0xA8, 0x4E)));
+        var options = new CompletionActionChoicePanel(supportsCompletionChoice,
+            members.Select(m => m.CompletionAction).ToArray());
+        CompletionOption = options.CompletionOption;
         Grid.SetRow(options, 2);
         grid.Children.Add(options);
 

@@ -14,6 +14,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public string Protocol { get; init; } = "hoeing.start.v2";
     public string Source { get; init; } = "online";
     public string RequestId { get; init; } = "";
+    public string QuickCommandKey { get; init; } = "";
     public IReadOnlyList<string> ParticipantUids { get; init; } = [];
     public IReadOnlyDictionary<string, int> IntentGenerations { get; init; } = new Dictionary<string, int>();
     public IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>> Bindings { get; init; }
@@ -62,6 +63,7 @@ public sealed class CoordinatedBatchState
     public int Generation { get; }
     public string Source { get; }
     public string RequestId { get; }
+    public string QuickCommandKey { get; }
     public bool UseCompletionActions { get; }
     public int Index { get; private set; }
     public int Attempt { get; private set; }
@@ -77,11 +79,12 @@ public sealed class CoordinatedBatchState
         IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>>? bindings = null,
         IReadOnlyDictionary<string, int>? intentGenerations = null,
         IReadOnlyDictionary<string, string>? executorInstances = null,
-        bool useCompletionActions = false)
+        bool useCompletionActions = false, string quickCommandKey = "")
     {
         Generation = generation;
         Source = source;
         RequestId = requestId;
+        QuickCommandKey = quickCommandKey;
         UseCompletionActions = useCompletionActions;
         _created = _phaseStarted = now;
         _members = uids.Distinct(StringComparer.Ordinal).ToDictionary(u => u, _ => new Member(now), StringComparer.Ordinal);
@@ -94,7 +97,15 @@ public sealed class CoordinatedBatchState
             ?? new Dictionary<string, int>();
         _executorInstances = executorInstances?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             ?? new Dictionary<string, string>();
-        if (_bindings.Count > 0)
+        if (QuickCommandKey.Length > 0)
+        {
+            if (_bindings.Count != _members.Count || _members.Keys.Any(uid =>
+                    !_bindings.TryGetValue(uid, out var items) || items.Count != 1
+                    || items[0].Type is not ("group" or "onedragon") || string.IsNullOrWhiteSpace(items[0].Name)))
+                throw new ArgumentException("Invalid quick command bindings");
+            _count = 1;
+        }
+        else if (_bindings.Count > 0)
         {
             _layout = string.Join(",", _bindings[_members.Keys.First()].Select(i => i.Type));
             _count = _bindings[_members.Keys.First()].Count;
@@ -108,6 +119,7 @@ public sealed class CoordinatedBatchState
     {
         Source = Source,
         RequestId = RequestId,
+        QuickCommandKey = QuickCommandKey,
         ParticipantUids = ParticipantUids,
         IntentGenerations = _intentGenerations,
         Bindings = _bindings,
@@ -169,15 +181,20 @@ public sealed class CoordinatedBatchState
         if (stage == "cleaned") throw new InvalidOperationException("batch_cleanup_before_terminal");
         if (layout.Length is < 1 or > 1024 || layout.Split(',').Any(x => x is not ("group" or "onedragon")))
             throw new InvalidOperationException("batch_layout");
-        if (_layout != null && _layout != layout)
+        var expectedLayout = QuickCommandKey.Length > 0
+            ? string.Join(",", _bindings[uid].Select(i => i.Type)) : _layout;
+        if (expectedLayout != null && expectedLayout != layout)
         {
             member.Token = token;
             member.Stage = "registered";
             Abort("batch_layout_mismatch:" + uid);
             return Snapshot();
         }
-        _layout ??= layout;
-        _count = layout.Split(',').Length;
+        if (QuickCommandKey.Length == 0)
+        {
+            _layout ??= layout;
+            _count = layout.Split(',').Length;
+        }
         if (member.Token.Length == 0)
         {
             if (stage != "registered") throw new InvalidOperationException("batch_registration_required");

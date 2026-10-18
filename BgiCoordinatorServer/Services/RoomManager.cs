@@ -1261,6 +1261,7 @@ public class RoomManager
                 OnlineEventConsumed = p.OnlineEventConsumed, OnlineEventGeneration = p.OnlineEventGeneration,
                 OnlineHoeingGroupNames = p.OnlineHoeingGroupNames?.ToList() ?? [],
                 OnlineHoeingGroupTypes = p.OnlineHoeingGroupTypes?.ToList() ?? [],
+                QuickCommands = p.QuickCommands?.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal) ?? new(),
                 HoeingCompletionAction = p.HoeingCompletionAction,
             }).ToList();
     }

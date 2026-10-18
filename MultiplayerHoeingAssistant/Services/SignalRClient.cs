@@ -107,6 +107,7 @@ public class SignalRClient : IAsyncDisposable
     public bool SupportsCoordinatedStart => _gateway?.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal) == true;
     public bool SupportsLocalTaskFailure => _gateway?.ServerCapabilities.Contains(GatewayProtocol.LocalTaskFailureCapability, StringComparer.Ordinal) == true;
     public bool SupportsLocalFinish => _gateway?.ServerCapabilities.Contains(GatewayProtocol.LocalFinishCapability, StringComparer.Ordinal) == true;
+    public bool SupportsQuickCommandCompletion => _gateway?.ServerCapabilities.Contains(GatewayProtocol.QuickCommandCompletionCapability, StringComparer.Ordinal) == true;
     public bool SupportsCompletionChoice => _gateway?.ServerCapabilities.Contains(GatewayProtocol.CompletionChoiceCapability, StringComparer.Ordinal) == true;
 
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
@@ -531,13 +532,15 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task<CoordinatedBatchSnapshot> BeginCoordinatedBatchAsync(string requestId,
         IReadOnlyList<string> targetUids, DateTimeOffset expiresAtUtc, CancellationToken ct = default,
-        bool useCompletionActions = false)
+        bool useCompletionActions = false, string quickCommandKey = "")
     {
         if (!SupportsCoordinatedStart) throw new InvalidOperationException("服务端不支持统一开锄，请更新配套服务端（未启动任务）");
         if (useCompletionActions && !SupportsCompletionChoice)
             throw new Gateway.GatewayErrorException("hoeing_completion_choice_capability_required", "服务端尚不支持一键锄地后动作选项，未发送任务");
+        if (quickCommandKey.Length > 0 && !SupportsQuickCommandCompletion)
+            throw new Gateway.GatewayErrorException("hoeing_quick_command_completion_capability_required", "服务端尚不支持快捷指令锄地后动作选项，未发送任务");
         var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchBegin,
-            new { requestId, targetUids, expiresAtUtc, useCompletionActions }, ct: ct);
+            new { requestId, targetUids, expiresAtUtc, useCompletionActions, quickCommandKey }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchSnapshot>()
             ?? throw new InvalidOperationException("服务端未返回联机批次身份");
     }

@@ -58,11 +58,13 @@ public sealed class UnifiedHoeingNativeEntryTests
         Directory.CreateDirectory(AssistantDataDirectory.Root);
         const string uid = "100000001";
         const string groupName = "隔离开锄入口";
+        const string quickGroupName = "快捷指令专用配置组";
+        const string quickKey = "一键传奇";
         var previousIpc = IpcClient.PipeNameOverrideForTest;
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
         await using var server = await IsolatedCoordinator.StartAsync();
         await using var pipe = new BgiInstancePipeDouble();
-        var script = new OwnedBatchPeer(groupName);
+        var script = new OwnedBatchPeer(groupName, quickGroupName);
         pipe.BodyForTest = script.Reply;
         pipe.Start();
         IpcClient.PipeNameOverrideForTest = pipe.PipeName;
@@ -81,6 +83,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                 TeamUids = [uid], ControlRoomPassword = "isolated-entry-only",
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
                 OnlineHoeingGroupNames = [groupName], OnlineHoeingGroupTypes = ["group"],
+                QuickCommands = new() { [quickKey] = "GROUP:" + quickGroupName },
                 ExpectedHoeingPlayers = 1, DisclaimerAccepted = true,
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external,
@@ -99,7 +102,8 @@ public sealed class UnifiedHoeingNativeEntryTests
             await client.ReportControlStatusAsync(new ControlStatus
             {
                 PlayerUid = uid, PlayerName = config.PlayerName, BgiStatus = "running",
-                ConfigGroups = [groupName], OnlineHoeingGroupNames = [groupName],
+                ConfigGroups = [groupName, quickGroupName], OnlineHoeingGroupNames = [groupName],
+                QuickCommands = new() { [quickKey] = "GROUP:" + quickGroupName },
                 OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 1,
                 HoeingCompletionAction = new("resume", "group", "", 0),
             });
@@ -141,13 +145,21 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.Null(executor.TakeoverTicketSnapshot);
             Assert.Null(external.TakeoverTicket);
 
-            var second = await BeginAsync(client, uid, useActions: true);
+            var self = vm.Members.Single(m => m.PlayerUid == uid);
+            self.IsSelected = true;
+            Assert.True(client.SupportsQuickCommandCompletion);
+            await vm.ExecuteBoundQuickCommandAsync(quickKey, [self], useCompletionActions: true);
+            var second = (await client.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal(quickKey, second.QuickCommandKey);
+            Assert.Equal(quickGroupName, Assert.Single(second.Bindings[uid]).Name);
             Assert.True(second.UseCompletionActions);
             Assert.NotEqual(first.BatchId, second.BatchId);
             await WaitAsync(() => script.StartCount == 2 && Active(vm)?.BatchId == second.BatchId,
                 () => Diagnostics(vm, pipe, server));
             var secondActive = Active(vm)!;
             Assert.Equal(TaskConflictPolicy.Resume, secondActive.Policy!.Policy);
+            var quickStart = pipe.Received.Where(r => r.Operation == "ext.task.start").Last().Data!.Value;
+            Assert.Equal(quickGroupName, quickStart.GetProperty("groupName").GetString());
             Assert.Equal("resume", vm.Members.Single(m => m.PlayerUid == uid).HoeingCompletionAction!.Policy);
             var stopsBeforeDelayedOldMessage = script.CancelCount;
             await StopAsync(client, uid, first.BatchId);
@@ -289,7 +301,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         + string.Join(",", pipe.Received.Select(r => r.Operation)) + "\nserver=" + server.Output;
 
     /// <summary>真实帧传输的保守协议替身：作业一直 running，只有自己的 ownedOnly cancel 才进入终态。</summary>
-    private sealed class OwnedBatchPeer(string groupName)
+    private sealed class OwnedBatchPeer(string groupName, string quickGroupName)
     {
         private sealed record Job(string Id, string Key, string Name, string BatchId)
         {
@@ -365,7 +377,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                             queueDepth = 0, currentTaskHandle = active?.Id,
                         });
                     case "ext.config.list":
-                        return (true, null, null, new { configGroups = new[] { groupName }, oneClickConfigs = Array.Empty<string>() });
+                        return (true, null, null, new { configGroups = new[] { groupName, quickGroupName }, oneClickConfigs = Array.Empty<string>() });
                     case "ext.config.describe":
                         return (true, null, null, new { bgiEpoch = Epoch, configRevision = "native-entry-r1",
                             tasks = new[] { new { name = "隔离首线边界协议任务", enabled = true } } });

@@ -6804,11 +6804,34 @@ public partial class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        var dialog = new Window
+        var dialog = CreateQuickCommandBindingWindow(key, onlineMembers);
+        dialog.Owner = Application.Current.MainWindow;
+        if (dialog.ShowDialog() != true) return;
+        await ExecuteBoundQuickCommandAsync(key, onlineMembers, dialog.UseCompletionActions);
+    }
+
+    private CoordinatedCompletionAction? MemberCompletionAction(MemberViewModel member)
+        => member.PlayerUid == _config?.PlayerUid && IsExecutorMode
+            ? CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()) : member.HoeingCompletionAction;
+
+    private string QuickCommandBinding(string key, MemberViewModel member)
+        => member.PlayerUid == _config?.PlayerUid && IsExecutorMode
+            ? _config?.QuickCommands?.GetValueOrDefault(key) ?? ""
+            : member.QuickCommands?.GetValueOrDefault(key) ?? "";
+
+    internal QuickCommandBindingWindow CreateQuickCommandBindingWindow(string key, IReadOnlyList<MemberViewModel> onlineMembers)
+    {
+        CoordinatedCompletionAction?[] Actions() => onlineMembers
+            .Where(m => m.IsSelected && m.Online && ParseQuickCommandBinding(QuickCommandBinding(key, m)) != null)
+            .Select(MemberCompletionAction).ToArray();
+        var completionChoice = new CompletionActionChoicePanel(
+            _signalRClient?.SupportsQuickCommandCompletion == true && _signalRClient.SupportsCompletionChoice, Actions());
+        var dialog = new QuickCommandBindingWindow(completionChoice)
         {
             Title = $"为成员配置「{key}」",
             Width = 800,
-            Height = 420,
+            Height = 510,
+            MaxHeight = Math.Max(350, SystemParameters.WorkArea.Height - 48),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -6829,7 +6852,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         var panel = new Grid { Margin = new Thickness(16) };
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: 标题
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: 成员列
-        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: 按钮
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 2: 完成动作
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 3: 按钮
 
         // 标题
         panel.Children.Add(new TextBlock
@@ -6910,16 +6934,27 @@ public partial class MainViewModel : INotifyPropertyChanged
                 bindingLabels[capturedMember.PlayerUid].Foreground = new System.Windows.Media.SolidColorBrush(string.IsNullOrEmpty(newBinding)
                     ? System.Windows.Media.Color.FromRgb(0xD9, 0xA8, 0x4E)
                     : System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0));
+                completionChoice.UpdateAvailability(_signalRClient?.SupportsQuickCommandCompletion == true
+                    && _signalRClient.SupportsCompletionChoice, Actions());
             };
             colPanel.Children.Add(selectBtn);
+            colPanel.Children.Add(new TextBlock
+            {
+                Text = "锄地后动作：" + (MemberCompletionAction(member)?.Description ?? "尚未上报（需更新该成员助手）"),
+                FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D))
+            });
 
             Grid.SetColumn(colPanel, i);
             memberGrid.Children.Add(colPanel);
         }
 
+        Grid.SetRow(completionChoice, 2);
+        panel.Children.Add(completionChoice);
+
         // 按钮
         var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        Grid.SetRow(btnRow, 2);
+        Grid.SetRow(btnRow, 3);
         var cancelBtn = new Button
         {
             Content = "取消", Width = 90, Margin = new Thickness(0, 0, 8, 0),
@@ -6951,59 +6986,99 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         dialog.Content = panel;
 
-        bool executed = false;
-        executeBtn.Click += async (_, _) =>
+        dialog.ConfirmButton = executeBtn;
+        executeBtn.Click += (_, _) => dialog.DialogResult = true;
+        cancelBtn.Click += (_, _) => dialog.DialogResult = false;
+        return dialog;
+    }
+
+    internal static CoordinatedHoeingBinding? ParseQuickCommandBinding(string? value)
+    {
+        var type = value?.StartsWith("ONEDRAGON:", StringComparison.Ordinal) == true ? "onedragon"
+            : value?.StartsWith("GROUP:", StringComparison.Ordinal) == true ? "group" : null;
+        if (type == null) return null;
+        var name = value![(type == "onedragon" ? "ONEDRAGON:".Length : "GROUP:".Length)..];
+        return string.IsNullOrWhiteSpace(name) ? null : new(name, type);
+    }
+
+    internal async Task ExecuteBoundQuickCommandAsync(string key, IReadOnlyList<MemberViewModel> onlineMembers,
+        bool useCompletionActions)
+    {
+        if (useCompletionActions)
         {
-            executed = true;
-            dialog.Close();
-            var targets = GetSelectedTargets();
-            if (targets.Count == 0)
+            var selected = onlineMembers.Where(m => m.IsSelected && m.Online
+                && ParseQuickCommandBinding(QuickCommandBinding(key, m)) != null).ToArray();
+            if (selected.Length == 0) { AddLog("没有在线、被选中且已绑定任务的成员可下发"); return; }
+            if (_signalRClient?.SupportsQuickCommandCompletion != true || !_signalRClient.SupportsCompletionChoice
+                || selected.Any(m => MemberCompletionAction(m)?.IsValid() != true))
             {
-                MessageBox.Show("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
+                AddLog($"{key}未发送：服务端或成员尚不支持完成动作，或成员动作配置不完整");
                 return;
             }
-            foreach (var member in onlineMembers.Where(m => m.IsSelected && m.Online))
+            var requestId = "quick_" + Guid.NewGuid().ToString("N");
+            try
             {
-                // 自己优先从持久化配置读（_config 不会因服务端广播覆盖而丢失），别人从 MemberViewModel 读
-                var isSelf = member.PlayerUid == _config?.PlayerUid;
-                var binding = isSelf
-                    ? (_config?.QuickCommands?.GetValueOrDefault(key) ?? "")
-                    : (member.QuickCommands?.GetValueOrDefault(key) ?? "");
-                if (string.IsNullOrEmpty(binding)) continue;
-                var isOneClick = binding.StartsWith("ONEDRAGON:");
-                var value = isOneClick ? binding["ONEDRAGON:".Length..] : binding["GROUP:".Length..];
-                if (member.PlayerUid == _config?.PlayerUid)
+                var batch = await _signalRClient.BeginCoordinatedBatchAsync(requestId,
+                    selected.Select(m => m.PlayerUid).ToArray(), DateTimeOffset.UtcNow.AddMinutes(2),
+                    useCompletionActions: true, quickCommandKey: key);
+                AddLog($"{key}已受理，批次 {batch.BatchId}，完成后使用各成员绑定动作");
+            }
+            catch (Services.Gateway.GatewayErrorException ex) { AddLog($"{key}未受理：{ex.Message}"); }
+            catch (Exception ex)
+            {
+                try
                 {
-                    if (_commandExecutor != null)
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var state = await _signalRClient.GetCurrentCoordinatedBatchAsync(timeout.Token);
+                    AddLog(state?.RequestId == requestId
+                        ? $"{key}已受理，批次 {state.BatchId}，当前阶段 {state.Phase}"
+                        : $"{key}受理结果未确认，未自动重发：{ex.Message}");
+                }
+                catch { AddLog($"{key}受理结果未确认，未自动重发：{ex.Message}"); }
+            }
+            return;
+        }
+        var targets = GetSelectedTargets();
+        if (targets.Count == 0)
+        {
+            MessageBox.Show("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
+            return;
+        }
+        foreach (var member in onlineMembers.Where(m => m.IsSelected && m.Online))
+        {
+            // 自己优先从持久化配置读（_config 不会因服务端广播覆盖而丢失），别人从 MemberViewModel 读
+            var binding = ParseQuickCommandBinding(QuickCommandBinding(key, member));
+            if (binding == null) continue;
+            var isOneClick = binding.Type == "onedragon";
+            var value = binding.Name;
+            if (member.PlayerUid == _config?.PlayerUid)
+            {
+                if (_commandExecutor != null)
+                {
+                    var localCmd = new RemoteCommand
                     {
-                        var localCmd = new RemoteCommand
+                        Cmd = isOneClick ? "start_oneclick" : "start_group",
+                        Params = new Dictionary<string, object>
                         {
-                            Cmd = isOneClick ? "start_oneclick" : "start_group",
-                            Params = new Dictionary<string, object>
-                            {
-                                [isOneClick ? "configName" : "groupName"] = value,
-                                ["startFromIndex"] = 0
-                            }
-                        };
-                        await _commandExecutor.ExecuteAsync(localCmd);
-                    }
-                    else
-                    {
-                        // 遥控器模式：无本地 BGI，发给同 UID 的执行端
-                        await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
-                    }
+                            [isOneClick ? "configName" : "groupName"] = value,
+                            ["startFromIndex"] = 0
+                        }
+                    };
+                    await _commandExecutor.ExecuteAsync(localCmd);
                 }
                 else
                 {
+                    // 遥控器模式：无本地 BGI，发给同 UID 的执行端
                     await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
                 }
             }
-        };
-        cancelBtn.Click += (_, _) => dialog.Close();
+            else
+            {
+                await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
+            }
+        }
 
-        dialog.ShowDialog();
-        if (!executed) return;
-        AddLog($"分成员绑定执行完成");
+        AddLog("分成员绑定指令已下发");
     }
 
     /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙。</summary>

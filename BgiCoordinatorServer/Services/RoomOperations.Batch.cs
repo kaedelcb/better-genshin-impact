@@ -26,14 +26,19 @@ public sealed partial class RoomOperations
 
     public async Task<CoordinatedBatchSnapshot> BeginManualCoordinatedBatchAsync(GatewayHandlerContext ctx,
         string requestId, IReadOnlyList<string> targetUids, DateTimeOffset? expiresAtUtc,
-        bool useCompletionActions = false)
+        bool useCompletionActions = false, string quickCommandKey = "")
     {
+        if (quickCommandKey is not ("" or "一键传奇" or "一键次数盾" or "一键精英" or "一键小怪" or "一键自定义"))
+            throw new InvalidOperationException("batch_quick_command_key");
         var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
             ?? throw new InvalidOperationException("batch_control_room_required");
         if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
             throw new InvalidOperationException("hoeing_start_capability_required");
         if (useCompletionActions && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.CompletionChoiceCapability) != true)
             throw new InvalidOperationException("hoeing_completion_choice_capability_required");
+        if (quickCommandKey.Length > 0
+            && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.QuickCommandCompletionCapability) != true)
+            throw new InvalidOperationException("hoeing_quick_command_completion_capability_required");
         var senderUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
             ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
             ?? throw new InvalidOperationException("batch_identity_required");
@@ -42,7 +47,7 @@ public sealed partial class RoomOperations
         lock (_batchGate)
         {
             batch = BeginCoordinatedBatch(group, "manual", senderUid + ":" + requestId,
-                requestId, targetUids, null, expiresAtUtc, out created, useCompletionActions);
+                requestId, targetUids, null, expiresAtUtc, out created, useCompletionActions, quickCommandKey);
             if (created) _roomManager.DisarmOnlineEvents(group, batch.ParticipantUids);
         }
         if (created) await PublishBatchStartAsync(group, batch);
@@ -52,7 +57,7 @@ public sealed partial class RoomOperations
     // 只负责受理。拒绝新请求不得修改旧批次，包括尚未完成清理的终态批次。
     private CoordinatedBatchState BeginCoordinatedBatch(string group, string source, string requestKey,
         string requestId, IReadOnlyList<string> uids, IReadOnlyDictionary<string, int>? intentGenerations,
-        DateTimeOffset? expiresAtUtc, out bool created, bool useCompletionActions = false)
+        DateTimeOffset? expiresAtUtc, out bool created, bool useCompletionActions = false, string quickCommandKey = "")
     {
         created = false;
         if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
@@ -66,7 +71,7 @@ public sealed partial class RoomOperations
             if (!repeated.ParticipantUids.Order(StringComparer.Ordinal).SequenceEqual(uids.Order(StringComparer.Ordinal)))
                 throw new InvalidOperationException("batch_request_identity_mismatch");
             var prior = repeated.Snapshot();
-            if (prior.UseCompletionActions != useCompletionActions)
+            if (prior.UseCompletionActions != useCompletionActions || prior.QuickCommandKey != quickCommandKey)
                 throw new InvalidOperationException("batch_request_identity_mismatch");
             return repeated;
         }
@@ -92,7 +97,12 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("hoeing_local_finish_capability_required:" + uid);
             if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.LocalTaskFailureCapability) != true)
                 throw new InvalidOperationException("hoeing_local_task_failure_capability_required:" + uid);
-            if (player.OnlineHoeingGroupNames.Count == 0)
+            if (quickCommandKey.Length > 0)
+            {
+                if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.QuickCommandCompletionCapability) != true)
+                    throw new InvalidOperationException("hoeing_quick_command_completion_capability_required:" + uid);
+            }
+            else if (player.OnlineHoeingGroupNames.Count == 0)
                 throw new InvalidOperationException("batch_binding_missing:" + uid);
             if (useCompletionActions)
             {
@@ -101,21 +111,44 @@ public sealed partial class RoomOperations
             }
             selected.Add(player);
         }
-        var bindingIssue = RoomManager.ValidateCoordinatedBindingLayout(selected);
-        if (bindingIssue is not null) throw new InvalidOperationException(bindingIssue);
-        var bindings = selected.ToDictionary(p => p.PlayerUid,
-            p => (IReadOnlyList<CoordinatedBatchBinding>)p.OnlineHoeingGroupNames.Select((name, i) =>
-                new CoordinatedBatchBinding(name, p.OnlineHoeingGroupTypes.Count == 0 ? "group" : p.OnlineHoeingGroupTypes[i])).ToArray(),
-            StringComparer.Ordinal);
+        Dictionary<string, IReadOnlyList<CoordinatedBatchBinding>> bindings;
+        if (quickCommandKey.Length > 0)
+        {
+            // 快捷指令允许每人各自绑定配置组或一条龙；只冻结这次所选指令，不回落到联机锄地绑定。
+            bindings = selected.ToDictionary(p => p.PlayerUid,
+                p => (IReadOnlyList<CoordinatedBatchBinding>)[ParseQuickCommandBinding(p, quickCommandKey)],
+                StringComparer.Ordinal);
+        }
+        else
+        {
+            var bindingIssue = RoomManager.ValidateCoordinatedBindingLayout(selected);
+            if (bindingIssue is not null) throw new InvalidOperationException(bindingIssue);
+            bindings = selected.ToDictionary(p => p.PlayerUid,
+                p => (IReadOnlyList<CoordinatedBatchBinding>)p.OnlineHoeingGroupNames.Select((name, i) =>
+                    new CoordinatedBatchBinding(name, p.OnlineHoeingGroupTypes.Count == 0 ? "group" : p.OnlineHoeingGroupTypes[i])).ToArray(),
+                StringComparer.Ordinal);
+        }
         var instances = selected.ToDictionary(p => p.PlayerUid, p => p.ClientInstanceId, StringComparer.Ordinal);
         var generation = Interlocked.Increment(ref _nextBatchGeneration);
         if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");
         var batch = new CoordinatedBatchState(generation, uids, DateTime.UtcNow, source, requestId,
-            bindings, intentGenerations, instances, useCompletionActions);
+            bindings, intentGenerations, instances, useCompletionActions, quickCommandKey);
         _controlBatches[group] = batch;
         _batchRequests[key] = batch;
         created = true;
         return batch;
+    }
+
+    private static CoordinatedBatchBinding ParseQuickCommandBinding(Models.ControlRoomPlayer player, string key)
+    {
+        var value = player.QuickCommands.GetValueOrDefault(key) ?? "";
+        var type = value.StartsWith("GROUP:", StringComparison.Ordinal) ? "group"
+            : value.StartsWith("ONEDRAGON:", StringComparison.Ordinal) ? "onedragon" : "";
+        var name = type == "group" ? value["GROUP:".Length..]
+            : type == "onedragon" ? value["ONEDRAGON:".Length..] : "";
+        if (type.Length == 0 || string.IsNullOrWhiteSpace(name) || name != name.Trim() || name.Length > 1024)
+            throw new InvalidOperationException("batch_quick_binding_invalid:" + player.PlayerUid);
+        return new CoordinatedBatchBinding(name, type);
     }
 
     private async Task PublishBatchStartAsync(string group, CoordinatedBatchState state)

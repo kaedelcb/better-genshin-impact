@@ -7,6 +7,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public string Protocol { get; init; } = "";
     public string Source { get; init; } = "";
     public string RequestId { get; init; } = "";
+    public string QuickCommandKey { get; init; } = "";
     public IReadOnlyList<string> ParticipantUids { get; init; } = [];
     public IReadOnlyDictionary<string, int> IntentGenerations { get; init; } = new Dictionary<string, int>();
     public IReadOnlyDictionary<string, IReadOnlyList<CoordinatedHoeingBinding>> Bindings { get; init; }
