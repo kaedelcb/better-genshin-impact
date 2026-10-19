@@ -4,7 +4,10 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using BgiCoordinatorServer.Services;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -116,6 +119,7 @@ public sealed partial class RemoteLogRoomTests
             Invoke(download);
             await self.HeldTransferStarted.Task.WaitAsync(TimeSpan.FromSeconds(8));
             await Until(() => browser.IsRoomLogDownloadRunning && cancel.IsEnabled);
+            VerifyBulkRunningAppearance(popup, root);
             Invoke(cancel);
             await Until(() => !browser.IsRoomLogDownloadRunning && browser.LastRoomLogDownloadResult != null
                 && !ReferenceEquals(priorResult, browser.LastRoomLogDownloadResult));
@@ -161,6 +165,69 @@ public sealed partial class RemoteLogRoomTests
             popup?.Close();
             window.Hide();
             window.Dodoco.Dispose();
+        }
+    }
+
+    private static void VerifyBulkRunningAppearance(RemoteMemberLogsWindow popup, string root)
+    {
+        popup.UpdateLayout();
+        Snapshot(popup, Path.Combine(root, "room-today-logs-running.png"));
+        var list = (ListBox)popup.FindName("RemoteFilesList");
+        Assert.True(list.IsEnabled);
+        Assert.False(Find<Button>(popup, button => button.Content as string == "获取列表")!.IsEnabled);
+        Assert.False(Find<Button>(popup, button => button.Content as string == "下载")!.IsEnabled);
+        Rect Bounds(FrameworkElement element) => element.TransformToAncestor(popup)
+            .TransformBounds(new Rect(element.RenderSize));
+        Assert.InRange(Bounds(list).Top, 0, 150);
+        Assert.True(list.ActualHeight > 0);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(popup.ActualWidth),
+            (int)Math.Ceiling(popup.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(popup);
+        var center = list.TranslatePoint(new Point(list.ActualWidth / 2, list.ActualHeight / 2), popup);
+        var pixel = new byte[4];
+        bitmap.CopyPixels(new Int32Rect((int)center.X, (int)center.Y, 1, 1), pixel, 4, 0);
+        Assert.True(pixel[3] > 0 && pixel[0] < 128 && pixel[1] < 128 && pixel[2] < 128,
+            $"下载中列表中心必须保持深色，实际 BGRA={string.Join(",", pixel)}。");
+
+        var originalWidth = popup.Width;
+        try
+        {
+            popup.Width = popup.MinWidth;
+            popup.UpdateLayout();
+            Assert.True(list.ActualHeight > 0);
+            Assert.True(((FrameworkElement)popup.FindName("RoomLogActionsRow")).ActualHeight > 0);
+            Assert.True(((FrameworkElement)popup.FindName("SingleLogFiltersRow")).ActualHeight > 0);
+            IEnumerable<Button> Buttons(DependencyObject parent)
+            {
+                if (parent is Button button) yield return button;
+                for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+                    foreach (var child in Buttons(VisualTreeHelper.GetChild(parent, i))) yield return child;
+            }
+            var controls = Buttons(popup).Cast<FrameworkElement>().Concat(new[]
+            {
+                (FrameworkElement)popup.FindName("RemoteMemberBox"),
+                (FrameworkElement)popup.FindName("RemoteDateFilterBox")
+            }).Where(control => control.IsVisible).ToArray();
+            var bounds = controls.Select(Bounds).ToArray();
+            for (var i = 0; i < bounds.Length; i++)
+            {
+                Assert.True(bounds[i].Width > 0 && bounds[i].Height > 0);
+                Assert.InRange(bounds[i].Left, 0, popup.ActualWidth);
+                Assert.InRange(bounds[i].Right, 0, popup.ActualWidth);
+                Assert.InRange(bounds[i].Top, 0, popup.ActualHeight);
+                Assert.InRange(bounds[i].Bottom, 0, popup.ActualHeight);
+                for (var j = i + 1; j < bounds.Length; j++)
+                {
+                    var overlap = Rect.Intersect(bounds[i], bounds[j]);
+                    Assert.True(overlap.IsEmpty || overlap.Width <= 0.5 || overlap.Height <= 0.5,
+                        $"窄窗口控件发生重叠：{controls[i].Name}/{controls[j].Name}。");
+                }
+            }
+        }
+        finally
+        {
+            popup.Width = originalWidth;
+            popup.UpdateLayout();
         }
     }
 
