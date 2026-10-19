@@ -92,13 +92,17 @@ public sealed partial class RemoteLogRoomTests
             Assert.DoesNotContain(browser.Files.Where(f => f.Group == "本机 · BGI 日志"), f => f.Name == remoteFileName);
             browser.SelectedRemoteMember = browser.RemoteMembers.Single(m => m.Uid == uid);
             var page = Find<DodocoPage>(monitorWindow)!;
-            Invoke(Find<Button>(page, b => b.Content as string == "获取列表")!);
+            var remotePopup = await OpenDialogAsync<RemoteMemberLogsWindow>((Button)page.FindName("RemoteMemberLogsButton"));
+            Assert.Same(browser, remotePopup.DataContext);
+            Invoke(Find<Button>(remotePopup, b => b.Content as string == "获取列表")!);
             await Until(() => browser.RemoteFiles.Any(f => f.Name == remoteFileName));
             browser.SelectedRemoteFile = browser.RemoteFiles.Single(f => f.Name == remoteFileName);
-            Invoke(Find<Button>(page, b => b.Content as string == "下载")!);
+            Invoke(Find<Button>(remotePopup, b => b.Content as string == "下载")!);
             await Until(() => browser.RemoteStatus.StartsWith("已下载到 "));
             Assert.Equal(remoteContent, await File.ReadAllBytesAsync(browser.RemoteStatus["已下载到 ".Length..]));
             Snapshot(monitorWindow, Path.Combine(root, "observer-own-executor-log.png"));
+            Snapshot(remotePopup, Path.Combine(root, "observer-remote-member-logs.png"));
+            remotePopup.Close();
 
             // 角色变化立即刷新，执行模式不能把监控时缓存的同 UID 流重新补回下拉。
             SetObserverRole(monitorVm, false);

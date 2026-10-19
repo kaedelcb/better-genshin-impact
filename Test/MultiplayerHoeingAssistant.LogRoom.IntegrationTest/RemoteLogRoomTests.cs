@@ -126,8 +126,14 @@ public sealed partial class RemoteLogRoomTests
             browser.RefreshRemoteMembers();
             Assert.Equal("peer", Assert.Single(browser.RemoteMembers).Uid);
             browser.SelectedRemoteMember = browser.RemoteMembers[0];
-            var assistButton = (Button)page.FindName("AssistLogRoomButton");
-            var returnButton = (Button)page.FindName("ReturnOwnLogRoomButton");
+            var remoteLogsButton = (Button)page.FindName("RemoteMemberLogsButton");
+            var localFiles = (ListBox)page.FindName("LocalLogFilesList");
+            Assert.True(localFiles.ActualHeight > 0);
+            var localFilesHeight = localFiles.ActualHeight;
+            var remotePopup = await OpenDialogAsync<RemoteMemberLogsWindow>(remoteLogsButton);
+            Assert.Same(browser, remotePopup.DataContext);
+            var assistButton = (Button)remotePopup.FindName("AssistLogRoomButton");
+            var returnButton = (Button)remotePopup.FindName("ReturnOwnLogRoomButton");
             Assert.False(returnButton.IsVisible);
 
             // 从真实「协助房间」按钮打开弹窗；错误密码保留原房间，同一弹窗可重试。
@@ -158,16 +164,39 @@ public sealed partial class RemoteLogRoomTests
             reopened.Close();
 
             browser.SelectedRemoteMember = browser.RemoteMembers[0];
-            Invoke(Find<Button>(page, b => b.Content as string == "获取列表")!);
+            Invoke(Find<Button>(remotePopup, b => b.Content as string == "获取列表")!);
             await Until(() => browser.RemoteFiles.Any(f => f.Name == fileName));
             browser.SelectedRemoteFile = browser.RemoteFiles.First(f => f.Name == fileName);
-            Invoke(Find<Button>(page, b => b.Content as string == "下载")!);
+            VerifyRemotePopupLayout(remotePopup, browser, localFiles, localFilesHeight);
+
+            // 关闭和重开只影响窗口，不重置成员、文件、状态或协助房间。
+            var selectedMember = browser.SelectedRemoteMember;
+            var selectedFile = browser.SelectedRemoteFile;
+            var remoteFiles = browser.RemoteFiles.ToArray();
+            var remoteStatus = browser.RemoteStatus;
+            remotePopup.Close();
+            Assert.Same(selectedMember, browser.SelectedRemoteMember);
+            Assert.Same(selectedFile, browser.SelectedRemoteFile);
+            Assert.Equal(remoteFiles, browser.RemoteFiles.ToArray());
+            Assert.Equal(remoteStatus, browser.RemoteStatus);
+            remotePopup = await OpenDialogAsync<RemoteMemberLogsWindow>(remoteLogsButton);
+            Assert.Same(browser, remotePopup.DataContext);
+            Assert.Same(selectedMember, browser.SelectedRemoteMember);
+            Assert.Same(selectedFile, browser.SelectedRemoteFile);
+            Assert.Equal(remoteFiles, browser.RemoteFiles.ToArray());
+            Assert.Equal(remoteStatus, browser.RemoteStatus);
+            Assert.True(browser.IsAssistedLogRoom);
+            assistButton = (Button)remotePopup.FindName("AssistLogRoomButton");
+            returnButton = (Button)remotePopup.FindName("ReturnOwnLogRoomButton");
+            Assert.True(returnButton.IsVisible);
+            Invoke(Find<Button>(remotePopup, b => b.Content as string == "下载")!);
             await Until(() => browser.RemoteStatus.StartsWith("已下载到 "));
             var downloaded = browser.RemoteStatus["已下载到 ".Length..];
             Assert.Contains("协助房间-" + targetRoom, downloaded);
             Assert.Equal(SHA256.HashData(bytes), SHA256.HashData(await File.ReadAllBytesAsync(downloaded)));
             await Until(() => !browser.IsLoading);
             Snapshot(window, Path.Combine(root, "assisted-room.png"));
+            Snapshot(remotePopup, Path.Combine(root, "remote-member-logs.png"));
 
             // 在途列表切回时，迟到结果不填入本房间。
             var delayedRequest = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -262,6 +291,7 @@ public sealed partial class RemoteLogRoomTests
             Invoke(returnButton);
             await Until(() => !browser.IsAssistedLogRoom);
 
+            remotePopup.Close();
             await VerifySameUidObserverAsync(url, manager, root);
             Assert.Same(own, typeof(MainViewModel).GetField("_signalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm));
             Assert.True(own.IsConnected);
@@ -284,19 +314,60 @@ public sealed partial class RemoteLogRoomTests
     private static void Invoke(Button button) =>
         ((IInvokeProvider)new ButtonAutomationPeer(button).GetPattern(PatternInterface.Invoke)).Invoke();
 
-    private static async Task<RemoteLogRoomWindow> OpenDialogAsync(Button button)
+    private static Task<RemoteLogRoomWindow> OpenDialogAsync(Button button) =>
+        OpenDialogAsync<RemoteLogRoomWindow>(button);
+
+    private static async Task<T> OpenDialogAsync<T>(Button button) where T : Window
     {
-        var result = new TaskCompletionSource<RemoteLogRoomWindow>();
+        var result = new TaskCompletionSource<T>();
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
         timer.Tick += (_, _) =>
         {
-            var dialog = Application.Current.Windows.OfType<RemoteLogRoomWindow>().FirstOrDefault(w => w.IsVisible);
+            var dialog = Application.Current.Windows.OfType<T>().FirstOrDefault(w => w.IsVisible);
             if (dialog != null) { timer.Stop(); result.TrySetResult(dialog); }
         };
         timer.Start();
         _ = Dispatcher.CurrentDispatcher.BeginInvoke(() => Invoke(button));
         try { return await result.Task.WaitAsync(TimeSpan.FromSeconds(8)); }
         finally { timer.Stop(); }
+    }
+
+    private static void VerifyRemotePopupLayout(RemoteMemberLogsWindow popup, LogBrowserViewModel browser,
+        ListBox localFiles, double originalLocalHeight)
+    {
+        var remoteFiles = (ListBox)popup.FindName("RemoteFilesList");
+        var originalFiles = browser.RemoteFiles.ToArray();
+        var selectedFile = browser.SelectedRemoteFile;
+        try
+        {
+            // 仅扩充隔离列表，验证长列表由弹窗内部滚动承担，不再挤占本机日志列表。
+            for (var i = 0; i < 24; i++)
+                browser.RemoteFiles.Add(new MemberLogFileDescriptor
+                {
+                    Name = $"isolated-layout-{i:D2}.log", Size = 1024, LastWrite = DateTime.Today
+                });
+            popup.UpdateLayout();
+            localFiles.UpdateLayout();
+            Assert.InRange(localFiles.ActualHeight, originalLocalHeight - 0.5, originalLocalHeight + 0.5);
+            Assert.True(remoteFiles.ActualHeight > 0);
+            var bounds = remoteFiles.TransformToAncestor(popup).TransformBounds(new Rect(remoteFiles.RenderSize));
+            Assert.InRange(bounds.Top, 0, popup.ActualHeight);
+            Assert.InRange(bounds.Bottom, 0, popup.ActualHeight);
+            var scroll = Find<ScrollViewer>(remoteFiles)!;
+            Assert.NotNull(scroll);
+            Assert.True(scroll.ScrollableHeight > 0);
+            scroll.ScrollToEnd();
+            remoteFiles.UpdateLayout();
+            Assert.True(scroll.VerticalOffset > 0);
+            Assert.InRange(localFiles.ActualHeight, originalLocalHeight - 0.5, originalLocalHeight + 0.5);
+        }
+        finally
+        {
+            browser.RemoteFiles.Clear();
+            foreach (var file in originalFiles) browser.RemoteFiles.Add(file);
+            browser.SelectedRemoteFile = selectedFile;
+            popup.UpdateLayout();
+        }
     }
 
     private static async Task Until(Func<bool> condition)

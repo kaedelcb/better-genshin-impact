@@ -510,7 +510,7 @@
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 左：文件列表 + 远程成员日志下载 -->
+                <!-- 左：文件列表 + 远程日志弹窗入口 -->
                 <Border Grid.Column="0" Style="{DynamicResource QuestCard}" Margin="0,0,8,0" Padding="10,8">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -539,7 +539,7 @@
                             </StackPanel>
                         </Grid>
                         <Grid Grid.Row="1">
-                            <ListBox ItemsSource="{Binding Browser.FilesView}"
+                            <ListBox x:Name="LocalLogFilesList" ItemsSource="{Binding Browser.FilesView}"
                                      SelectedItem="{Binding Browser.SelectedFile}"
                                      Background="Transparent" BorderThickness="0"
                                      ToolTip="默认已选中最新文件；本机两组在上，远程下载的在最下">
@@ -587,75 +587,12 @@
                             </TextBlock>
                         </Grid>
 
-                        <!-- 远程成员日志下载：选成员 → 获取列表 → 选中文件下载（gzip 分块，30s 无新块超时） -->
-                        <StackPanel Grid.Row="2" Margin="0,8,0,0">
-                            <Border BorderBrush="{DynamicResource Dim}" BorderThickness="0,1,0,0" Margin="0,0,0,6"/>
-                            <DockPanel Margin="0,0,0,4">
-                                <Button x:Name="AssistLogRoomButton" DockPanel.Dock="Right" Content="协助房间"
-                                        Click="AssistLogRoom_Click" Style="{DynamicResource BtnGhost}"
-                                        Padding="6,2" FontSize="10" ToolTip="输入房间号和密码，仅切换日志面板"/>
-                                <TextBlock Text="远程成员日志" FontSize="11" FontWeight="SemiBold"
-                                           Foreground="{DynamicResource Gold}" VerticalAlignment="Center"/>
-                            </DockPanel>
-                            <DockPanel Margin="0,0,0,4">
-                                <Button x:Name="ReturnOwnLogRoomButton" DockPanel.Dock="Right" Content="返回本房间"
-                                        Command="{Binding Browser.ReturnToOwnLogRoomCommand}" Style="{DynamicResource BtnGhost}"
-                                        Padding="6,2" FontSize="10"
-                                        Visibility="{Binding Browser.CanReturnToOwnLogRoom, Converter={StaticResource BoolToVis}}"/>
-                                <TextBlock Text="{Binding Browser.LogRoomLabel}" FontSize="10"
-                                           Foreground="{DynamicResource Dim}" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding Browser.LogRoomLabel}"/>
-                            </DockPanel>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ComboBox Grid.Column="0" ItemsSource="{Binding Browser.RemoteMembers}"
-                                          SelectedItem="{Binding Browser.SelectedRemoteMember}"
-                                          Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                          ToolTip="选择在线执行端；监控模式也可选择自己的执行端"/>
-                                <Button Grid.Column="1" Content="获取列表" Style="{DynamicResource BtnGhost}"
-                                        Padding="8,3" FontSize="11" Margin="6,0,0,0"
-                                        Command="{Binding Browser.FetchRemoteFilesCommand}"
-                                        ToolTip="向选中成员请求日志文件列表（需对方开启「共享日志文件」）"/>
-                            </Grid>
-                            <ListBox ItemsSource="{Binding Browser.RemoteFiles}"
-                                     SelectedItem="{Binding Browser.SelectedRemoteFile}"
-                                     Background="Transparent" BorderThickness="0" MaxHeight="140" Margin="0,4,0,0">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <StackPanel Margin="0,2">
-                                            <TextBlock Text="{Binding Name}" FontSize="11" Foreground="{DynamicResource White}"
-                                                       TextTrimming="CharacterEllipsis"/>
-                                            <TextBlock FontSize="10" Foreground="{DynamicResource Dim}">
-                                                <TextBlock.Text>
-                                                    <MultiBinding StringFormat="{}{0} · {1}">
-                                                        <Binding Path="DateText"/>
-                                                        <Binding Path="SizeText"/>
-                                                    </MultiBinding>
-                                                </TextBlock.Text>
-                                            </TextBlock>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
-                            </ListBox>
-                            <Grid Margin="0,4,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Content="下载" Style="{DynamicResource BtnGhost}"
-                                        Padding="10,3" FontSize="11"
-                                        Command="{Binding Browser.DownloadRemoteFileCommand}"
-                                        ToolTip="下载选中的远程日志到本机 log\remote_downloads\，完成后自动在上方列表打开"/>
-                                <ProgressBar Grid.Column="1" Minimum="0" Maximum="1" Height="4" Margin="8,0,0,0"
-                                             VerticalAlignment="Center"
-                                             Value="{Binding Browser.DownloadProgress}"/>
-                            </Grid>
-                            <TextBlock Text="{Binding Browser.RemoteStatus}" FontSize="10" TextWrapping="Wrap"
-                                       Foreground="{DynamicResource Dim}" Margin="0,3,0,0"/>
-                        </StackPanel>
+                        <!-- 远程列表在独立弹窗中显示，不再挤占本地日志列表。 -->
+                        <Button x:Name="RemoteMemberLogsButton" Grid.Row="2" Content="远程日志"
+                                HorizontalAlignment="Left" Margin="0,8,0,0"
+                                Click="RemoteMemberLogs_Click" Style="{DynamicResource BtnGhost}"
+                                Padding="10,4" FontSize="11"
+                                ToolTip="打开远程成员日志窗口，选择成员、获取列表并下载日志"/>
                     </Grid>
                 </Border>
 

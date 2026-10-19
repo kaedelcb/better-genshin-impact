@@ -256,14 +256,14 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>请求视图滚动定位：null=滚到末尾看最新（初次加载/刷新）；否则=滚动+选中+居中该行（Lines 下标）。UI 线程触发。</summary>
     public event Action<int?>? NavigateRequested;
 
-    private string _viewerHintText = "← 在左侧选择日志文件开始浏览；远程成员日志在左下角请求下载";
+    private string _viewerHintText = "← 在左侧选择日志文件开始浏览；点击左下角“远程日志”按钮获取成员日志";
     /// <summary>查看区空态提示（空串=不显示）。</summary>
     public string ViewerHintText { get => _viewerHintText; set => SetProperty(ref _viewerHintText, value); }
 
     private void NotifyViewerHint()
     {
         ViewerHintText = _selectedFile == null
-            ? "← 在左侧选择日志文件开始浏览；远程成员日志在左下角请求下载"
+            ? "← 在左侧选择日志文件开始浏览；点击左下角“远程日志”按钮获取成员日志"
             : Lines.Count == 0 && !IsLoading
                 ? (IsLevelFilterActive && _allLines.Count > 0
                     ? "当前文件没有符合级别筛选的日志行"
