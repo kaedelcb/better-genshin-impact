@@ -12,6 +12,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -43,31 +44,49 @@
                     Padding="10,4" FontSize="12" Margin="8,0,0,0" Command="{Binding FetchRemoteFilesCommand}"
                     ToolTip="向选中成员请求日志文件列表（需对方开启「共享日志文件」）"/>
         </Grid>
-        <ListBox x:Name="RemoteFilesList" Grid.Row="3" ItemsSource="{Binding RemoteFiles}"
-                 SelectedItem="{Binding SelectedRemoteFile}" Background="Transparent" BorderThickness="0"
-                 ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Margin="0,3">
-                        <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource White}"
-                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
-                        <TextBlock FontSize="11" Foreground="{DynamicResource Dim}">
-                            <TextBlock.Text>
-                                <MultiBinding StringFormat="{}{0} · {1}">
-                                    <Binding Path="DateText"/>
-                                    <Binding Path="SizeText"/>
-                                </MultiBinding>
-                            </TextBlock.Text>
-                        </TextBlock>
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-        <ScrollViewer Grid.Row="4" MaxHeight="64" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
+        <Grid Grid.Row="3" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="日期" VerticalAlignment="Center" Foreground="{DynamicResource Dim}" Margin="0,0,8,0"/>
+            <ComboBox x:Name="RemoteDateFilterBox" Grid.Column="1" FontSize="11"
+                      ItemsSource="{Binding RemoteDateFilterItems}" SelectedItem="{Binding SelectedRemoteDateFilter}"
+                      Style="{DynamicResource GoldComboBox}" ItemContainerStyle="{DynamicResource GoldComboItem}"
+                      ToolTip="按文件最后修改日期筛选，默认当天；也可选择其他日期或全部日期"/>
+            <TextBlock Grid.Column="2" Text="{Binding RemoteFilesView.Count, StringFormat='显示 {0} 个'}"
+                       VerticalAlignment="Center" HorizontalAlignment="Right" FontSize="11" Foreground="{DynamicResource Dim}"/>
+        </Grid>
+        <Grid Grid.Row="4">
+            <ListBox x:Name="RemoteFilesList" ItemsSource="{Binding RemoteFilesView}" IsSynchronizedWithCurrentItem="False"
+                     SelectedItem="{Binding SelectedRemoteFile}" Background="Transparent" BorderThickness="0"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,3">
+                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource White}"
+                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                            <TextBlock FontSize="11" Foreground="{DynamicResource Dim}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0} · {1}">
+                                        <Binding Path="DateText"/>
+                                        <Binding Path="SizeText"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Text="{Binding RemoteDateFilterHint}" TextWrapping="Wrap" FontSize="12"
+                       Foreground="{DynamicResource Dim}" Margin="4" IsHitTestVisible="False"/>
+        </Grid>
+        <ScrollViewer Grid.Row="5" MaxHeight="64" VerticalScrollBarVisibility="Auto" Margin="0,8,0,0">
             <TextBlock Text="{Binding RemoteStatus}" FontSize="11" TextWrapping="Wrap"
                        Foreground="{DynamicResource Dim}"/>
         </ScrollViewer>
-        <Grid Grid.Row="5" Margin="0,12,0,0">
+        <Grid Grid.Row="6" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>

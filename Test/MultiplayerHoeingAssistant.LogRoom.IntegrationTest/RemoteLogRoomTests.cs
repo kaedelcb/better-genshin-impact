@@ -167,24 +167,35 @@ public sealed partial class RemoteLogRoomTests
             Invoke(Find<Button>(remotePopup, b => b.Content as string == "获取列表")!);
             await Until(() => browser.RemoteFiles.Any(f => f.Name == fileName));
             browser.SelectedRemoteFile = browser.RemoteFiles.First(f => f.Name == fileName);
+            await remotePopup.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Assert.Equal(DateTime.Today.ToString("yyyy-MM-dd"), ((ComboBox)remotePopup.FindName("RemoteDateFilterBox")).SelectionBoxItem);
+            Snapshot(remotePopup, Path.Combine(root, "remote-member-logs-today.png"));
+            VerifyRemoteDateFilter(remotePopup, browser);
             VerifyRemotePopupLayout(remotePopup, browser, localFiles, localFilesHeight);
+            ((ComboBox)remotePopup.FindName("RemoteDateFilterBox"))
+                .SetCurrentValue(ComboBox.SelectedItemProperty, "全部日期");
+            Assert.Equal("全部日期", browser.SelectedRemoteDateFilter);
 
-            // 关闭和重开只影响窗口，不重置成员、文件、状态或协助房间。
+            // 关闭和重开只影响窗口，不重置成员、文件、日期、状态或协助房间。
             var selectedMember = browser.SelectedRemoteMember;
             var selectedFile = browser.SelectedRemoteFile;
             var remoteFiles = browser.RemoteFiles.ToArray();
             var remoteStatus = browser.RemoteStatus;
+            var remoteDateFilter = browser.SelectedRemoteDateFilter;
             remotePopup.Close();
             Assert.Same(selectedMember, browser.SelectedRemoteMember);
             Assert.Same(selectedFile, browser.SelectedRemoteFile);
             Assert.Equal(remoteFiles, browser.RemoteFiles.ToArray());
             Assert.Equal(remoteStatus, browser.RemoteStatus);
+            Assert.Equal(remoteDateFilter, browser.SelectedRemoteDateFilter);
             remotePopup = await OpenDialogAsync<RemoteMemberLogsWindow>(remoteLogsButton);
             Assert.Same(browser, remotePopup.DataContext);
             Assert.Same(selectedMember, browser.SelectedRemoteMember);
             Assert.Same(selectedFile, browser.SelectedRemoteFile);
             Assert.Equal(remoteFiles, browser.RemoteFiles.ToArray());
             Assert.Equal(remoteStatus, browser.RemoteStatus);
+            Assert.Equal(remoteDateFilter, browser.SelectedRemoteDateFilter);
+            Assert.Equal(remoteDateFilter, ((ComboBox)remotePopup.FindName("RemoteDateFilterBox")).SelectedItem);
             Assert.True(browser.IsAssistedLogRoom);
             assistButton = (Button)remotePopup.FindName("AssistLogRoomButton");
             returnButton = (Button)remotePopup.FindName("ReturnOwnLogRoomButton");
@@ -330,6 +341,66 @@ public sealed partial class RemoteLogRoomTests
         _ = Dispatcher.CurrentDispatcher.BeginInvoke(() => Invoke(button));
         try { return await result.Task.WaitAsync(TimeSpan.FromSeconds(8)); }
         finally { timer.Stop(); }
+    }
+
+    private static void VerifyRemoteDateFilter(RemoteMemberLogsWindow popup, LogBrowserViewModel browser)
+    {
+        var filter = (ComboBox)popup.FindName("RemoteDateFilterBox");
+        var list = (ListBox)popup.FindName("RemoteFilesList");
+        var originalFiles = browser.RemoteFiles.ToArray();
+        var originalSelection = browser.SelectedRemoteFile;
+        var originalFilter = browser.SelectedRemoteDateFilter;
+        var today = DateTime.Today.ToString("yyyy-MM-dd");
+        var yesterday = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd");
+        var todayFile = new MemberLogFileDescriptor { Name = "isolated-today.log", LastWrite = DateTime.Today };
+        var yesterdayFile = new MemberLogFileDescriptor { Name = "isolated-yesterday.log", LastWrite = DateTime.Today.AddDays(-1) };
+        void SelectDate(string date)
+        {
+            filter.SetCurrentValue(ComboBox.SelectedItemProperty, date);
+            popup.UpdateLayout();
+            Assert.Equal(date, browser.SelectedRemoteDateFilter);
+        }
+        try
+        {
+            Assert.Equal(today, originalFilter);
+            Assert.Equal(today, filter.SelectedItem);
+            Assert.Same(browser.RemoteFilesView, list.ItemsSource);
+            browser.RemoteFiles.Clear();
+            browser.RemoteFiles.Add(todayFile);
+            browser.RemoteFiles.Add(yesterdayFile);
+            popup.UpdateLayout();
+            Assert.Contains(today, filter.Items.Cast<string>());
+            Assert.Contains(yesterday, filter.Items.Cast<string>());
+            Assert.Same(todayFile, Assert.Single(list.Items.Cast<MemberLogFileDescriptor>()));
+            list.SetCurrentValue(ListBox.SelectedItemProperty, todayFile);
+            Assert.Same(todayFile, browser.SelectedRemoteFile);
+
+            SelectDate(yesterday);
+            Assert.Same(yesterdayFile, Assert.Single(list.Items.Cast<MemberLogFileDescriptor>()));
+            Assert.Null(browser.SelectedRemoteFile);
+            Assert.Null(list.SelectedItem);
+            SelectDate("全部日期");
+            Assert.Equal(new[] { todayFile, yesterdayFile }, list.Items.Cast<MemberLogFileDescriptor>().ToArray());
+            Assert.Equal(new[] { todayFile, yesterdayFile }, browser.RemoteFiles.ToArray());
+
+            SelectDate(today);
+            list.SetCurrentValue(ListBox.SelectedItemProperty, todayFile);
+            browser.RemoteFiles.Remove(todayFile);
+            popup.UpdateLayout();
+            Assert.Equal(today, browser.SelectedRemoteDateFilter);
+            Assert.Equal(today, filter.SelectedItem);
+            Assert.Empty(list.Items);
+            Assert.Same(yesterdayFile, Assert.Single(browser.RemoteFiles));
+            Assert.Null(browser.SelectedRemoteFile);
+        }
+        finally
+        {
+            browser.RemoteFiles.Clear();
+            foreach (var file in originalFiles) browser.RemoteFiles.Add(file);
+            browser.SelectedRemoteDateFilter = originalFilter;
+            browser.SelectedRemoteFile = originalSelection;
+            popup.UpdateLayout();
+        }
     }
 
     private static void VerifyRemotePopupLayout(RemoteMemberLogsWindow popup, LogBrowserViewModel browser,

@@ -36,6 +36,9 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
         FilesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LogFileItem.Group)));
         // 按日期筛选（下拉在「日志文件」标题旁）：只过滤显示，不动 Files 集合本身
         FilesView.Filter = obj => obj is LogFileItem f && MatchesDateFilter(f);
+        RemoteFilesView = new ListCollectionView(RemoteFiles);
+        RemoteFilesView.Filter = obj => obj is MemberLogFileDescriptor file && MatchesRemoteDateFilter(file);
+        RemoteFiles.CollectionChanged += (_, _) => RebuildRemoteDateFilterItems();
     }
 
     // ========== 文件列表 ==========
