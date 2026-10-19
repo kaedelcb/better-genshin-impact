@@ -9,7 +9,7 @@ using OneDragonMigration.Core;
 
 namespace BetterGenshinImpact.Core.Config;
 
-/// <summary>Normal legacy files are projected in memory; opening a page never converts its source.</summary>
+/// <summary>Pure readers project legacy files; normal use also keeps the User copy readable by public BGI.</summary>
 internal static class OneDragonCompatibility
 {
     internal sealed record Source(string Path, string Revision, byte[] Bytes, OneDragonFlowConfig Config);
@@ -49,7 +49,45 @@ internal static class OneDragonCompatibility
         return new(System.IO.Path.GetFullPath(path), TaskConfigurationContract.Revision(bytes), bytes, config);
     }
 
+    /// <summary>Persist the validated projection, retaining enhanced fields and an exact original backup.</summary>
+    internal static Source ReadForPublicUse(string path)
+    {
+        var source = Read(path);
+        var document = ParseRaw(source.Bytes);
+        var shape = OneDragonConfigShapePreflight.InspectBytes(source.Bytes);
+        // Public files stay byte-identical unless a consumed start marker still lives only in the sidecar.
+        if (shape.IsLoadable && (document["NextTaskId"]?.Value<string>() ?? string.Empty) == source.Config.NextTaskId)
+            return source;
+        foreach (var field in Project(source.Bytes, path).Properties())
+            document[field.Name] = field.Value.DeepClone();
+        document.Remove("NextTaskIndex");
+        return WriteDocument(path, document, source);
+    }
+
+    internal static void PrepareDirectoryForPublic(string directory, Action<string, Exception> onFailure)
+    {
+        if (!Directory.Exists(directory)) return;
+        string[] files;
+        try { files = Directory.GetFiles(directory, "*.json"); }
+        catch (Exception ex) { onFailure(directory, ex); return; }
+        foreach (var file in files)
+        {
+            try { ReadForPublicUse(file); }
+            catch (Exception ex) { onFailure(file, ex); }
+        }
+    }
+
     internal static Source Save(string path, OneDragonFlowConfig config, Source? original)
+    {
+        // Only public editable fields are updated; legacy orchestration and unknown fields survive.
+        var document = original is null ? new JObject() : ParseRaw(original.Bytes);
+        foreach (var field in JObject.FromObject(config).Properties())
+            document[field.Name] = field.Value.DeepClone();
+        document.Remove("NextTaskIndex"); // Explicit editing has mapped this legacy index to NextTaskId.
+        return WriteDocument(path, document, original);
+    }
+
+    private static Source WriteDocument(string path, JObject document, Source? original)
         => TaskConfigurationContract.ExecuteFileLockedSync(path, () =>
         {
             RejectLinks(path);
@@ -61,16 +99,15 @@ internal static class OneDragonCompatibility
             if (!exists && sameSource)
                 throw new InvalidOperationException("配置文件已被移除，未自动重建或覆盖");
 
-            // Only public editable fields are updated; legacy orchestration and unknown fields survive.
-            var document = original is null ? new JObject() : ParseRaw(original.Bytes);
-            var edited = JObject.FromObject(config);
-            foreach (var field in edited.Properties()) document[field.Name] = field.Value.DeepClone();
-            document.Remove("NextTaskIndex"); // Explicit editing has mapped this legacy index to NextTaskId.
             var text = document.ToString(Formatting.Indented);
             var basis = current ?? original?.Bytes;
             var withBom = basis is { Length: >= 3 } && basis[0] == 239 && basis[1] == 187 && basis[2] == 191;
-            if (basis != null && Encoding.UTF8.GetString(basis).Contains("\r\n", StringComparison.Ordinal))
-                text = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal);
+            if (basis != null)
+            {
+                text = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+                if (Encoding.UTF8.GetString(basis).Contains("\r\n", StringComparison.Ordinal))
+                    text = text.Replace("\n", "\r\n", StringComparison.Ordinal);
+            }
             var encoder = new UTF8Encoding(withBom);
             var output = encoder.GetPreamble().Concat(encoder.GetBytes(text)).ToArray();
             _ = Project(output, path); // Invalid edited watermarks cannot be silently persisted.

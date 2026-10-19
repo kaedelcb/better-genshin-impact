@@ -80,6 +80,10 @@ public class ApplicationHostService(
     /// <param name="cancellationToken">Indicates that the start process has been aborted.</param>
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        // Prepare every configuration before UI/assistant activation, including files the user never selects.
+        Core.Config.OneDragonCompatibility.PrepareDirectoryForPublic(Core.Config.Global.Absolute(@"User\OneDragon"),
+            (file, error) => App.GetLogger<ApplicationHostService>().LogWarning(error,
+                "一条龙配置 {File} 暂时无法转换为公版格式，原件已保留", file));
         await HandleActivationAsync();
         instanceService.MarkApplicationReady();
     }

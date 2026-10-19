@@ -335,7 +335,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         InitConfigList();
     }
 
-    public void InitConfigList() // IPC and the page share the same read-only compatibility entry.
+    public void InitConfigList()
     {
         _loadingConfigs = true;
         try
@@ -348,7 +348,10 @@ public partial class OneDragonFlowViewModel : ViewModel
             {
                 try
                 {
-                    var source = OneDragonCompatibility.Read(file);
+                    // A running revision-bound request must retain its frozen source; normal use prepares the whole User for public BGI.
+                    var source = _preserveExecutionSource
+                        ? OneDragonCompatibility.Read(file)
+                        : OneDragonCompatibility.ReadForPublicUse(file);
                     configs.Add(source.Config);
                     _configSources[source.Config] = source;
                 }
