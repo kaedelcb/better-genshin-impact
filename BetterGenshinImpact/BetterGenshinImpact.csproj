@@ -139,28 +139,23 @@
 		<ProjectReference Include="..\Fischless.GameCapture\Fischless.GameCapture.csproj" />
 		<ProjectReference Include="..\Fischless.HotkeyCapture\Fischless.HotkeyCapture.csproj" />
 		<ProjectReference Include="..\Fischless.WindowsInput\Fischless.WindowsInput.csproj" />
-		<!-- 不再对 MultiplayerHoeingAssistant 建 ProjectReference：
-		     主项目对它没有任何编译期类型引用（ReferenceOutputAssembly=false 已证明），
-		     该引用唯一副作用是把助手 exe/dll/deps/runtimeconfig 复制进主输出根目录（发布产物根目录残留 MultiplayerHoeingAssistant.exe 的根源）。
-		     Tools\MultiplayerHoeingAssistant 的部署由下方 CopyMultiplayerHoeingAssistant target 独立负责，不受影响。 -->
+		<!-- 助手作为构建依赖进入 IDE/CLI 项目图；不引用其类型，也不传递复制其运行文件到 BGI 输出根。 -->
+		<ProjectReference Include="..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj"
+		                  ReferenceOutputAssembly="false" Private="false" OutputItemType="_AssistantTargetPath" />
 	</ItemGroup>
 
 	<!-- 编译后复制助手全部输出到 BGI 输出目录下的 Tools\MultiplayerHoeingAssistant 子目录（用 $(Configuration) 兼容 Debug/Release） -->
   <!-- 助手进程运行中会锁住部署目标目录，此时可用 -p:DeployToBgiTools=false 跳过部署仅完成编译验证（与 MHA csproj 同名开关一致） -->
   <Target Name="CopyMultiplayerHoeingAssistant" AfterTargets="Build" Condition="'$(DeployToBgiTools)' != 'false'">
     <Message Text="CopyMultiplayerHoeingAssistant: 复制助手全部输出到 $(OutDir)Tools\MultiplayerHoeingAssistant" Importance="high" />
-    <!-- 重新编译并部署助手（已实测可靠）：
-         1) 此处不可用嵌套(MSBuild Targets=Rebuild)或单个 dotnet build，因其会受 MSBuild Server 的
-            内存增量缓存返回"已最新"而跳过真正C#重编，导致助手改动（版本号/功能/UI）不进入 Tools；
-         2) 原方案用 dotnet clean 和 dotnet build 虽能强制重编，但 dotnet clean 是外层 shell 独立进程，
-            与随后 dotnet build 之间会被 MSBuild Server 缓存判定绕过：clean 删掉了助手的
-            .runtimeconfig.json / .deps.json（它们在 build 序列中生成较晚），而内层 build 若被缓存判定为
-            已最新而跳过不重新生成，则 BGI 的 Copy 步骤复制这些 json 时找不到，反复报 MSB3030。
-         3) 根治：改用单个 dotnet build 加 no-incremental 参数（等效于 /t:Rebuild，同一 MSBuild
-            上下文内 Clean 与 Build 强绑定，Clean 删后 Build 必在同一流程重编），保证 json 始终
-            重新生成，且规避 MSBuild Server 增量缓存。 -->
-    <Exec Command="dotnet build &quot;$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.csproj&quot; -c $(Configuration) --no-incremental"
-          WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <!-- ResolveProjectReferences 已构建助手；专用输出项来自本次引用的实际 TargetPath，兼容平台和输出目录。 -->
+    <Error Condition="'@(_AssistantTargetPath->Count())' != '1'"
+           Text="助手构建输出路径应有且仅有一项，实际为：@(_AssistantTargetPath)。已阻止复制旧产物。" />
+    <Error Condition="!Exists('@(_AssistantTargetPath)')"
+           Text="助手本次构建输出不存在：@(_AssistantTargetPath)。已阻止复制旧产物。" />
+    <PropertyGroup>
+      <_AssistantOutputDirectory>@(_AssistantTargetPath->'%(RootDir)%(Directory)')</_AssistantOutputDirectory>
+    </PropertyGroup>
     <!-- 清理 BGI 输出目录根的历史残留助手文件（早期 ProjectReference 默认复制留下的 exe/deps/runtimeconfig）。
          现在一律只允许存在于 Tools\MultiplayerHoeingAssistant 子目录，
          根目录的不属于本版本部署结构，删除以免与 Tools 副本混淆、防止手误运行错 exe。 -->
@@ -175,7 +170,7 @@
     <!-- 排除 assistant-config.json：它是用户运行配置（存免责同意/密码/UID/快捷绑定），
          绝不随构建覆盖到 Tools，否则每次构建都会把免责同意标记等配置复位。 -->
     <ItemGroup>
-      <AssistOutput Include="$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\bin\$(Configuration)\net8.0-windows\**\*" Exclude="$(MSBuildProjectDirectory)\..\MultiplayerHoeingAssistant\bin\$(Configuration)\net8.0-windows\**\assistant-config.json" />
+      <AssistOutput Include="$(_AssistantOutputDirectory)**\*" Exclude="$(_AssistantOutputDirectory)**\assistant-config.json" />
     </ItemGroup>
     <!-- 复制到 bin\Debug\...\Tools\（无 x64 平台目录） -->
     <Copy SourceFiles="@(AssistOutput)"

@@ -87,6 +87,17 @@ public sealed partial class RemoteLogRoomTests
             var ownStateBefore = BulkRoomState(manager, room);
             var assistStateBefore = BulkRoomState(manager, assistRoom);
 
+            // 正式成员下拉和列表请求取得真实夹具文件，再以已填充、已有选中项的状态开始批量。
+            browser.RefreshRemoteMembers();
+            ((ComboBox)popup.FindName("RemoteMemberBox")).SetCurrentValue(ComboBox.SelectedItemProperty,
+                browser.RemoteMembers.Single(member => member.Uid == self.Uid));
+            Invoke(Find<Button>(popup, button => button.Content as string == "获取列表")!);
+            var remoteFilesList = (ListBox)popup.FindName("RemoteFilesList");
+            await Until(() => remoteFilesList.Items.Count >= 2 && browser.RemoteFiles.Any(file => file.Name == self.TodayFiles[0]));
+            var selectedBgiFile = browser.RemoteFiles.Single(file => file.Name == self.TodayFiles[0]);
+            remoteFilesList.SetCurrentValue(ListBox.SelectedItemProperty, selectedBgiFile);
+            Assert.Same(selectedBgiFile, browser.SelectedRemoteFile);
+
             var first = await RunBulkButtonAsync(browser, download);
             Assert.False(first.Cancelled);
             Assert.Equal(ownEndpoints.Length, first.Members.Count);
@@ -171,8 +182,20 @@ public sealed partial class RemoteLogRoomTests
     private static void VerifyBulkRunningAppearance(RemoteMemberLogsWindow popup, string root)
     {
         popup.UpdateLayout();
-        Snapshot(popup, Path.Combine(root, "room-today-logs-running.png"));
         var list = (ListBox)popup.FindName("RemoteFilesList");
+        var assembly = typeof(RemoteMemberLogsWindow).Assembly;
+        File.WriteAllText(Path.Combine(root, "loaded-window-identity.json"), JsonSerializer.Serialize(new
+        {
+            AssemblyPath = assembly.Location,
+            ModuleVersionId = assembly.ManifestModule.ModuleVersionId,
+            Sha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly.Location))),
+            SelectedItemCount = list.SelectedItems.Count,
+            ItemCount = list.Items.Count,
+            SelectionActive = System.Windows.Controls.Primitives.Selector.GetIsSelectionActive(list)
+        }));
+        Assert.True(list.Items.Count >= 2);
+        var selectedFile = Assert.IsType<MemberLogFileDescriptor>(list.SelectedItem);
+        Assert.True(LogFileBrowser.BgiLogFileNameRegex.IsMatch(selectedFile.Name));
         Assert.True(list.IsEnabled);
         Assert.False(Find<Button>(popup, button => button.Content as string == "获取列表")!.IsEnabled);
         Assert.False(Find<Button>(popup, button => button.Content as string == "下载")!.IsEnabled);
@@ -180,14 +203,46 @@ public sealed partial class RemoteLogRoomTests
             .TransformBounds(new Rect(element.RenderSize));
         Assert.InRange(Bounds(list).Top, 0, 150);
         Assert.True(list.ActualHeight > 0);
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(popup.ActualWidth),
-            (int)Math.Ceiling(popup.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(popup);
-        var center = list.TranslatePoint(new Point(list.ActualWidth / 2, list.ActualHeight / 2), popup);
-        var pixel = new byte[4];
-        bitmap.CopyPixels(new Int32Rect((int)center.X, (int)center.Y, 1, 1), pixel, 4, 0);
-        Assert.True(pixel[3] > 0 && pixel[0] < 128 && pixel[1] < 128 && pixel[2] < 128,
-            $"下载中列表中心必须保持深色，实际 BGRA={string.Join(",", pixel)}。");
+        void CheckListColors(string screenshot)
+        {
+            list.ScrollIntoView(selectedFile);
+            popup.UpdateLayout();
+            var selectedRow = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromItem(selectedFile));
+            Assert.True(selectedRow.IsSelected);
+            var lastRowBottom = Enumerable.Range(0, list.Items.Count)
+                .Select(index => list.ItemContainerGenerator.ContainerFromIndex(index)).OfType<ListBoxItem>()
+                .Max(row => row.TransformToAncestor(list).TransformBounds(new Rect(row.RenderSize)).Bottom);
+            Assert.True(lastRowBottom + 8 < list.ActualHeight, "本次夹具必须留下可采样的列表空白区。");
+            var blankPoint = list.TranslatePoint(new Point(list.ActualWidth - 24,
+                (lastRowBottom + list.ActualHeight) / 2), popup);
+            var selectedPoint = selectedRow.TranslatePoint(new Point(selectedRow.ActualWidth - 16,
+                selectedRow.ActualHeight / 2), popup);
+            Snapshot(popup, Path.Combine(root, screenshot));
+            var bitmap = new RenderTargetBitmap((int)Math.Ceiling(popup.ActualWidth),
+                (int)Math.Ceiling(popup.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(popup);
+            foreach (var sample in new[] { (Name: "列表空白区", Point: blankPoint), (Name: "选中行右侧背景", Point: selectedPoint) })
+            {
+                var pixel = new byte[4];
+                bitmap.CopyPixels(new Int32Rect((int)sample.Point.X, (int)sample.Point.Y, 1, 1), pixel, 4, 0);
+                Assert.True(pixel[3] > 0 && pixel[0] < 128 && pixel[1] < 128 && pixel[2] < 128,
+                    $"{sample.Name}必须保持深色，实际 BGRA={string.Join(",", pixel)}。");
+            }
+        }
+        CheckListColors("running-populated.png");
+        var enabledValue = list.ReadLocalValue(UIElement.IsEnabledProperty);
+        var wasEnabled = list.IsEnabled;
+        try
+        {
+            list.SetCurrentValue(UIElement.IsEnabledProperty, false);
+            CheckListColors("running-disabled.png");
+        }
+        finally
+        {
+            if (enabledValue == DependencyProperty.UnsetValue) list.ClearValue(UIElement.IsEnabledProperty);
+            else list.SetCurrentValue(UIElement.IsEnabledProperty, wasEnabled);
+            popup.UpdateLayout();
+        }
 
         var originalWidth = popup.Width;
         try
