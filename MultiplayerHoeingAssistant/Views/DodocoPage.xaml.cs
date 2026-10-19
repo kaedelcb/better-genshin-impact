@@ -88,6 +88,11 @@ public partial class DodocoPage : UserControl
             return;
         }
         if (_rendering) { _renderDirty = true; return; }
+        QueueRealtimeSync(vm);
+    }
+
+    private void QueueRealtimeSync(DodocoViewModel vm)
+    {
         if (_syncQueued) return;
         _syncQueued = true;
         Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
@@ -168,30 +173,53 @@ public partial class DodocoPage : UserControl
         FollowTailIfNeeded(vm);
         RestoreRealtimeScrollAnchor(vm, anchor, version);
         // 初次排版期间到达的新日志也只增量追平，不能再次清文档、重启加载。
-        if (_renderDirty) SyncRealtimeDocument(vm);
+        // 先让本轮布局和 Loaded 优先级的阅读位置恢复完成，再追平积压日志。
+        if (_renderDirty) QueueRealtimeSync(vm);
     }
 
     private (TextPointer Position, double Top, int ScrollVersion)? CaptureRealtimeScrollAnchor(DodocoViewModel vm)
     {
-        if (vm.AutoFollow) return null;
+        if (vm.AutoFollow || !CanReadRealtimeGeometry()) return null;
         var position = RealtimeLog.GetPositionFromPoint(new Point(4, 4), snapToText: true);
         if (position == null) return null;
         var rect = position.GetCharacterRect(LogicalDirection.Forward);
         return rect.IsEmpty ? null : (position, rect.Top, _scrollVersion);
     }
 
+    private bool CanReadRealtimeGeometry()
+    {
+        if (!RealtimeLog.IsLoaded || !RealtimeLog.IsVisible
+            || !RealtimeLog.IsMeasureValid || !RealtimeLog.IsArrangeValid
+            || !RealtimeLog.Document.ContentStart.HasValidLayout) return false;
+        // Document 或模板重建后，新文本视图可能尚未接入视觉树。
+        // GetPositionFromPoint 会先 TransformToDescendant，不能用它来试探布局是否就绪。
+        var host = RealtimeLog.Template?.FindName("PART_ContentHost", RealtimeLog);
+        Visual? scope = host switch
+        {
+            ScrollViewer { Content: Visual content } => content,
+            Decorator { Child: Visual child } => child,
+            _ => null
+        };
+        return scope is not null && RealtimeLog.IsAncestorOf(scope);
+    }
+
     private void RestoreRealtimeScrollAnchor(DodocoViewModel vm,
         (TextPointer Position, double Top, int ScrollVersion)? anchor, int version)
     {
         if (anchor is not { } saved) return;
+        bool IsCurrent() => version == _renderVersion && !vm.AutoFollow
+            && saved.ScrollVersion == _scrollVersion && RealtimeLog.IsLoaded && RealtimeLog.IsVisible
+            && saved.Position.IsInSameDocument(RealtimeLog.Document.ContentStart);
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () =>
         {
-            if (version != _renderVersion || vm.AutoFollow || saved.ScrollVersion != _scrollVersion) return;
+            if (!IsCurrent()) return;
             _restoringScroll = true;
             try
             {
                 RealtimeLog.UpdateLayout();
+                if (!IsCurrent() || !CanReadRealtimeGeometry() || !saved.Position.HasValidLayout) return;
                 var rect = saved.Position.GetCharacterRect(LogicalDirection.Forward);
+                if (!IsCurrent()) return;
                 if (!rect.IsEmpty)
                     RealtimeLog.ScrollToVerticalOffset(RealtimeLog.VerticalOffset + rect.Top - saved.Top);
                 RealtimeLog.UpdateLayout();
