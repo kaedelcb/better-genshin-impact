@@ -62,9 +62,34 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - name: npm install (with retry on transient network errors)
+      - name: npm install (official registry with retry)
+        id: npm_install
         shell: bash
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+          npm_config_logs_dir: ${{ runner.temp }}/npm-logs
         run: |
+          # 锁文件保留了镜像下载地址；仅设置 registry 不会替换它们。
+          # 腾讯镜像还带 /npm/ 前缀，需要一起移除，保留版本和 integrity。
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'package-lock.json';
+          const lock = JSON.parse(fs.readFileSync(path, 'utf8'));
+          let rewritten = 0;
+          for (const dependency of Object.values(lock.packages ?? {})) {
+            if (typeof dependency.resolved !== 'string') continue;
+            const resolved = dependency.resolved.replace(
+              /^https?:\/\/(?:mirrors\.cloud\.tencent\.com\/npm|registry\.npmmirror\.com)\//,
+              'https://registry.npmjs.org/'
+            );
+            if (resolved !== dependency.resolved) {
+              dependency.resolved = resolved;
+              rewritten++;
+            }
+          }
+          if (rewritten > 0) fs.writeFileSync(path, JSON.stringify(lock, null, 2) + '\n');
+          console.log(`Normalized ${rewritten} mirror URLs to the official npm registry`);
+          NODE
           # 提升 npm 内建 fetch 层对瞬时网络错误的容忍度
           npm config set fetch-retries 5
           npm config set fetch-retry-mintimeout 20000
@@ -73,7 +98,7 @@ jobs:
           # 步骤级重试：最多尝试 4 次（首次 + 最多重试 3 次）
           for attempt in 1 2 3 4; do
             echo "npm install attempt #${attempt}"
-            if npm install; then
+            if npm install --prefer-offline --no-audit --no-fund --loglevel=http; then
               echo "npm install succeeded on attempt #${attempt}"
               exit 0
             fi
@@ -86,6 +111,14 @@ jobs:
           done
           echo "::error::npm install failed after 4 attempts"
           exit 1
+      - name: Upload npm failure logs
+        if: failure() && steps.npm_install.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-logs-${{ github.job }}
+          path: ${{ runner.temp }}/npm-logs
+          if-no-files-found: ignore
+          retention-days: 7
       - run: npm run build:single
       - uses: actions/upload-artifact@v4
         with:
@@ -102,9 +135,34 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
-      - name: npm install (with retry on transient network errors)
+      - name: npm install (official registry with retry)
+        id: npm_install
         shell: bash
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+          npm_config_logs_dir: ${{ runner.temp }}/npm-logs
         run: |
+          # 锁文件保留了镜像下载地址；仅设置 registry 不会替换它们。
+          # 腾讯镜像还带 /npm/ 前缀，需要一起移除，保留版本和 integrity。
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'package-lock.json';
+          const lock = JSON.parse(fs.readFileSync(path, 'utf8'));
+          let rewritten = 0;
+          for (const dependency of Object.values(lock.packages ?? {})) {
+            if (typeof dependency.resolved !== 'string') continue;
+            const resolved = dependency.resolved.replace(
+              /^https?:\/\/(?:mirrors\.cloud\.tencent\.com\/npm|registry\.npmmirror\.com)\//,
+              'https://registry.npmjs.org/'
+            );
+            if (resolved !== dependency.resolved) {
+              dependency.resolved = resolved;
+              rewritten++;
+            }
+          }
+          if (rewritten > 0) fs.writeFileSync(path, JSON.stringify(lock, null, 2) + '\n');
+          console.log(`Normalized ${rewritten} mirror URLs to the official npm registry`);
+          NODE
           # 提升 npm 内建 fetch 层对瞬时网络错误的容忍度
           npm config set fetch-retries 5
           npm config set fetch-retry-mintimeout 20000
@@ -113,7 +171,7 @@ jobs:
           # 步骤级重试：最多尝试 4 次（首次 + 最多重试 3 次）
           for attempt in 1 2 3 4; do
             echo "npm install attempt #${attempt}"
-            if npm install; then
+            if npm install --prefer-offline --no-audit --no-fund --loglevel=http; then
               echo "npm install succeeded on attempt #${attempt}"
               exit 0
             fi
@@ -126,6 +184,14 @@ jobs:
           done
           echo "::error::npm install failed after 4 attempts"
           exit 1
+      - name: Upload npm failure logs
+        if: failure() && steps.npm_install.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-logs-${{ github.job }}
+          path: ${{ runner.temp }}/npm-logs
+          if-no-files-found: ignore
+          retention-days: 7
       - run: npm run build:single
       - uses: actions/upload-artifact@v4
         with:
