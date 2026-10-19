@@ -793,7 +793,7 @@
                             <Popup x:Name="RoomCodeCopyHint" Placement="Bottom" PlacementTarget="{Binding ElementName=RoomCodeCopyBorder}" VerticalOffset="4"
                                    AllowsTransparency="True" StaysOpen="True" IsHitTestVisible="False">
                                 <Border Background="#29243F" BorderBrush="{StaticResource GoldDeep}" BorderThickness="1" CornerRadius="5" Padding="8,5">
-                                    <TextBlock Text="房间号已复制到粘贴板。" FontSize="11" Foreground="{StaticResource GoldText}"/>
+                                    <TextBlock x:Name="RoomCodeCopyHintText" Text="房间号已复制到剪贴板。" FontSize="11" Foreground="{StaticResource GoldText}"/>
                                 </Border>
                             </Popup>
                             <Button x:Name="HeaderRefreshButton" Grid.Column="1" Width="{Binding ActualWidth, ElementName=HeaderExitButton}"

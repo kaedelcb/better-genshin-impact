@@ -16,20 +16,58 @@ public partial class MainWindow : Window
         Interval = TimeSpan.FromSeconds(1.5),
     };
 
-    private void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private bool _copyingRoomCode;
+
+    private async void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         e.Handled = true;
-        _roomCodeCopyHintTimer.Stop();
-        RoomCodeCopyHint.IsOpen = false;
+        if (_copyingRoomCode) return;
         var roomCode = ViewModel.RoomCode;
-        if (string.IsNullOrWhiteSpace(roomCode)) return;
-        try { Clipboard.SetText(roomCode); }
-        catch (System.Runtime.InteropServices.ExternalException)
+        if (string.IsNullOrWhiteSpace(roomCode))
         {
-            ViewModel.AddLog("复制房间号失败：剪贴板正忙，请稍后重试。");
+            ShowRoomCodeCopyHint("暂无可复制的房间号。", 3);
             return;
         }
+
+        _copyingRoomCode = true;
+        ShowRoomCodeCopyHint("正在复制房间号…", 3);
+        try
+        {
+            // 剪贴板可能被其他程序短暂占用；等待时让 UI 保持响应。
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    Clipboard.SetText(roomCode);
+                    ShowRoomCodeCopyHint("房间号已复制到剪贴板。", 1.5);
+                    return;
+                }
+                catch (System.Runtime.InteropServices.ExternalException ex)
+                {
+                    if (attempt == 2)
+                    {
+                        ViewModel.AddLog($"复制房间号失败：剪贴板不可用，请稍后重试。（0x{ex.HResult:X8}）");
+                        ShowRoomCodeCopyHint("复制失败：剪贴板不可用，请稍后重试。", 3);
+                        return;
+                    }
+                }
+                await Task.Delay(80);
+                if (!IsLoaded) return;
+            }
+        }
+        finally
+        {
+            _copyingRoomCode = false;
+        }
+    }
+
+    private void ShowRoomCodeCopyHint(string message, double seconds)
+    {
+        if (!IsLoaded) return;
+        _roomCodeCopyHintTimer.Stop();
+        RoomCodeCopyHintText.Text = message;
         RoomCodeCopyHint.IsOpen = true;
+        _roomCodeCopyHintTimer.Interval = TimeSpan.FromSeconds(seconds);
         _roomCodeCopyHintTimer.Start();
     }
 
