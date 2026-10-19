@@ -97,11 +97,13 @@ public partial class App : Application
                 MessageBoxButton.OK, MessageBoxImage.Error);
         };
 
+        var uiExceptionReporter = new UiExceptionReporter(RuntimeLog.WriteLine,
+            message => MessageBox.Show(message, "错误", MessageBoxButton.OK, MessageBoxImage.Error));
         DispatcherUnhandledException += (_, args) =>
         {
-            MessageBox.Show($"UI线程异常: {args.Exception.Message}", "错误",
-                MessageBoxButton.OK, MessageBoxImage.Error);
+            // 先标记已处理；错误提示会泵送消息，期间的界面刷新可能再次抛异常。
             args.Handled = true;
+            uiExceptionReporter.Report(args.Exception);
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
