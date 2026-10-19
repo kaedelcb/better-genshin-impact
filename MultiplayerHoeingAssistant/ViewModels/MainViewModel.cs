@@ -129,7 +129,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     public string RoomCode
     {
         get => _roomCode;
-        set { _roomCode = value; OnPropertyChanged(); }
+        set
+        {
+            if (_roomCode != value) InvalidateCoordinatedControlContext();
+            _roomCode = value;
+            OnPropertyChanged();
+        }
     }
 
     public bool IsConnected
@@ -321,6 +326,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 Application.Current.Shutdown();
                 return;
             }
+            InvalidateChangedControlSettings(newConfig);
             _config = newConfig;
             _configManager.Save(_config);
             NotifyModeBindings(); // 首启设置弹窗可能改了遥控器模式，同步刷新模式显隐绑定
@@ -4831,7 +4837,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 pendingClient = CreateWiredSignalRClient();
                 using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-                await ConnectSignalRWithConfigAsync(pendingClient, connectTimeout.Token);
+                await ConnectSignalRWithConfigAsync(pendingClient, connectTimeout.Token,
+                    "刷新完成，已重新建立连接", fireRefreshCompleted: true);
                 // 刷新连接在飞期间用户切到离线：销毁刚到手的连接，不接管
                 if (IsStandaloneMode)
                 {
@@ -4841,7 +4848,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     AddLog("单机模式已开启，放弃本次刷新建立的连接");
                     return;
                 }
-                await AdoptConnectedSignalRClientAsync(pendingClient, "刷新完成，已重新建立连接", fireRefreshCompleted: true);
+                // The serialized connection helper has already adopted this client.
                 pendingClient = null; // 所有权已移交 _signalRClient
                 if (old != null && !ReferenceEquals(old, _signalRClient))
                 {
@@ -4856,7 +4863,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                 try { await pendingClient.DisposeAsync(); } catch { /* 销毁失败不影响重试 */ }
             }
             // 新连接失败时，健康的旧连接仍是有效控制面；只有旧连接也已失效才交给重试链。
-            if (old is { IsConnected: true } && ReferenceEquals(_signalRClient, old) && !IsStandaloneMode)
+            if (old is { IsControlRoomReady: true, IsRetired: false }
+                && old.ControlContext == CurrentControlContext()
+                && ReferenceEquals(_signalRClient, old) && !IsStandaloneMode)
             {
                 _signalRClient = old;
                 IsConnected = true;
@@ -5047,10 +5056,21 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             ObserveOnlineTask(OnAllReadyConfirmedInternal(generation), "全员就绪启动");
         };
-        client.OnHoeingBatchStart += batch => ObserveOnlineTask(OnCoordinatedBatchStartAsync(batch), "联机开始受理");
-        client.OnHoeingBatchState += OnCoordinatedBatchState;
+        client.OnHoeingBatchStart += batch =>
+        {
+            if (ReferenceEquals(_signalRClient, client) && client.IsControlRoomReady
+                && client.ControlContext == CurrentControlContext())
+                ObserveOnlineTask(OnCoordinatedBatchStartAsync(batch), "联机开始受理");
+        };
+        client.OnHoeingBatchState += state =>
+        {
+            if (ReferenceEquals(_signalRClient, client) && client.IsControlRoomReady
+                && client.ControlContext == CurrentControlContext()) OnCoordinatedBatchState(state);
+        };
         client.OnCoordinatedAuthorityReady += () =>
         {
+            if (!ReferenceEquals(_signalRClient, client) || !client.IsControlRoomReady
+                || client.ControlContext != CurrentControlContext()) return;
             OnlineHoeingBatch? pending;
             lock (_batchGate) pending = _activeBatch;
             if (pending?.RunTask?.IsCompleted == true)
@@ -6227,6 +6247,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
         if (newConfig != null)
         {
+            InvalidateChangedControlSettings(newConfig);
             _config = newConfig;
             _configManager.Save(_config);
             RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
@@ -6532,6 +6553,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
         if (newConfig != null)
         {
+            InvalidateChangedControlSettings(newConfig);
             _config = newConfig;
             _configManager.Save(_config);
             SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings（ObserverMode 显隐 + 离线派生属性）；清空地址 = 单机模式需即时断开

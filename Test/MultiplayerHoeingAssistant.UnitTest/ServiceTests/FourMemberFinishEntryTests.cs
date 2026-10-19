@@ -78,8 +78,8 @@ public sealed class FourMemberFinishEntryTests
         BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
         using var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
         using var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
-        await using var originalLocal = new SignalRClient();
-        SignalRClient local = originalLocal;
+        SignalRClient? originalLocal = null;
+        SignalRClient local = null!;
         SignalRClient? reconnected = null;
         await using var second = new SignalRClient();
         await using var third = new SignalRClient();
@@ -99,7 +99,7 @@ public sealed class FourMemberFinishEntryTests
                 TeamUids = uids.ToList(), ControlRoomPassword = "isolated-finish-only",
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
                 OnlineHoeingGroupNames = [boundGroup], OnlineHoeingGroupTypes = ["group"],
-                ExpectedHoeingPlayers = 4, DisclaimerAccepted = true,
+                ExpectedHoeingPlayers = 4, DisclaimerAccepted = true, BypassSystemProxy = true,
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
@@ -108,16 +108,16 @@ public sealed class FourMemberFinishEntryTests
             Set(vm, "_externalClient", external);
             Set(vm, "_processMonitor", monitor);
             Set(vm, "_commandExecutor", executor);
-            Set(vm, "_signalRClient", local);
-            Call(vm, "WireSignalRClient", local);
             var room = "FINISH-" + Guid.NewGuid().ToString("N")[..8];
+            vm.RoomCode = room;
+            originalLocal = local = await ConnectProductionClientAsync(vm);
             SignalRClient[] clients = [local, second, third, tail];
             for (var i = 0; i < clients.Length; i++)
             {
-                await clients[i].ConnectAsync(server.Url, room, config.ControlRoomPassword,
-                    uids[i], "隔离成员" + i, uids.ToList(),
-                    clientInstanceId: i == 0 ? config.ClientInstanceId : Guid.NewGuid().ToString("N"),
-                    bypassSystemProxy: true);
+                if (i > 0)
+                    await clients[i].ConnectAsync(server.Url, room, config.ControlRoomPassword,
+                        uids[i], "隔离成员" + i, uids.ToList(),
+                        clientInstanceId: Guid.NewGuid().ToString("N"), bypassSystemProxy: true);
                 Assert.True(clients[i].SupportsCoordinatedStart);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
@@ -135,6 +135,29 @@ public sealed class FourMemberFinishEntryTests
             var oldBatch = Active(vm)!;
             var cooperativeJob = bgi.CooperativeJobId!;
             Assert.True(oldBatch.TakenOver);
+
+            if (reconnectAfterLocalFinish)
+            {
+                // Real production Refresh while the original BGI job is still running:
+                // pending join must not end/recreate the loop or submit the same group twice.
+                var originalLoop = oldBatch.RunTask;
+                var participantToken = oldBatch.Token;
+                var originalTicket = oldBatch.TakeoverTicket;
+                var previousClient = local;
+                await ((Task)Call(vm, "RefreshAsync")!).WaitAsync(TimeSpan.FromSeconds(30));
+                local = CurrentClient(vm);
+                reconnected = local;
+                Assert.NotSame(previousClient, local);
+                Assert.True(local.IsControlRoomReady);
+                Assert.Same(oldBatch, Active(vm));
+                Assert.Same(originalLoop, oldBatch.RunTask);
+                Assert.False(originalLoop!.IsCompleted);
+                Assert.Equal(participantToken, oldBatch.Token);
+                Assert.Equal(originalTicket, oldBatch.TakeoverTicket);
+                Assert.Equal(cooperativeJob, bgi.CooperativeJobId);
+                Assert.Equal(1, bgi.CooperativeStarts);
+                Assert.Equal(0, bgi.CancelCount);
+            }
 
             bgi.CompleteCooperative();
             await WaitAsync(() => oldBatch.LocalExecutionReleased && executor.TakeoverTicketSnapshot == null,
@@ -176,13 +199,8 @@ public sealed class FourMemberFinishEntryTests
                 Assert.True(oldBatch.LocalSucceeded);
                 Assert.True(oldBatch.LocalExecutionReleased);
                 Assert.True(bgi.ManualRunning);
-                reconnected = new SignalRClient();
+                reconnected = await ConnectProductionClientAsync(vm);
                 local = reconnected;
-                Set(vm, "_signalRClient", local);
-                Call(vm, "WireSignalRClient", local);
-                await local.ConnectAsync(server.Url, room, config.ControlRoomPassword,
-                    uids[0], config.PlayerName, uids.ToList(), clientInstanceId: config.ClientInstanceId,
-                    bypassSystemProxy: true);
                 await local.ReportControlStatusAsync(new ControlStatus
                 {
                     PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
@@ -258,11 +276,13 @@ public sealed class FourMemberFinishEntryTests
                 var host = (TaskCenterHost?)typeof(MainViewModel)
                     .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm);
                 Set(vm, "_disposing", true);
+                StopFixtureTimers(vm);
                 if (host != null) await host.ShutdownAsync();
             }
             IpcClient.PipeNameOverrideForTest = previousIpc;
             BgiExternalClient.PipeNameOverrideForTest = previousExt;
             if (reconnected != null) await reconnected.DisposeAsync();
+            if (originalLocal != null) await originalLocal.DisposeAsync();
         }
     }
 
@@ -283,8 +303,8 @@ public sealed class FourMemberFinishEntryTests
         BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
         using var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
         using var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
-        await using var originalLocal = new SignalRClient();
-        SignalRClient local = originalLocal;
+        SignalRClient? originalLocal = null;
+        SignalRClient local = null!;
         SignalRClient? reconnected = null;
         await using var zeroTailClient = new SignalRClient();
         await using var failedClient = new SignalRClient();
@@ -305,7 +325,7 @@ public sealed class FourMemberFinishEntryTests
                 TeamUids = uids.ToList(), ControlRoomPassword = "isolated-local-failure",
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
                 OnlineHoeingGroupNames = [group, next], OnlineHoeingGroupTypes = ["group", "group"],
-                ExpectedHoeingPlayers = 4, DisclaimerAccepted = true,
+                ExpectedHoeingPlayers = 4, DisclaimerAccepted = true, BypassSystemProxy = true,
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
@@ -314,16 +334,16 @@ public sealed class FourMemberFinishEntryTests
             Set(vm, "_externalClient", external);
             Set(vm, "_processMonitor", monitor);
             Set(vm, "_commandExecutor", executor);
-            Set(vm, "_signalRClient", local);
-            Call(vm, "WireSignalRClient", local);
             var room = "LOCAL-FAIL-" + Guid.NewGuid().ToString("N")[..8];
+            vm.RoomCode = room;
+            originalLocal = local = await ConnectProductionClientAsync(vm);
             SignalRClient[] clients = [local, zeroTailClient, failedClient, waitingClient];
             for (var i = 0; i < clients.Length; i++)
             {
-                await clients[i].ConnectAsync(server.Url, room, config.ControlRoomPassword,
-                    uids[i], "隔离不同后置成员" + i, uids.ToList(),
-                    clientInstanceId: i == 0 ? config.ClientInstanceId : Guid.NewGuid().ToString("N"),
-                    bypassSystemProxy: true);
+                if (i > 0)
+                    await clients[i].ConnectAsync(server.Url, room, config.ControlRoomPassword,
+                        uids[i], "隔离不同后置成员" + i, uids.ToList(),
+                        clientInstanceId: Guid.NewGuid().ToString("N"), bypassSystemProxy: true);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
                     PlayerUid = uids[i], PlayerName = "隔离不同后置成员" + i, BgiStatus = "running",
@@ -398,13 +418,8 @@ public sealed class FourMemberFinishEntryTests
             Assert.Equal(0, unacknowledged.Index);
             Assert.Equal(0, unacknowledged.Attempt);
 
-            reconnected = new SignalRClient();
+            reconnected = await ConnectProductionClientAsync(vm);
             local = reconnected;
-            Set(vm, "_signalRClient", local);
-            Call(vm, "WireSignalRClient", local);
-            await local.ConnectAsync(server.Url, room, config.ControlRoomPassword,
-                uids[0], config.PlayerName, uids.ToList(), clientInstanceId: config.ClientInstanceId,
-                bypassSystemProxy: true);
             await local.ReportControlStatusAsync(new ControlStatus
             {
                 PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
@@ -468,11 +483,13 @@ public sealed class FourMemberFinishEntryTests
                 var host = (TaskCenterHost?)typeof(MainViewModel)
                     .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm);
                 Set(vm, "_disposing", true);
+                StopFixtureTimers(vm);
                 if (host != null) await host.ShutdownAsync();
             }
             IpcClient.PipeNameOverrideForTest = previousIpc;
             BgiExternalClient.PipeNameOverrideForTest = previousExt;
             if (reconnected != null) await reconnected.DisposeAsync();
+            if (originalLocal != null) await originalLocal.DisposeAsync();
         }
     }
 
@@ -765,6 +782,33 @@ public sealed class FourMemberFinishEntryTests
                 }
             }
         }
+    }
+
+    private static async Task<SignalRClient> ConnectProductionClientAsync(MainViewModel vm)
+    {
+        var client = (SignalRClient)Call(vm, "CreateWiredSignalRClient")!;
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        try
+        {
+            await (Task)Call(vm, "ConnectSignalRWithConfigAsync", client, budget.Token,
+                "隔离四成员生产建连入口", false)!;
+            Assert.Same(client, CurrentClient(vm));
+            Assert.True(client.IsControlRoomReady);
+            return client;
+        }
+        catch { await client.DisposeAsync(); throw; }
+    }
+
+    private static SignalRClient CurrentClient(MainViewModel vm) =>
+        (SignalRClient)typeof(MainViewModel).GetField("_signalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(vm)!;
+
+    private static void StopFixtureTimers(MainViewModel vm)
+    {
+        Call(vm, "StopSignalRRecovery");
+        foreach (var field in new[] { "_statusTimer", "_retryTimer", "_onlineTimer", "_resumeTimeoutTimer" })
+            (typeof(MainViewModel).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(vm) as IDisposable)?.Dispose();
     }
 
     private static OnlineHoeingBatch? Active(MainViewModel vm) =>

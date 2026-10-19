@@ -31,6 +31,168 @@ public class CoordinatorClient : IAsyncDisposable
     private readonly ILogger<CoordinatorClient> _logger = App.GetLogger<CoordinatorClient>();
     private BgiGatewayClient? _gateway;
     private Timer? _heartbeatTimer;
+    private readonly CancellationTokenSource _lifetimeCts = new();
+    private readonly object _roomLock = new();
+    private readonly SemaphoreSlim _recoveryGate = new(1, 1);
+    private RoomSession? _roomSession;
+    private long _roomEpoch;
+    private int _heartbeatRunning;
+    private bool _taskStopped;
+    private bool _taskLifetimeBound;
+    private CancellationTokenRegistration _taskCancellation;
+
+    // 每次显式建房/入房建立新上下文；后台重连只能恢复冻结的原房间身份。
+    private sealed class RoomSession(long epoch, string roomCode, string name, string? uid, string? batchId)
+    {
+        public long Epoch { get; } = epoch;
+        public string RoomCode { get; } = roomCode;
+        public string Name { get; } = name;
+        public string? Uid { get; } = uid;
+        public string? BatchId { get; } = batchId;
+        public CancellationTokenSource End { get; } = new();
+        public TaskCompletionSource<bool> Ready { get; set; } = NewReady();
+        public bool Ended { get; set; }
+        public long RecoveryStarted { get; set; }
+    }
+    private static TaskCompletionSource<bool> NewReady() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public event Action<string>? SessionFailed;
+
+    private RoomSession BeginRoomSession(string code, string name, string? uid, string? batchId)
+    {
+        EndRoomSession("room-replaced");
+        lock (_roomLock)
+        {
+            _lifetimeCts.Token.ThrowIfCancellationRequested();
+            if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机任务的房间准入已撤销");
+            var session = new RoomSession(++_roomEpoch, code, name, uid, batchId);
+            _roomSession = session;
+            _currentRoomCode = code;
+            _playerName = name;
+            _playerUid = uid;
+            _isInRoom = false;
+            _selfClosingRoom = false;
+            return session;
+        }
+    }
+
+    private bool IsCurrent(RoomSession session)
+    {
+        lock (_roomLock) return ReferenceEquals(_roomSession, session) && !session.Ended && !_taskStopped && !_lifetimeCts.IsCancellationRequested;
+    }
+
+    private void MarkRoomReady(RoomSession session)
+    {
+        lock (_roomLock)
+        {
+            if (!IsCurrent(session)) return;
+            _isInRoom = true;
+            _isReconnecting = false;
+            session.RecoveryStarted = 0;
+            session.Ready.TrySetResult(true);
+        }
+    }
+
+    internal void BindTaskLifetime(CancellationToken taskToken)
+    {
+        lock (_roomLock)
+        {
+            if (_taskLifetimeBound) return;
+            _taskLifetimeBound = true;
+        }
+        _taskCancellation = taskToken.Register(() =>
+        {
+            lock (_roomLock) _taskStopped = true;
+            EndRoomSession("task-cancelled");
+        });
+    }
+
+    internal bool TryRevokeRoomAdmission(long? expectedEpoch)
+    {
+        lock (_roomLock)
+        {
+            if (_roomSession?.Epoch != expectedEpoch) return false;
+            _taskStopped = true;
+            return true;
+        }
+    }
+
+    private void DetachRoomForExplicitChange()
+    {
+        RoomSession? old;
+        lock (_roomLock) old = _roomSession;
+        EndRoomSession("explicit-room-change", expectedEpoch: old?.Epoch);
+        lock (_roomLock)
+            if (ReferenceEquals(_roomSession, old)) _roomSession = null;
+    }
+
+    internal void EndRoomSession(string reason, bool notifyFailure = false, long? expectedEpoch = null)
+    {
+        RoomSession? session;
+        lock (_roomLock)
+        {
+            session = _roomSession;
+            if (session == null || session.Ended || expectedEpoch.HasValue && session.Epoch != expectedEpoch) return;
+            session.Ended = true;
+            _isInRoom = false;
+            _isReconnecting = false;
+            session.Ready.TrySetResult(false);
+        }
+        try { session.End.Cancel(); }
+        catch (AggregateException ex) { _logger.LogWarning(ex, "[联机] 房间退出取消回调异常"); }
+        if (notifyFailure) SessionFailed?.Invoke(reason);
+    }
+
+    /// <summary>只准入原房间 Hello + Join 已确认的业务；从不创建新房间或重放路线。</summary>
+    public async Task WaitForBusinessReadyAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var budget = CreateRpcBudget(ct, TimeSpan.FromSeconds(120), includeRoom: false);
+        while (true)
+        {
+            RoomSession? session;
+            Task<bool>? ready;
+            lock (_roomLock)
+            {
+                session = _roomSession;
+                // 保留既有无真实连接测试种子；生产路径必须有显式房间上下文。
+                if (session == null && _testIsConnectedOverride == true && _roomEpoch == 0 && !_taskStopped) return;
+                if (session == null || session.Ended || _taskStopped)
+                    throw new MultiplayerSessionFailedException("原联机房间已结束");
+                if (IsConnected && _isInRoom && !_isReconnecting && session.Ready.Task.IsCompletedSuccessfully)
+                    return;
+                if (!IsConnected && !_isReconnecting)
+                {
+                    _isReconnecting = true;
+                    _isInRoom = false;
+                    session.RecoveryStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                    session.Ready = NewReady();
+                }
+                ready = session.Ready.Task;
+            }
+            if (!await ready.WaitAsync(RecoveryRemaining(session), budget.Token))
+                throw new MultiplayerSessionFailedException("原联机房间恢复未确认");
+            ct.ThrowIfCancellationRequested();
+        }
+    }
+
+    private static TimeSpan RecoveryRemaining(RoomSession session)
+    {
+        var remaining = session.RecoveryStarted == 0 ? TimeSpan.FromSeconds(120)
+            : TimeSpan.FromSeconds(120) - System.Diagnostics.Stopwatch.GetElapsedTime(session.RecoveryStarted);
+        if (remaining <= TimeSpan.Zero) throw new TimeoutException("原房间恢复总预算已耗尽");
+        return remaining;
+    }
+
+    internal long? CurrentRoomEpoch { get { lock (_roomLock) return _roomSession?.Epoch; } }
+
+    private CancellationTokenSource CreateRpcBudget(CancellationToken ct, TimeSpan? timeout = null, bool includeRoom = true)
+    {
+        CancellationToken roomToken;
+        lock (_roomLock) roomToken = includeRoom ? _roomSession?.End.Token ?? CancellationToken.None : CancellationToken.None;
+        var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, _lifetimeCts.Token, roomToken);
+        budget.CancelAfter(timeout ?? _testAuxiliaryBudget ?? TimeSpan.FromSeconds(10));
+        return budget;
+    }
 
     // === 测试种子（[InternalsVisibleTo("BetterGenshinImpact.UnitTest")]）===
     // 抽出 NotifyKazuhaCollectStartedAsync 内的发送动作，让 PBT 可注入 fake 代理断言
@@ -47,6 +209,9 @@ public class CoordinatorClient : IAsyncDisposable
     // 测试种子：单元测试可强制 IsConnected==true，绕开真实的网关连接。
     // 仅在测试中赋值；生产路径下保持 null → IsConnected fallback 到网关连接状态。
     internal bool? _testIsConnectedOverride;
+    internal TimeSpan? _testStrictWaitBudget;
+    internal TimeSpan? _testAuxiliaryBudget;
+    internal int? _testWaitRetryIntervalMs;
 
     // 保存房间信息用于重连
     private string? _currentRoomCode;
@@ -256,6 +421,7 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task<bool> ConnectAsync(string serverUrl, CancellationToken ct)
     {
+        BindTaskLifetime(ct);
         var maskedUrl = MaskServerUrl(serverUrl);
         try
         {
@@ -276,8 +442,10 @@ public class CoordinatorClient : IAsyncDisposable
             // 启动心跳定时器，每 5 秒发送一次
             _heartbeatTimer = new Timer(async _ =>
             {
+                if (Interlocked.Exchange(ref _heartbeatRunning, 1) != 0) return;
                 try { await SendHeartbeatAsync(); }
-                catch { /* 忽略心跳异常 */ }
+                catch { /* 心跳单次失败不启动第二套重连 */ }
+                finally { Volatile.Write(ref _heartbeatRunning, 0); }
             }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
 
             return true;
@@ -361,6 +529,11 @@ public class CoordinatorClient : IAsyncDisposable
                 }
 
                 case GatewayProtocol.Events.RoomClosed:
+                    lock (_roomLock)
+                    {
+                        if (env.RoomCode != null && _roomSession != null && env.RoomCode != _roomSession.RoomCode) break;
+                    }
+                    if (!_selfClosingRoom) EndRoomSession(env.GetString("reason"));
                     RoomClosed?.Invoke(env.GetString("reason"));
                     break;
 
@@ -592,100 +765,100 @@ public class CoordinatorClient : IAsyncDisposable
             Stopped = env.Name == GatewayProtocol.Events.SyncRouteAnchorStopped,
         };
 
-    /// <summary>SignalR 内置自动重连成功（同一连接，新 connectionId）。</summary>
-    private async Task OnReconnected(string? newConnectionId)
+    /// <summary>恢复只能使用掉线时冻结的房间上下文，不能借用后继任务的 AsyncLocal 身份。</summary>
+    private async Task RestoreRoomAsync(RoomSession session, CancellationToken ct)
     {
-        _logger.LogInformation("[联机] SignalR 重连成功，重新加入房间: {Code}", _currentRoomCode);
-        if (!string.IsNullOrEmpty(_currentRoomCode))
+        if (!IsCurrent(session)) return;
+        using (var hello = CreateRpcBudget(ct)) await _gateway!.HelloAsync(hello.Token);
+        if (!IsCurrent(session)) return;
+        using var join = CreateRpcBudget(ct);
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
         {
-            try
-            {
-                // v3：断线后服务端会话登记已清除，必须先重新 hello 再 join（DAP 时序）
-                if (_gateway != null)
-                    await _gateway.HelloAsync();
-                await JoinRoomAsync(_currentRoomCode, _playerName ?? "", _playerUid ?? "");
-                _logger.LogInformation("[联机] 重连后重新加入房间成功");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[联机] 重连后重新加入房间失败");
-            }
+            roomCode = session.RoomCode, playerName = session.Name, playerUid = session.Uid ?? "",
+            hoeingBatchId = session.BatchId,
+            reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
+        }, session.RoomCode, join.Token);
+        ct.ThrowIfCancellationRequested();
+        if (!response.GetBool("success"))
+            throw new MultiplayerSessionFailedException("原联机房间拒绝恢复加入");
+        MarkRoomReady(session);
+    }
+
+    internal async Task OnReconnected(string? newConnectionId)
+    {
+        RoomSession? session;
+        lock (_roomLock) session = _roomSession;
+        if (session == null || !IsCurrent(session)) return;
+        try
+        {
+            using var budget = CreateRpcBudget(session.End.Token, RecoveryRemaining(session));
+            await _recoveryGate.WaitAsync(budget.Token);
+            try { await RestoreRoomAsync(session, budget.Token); }
+            finally { _recoveryGate.Release(); }
+            if (IsCurrent(session)) _logger.LogInformation("[联机] Hello 与原房间重新加入均已确认");
+        }
+        catch (Exception ex)
+        {
+            if (IsCurrent(session)) EndRoomSession($"联机恢复失败: {ex.Message}", true, session.Epoch);
         }
     }
 
-    private Task OnReconnecting(Exception? error)
+    internal Task OnReconnecting(Exception? error)
     {
-        _logger.LogWarning(error, "[联机] SignalR 连接断开，正在自动重连...");
-        _worldStateMonitor?.NotifyHeartbeatSuccess(); // 重置失败计数
+        lock (_roomLock)
+        {
+            if (_roomSession is { Ended: false } session)
+            {
+                if (!_isReconnecting)
+                {
+                    session.RecoveryStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                    session.Ready = NewReady();
+                }
+                _isReconnecting = true;
+                _isInRoom = false;
+            }
+        }
+        _logger.LogWarning(error, "[联机] SignalR 连接断开，暂停新路点和动作，等待原房间恢复...");
+        _worldStateMonitor?.NotifyHeartbeatSuccess();
         return Task.CompletedTask;
     }
 
     private async Task OnConnectionClosed(Exception? ex)
     {
-        if (_isReconnecting)
+        await OnReconnecting(ex);
+        RoomSession? session;
+        lock (_roomLock) session = _roomSession;
+        if (session == null || !IsCurrent(session)) return;
+        try
         {
-            _logger.LogWarning("CoordinatorClient 重连期间再次断线，忽略（等当前重连流程完成）");
-            return;
-        }
-
-        _isReconnecting = true;
-        _isInRoom = false;
-        _logger.LogWarning(ex, "CoordinatorClient 连接断开，开始指数退避重连...");
-
-        if (_gateway == null)
-        {
-            _isReconnecting = false;
-            return;
-        }
-
-        var retryDelays = new[] { 0, 2000, 5000, 10000 };
-        bool reconnected = false;
-
-        for (int round = 1; round <= 2 && !reconnected; round++)
-        {
-            if (round > 1)
+            using var budget = CreateRpcBudget(session.End.Token, RecoveryRemaining(session));
+            await _recoveryGate.WaitAsync(budget.Token);
+            try
             {
-                _logger.LogInformation("CoordinatorClient 第{Round}轮重连前等待30秒...", round);
-                await Task.Delay(30000);
-            }
-
-            for (int attempt = 0; attempt < retryDelays.Length; attempt++)
-            {
-                if (retryDelays[attempt] > 0)
-                    await Task.Delay(retryDelays[attempt]);
-
-                try
+                var delays = new[] { 0, 2000, 5000, 10000, 30000, 0, 2000, 5000, 10000 };
+                foreach (var delay in delays)
                 {
-                    await _gateway.ReconnectStartAsync();
-                    // v3：重连成功后必须先重新 hello（DAP 时序），hello 失败计入该次重连失败
-                    await _gateway.HelloAsync();
-                    reconnected = true;
-                    _logger.LogInformation("CoordinatorClient 重连成功（第{Round}轮，第{Attempt}次）", round, attempt + 1);
-
-                    // 重连后重新加入房间
-                    if (!string.IsNullOrEmpty(_currentRoomCode) && !string.IsNullOrEmpty(_playerName))
+                    budget.Token.ThrowIfCancellationRequested();
+                    if (!IsCurrent(session)) return;
+                    if (delay > 0) await Task.Delay(delay, budget.Token);
+                    try
                     {
-                        await JoinRoomAsync(_currentRoomCode, _playerName, _playerUid ?? "");
+                        using var start = CreateRpcBudget(budget.Token);
+                        await _gateway!.ReconnectStartAsync(start.Token);
+                        await RestoreRoomAsync(session, budget.Token);
+                        return;
                     }
-                    break;
+                    catch (MultiplayerSessionFailedException) { throw; }
+                    catch (Exception retryEx) when (!budget.IsCancellationRequested)
+                    { _logger.LogWarning(retryEx, "[联机] 原房间重连本次失败，预算内重试"); }
                 }
-                catch (Exception retryEx)
-                {
-                    _logger.LogWarning(retryEx, "CoordinatorClient 重连失败（第{Round}轮，第{Attempt}次）", round, attempt + 1);
-                }
+                throw new MultiplayerSessionFailedException("原房间重连次数已耗尽");
             }
+            finally { _recoveryGate.Release(); }
         }
-
-        _isReconnecting = false;
-
-        if (!reconnected)
+        catch (Exception failure)
         {
-            _logger.LogError("CoordinatorClient 重连失败，触发降级");
-            OnDegraded?.Invoke();
-        }
-        else
-        {
-            _logger.LogInformation("CoordinatorClient 重连完成");
+            if (IsCurrent(session)) EndRoomSession($"联机恢复失败: {failure.Message}", true, session.Epoch);
         }
     }
 
@@ -753,66 +926,90 @@ public class CoordinatorClient : IAsyncDisposable
         }
     }
 
-    public async Task<bool> JoinRoomAsync(string roomCode, string playerName, string? playerUid = null)
+    public async Task<bool> JoinRoomAsync(string roomCode, string playerName, string? playerUid = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null) return false;
+        var batchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId;
+        // 旧恢复先收到撤销，再等待同一窄门；后台回调不得阻塞正常轮换的取消。
+        DetachRoomForExplicitChange();
+        using var budget = CreateRpcBudget(ct, includeRoom: false);
+        await _recoveryGate.WaitAsync(budget.Token);
         try
         {
-            // version-compatibility-check R2.1：上报完整 Global.Version（含构建元数据，不截断）
+            lock (_roomLock)
+                if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
+            DetachRoomForExplicitChange();
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
             {
-                roomCode,
-                playerName,
-                playerUid = playerUid ?? "",
-                hoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
+                roomCode, playerName, playerUid = playerUid ?? "", hoeingBatchId = batchId,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            }, roomCode);
+            }, roomCode, budget.Token);
+            ct.ThrowIfCancellationRequested();
+            budget.Token.ThrowIfCancellationRequested();
             var result = resp.GetBool("success");
-            _currentRoomCode = roomCode;
-            _playerName = playerName;
-            _playerUid = playerUid;
-            _isInRoom = result;
-            _logger.LogInformation("JoinRoomAsync 完成: Room={RoomCode}, Player={PlayerName}, Result={Result}",
-                roomCode, playerName, result);
+            if (result)
+            {
+                var session = BeginRoomSession(roomCode, playerName, playerUid, batchId);
+                ct.ThrowIfCancellationRequested();
+                MarkRoomReady(session);
+                result = IsCurrent(session);
+            }
+            _logger.LogInformation("JoinRoomAsync 完成: Room={RoomCode}, Player={PlayerName}, Result={Result}", roomCode, playerName, result);
             return result;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "JoinRoomAsync 失败: Room={RoomCode}, Player={PlayerName}", roomCode, playerName);
             return false;
         }
+        finally { _recoveryGate.Release(); }
     }
 
     public async Task LeaveRoomAsync()
     {
         if (_gateway == null) return;
+        var epoch = CurrentRoomEpoch;
+        EndRoomSession("LeaveRoomAsync", expectedEpoch: epoch);
+        using var budget = CreateRpcBudget(CancellationToken.None, includeRoom: false);
+        await _recoveryGate.WaitAsync(budget.Token);
         try
         {
-            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomLeave, null);
-            _isInRoom = false;
+            RoomSession? leaving;
+            lock (_roomLock)
+            {
+                leaving = _roomSession;
+                if (leaving?.Epoch != epoch) return;
+            }
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomLeave, null, leaving?.RoomCode, budget.Token);
             _logger.LogInformation("LeaveRoomAsync 完成");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "LeaveRoomAsync 失败");
-        }
+        catch (Exception ex) { _logger.LogError(ex, "LeaveRoomAsync 失败"); }
+        finally { _recoveryGate.Release(); }
     }
 
-    public async Task CloseRoomAsync()
+    public async Task CloseRoomAsync(long? expectedEpoch = null)
     {
         if (_gateway == null) return;
+        var epoch = expectedEpoch ?? CurrentRoomEpoch;
+        EndRoomSession("CloseRoomAsync", expectedEpoch: epoch);
+        using var budget = CreateRpcBudget(CancellationToken.None, includeRoom: false);
+        await _recoveryGate.WaitAsync(budget.Token);
         try
         {
-            // 标记本地正在主动关闭房间，使后续到达的 RoomClosed 广播能识别为"自触发"
-            // （本节点是房主，多世界轮次切换时主动关房，应避免 RoomClosed 取消主任务流程）
-            _selfClosingRoom = true;
-            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomClose, null);
-            _isInRoom = false;
+            RoomSession? closing;
+            lock (_roomLock)
+            {
+                closing = _roomSession;
+                if (closing?.Epoch != epoch) return;
+                _selfClosingRoom = true;
+            }
+            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomClose, null, closing?.RoomCode, budget.Token);
+            // 新房间只能在释放同一门后显式建立；旧 Close 不会作用于后继房间。
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "CloseRoomAsync 失败");
-        }
+        catch (Exception ex) { _logger.LogError(ex, "CloseRoomAsync 失败"); }
+        finally { _recoveryGate.Release(); }
     }
 
     /// <summary>本地是否正在主动关闭房间（CloseRoomAsync 已发起，等待广播回环）</summary>
@@ -822,21 +1019,26 @@ public class CoordinatorClient : IAsyncDisposable
     /// 上报协同中止（hoeing-multiplayer-coordinated-abort-restart）：任一端真异常中止时通知服务器广播全房间。
     /// 旧服务器无此命令会返回 error，catch 降级仅记日志，不影响本地停止。
     /// </summary>
-    public async Task ReportCoordinatedAbortAsync(string? reason)
+    public async Task ReportCoordinatedAbortAsync(string? reason, long? expectedEpoch = null)
     {
         if (_gateway == null) return;
+        var epoch = expectedEpoch ?? CurrentRoomEpoch;
+        using var budget = CreateRpcBudget(CancellationToken.None, includeRoom: false);
+        await _recoveryGate.WaitAsync(budget.Token);
         try
         {
-            // reporterUid 为空时服务器端跳过冒名校验；10s 超时：半死连接下 InvokeAsync 默认要等
-            // SignalR server-timeout（~30s）才失败，会拖住后续的 CloseRoomAsync（第二收敛通道）。
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            RoomSession? reporting;
+            lock (_roomLock)
+            {
+                reporting = _roomSession;
+                if (reporting?.Epoch != epoch) return;
+            }
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SyncReportCoordinatedAbort,
-                new { reason, reporterUid = string.IsNullOrEmpty(_playerUid) ? null : _playerUid }, null, timeoutCts.Token);
+                new { reason, reporterUid = reporting?.Uid ?? _playerUid }, reporting?.RoomCode, budget.Token);
         }
         catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "ReportCoordinatedAbortAsync 失败（降级为纯本地判定）: reason={Reason}", reason);
-        }
+        { _logger.LogWarning(ex, "ReportCoordinatedAbortAsync 失败: {Reason}", reason); }
+        finally { _recoveryGate.Release(); }
     }
 
     /// <summary>
@@ -883,8 +1085,10 @@ public class CoordinatorClient : IAsyncDisposable
     public async Task SendHeartbeatAsync()
     {
         if (_gateway == null) return;
+        if (!IsConnected) return;
         try
         {
+            using var budget = CreateRpcBudget(CancellationToken.None);
             if (_currentRouteIndex >= 0)
             {
                 await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, new
@@ -892,11 +1096,11 @@ public class CoordinatorClient : IAsyncDisposable
                     routeIndex = _currentRouteIndex,
                     routeStartTime = _routeStartTime,
                     routeEstimatedSeconds = _routeEstimatedSeconds,
-                });
+                }, null, budget.Token);
             }
             else
             {
-                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, null);
+                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, null, null, budget.Token);
             }
             _worldStateMonitor?.NotifyHeartbeatSuccess();
         }
@@ -988,37 +1192,39 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 创建房间
     /// </summary>
-    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount)
+    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null) return null;
+        var batchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId;
+        var participants = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids;
+        DetachRoomForExplicitChange();
+        using var budget = CreateRpcBudget(ct, includeRoom: false);
+        await _recoveryGate.WaitAsync(budget.Token);
         try
         {
+            lock (_roomLock)
+                if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
+            DetachRoomForExplicitChange();
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
             {
-                playerName,
-                whitelist = whitelist ?? new List<string>(),
-                playerUid,
-                expectedPlayerCount,
-                hoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
-                expectedParticipantUids = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids,
+                playerName, whitelist = whitelist ?? new List<string>(), playerUid, expectedPlayerCount,
+                hoeingBatchId = batchId, expectedParticipantUids = participants,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            });
+            }, null, budget.Token);
+            ct.ThrowIfCancellationRequested();
+            budget.Token.ThrowIfCancellationRequested();
             var result = resp.GetString("roomCode");
-            _playerName = playerName;
-            _playerUid = playerUid;
-            _isInRoom = !string.IsNullOrEmpty(result);
-            if (!string.IsNullOrEmpty(result))
-            {
-                _currentRoomCode = result;
-                return result;
-            }
-            return null;
+            if (string.IsNullOrEmpty(result)) return null;
+            var session = BeginRoomSession(result, playerName, playerUid, batchId);
+            ct.ThrowIfCancellationRequested();
+            MarkRoomReady(session);
+            return IsCurrent(session) ? result : null;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
-        {
-            _logger.LogError(ex, "CreateRoomAsync 失败");
-            return null;
-        }
+        { _logger.LogError(ex, "CreateRoomAsync 失败"); return null; }
+        finally { _recoveryGate.Release(); }
     }
 
     /// <summary>
@@ -1383,36 +1589,27 @@ public class CoordinatorClient : IAsyncDisposable
     /// </summary>
     public async Task<bool> EnsureInRoomAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return false;
+        RoomSession? session;
+        lock (_roomLock) session = _roomSession;
+        if (session == null || !IsCurrent(session)) return false;
         if (_isInRoom && AmIInRoomRoster()) return true;
-        if (string.IsNullOrEmpty(_currentRoomCode)) return false;
         try
         {
-            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
+            using var budget = CreateRpcBudget(ct);
+            await _recoveryGate.WaitAsync(budget.Token);
+            try
             {
-                roomCode = _currentRoomCode,
-                playerName = _playerName ?? "",
-                playerUid = _playerUid ?? "",
-                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            }, _currentRoomCode);
-            var ok = resp.GetBool("success");
-            _isInRoom = ok;
-            if (ok)
-            {
-                _logger.LogInformation("[联机] EnsureInRoomAsync：重新确认加入房间 {Code} 成功", _currentRoomCode);
-                try { await SendHeartbeatAsync(); } catch { /* 心跳失败不阻塞，下个周期重试 */ }
+                if (!IsCurrent(session)) return false;
+                await RestoreRoomAsync(session, budget.Token);
+                return IsCurrent(session) && _isInRoom;
             }
-            else
-            {
-                _logger.LogWarning("[联机] EnsureInRoomAsync：重新加入房间 {Code} 被拒（可能已满/已开锄/白名单）", _currentRoomCode);
-            }
-            return ok;
+            finally { _recoveryGate.Release(); }
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "[联机] EnsureInRoomAsync 失败（静默，下个周期重试）");
-            return false;
-        }
+        { _logger.LogWarning(ex, "[联机] 房间登记未确认"); return false; }
     }
 
     /// <summary>
@@ -1615,28 +1812,7 @@ public class CoordinatorClient : IAsyncDisposable
     /// 静默返回 false，本方法自上线起从未成功过。现按 owner 决策映射到 room.join——
     /// 服务端对同名/同 UID 重连幂等（与 Reconnected 回调 / EnsureInRoomAsync 同一路径），死路就此打通。
     /// </summary>
-    public async Task<bool> RejoinCurrentRoomAsync()
-    {
-        if (_gateway == null || string.IsNullOrEmpty(_currentRoomCode) || string.IsNullOrEmpty(_playerName)) return false;
-        try
-        {
-            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
-            {
-                roomCode = _currentRoomCode,
-                playerName = _playerName,
-                playerUid = _playerUid ?? "",
-                reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            }, _currentRoomCode);
-            var result = resp.GetBool("success");
-            _isInRoom = result;
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "RejoinCurrentRoomAsync 失败");
-            return false;
-        }
-    }
+    public Task<bool> RejoinCurrentRoomAsync() => EnsureInRoomAsync(_lifetimeCts.Token);
 
     /// <summary>
     /// 上报到达同步点
@@ -1737,15 +1913,18 @@ public class CoordinatorClient : IAsyncDisposable
     /// 上报成员状态（Normal/Fighting/Rejoining/Reviving/Offline）
     /// targetProgress：异常恢复后将到达的同步点进度值（仅 Reviving/Rejoining 时有意义，其他时候传 -1）
     /// </summary>
-    public async Task ReportMemberStatusAsync(MemberStatus status, long targetProgress = -1)
+    public async Task ReportMemberStatusAsync(MemberStatus status, long targetProgress = -1, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return;
         try
         {
+            using var budget = CreateRpcBudget(ct);
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyMemberStatusChanged,
-                new { playerUid = PlayerUid ?? "", status = status.ToString(), targetProgress });
+                new { playerUid = PlayerUid ?? "", status = status.ToString(), targetProgress }, null, budget.Token);
             _logger.LogDebug("[联机] 上报成员状态: {Status}, 目标进度={Target}", status, targetProgress);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ReportMemberStatusAsync 失败（静默忽略）");
@@ -1791,15 +1970,18 @@ public class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 上报战斗状态
     /// </summary>
-    public async Task ReportFightingStatusAsync(bool isFighting)
+    public async Task ReportFightingStatusAsync(bool isFighting, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return;
         try
         {
+            using var budget = CreateRpcBudget(ct);
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.AnomalyFightingStatusChanged,
-                new { playerUid = PlayerUid ?? "", isFighting });
+                new { playerUid = PlayerUid ?? "", isFighting }, null, budget.Token);
             _logger.LogDebug("[联机] 上报战斗状态: {IsFighting}", isFighting);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "ReportFightingStatusAsync 失败（静默忽略）");
@@ -1814,15 +1996,18 @@ public class CoordinatorClient : IAsyncDisposable
     /// 已经在等的对方——抢报方自己不阻塞，由后续的严格 WaitForAllPlayers 路径再次上报
     /// 走完整等待逻辑（idempotent）。
     /// </summary>
-    public async Task FireAndForgetArrivalAsync(string syncId, long syncProgress = -1)
+    public async Task FireAndForgetArrivalAsync(string syncId, long syncProgress = -1, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return;
         try
         {
+            using var budget = CreateRpcBudget(ct);
             await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
-                new { syncId, syncProgress });
+                new { syncId, syncProgress }, null, budget.Token);
             _logger.LogDebug("[联机] 抢报到达（fire-and-forget）: {SyncId}, 进度={Progress}", syncId, syncProgress);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 抢报到达失败（已忽略）: {SyncId}", syncId);
@@ -2016,13 +2201,14 @@ public class CoordinatorClient : IAsyncDisposable
     /// syncProgress：当前同步点的全局进度值（用于服务端判定异常玩家是否会经过此点）
     /// 返回 true 仅表示与当前 syncId 匹配的 AllArrived 已被消费（严格等待完成）；
     /// 未连接/未匹配返回 false；取消、超时、房间关闭和其它异常仍按原有语义抛出，
-    /// 由调用方（MultiplayerCoordinator.WaitForAllPlayers）统一映射为未确认完成。
+    /// 由调用方（MultiplayerCoordinator.WaitForAllPlayers）终止未确认的联机会话。
     /// 进程内 API 变化，不影响 subscribe-before-action / 匹配逻辑 / SignalR 协议。
     /// </summary>
     public async Task<bool> WaitForAllPlayersAsync(string syncId, CancellationToken ct, long syncProgress = -1, bool wasFastReported = false)
     {
-        // 未连接：没有任何 AllArrived 匹配被消费，返回 false 表示未确认完成（不能误判为严格等待完成）。
-        if (_gateway == null || !IsConnected) return false;
+        ct.ThrowIfCancellationRequested();
+        using var linkedCts = CreateRpcBudget(ct, _testStrictWaitBudget ?? TimeSpan.FromSeconds(120));
+        if (_gateway == null) return false;
 
         // 使用与 SyncBarrier 相同的模式：先订阅事件，再发送动作，本地等待
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2041,16 +2227,33 @@ public class CoordinatorClient : IAsyncDisposable
         AllArrived += OnArrived;
         RoomClosed += OnRoomClosed;
 
+        async Task SendArrivalAsync()
+        {
+            while (true)
+            {
+                linkedCts.Token.ThrowIfCancellationRequested();
+                await WaitForBusinessReadyAsync(linkedCts.Token);
+                try
+                {
+                    await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
+                        new { syncId, syncProgress }, null, linkedCts.Token);
+                    return;
+                }
+                catch (Exception) when (!linkedCts.IsCancellationRequested && (_isReconnecting || !IsConnected))
+                {
+                    // 仅传输重连可等待原房间恢复；仍使用同一份总预算，不制造本地放行。
+                }
+            }
+        }
+
         try
         {
-            // 首次上报到达
-            await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
-                new { syncId, syncProgress });
+            // 连接恢复、首次发送、重试和事件等待共用入口创建的 120 秒总预算。
+            await WaitForBusinessReadyAsync(linkedCts.Token);
+            await SendArrivalAsync();
             _logger.LogDebug("[联机] 请求等待所有玩家: {SyncId}, 进度={Progress}", syncId, syncProgress);
 
             // 本地等待 AllArrived 事件（受 CT 控制，可被用户取消）
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
 
             // fastsync-claim-short-circuit-premature-release-fix（OQ-4=a / 方案 B）：
             // 短探测窗口区分"全员已到 / 服务端补发命中 → 立即放行"与"全员未到 → 进入等待"。
@@ -2060,6 +2263,8 @@ public class CoordinatorClient : IAsyncDisposable
             var probe = await Task.WhenAny(tcs.Task, Task.Delay(replayProbeMs, linkedCts.Token));
             if (probe == tcs.Task && tcs.Task.IsCompletedSuccessfully)
             {
+                linkedCts.Token.ThrowIfCancellationRequested();
+                await WaitForBusinessReadyAsync(linkedCts.Token);
                 if (wasFastReported)
                     _logger.LogInformation("[联机][FastSync] 已抢报且全员已到，立即放行: {SyncId}", syncId);
                 else
@@ -2076,7 +2281,7 @@ public class CoordinatorClient : IAsyncDisposable
             // 注意：重试循环必须正确响应 linkedCts 超时取消，否则 Task.Delay(cancelledToken) 会
             // 被 Task.WhenAny 吃掉异常，导致循环无法被 catch (OperationCanceledException) 捕获，
             // 进入无限重试（日志中同一毫秒出现大量重复"等待中，重试上报到达"即为该症状）。
-            const int retryIntervalMs = 5000;
+            var retryIntervalMs = _testWaitRetryIntervalMs ?? 5000;
             while (true)
             {
                 // 每次循环迭代前检查超时/取消，确保 linkedCts 取消后立即退出而不是继续重试
@@ -2089,13 +2294,17 @@ public class CoordinatorClient : IAsyncDisposable
                     break;
                 }
                 // 5 秒到了还没收到 AllArrived → 重试上报
+                linkedCts.Token.ThrowIfCancellationRequested();
+                await WaitForBusinessReadyAsync(linkedCts.Token);
                 _logger.LogDebug("[联机] 等待中，重试上报到达: {SyncId}", syncId);
-                await _gateway.SendCommandFireAndForgetAsync(GatewayProtocol.Names.SyncWaitForAllPlayers,
-                    new { syncId, syncProgress });
+                await SendArrivalAsync();
             }
 
             // A completed TCS can also represent RoomClosed cancellation.
-            return await tcs.Task;
+            var arrived = await tcs.Task;
+            linkedCts.Token.ThrowIfCancellationRequested();
+            await WaitForBusinessReadyAsync(linkedCts.Token);
+            return arrived;
         }
         catch (OperationCanceledException)
         {
@@ -2116,6 +2325,8 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async Task DisconnectAsync()
     {
+        EndRoomSession("disconnect");
+        _lifetimeCts.Cancel();
         if (_gateway == null) return;
         try
         {
@@ -2123,7 +2334,7 @@ public class CoordinatorClient : IAsyncDisposable
             _heartbeatTimer = null;
             _isInRoom = false;
             _gateway.Closed -= OnConnectionClosed;
-            await _gateway.StopAsync();
+            await _gateway.StopAsync().WaitAsync(TimeSpan.FromSeconds(10));
             _logger.LogInformation("CoordinatorClient 已断开连接");
         }
         catch (Exception ex)
@@ -2134,12 +2345,18 @@ public class CoordinatorClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _taskCancellation.Dispose();
+        EndRoomSession("dispose");
+        _lifetimeCts.Cancel();
         _heartbeatTimer?.Dispose();
         _heartbeatTimer = null;
         if (_gateway != null)
         {
             _gateway.Closed -= OnConnectionClosed;
-            await _gateway.DisposeAsync();
+            _gateway.Reconnecting -= OnReconnecting;
+            _gateway.Reconnected -= OnReconnected;
+            // 超时向上报告清理失败，保留实例引用；不把超时写成已经断开。
+            await _gateway.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
             _gateway = null;
         }
     }

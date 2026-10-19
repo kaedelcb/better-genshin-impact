@@ -606,6 +606,19 @@ public partial class PathExecutor
         RecordWaypoint = CurWaypoint;
     }
 
+    private Task CheckMultiplayerBoundaryAsync() => MultiplayerCoordinator == null
+        ? Task.CompletedTask
+        : MultiplayerCoordinator.EnsureExecutionAllowedAsync(ct, CooperativeContext?.IsReplay == true);
+
+    // 联机专用调用边界：共享脚本吞掉 OCE 后也必须在返回处重新观察停止。
+    internal static async Task RunMultiplayerActionAsync(MultiplayerCoordinator? coordinator,
+        bool replay, Func<Task> action, CancellationToken token)
+    {
+        if (coordinator != null) await coordinator.EnsureExecutionAllowedAsync(token, replay);
+        await action();
+        if (coordinator != null) await coordinator.EnsureExecutionAllowedAsync(token, replay);
+    }
+
     public async Task Pathing(PathingTask task)
     {
         var previousInstance = CurrentActiveInstance;
@@ -728,6 +741,7 @@ public partial class PathExecutor
                 _wpIdxToSyncIdCache = __cache;
             }
 
+            await CheckMultiplayerBoundaryAsync();
             // === 集体卡死跳段消费点 2（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
             // 段切换前消费一次：避免跨段残留信号位 + 段开始前若已收到跳段请求立即处理。
             // 段切换点不在 MoveForward 持按状态，故无需 KeyUp。
@@ -802,6 +816,7 @@ public partial class PathExecutor
                     var last2Waypoints = false;
                     foreach (var waypoint in waypoints) // 一条路径
                     {
+                        await CheckMultiplayerBoundaryAsync();
                         // === 实时中断检查（multiplayer-abort-and-realign spec）===
                         // 在每个路径点迭代时检查是否收到中断指令
                         if (MultiplayerCoordinator?.IsAbortRequested == true)
@@ -1118,6 +1133,7 @@ public partial class PathExecutor
                                 }
                             }
 
+                            await CheckMultiplayerBoundaryAsync();
                             // 联机模式：传送完成后检查是否需要同步等待
                             // 异常等待点：强制等待，不依赖 SyncAtEveryTeleport 配置
                             // 正常同步点：按配置决定是否等待
@@ -1128,7 +1144,7 @@ public partial class PathExecutor
                                 {
                                     _needReportNormalBeforeSync = false;
                                     Logger.LogInformation("[联机] 异常恢复：在同步点前上报 Normal，恢复全员等待判定");
-                                    try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Normal); } catch { }
+                                    try { await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Normal, ct: ct); } catch { }
                                 }
 
                                 // 优先检查服务端指令的等待点（multiplayer-abnormal-wait-coordination）
@@ -1189,7 +1205,7 @@ public partial class PathExecutor
                                                 if (MultiplayerCoordinator.TryGetLaggingCatchUpDecision(mySeg))
                                                 {
                                                     // ① fire-and-forget 上报本段进度（推进服务端 CurrentProgress，避免 BUG-C 大部队空等）
-                                                    await MultiplayerCoordinator.FastReportAsync(tpSyncId, tpProgress);
+                                                    await MultiplayerCoordinator.FastReportAsync(tpSyncId, tpProgress, ct);
                                                     // ② 抛 LaggingCatchUpSkipException 跳出 try 路点循环，由 catch(RetryException) 最前面的
                                                     //    非异常跳段分支处理（置 SkipToNextSegment + break）。不用 continue/裸 break/throw 普通 RetryException（BUG-D）。
                                                     Logger.LogWarning("[落后追赶] 段同步点 {SyncId} 判定落后，已 fire-and-forget 上报本段进度，抛 LaggingCatchUpSkipException 跳段，mySeg={My}", tpSyncId, mySeg);
@@ -1294,6 +1310,7 @@ public partial class PathExecutor
                                 await MoveCloseTo(waypoint, fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint);
                             }
 
+                            await CheckMultiplayerBoundaryAsync();
                             // === 形式集合等待块（fastsync-preclaim-fires-after-rendezvous-fix / OQ-1=方案甲）===
                             // 挪动后位置：MoveTo/MoveCloseTo（走向集合点）之后、Action 块之前。
                             // 守卫保持 waypoint.Type != Teleport（此分支本就是非传送），__fastSyncId 复用顶部反查。
@@ -1310,6 +1327,7 @@ public partial class PathExecutor
                                 Logger.LogInformation("[联机] 集合完成，继续前进，syncId={SyncId}", __fastSyncId);
                             }
 
+                            await CheckMultiplayerBoundaryAsync();
                             //skipOtherOperations如果重试，则跳过相关操作，
                             if ((!string.IsNullOrEmpty(waypoint.Action) && !_skipOtherOperations) ||
                                 waypoint.Action == ActionEnum.CombatScript.Code)
@@ -1401,10 +1419,11 @@ public partial class PathExecutor
                                         _activeCooperativeFightKey = CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
                                         ActiveCooperativeFight = fightScope;
                                     }
-                                    await MultiplayerCoordinator.ReportFightingStatusAsync(true);
+                                    await MultiplayerCoordinator.ReportFightingStatusAsync(true, ct);
                                     try
                                     {
-                                        await AfterMoveToTarget(waypoint, nextWaypoint);
+                                        await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                                            () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
                                         cooperativeFightInterrupted = fightScope?.CheckStop() == true;
                                         if (fightScope != null && !cooperativeFightInterrupted && _multiplayerRevivalDetected == 0 && !ct.IsCancellationRequested)
                                             CooperativeContext?.CompleteFight(fightScope.PointId);
@@ -1425,12 +1444,14 @@ public partial class PathExecutor
                                             _activeCooperativeFightKey = null;
                                         }
                                         // 无论战斗正常结束还是超时（AutoFightTask 内部处理），都清除 Fighting 状态
-                                        await MultiplayerCoordinator.ReportFightingStatusAsync(false);
+                                        if (!ct.IsCancellationRequested)
+                                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
                                     }
                                 }
                                 else
                                 {
-                                    await AfterMoveToTarget(waypoint, nextWaypoint);
+                                    await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                                            () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
                                 }
                                 
                                 if (waypoint.Action == ActionEnum.Fight.Code)
@@ -1915,6 +1936,7 @@ public partial class PathExecutor
                 }
                 catch (TaskCanceledException e)
                 {
+                    if (MultiplayerCoordinator != null) throw;
                     if (!RunnerContext.Instance.isAutoFetchDispatch && RunnerContext.Instance.IsContinuousRunGroup)
                     {
                         throw;
@@ -1926,6 +1948,7 @@ public partial class PathExecutor
                 }
                 catch (RetryException retryException)
                 {
+                    await CheckMultiplayerBoundaryAsync();
                     // 仅当本次重试确有真实复苏时才发布“恢复中”（Recovering 不豁免任何到达义务，
                     // 也不产生计划项；它只让队友知道本机在恢复）。局部保护重试/落后追赶不发布，
                     // 避免无谓占用重跑 RPC 门与产生团队可见噪声。
@@ -2089,8 +2112,8 @@ public partial class PathExecutor
                             targetProgress, retryException.Message);
                         try
                         {
-                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
-                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
+                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress, ct);
                             if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, true, ct);
                         }
                         catch { }
@@ -2110,8 +2133,8 @@ public partial class PathExecutor
                             targetProgress, retryException.Message);
                         try
                         {
-                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
-                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
+                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress, ct);
                             if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, false, ct);
                         }
                         catch { }
@@ -2131,8 +2154,8 @@ public partial class PathExecutor
                             targetProgress, retryException.Message);
                         try
                         {
-                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
-                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress);
+                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
+                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, targetProgress, ct);
                             if (CooperativeContext != null) await CooperativeContext.ReportBypassAsync(CurWaypoints.Item1, false, ct);
                         }
                         catch { }
@@ -2161,8 +2184,8 @@ public partial class PathExecutor
 
                         try
                         {
-                            await MultiplayerCoordinator.ReportFightingStatusAsync(false);
-                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, progressForReport);
+                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
+                            await MultiplayerCoordinator.ReportMemberStatusAsync(MemberStatus.Reviving, progressForReport, ct);
                         }
                         catch { }
 
@@ -3493,7 +3516,7 @@ public partial class PathExecutor
                 {
                     // fire-and-forget：上报后立即返回，不阻塞 MoveTo 主流程；
                     // 后续严格 WaitForAllPlayers 路径会再上报一次走完整等待（服务端 idempotent）
-                    await MultiplayerCoordinator!.FastReportAsync(fastSyncId!, __progress);
+                    await MultiplayerCoordinator!.FastReportAsync(fastSyncId!, __progress, ct);
                     Logger.LogInformation("[联机][FastSync] MoveTo 抢报命中 syncId={SyncId} dist={Dist:F2}", fastSyncId, __fastDist);
                 }
                 catch (OperationCanceledException) { throw; }
@@ -4247,7 +4270,7 @@ public partial class PathExecutor
                 try
                 {
                     // fire-and-forget：上报后立即返回，不阻塞 MoveCloseTo 主流程
-                    await MultiplayerCoordinator!.FastReportAsync(fastSyncId!, __progress);
+                    await MultiplayerCoordinator!.FastReportAsync(fastSyncId!, __progress, ct);
                     Logger.LogInformation("[联机][FastSync] MoveCloseTo 抢报命中 syncId={SyncId} dist={Dist:F2}", fastSyncId, __fastDist);
                 }
                 catch (OperationCanceledException) { throw; }

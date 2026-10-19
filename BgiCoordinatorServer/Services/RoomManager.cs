@@ -18,7 +18,6 @@ public class RoomManager
     private readonly ConcurrentDictionary<string, Room> _rooms = new();
     // connectionId → roomCode 反向索引，加速查找
     private readonly ConcurrentDictionary<string, string> _connectionRoomMap = new();
-    private readonly ConcurrentDictionary<string, List<PlayerInfo>> _lastRemovedPlayers = new();
     private readonly int _maxRooms;
     private readonly ILogger<RoomManager>? _logger;
 
@@ -149,6 +148,8 @@ public class RoomManager
 
         lock (room)
         {
+            if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room))
+                return (false, "房间不存在");
             if (room.HoeingBatchId is not null && !room.ExpectedParticipantUids.Contains(playerUid, StringComparer.Ordinal))
                 return (false, "hoeing_start_not_participant");
             if (room.HoeingBatchId is not null && room.Players.Any(p => p.PlayerUid == playerUid
@@ -185,7 +186,7 @@ public class RoomManager
                 graceMember.ConnectionId = connectionId;
                 graceMember.LastHeartbeat = DateTime.UtcNow;
                 graceMember.ReportedVersion = reportedVersion ?? "";
-                _connectionRoomMap.TryRemove(oldConnId, out _);
+                RemoveConnectionMappingLocked(oldConnId, roomCode);
                 _connectionRoomMap[connectionId] = roomCode;
                 _logger?.LogInformation("[JoinRoom] 成员 {Name} 宽限期内重连复用，房间 {Code}", playerName, roomCode);
                 return (true, null);
@@ -226,7 +227,7 @@ public class RoomManager
                     return (false, "房间已满（最多4人）");
 
                 // Replace old connection with new one
-                _connectionRoomMap.TryRemove(existing.ConnectionId, out _);
+                RemoveConnectionMappingLocked(existing.ConnectionId, roomCode);
                 foreach (var set in room.ArrivalSets.Values)
                 {
                     if (set.Remove(existing.ConnectionId))
@@ -253,7 +254,7 @@ public class RoomManager
                 ? p.PlayerUid == playerUid : p.PlayerName == playerName && !string.IsNullOrEmpty(playerName));
             if (existingByName != null)
             {
-                _connectionRoomMap.TryRemove(existingByName.ConnectionId, out _);
+                RemoveConnectionMappingLocked(existingByName.ConnectionId, roomCode);
                 foreach (var set in room.ArrivalSets.Values)
                 {
                     if (set.Remove(existingByName.ConnectionId))
@@ -288,9 +289,9 @@ public class RoomManager
                 Status = PlayerStatus.Waiting,
                 LastHeartbeat = DateTime.UtcNow
             });
+            _connectionRoomMap[connectionId] = roomCode;
         }
 
-        _connectionRoomMap[connectionId] = roomCode;
         return (true, null);
     }
 
@@ -810,22 +811,54 @@ public class RoomManager
         return room;
     }
 
-    /// <summary>删除整个房间及其所有玩家的映射（只删除仍在该房间的玩家映射）</summary>
+    /// <summary>删除整个房间及其所有玩家的映射；只清理仍属于该房间实例的状态。</summary>
     public void DeleteRoom(string roomCode)
     {
-        if (!_rooms.TryRemove(roomCode, out var room))
-            return;
+        if (!_rooms.TryGetValue(roomCode, out var room)) return;
         lock (room)
         {
-            room.RerunExecution?.Abort("RoomClosed");
-            foreach (var p in room.Players)
-            {
-                // 只删除映射值仍指向该房间的条目，避免误删已加入新房间的玩家映射
-                if (_connectionRoomMap.TryGetValue(p.ConnectionId, out var mappedRoom) && mappedRoom == roomCode)
-                    _connectionRoomMap.TryRemove(p.ConnectionId, out _);
-            }
+            if (!RemoveRoomLocked(roomCode, room)) return;
         }
         NotifyRoomLogEnded(room);
+    }
+
+    // 调用方持有 room 锁；条件移除避免旧房间/旧连接清理覆盖后继身份。
+    private bool RemoveRoomLocked(string roomCode, Room room)
+    {
+        if (!_rooms.TryRemove(new KeyValuePair<string, Room>(roomCode, room))) return false;
+        room.RerunExecution?.Abort("RoomClosed");
+        foreach (var player in room.Players)
+            RemoveConnectionMappingLocked(player.ConnectionId, roomCode);
+        return true;
+    }
+
+    private void RemoveConnectionMappingLocked(string connectionId, string roomCode)
+        => _connectionRoomMap.TryRemove(new KeyValuePair<string, string>(connectionId, roomCode));
+
+    /// <summary>在当前成员锁内确定断线身份；迟到的旧连接回调不再影响已重连成员。</summary>
+    internal GameDisconnectResult? BeginGameDisconnect(string connectionId, DateTime utcNow, TimeSpan memberGrace)
+    {
+        var (room, roomCode) = GetRoomByConnectionId(connectionId);
+        if (room is null || roomCode is null) return null;
+        bool wasHost;
+        lock (room)
+        {
+            if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room)
+                || !_connectionRoomMap.TryGetValue(connectionId, out var mappedRoom) || mappedRoom != roomCode
+                || !room.Players.Any(p => p.ConnectionId == connectionId)) return null;
+            wasHost = room.HostConnectionId == connectionId;
+            if (wasHost)
+            {
+                if (!RemoveRoomLocked(roomCode, room)) return null;
+            }
+            else
+            {
+                // 重复断线回调不能延长原宽限期。
+                room.GracePendingMembers.TryAdd(connectionId, utcNow + memberGrace);
+            }
+        }
+        if (wasHost) NotifyRoomLogEnded(room);
+        return new GameDisconnectResult(room, roomCode, wasHost);
     }
 
     public (Room? Room, string? RoomCode) GetRoomByConnectionId(string connectionId)
@@ -1005,58 +1038,52 @@ public class RoomManager
         }
     }
 
-    /// <summary>移除超时玩家，返回受影响的房间码列表</summary>
-    public List<string> RemoveDeadPlayers(TimeSpan timeout)
+    /// <summary>唯一的成员过期清退入口；判定、Player/map/集合清理及快照均在同一个 room 锁内。</summary>
+    internal IReadOnlyList<RoomExpirySnapshot> RemoveDeadPlayers(TimeSpan timeout, DateTime? utcNow = null)
     {
-        var affected = new List<string>();
-        var cutoff = DateTime.UtcNow - timeout;
-
+        var results = new List<RoomExpirySnapshot>();
+        var now = utcNow ?? DateTime.UtcNow;
+        var cutoff = now - timeout;
         foreach (var (code, room) in _rooms)
         {
-            Room? endedRoom = null;
-            List<string> deadConnections;
+            var ended = false;
             lock (room)
             {
-                deadConnections = room.Players
-                    .Where(p => p.LastHeartbeat < cutoff)
-                    .Select(p => p.ConnectionId)
-                    .ToList();
-            }
-
-            foreach (var connId in deadConnections)
-            {
-                _connectionRoomMap.TryRemove(connId, out _);
-            }
-
-            lock (room)
-            {
-                var deadPlayers = room.Players
-                    .Where(p => p.LastHeartbeat < cutoff)
-                    .ToList();
-
-                if (deadPlayers.Count > 0)
+                if (!_rooms.TryGetValue(code, out var current) || !ReferenceEquals(current, room)) continue;
+                var expired = room.Players.Where(p =>
+                    room.GracePendingMembers.TryGetValue(p.ConnectionId, out var deadline)
+                        ? now >= deadline : p.LastHeartbeat < cutoff).ToArray();
+                if (expired.Length == 0) continue;
+                var removed = Array.AsReadOnly(expired.Select(RoomPlayerSnapshot.Capture).ToArray());
+                var hostTimedOut = expired.Any(p => p.ConnectionId == room.HostConnectionId);
+                if (hostTimedOut)
                 {
-                    _lastRemovedPlayers[code] = deadPlayers;
+                    ended = RemoveRoomLocked(code, room);
+                    if (!ended) continue;
                 }
-
-                var removed = room.Players.RemoveAll(p => p.LastHeartbeat < cutoff);
-                if (removed > 0)
+                else
                 {
-                    affected.Add(code);
-                    if (room.Players.Count == 0)
-                        _rooms.TryRemove(code, out endedRoom);
+                    foreach (var player in expired)
+                    {
+                        var connectionId = player.ConnectionId;
+                        room.Players.Remove(player);
+                        room.GracePendingMembers.Remove(connectionId);
+                        foreach (var set in room.ArrivalSets.Values) set.Remove(connectionId);
+                        foreach (var set in room.FightDoneSets.Values) set.Remove(connectionId);
+                        foreach (var set in room.FightParticipantSets.Values) set.Remove(connectionId);
+                        room.WorldJoinedSet.Remove(connectionId);
+                        room.RouteVerificationDoneSet.Remove(connectionId);
+                        RemoveConnectionMappingLocked(connectionId, code);
+                    }
+                    if (room.Players.Count == 0) ended = RemoveRoomLocked(code, room);
                 }
+                var remaining = hostTimedOut ? Array.Empty<RoomPlayerSnapshot>()
+                    : room.Players.Select(RoomPlayerSnapshot.Capture).ToArray();
+                results.Add(new RoomExpirySnapshot(code, hostTimedOut, removed, Array.AsReadOnly(remaining)));
             }
-            if (endedRoom is not null) NotifyRoomLogEnded(endedRoom);
+            if (ended) NotifyRoomLogEnded(room);
         }
-
-        return affected;
-    }
-
-    public List<PlayerInfo> GetLastRemovedPlayers(string roomCode)
-    {
-        _lastRemovedPlayers.TryRemove(roomCode, out var removed);
-        return removed ?? new List<PlayerInfo>();
+        return results.AsReadOnly();
     }
 
     private static bool AllOnlineMembersReported(Room room, HashSet<string> reported)
@@ -2095,3 +2122,19 @@ public class RoomManager
         lock (set) { return set.ToList(); }
     }
 }
+
+// 内部快照保持现有 PlayerListUpdated 字段形状；记录及只读集合不会随房间后续变更而改变。
+internal sealed record RoomPlayerSnapshot(string ConnectionId, string PlayerId, string PlayerName, string PlayerUid,
+    string ReportedVersion, PlayerStatus Status, DateTime LastHeartbeat, int CurrentRouteIndex,
+    DateTime RouteStartTime, double RouteEstimatedSeconds, bool IsAbnormal, string? WaitPointId,
+    long TargetProgress, long CurrentProgress)
+{
+    internal static RoomPlayerSnapshot Capture(PlayerInfo player) => new(player.ConnectionId, player.PlayerId,
+        player.PlayerName, player.PlayerUid, player.ReportedVersion, player.Status, player.LastHeartbeat,
+        player.CurrentRouteIndex, player.RouteStartTime, player.RouteEstimatedSeconds, player.IsAbnormal,
+        player.WaitPointId, player.TargetProgress, player.CurrentProgress);
+}
+
+internal sealed record RoomExpirySnapshot(string RoomCode, bool HostTimedOut,
+    IReadOnlyList<RoomPlayerSnapshot> RemovedPlayers, IReadOnlyList<RoomPlayerSnapshot> RemainingPlayers);
+internal sealed record GameDisconnectResult(Room Room, string RoomCode, bool WasHost);

@@ -71,7 +71,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
         using var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
         using var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
-        await using var client = new SignalRClient();
+        SignalRClient? client = null;
         MainViewModel? vm = null;
         try
         {
@@ -84,7 +84,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
                 OnlineHoeingGroupNames = [groupName], OnlineHoeingGroupTypes = ["group"],
                 QuickCommands = new() { [quickKey] = "GROUP:" + quickGroupName },
-                ExpectedHoeingPlayers = 1, DisclaimerAccepted = true,
+                ExpectedHoeingPlayers = 1, DisclaimerAccepted = true, BypassSystemProxy = true,
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external,
                 logger: vm.AddLog, isBatchInFlight: () => Active(vm)?.IsAlive == true);
@@ -92,11 +92,11 @@ public sealed class UnifiedHoeingNativeEntryTests
             Set(vm, "_externalClient", external);
             Set(vm, "_processMonitor", monitor);
             Set(vm, "_commandExecutor", executor);
-            Set(vm, "_signalRClient", client);
-            Call(vm, "WireSignalRClient", client);
-            await client.ConnectAsync(server.Url, "NATIVE-" + Guid.NewGuid().ToString("N")[..8],
-                config.ControlRoomPassword, uid, config.PlayerName, [uid],
-                clientInstanceId: config.ClientInstanceId, bypassSystemProxy: true);
+            vm.RoomCode = "NATIVE-" + Guid.NewGuid().ToString("N")[..8];
+            client = (SignalRClient)Call(vm, "CreateWiredSignalRClient")!;
+            using (var connectionBudget = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
+                await (Task)Call(vm, "ConnectSignalRWithConfigAsync", client, connectionBudget.Token,
+                    "隔离正式开始生产建连入口", false)!;
             Assert.True(client.SupportsCoordinatedStart);
             Assert.True(client.SupportsCompletionChoice);
             await client.ReportControlStatusAsync(new ControlStatus
@@ -259,10 +259,15 @@ public sealed class UnifiedHoeingNativeEntryTests
                 var host = (TaskCenterHost?)typeof(MainViewModel)
                     .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm);
                 Set(vm, "_disposing", true);
+                Call(vm, "StopSignalRRecovery");
+                foreach (var field in new[] { "_statusTimer", "_retryTimer", "_onlineTimer", "_resumeTimeoutTimer" })
+                    (typeof(MainViewModel).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!
+                        .GetValue(vm) as IDisposable)?.Dispose();
                 if (host != null) await host.ShutdownAsync();
             }
             IpcClient.PipeNameOverrideForTest = previousIpc;
             BgiExternalClient.PipeNameOverrideForTest = previousExt;
+            if (client != null) await client.DisposeAsync();
         }
     }
 

@@ -30,6 +30,43 @@ public class SignalRClient : IAsyncDisposable
     private List<string> _teamUids = new();
 
     private bool _disposed;
+    private readonly CancellationTokenSource _connectionLifetime = new();
+    private readonly SemaphoreSlim _roomJoinGate = new(1, 1);
+    private volatile bool _roomReady;
+    private volatile bool _retired;
+    internal bool IsControlRoomReady => _roomReady && !_retired && IsConnected;
+    internal bool IsRetired => _retired;
+    internal bool JoinAttempted { get; private set; }
+    internal string ControlContext { get; set; } = "";
+    internal Func<SignalRClient, Func<CancellationToken, Task>, CancellationToken, Task>? CoordinateRoomJoin { get; set; }
+    internal Func<SignalRClient, Func<CancellationToken, Task<CoordinatedBatchSnapshot>>,
+        CancellationToken, Task<CoordinatedBatchSnapshot>>? CoordinateBatchUpdate { get; set; }
+    internal Func<TimeSpan?>? RemainingBatchRecoveryBudget { get; set; }
+    internal event Action? ControlConnectionLost;
+
+    internal void RetireForReplacement()
+    {
+        _retired = true;
+        _roomReady = false;
+        _connectionLifetime.Cancel();
+        ControlConnectionLost?.Invoke();
+    }
+
+    private CancellationTokenSource CreateRecoveryBudget(CancellationToken ct)
+    {
+        var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, _connectionLifetime.Token);
+        var timeout = RemainingBatchRecoveryBudget?.Invoke() is { } left && left < TimeSpan.FromSeconds(20)
+            ? left : TimeSpan.FromSeconds(20);
+        if (timeout <= TimeSpan.Zero) budget.Cancel();
+        else budget.CancelAfter(timeout);
+        return budget;
+    }
+
+    private void InvalidateControlRoom()
+    {
+        _roomReady = false;
+        ControlConnectionLost?.Invoke();
+    }
 
     /// <summary>URL 归一化告警去重（按原始配置值）：10s 重试循环场景防告警刷屏。</summary>
     private string? _lastUrlWarned;
@@ -158,6 +195,8 @@ public class SignalRClient : IAsyncDisposable
         // 重连中（SignalR 内置自动重连尝试期间）
         gateway.Reconnecting += error =>
         {
+            InvalidateControlRoom();
+            if (_retired) return Task.CompletedTask;
             // 必须落 OnLog：此前只有 Debug.WriteLine，断线时 UI/文件零痕迹，
             // 出现"徽章离线但日志无任何提示"的不可排查状态
             OnLog?.Invoke(error != null
@@ -170,6 +209,7 @@ public class SignalRClient : IAsyncDisposable
         // SignalR 内置自动重连成功
         gateway.Reconnected += async _ =>
         {
+            if (_retired) return;
             try
             {
                 OnLog?.Invoke("[连接] SignalR 已重连，重新加入控制房间");
@@ -203,7 +243,8 @@ public class SignalRClient : IAsyncDisposable
         {
             // 手动刷新/重建连接时 DisposeAsync 会先置 _disposed 再 Dispose 连接，
             // Dispose 触发的 Closed 不是真实断连：不打"自动重连已耗尽"误导日志、不转离线状态
-            if (_disposed) return Task.CompletedTask;
+            InvalidateControlRoom();
+            if (_disposed || _retired) return Task.CompletedTask;
             OnLog?.Invoke(exception != null
                 ? $"[连接] SignalR 连接已关闭: {exception.Message}（自动重连已耗尽，将每 30 秒尝试自愈）"
                 : "[连接] SignalR 连接已关闭（自动重连已耗尽，将每 30 秒尝试自愈）");
@@ -218,8 +259,8 @@ public class SignalRClient : IAsyncDisposable
         {
             // 连接 + session.hello 握手（DAP 时序：握手完成前服务端拒绝其它消息）
             await gateway.ConnectAsync(baseUrl, bypassSystemProxy, cancellationToken);
-            await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote,
-                cancellationToken);
+            await JoinWithAuthorityAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote,
+                cancellationToken, hello: false);
         }
         catch
         {
@@ -233,7 +274,8 @@ public class SignalRClient : IAsyncDisposable
         // 导致自愈循环里 closedGateway != _gateway 判断提前 return、放弃重连。
         var old = _gateway;
         _gateway = gateway;
-        await RestoreCoordinatedBatchAsync(gateway, cancellationToken);
+        // A pending replacement cannot publish batch starts before MainViewModel adopts it.
+        if (CoordinateRoomJoin is null) await RestoreCoordinatedBatchAsync(gateway, cancellationToken);
         // 旧实例（上次失败/掉线残留）在新实例就位后释放，避免双连接并发收发
         if (old != null)
         {
@@ -379,7 +421,7 @@ public class SignalRClient : IAsyncDisposable
     private void StartSelfHeal(MhaGatewayClient closedGateway, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
-        if (_disposed) return;
+        if (_disposed || _retired) return;
         // 同一时刻只允许一条自愈定时器（如对旧连接的残留），先停掉再建
         StopSelfHeal();
         _selfHealTimer = new Timer(async _ =>
@@ -387,7 +429,7 @@ public class SignalRClient : IAsyncDisposable
             if (Interlocked.CompareExchange(ref _selfHealRunning, 1, 0) != 0) return;
             try
             {
-                if (_disposed) return;
+                if (_disposed || _retired) return;
                 // 连接已被替换（如用户手动 RefreshAsync 重建了新连接）或已恢复，放弃自愈
                 if (!ReferenceEquals(closedGateway, _gateway)
                     || closedGateway.IsConnected)
@@ -396,7 +438,8 @@ public class SignalRClient : IAsyncDisposable
                     return;
                 }
                 OnLog?.Invoke("[自愈] SignalR 内置重连已耗尽，尝试重新连接...");
-                await closedGateway.ReconnectStartAsync();
+                using var reconnectBudget = CreateRecoveryBudget(_connectionLifetime.Token);
+                await closedGateway.ReconnectStartAsync(reconnectBudget.Token);
                 // 重连成功：停止自愈，重新 hello + 加入控制房间，全部成功才恢复在线状态
                 StopSelfHeal();
                 try
@@ -441,10 +484,44 @@ public class SignalRClient : IAsyncDisposable
     private async Task ResumeAfterReconnectAsync(MhaGatewayClient gateway, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
-        await gateway.HelloAsync();
-        await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote);
-        await RestoreCoordinatedBatchAsync(gateway, CancellationToken.None);
+        using var budget = CreateRecoveryBudget(_connectionLifetime.Token);
+        await JoinWithAuthorityAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote,
+            budget.Token);
+        if (_retired) return;
+        await RestoreCoordinatedBatchAsync(gateway, budget.Token);
     }
+
+    private async Task JoinWithAuthorityAsync(MhaGatewayClient gateway, string roomCode, string password,
+        string playerUid, string playerName, List<string> teamUids, bool isRemote, CancellationToken ct,
+        bool hello = true)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, _connectionLifetime.Token);
+        budget.CancelAfter(TimeSpan.FromSeconds(20));
+        async Task Join(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            if (_retired) throw new ControlChannelUnavailableException("旧控制连接已撤销");
+            _roomReady = false;
+            if (hello) await gateway.HelloAsync(token);
+            JoinAttempted = true; // Even an unknown response may already have replaced the old connection.
+            await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote, token);
+            token.ThrowIfCancellationRequested();
+            if (_retired || !gateway.IsConnected) throw new ControlChannelUnavailableException("入房期间连接已失效");
+            _roomReady = true;
+        }
+        if (CoordinateRoomJoin is { } coordinate)
+            await coordinate(this, Join, budget.Token);
+        else
+        {
+            await _roomJoinGate.WaitAsync(budget.Token);
+            try { await Join(budget.Token); }
+            finally { _roomJoinGate.Release(); }
+        }
+    }
+
+    internal Task RestoreCoordinatedAuthorityAsync(CancellationToken ct = default)
+        => _gateway is { } gateway && IsControlRoomReady
+            ? RestoreCoordinatedBatchAsync(gateway, ct) : Task.CompletedTask;
 
     private async Task RestoreCoordinatedBatchAsync(MhaGatewayClient gateway, CancellationToken ct)
     {
@@ -474,7 +551,7 @@ public class SignalRClient : IAsyncDisposable
     private void StartRejoinRetry(MhaGatewayClient gateway, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote)
     {
-        if (_disposed) return;
+        if (_disposed || _retired) return;
         // 同一时刻只允许一条入房重试定时器，先停掉再建
         StopRejoinRetry();
         _rejoinTimer = new Timer(async _ =>
@@ -482,7 +559,7 @@ public class SignalRClient : IAsyncDisposable
             if (Interlocked.CompareExchange(ref _rejoinRunning, 1, 0) != 0) return;
             try
             {
-                if (_disposed) return;
+                if (_disposed || _retired) return;
                 // 连接已被替换（手动 RefreshAsync / 新一轮 EstablishAsync）：旧连接的入房重试无意义
                 if (!ReferenceEquals(gateway, _gateway))
                 {
@@ -519,12 +596,20 @@ public class SignalRClient : IAsyncDisposable
         timer?.Dispose();
     }
 
-    public async Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchAsync(int generation, string token,
+    public Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchAsync(int generation, string token,
+        string batchId, string layout, int index, int attempt, string result, CancellationToken ct,
+        string stage = "", string reason = "")
+        => CoordinateBatchUpdate is { } coordinate
+            ? coordinate(this, t => UpdateCoordinatedBatchRawAsync(generation, token, batchId, layout,
+                index, attempt, result, t, stage, reason), ct)
+            : UpdateCoordinatedBatchRawAsync(generation, token, batchId, layout, index, attempt, result, ct, stage, reason);
+
+    internal async Task<CoordinatedBatchSnapshot> UpdateCoordinatedBatchRawAsync(int generation, string token,
         string batchId, string layout, int index, int attempt, string result, CancellationToken ct,
         string stage = "", string reason = "")
     {
-        if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间连接不可用");
-        var response = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchUpdate,
+        if (!IsControlRoomReady) throw new ControlChannelUnavailableException("控制房间业务身份暂不可用");
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchUpdate,
             new { generation, token, batchId, layout, index, attempt, result, stage, reason }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchSnapshot>()
             ?? throw new InvalidOperationException("全队批次响应为空");
@@ -928,6 +1013,7 @@ public class SignalRClient : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        RetireForReplacement();
         // 连接对象 Dispose 时一并停掉自愈/入房重试定时器，避免对已释放连接 StartAsync/入房
         StopSelfHeal();
         StopRejoinRetry();

@@ -18,8 +18,8 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 /// **Validates: Requirements 3.8, 4.2**
 ///
 /// 目标：验证门面把"严格等待完成"（CoordinatorClient 正常返回，即匹配 AllArrived 已消费）
-/// 映射为 <see langword="true"/>，把取消 / 超时 / 关房 / 断线 / 未连接 / 其它异常映射为
-/// <see langword="false"/>，且不改变 CoordinatorClient 的协议调用
+/// 映射为 <see langword="true"/>；2026-10-19 修复后外部取消透传，其余未确认终止会话
+/// （原 false 导致 strict_2 失败后仍继续动作），且不改变 CoordinatorClient 的协议调用
 /// （subscribe-before-action、按 syncId 匹配、取消 / 超时语义）。
 ///
 /// 注意：CoordinatorClient.WaitForAllPlayersAsync 是非 virtual 具体方法，无法用 Moq 直接 mock。
@@ -111,7 +111,7 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
     // =========================================================================
 
     [Fact]
-    public async Task WaitForAllPlayers_CancellationRethrown_ReturnsFalse()
+    public async Task WaitForAllPlayers_UnownedCancellationTerminatesSession()
     {
         // Arrange: 客户端等待被取消（OperationCanceledException）
         _gateway._testSendOverride = (_, _, _) => throw new OperationCanceledException();
@@ -119,14 +119,13 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
         var coordinator = CreateCoordinator();
 
         // Act
-        var result = await coordinator.WaitForAllPlayers(SyncId, CancellationToken.None);
-
-        // Assert: 取消 → 未确认完成 → false
-        Assert.False(result);
+        await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() =>
+            coordinator.WaitForAllPlayers(SyncId, CancellationToken.None));
+        Assert.True(coordinator.IsExitTriggered);
     }
 
     [Fact]
-    public async Task WaitForAllPlayers_GenericExceptionRethrown_ReturnsFalse()
+    public async Task WaitForAllPlayers_GenericExceptionTerminatesSession()
     {
         // Arrange: 关房 / 断线 / 网络异常等统一由客户端 rethrow，门面 catch
         _gateway._testSendOverride = (_, _, _) => throw new InvalidOperationException("connection closed");
@@ -134,10 +133,9 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
         var coordinator = CreateCoordinator();
 
         // Act
-        var result = await coordinator.WaitForAllPlayers(SyncId, CancellationToken.None);
-
-        // Assert: 其它异常 → 未确认完成 → false
-        Assert.False(result);
+        await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() =>
+            coordinator.WaitForAllPlayers(SyncId, CancellationToken.None));
+        Assert.True(coordinator.IsExitTriggered);
     }
 
     // =========================================================================
@@ -162,14 +160,10 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
         cts.Cancel();
 
         // Act
-        var result = await coordinator.WaitForAllPlayers(SyncId, cts.Token);
-
-        // Assert: 非匹配 AllArrived 不放行 → 等待未确认完成（取消路径）→ false
-        Assert.False(result);
-
-        // 协议调用确实发生（信封已发出，事件也广播了），只是未匹配 → 未确认
-        Assert.Single(_sentEnvelopes);
-        AssertLastEnvelopeIsWaitForAllPlayers();
+        // 2026-10-19 strict_2 故障回归：已取消不再发送到达或静默返回 false。
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            coordinator.WaitForAllPlayers(SyncId, cts.Token));
+        Assert.Empty(_sentEnvelopes);
     }
 
     // =========================================================================
@@ -177,7 +171,7 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
     // =========================================================================
 
     [Fact]
-    public async Task WaitForAllPlayers_ClientNotConnected_ReturnsFalse()
+    public async Task WaitForAllPlayers_ClientNotConnectedTerminatesSession()
     {
         // Arrange: 客户端未连接（_testIsConnectedOverride=false，绕开真实网关连接）
         _client._testIsConnectedOverride = false;
@@ -190,10 +184,9 @@ public class MultiplayerCoordinatorWaitForAllPlayersTest : IDisposable
         var coordinator = CreateCoordinator();
 
         // Act
-        var result = await coordinator.WaitForAllPlayers(SyncId, CancellationToken.None);
-
-        // Assert: 未连接 → 无匹配 AllArrived 被消费 → false
-        Assert.False(result);
+        await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() =>
+            coordinator.WaitForAllPlayers(SyncId, CancellationToken.None));
+        Assert.True(coordinator.IsExitTriggered);
 
         // 未连接时应直接短路，不触发任何协议调用
         Assert.Empty(_sentEnvelopes);

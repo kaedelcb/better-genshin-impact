@@ -1,5 +1,7 @@
+using System.IO;
 using System.Windows;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.Models;
 using Timer = System.Threading.Timer;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
@@ -9,6 +11,155 @@ public partial class MainViewModel
     // 断线自愈与手动刷新共用：避免旧 SignalR 实例迟到回调把连接状态锁死。
     private Timer? _connectionRecoveryTimer;
     private int _connectionRecoveryRunning;
+    private readonly CoordinatedControlAuthority _controlAuthority = new();
+    private readonly SemaphoreSlim _connectionAttemptGate = new(1, 1);
+    private SignalRClient? _pendingControlClient;
+    private long _controlContextVersion;
+
+    private static string ControlSettingsIdentity(AssistConfig? config, string room) => string.Join("\n",
+        config?.ServerUrl?.Trim().TrimEnd('/'), room, config?.PlayerUid, config?.ClientInstanceId,
+        config?.StandaloneMode == true || string.IsNullOrWhiteSpace(config?.ServerUrl), config?.ObserverMode == true);
+
+    private string CurrentControlContext() => Interlocked.Read(ref _controlContextVersion) + "\n"
+        + ControlSettingsIdentity(_config, RoomCode);
+
+    private void InvalidateChangedControlSettings(AssistConfig config)
+    {
+        var room = AssistConfigManager.GenerateControlRoomCode(config.TeamUids);
+        if (ControlSettingsIdentity(_config, RoomCode) != ControlSettingsIdentity(config, room))
+            InvalidateCoordinatedControlContext();
+    }
+
+    private void InvalidateCoordinatedControlContext()
+    {
+        Interlocked.Increment(ref _controlContextVersion);
+        _controlAuthority.Revoke();
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        if (batch is not null) ObserveOnlineTask(Task.Run(() => batch.Cancel()), "房间身份变化撤销原批次");
+    }
+
+    private void RequireCoordinatedControlContext(OnlineHoeingBatch batch, CancellationToken ct, bool terminalReport = false)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!terminalReport)
+        {
+            batch.Cts.Token.ThrowIfCancellationRequested();
+            if (batch.ControlExecutionEnded)
+                throw new ControlContextRevokedException("原批次执行循环已退出，不能重新取得运行授权", batch.Cts.Token);
+        }
+        if (_disposing || IsStandaloneMode || batch.ControlContext != CurrentControlContext()
+            || !terminalReport && (batch.Generation <= Volatile.Read(ref _resetFenceGeneration) || _localResetGate.CurrentCount == 0))
+            throw new ControlContextRevokedException("原批次控制房间或停止权限已撤销", batch.Cts.Token);
+        lock (_batchGate)
+            if (!ReferenceEquals(_activeBatch, batch))
+                throw new ControlContextRevokedException("原批次已结束或被替换", batch.Cts.Token);
+        if (!terminalReport) batch.RequireRunningControlBudget();
+    }
+
+    private async Task CoordinateControlRoomJoinAsync(SignalRClient client,
+        Func<CancellationToken, Task> join, CancellationToken ct)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        var remaining = batch?.RemainingRunningControlBudget;
+        if (remaining is { } left)
+        {
+            if (left <= TimeSpan.Zero) throw new ControlChannelUnavailableException("原批次恢复预算已耗尽");
+            budget.CancelAfter(left < TimeSpan.FromSeconds(20) ? left : TimeSpan.FromSeconds(20));
+        }
+        using (await _controlAuthority.EnterAsync(budget.Token))
+        {
+            if (client.IsRetired || client.ControlContext != CurrentControlContext()
+                || !ReferenceEquals(client, _signalRClient) && !ReferenceEquals(client, _pendingControlClient))
+                throw new ControlChannelUnavailableException("旧连接回调不能重新取得房间身份");
+            if (ReferenceEquals(client, _pendingControlClient) && _signalRClient is { } old
+                && !ReferenceEquals(old, client))
+            {
+                // Retire before join can replace the server-side connection ID.
+                old.RetireForReplacement();
+                _controlAuthority.Revoke();
+            }
+            await join(budget.Token);
+            budget.Token.ThrowIfCancellationRequested();
+            if (client.IsRetired || client.ControlContext != CurrentControlContext())
+                throw new ControlChannelUnavailableException("入房回应已属于旧连接上下文");
+            if (ReferenceEquals(client, _signalRClient))
+                _controlAuthority.Publish(client, client.ControlContext);
+        }
+        // Notifications/current queries are deliberately outside the transition gate.
+    }
+
+    private async Task<CoordinatedBatchSnapshot> ExchangeCoordinatedControlAsync(OnlineHoeingBatch batch,
+        string stage, string result, string reason, int index, int attempt, CancellationToken ct)
+    {
+        using (await _controlAuthority.EnterAsync(ct))
+        {
+            var terminalReport = (batch.IsCancellationRequested || batch.ControlExecutionEnded) && result.Length > 0 || stage == "cleaned";
+            RequireCoordinatedControlContext(batch, ct, terminalReport);
+            var client = _signalRClient;
+            if (client is null || !client.IsControlRoomReady)
+                throw new ControlChannelUnavailableException("控制房间正在恢复，原任务保持原身份");
+            var grant = _controlAuthority.Capture(client, batch.ControlContext);
+            using var call = CancellationTokenSource.CreateLinkedTokenSource(ct, grant.Revoked);
+            try
+            {
+                var state = await client.UpdateCoordinatedBatchRawAsync(batch.Generation, batch.Token, batch.BatchId,
+                    string.Join(",", batch.Bindings.Select(b => b.Type)), index, attempt, result, call.Token, stage, reason);
+                RequireCoordinatedControlContext(batch, ct, terminalReport);
+                _controlAuthority.Verify(grant);
+                if (state.BatchId == batch.BatchId && state.Generation == batch.Generation && state.Protocol == "hoeing.start.v2")
+                    batch.ControlGrant = state.Phase == "running" ? grant : null;
+                return state;
+            }
+            catch (Exception ex) when (!batch.IsCancellationRequested && IsTemporaryControlFailure(ex, client, grant))
+            { throw new ControlChannelUnavailableException("控制通道暂不可用，按原批次等待恢复", ex); }
+        }
+    }
+
+    private async Task<CoordinatedBatchSnapshot> CoordinateBatchUpdateAsync(SignalRClient client,
+        Func<CancellationToken, Task<CoordinatedBatchSnapshot>> update, CancellationToken ct)
+    {
+        using (await _controlAuthority.EnterAsync(ct))
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(client, _signalRClient) || !client.IsControlRoomReady
+                || client.ControlContext != CurrentControlContext())
+                throw new ControlChannelUnavailableException("批次回执所属连接已变化");
+            var grant = _controlAuthority.Capture(client, client.ControlContext);
+            using var call = CancellationTokenSource.CreateLinkedTokenSource(ct, grant.Revoked);
+            var state = await update(call.Token);
+            ct.ThrowIfCancellationRequested();
+            _controlAuthority.Verify(grant);
+            return state;
+        }
+    }
+
+    private static bool IsTemporaryControlFailure(Exception ex, SignalRClient client,
+        CoordinatedControlAuthority.Grant grant) => ex is ControlChannelUnavailableException
+        or IOException or TimeoutException or System.Net.Http.HttpRequestException or System.Net.WebSockets.WebSocketException
+        || ex is OperationCanceledException && grant.Revoked.IsCancellationRequested
+        || ex is InvalidOperationException && (!client.IsConnected || client.IsRetired || grant.Revoked.IsCancellationRequested);
+
+    private async Task<BgiTaskSubmitResult> SubmitCoordinatedControlAsync(OnlineHoeingBatch batch,
+        Func<CancellationToken, Task<BgiTaskSubmitResult>> send, CancellationToken ct)
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, batch.Cts.Token);
+        if (batch.RemainingRunningControlBudget is { } remaining)
+        {
+            if (remaining <= TimeSpan.Zero)
+                throw new ControlSubmissionDeferredException("原运行授权已过期，未发送任务");
+            budget.CancelAfter(remaining);
+        }
+        return await _controlAuthority.SubmitAsync(batch.ControlGrant, () =>
+        {
+            RequireCoordinatedControlContext(batch, budget.Token);
+            if (_signalRClient is not { IsControlRoomReady: true } client
+                || !ReferenceEquals(client, batch.ControlGrant?.Owner))
+                throw new ControlChannelUnavailableException("提交前控制连接已变化");
+        }, send, budget.Token);
+    }
 
     /// <summary>
     /// [F9-2] 三份复刻收拢的共用原语（首连 ConnectSignalRAsync / 刷新 RefreshAsync / 失败重试共用）：
@@ -18,6 +169,14 @@ public partial class MainViewModel
     private SignalRClient CreateWiredSignalRClient()
     {
         var client = new SignalRClient();
+        client.ControlContext = CurrentControlContext();
+        client.CoordinateRoomJoin = CoordinateControlRoomJoinAsync;
+        client.CoordinateBatchUpdate = CoordinateBatchUpdateAsync;
+        client.RemainingBatchRecoveryBudget = () =>
+        {
+            lock (_batchGate) return _activeBatch?.RemainingRunningControlBudget;
+        };
+        client.ControlConnectionLost += () => _controlAuthority.Revoke(client);
         WireSignalRClient(client);
         // 连接状态变化（断开/重连）同步到 IsConnected → 标题栏连接徽章实时刷新
         client.OnConnectionStateChanged += connected =>
@@ -45,31 +204,77 @@ public partial class MainViewModel
     }
 
     /// <summary>[F9-2] 用当前配置发起连接（三处调用点的参数列表统一在此）。</summary>
-    private Task ConnectSignalRWithConfigAsync(SignalRClient client, CancellationToken cancellationToken = default) =>
-        client.ConnectAsync(
-            _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
-            _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
-            _config.BypassSystemProxy, cancellationToken);
+    private async Task ConnectSignalRWithConfigAsync(SignalRClient client, CancellationToken cancellationToken = default,
+        string message = "已连接控制房间", bool fireRefreshCompleted = false)
+    {
+        using var attemptBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        if (batch?.RemainingRunningControlBudget is { } remaining)
+        {
+            if (remaining <= TimeSpan.Zero) attemptBudget.Cancel();
+            else attemptBudget.CancelAfter(remaining);
+        }
+        cancellationToken = attemptBudget.Token;
+        await _connectionAttemptGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (client.ControlContext != CurrentControlContext() || IsStandaloneMode)
+                throw new OperationCanceledException("连接参数已变化", cancellationToken);
+            _pendingControlClient = client;
+            await client.ConnectAsync(
+                _config!.ServerUrl, RoomCode, _config.ControlRoomPassword,
+                _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
+                _config.BypassSystemProxy, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsStandaloneMode || client.ControlContext != CurrentControlContext())
+                throw new OperationCanceledException("连接完成时原房间身份已撤销", cancellationToken);
+            await AdoptConnectedSignalRClientAsync(client, message, fireRefreshCompleted, cancellationToken);
+        }
+        catch
+        {
+            if (ReferenceEquals(_signalRClient, client))
+            {
+                _controlAuthority.Revoke(client);
+                _signalRClient = null;
+            }
+            client.RetireForReplacement();
+            throw;
+        }
+        finally
+        {
+            if (ReferenceEquals(_pendingControlClient, client)) _pendingControlClient = null;
+            _connectionAttemptGate.Release();
+        }
+    }
 
     /// <summary>
     /// [F9-2] 连接成功后的统一接管：所有权移交 _signalRClient + 徽章/日志（Dispatcher 内）+
     /// 可选 RefreshCompleted（仅刷新语义的路径触发，首连不触发——保持原行为）+ 状态上报 + 定时器幂等兜底。
     /// </summary>
-    private async Task AdoptConnectedSignalRClientAsync(SignalRClient client, string logMessage, bool fireRefreshCompleted)
+    private async Task AdoptConnectedSignalRClientAsync(SignalRClient client, string logMessage, bool fireRefreshCompleted,
+        CancellationToken ct = default)
     {
         // 所有权移交与徽章/日志一起在 Dispatcher 内完成：Invoke 抛异常（关机竞态）时
         // _signalRClient 未被污染，调用方 finally 会正确销毁这个半成品客户端
+        using (await _controlAuthority.EnterAsync(ct))
+        {
+        if (!client.IsControlRoomReady || client.ControlContext != CurrentControlContext())
+            throw new ControlChannelUnavailableException("接管时连接已失效");
+        _signalRClient = client;
+        _controlAuthority.Publish(client, client.ControlContext);
+        }
+        // Never run callbacks, queries, or disposal while holding the transition gate.
         Application.Current.Dispatcher.Invoke(() =>
         {
-            _signalRClient = client;
             IsConnected = true;
             AddLog(logMessage);
-            // 统一在 Dispatcher 内触发：原刷新重试路径从线程池线程直接 Invoke，有跨线程碰 UI 的隐患
             if (fireRefreshCompleted) RefreshCompleted?.Invoke();
         });
+        await client.RestoreCoordinatedAuthorityAsync(ct);
         // 启动定时上报（每10秒）；通常已在 InitializeAsync 启动，此处幂等兜底
         EnsureStatusTimerStarted();
-        await ReportStatusAsync(); // 内部全容错不抛（断线仅记日志），不会逃逸进调用方的销毁路径
+        ObserveOnlineTask(ReportStatusAsync(), "连接恢复状态上报");
     }
 
     /// <summary>
@@ -110,19 +315,8 @@ public partial class MainViewModel
                 }
                 client = CreateWiredSignalRClient();
                 using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-                await ConnectSignalRWithConfigAsync(client, connectTimeout.Token);
-                if (_signalRClient != null)
-                {
-                    // 本次 StartAsync 在途期间（最长 ~100s）刷新已重建成功——不能接管 _signalRClient
-                    // （会把在位连接挤成无人持有的幽灵连接），本次成果交 finally 销毁；
-                    // 在位连接已负责状态，本定时器自我销毁
-                    _retryTimer?.Dispose();
-                    _retryTimer = null;
-                    return;
-                }
-                // 连接在飞期间用户切到离线：销毁刚到手的连接，不接管，等 GoStandaloneAsync 收场
-                if (IsStandaloneMode) return;
-                await AdoptConnectedSignalRClientAsync(client, "已重新连接控制房间", fireRefreshCompletedOnSuccess);
+                await ConnectSignalRWithConfigAsync(client, connectTimeout.Token,
+                    "已重新连接控制房间", fireRefreshCompletedOnSuccess);
                 client = null; // 所有权已移交 _signalRClient
                 _retryTimer?.Dispose();
                 _retryTimer = null;
@@ -169,7 +363,7 @@ public partial class MainViewModel
                 AddLog("单机模式已开启，放弃本次建立的连接");
                 return;
             }
-            await AdoptConnectedSignalRClientAsync(client, "已连接控制房间", fireRefreshCompleted: false);
+            // ConnectSignalRWithConfigAsync has already published the adopted client.
         }
         catch (Exception ex)
         {
@@ -201,6 +395,7 @@ public partial class MainViewModel
             }
             if (!ShowSwitchConfirmDialog("切换为在线模式",
                 "切换为在线模式后，将连接服务器，耕地机、嘟嘟可、槲寄生的联机功能恢复可用。是否继续切换？")) return;
+            InvalidateCoordinatedControlContext();
             _config.StandaloneMode = false;
             _configManager.Save(_config);
             NotifyModeBindings();
@@ -211,6 +406,7 @@ public partial class MainViewModel
         {
             if (!ShowSwitchConfirmDialog("切换为单机模式",
                 "切换为单机模式后，将断开服务器连接，耕地机、嘟嘟可、槲寄生的联机功能全部不可用（本机功能照常）。是否继续切换？")) return;
+            InvalidateCoordinatedControlContext();
             _config.StandaloneMode = true;
             _configManager.Save(_config);
             NotifyModeBindings();
@@ -222,6 +418,7 @@ public partial class MainViewModel
     /// 注意刻意不停 _statusTimer：本地状态采集单机时也必须继续（LatestLocalStatus 是槲寄生条件/电子狗的数据源）。</summary>
     private async Task GoStandaloneAsync(string reason)
     {
+        InvalidateCoordinatedControlContext();
         StopSignalRRecovery();
         _retryTimer?.Dispose();
         _retryTimer = null;
@@ -264,7 +461,7 @@ public partial class MainViewModel
             try
             {
                 if (_disposing || IsStandaloneMode || !ReferenceEquals(_signalRClient, expected)
-                    || expected.IsConnected) return;
+                    || expected.IsControlRoomReady) return;
                 if (Volatile.Read(ref _refreshRunning) != 0)
                 {
                     ScheduleSignalRRecovery(expected);

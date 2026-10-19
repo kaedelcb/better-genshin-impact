@@ -16,8 +16,10 @@ public sealed partial class RoomOperations
     {
         using var logScope = _roomLogContext?.BeginSnapshotScope(_logger, _roomLogContext.SnapshotConnection(ctx.ConnectionId));
         // 获取断线玩家所在的房间信息
-        var (disconnectedRoom, disconnectedRoomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
-        var wasHost = disconnectedRoom?.HostConnectionId == ctx.ConnectionId;
+        var disconnected = _roomManager.BeginGameDisconnect(ctx.ConnectionId, DateTime.UtcNow, TimeSpan.FromSeconds(30));
+        var disconnectedRoom = disconnected?.Room;
+        var disconnectedRoomCode = disconnected?.RoomCode;
+        var wasHost = disconnected?.WasHost == true;
 
         if (disconnectedRoom != null && disconnectedRoomCode != null)
         {
@@ -29,16 +31,10 @@ public sealed partial class RoomOperations
                 _phaseObserver.Forget(disconnectedRoomCode);
                 await _broadcaster.BroadcastGroupAsync(disconnectedRoomCode, "RoomClosed",
                     new { reason = "房主已断开连接" }, "房主已断开连接");
-                _roomManager.LeaveRoom(ctx.ConnectionId);
-                _roomManager.DeleteRoom(disconnectedRoomCode);
             }
             else
             {
                 // === 成员断线：进宽限期，不删人、不广播 PlayerListUpdated 缩水 ===
-                lock (disconnectedRoom)
-                {
-                    disconnectedRoom.GracePendingMembers[ctx.ConnectionId] = DateTime.UtcNow.AddSeconds(30);
-                }
                 _logger.LogInformation("[OnDisconnectedAsync] 成员 {ConnId} 进入宽限期(30s)，房间 {Code} 人数保持 {N}",
                     ctx.ConnectionId, disconnectedRoomCode, disconnectedRoom.Players.Count);
 

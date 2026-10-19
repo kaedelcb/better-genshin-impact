@@ -85,9 +85,9 @@ public sealed class HoeingStartupBoundaryTests
             Type = GatewayProtocol.MessageTypes.Event, Name = "room.closed",
             Payload = GatewayEnvelope.ToPayload(new { reason = "房主已关闭房间" })
         });
-        var confirmed = await waiting.WaitAsync(TimeSpan.FromSeconds(3));
-        Assert.Throws<HoeingStartupException>(() => HoeingStartupBoundary.RequireConfirmed(
-            confirmed, "route_sync_done", CancellationToken.None));
+        // 原 room.closed 启动门回归：严格同步未确认已直接抛会话终止，首线不可达。
+        await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.True(coordinator.IsExitTriggered);
     }
 
     [Fact]

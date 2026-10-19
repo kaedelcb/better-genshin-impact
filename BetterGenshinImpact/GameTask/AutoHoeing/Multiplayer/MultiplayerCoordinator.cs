@@ -135,6 +135,73 @@ public class MultiplayerCoordinator : IAsyncDisposable
 
     // === CancellationTokenSource（需求 2.1）===
     public CancellationTokenSource? StopCts { get; set; }
+    public event Action<string>? LocalStopRequested;
+    private int _stopRequested;
+    private readonly object _stopNotificationLock = new();
+    private Task? _stopNotification;
+    private readonly long? _ownedRoomEpoch;
+    private volatile bool _disposed;
+    internal bool OwnsCurrentRoom => !_disposed && _client.CurrentRoomEpoch == _ownedRoomEpoch;
+
+    public bool RequestLocalStop(string reason)
+    {
+        if (_disposed || !_client.TryRevokeRoomAdmission(_ownedRoomEpoch)) return false;
+        if (Interlocked.Exchange(ref _stopRequested, 1) != 0) return true;
+        IsExitTriggered = true;
+        // 先保存任务失败事实，再取消；本机退出绝不等待网络。
+        try { LocalStopRequested?.Invoke(reason); }
+        finally
+        {
+            // 先取消任务，再唤醒 Ready=false；正常经验上限收尾的续体必须先观察到取消。
+            try { StopCts?.Cancel(); }
+            catch (ObjectDisposedException) { }
+            finally { _client.EndRoomSession("local-stop", expectedEpoch: _ownedRoomEpoch); }
+        }
+        return true;
+    }
+
+    private void OnClientSessionFailed(string reason)
+    {
+        RequestLocalStop(reason);
+        _ = TriggerCoordinatedStop(IsHost, reason);
+    }
+
+    public async Task EnsureExecutionAllowedAsync(CancellationToken ct, bool cooperativeReplay = false)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (IsExitTriggered)
+        {
+            // 停止事实已发布但取消回调尚未返回时，也不能把正常停止错记成同步失败。
+            try { StopCts?.Cancel(); } catch (ObjectDisposedException) { }
+            ct.ThrowIfCancellationRequested();
+            throw new MultiplayerSessionFailedException("联机任务已停止");
+        }
+        // Replay 的服务端会话与 WaitAsync 自行准入，不复用旧房间 AllArrived 门。
+        if (!cooperativeReplay)
+        {
+            if (!OwnsCurrentRoom) throw new MultiplayerSessionFailedException("联机房间执行归属已变更");
+            try { await _client.WaitForBusinessReadyAsync(ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
+            {
+                if (IsExitTriggered)
+                {
+                    try { StopCts?.Cancel(); } catch (ObjectDisposedException) { }
+                    ct.ThrowIfCancellationRequested();
+                }
+                RequestLocalStop(ex.Message);
+                throw new MultiplayerSessionFailedException("联机业务连接未恢复", ex);
+            }
+        }
+        ct.ThrowIfCancellationRequested();
+        if (IsExitTriggered)
+        {
+            // 停止事实已发布但取消回调尚未返回时，也不能把正常停止错记成同步失败。
+            try { StopCts?.Cancel(); } catch (ObjectDisposedException) { }
+            ct.ThrowIfCancellationRequested();
+            throw new MultiplayerSessionFailedException("联机任务已停止");
+        }
+    }
 
     public MultiplayerCoordinator(
         CoordinatorClient client,
@@ -142,6 +209,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
         AutoHoeingConfig? config = null)
     {
         _client = client;
+        _ownedRoomEpoch = client.CurrentRoomEpoch;
+        _client.SessionFailed += OnClientSessionFailed;
         // 优先使用调用方传入的 config（持有 AutoHoeingTask 拷贝/覆盖后的实例），
         // 否则 fallback 到全局（保持向后兼容）。
         // 配置组（ScriptGroup）启动时 AutoHoeingTask 会在深拷贝上 ApplySettingsOverride，
@@ -388,30 +457,20 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// <param name="reason">停止原因</param>
     /// <param name="reportAbortToRoom">是否先上报协同中止广播全房间（hoeing-multiplayer-coordinated-abort-restart）。
     /// 真异常中止默认 true；正常停止（如经验上限）调用方传 false。</param>
-    public async Task TriggerCoordinatedStop(bool isHost, string reason, bool reportAbortToRoom = true)
+    public Task TriggerCoordinatedStop(bool isHost, string reason, bool reportAbortToRoom = true)
     {
-        IsExitTriggered = true;
-        _logger.LogWarning("[联机] 触发协调停止，原因：{Reason}", reason);
+        if (!RequestLocalStop(reason)) return Task.CompletedTask;
+        lock (_stopNotificationLock)
+            return _stopNotification ??= NotifyStopAsync(isHost, reason, reportAbortToRoom, _ownedRoomEpoch);
+    }
 
-        // 上报必须排在关房之前：关房后服务器侧已不在房间，上报会被丢弃
+    private async Task NotifyStopAsync(bool isHost, string reason, bool reportAbortToRoom, long? epoch)
+    {
+        // 两条通知各自有界；始终先 report 后 close，本机取消已经在前面完成。
         if (reportAbortToRoom)
-        {
-            try { await _client.ReportCoordinatedAbortAsync(reason); } catch { }
-        }
-
+            try { await _client.ReportCoordinatedAbortAsync(reason, epoch); } catch { }
         if (isHost)
-        {
-            try { await _client.CloseRoomAsync(); } catch { }
-        }
-
-        // StopCts 与 AutoHoeingTask._linkedStopCts 是同一实例。任务收尾时
-        // AutoHoeingTask 会先 Dispose 该 CTS，若此后（或并发）收到 AllReachedExpCap /
-        // CollectiveSkipDegraded 等广播再走到这里，Cancel() 会抛 ObjectDisposedException，
-        // 冒泡为未处理异常弹窗并阻塞后续任务。与 AutoHoeingTask 中所有 _linkedStopCts?.Cancel()
-        // 调用点一致，吞掉已释放异常（幂等，停止信号已由 IsExitTriggered/其他路径覆盖）。
-        try { StopCts?.Cancel(); }
-        catch (ObjectDisposedException) { }
-        catch (Exception ex) { _logger.LogWarning(ex, "[联机] 触发协调停止时 Cancel 异常（已忽略）"); }
+            try { await _client.CloseRoomAsync(epoch); } catch { }
     }
 
     // === 基于经验判断停止锄地（multiplayer-hoeing-exp-cap-stop）===
@@ -528,6 +587,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
         _consecutiveSkipCount = 0;
         _skipNextSyncPoint = false;
         IsExitTriggered = false;
+        Interlocked.Exchange(ref _stopRequested, 0);
+        _stopNotification = null;
         IsAbortRequested = false;
 
         // 基于经验判断停止锄地：新轮次复位本机计数与上报态（multiplayer-hoeing-exp-cap-stop R6.1）
@@ -667,28 +728,37 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// 严格等待所有玩家到达指定同步点（multiplayer-hoeing-post-teleport-revival-protection）。
     /// 返回 <see langword="true"/> 仅表示与当前 <paramref name="syncId"/> 匹配的 AllArrived
     /// 已被 <see cref="CoordinatorClient.WaitForAllPlayersAsync"/> 严格等待消费（严格等待完成）；
-    /// 返回 <see langword="false"/> 表示未确认完成（取消、超时、房间关闭、断线、未连接或其它异常）。
-    /// 调用方只能据此决定是否建立传送后保护窗口，不得把"吞异常后的正常返回"误认成确认完成。
+    /// 外部取消直接传播；超时、关房、断连且恢复失败等未确认结果终止整项联机。
+    /// 只有匹配 AllArrived 的严格确认才允许返回并建立传送后保护窗口。
     /// </summary>
     public async Task<bool> WaitForAllPlayers(string syncId, CancellationToken ct, long syncProgress = -1)
     {
-        // fastsync-claim-short-circuit-premature-release-fix（OQ-1=a）：
-        // 删除「自己已抢报过即短路放行」分支。抢报方真正到达同步点后，照常走严格
-        // subscribe-before-action 路径等全员到齐。抢报「让别人早走」能力由 FastReportAsync 保留。
-        // 组合 7「服务端已广播 + 已清空 ArrivalSet」竞态由服务端对已放行 syncId 的幂等补发 AllArrived 解决
-        // （见 CoordinatorHub.WaitForAllPlayers 补发分支），不再依赖客户端短路规避死等。
-        // wasFastReported 仅用于日志文案区分（OQ-4=a / 方案 B），不参与放行决策。
-        bool wasFastReported = _fastReportedSyncIds.ContainsKey(syncId);
+        ct.ThrowIfCancellationRequested();
         try
         {
-            // CoordinatorClient 正常返回即表示匹配 AllArrived 已被消费（未连接/未匹配时返回 false），
-            // 故此处正常返回可安全映射为 true。取消/超时/关房/断线异常由 catch 统一映射为 false。
-            return await _client.WaitForAllPlayersAsync(syncId, ct, syncProgress, wasFastReported);
+            bool confirmed = await _client.WaitForAllPlayersAsync(syncId, ct, syncProgress,
+                _fastReportedSyncIds.ContainsKey(syncId));
+            ct.ThrowIfCancellationRequested();
+            if (IsExitTriggered)
+            {
+                try { StopCts?.Cancel(); } catch (ObjectDisposedException) { }
+                ct.ThrowIfCancellationRequested();
+            }
+            if (!confirmed || IsExitTriggered)
+                throw new MultiplayerSessionFailedException($"同步点未确认放行: {syncId}");
+            return true;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[联机] 等待所有玩家失败: {SyncId}", syncId);
-            return false;
+            if (IsExitTriggered)
+            {
+                try { StopCts?.Cancel(); } catch (ObjectDisposedException) { }
+                ct.ThrowIfCancellationRequested();
+            }
+            RequestLocalStop($"同步点 {syncId} 失败: {ex.Message}");
+            _ = TriggerCoordinatedStop(IsHost, $"同步点 {syncId} 失败");
+            throw new MultiplayerSessionFailedException($"同步点未确认放行: {syncId}", ex);
         }
     }
 
@@ -698,13 +768,15 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// 命中后将 syncId 加入 _fastReportedSyncIds，让后续严格 WaitForAllPlayers 路径
     /// short-circuit 直接返回，避免服务端 ArrivalSet 清空后再订阅事件死等。
     /// </summary>
-    public async Task FastReportAsync(string syncId, long syncProgress = -1)
+    public async Task FastReportAsync(string syncId, long syncProgress = -1, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         try
         {
-            await _client.FireAndForgetArrivalAsync(syncId, syncProgress);
+            await _client.FireAndForgetArrivalAsync(syncId, syncProgress, ct);
             _fastReportedSyncIds.TryAdd(syncId, 0);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 抢报失败（已忽略）: {SyncId}", syncId);
@@ -759,12 +831,14 @@ public class MultiplayerCoordinator : IAsyncDisposable
 
     // === 上报状态 ===
 
-    public async Task ReportFightingStatusAsync(bool isFighting)
+    public async Task ReportFightingStatusAsync(bool isFighting, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         try
         {
-            await _client.ReportFightingStatusAsync(isFighting);
+            await _client.ReportFightingStatusAsync(isFighting, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 上报战斗状态失败");
@@ -812,12 +886,14 @@ public class MultiplayerCoordinator : IAsyncDisposable
         }
     }
 
-    public async Task ReportMemberStatusAsync(MemberStatus status, long targetProgress = -1)
+    public async Task ReportMemberStatusAsync(MemberStatus status, long targetProgress = -1, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         try
         {
-            await _client.ReportMemberStatusAsync(status, targetProgress);
+            await _client.ReportMemberStatusAsync(status, targetProgress, ct);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[联机] 上报成员状态失败");
@@ -1017,9 +1093,11 @@ public class MultiplayerCoordinator : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
         // 集体卡死跳段事件取消订阅 + Gate 重置（multiplayer-mutual-wait-collective-skip §8.6 改动 5）
         try
         {
+            _client.SessionFailed -= OnClientSessionFailed;
             _client.CollectiveSkipRequested -= OnCollectiveSkipRequested;
             _client.CollectiveSkipAppliedAllReceived -= OnCollectiveSkipAppliedAllReceived;
             _client.CollectiveSkipDegradedReceived -= OnCollectiveSkipDegradedReceived;
@@ -1040,3 +1118,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
         KazuhaCollectSync = null;
     }
 }
+
+/// <summary>会话未确认的终止故障，不允许被复苏/局部路线重试吞掉。</summary>
+public sealed class MultiplayerSessionFailedException(string message, Exception? inner = null)
+    : InvalidOperationException(message, inner) { }

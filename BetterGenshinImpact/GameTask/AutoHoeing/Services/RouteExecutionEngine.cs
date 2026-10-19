@@ -309,6 +309,7 @@ public class RouteExecutionEngine
         var effectiveRoute = cooperativeContext?.Plan.Route ?? route;
         var executionFailed = false;
         var executionCancelled = false;
+        MultiplayerSessionFailedException? sessionFailure = null;
         try
         {
         _running = true;
@@ -430,6 +431,14 @@ public class RouteExecutionEngine
                     Logger.LogWarning("[DEBUG] BuildFromFilePath 返回 null，路线: {Name}", route.FileName);
                 }
             }
+            catch (MultiplayerSessionFailedException ex) when (_coordinator != null)
+            {
+                sessionFailure = ex;
+                executionFailed = true;
+                cooperativeContext?.MarkIncomplete(ex.Message);
+                cts.Cancel();
+                throw;
+            }
             catch (OperationCanceledException)
             {
                 executionCancelled = true;
@@ -522,16 +531,8 @@ public class RouteExecutionEngine
             }
         }
 
-        // 等待所有任务完成
-        try
-        {
-            await Task.WhenAll(tasks);
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            Logger.LogDebug("并发任务异常: {Msg}", ex.Message);
-        }
+        await AwaitRouteTasksAsync(tasks, _coordinator, () => sessionFailure, ct,
+            cooperativeContext?.IsReplay == true);
 
         sw.Stop();
         result.ActualDuration = sw.Elapsed.TotalSeconds;
@@ -557,6 +558,23 @@ public class RouteExecutionEngine
         {
             if (_coordinator != null && ReferenceEquals(_coordinator.ActiveCooperativeContext, cooperativeContext))
                 _coordinator.ActiveCooperativeContext = previousCooperativeContext;
+        }
+    }
+
+    internal static async Task AwaitRouteTasksAsync(IReadOnlyCollection<Task> tasks,
+        MultiplayerCoordinator? coordinator, Func<MultiplayerSessionFailedException?> sessionFailure,
+        CancellationToken ct, bool replay = false)
+    {
+        try { await Task.WhenAll(tasks); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Logger.LogDebug("并发任务异常: {Msg}", ex.Message); }
+        if (coordinator != null)
+        {
+            // WhenAll 可能先呈现拾取子任务的取消；仍优先保留严格同步的实际致因。
+            if (sessionFailure() is { } failure)
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failure).Throw();
+            ct.ThrowIfCancellationRequested();
+            await coordinator.EnsureExecutionAllowedAsync(ct, replay);
         }
     }
 

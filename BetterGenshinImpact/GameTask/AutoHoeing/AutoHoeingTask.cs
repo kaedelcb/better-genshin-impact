@@ -668,7 +668,8 @@ public class AutoHoeingTask : ISoloTask
                 // 路线边界锚点：先尽力通知服务端取消（否则其余成员要等满锚点超时才会停），再释放订阅
                 if (_routeAnchorEnabledThisSession && _routeAnchor != null)
                 {
-                    try { await _routeAnchor.CancelAsync("task-teardown", CancellationToken.None); }
+                    using var anchorTeardown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    try { await _routeAnchor.CancelAsync("task-teardown", anchorTeardown.Token); }
                     catch (Exception __anchorCancelEx)
                     {
                         _logger.LogDebug(__anchorCancelEx, "[联机][锚点] 收尾取消失败（已忽略）");
@@ -982,7 +983,7 @@ public class AutoHoeingTask : ISoloTask
                         {
                             _logger.LogInformation("[联机] 尝试加入房间: {Code}（房主: {Host}，{N}/{Max}人）",
                                 room.Code, room.HostName, room.PlayerCount, room.MaxPlayers);
-                            var ok = await client.JoinRoomAsync(room.Code, _config.PlayerName, _config.PlayerUid);
+                            var ok = await client.JoinRoomAsync(room.Code, _config.PlayerName, _config.PlayerUid, _ct);
                             if (ok)
                             {
                                 roomCodeToJoin = room.Code;
@@ -1051,7 +1052,7 @@ public class AutoHoeingTask : ISoloTask
                         {
                             if (roomClosed) { _logger.LogWarning("[联机] 房间已被关闭，停止加入"); break; }
                             _logger.LogInformation("[联机] 尝试加入房间: {Code}（第{N}次）", roomCodeToJoin, retry);
-                            joinedRoom = await client.JoinRoomAsync(roomCodeToJoin, _config.PlayerName, _config.PlayerUid);
+                            joinedRoom = await client.JoinRoomAsync(roomCodeToJoin, _config.PlayerName, _config.PlayerUid, _ct);
                             if (joinedRoom) { _logger.LogInformation("[联机] 成功加入房间: {Code}", roomCodeToJoin); break; }
                             _logger.LogWarning("[联机] 加入房间 {Code} 失败，3秒后重试", roomCodeToJoin);
                             await Task.Delay(3000, _ct);
@@ -1081,7 +1082,7 @@ public class AutoHoeingTask : ISoloTask
                     _config.CurrentRoomCode = "";
                 }
                 _logger.LogInformation("[联机] 无房间码，创建新房间");
-                var newCode = await client.CreateRoomAsync(_config.PlayerName, whitelist, _config.PlayerUid, _config.ExpectedPlayerCount);
+                var newCode = await client.CreateRoomAsync(_config.PlayerName, whitelist, _config.PlayerUid, _config.ExpectedPlayerCount, _ct);
                 if (newCode != null)
                 {
                     _config.CurrentRoomCode = newCode;
@@ -1255,6 +1256,14 @@ public class AutoHoeingTask : ISoloTask
                 _config.EnableExpCapStop, _config.ExpCapDetectAllExp ? "所有经验" : "仅精英经验");
             _logger.LogInformation("[联机] =====================================");
 
+            var initialRoomCoordinator = _multiplayerCoordinator;
+            initialRoomCoordinator.LocalStopRequested += reason =>
+            {
+                if (!ReferenceEquals(_multiplayerCoordinator, initialRoomCoordinator) || !initialRoomCoordinator.OwnsCurrentRoom) return;
+                _stopReason ??= reason;
+                _sessionTerminated = true;
+                if (!_expCapStopTriggered) MarkCoordinatedRestartRequired();
+            };
             _multiplayerCoordinator.OnDegraded += reason =>
             {
                 _logger.LogWarning("[联机] 已降级为单机模式，原因：{Reason}", reason);
@@ -2364,7 +2373,8 @@ public class AutoHoeingTask : ISoloTask
                     // 路线边界锚点：先尽力通知服务端取消（否则其余成员要等满锚点超时才会停），再释放订阅
                     if (_routeAnchorEnabledThisSession && _routeAnchor != null)
                     {
-                        try { await _routeAnchor.CancelAsync("task-teardown", CancellationToken.None); }
+                        using var anchorTeardown = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                        try { await _routeAnchor.CancelAsync("task-teardown", anchorTeardown.Token); }
                         catch (Exception __anchorCancelEx)
                         {
                             _logger.LogDebug(__anchorCancelEx, "[联机][锚点] 收尾取消失败（已忽略）");
@@ -2483,7 +2493,7 @@ public class AutoHoeingTask : ISoloTask
                 string? newCode = null;
                 for (int retry = 1; retry <= 3; retry++)
                 {
-                    newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount);
+                    newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount, _ct);
                     if (newCode != null)
                     {
                         _logger.LogInformation("[多世界] 第 {Round} 轮创建房间成功（第{N}次尝试）: {Code}", round + 1, retry, newCode);
@@ -2624,7 +2634,7 @@ public class AutoHoeingTask : ISoloTask
                     if (target != null)
                     {
                         _logger.LogInformation("[多世界] 找到新房主 [{Host}] 的房间: {Code}", roundHostPlayer.PlayerName, target.Code);
-                        var joined = await client.JoinRoomAsync(target.Code, _config.PlayerName, _config.PlayerUid);
+                        var joined = await client.JoinRoomAsync(target.Code, _config.PlayerName, _config.PlayerUid, _ct);
                         if (joined)
                         {
                             newRoomCode = target.Code;
@@ -2801,6 +2811,14 @@ public class AutoHoeingTask : ISoloTask
             // 将当前 _linkedStopCts 赋给新 coordinator，确保协调停止能传播到 _ct
             _multiplayerCoordinator.StopCts = _linkedStopCts;
 
+            var nextRoomCoordinator = _multiplayerCoordinator;
+            nextRoomCoordinator.LocalStopRequested += reason =>
+            {
+                if (!ReferenceEquals(_multiplayerCoordinator, nextRoomCoordinator) || !nextRoomCoordinator.OwnsCurrentRoom) return;
+                _stopReason ??= reason;
+                _sessionTerminated = true;
+                if (!_expCapStopTriggered) MarkCoordinatedRestartRequired();
+            };
             _multiplayerCoordinator.OnDegraded += reason =>
                 _logger.LogWarning("[联机] 已降级为单机模式，原因：{Reason}", reason);
             // 连续超时退出处理（需求 5）— 多世界模式每轮重建时也需要注册
@@ -3959,7 +3977,7 @@ public class AutoHoeingTask : ISoloTask
                         
                         // 上报 Rejoining 状态，触发路线跳过流程追赶
                         _logger.LogInformation("[联机] 上报 Rejoining 状态，触发路线跳过流程追赶");
-                        await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Rejoining);
+                        await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Rejoining, ct: _ct);
                         
                         // 继续执行当前路线，在路线执行时会检测到 Rejoining 状态并触发跳过
                     }
@@ -3992,6 +4010,8 @@ public class AutoHoeingTask : ISoloTask
                 break;
             }
             _ct.ThrowIfCancellationRequested();
+            if (_multiplayerCoordinator != null)
+                await _multiplayerCoordinator.EnsureExecutionAllowedAsync(_ct);
             count++;
 
             // 时间限制检查
@@ -4306,7 +4326,7 @@ public class AutoHoeingTask : ISoloTask
                         // 联机模式：路线正常完成，确保状态为 Normal（可能之前是 Rejoining/Reviving）
                         if (_coordinatorClientRef != null && _multiplayerCoordinator != null)
                         {
-                            try { await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Normal); } catch { }
+                            try { await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Normal, ct: _ct); } catch { }
                         }
                         
                         // === 线路同步检查点（需求 10）：路线完成时上报进度 ===
@@ -4365,6 +4385,8 @@ public class AutoHoeingTask : ISoloTask
                     completedCount++;
                 }
             }
+            catch (MultiplayerSessionFailedException) { throw; }
+            catch (OperationCanceledException) when (_multiplayerCoordinator != null) { throw; }
             catch (Exception) when (cooperative != null)
             {
                 throw;
@@ -4681,7 +4703,7 @@ public class AutoHoeingTask : ISoloTask
                     _cdManager.Save();
                 }
                 if (_coordinatorClientRef != null)
-                    await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Normal);
+                    await _coordinatorClientRef.ReportMemberStatusAsync(MemberStatus.Normal, ct: _ct);
             }
             else incomplete++;
         }

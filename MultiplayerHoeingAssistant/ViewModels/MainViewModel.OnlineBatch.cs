@@ -405,6 +405,7 @@ public partial class MainViewModel
                 {
                     var candidate = new OnlineHoeingBatch(start, uid,
                         SnapshotBatchCompletionPolicy(start));
+                    candidate.FreezeControlContext(CurrentControlContext());
                     batch = candidate;
                     _activeBatch = batch; // 从这里起Preparing也是busy，而不是等待RunTask出现。
                 }

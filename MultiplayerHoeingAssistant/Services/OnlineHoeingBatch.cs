@@ -17,6 +17,58 @@ internal sealed record LocalTaskFailureReport(int Index, int Attempt, string Job
 public sealed class OnlineHoeingBatch
 {
     private int _settled;
+    internal string ControlContext { get; private set; } = "";
+    internal CoordinatedControlAuthority.Grant? ControlGrant { get; set; }
+    private TimeProvider _controlClock = TimeProvider.System;
+    private long _lastControlContact;
+    private bool _hasControlContact;
+    private int _controlExecutionEnded;
+    private int _controlItemSubmitted;
+    internal void SetControlItemSubmitted(bool submitted) =>
+        Volatile.Write(ref _controlItemSubmitted, submitted ? 1 : 0);
+    internal bool ControlExecutionEnded => Volatile.Read(ref _controlExecutionEnded) != 0;
+    internal void EndControlExecution() => Interlocked.Exchange(ref _controlExecutionEnded, 1);
+    private string _lastControlPhase = "";
+    private TimeSpan _runningContactTimeout = TimeSpan.FromSeconds(90);
+
+    internal void FreezeControlContext(string context)
+    {
+        if (ControlContext.Length != 0 && ControlContext != context)
+            throw new InvalidOperationException("批次控制房间身份不能替换");
+        ControlContext = context;
+    }
+
+    internal void RecordControlContact(CoordinatedBatchSnapshot state, TimeProvider clock, TimeSpan runningTimeout)
+    {
+        lock (_policyGate)
+        {
+            _controlClock = clock;
+            _lastControlContact = clock.GetTimestamp();
+            _hasControlContact = true;
+            _lastControlPhase = state.Phase;
+            _runningContactTimeout = runningTimeout;
+        }
+    }
+
+    internal TimeSpan? RemainingRunningControlBudget
+    {
+        get
+        {
+            lock (_policyGate)
+                return _hasControlContact && TakenOver && _lastControlPhase == "running"
+                    && Volatile.Read(ref _controlItemSubmitted) != 0
+                    && !ControlExecutionEnded && !IsCancellationRequested && !LocalExecutionReleased && !LocalCleanupConfirmed
+                    && Volatile.Read(ref _settled) == 0
+                    ? _runningContactTimeout - _controlClock.GetElapsedTime(_lastControlContact) : null;
+        }
+    }
+
+    internal void RequireRunningControlBudget()
+    {
+        if (RemainingRunningControlBudget is { } remaining && remaining <= TimeSpan.Zero)
+            throw new TimeoutException("原批次控制连接核对已超过运行阶段总预算");
+    }
+
     private int _localSucceeded;
     private int _localExecutionReleased;
     private int _localTasksFailed;

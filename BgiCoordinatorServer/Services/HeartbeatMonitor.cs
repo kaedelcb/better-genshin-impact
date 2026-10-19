@@ -51,7 +51,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
         return Task.CompletedTask;
     }
 
-    private void Scan(object? state)
+    private async void Scan(object? state)
     {
         try
         {
@@ -61,97 +61,9 @@ public class HeartbeatMonitor : IHostedService, IDisposable
             // 2. 检查线路强制同步（multiplayer-route-enforcement spec）
             CheckRouteEnforcement();
             
-            // 3. 检查玩家心跳超时
-            var affectedRooms = _roomManager.RemoveDeadPlayers(PlayerTimeout);
-            foreach (var roomCode in affectedRooms)
-            {
-                var removedPlayers = _roomManager.GetLastRemovedPlayers(roomCode);
-                var room = _roomManager.GetRoom(roomCode);
-
-                foreach (var removedPlayer in removedPlayers)
-                {
-                    // Check if the removed player was the host
-                    if (room != null && removedPlayer.ConnectionId == room.HostConnectionId)
-                    {
-                        // Host was removed: broadcast RoomClosed and delete the room
-                        _logger.LogWarning("房间 {RoomCode} 房主 {PlayerName} 心跳超时，关闭房间",
-                            roomCode, removedPlayer.PlayerName);
-
-                        _phaseObserver.Mark(roomCode, RoomPhase.Ended, "heartbeat.hostTimeout");
-                        _phaseObserver.Forget(roomCode);
-                        _ = _broadcaster.BroadcastGroupAsync(roomCode, "RoomClosed",
-                            new { reason = "房主心跳超时" }, "房主心跳超时");
-
-                        _roomManager.DeleteRoom(roomCode);
-                        break; // Room is deleted, no need to process remaining removed players
-                    }
-                    else
-                    {
-                        // Member was removed: broadcast MemberStatusChanged
-                        _logger.LogWarning("房间 {RoomCode} 成员 {PlayerName}({Uid}) 心跳超时，标记离线",
-                            roomCode, removedPlayer.PlayerName, removedPlayer.PlayerUid);
-
-                        _ = _broadcaster.BroadcastGroupAsync(roomCode, "MemberStatusChanged",
-                            new { playerUid = removedPlayer.PlayerUid, status = "Offline", targetProgress = long.MaxValue },
-                            removedPlayer.PlayerUid, "Offline", long.MaxValue);
-                    }
-                }
-
-                // Still send PlayerListUpdated for remaining players
-                if (room != null)
-                {
-                    var players = room.Players ?? [];
-                    _logger.LogInformation("房间 {RoomCode} 有玩家超时断线，当前剩余 {Count} 人", roomCode, players.Count);
-
-                    _ = _broadcaster.BroadcastGroupAsync(roomCode, "PlayerListUpdated",
-                        new { players }, players);
-                }
-            }
-
-            // 4. 宽限期到期清理（resilience-framework §2d）
-            foreach (var (graceRoom, graceRoomCode) in _roomManager.GetAllRoomsWithCodes())
-            {
-                List<string> expired;
-                lock (graceRoom)
-                {
-                    expired = graceRoom.GracePendingMembers
-                        .Where(kvp => kvp.Value < DateTime.UtcNow)
-                        .Select(kvp => kvp.Key)
-                        .ToList();
-                }
-
-                foreach (var connId in expired)
-                {
-                    lock (graceRoom)
-                    {
-                        graceRoom.GracePendingMembers.Remove(connId);
-                        var player = graceRoom.Players.FirstOrDefault(p => p.ConnectionId == connId);
-                        if (player != null)
-                        {
-                            graceRoom.Players.Remove(player);
-                            // 清理该连接在各同步集合中的记录
-                            foreach (var set in graceRoom.ArrivalSets.Values)
-                                set.Remove(connId);
-                            foreach (var set in graceRoom.FightDoneSets.Values)
-                                set.Remove(connId);
-                            foreach (var set in graceRoom.FightParticipantSets.Values)
-                                set.Remove(connId);
-                            graceRoom.WorldJoinedSet.Remove(connId);
-                            graceRoom.RouteVerificationDoneSet.Remove(connId);
-
-                            _logger.LogWarning("房间 {RoomCode} 成员 {PlayerName}({Uid}) 宽限期满未重连，删除",
-                                graceRoomCode, player.PlayerName, player.PlayerUid);
-
-                            _ = _broadcaster.BroadcastGroupAsync(graceRoomCode, "MemberStatusChanged",
-                                new { playerUid = player.PlayerUid, status = "Offline", targetProgress = long.MaxValue },
-                                player.PlayerUid, "Offline", long.MaxValue);
-                            _ = _broadcaster.BroadcastGroupAsync(graceRoomCode, "PlayerListUpdated",
-                                new { players = graceRoom.Players }, graceRoom.Players);
-                        }
-                    }
-                }
-            }
-        // 5. 检查控制房间上线状态过期
+            // 3/4. 心跳与成员宽限由 RoomManager 一次原子清退，只广播该次实际移除的快照。
+            await ScanExpiredPlayersAsync(DateTime.UtcNow);
+            // 5. 检查控制房间上线状态过期
             CheckControlRoomTimeout();
 
             // 6. 控制房间增量广播兜底：CheckControlRoomTimeout 直接改成员字段（上线过期复位/任务运行态超时复位）
@@ -164,6 +76,33 @@ public class HeartbeatMonitor : IHostedService, IDisposable
         }
     }
     
+    internal async Task ScanExpiredPlayersAsync(DateTime utcNow)
+    {
+        var snapshots = _roomManager.RemoveDeadPlayers(PlayerTimeout, utcNow);
+        foreach (var snapshot in snapshots)
+        {
+            if (snapshot.HostTimedOut)
+            {
+                _logger.LogWarning("房间 {RoomCode} 房主心跳超时，关闭房间", snapshot.RoomCode);
+                _phaseObserver.Mark(snapshot.RoomCode, RoomPhase.Ended, "heartbeat.hostTimeout");
+                _phaseObserver.Forget(snapshot.RoomCode);
+                await _broadcaster.BroadcastGroupAsync(snapshot.RoomCode, "RoomClosed",
+                    new { reason = "房主心跳超时" }, "房主心跳超时");
+                continue;
+            }
+            foreach (var player in snapshot.RemovedPlayers)
+            {
+                _logger.LogWarning("房间 {RoomCode} 成员 {PlayerName}({Uid}) 心跳或宽限期到期，标记离线",
+                    snapshot.RoomCode, player.PlayerName, player.PlayerUid);
+                await _broadcaster.BroadcastGroupAsync(snapshot.RoomCode, "MemberStatusChanged",
+                    new { playerUid = player.PlayerUid, status = "Offline", targetProgress = long.MaxValue },
+                    player.PlayerUid, "Offline", long.MaxValue);
+            }
+            await _broadcaster.BroadcastGroupAsync(snapshot.RoomCode, "PlayerListUpdated",
+                new { players = snapshot.RemainingPlayers }, snapshot.RemainingPlayers);
+        }
+    }
+
     /// <summary>
     /// 检查重对齐超时（每10秒执行一次）
     /// </summary>

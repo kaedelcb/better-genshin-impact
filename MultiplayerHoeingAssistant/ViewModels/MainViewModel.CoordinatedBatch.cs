@@ -35,14 +35,12 @@ public partial class MainViewModel
                 await takeover(ct);
                 if (!ReferenceEquals(owner, _commandExecutor)) throw new InvalidOperationException("接管执行器已被替换");
             },
-            Exchange = (stage, result, reason, index, attempt, ct) =>
-                (_signalRClient ?? throw new IOException("控制房间未连接")).UpdateCoordinatedBatchAsync(
-                    batch.Generation, batch.Token, batch.BatchId, string.Join(",", batch.Bindings.Select(b => b.Type)),
-                    index, attempt, result, ct, stage, reason),
+            Exchange = (stage, result, reason, index, attempt, ct) => ExchangeCoordinatedControlAsync(
+                batch, stage, result, reason, index, attempt, ct),
             ReadJobs = ct => External().QueryJobListAsync(ct),
             ReadTerminal = (jobId, ct) => External().QueryTaskQueueStatusAsync(jobId, ct),
             CancelOwned = async (jobId, ct) => { await External().CancelOwnedTaskAsync(jobId, ct); },
-            Submit = (item, epoch, ct) =>
+            Submit = (item, epoch, ct) => SubmitCoordinatedControlAsync(batch, async admittedToken =>
             {
                 var ext = _externalClient is { State: BgiExternalLinkState.Ready } ready ? ready
                     : throw new BgiNotSentException(BgiNotSentException.ChannelNotReady, "BGI 通道不可用，启动未发送");
@@ -57,15 +55,15 @@ public partial class MainViewModel
                     throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "本批接管票据已变化，启动未发送");
                 if (!batch.ConfigRevisions.TryGetValue(OnlineHoeingBatch.ConfigurationKey(item.Name, item.IsOneDragon), out var revision))
                     throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "本批任务配置修订未冻结，启动未发送");
-                return ext.SubmitTaskStartAsync(item.IsOneDragon ? null : item.Name,
+                return await ext.SubmitTaskStartAsync(item.IsOneDragon ? null : item.Name,
                     item.IsOneDragon ? item.Name : null, 0, batch.Generation,
-                    string.Join(",", batch.Bindings.Where(b => b.Type == "group").Select(b => b.Name)), ct,
+                    string.Join(",", batch.Bindings.Where(b => b.Type == "group").Select(b => b.Name)), admittedToken,
                     preempt: false, idempotencyKey: item.RequestKey,
                     expectedConfigRevision: revision,
                     bgiEpoch: new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc },
                     coordinatedHoeing: true, hoeingBatchId: batch.BatchId,
                     hoeingParticipantUids: batch.Start!.ParticipantUids);
-            },
+            }, ct),
             ReleaseTicket = async (ticket, epoch, ct) =>
             {
                 if (owner == null || !ReferenceEquals(owner, _commandExecutor)
@@ -122,6 +120,9 @@ internal sealed class CoordinatedBatchRuntime
     internal TimeSpan SubmissionReconcileTimeout { get; init; } = TimeSpan.FromSeconds(30);
     internal TimeSpan ObservationReconcileTimeout { get; init; } = TimeSpan.FromSeconds(30);
     internal TimeSpan AuthorityContactTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    internal TimeSpan RunningAuthorityContactTimeout { get; init; } = TimeSpan.FromSeconds(90);
+    internal TimeSpan AuthorityRpcTimeout { get; init; } = TimeSpan.FromSeconds(10);
+    internal TimeProvider Clock { get; init; } = TimeProvider.System;
     internal bool RequireFinishEvidence { get; init; }
     internal bool RequireLocalTaskFailureIsolation { get; init; }
     internal Func<string, BgiEpoch, string, CancellationToken, Task<bool?>>? ConfirmLocalTasksFailure { get; init; }
@@ -165,10 +166,12 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         or "capability_required" or "invalid_request" or "stale_epoch" or "request_expired"
         or "unsupported_operation" or "task_busy" or "manual_stop_cooldown";
 
-    private async Task<CoordinatedBatchSnapshot> ExchangeAsync(CancellationToken ct)
+    private async Task<CoordinatedBatchSnapshot> ExchangeAsync(CancellationToken ct, TimeSpan? remaining = null)
     {
         using var bound = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        bound.CancelAfter(TimeSpan.FromSeconds(10));
+        var timeout = remaining is { } left && left < io.AuthorityRpcTimeout ? left : io.AuthorityRpcTimeout;
+        if (timeout <= TimeSpan.Zero) throw new TimeoutException("原批次控制连接等待预算已耗尽");
+        bound.CancelAfter(timeout);
         var snapshot = await io.Exchange(_stage, _result, _reason, _index, _attempt, bound.Token);
         var start = batch.Start!;
         if (snapshot.Protocol != "hoeing.start.v2" || snapshot.BatchId != batch.BatchId
@@ -220,7 +223,9 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         if (batch.Start == null || batch.Bindings.Count == 0 || string.IsNullOrWhiteSpace(batch.SelfUid))
             throw new InvalidOperationException("统一开始缺少冻结批次、成员或绑定");
         var ct = batch.Cts.Token;
-        var lastContact = DateTime.UtcNow;
+        var lastContact = io.Clock.GetTimestamp();
+        TimeSpan RemainingContactBudget() => batch.RemainingRunningControlBudget
+            ?? io.AuthorityContactTimeout - io.Clock.GetElapsedTime(lastContact);
         try
         {
             while (true)
@@ -229,12 +234,24 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 if (batch.LocalSucceeded && batch.LocalFinalizationTask is not null)
                     await ObserveLocalFinalizationAsync();
                 CoordinatedBatchSnapshot team;
-                try { team = await ExchangeAsync(ct); lastContact = DateTime.UtcNow; }
-                catch (Exception ex) when (!batch.IsCancellationRequested
-                    && ex is IOException or TimeoutException or OperationCanceledException
-                    && DateTime.UtcNow - lastContact < io.AuthorityContactTimeout)
+                try
                 {
-                    await Task.Delay(io.PollInterval, ct);
+                    var remaining = RemainingContactBudget();
+                    if (remaining <= TimeSpan.Zero) throw new TimeoutException("原批次控制连接等待预算已耗尽");
+                    team = await ExchangeAsync(ct, remaining);
+                    ct.ThrowIfCancellationRequested();
+                    if (RemainingContactBudget() <= TimeSpan.Zero)
+                        throw new TimeoutException("控制回应到达时原批次等待预算已耗尽");
+                    lastContact = io.Clock.GetTimestamp();
+                    batch.RecordControlContact(team, io.Clock, io.RunningAuthorityContactTimeout);
+                }
+                catch (Exception ex) when (!batch.IsCancellationRequested && ex is not ControlContextRevokedException
+                    && ex is IOException or TimeoutException or OperationCanceledException
+                    && RemainingContactBudget() > TimeSpan.Zero)
+                {
+                    var remaining = RemainingContactBudget();
+                    if (remaining <= TimeSpan.Zero) throw;
+                    await Task.Delay(remaining < io.PollInterval ? remaining : io.PollInterval, ct);
                     continue; // 没有权威回应时只能续等，不能启动或推进。
                 }
                 if (_result == "local_tasks_failed" && batch.ObserveLocalTasksFailureAccepted(team))
@@ -362,6 +379,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
         finally
         {
+            batch.EndControlExecution(); // Reconnection may now settle receipts, never restart this loop.
             if (!_complete) await CleanupAsync();
             if (_prepare?.IsCompleted != false && _takeover?.IsCompleted != false) _stageCancellation?.Dispose();
         }
@@ -398,6 +416,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 throw new InvalidOperationException("本项已有联机锄地完成证据，不整组重跑");
             _index = team.Index; _attempt = team.Attempt;
             _item = null; _result = ""; _reason = ""; _cancelSent = false; _completedNative = 0;
+            batch.SetControlItemSubmitted(false);
             batch.MarkCurrentBindingStarted();
         }
         if (_index >= batch.Bindings.Count) throw new InvalidOperationException("运行项越过冻结绑定范围");
@@ -467,7 +486,10 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             if (!string.IsNullOrWhiteSpace(terminal?.ErrorCode))
                 _reason = LimitReason(terminal.ErrorCode + ": " + terminal.ErrorMessage);
             if (terminal?.Status is "completed" or "failed" or "queueCancelled")
+            {
                 _item.State = BatchItemState.TerminalConfirmed;
+                batch.SetControlItemSubmitted(false); // A terminal item only needs the original receipt/cleanup budget.
+            }
             if (_result == "local_failed")
                 _reason = LimitReason($"联机锄地已完成 {_completedNative} 次，本机配置组后续失败，禁止整组重跑；" + _reason);
             if (_result == "local_tasks_failed")
@@ -486,16 +508,30 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         if (team.Phase != "running" || _result.Length != 0 || _item.State != BatchItemState.PendingSubmit) return;
         _observationUnavailableSince = null;
         _item.State = BatchItemState.Submitted; // 发送前保留唯一请求身份；任何不确定都不得生成第二次提交。
+        batch.SetControlItemSubmitted(true); // Includes a possible send whose response/observation is unknown.
         _submittedAt = DateTime.UtcNow;
         BgiTaskSubmitResult submitted;
         try { submitted = await io.Submit(_item, _epoch!, rpc.Token); }
+        catch (ControlSubmissionDeferredException) when (!batch.IsCancellationRequested)
+        {
+            // The admission gate guarantees no BGI send was invoked. Keep the same request key.
+            _item.State = BatchItemState.PendingSubmit;
+            batch.SetControlItemSubmitted(false);
+            _submittedAt = default;
+            return;
+        }
         catch (BgiNotSentException ex) when (BgiNotSentException.IsKnownEvidenceCode(ex.EvidenceCode))
-        { _item.State = BatchItemState.TerminalConfirmed; _result = "failed"; _reason = LimitReason(ex.Message); return; }
+        {
+            _item.State = BatchItemState.TerminalConfirmed;
+            batch.SetControlItemSubmitted(false);
+            _result = "failed"; _reason = LimitReason(ex.Message); return;
+        }
         catch (Exception ex) when (!batch.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
         { io.Log("[全队批次] 启动回执未确认，将按原请求键补查: " + ex.Message); return; }
         if (!submitted.Success && KnownRejection(submitted.ErrorCode))
         {
             _item.State = BatchItemState.TerminalConfirmed;
+            batch.SetControlItemSubmitted(false);
             _result = submitted.ErrorCode == "manual_stop_cooldown" ? "cancelled" : "failed";
             _reason = LimitReason(submitted.ErrorCode + ": " + submitted.ErrorMessage);
             return;

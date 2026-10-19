@@ -125,7 +125,9 @@ public sealed class CooperativeRerunContractTests
 
         var completed = await Task.WhenAny(wait, Task.Delay(5000));
         Assert.True(ReferenceEquals(completed, wait), "关房后严格等待应立即结束，而不是继续空等");
-        Assert.False(await wait, "关房导致的等待取消不能被当成“全员已到”");
+        // 保留原 room.closed 故障身份：未确认现在必须终止整项联机，不能再供调用方忽略 false。
+        await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() => wait);
+        Assert.True(coordinator.IsExitTriggered);
     }
 
     // =========================================================================
