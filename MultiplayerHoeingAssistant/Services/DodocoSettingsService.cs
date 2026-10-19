@@ -7,6 +7,7 @@ namespace MultiplayerHoeingAssistant.Services;
 /// <summary>嘟嘟可统一设置（P3 尾巴收口：卡死阈值 + 截图设置 + 全部静音 集中持久化）。</summary>
 public class DodocoSettings
 {
+    public const int DefaultIncidentRetentionCount = 50;
     /// <summary>卡死判定阈值（分钟）：任务运行中但日志超时无新行 → 疑似卡死。默认 3。</summary>
     [JsonPropertyName("stallThresholdMinutes")] public int StallThresholdMinutes { get; set; } = 3;
     /// <summary>截图自动刷新间隔（秒）：1/3/5/10 之一。默认 3（仅在开启自动刷新时生效）。</summary>
@@ -38,6 +39,8 @@ public class DodocoSettings
     [JsonPropertyName("incidentPreSeconds")] public int IncidentPreSeconds { get; set; } = 3;
     /// <summary>事发录像·保存事发后秒数：1~20，默认 3（触发后继续补采该时长的帧再封盘）。</summary>
     [JsonPropertyName("incidentPostSeconds")] public int IncidentPostSeconds { get; set; } = 3;
+    /// <summary>事发录像保留次数：默认 50，0 表示不自动清理；超出时删除最旧的事件目录。</summary>
+    [JsonPropertyName("incidentRetentionCount")] public int IncidentRetentionCount { get; set; } = DefaultIncidentRetentionCount;
 }
 
 /// <summary>
@@ -59,9 +62,10 @@ public sealed class DodocoSettingsService
     /// <summary>设置变更通知（UI 线程订阅后自行刷新绑定）。</summary>
     public event Action? SettingsChanged;
 
-    public DodocoSettingsService()
+    public DodocoSettingsService() : this(AssistantDataDirectory.Root) { }
+
+    internal DodocoSettingsService(string dir)
     {
-        var dir = AssistantDataDirectory.Root;
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "dodoco_settings.json");
         Load();
@@ -88,7 +92,8 @@ public sealed class DodocoSettingsService
                     IncidentBufferSeconds = _settings.IncidentBufferSeconds,
                     IncidentCaptureIntervalSeconds = _settings.IncidentCaptureIntervalSeconds,
                     IncidentPreSeconds = _settings.IncidentPreSeconds,
-                    IncidentPostSeconds = _settings.IncidentPostSeconds
+                    IncidentPostSeconds = _settings.IncidentPostSeconds,
+                    IncidentRetentionCount = _settings.IncidentRetentionCount
                 };
         }
     }
@@ -173,6 +178,7 @@ public sealed class DodocoSettingsService
             _settings.IncidentCaptureIntervalSeconds is < 0.5 or > 5) _settings.IncidentCaptureIntervalSeconds = 1;
         if (_settings.IncidentPreSeconds is < 1 or > 20) _settings.IncidentPreSeconds = 3;
         if (_settings.IncidentPostSeconds is < 1 or > 20) _settings.IncidentPostSeconds = 3;
+        if (_settings.IncidentRetentionCount < 0) _settings.IncidentRetentionCount = DodocoSettings.DefaultIncidentRetentionCount;
     }
 
     private void SaveLocked()

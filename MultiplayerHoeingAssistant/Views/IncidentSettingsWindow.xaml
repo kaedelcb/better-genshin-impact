@@ -29,6 +29,7 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <TextBlock Grid.Row="0" Grid.Column="0" Text="缓存时长（秒）" VerticalAlignment="Center" Margin="0,0,0,10"/>
@@ -52,16 +53,25 @@
             <TextBlock Grid.Row="2" Grid.Column="2" Text="1 ~ 20，默认 3" VerticalAlignment="Center"
                        Foreground="#78909c" FontSize="11" Margin="0,0,0,10"/>
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Text="保存事发后（秒）" VerticalAlignment="Center"/>
-            <TextBox Grid.Row="3" Grid.Column="1" x:Name="PostInput" Height="30" Margin="0,0,8,0"
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="保存事发后（秒）" VerticalAlignment="Center" Margin="0,0,0,10"/>
+            <TextBox Grid.Row="3" Grid.Column="1" x:Name="PostInput" Height="30" Margin="0,0,8,10"
                      Background="#263238" Foreground="White" BorderBrush="#37474f"
                      Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
             <TextBlock Grid.Row="3" Grid.Column="2" Text="1 ~ 20，默认 3" VerticalAlignment="Center"
+                       Foreground="#78909c" FontSize="11" Margin="0,0,0,10"/>
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="保留次数（次）" VerticalAlignment="Center"/>
+            <TextBox Grid.Row="4" Grid.Column="1" x:Name="RetentionInput" Height="30" Margin="0,0,8,0"
+                     Background="#263238" Foreground="White" BorderBrush="#37474f"
+                     Padding="6,4" CaretBrush="#d4af37" TextAlignment="Center"/>
+            <TextBlock Grid.Row="4" Grid.Column="2" Text="0 不限，默认 50" VerticalAlignment="Center"
                        Foreground="#78909c" FontSize="11"/>
         </Grid>
 
         <StackPanel Grid.Row="2">
             <TextBlock Text="缓存时长决定「保存事发前」最多能回溯多久：想存更久的事发前画面，需同时加大缓存时长。"
+                       Foreground="#78909c" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+            <TextBlock Text="超出保留次数时，下次录像保存完成后自动删除最旧记录；0 表示不自动清理。"
                        Foreground="#78909c" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
             <TextBlock x:Name="ErrorText" Text=""
                        Foreground="#ef5350" FontSize="12" Margin="0,0,0,8" TextWrapping="Wrap"/>

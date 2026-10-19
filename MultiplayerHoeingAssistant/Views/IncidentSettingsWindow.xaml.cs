@@ -4,14 +4,14 @@ using MultiplayerHoeingAssistant.Services;
 namespace MultiplayerHoeingAssistant.Views;
 
 /// <summary>
-/// 事发录像设置弹窗（异常监控 Tab「📂」旁的 ⚙ 打开）：缓存时长 / 截图间隔 / 保存事发前后秒数。
+/// 事发录像设置弹窗（异常监控 Tab「📂」旁的 ⚙ 打开）：缓存时长 / 截图间隔 / 保存事发前后秒数 / 保留次数。
 /// 仿 ConfirmStepWindow / PasswordSetupWindow 风格（本工程无 ThemedMessageBox）。
 /// 保存时做数值域校验，非法输入红字提示且不关窗。
 /// </summary>
 public partial class IncidentSettingsWindow : Window
 {
     /// <summary>校验通过后的结果（仅点「保存」时有值）。</summary>
-    public (int BufferSeconds, double IntervalSeconds, int PreSeconds, int PostSeconds)? Result { get; private set; }
+    public (int BufferSeconds, double IntervalSeconds, int PreSeconds, int PostSeconds, int RetentionCount)? Result { get; private set; }
 
     private IncidentSettingsWindow(DodocoSettings current, Window? owner)
     {
@@ -27,10 +27,11 @@ public partial class IncidentSettingsWindow : Window
         IntervalInput.Text = current.IncidentCaptureIntervalSeconds.ToString("0.#");
         PreInput.Text = current.IncidentPreSeconds.ToString();
         PostInput.Text = current.IncidentPostSeconds.ToString();
+        RetentionInput.Text = current.IncidentRetentionCount.ToString();
     }
 
     /// <summary>弹出设置对话框；返回用户保存的新值，取消/关窗返回 null。</summary>
-    public static (int BufferSeconds, double IntervalSeconds, int PreSeconds, int PostSeconds)? ShowEdit(
+    public static (int BufferSeconds, double IntervalSeconds, int PreSeconds, int PostSeconds, int RetentionCount)? ShowEdit(
         DodocoSettings current, Window? owner = null)
     {
         // 托盘/静默启动的助手中主窗口从未显示，不能当 Owner
@@ -64,7 +65,12 @@ public partial class IncidentSettingsWindow : Window
             ErrorText.Text = "保存事发后需为 1 ~ 20 的整数（秒）";
             return;
         }
-        Result = (buffer, interval, pre, post);
+        if (!int.TryParse(RetentionInput.Text.Trim(), out var retention) || retention < 0)
+        {
+            ErrorText.Text = "保留次数需为非负整数（0 表示不自动清理）";
+            return;
+        }
+        Result = (buffer, interval, pre, post, retention);
         DialogResult = true;
     }
 

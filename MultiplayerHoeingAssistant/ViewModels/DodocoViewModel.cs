@@ -623,7 +623,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         return (int)((s.IncidentPostSeconds + s.IncidentCaptureIntervalSeconds * 1.5 + 1) * 1000);
     }
 
-    /// <summary>打开事发录像设置弹窗（监控规则行 ⚙）：缓存时长 / 截图间隔 / 保存事发前后秒数。</summary>
+    /// <summary>打开事发录像设置弹窗（监控规则行 ⚙）：缓存时长 / 截图间隔 / 保存事发前后秒数 / 保留次数。</summary>
     public RelayCommand OpenIncidentSettingsCommand => new(_ =>
     {
         var result = Views.IncidentSettingsWindow.ShowEdit(_settingsService.Current);
@@ -635,6 +635,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
                 s.IncidentCaptureIntervalSeconds = r.IntervalSeconds;
                 s.IncidentPreSeconds = r.PreSeconds;
                 s.IncidentPostSeconds = r.PostSeconds;
+                s.IncidentRetentionCount = r.RetentionCount;
             });
         }
     });

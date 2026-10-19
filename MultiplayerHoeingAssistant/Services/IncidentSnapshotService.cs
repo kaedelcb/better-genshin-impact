@@ -19,7 +19,7 @@ namespace MultiplayerHoeingAssistant.Services;
 /// 录像参数（间隔/缓冲/前后秒数）在事发录像设置弹窗里调整，持久化到 dodoco_settings.json，
 /// 服务每拍动态读取生效（触发瞬间的参数快照进 PendingIncident，事件进行中改设置不影响在途事件）。
 ///
-/// 防刷：同规则 30 秒冷却（卡死持续刷日志时不连拍）；事件目录只留最近 50 个，超出自动删最旧。
+/// 防刷：同规则 30 秒冷却（卡死持续刷日志时不连拍）；事件目录默认只留最近 50 个，可在设置中调整，0 为不自动清理。
 /// 远程成员命中（SourceFile 形如 "远程:玩家名"）不触发——截本机屏幕对他机没意义。
 /// 线程模型：Timer 回调与 NotifyTrigger 都在后台线程；环形缓冲/待封盘列表共用 _lock；
 /// 截图/写盘全部后台执行，绝不碰 UI 线程。异常与"为何没录到"均写 assistant_runtime 日志
@@ -29,8 +29,6 @@ public sealed class IncidentSnapshotService : IDisposable
 {
     /// <summary>同规则快照冷却（防持续刷日志连拍）。</summary>
     private static readonly TimeSpan CooldownPerRule = TimeSpan.FromSeconds(30);
-    /// <summary>事件目录保留个数（超出删最旧）。</summary>
-    private const int MaxIncidentDirs = 50;
     /// <summary>录像帧规格（独立低规格，与监控 Tab 高清帧互不影响）：960px / JPEG 质量 60。</summary>
     private const int FrameWidth = 960;
     private const long FrameQuality = 60L;
@@ -56,6 +54,8 @@ public sealed class IncidentSnapshotService : IDisposable
     private readonly object _lock = new();
     private readonly List<(DateTime Time, byte[] Jpeg)> _ring = [];
     private readonly List<PendingIncident> _pending = [];
+    /// <summary>从触发到封盘写入完成的目录，保留次数再小也不能清理在途录像。</summary>
+    private readonly HashSet<string> _savingIncidentDirs = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>冷却表：ruleId → 上次触发快照时刻。</summary>
     private readonly Dictionary<string, DateTime> _cooldown = new();
     /// <summary>防重入：一帧截图未完成时跳过下一拍。</summary>
@@ -149,11 +149,12 @@ public sealed class IncidentSnapshotService : IDisposable
                     Dir = BuildIncidentDir(now, record.RuleName)
                 };
                 _pending.Add(pending);
+                _savingIncidentDirs.Add(pending.Dir);
+                // 在发布在途事件的同一锁内安排前段落盘，封盘必须等它完成。
+                pending.PreFramesTask = Task.Run(() => DumpPreFrames(pending));
             }
 
-            // 前段立即落盘（防封盘前进程退出丢现场）；文件 IO 放线程池，不堵日志线程
             RuntimeLog.WriteLine($"[IncidentSnapshot] 触发: 规则「{record.RuleName}」，环形缓冲 {RingSnapshotCount()} 帧");
-            Task.Run(() => DumpPreFrames(pending));
         }
         catch (Exception ex)
         {
@@ -285,6 +286,7 @@ public sealed class IncidentSnapshotService : IDisposable
     {
         try
         {
+            p.PreFramesTask.GetAwaiter().GetResult();
             Directory.CreateDirectory(p.Dir);
             foreach (var f in p.PostFrames)
                 WriteFrame(p.Dir, FrameFileName(f.Time - p.TriggerTime), f.Jpeg);
@@ -311,10 +313,15 @@ public sealed class IncidentSnapshotService : IDisposable
             {
                 RuntimeLog.WriteLine($"[IncidentSnapshot] 已封盘: {p.Dir}（前段 {p.PreFrameCount} 帧 / 后段 {p.PostFrames.Count} 帧）");
             }
-            PruneOldIncidents();
+            lock (_lock)
+            {
+                _savingIncidentDirs.Remove(p.Dir);
+                PruneOldIncidents(IncidentRootDir, _settingsProvider().IncidentRetentionCount, _savingIncidentDirs);
+            }
         }
         catch (Exception ex)
         {
+            lock (_lock) _savingIncidentDirs.Remove(p.Dir);
             RuntimeLog.WriteLine($"[IncidentSnapshot] 封盘失败: {ex.Message}");
         }
     }
@@ -404,20 +411,23 @@ public sealed class IncidentSnapshotService : IDisposable
             System.Globalization.DateTimeStyles.None, out _);
     }
 
-    /// <summary>事件目录名带时间戳前缀，字典序=时间序；新（日期分层）旧（平铺）布局一起参与清点，只留最近 MaxIncidentDirs 个；
+    /// <summary>事件目录名带时间戳前缀，字典序=时间序；新（日期分层）旧（平铺）布局一起参与清点，按当前设置保留最近若干个（0 为不自动清理），在途事件不计入数量；
     /// 顺手删掉清空后的日期目录。</summary>
-    private static void PruneOldIncidents()
+    internal static void PruneOldIncidents(string root, int retentionCount, IReadOnlySet<string>? activeDirs = null)
     {
         try
         {
-            if (!Directory.Exists(IncidentRootDir)) return;
-            var roots = Directory.GetDirectories(IncidentRootDir);
+            if (retentionCount == 0) return;
+            if (retentionCount < 0) retentionCount = DodocoSettings.DefaultIncidentRetentionCount;
+            if (!Directory.Exists(root)) return;
+            var roots = Directory.GetDirectories(root);
             var dirs = roots.Where(d => IsIncidentDirName(Path.GetFileName(d))) // 旧平铺
                 .Concat(roots.Where(d => IsDateDirName(Path.GetFileName(d)))
                     .SelectMany(Directory.GetDirectories)) // 新：日期分层下的事件目录
+                .Where(d => IsIncidentDirName(Path.GetFileName(d)) && activeDirs?.Contains(d) != true)
                 .OrderByDescending(d => Path.GetFileName(d))
                 .ToList();
-            foreach (var old in dirs.Skip(MaxIncidentDirs))
+            foreach (var old in dirs.Skip(retentionCount))
                 Directory.Delete(old, true);
             // 清空后的日期目录不留空壳
             foreach (var dateDir in roots.Where(d => IsDateDirName(Path.GetFileName(d))))
@@ -450,6 +460,7 @@ public sealed class IncidentSnapshotService : IDisposable
         public DateTime TriggerTime;
         public DateTime Deadline;
         public string Dir = "";
+        public Task PreFramesTask = Task.CompletedTask;
         /// <summary>触发时快照的参数：前段保存秒数 / 后段补采帧数（= 事发后秒数 ÷ 截图间隔，向上取整至少 1 帧）。</summary>
         public int PreSeconds;
         public int PostFramesWanted;
