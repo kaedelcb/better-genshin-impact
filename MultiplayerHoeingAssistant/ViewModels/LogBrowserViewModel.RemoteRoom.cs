@@ -111,8 +111,9 @@ public sealed partial class LogBrowserViewModel
     }
 
     /// <summary>切换房间/成员后不接收旧请求；后台落盘仍保留在原来源目录，不回写新面板状态。</summary>
-    private void ResetRemoteRequests()
+    private void ResetRemoteRequests(bool cancelRoomBatch = true)
     {
+        if (cancelRoomBatch) CancelRoomLogDownload("日志房间或连接已切换，批量下载已取消");
         _remoteContextVersion++;
         _pendingListRequestId = null;
         _listMemberUid = null;

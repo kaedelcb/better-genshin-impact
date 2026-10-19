@@ -731,7 +731,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
             if (!SetProperty(ref _selectedRemoteMember, value)) return;
             if (changed && !_refreshingRemoteMembers)
             {
-                ResetRemoteRequests();
+                ResetRemoteRequests(cancelRoomBatch: false);
                 RemoteStatus = value == null ? "请选择在线成员" : "请获取该成员的日志列表";
             }
         }
@@ -780,7 +780,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
             finally { _refreshingRemoteMembers = false; }
             if (keep != SelectedRemoteMember?.Uid)
             {
-                ResetRemoteRequests();
+                ResetRemoteRequests(cancelRoomBatch: false);
                 RemoteStatus = "成员已离线，请重新选择在线成员";
             }
         }
@@ -812,6 +812,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>获取选中成员的远程文件列表。</summary>
     public RelayCommand FetchRemoteFilesCommand => new(_ =>
     {
+        if (IsRoomLogDownloadRunning) { RemoteStatus = "正在收集全房间日志，请稍候或取消批量下载"; return; }
         var member = SelectedRemoteMember;
         EnsureSignalRHooked();
         var client = LogClient;
@@ -830,6 +831,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>下载选中的远程文件（重名覆盖需确认；同时间只允许一个下载）。</summary>
     public RelayCommand DownloadRemoteFileCommand => new(_ =>
     {
+        if (IsRoomLogDownloadRunning) { RemoteStatus = "正在收集全房间日志，请稍候或取消批量下载"; return; }
         var member = SelectedRemoteMember;
         var file = SelectedRemoteFile;
         EnsureSignalRHooked();
@@ -1080,6 +1082,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     /// <summary>解绑 SignalR 事件并停超时巡检（DodocoViewModel.Dispose 时调用；在途下载随之放弃）。</summary>
     public void Dispose()
     {
+        CancelRoomLogDownload("日志页面已释放，批量下载已取消");
         _disposed = true;
         _roomConnectCts?.Cancel();
         _roomConnectCts = null;

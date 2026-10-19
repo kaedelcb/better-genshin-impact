@@ -303,6 +303,7 @@ public sealed partial class RemoteLogRoomTests
             await Until(() => !browser.IsAssistedLogRoom);
 
             remotePopup.Close();
+            await VerifyRoomBulkDownloadAsync(url, manager, root);
             await VerifySameUidObserverAsync(url, manager, root);
             Assert.Same(own, typeof(MainViewModel).GetField("_signalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm));
             Assert.True(own.IsConnected);

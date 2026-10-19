@@ -51,6 +51,13 @@ internal sealed class RemoteLogRoomSession : IAsyncDisposable
         }
     }
 
+    /// <summary>批量收集使用完整成员快照，离线成员也须列入结果。</summary>
+    public List<ControlRoomPlayer> PlayersSnapshot()
+    {
+        lock (_gate)
+            return _joined ? _players.Values.OrderBy(p => p.PlayerName).ToList() : [];
+    }
+
     public List<ControlRoomPlayer> OnlinePlayers()
     {
         lock (_gate)
