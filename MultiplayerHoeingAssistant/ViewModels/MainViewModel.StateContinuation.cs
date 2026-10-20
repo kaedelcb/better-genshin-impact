@@ -60,6 +60,11 @@ public partial class MainViewModel
                     { io.Waiting?.Invoke("完成动作继续执行，原计划记录待补：" + ex.Message); }
                 }
 
+                if (recordsReady && batch.PolicyRejectedBeforeStart && batch.PolicyExecution is null)
+                {
+                    batch.MarkLocalExecutionReleased();
+                    return;
+                }
                 if (batch.PolicyTerminalResult is { } terminal)
                 {
                     if (batch.PriorityRecoveryEnabled && terminal.Status is "failed" or "queueCancelled"
@@ -208,7 +213,7 @@ public partial class MainViewModel
         var executor = _commandExecutor ?? throw new IOException("本批完成动作执行器暂不可用");
         TaskCenterHost? host;
         lock (_taskCenterHostGate) host = _taskCenterHost;
-        var runId = host?.OnlineHoeingManagedRun(batch.Generation);
+        var runId = host?.OnlineHoeingManagedRun(batch.Generation) ?? batch.ManagedRunId;
         var policy = batch.Policy ?? throw new InvalidOperationException("本批完成策略未冻结");
         var nativeResume = policy.Policy == TaskConflictPolicy.Resume && runId is null && batch.ManagedRunId is null
             && CommandExecutor.TryReadNativeResumeSnapshot(batch.SuspendedRawData, out _);
@@ -266,6 +271,12 @@ public partial class MainViewModel
             if (batch.PriorityRecoveryEnabled)
                 await executor.ReconcileCompletionTicketAsync(batch, token).ConfigureAwait(false);
             if (host is null) return true;
+            if (batch.PriorityRecoveryEnabled && policy.Policy == TaskConflictPolicy.Resume
+                && runId is not null && batch.PolicyRejectedBeforeStart && batch.PolicyTicketReleased)
+            {
+                await host.OpenOnlineHoeingSendAsync(priorityRecovery: batch.PriorityRecoveryEnabled).ConfigureAwait(false);
+                return true;
+            }
             if (runId is not null && policy.Policy != TaskConflictPolicy.Resume && !stoppedPlan)
                 stoppedPlan = await host.SettleFailedOnlineHoeingAsync(batch.Generation, runId,
                     batch.PolicyTicketReleased, "锄地结束，按绑定策略结束原计划而不恢复").ConfigureAwait(false);
@@ -354,6 +365,10 @@ public partial class MainViewModel
         {
             try
             {
+                if (batch.PriorityRecoveryEnabled && policy.Policy == TaskConflictPolicy.Resume
+                    && runId is not null && host is not null && batch.ManagedPlanSnapshot is null && host.Runs.Load(runId) is null
+                    && await RejectExitedUnrecoverablePlan("原计划记录与安排快照均已丢失，保留失败，不构造其他任务", token).ConfigureAwait(false))
+                    return true;
                 if (batch.RestoredFromRecovery && !nativeResume)
                 {
                     if (host is null && batch.ManagedRunId is not null)
@@ -374,13 +389,40 @@ public partial class MainViewModel
                     }
                 }
                 return await EnsureCompletionExecutorAsync(batch, executor, () => _externalClient,
-                    EnsureTaskCenterExecutionReadyAsync, CompletionRequestKey, nativeResume, RequireAuthority, token).ConfigureAwait(false);
+                    EnsureTaskCenterExecutionReadyAsync, CompletionRequestKey, nativeResume, RequireAuthority, token,
+                    policy.Policy == TaskConflictPolicy.Resume && !nativeResume && host is not null
+                        ? async (previous, replacement, budget) =>
+                        {
+                            runId ??= batch.ManagedRunId;
+                            var continued = await host.ContinuePriorityPlanOnReplacementAsync(batch, previous, replacement, budget).ConfigureAwait(false);
+                            if (continued) { associatedResume = true; stoppedPlan = false; }
+                            return continued;
+                        } : null).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or WorkflowRevisionConflictException)
+            {
+                if (await RejectExitedUnrecoverablePlan(ex.Message, token).ConfigureAwait(false)) return true;
+                throw;
             }
             finally { epoch = batch.ExecutionEpoch ?? epoch; ticket = batch.TakeoverTicket; }
         }
 
+        async Task<bool> RejectExitedUnrecoverablePlan(string reason, CancellationToken token)
+        {
+            var original = batch.ProcessRecoveryPreviousEpoch ?? batch.ExecutionEpoch;
+            if (original is null || CommandExecutor.ProbeOriginalBgiProcess(original) != false) return false;
+            if (!await executor.AbandonExitedCoordinatedOwnershipAsync(batch.TakeoverTicket, original, token).ConfigureAwait(false)) return false;
+            if (!batch.RejectUnrecoverableManagedPlanAfterExit(reason)) return false;
+            batch.PersistRecovery?.Invoke();
+            Waiting(batch.CompletionActionWarning!);
+            return true;
+        }
+
         async Task<bool> Prepare(CancellationToken token)
         {
+            if (runId is not null && policy.Policy == TaskConflictPolicy.Resume
+                && host?.HasPriorityProcessContinuation(batch, runId) == true)
+                return false; // Only the original Runner may accept and publish the new attempt.
             if (policy.Policy == TaskConflictPolicy.Stop && batch.PolicyTicketReleased
                 && CommandExecutor.ProbeOriginalBgiProcess(epoch) == false) return true;
             var current = External();

@@ -8,7 +8,8 @@ public partial class MainViewModel
 {
     internal static async Task<bool> EnsureCompletionExecutorAsync(OnlineHoeingBatch batch, CommandExecutor executor,
         Func<BgiExternalClient?> externalClient, Func<CancellationToken, Task<string?>> ensureExecutionReady,
-        Func<string?> completionRequestKey, bool nativeResume, Action requireAuthority, CancellationToken token)
+        Func<string?> completionRequestKey, bool nativeResume, Action requireAuthority, CancellationToken token,
+        Func<BgiEpoch, BgiEpoch, CancellationToken, Task<bool>>? managedRecovery = null)
     {
         var epoch = batch.ExecutionEpoch ?? throw new IOException("原完成动作进程身份缺失");
         var ticket = batch.TakeoverTicket;
@@ -48,7 +49,7 @@ public partial class MainViewModel
                 batch.PolicyResultAcknowledged = true;
                 return true;
             }
-            if (policy.Policy == TaskConflictPolicy.Resume && !nativeResume)
+            if (policy.Policy == TaskConflictPolicy.Resume && !nativeResume && managedRecovery is null)
                 throw new IOException("原计划恢复进程已退出，保留原Runner消费责任等待同计划接续");
             var ready = await ensureExecutionReady(token).ConfigureAwait(false);
             if (ready is not null) throw new IOException(ready);
@@ -61,7 +62,7 @@ public partial class MainViewModel
             requireAuthority();
             token.ThrowIfCancellationRequested();
             if (!batch.BeginCompletionProcessRecovery(previous, replacement, completionRequestKey(), nativeResume,
-                    CommandExecutor.ProbeOriginalBgiProcess)) return false;
+                    CommandExecutor.ProbeOriginalBgiProcess, managedResume: managedRecovery is not null && !nativeResume)) return false;
             epoch = replacement;
             ticket = null;
             batch.PersistRecovery?.Invoke();
@@ -103,6 +104,11 @@ public partial class MainViewModel
         }
         batch.ObserveRecoveryStopSignal();
         token.ThrowIfCancellationRequested();
+        if (policy.Policy == TaskConflictPolicy.Resume && !nativeResume)
+        {
+            if (managedRecovery is null || batch.ProcessRecoveryPreviousEpoch is not { } retired
+                || !await managedRecovery(retired, epoch, token).ConfigureAwait(false)) return false;
+        }
         batch.CompleteProcessRecovery();
         batch.PersistRecovery?.Invoke();
         return true;

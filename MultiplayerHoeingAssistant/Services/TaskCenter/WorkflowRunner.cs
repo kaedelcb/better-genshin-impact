@@ -1987,16 +1987,20 @@ public sealed partial class WorkflowRunner
     private async Task VerifyStopAuthorityAsync(WorkflowRunRecord run, CancellationToken ct)
     {
         if (!_boundary.RequiresStopAuthority) return;
-        if (_runs.Load(run.RunId) is { StopRequested: true })
-            throw new OperationCanceledException("运行已耐久停止，不允许恢复或推进", ct);
-        if (run.StopAuthority is not { } authority)
+        if (_runs.Load(run.RunId) is { } saved)
+        {
+            if (saved.StopRequested) throw new OperationCanceledException("运行已耐久停止，不允许恢复或推进", ct);
+            if (saved.PriorityProcessContinuations.Count > run.PriorityProcessContinuations.Count)
+                RunStore.RebaseOnto(run, saved);
+        }
+        if (WorkflowStopAuthority.Current(run) is not { } authority)
             throw new StopAuthorityUnknownException("旧运行缺少停止基线，禁止自动刷新；需要只读对账或新显式运行。");
         bool? current;
         try
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
             budget.CancelAfter(TimeSpan.FromSeconds(5));
-            current = _runs.IsStartupSourceRevoked(authority, run.RunId) ? false
+            current = _runs.IsStartupSourceRevoked(run.StopAuthority!, run.RunId) ? false
                 : await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -2004,6 +2008,11 @@ public sealed partial class WorkflowRunner
         if (current is null) throw new StopAuthorityUnknownException("停止权威查询不可确认；保留原基线和责任，等待对账。");
         if (current == false)
         {
+            if ((IsPriorityOnlineContinuation(run) || run.OnlineHoeingHandoff is { StateContinuation: true, PriorityRecovery: true })
+                && WorkflowStopAuthority.TryEpoch(authority.Epoch, out var oldEpoch)
+                && CommandExecutor.ProbeOriginalBgiProcess(oldEpoch) == false
+                && !_runs.IsStartupSourceRevoked(run.StopAuthority!, run.RunId))
+                throw new StopAuthorityUnknownException("原执行进程已退出，保留原停止来源等待同批次接续。");
             if (!_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _))
                 throw new StopAuthorityUnknownException("停止记录不可读取，保留责任待对账。");
             if (_runs.Load(run.RunId) is { } latest) RunStore.RebaseOnto(run, latest);

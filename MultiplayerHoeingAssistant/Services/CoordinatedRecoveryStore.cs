@@ -43,6 +43,7 @@ internal sealed record CoordinatedRecoverySnapshot
     public bool LocalReleased { get; init; }
     public bool NativeResumeRetryPending { get; init; }
     public string? ManagedRunId { get; init; }
+    public PriorityPlanRecoverySnapshot? ManagedPlanSnapshot { get; init; }
     public bool CompletionRecoveryReservationAcquired { get; init; }
     public int PolicyAttempt { get; init; }
     public IReadOnlyList<BgiTaskQueueStatus> FailedPolicyAttempts { get; init; } = [];

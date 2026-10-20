@@ -59,10 +59,11 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         .Select(r => r.Data!.Value).ToArray();
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task OwnedExecutorExitRecoversFrozenCompletionOnlyAfterExitAndKeepsStopFence(bool native, bool loseReleaseReply)
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, false, true)]
+    public async Task OwnedExecutorExitRecoversFrozenCompletionOnlyAfterExitAndKeepsStopFence(bool native, bool loseReleaseReply, bool managed)
     {
         var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
             "WindowsPowerShell", "v1.0", "powershell.exe"))
@@ -73,7 +74,7 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         var previousV2 = IpcClient.PipeNameOverrideForTest;
         IpcClient.PipeNameOverrideForTest = _pipe.PipeName;
         string? heldTicket = null;
-        var reservations = 0; var releases = 0; var launches = 0;
+        var reservations = 0; var releases = 0; var launches = 0; var managedCalls = 0;
         var newJob = Guid.NewGuid().ToString("N");
         Mistletoe.Shared.CoordinatedStopSignal? peerStop = null;
         JsonElement? resumedPayload = null;
@@ -82,19 +83,20 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
             Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
             ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
                 { ["self"] = [new("original", "group")] }
-        }, "self", new() { Policy = native ? Models.TaskConflictPolicy.Resume : Models.TaskConflictPolicy.RunSpecified,
+        }, "self", new() { Policy = native || managed ? Models.TaskConflictPolicy.Resume : Models.TaskConflictPolicy.RunSpecified,
             SpecifiedTaskName = "frozen-config", SpecifiedTaskType = "group" })
         {
+            ManagedRunId = managed ? "original-managed-run" : null,
             ExecutionEpoch = oldEpoch, StateContinuationEnabled = true, StateContinuationStopVersion = 7,
             TakenOver = true, TakeoverTicket = "old-reservation", PolicyStartAttempted = true,
             PolicySubmitPayload = new Dictionary<string, object?> { ["name"] = "frozen-config", ["oneDragon"] = false, ["revision"] = "frozen-revision" },
             SuspendedRawData = JsonSerializer.Serialize(new { recoverySnapshot = new { TaskType = "solo",
-                ProjectName = "original-solo", ManagedByWorkflow = false, NodeId = (string?)null, SoloSettingsJson = "{\"exact\":true}" } }),
+                ProjectName = "original-solo", ManagedByWorkflow = managed, NodeId = managed ? "B" : (string?)null, SoloSettingsJson = "{\"exact\":true}" } }),
         };
         batch.MarkLocalSuccess(oldEpoch); batch.EnsureRecoveryStopSignal();
         var oldJob = Guid.NewGuid().ToString("N");
         batch.RecordPolicyExecution(new(oldJob, oldEpoch, true));
-        var oldKey = native ? "resume/old-reservation" : batch.PolicyRequestKey;
+        var oldKey = native || managed ? "resume/old-reservation" : batch.PolicyRequestKey;
         var originalSnapshot = batch.SuspendedRawData;
         var executor = new CommandExecutor(null!, "unused", () => _client);
         executor.SeedTakeoverStateForTest("old-reservation", oldEpoch);
@@ -132,7 +134,19 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         };
         async Task<bool> Recover() => await ViewModels.MainViewModel.EnsureCompletionExecutorAsync(batch, executor,
             () => _client, _ => { launches++; return Task.FromResult<string?>(null); }, () => oldKey,
-            native, () => batch.Cts.Token.ThrowIfCancellationRequested(), batch.Cts.Token);
+            native, () => batch.Cts.Token.ThrowIfCancellationRequested(), batch.Cts.Token,
+            managed ? (previous, replacement, token) =>
+            {
+                managedCalls++;
+                Assert.True(oldProcess.HasExited);
+                Assert.Equal(oldEpoch.ProcessId, previous.ProcessId);
+                Assert.Equal(Epoch.ProcessId, replacement.ProcessId);
+                Assert.NotNull(peerStop); Assert.False(peerStop.IsStopped);
+                Assert.Null(heldTicket); Assert.Null(executor.TakeoverTicketSnapshot);
+                Assert.Equal(0, batch.StateContinuationStopVersion);
+                token.ThrowIfCancellationRequested();
+                return Task.FromResult(true); // Host/Runner callback itself is covered by the production-admission case.
+            } : null);
         try
         {
             Assert.False(await Recover());
@@ -150,6 +164,14 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
             Assert.Equal(originalSnapshot, batch.SuspendedRawData);
             Assert.True(await Recover());
             Assert.Equal(1, reservations);
+            if (managed)
+            {
+                Assert.Equal(1, managedCalls);
+                Assert.Empty(Starts());
+                peerStop!.Stop(); batch.ObserveRecoveryStopSignal();
+                Assert.True(batch.IsCancellationRequested);
+                return;
+            }
             CommandResult sent;
             if (native)
             {

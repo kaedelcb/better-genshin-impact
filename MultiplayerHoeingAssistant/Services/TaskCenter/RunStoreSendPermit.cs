@@ -87,7 +87,7 @@ public sealed partial class RunStore
             {
                 var s = current.CurrentSubmission;
                 if (current.TerminalRelease is not null || s is null || s.SendPermit != permit
-                    || current.StopAuthority != prepared.FrozenStopAuthority || current.WireRunId != identity.WireRunId
+                    || WorkflowStopAuthority.ForEpoch(current, identity.Epoch) != prepared.FrozenStopAuthority || current.WireRunId != identity.WireRunId
                     || s.Key != identity.Key || s.Epoch != identity.Epoch || s.NodeId != identity.NodeId
                     || s.Occurrence != identity.Occurrence || s.LoopIteration != identity.LoopIteration || s.Attempt != identity.Attempt
                     || s.Fingerprint != prepared.FrozenFingerprint || s.OriginalRequestEvidence != evidence

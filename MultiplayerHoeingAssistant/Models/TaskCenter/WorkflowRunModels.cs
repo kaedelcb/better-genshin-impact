@@ -228,6 +228,9 @@ public sealed class VerifiedAccountRunMarker
     public int LoopIteration { get; set; }
 }
 
+public sealed record PriorityProcessContinuation(string PreviousEpoch, WorkflowStopAuthorityRecord Authority,
+    string BatchId, int Generation, string StopSignalName);
+
 public sealed class WorkflowRunRecord
 {
     /// <summary>运行身份（"run-" + 12 位十六进制，创建即固定）。</summary>
@@ -265,6 +268,9 @@ public sealed class WorkflowRunRecord
 
     [JsonPropertyName("stopAuthority")]
     public WorkflowStopAuthorityRecord? StopAuthority { get; set; }
+
+    [JsonPropertyName("priorityProcessContinuations")]
+    public List<PriorityProcessContinuation> PriorityProcessContinuations { get; set; } = [];
 
     /// <summary>当前节点游标（运行水位，C06 入口的落地处）。</summary>
     [JsonPropertyName("cursor")]

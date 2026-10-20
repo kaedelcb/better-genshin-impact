@@ -25,8 +25,20 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null)
     {
+        var oldProcesses = current.PriorityProcessContinuations;
+        var processes = next.PriorityProcessContinuations;
+        Require(processes is not null && oldProcesses is not null
+            && processes.Count == oldProcesses.Count + (authorizedProcess is null ? 0 : 1));
+        for (var i = 0; i < oldProcesses.Count; i++) Require(oldProcesses[i] == processes[i]);
+        if (authorizedProcess is not null)
+            Require(processes[^1] == authorizedProcess && current.StopAuthority is { } origin
+                && authorizedProcess.PreviousEpoch == WorkflowStopAuthority.Current(current)?.Epoch
+                && authorizedProcess.Authority.IntentId == origin.IntentId
+                && authorizedProcess.Authority.IntentTimestamp == origin.IntentTimestamp
+                && authorizedProcess.Authority.MonotonicFrequency == origin.MonotonicFrequency
+                && authorizedProcess.Authority.Version == 0 && !current.StopRequested);
         if (current.ExecutionResetRelease is { } reset)
             Require(JsonSerializer.Serialize(next.ExecutionResetRelease) == JsonSerializer.Serialize(reset) && ExecutionResetEvidence.Valid(next));
         else if (next.ExecutionResetRelease is { } newReset)

@@ -1,8 +1,8 @@
 # 四人锄地按实际状态接续：任务与接力
 
 本次授权：按 Spec 实施、验证到完成；用户已明确从只读讨论转为修复。
-整体阶段：R-17至R-22实施中，跨助手/BGI接续及完整组合验证尚未完成；此前同进程修复证据和原失败保留
-更新日期：2026-10-20
+整体阶段：R-17至R-22实现、开发侧受控验收及原定独立复核完成；原失败与阶段记录保留，当前结论见文末
+更新日期：2026-10-21
 依据：[requirements.md](requirements.md)；[design.md](design.md)
 
 本次补今天 B54387 接管误判和完成动作卡死的真实使用故障；验收决定是否可作为同套三端源码修复交付，已有日志不能证明拟修改代码有效，以 V-1 至 V-8 的隔离重放和无部署构建为开发侧结束判据。
@@ -158,10 +158,10 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 
 补齐用户确认的实际故障：旧计划记录仍挡开锄、BGI/助手异常后不能接续、后续本体失败被当作处理完。前次cef55430仅证明原限定范围，不能作为本轮通过。
 
-- [ ] T-17（in_progress）：解除旧记录准入阻塞并落实联机优先；验证R-17/R-18。
-- [ ] T-18（pending）：原批次/执行/停止恢复及重启接回；验证R-19/R-20/R-22。
-- [ ] T-19（pending）：绑定后续异常接续及进度丢失退路；验证R-21。
-- [ ] T-20（pending）：故障定向测试、生产入口受控验证及独立复审，修复本范围发现后提交。现有同进程证据不足以证明重启恢复；各R项有对应通过结果且无未解决本次阻断后结束验证。
+- [x] T-17（done）：解除旧记录准入阻塞并落实联机优先；验证R-17/R-18。
+- [x] T-18（done）：原批次/执行/停止恢复及重启接回；验证R-19/R-20/R-22。
+- [x] T-19（done）：绑定后续异常接续及进度丢失退路；验证R-21。
+- [x] T-20（done）：故障定向测试、生产入口受控验证及独立复审，修复本范围发现后提交。现有同进程证据不足以证明重启恢复；各R项有对应通过结果且无未解决本次阻断后结束验证。
 
 本轮基线cef55430ce5e169adebc60b95da6dbfbd0c5aee6，源码备份及编码/换行/hash：Build/hoeing-priority-recovery-20261020-01a156d7/before-manifest.json。未操作真实User/游戏或运行实例。
 
@@ -303,3 +303,27 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 - validation-22 server/entry均exit0、Job active_processes=0。此前受控自有进程退出的原生/指定后续证据validation-18继续复用，不另跑相同组件证明。
 
 剩余核心实现：原计划跨BGI退出后的同安排接续及持久记录丢失退路；完成后进行原定集中复核并修复实际问题。原完整Goal继续active，T17—T20不勾，不推进baseline、不部署、不push。没有新增精简重构阶段。
+
+
+## 本次完整目标的最终开发侧验收（2026-10-21）
+
+当前结论替代前述WIP阶段状态；前文失败、原报告及其等级不改写。原生完整Goal保持同一目标至本次完成，不新增精简重构阶段、服务、计时器或用户确认。
+
+| 要求 | 当前实现与直接证据 |
+|---|---|
+| R-17 / V-16 | 原Runner/Host在持续记录读写故障下消费恢复、继续原节点及后继，原发送门按真实责任开闭；validation-27的StateContinuationPlanResumeTests及此前13/16的owner/CAS、等待重唤证据 |
+| R-18 / V-17 | 沿BGI原队列和优先Channel，持票期间普通排队让路，辅助记录失败不否决物理执行；BGI源码本次未变，复用validation-8的110项及原服务器47项结果 |
+| R-19 / V-18 | 原helper记录恢复接原Host/Runner，缺失/坏run与flow按原身份重建；自有旧进程实际退出后，正式生产Host双准入门沿原scope/父来源发至新epoch；validation-27对应PlanSnapshot/ManagedProcess及Transport用例 |
+| R-20 / V-19 | 当前产物的四条真实网关连接和实际MainVM入口：进度文件占用、第一项共同完成不重跑、第二项失败共同新attempt、延迟通知、队友异常等；validation-28/entry-results/entry.trx，单Fact内部9场景通过 |
+| R-21 / V-20 | 原生、指定后续与managed保持各自入口，失败后真实退出再重试，managed由同原Runner完成B重试→C；丢回复不另发，已完成不重跑；validation-27的Transport/Completion/PlanResume/ManagedProcess，加28的不可恢复边界3例 |
+| R-22 / V-21 | 原共享停止、耐久停止、旧进程存活拒重放，停止与恢复并发不再启动；validation-27停止guard及validation-28四成员恢复期间明确停止场景；此前停止证据复用 |
+
+最终源码输入及读回：successor-01a15932/validation-28/source-inputs.json。27到28仅LostManagedPlanCompletionTests测试夹具协议字段变化，所有产品源码hash相同，当前读回无差异，因此复用27中79项有效结果，受影响3项在28补跑通过，不伪造“单轮82/82”。
+
+- validation-23：首次集中编译因局部变量重名CS0136退出1，修复后24实际52/52、exit0/tree0。
+- validation-25：正式生产Host双准入路径5/5、exit0/tree0，新节点的TargetEpoch为新进程、父scope仍原来源。
+- validation-26：异常过滤模式CS8121编译失败，原件保留；修正异常类型过滤后27实际79/82、exit1/tree0。三个失败是新LostManagedPlan夹具漏填v2协议字段，在构造器拒绝，未进入产品断言。
+- validation-28：仅补正夹具，3/3通过；同产物完整四成员入口1/1（内部9场景，实际duration=2:00.243），两者exit0、Job active_processes=0。没有删除失败或降低断言。
+- 原定独立复核/root/priority_recovery_final_review保持原模型/强度，R-F1至R-F11均保留并闭合；最后F9固定原身份/内容与捕获基线、F10清完整预约责任、F11保护未来schema/迁移原字节。原文与最终闭合分别保存于successor-01a15932/review-managed-original-full.md及review-managed-final-closure.md。
+
+已实现全部本次约定功能及既有UI调用链；没有需要用户逐项安排的剩余施工。验收为隔离数据、自有等待进程、真实SDK/私管和四条网关连接；没有操作真实User、第三方JS或用户运行实例，没有部署/push，不把源码/受控验证写成游戏实跑或任意断电恢复。明确归属成果由本节对应中文本地提交保存；外部分支取代码基线的原值cef55430ce5e169adebc60b95da6dbfbd0c5aee6保留于此。

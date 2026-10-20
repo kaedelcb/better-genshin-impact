@@ -70,7 +70,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             FrozenPermit = submission?.SendPermit;
             _runId = run?.RunId;
             _expiresAtUtc = submission?.ExpiresAtUtc;
-            _stopAuthority = run?.StopAuthority;
+            _stopAuthority = run is null ? null : WorkflowStopAuthority.ForEpoch(run, submission?.Epoch);
         }
 
         public WorkflowRunRecord? Run { get; }
@@ -261,7 +261,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         expectedUid = ExpectedUidForSubmission(expectedUid, request.VerifiedAccountUid,
             request.VerifiedAccountEpoch, epochText);
 
-        if (run.StopRequested || run.StopAuthority is not { } authority || authority.Epoch != epochText
+        if (run.StopRequested || WorkflowStopAuthority.ForEpoch(run, epochText) is not { } authority || authority.Epoch != epochText
             || !_port.HasCapability(WorkflowStopAuthority.Capability))
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("停止授权缺失/已停止/纪元变化（未发送）"));
 
@@ -309,7 +309,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         var merged = _runs.TryPrepareSubmission(run.RunId!, latest =>
         {
             var live = latest.CurrentSubmission;
-            if (latest.StopRequested || latest.StopAuthority != authority) return false;
+            if (latest.StopRequested || WorkflowStopAuthority.ForEpoch(latest, frozenEpoch) != authority) return false;
             if (live is null) return false;
             var renewing = RunStore.CanRenewPreparedSubmission(latest, live, originalSendIdentity);
             if (live.Intent != SubmitIntentState.IntentRecorded && !renewing) return false;
@@ -395,7 +395,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         {
             return BoundarySubmitResult.UnknownWith("发送前记录/零调用证明不可确认：" + ex.GetType().Name);
         }
-        if (beforeSend is null || beforeSend.StopAuthority != run.StopAuthority)
+        if (beforeSend is null || WorkflowStopAuthority.ForEpoch(beforeSend, submission.Epoch) != prepared.FrozenStopAuthority)
             return BoundarySubmitResult.UnknownWith("冻结后停止权威不可确认，未调用发送；原可能发送事实保留待对账");
 
         // 4) 发送一次（绝不重发；不确定 → 对账）

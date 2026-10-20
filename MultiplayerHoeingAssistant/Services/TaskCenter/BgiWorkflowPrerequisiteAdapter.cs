@@ -83,7 +83,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         }
 
         var epoch = _port.ServerEpoch; // Capture once; never reread a later epoch into this payload.
-        if (run.StopRequested || run.StopAuthority is not { } authority
+        if (run.StopRequested || WorkflowStopAuthority.ForEpoch(run, WorkflowStopAuthority.Epoch(epoch)) is not { } authority
             || authority.Epoch != WorkflowStopAuthority.Epoch(epoch)
             || !_port.HasCapability(WorkflowStopAuthority.Capability))
             return new PrerequisiteResult(PrerequisiteStatus.Failed, "停止授权缺失或失效；未发送前置");

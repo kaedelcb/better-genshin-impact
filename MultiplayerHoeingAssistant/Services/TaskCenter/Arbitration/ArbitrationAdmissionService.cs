@@ -345,6 +345,7 @@ public sealed class AdmissionHooks
     public Func<ArbitrationFacts> FactsProvider { get; set; } = () => new ArbitrationFacts();
     /// <summary>当前 BGI epoch（本地缓存事实；epoch 固定合同：只比较不重写）。</summary>
     public Func<string> BgiEpochProvider { get; set; } = () => "";
+    public Func<AdmissionRequest, string?>? PriorityNodeEpoch { get; set; }
     /// <summary>资格快照供给（每候选——本地事实）。</summary>
     public Func<AdmissionRequest, CandidateEligibility> EligibilityProvider { get; set; } = _ => new CandidateEligibility();
     /// <summary>锁外发送（既有提交路径原样；发布失败/锁内复核失败=不得调用）。</summary>
@@ -792,7 +793,7 @@ public sealed class ArbitrationAdmissionService
                     .Replace("{requestIdentity}", rid, StringComparison.Ordinal);
                 var stableIdentity = ArbitrationOrdering.BuildStableIdentity(frz.Candidate);
                 var candidateId = ArbitrationOrdering.DeriveCandidateId(stableIdentity);
-                var targetEpoch = ExtractEpoch(frz.Candidate.Scope);
+                var targetEpoch = _hooks.PriorityNodeEpoch?.Invoke(frz) ?? ExtractEpoch(frz.Candidate.Scope);
                 var sortKeyFingerprint = SortKeyFingerprintOf(frz.Candidate, frz.RunBinding, frz.CursorRef, frz.CursorRevision);
                 var now = _utcNow();
                 register = MutateOwned(read.File.Lease.LeaseId, read.File.Lease.OwnerEpoch, file =>
@@ -2221,7 +2222,7 @@ public sealed class ArbitrationAdmissionService
     {
         var stableIdentity = ArbitrationOrdering.BuildStableIdentity(request.Candidate);
         var candidateId = ArbitrationOrdering.DeriveCandidateId(stableIdentity);
-        var targetEpoch = ExtractEpoch(request.Candidate.Scope);
+        var targetEpoch = _hooks.PriorityNodeEpoch?.Invoke(request) ?? ExtractEpoch(request.Candidate.Scope);
         var now = _utcNow();
 
         if (_hooks.Barriers?.BeforeOccupyPublish is { } beforeOccupy) await beforeOccupy().ConfigureAwait(false);
@@ -2657,6 +2658,8 @@ public sealed class ArbitrationAdmissionService
             if (!eligibility.IsDue || !eligibility.PrerequisiteReady || !eligibility.FlexibleWindowOpen) return "eligibility_lost";
             // ⑥ 目标 bgiEpoch（只比较不重写；身份/时限类不透明重试）。
             if (!string.Equals(targetEpoch, _hooks.BgiEpochProvider(), StringComparison.Ordinal)) return "stale_epoch";
+            if (_hooks.PriorityNodeEpoch?.Invoke(request) is { } recoveredEpoch
+                && (recoveredEpoch != targetEpoch || op.TargetEpoch != targetEpoch)) return "stale_epoch";
 
             file.Handoff ??= new LeaseHandoffSegment();
             // ⑦ Pending 组合约束：授权抢占方+目标 epoch 匹配（双字段组合约束），且阶段许可——

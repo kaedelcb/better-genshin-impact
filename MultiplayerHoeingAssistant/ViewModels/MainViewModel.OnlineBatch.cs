@@ -438,6 +438,9 @@ public partial class MainViewModel
                     candidate.FreezeControlContext(CurrentControlContext());
                     candidate.PersistRecovery = () =>
                     {
+                        TaskCenterHost? snapshotHost;
+                        lock (_taskCenterHostGate) snapshotHost = _taskCenterHost;
+                        snapshotHost?.CapturePriorityPlanRecovery(candidate);
                         try
                         {
                             if (_externalClient is { } peer)

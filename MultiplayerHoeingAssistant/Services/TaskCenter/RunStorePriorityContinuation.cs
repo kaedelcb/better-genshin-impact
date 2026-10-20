@@ -208,7 +208,7 @@ public sealed partial class RunStore
         RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null,
         AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null,
         bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null,
-        ExecutionResetReleaseRecord? authorizedReset = null)
+        ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null)
     {
         lock (_gate)
         {
@@ -216,7 +216,7 @@ public sealed partial class RunStore
             {
                 PersistDisk(rec, expectedRecordRevision, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation,
                     authorizedPermit, authorizedParent, authorizedMapping, authorizedDiagnostic,
-                    authorizedRouting, authorizedEntrySeed, authorizedReset);
+                    authorizedRouting, authorizedEntrySeed, authorizedReset, authorizedProcess);
                 RememberProgress(rec);
                 return;
             }
@@ -232,7 +232,7 @@ public sealed partial class RunStore
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
             RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation,
-                authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed, authorizedReset);
+                authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed, authorizedReset, authorizedProcess);
             if (current.StopRequested) rec.StopRequested = true;
             if (rec.LocalWaitDecision is { } decision) rec.LocalWaitDecision = WorkflowRunner.SanitizeWaitDecision(decision);
             // Keep each exact authorized transition. Recovery of disk IO replays the original CAS writes,
@@ -248,7 +248,7 @@ public sealed partial class RunStore
                 var publication = ApplyProgressChanges(progress.Published, changes);
                 PersistDisk(publication, expectedRecordRevision, authorizedNoSend,
                     authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedParent, authorizedMapping,
-                    authorizedDiagnostic, authorizedRouting, authorizedEntrySeed, authorizedReset);
+                    authorizedDiagnostic, authorizedRouting, authorizedEntrySeed, authorizedReset, authorizedProcess);
                 progress.Published = publication;
             }, payloadBytes));
             PublishPriorityProgress(progress);

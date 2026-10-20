@@ -17,6 +17,28 @@ internal static class WorkflowStopAuthority
     internal const string Operation = "ext.execution.manualStopFence";
     internal static string? Epoch(BgiEpoch? epoch) => epoch is null ? null : $"{epoch.ProcessId}:{epoch.StartTicksUtc}";
 
+    // Original intent remains immutable. Each replacement is appended only by the
+    // batch recovery path after the old process has exited and the shared stop is checked.
+    internal static WorkflowStopAuthorityRecord? ForEpoch(WorkflowRunRecord run, string? epoch)
+    {
+        if (run.StopAuthority is not { } original) return null;
+        if (epoch == original.Epoch) return original;
+        return run.PriorityProcessContinuations.SingleOrDefault(c => c.Authority.Epoch == epoch)?.Authority;
+    }
+
+    internal static WorkflowStopAuthorityRecord? Current(WorkflowRunRecord run)
+        => run.PriorityProcessContinuations.LastOrDefault()?.Authority ?? run.StopAuthority;
+
+    internal static bool TryEpoch(string? value, out BgiEpoch epoch)
+    {
+        epoch = new();
+        var parts = value?.Split(':');
+        if (parts is not { Length: 2 } || !int.TryParse(parts[0], out var pid) || pid <= 0
+            || !long.TryParse(parts[1], out var ticks) || ticks <= 0) return false;
+        epoch = new() { ProcessId = pid, StartTicksUtc = ticks };
+        return true;
+    }
+
     internal static async Task<ManualStopFence?> QueryAsync(IBgiExecutionPort port, CancellationToken ct)
     {
         if (!port.IsReady || !port.HasCapability(Capability)) return null;

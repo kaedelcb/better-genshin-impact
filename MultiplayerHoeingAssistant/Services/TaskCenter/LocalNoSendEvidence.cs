@@ -17,7 +17,7 @@ internal static class LocalNoSendEvidence
     internal static bool Matches(WorkflowRunRecord run, WorkflowSubmission submission, LocalNoSendProof proof)
         => (proof.Kind == PreparedStop && run.StopRequested && proof.TransportEvidence is null
             || proof.Kind == TransportNotSent && BgiNotSentException.IsKnownEvidenceCode(proof.TransportEvidence!))
-           && Guid.TryParseExact(proof.ConsumptionId, "N", out _) && run.StopAuthority == proof.StopAuthority
+           && Guid.TryParseExact(proof.ConsumptionId, "N", out _) && WorkflowStopAuthority.ForEpoch(run, proof.Epoch) == proof.StopAuthority
            && (submission.SendPermit is null || submission.SendPermit is { Version: 1, Consumed: true } permit && permit.Nonce == proof.ConsumptionId)
            && !string.IsNullOrEmpty(proof.RunId) && run.RunId == proof.RunId
            && !string.IsNullOrEmpty(proof.WireRunId) && run.WireRunId == proof.WireRunId
@@ -44,7 +44,7 @@ internal static class LocalNoSendEvidence
             && p.RunId == run.RunId && p.WireRunId == run.WireRunId && p.Epoch == sub.Epoch && p.Key == sub.Key
             && p.NodeId == sub.NodeId && p.Occurrence == sub.Occurrence && p.LoopIteration == sub.LoopIteration && p.Attempt == sub.Attempt
             && p.Fingerprint == sub.Fingerprint && p.ExpiresAtUtc == sub.ExpiresAtUtc
-            && p.StopAuthority == run.StopAuthority && p.StopAuthority.Epoch == sub.Epoch;
+            && p.StopAuthority == WorkflowStopAuthority.ForEpoch(run, p.Epoch) && p.StopAuthority.Epoch == sub.Epoch;
     }
 
     internal static bool IsDischarged(WorkflowRunRecord run, WorkflowSubmission submission)

@@ -64,7 +64,7 @@ public sealed class OnlineHoeingBatch
         }
     }
     internal bool BeginCompletionProcessRecovery(BgiEpoch previous, BgiEpoch replacement,
-        string? previousRequestKey, bool nativeResume, Func<BgiEpoch, bool?> originalProcessAlive)
+        string? previousRequestKey, bool nativeResume, Func<BgiEpoch, bool?> originalProcessAlive, bool managedResume = false)
     {
         lock (_policyGate)
         {
@@ -76,6 +76,7 @@ public sealed class OnlineHoeingBatch
                 || _policyExecution is { } held && !ViewModels.CoordinatedBatchLoop.SameEpoch(held.Epoch, previous)
                 || _policyTerminalResult?.Epoch is { } resultEpoch && !ViewModels.CoordinatedBatchLoop.SameEpoch(resultEpoch, previous)
                 || !(Policy?.Policy == TaskConflictPolicy.RunSpecified
+                    || managedResume && ManagedRunId is not null && Policy?.Policy == TaskConflictPolicy.Resume
                     || nativeResume && Policy?.Policy == TaskConflictPolicy.Resume
                         && CommandExecutor.TryReadNativeResumeSnapshot(_suspendedRawData, out _))
                 || _policyTerminalResult is { Status: "completed", Cancelled: false }) return false;
@@ -101,6 +102,36 @@ public sealed class OnlineHoeingBatch
         }
     }
 
+    internal bool RejectUnrecoverableManagedPlanAfterExit(string reason)
+    {
+        lock (_policyGate)
+        {
+            if (!PriorityRecoveryEnabled || ManagedRunId is null || Policy?.Policy != TaskConflictPolicy.Resume
+                || ExplicitStopRequested || IsCancellationRequested || RecoveryStopSignal is not { IsStopped: false }
+                || (ProcessRecoveryPreviousEpoch ?? ExecutionEpoch) is not { } exited
+                || ProcessRecoveryPreviousEpoch is not null && (!CompletionRecoveryReservationAcquired || !PolicyTicketReleased)
+                || CommandExecutor.ProbeOriginalBgiProcess(exited) != false)
+                return false;
+            if (_policyTerminalResult is not { Status: "completed", Cancelled: false })
+            {
+                if (_policyStartAttempted || _policyExecution is not null || _policyTerminalResult is not null)
+                    _failedPolicyAttempts.Add(_policyTerminalResult ?? new BgiTaskQueueStatus
+                    {
+                        TaskHandle = _policyExecution?.JobId, Epoch = exited, Status = "failed", ExecutionExitConfirmed = true,
+                        ErrorCode = "original_plan_lost_result_unknown", ErrorMessage = reason,
+                    });
+                _policyExecution = null;
+                _policyTerminalResult = null;
+            }
+            PolicyRejectedBeforeStart = true;
+            PolicyTicketReleased = true;
+            _policyResultAcknowledged = true;
+            PolicySendUnknown = false;
+            CompletionActionWarning = "原计划无法接续：" + reason;
+            return true;
+        }
+    }
+
     internal void CompleteProcessRecovery()
     {
         lock (_policyGate)
@@ -113,6 +144,9 @@ public sealed class OnlineHoeingBatch
     }
     internal CoordinatedRecoveryProgress? RecoveryProgress { get; set; }
     internal bool RestoredFromRecovery { get; private set; }
+    internal int RecoveryOwnerPid { get; private set; }
+    internal long RecoveryOwnerStartTicks { get; private set; }
+    internal PriorityPlanRecoverySnapshot? ManagedPlanSnapshot { get; set; }
     internal Action? PersistRecovery { get; set; }
 
     internal CoordinatedRecoverySnapshot CaptureRecovery()
@@ -129,6 +163,7 @@ public sealed class OnlineHoeingBatch
             LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
             LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
             NativeResumeRetryPending = NativeResumeRetryPending, ManagedRunId = ManagedRunId,
+            ManagedPlanSnapshot = ManagedPlanSnapshot,
             CompletionRecoveryReservationAcquired = CompletionRecoveryReservationAcquired,
             PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
             PolicyRequestIdentity = _policyRequestIdentity,
@@ -146,6 +181,8 @@ public sealed class OnlineHoeingBatch
         {
             _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
             NativeResumeRetryPending = saved.NativeResumeRetryPending, ManagedRunId = saved.ManagedRunId,
+            ManagedPlanSnapshot = saved.ManagedPlanSnapshot,
+            RecoveryOwnerPid = saved.OwnerPid, RecoveryOwnerStartTicks = saved.OwnerStartTicks,
             CompletionRecoveryReservationAcquired = saved.CompletionRecoveryReservationAcquired,
             Token = saved.Token, RestoredFromRecovery = true, RecoveryProgress = saved.Progress,
             ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,

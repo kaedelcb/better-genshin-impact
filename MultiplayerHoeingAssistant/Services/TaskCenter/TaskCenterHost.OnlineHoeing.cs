@@ -427,8 +427,15 @@ public sealed partial class TaskCenterHost
         batch.ObserveRecoveryStopSignal();
         batch.Cts.Token.ThrowIfCancellationRequested();
         var currentEpoch = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
-        if (!ViewModels.CoordinatedBatchLoop.SameEpoch(batch.ExecutionEpoch, currentEpoch)) return null;
+        if (!ViewModels.CoordinatedBatchLoop.SameEpoch(batch.ExecutionEpoch, currentEpoch))
+        {
+            if (!await RestorePriorityPlanRecoveryAsync(batch).ConfigureAwait(false)) return null;
+            if (batch.ManagedRunId is { } oldRun && _runs.Load(oldRun) is { StopRequested: false } oldPlan
+                && !IsExecutionResetReleased(oldPlan)) return oldRun;
+            return null;
+        }
         await EnsureRecoveredAsync().ConfigureAwait(false);
+        if (!await RestorePriorityPlanRecoveryAsync(batch).ConfigureAwait(false)) return null;
         if (batch.ManagedRunId is { } managed && _runs.Load(managed) is { } savedIntent
             && (savedIntent.StopRequested || IsExecutionResetReleased(savedIntent)))
         { batch.Cancel(); return null; }
@@ -497,19 +504,31 @@ public sealed partial class TaskCenterHost
 
     internal bool ObserveManagedCompletionRetry(OnlineHoeingBatch batch, string runId)
     {
-        if (batch.PlanResumeContinuation?.GetValueOrDefault("idempotencyKey") is not string originalKey) return true;
+        var originalKey = batch.PlanResumeContinuation?.GetValueOrDefault("idempotencyKey") as string;
+        if (originalKey is null && !HasPriorityProcessContinuation(batch, runId)) return true;
         var run = _runs.Load(runId);
         if (run is null) return false;
         if (run.StopRequested || IsExecutionResetReleased(run)) { batch.Cancel(); return false; }
-        var handoff = run.OnlineHoeingHandoff?.ResumeKey == originalKey ? run.OnlineHoeingHandoff
-            : run.OnlineHoeingHistory.SingleOrDefault(h => h.ResumeKey == originalKey && h.Generation == batch.Generation);
-        if (handoff is not { PriorityRecovery: true, ResumeAttempt: not null }) return true;
+        var handoff = run.OnlineHoeingHandoff is { } active && active.Generation == batch.Generation
+                && (originalKey is null || active.ResumeKey == originalKey) ? active
+            : run.OnlineHoeingHistory.LastOrDefault(h => h.Generation == batch.Generation
+                && (originalKey is null || h.ResumeKey == originalKey));
+        if (handoff is not { PriorityRecovery: true }) return true;
+        var firstAttempt = handoff.ResumeAttempt ?? handoff.Attempt + 1;
         var submissions = run.SubmissionHistory.Concat(run.CurrentSubmission is { } current ? [current] : [])
             .Where(s => s.NodeId == handoff.NodeId && s.Occurrence == handoff.Occurrence
-                && s.LoopIteration == handoff.LoopIteration && s.Attempt >= handoff.ResumeAttempt
+                && s.LoopIteration == handoff.LoopIteration && s.Attempt >= firstAttempt
                 && s.Intent == SubmitIntentState.Accepted && Guid.TryParse(s.JobId, out _)).ToArray();
         var latest = submissions.OrderByDescending(s => s.Attempt).FirstOrDefault();
         if (latest is null) return false;
+        if (batch.PolicyExecution is null && HasPriorityProcessContinuation(batch, runId))
+        {
+            if (latest.Epoch != WorkflowStopAuthority.Epoch(batch.ExecutionEpoch)) return false;
+            batch.RecordPolicyExecution(new(latest.JobId!, batch.ExecutionEpoch!, true));
+            batch.PolicyRequestIdentity = latest.Key;
+            batch.PolicyStartAttempted = true;
+            batch.PersistRecovery?.Invoke();
+        }
         if (batch.PolicyExecution is { } known && !string.Equals(known.JobId, latest.JobId, StringComparison.OrdinalIgnoreCase))
         {
             static bool SameJob(string? a, string? b) => Guid.TryParse(a, out var x) && Guid.TryParse(b, out var y) && x == y;

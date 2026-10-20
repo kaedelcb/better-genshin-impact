@@ -389,6 +389,7 @@ public sealed partial class TaskCenterHost
                 F11Active = () => CurrentArbitrationFacts().F11Active,
                 FactsProvider = CurrentArbitrationFacts,
                 BgiEpochProvider = CurrentBgiEpoch,
+                PriorityNodeEpoch = PriorityNodeExecutionEpoch,
                 HandoffParentProvider = (runId, workflowId) =>
                     ResolveAdmissionParent([], _runs.Load(runId), runId, workflowId),
                 Sender = DispatchViaHostAsync,

@@ -65,7 +65,7 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
         if (record.SendAttempted || record.State != "pending" || !string.IsNullOrEmpty(record.JobId))
             return TerminalExecutionResult.UnknownWith(record.JobId, "收尾已有发送责任，只读对账，不补发");
         var epoch = _port.ServerEpoch;
-        if (run.StopRequested || run.StopAuthority is not { } authority
+        if (run.StopRequested || WorkflowStopAuthority.ForEpoch(run, WorkflowStopAuthority.Epoch(epoch)) is not { } authority
             || authority.Epoch != WorkflowStopAuthority.Epoch(epoch)
             || !_port.HasCapability(WorkflowStopAuthority.Capability))
             return TerminalExecutionResult.RejectedWith("停止授权缺失或失效；未发送收尾");
