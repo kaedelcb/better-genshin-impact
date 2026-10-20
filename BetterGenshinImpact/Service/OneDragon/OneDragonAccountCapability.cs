@@ -458,6 +458,47 @@ public class OneDragonAccountCapability
 
     // ---- R4.6 D8 严格路径（ext 前置操作专用；上方既有方法逐字不动，原生链/旧调用语义不变）----
 
+    // 复用自动开门的识别资源；只处理明确识别的登录/领奖界面，游戏内菜单仍走原返回逻辑。
+    private static UidGameEntry.Screen HandleUidGameEntryScreen(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!SystemControl.IsGenshinImpactActive()) return UidGameEntry.Screen.FocusLost;
+        using var capture = CaptureToRectArea();
+        if (Bv.IsInMainUi(capture)) return UidGameEntry.Screen.MainUi;
+
+        using var chooseEnter = capture.Find(RecognitionAssets.Get("GameLoading", "ChooseEnterGame", capture));
+        using var enterGame = capture.Find(RecognitionAssets.Get("GameLoading", "EnterGame", capture));
+        using var primogem = capture.Find(ElementRecognition.Get("Primogem", capture));
+        Action click;
+        string screenName;
+        if (chooseEnter.IsExist())
+        {
+            click = () => chooseEnter.Click();
+            screenName = "进入游戏确认";
+        }
+        else if (enterGame.IsExist())
+        {
+            click = () => enterGame.Click();
+            screenName = "登录界面";
+        }
+        else if (Bv.IsInBlessingOfTheWelkinMoon(capture) || primogem.IsExist())
+        {
+            // 与自动开门一致，点击安全位置关闭月卡/原石展示；不受凌晨时间窗口限制。
+            click = () => GameCaptureRegion.GameRegion1080PPosClick(100, 100);
+            screenName = "月卡或原石领取界面";
+        }
+        else
+        {
+            return UidGameEntry.Screen.OtherUi;
+        }
+
+        ct.ThrowIfCancellationRequested();
+        if (!SystemControl.IsGenshinImpactActive()) return UidGameEntry.Screen.FocusLost;
+        click();
+        _logger.LogInformation("UID 校验前：识别到{Screen}，点击后等待游戏主界面", screenName);
+        return UidGameEntry.Screen.EntryHandled;
+    }
+
     /// <summary>严格 UID 验证结果（受控词表）。</summary>
     public enum UidVerifyStatus { Matched, Mismatch, ReadFailed, InvalidExpected }
 
@@ -492,6 +533,10 @@ public class OneDragonAccountCapability
         }
         if (!focused)
             return new UidVerifyResult(UidVerifyStatus.ReadFailed, "原神窗口未获得前台焦点，未执行 UID 点击");
+
+        var entryFailure = await UidGameEntry.EnterIfNeededAsync(() => HandleUidGameEntryScreen(ct), ct);
+        if (entryFailure is not null)
+            return new UidVerifyResult(UidVerifyStatus.ReadFailed, entryFailure);
 
         await new ReturnMainUiTask().Start(ct);
         await Task.Delay(120, ct);
