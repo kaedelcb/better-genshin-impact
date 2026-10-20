@@ -34,20 +34,13 @@ public sealed partial class BgiExternalClient
     internal async Task<long?> ReadStateContinuationStopVersionAsync(BgiEpoch expected,
         CancellationToken cancellationToken = default)
     {
-        if (ServerEpoch is not { } epoch || epoch.ProcessId != expected.ProcessId
-            || epoch.StartTicksUtc != expected.StartTicksUtc) return null;
-        var response = await SendCommandAsync(ExternalOperations.TaskStatus, null, CommandTimeout, cancellationToken).ConfigureAwait(false);
-        if (response is not { Success: true, Data: not null }) return null;
-        using var doc = JsonDocument.Parse(response.Data);
-        var data = doc.RootElement;
-        if (!data.TryGetProperty("bgiEpoch", out var e) || e.ValueKind != JsonValueKind.Object
-            || !e.TryGetProperty("processId", out var pid) || !pid.TryGetInt32(out var processId)
-            || !e.TryGetProperty("startTicksUtc", out var ticks) || !ticks.TryGetInt64(out var startTicks)
-            || processId != expected.ProcessId || startTicks != expected.StartTicksUtc
-            || !data.TryGetProperty("stopVersion", out var fence) || !fence.TryGetInt64(out var version)) return null;
-        if (ServerEpoch is not { } current || current.ProcessId != expected.ProcessId
-            || current.StartTicksUtc != expected.StartTicksUtc) return null;
-        return version;
+        var expectedEpoch = WorkflowStopAuthority.Epoch(expected);
+        if (!HasCapability(WorkflowStopAuthority.Capability)
+            || WorkflowStopAuthority.Epoch(ServerEpoch) != expectedEpoch) return null;
+        // task.status does not contain a stop version. Share the existing manual-stop
+        // endpoint and parser so preparation uses the same fence as workflow admission.
+        var response = await SendCommandAsync(WorkflowStopAuthority.Operation, null, CommandTimeout, cancellationToken).ConfigureAwait(false);
+        return WorkflowStopAuthority.Parse(response, expectedEpoch, WorkflowStopAuthority.Epoch(ServerEpoch))?.Version;
     }
 
     private async Task<Dictionary<string, object?>> FreezeRetainedStartPayloadAsync(

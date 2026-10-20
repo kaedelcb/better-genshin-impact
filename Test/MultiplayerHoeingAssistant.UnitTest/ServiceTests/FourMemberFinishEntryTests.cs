@@ -45,6 +45,7 @@ public sealed partial class FourMemberFinishEntryTests
                         await RunEntryAsync(peerFails: true, reconnectAfterLocalFinish: false);
                         await RunEntryAsync(peerFails: false, reconnectAfterLocalFinish: true);
                         await RunLocalTaskFailureEntryAsync();
+                        await RunLegacyCompletionCancellationEntryAsync();
                         await RunStateContinuationCompletionEntryAsync();
                         await RunStateContinuationCompletionEntryAsync(configurationRemoved: true);
                         await RunStateContinuationCompletionEntryAsync(priorityRecovery: true);
@@ -202,7 +203,7 @@ public sealed partial class FourMemberFinishEntryTests
                 var originalLoop = oldBatch.RunTask;
                 await local.DisposeAsync();
                 await Task.Delay(TimeSpan.FromSeconds(31));
-                Assert.False(originalLoop!.IsCompleted);
+                Assert.False(originalLoop!.IsCompleted, Diagnostics(vm, bgi, peers, server));
                 Assert.True(oldBatch.LocalSucceeded);
                 Assert.True(oldBatch.LocalExecutionReleased);
                 Assert.True(bgi.ManualRunning);
@@ -601,19 +602,21 @@ public sealed partial class FourMemberFinishEntryTests
                 snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
     }
 
-    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = true) : IDisposable
+    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null,
+        bool stateContinuation = true, bool manualIsOneDragon = false) : IDisposable
     {
         private sealed record Job(string Id, string Key, string Name, bool Cooperative)
         {
             public bool Completed, Cancelled, Failed, BodyCompleted, NativeFailed;
+            public string Kind { get; init; } = "group";
             public int TailSteps, Revision = 1;
         }
         private readonly object _gate = new();
         private readonly List<Job> _jobs = [];
         private string? _ticket;
         private int _cancelCount;
-        public volatile bool CompletionSlotBusy, DropNextCompletionReply, CompletionConfigMissing;
-        public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements;
+        public volatile bool CompletionSlotBusy, DropNextCompletionReply, CompletionConfigMissing, ManualTerminalUnavailable;
+        public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements, ManualUnknownStatusReads;
         private readonly int _pid = Environment.ProcessId;
         private readonly List<Mistletoe.Shared.CoordinatedStopSignal> _stopSignals = [];
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
@@ -661,6 +664,7 @@ public sealed partial class FourMemberFinishEntryTests
             }
         }
         public void CompleteManual() { lock (_gate) _jobs.Last(j => !j.Cooperative).Completed = true; }
+        public void CancelManual() { lock (_gate) _jobs.Last(j => !j.Cooperative).Cancelled = true; }
         public void FailManual() { lock (_gate) _jobs.Last(j => !j.Cooperative).Failed = true; }
         private static string? Value(JsonElement? data, string name) => data is { } d && d.TryGetProperty(name, out var v)
             && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
@@ -670,6 +674,7 @@ public sealed partial class FourMemberFinishEntryTests
             lock (_gate)
             {
                 var active = _jobs.LastOrDefault(j => !j.Completed && !j.Cancelled && !j.Failed);
+                bool TerminalUnavailable(Job job) => ManualTerminalUnavailable && !job.Cooperative && job.Cancelled;
                 switch (operation)
                 {
                     case "ext.hello":
@@ -685,8 +690,12 @@ public sealed partial class FourMemberFinishEntryTests
                                 ["task.stateContinuation.v1"] = stateContinuation,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
                                 ["task.coordinatedRecoveryStop.v1"] = true,
+                                ["execution.manualStopFence.v1"] = true,
                             }
                         });
+                    case "ext.execution.manualStopFence":
+                        return (true, null, null, new { bgiEpoch = Epoch, stopVersion = 0L,
+                            lastManualStopTimestamp = (long?)null, monotonicFrequency = Stopwatch.Frequency });
                     case "task.status":
                     case "ext.task.status":
                         var completionBusy = stateContinuation && CompletionSlotBusy && _jobs.LastOrDefault(j => j.Cooperative) is { Completed: true } lastNative
@@ -706,12 +715,13 @@ public sealed partial class FourMemberFinishEntryTests
                             executionExitQueryInstanceId = queriedRoot, executionExitAtUtc = DateTime.UtcNow,
                             executionExitOrder = 1L, executionExitReason = exited ? "confirmed" : active == null ? "no_active_root" : "not_exited",
                             bgiEpoch = Epoch, takeoverActive = _ticket != null, hasSuspendedTaskContext = false,
-                            queueDepth = 0, currentTaskHandle = active?.Id, stopVersion = 0L,
+                            queueDepth = 0, currentTaskHandle = active?.Id,
                         });
                     case "config.list":
                     case "ext.config.list":
                         return (true, null, null, new { configGroups = new[] { boundGroup, manualGroup, nextBoundGroup }
-                            .Where(n => n != null && (!CompletionConfigMissing || n != manualGroup)).ToArray(), oneClickConfigs = Array.Empty<string>() });
+                            .Where(n => n != null && (!CompletionConfigMissing || n != manualGroup)).ToArray(),
+                            oneClickConfigs = manualIsOneDragon && !CompletionConfigMissing ? new[] { manualGroup } : Array.Empty<string>() });
                     case "ext.config.describe":
                         return (true, null, null, new { bgiEpoch = Epoch, configRevision = "finish-entry-r1",
                             tasks = nextBoundGroup != null && Value(data, "groupName") == boundGroup
@@ -720,23 +730,26 @@ public sealed partial class FourMemberFinishEntryTests
                     case "ext.job.list":
                         return (true, null, null, new { bgiEpoch = Epoch, jobs = _jobs.Select(j => new
                         {
-                            jobId = j.Id, idempotencyKey = j.Key, name = j.Name, kind = "group",
-                            state = j.Cancelled ? "cancelled" : j.Failed ? "failed" : j.Completed ? "succeeded" : "running", wasCancelled = j.Cancelled,
-                            exitConfirmed = j.Completed || j.Cancelled || j.Failed, exitDisposition = j.Completed || j.Cancelled || j.Failed ? "terminal" : null,
+                            jobId = j.Id, idempotencyKey = j.Key, name = j.Name, kind = j.Kind,
+                            state = TerminalUnavailable(j) ? "unknown" : j.Cancelled ? "cancelled" : j.Failed ? "failed" : j.Completed ? "succeeded" : "running",
+                            wasCancelled = j.Cancelled && !TerminalUnavailable(j),
+                            exitConfirmed = !TerminalUnavailable(j) && (j.Completed || j.Cancelled || j.Failed),
+                            exitDisposition = !TerminalUnavailable(j) && (j.Completed || j.Cancelled || j.Failed) ? "terminal" : null,
                         }).ToArray() });
                     case "ext.job.status":
                         var exactJob = _jobs.SingleOrDefault(j => Guid.TryParse(j.Id, out var known)
                             && Guid.TryParse(Value(data, "jobId"), out var requested) && known == requested);
                         if (exactJob is { Cooperative: true, Failed: true, BodyCompleted: true, NativeFailed: false })
                             Interlocked.Exchange(ref BeforeFailedJobIdentityReply, null)?.Invoke();
-                        return (true, null, null, new { status = exactJob == null ? "not_found"
+                        return (true, null, null, new { status = exactJob == null ? "not_found" : TerminalUnavailable(exactJob) ? "unknown"
                                 : exactJob.Cancelled ? "cancelled" : exactJob.Failed ? "failed" : exactJob.Completed ? "succeeded" : "running", bgiEpoch = Epoch,
                             job = exactJob == null ? null : new
                             {
-                                jobId = exactJob.Id, idempotencyKey = exactJob.Key, name = exactJob.Name, kind = "group",
-                                state = exactJob.Cancelled ? "cancelled" : exactJob.Failed ? "failed" : exactJob.Completed ? "succeeded" : "running",
-                                wasCancelled = exactJob.Cancelled, exitConfirmed = exactJob.Completed || exactJob.Cancelled || exactJob.Failed,
-                                exitDisposition = exactJob.Completed || exactJob.Cancelled || exactJob.Failed ? "terminal" : null,
+                                jobId = exactJob.Id, idempotencyKey = exactJob.Key, name = exactJob.Name, kind = exactJob.Kind,
+                                state = TerminalUnavailable(exactJob) ? "unknown" : exactJob.Cancelled ? "cancelled" : exactJob.Failed ? "failed" : exactJob.Completed ? "succeeded" : "running",
+                                wasCancelled = exactJob.Cancelled && !TerminalUnavailable(exactJob),
+                                exitConfirmed = !TerminalUnavailable(exactJob) && (exactJob.Completed || exactJob.Cancelled || exactJob.Failed),
+                                exitDisposition = !TerminalUnavailable(exactJob) && (exactJob.Completed || exactJob.Cancelled || exactJob.Failed) ? "terminal" : null,
                             } });
                     case "task.suspend":
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
@@ -759,7 +772,8 @@ public sealed partial class FourMemberFinishEntryTests
                             || !cooperative && _ticket != null)
                             return (false, "task_busy", "新任务不能借用旧票据或覆盖活动任务", null);
                         var job = new Job(Guid.NewGuid().ToString("N"), Value(data, "idempotencyKey")!,
-                            Value(data, "groupName")!, cooperative);
+                            (Value(data, "groupName") ?? Value(data, "configName"))!, cooperative)
+                            { Kind = Value(data, "configName") is null ? "group" : "onedragon" };
                         _jobs.Add(job);
                         if (stateContinuation && !cooperative && DropNextCompletionReply)
                         {
@@ -773,6 +787,12 @@ public sealed partial class FourMemberFinishEntryTests
                     case "ext.task.queueStatus":
                         var queryKey = stateContinuation ? Value(data, "idempotencyKey") : null;
                         var queried = _jobs.SingleOrDefault(j => (queryKey is not null ? j.Key == queryKey : j.Id == Value(data, "taskHandle")));
+                        if (queried is { Cooperative: false, Cancelled: true } && ManualTerminalUnavailable)
+                        {
+                            Interlocked.Increment(ref ManualUnknownStatusReads);
+                            return (true, null, null, new { status = "unknown", taskHandle = queried.Id,
+                                idempotencyKey = queried.Key, bgiEpoch = Epoch, executionExitConfirmed = false });
+                        }
                         if (queried is null && stateContinuation)
                             return (true, null, null, new { status = "not_found", taskHandle = (string?)null,
                                 idempotencyKey = queryKey, bgiEpoch = Epoch, executionExitConfirmed = false });

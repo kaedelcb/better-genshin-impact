@@ -23,10 +23,12 @@ public sealed class CoordinatedStateContinuationTests
         internal readonly TaskCompletionSource Preparing = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource PrepareAllowed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly List<string> SubmittedKeys = [];
+        internal readonly List<(string Phase, string Message)> VisibleStatuses = [];
+        internal Func<int, string>? PreparationFailureMessage;
         internal volatile bool HoldPrepare, LoseAuthority, LoseReads, AllowFinish, LoseAcknowledgements;
         internal bool OrdinaryRegistryEmpty, OrdinaryRegistryUnavailable, LoseFirstReply, DropFirstRequest;
         internal bool ManualStopBeforeSend, ManualStopFenceReply;
-        internal volatile bool BoundEpochUnknown, CapabilitiesUnknown;
+        internal volatile bool BoundEpochUnknown, CapabilitiesUnknown, HoldPeerPreparation;
         internal BgiEpoch? BoundEpochOverride;
         internal int FirstBusy, PrepareFailures;
         internal int Preparations, Submissions, Executions, Cancels, Releases, Finalizations, KeyQueries, AckAttempts;
@@ -75,14 +77,15 @@ public sealed class CoordinatedStateContinuationTests
                 var attempt = Interlocked.Increment(ref Preparations);
                 Preparing.TrySetResult();
                 if (HoldPrepare) await PrepareAllowed.Task.WaitAsync(ct);
-                if (attempt <= PrepareFailures) throw new IOException("temporary preparation failure");
+                if (attempt <= PrepareFailures)
+                    throw new IOException(PreparationFailureMessage?.Invoke(attempt) ?? "temporary preparation failure");
             },
             Takeover = _ => { Batch.TakeoverTicket = "same-ticket"; return Task.CompletedTask; },
             Exchange = (stage, result, _, _, _, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
                 if (LoseAuthority) throw new ControlChannelUnavailableException("temporary control loss");
-                if (stage == "prepared") _phase = "takeover";
+                if (stage == "prepared" && !HoldPeerPreparation) _phase = "takeover";
                 if (stage == "takeoverConfirmed") _phase = "running";
                 if (result == "succeeded") _phase = "completed";
                 return Task.FromResult(new CoordinatedBatchSnapshot(Batch.BatchId, Batch.Generation,
@@ -129,7 +132,13 @@ public sealed class CoordinatedStateContinuationTests
             ReleaseTicket = (_, _, _) => { Interlocked.Increment(ref Releases); return Task.FromResult(true); },
             FinalizeLocal = (_, _) => { Interlocked.Increment(ref Finalizations); return Task.CompletedTask; },
             OriginalProcessAlive = _ => true,
-            RequireFinishEvidence = true
+            RequireFinishEvidence = true,
+            Status = (phase, message) =>
+            {
+                if (Batch.Phase == phase && Batch.Message == message) return;
+                Batch.Phase = phase; Batch.Message = message;
+                VisibleStatuses.Add((phase, message));
+            }
         }).RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -145,6 +154,84 @@ public sealed class CoordinatedStateContinuationTests
         r.PrepareAllowed.SetResult();
         Assert.True(await task);
         Assert.Equal(2, r.Preparations); Assert.Equal(1, r.Executions); Assert.Equal(1, r.Finalizations);
+    }
+
+    [Fact]
+    public async Task RepeatedPreparationFailureStaysVisibleWithoutSpamAndStillHonorsStop()
+    {
+        var r = new Run { PrepareFailures = int.MaxValue };
+        var pending = r.Start();
+        try
+        {
+            await Until(() => r.Preparations >= 4);
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(0, r.Executions);
+        }
+        finally { r.Batch.Cancel(); }
+
+        Assert.False(await pending);
+        Assert.True(r.Batch.ExplicitStopRequested);
+        Assert.Single(r.VisibleStatuses.Where(status => status.Phase == "preparing"));
+        var waiting = Assert.Single(r.VisibleStatuses.Where(status => status.Phase == "reconciling"));
+        Assert.Contains("temporary preparation failure", waiting.Message);
+        Assert.True(r.Preparations >= 4);
+        Assert.Equal(0, r.Submissions);
+    }
+
+    [Fact]
+    public async Task ChangedPreparationErrorIsShownAndTheSameBatchContinuesWhenReady()
+    {
+        var r = new Run
+        {
+            PrepareFailures = 4, AllowFinish = true,
+            PreparationFailureMessage = attempt => attempt <= 2 ? "stop fence unavailable" : "configuration unavailable"
+        };
+        var batchId = r.Batch.BatchId;
+
+        Assert.True(await r.Start());
+
+        Assert.Equal(batchId, r.Batch.BatchId);
+        Assert.Equal(5, r.Preparations);
+        Assert.Single(r.VisibleStatuses.Where(status => status.Phase == "preparing"));
+        Assert.Equal(new[]
+        {
+            "本机准备尚未完成，按原批次继续：stop fence unavailable",
+            "本机准备尚未完成，按原批次继续：configuration unavailable"
+        }, r.VisibleStatuses.Where(status => status.Phase == "reconciling").Select(status => status.Message));
+        Assert.True(r.Batch.Prepared);
+        Assert.Equal(1, r.Executions);
+        Assert.Equal(1, r.Finalizations);
+        Assert.False(r.Batch.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task PreparationRecoveryClearsOldFailureWhileWaitingForOtherMembers()
+    {
+        var r = new Run { PrepareFailures = 1, HoldPeerPreparation = true, AllowFinish = true };
+        var batchId = r.Batch.BatchId;
+        var pending = r.Start();
+        try
+        {
+            await Until(() => r.Batch.Prepared && r.Batch.Phase == "preparing");
+            Assert.False(pending.IsCompleted);
+            Assert.Equal(2, r.Preparations);
+            Assert.Equal(0, r.Submissions);
+
+            r.HoldPeerPreparation = false;
+            Assert.True(await pending);
+        }
+        finally
+        {
+            if (!pending.IsCompleted) { r.Batch.Cancel(); await pending; }
+        }
+
+        Assert.Equal(batchId, r.Batch.BatchId);
+        Assert.Equal(new[] { "preparing", "reconciling", "preparing" },
+            r.VisibleStatuses.Where(status => status.Phase is "preparing" or "reconciling")
+                .Select(status => status.Phase));
+        Assert.Equal(1, r.Executions);
+        Assert.Equal(1, r.Finalizations);
+        Assert.False(r.Batch.IsCancellationRequested);
     }
 
     [Fact]

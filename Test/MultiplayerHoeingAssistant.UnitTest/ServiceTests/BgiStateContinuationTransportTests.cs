@@ -37,11 +37,48 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         BgiExternalClient.PipeNameOverrideForTest = _previousPipe;
     }
 
-    private object Status(long stopVersion) => new
+    private object Fence(long stopVersion) => new
     {
-        running = false, slotOccupied = false, stopVersion,
+        stopVersion, monotonicFrequency = Stopwatch.Frequency,
+        lastManualStopTimestamp = stopVersion > 0 ? (long?)Stopwatch.GetTimestamp() : null,
         bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc }
     };
+
+    [Fact]
+    public async Task RetainedStartReadsProductionManualStopEndpoint_WhenTaskStatusHasNoStopVersion()
+    {
+        _pipe.BodyForTest = (op, _) => op switch
+        {
+            "ext.task.status" => (true, null, null, new
+            {
+                running = true, slotOccupied = true,
+                bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc }
+            }),
+            WorkflowStopAuthority.Operation => (true, null, null, Fence(7)),
+            _ => null
+        };
+        var ordinaryStatus = await _client.SendCommandAsync("ext.task.status");
+        using (var json = JsonDocument.Parse(ordinaryStatus.Data!))
+            Assert.False(json.RootElement.TryGetProperty("stopVersion", out _));
+        Assert.Equal(7L, await _client.ReadStateContinuationStopVersionAsync(Epoch));
+        Assert.True((await Start("production-stop-fence", expectedStopVersion: 7)).Success);
+        Assert.Equal(7, Assert.Single(Starts()).GetProperty("expectedStopVersion").GetInt64());
+        Assert.Equal(2, _pipe.CountOf(WorkflowStopAuthority.Operation));
+        Assert.Equal(1, _pipe.CountOf("ext.task.status"));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("negative")]
+    [InlineData("malformed")]
+    public async Task UnreadableManualStopFenceDoesNotDefaultToZeroOrSendStart(string kind)
+    {
+        _pipe.BodyForTest = (op, _) => op == WorkflowStopAuthority.Operation
+            ? (true, null, null, kind == "negative" ? Fence(-1) : kind == "malformed"
+                ? new { stopVersion = "invalid" } : new { }) : null;
+        await Assert.ThrowsAsync<BgiNotSentException>(() => Start("unknown-stop-fence"));
+        Assert.Empty(Starts());
+    }
 
     private Task<BgiTaskSubmitResult> Start(string key, string config = "收尾任务", string batch = "batch-A",
         IReadOnlyList<string>? participants = null, long? expectedStopVersion = null, BgiEpoch? targetEpoch = null)
@@ -104,10 +141,11 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         { batch.TakeoverTicket = ticket; batch.PolicyTicketReleased = false; batch.CompletionRecoveryReservationAcquired = false; };
         _pipe.BodyForTest = (op, data) =>
         {
+            if (op == WorkflowStopAuthority.Operation) return (true, null, null, Fence(0));
             if (op is "task.status" or "ext.task.status")
                 return (true, null, null, new { running = false, slotOccupied = false, executionSlotOccupied = false,
                     executionIdentityAvailable = false, takeoverActive = heldTicket is not null, hasSuspendedTaskContext = false,
-                    stopVersion = 0, bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
+                    bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
             if (op == "task.suspend")
             {
                 reservations++; heldTicket = data!.Value.GetProperty("takeoverTicket").GetString();
@@ -244,13 +282,14 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
                 return (true, null, null, new { status = "queued", attemptId = nextJob,
                     idempotencyKey = "resume/" + nextTicket });
             }
+            if (op == WorkflowStopAuthority.Operation) return (true, null, null, Fence(7));
             if (op is "task.status" or "ext.task.status")
             {
                 statusReads++;
                 if (statusReads <= 4) return (false, "state_unavailable", "temporary read failure", null);
                 return (true, null, null, new { running = false, slotOccupied = false, executionSlotOccupied = false,
                     executionIdentityAvailable = false, takeoverActive = false, hasSuspendedTaskContext = false,
-                    stopVersion = 7, bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
+                    bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
             }
             if (op == "task.suspend")
             {
@@ -326,7 +365,7 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         var restored = OnlineHoeingBatch.Restore(snapshot);
         Assert.Null(restored.RecoveryStopSignal);
         Assert.Throws<IOException>(restored.EnsureRecoveryStopSignal);
-        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(7)) : null;
+        _pipe.BodyForTest = (op, _) => op == WorkflowStopAuthority.Operation ? (true, null, null, Fence(7)) : null;
         await _client.EnsureCoordinatedRecoveryStopAsync(restored, CancellationToken.None);
         Assert.NotNull(restored.RecoveryStopSignal);
         Assert.NotEqual(snapshot.RecoveryStopSignalName, restored.RecoveryStopSignal!.Name);
@@ -337,7 +376,7 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         using var afterExit = Mistletoe.Shared.CoordinatedStopSignal.Open(name);
         Assert.NotNull(afterExit);
         var stopped = OnlineHoeingBatch.Restore(snapshot);
-        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(8)) : null;
+        _pipe.BodyForTest = (op, _) => op == WorkflowStopAuthority.Operation ? (true, null, null, Fence(8)) : null;
         await Assert.ThrowsAsync<BgiStateContinuationStoppedException>(() =>
             _client.EnsureCoordinatedRecoveryStopAsync(stopped, CancellationToken.None));
         Assert.Null(stopped.RecoveryStopSignal);
@@ -369,7 +408,7 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         Assert.Null(_client.TakeoverTicket);
         _pipe.BodyForTest = (op, data) =>
         {
-            if (op == "ext.task.status") return (true, null, null, Status(0));
+            if (op == WorkflowStopAuthority.Operation) return (true, null, null, Fence(0));
             if (op == "ext.task.start")
             {
                 Assert.True(oldReads >= 3);
@@ -411,7 +450,12 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
     [Fact]
     public async Task RecoveryCheckpointTravelsOnlyOnObservation_NotOnFrozenStartFingerprint()
     {
-        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(0)) : null;
+        _pipe.BodyForTest = (op, _) => op switch
+        {
+            WorkflowStopAuthority.Operation => (true, null, null, Fence(0)),
+            "ext.task.status" => (true, null, null, new { running = false, slotOccupied = false }),
+            _ => null
+        };
         _client.CoordinatedRecoveryCheckpointJson = "{\"Revision\":1}";
         await _client.SendCommandAsync("ext.task.status");
         Assert.Contains(_pipe.Received, frame => frame.Operation == "ext.task.status"
@@ -433,9 +477,9 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         var statusReads = 0;
         _pipe.BodyForTest = (operation, _) =>
         {
-            if (operation != "ext.task.status") return null;
+            if (operation != WorkflowStopAuthority.Operation) return null;
             Interlocked.Increment(ref statusReads);
-            return (true, null, null, Status(Volatile.Read(ref stopVersion)));
+            return (true, null, null, Fence(Volatile.Read(ref stopVersion)));
         };
         _client.TakeoverTicket = "original-ticket";
         Assert.True((await Start("same-start")).Success);
@@ -462,10 +506,10 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         var reads = 0;
         _pipe.BodyForTest = (operation, _) =>
         {
-            if (operation != "ext.task.status") return null;
+            if (operation != WorkflowStopAuthority.Operation) return null;
             return Interlocked.Increment(ref reads) == 1
                 ? (false, "temporarily_unavailable", "status reply unavailable", null)
-                : (true, null, null, Status(9));
+                : (true, null, null, Fence(9));
         };
         var error = await Assert.ThrowsAsync<BgiNotSentException>(() => Start("status-retry"));
         Assert.Equal(BgiNotSentException.ChannelNotReady, error.EvidenceCode);
@@ -483,8 +527,8 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
     [InlineData("participants")]
     public async Task SameKeyCannotSendChangedTaskOrCoordinatedIdentity(string changed)
     {
-        _pipe.BodyForTest = (operation, _) => operation == "ext.task.status"
-            ? (true, null, null, Status(7)) : null;
+        _pipe.BodyForTest = (operation, _) => operation == WorkflowStopAuthority.Operation
+            ? (true, null, null, Fence(7)) : null;
         Assert.True((await Start("frozen-content")).Success);
 
         var error = await Assert.ThrowsAsync<BgiNotSentException>(() => Start("frozen-content",
@@ -493,20 +537,20 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
             participants: changed == "participants" ? ["100000001", "100000003"] : null));
         Assert.Equal(BgiNotSentException.LocalRequestRejected, error.EvidenceCode);
         Assert.Single(Starts());
-        Assert.Equal(1, _pipe.CountOf("ext.task.status"));
+        Assert.Equal(1, _pipe.CountOf(WorkflowStopAuthority.Operation));
     }
 
     [Fact]
     public async Task ANewKeyAfterManualStopCannotReplaceTheBatchsOriginalStopFence()
     {
         var currentFence = 7L;
-        _pipe.BodyForTest = (operation, _) => operation == "ext.task.status"
-            ? (true, null, null, Status(Volatile.Read(ref currentFence))) : null;
+        _pipe.BodyForTest = (operation, _) => operation == WorkflowStopAuthority.Operation
+            ? (true, null, null, Fence(Volatile.Read(ref currentFence))) : null;
         Assert.True((await Start("original-item", expectedStopVersion: 7)).Success);
         Volatile.Write(ref currentFence, 8);
         await Assert.ThrowsAsync<BgiStateContinuationStoppedException>(() => Start("next-item", expectedStopVersion: 7));
         Assert.Single(Starts());
-        Assert.Equal(2, _pipe.CountOf("ext.task.status"));
+        Assert.Equal(2, _pipe.CountOf(WorkflowStopAuthority.Operation));
     }
 
     [Theory]
@@ -515,10 +559,10 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
     public async Task ANewBgiHandshakeCannotRetargetAnOriginalBatchRequest(bool sentBeforeReconnect)
     {
         var original = Epoch;
-        _pipe.BodyForTest = (operation, _) => operation == "ext.task.status" ? (true, null, null, Status(7)) : null;
+        _pipe.BodyForTest = (operation, _) => operation == WorkflowStopAuthority.Operation ? (true, null, null, Fence(7)) : null;
         if (sentBeforeReconnect) Assert.True((await Start("original-process", expectedStopVersion: 7, targetEpoch: original)).Success);
         var initialStarts = Starts().Length;
-        var initialStatusReads = _pipe.CountOf("ext.task.status");
+        var initialStatusReads = _pipe.CountOf(WorkflowStopAuthority.Operation);
         _client.Dispose();
         using var replacement = await ReplacementBgiPipe.StartAsync();
         BgiExternalClient.PipeNameOverrideForTest = replacement.PipeName;
@@ -531,9 +575,9 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
             Assert.Equal(replacement.StartTicksUtc, Epoch.StartTicksUtc);
             await Assert.ThrowsAsync<BgiNotSentException>(() => Start("original-process", expectedStopVersion: 7, targetEpoch: original));
             Assert.Equal(initialStarts, Starts().Length);
-            Assert.Equal(initialStatusReads, _pipe.CountOf("ext.task.status"));
+            Assert.Equal(initialStatusReads, _pipe.CountOf(WorkflowStopAuthority.Operation));
             Assert.Equal(0, replacement.CountOf("ext.task.start"));
-            Assert.Equal(0, replacement.CountOf("ext.task.status"));
+            Assert.Equal(0, replacement.CountOf(WorkflowStopAuthority.Operation));
         }
         finally
         {
@@ -546,14 +590,14 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
     public async Task AStatusReplyFromADifferentProcessCannotSupplyTheOriginalRequestsStopFence()
     {
         var original = Epoch;
-        _pipe.BodyForTest = (operation, _) => operation == "ext.task.status" ? (true, null, null, new
+        _pipe.BodyForTest = (operation, _) => operation == WorkflowStopAuthority.Operation ? (true, null, null, new
         {
-            stopVersion = 7L,
+            stopVersion = 7L, lastManualStopTimestamp = Stopwatch.GetTimestamp(), monotonicFrequency = Stopwatch.Frequency,
             bgiEpoch = new { processId = original.ProcessId, startTicksUtc = original.StartTicksUtc + 1 }
         }) : null;
         await Assert.ThrowsAsync<BgiNotSentException>(() => Start("status-process-change", expectedStopVersion: 7, targetEpoch: original));
         Assert.Empty(Starts());
-        Assert.Equal(1, _pipe.CountOf("ext.task.status"));
+        Assert.Equal(1, _pipe.CountOf(WorkflowStopAuthority.Operation));
     }
 
     [Fact]
@@ -651,10 +695,12 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
                             $data = @{
                                 bgiVersion = 'replacement-fixture'; sessionId = 'replacement-private-session'
                                 windowsSessionId = $process.SessionId; processId = $process.Id; bgiEpoch = $epoch
-                                capabilities = @{ 'event.push' = $true; 'task.queue' = $true; 'task.stateContinuation.v1' = $true }
+                                capabilities = @{ 'event.push' = $true; 'task.queue' = $true; 'task.stateContinuation.v1' = $true; 'execution.manualStopFence.v1' = $true }
                             }
+                        } elseif ($operation -eq 'ext.execution.manualStopFence') {
+                            $data = @{ stopVersion = 7; bgiEpoch = $epoch; lastManualStopTimestamp = [Diagnostics.Stopwatch]::GetTimestamp(); monotonicFrequency = [Diagnostics.Stopwatch]::Frequency }
                         } elseif ($operation -eq 'ext.task.status') {
-                            $data = @{ running = $false; slotOccupied = $false; stopVersion = 7; bgiEpoch = $epoch }
+                            $data = @{ running = $false; slotOccupied = $false; bgiEpoch = $epoch }
                         } elseif ($operation -eq 'ext.task.start') {
                             $data = @{ status = 'queued'; taskHandle = [Guid]::NewGuid().ToString('N'); queuePosition = 0 }
                         } else { $data = @{} }

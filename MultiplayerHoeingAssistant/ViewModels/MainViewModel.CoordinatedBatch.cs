@@ -472,7 +472,9 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     io.Status("registering", "等待全队登记");
                 else if (team.Phase == "preparing")
                 {
-                    io.Status("preparing", "正在准备本机，持续向全队报告状态");
+                    // 准备仍在重试时保留具体失败原因，避免与普通准备提示交替刷屏。
+                    if (batch.Phase != "reconciling" || batch.Prepared)
+                        io.Status("preparing", "正在准备本机，持续向全队报告状态");
                     if (!batch.Prepared && _prepare == null) StartStage(io.Prepare, preparation: true);
                     if (!batch.Prepared && await ObserveStageAsync(_prepare!, "preparation_failed", ct))
                     {

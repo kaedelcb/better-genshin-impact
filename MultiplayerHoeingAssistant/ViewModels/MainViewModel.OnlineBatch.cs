@@ -323,7 +323,18 @@ public partial class MainViewModel
             && batch.PolicyExecution is null) batch.PolicySendUnknown = true;
         if (batch.IsCancellationRequested)
             return;
-        if (result is { Status: not "success" }) throw new InvalidOperationException("本批收尾未完成：" + result.Message);
+        // 完成动作的明确取消不撤销已完成的联机结果；只有原仲裁面已结清责任才结束收尾。
+        var specifiedCancellationSettled = policy.Policy == TaskConflictPolicy.RunSpecified
+            && result is { IsTerminal: true, ExecutionDisposition: ExecutionDisposition.Cancelled,
+                ResponsibilityState: ResponsibilityState.Settled };
+        if (specifiedCancellationSettled)
+        {
+            batch.PolicyTicketReleased = true; // RunSpecified 在提交后续前已确认释放原接管票据。
+            batch.CompletionActionWarning = "完成后指定任务已取消";
+            AddLog("[任务冲突策略] " + batch.CompletionActionWarning);
+        }
+        if (result is { Status: not "success" } && !specifiedCancellationSettled)
+            throw new InvalidOperationException("本批收尾未完成：" + result.Message);
         if (host?.CanOpenOnlineSendAfterBatch == false) throw new InvalidOperationException("原计划接管责任尚未确认");
         }
         finally { batch.MarkPolicyPhaseFinished(); }

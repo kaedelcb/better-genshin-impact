@@ -270,6 +270,20 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                         hasSuspendedTaskContext = false
                     });
                 }
+            case "ext.execution.manualStopFence":
+                using (var process = System.Diagnostics.Process.GetCurrentProcess())
+                {
+                    return (true, null, null, new
+                    {
+                        bgiEpoch = new
+                        {
+                            processId = ReportedProcessIdOverride ?? process.Id,
+                            startTicksUtc = ReportedStartTicksOverride ?? process.StartTime.ToUniversalTime().Ticks
+                        },
+                        stopVersion = 0L,
+                        monotonicFrequency = System.Diagnostics.Stopwatch.Frequency,
+                    });
+                }
             case "task.start":
                 return AcceptV2TaskStart
                     ? (true, null, null, new { status = "success" })
@@ -298,6 +312,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                             ["event.push"] = true,
                             ["task.queue"] = true,
                             ["task.stateContinuation.v1"] = StateContinuationForTest,
+                            ["execution.manualStopFence.v1"] = StateContinuationForTest,
                             ["task.coordinatedRecoverySnapshot.v1"] = StateContinuationForTest,
                             ["task.coordinatedRecoveryStop.v1"] = StateContinuationForTest,
                             ["task.nativeResumeRetry.v1"] = StateContinuationForTest,
