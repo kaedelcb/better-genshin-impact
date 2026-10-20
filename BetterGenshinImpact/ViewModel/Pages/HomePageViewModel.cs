@@ -269,7 +269,7 @@ public partial class HomePageViewModel : ViewModel, IDisposable
     private void OnClosed()
     {
         CancelBannerDownload();
-        _ = OnStopTrigger();
+        _ = _gameRuntimeService.StopAsync();
         // 等待任务结束
         _maskWindowHost.Close();
     }
@@ -299,7 +299,7 @@ public partial class HomePageViewModel : ViewModel, IDisposable
         if (TaskDispatcherEnabled)
         {
             _logger.LogInformation("► 切换捕获模式至[{Mode}]，截图器自动重启...", Config.CaptureMode);
-            await OnStopTrigger();
+            await _gameRuntimeService.StopAsync();
             await OnStartTriggerAsync();
         }
     }
@@ -375,6 +375,8 @@ public partial class HomePageViewModel : ViewModel, IDisposable
     [RelayCommand(CanExecute = nameof(CanStopTrigger))]
     private async Task OnStopTrigger()
     {
+        // F11/手动停止先撤销执行与恢复意图，不能等截图器解绑后仅记一次普通取消。
+        CancellationContext.Instance.ManualCancel();
         await _gameRuntimeService.StopAsync();
     }
 

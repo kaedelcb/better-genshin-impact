@@ -260,7 +260,7 @@ public sealed class OnlineHoeingBatch
             if (!PriorityRecoveryEnabled || IsCancellationRequested || ExplicitStopRequested
                 || !(Policy?.Policy == TaskConflictPolicy.RunSpecified
                     || allowNativeResume && Policy?.Policy == TaskConflictPolicy.Resume)
-                || _policyTerminalResult is not { ExecutionExitConfirmed: true, Status: "failed" or "queueCancelled" } failed
+                || _policyTerminalResult is not { ExecutionExitConfirmed: true, Status: "failed", Cancelled: false } failed
                 || _policyExecution is not { } execution
                 || !Guid.TryParse(failed.TaskHandle, out var failedJob) || !Guid.TryParse(execution.JobId, out var runningJob)
                 || failedJob != runningJob || !ViewModels.CoordinatedBatchLoop.SameEpoch(failed.Epoch, execution.Epoch))

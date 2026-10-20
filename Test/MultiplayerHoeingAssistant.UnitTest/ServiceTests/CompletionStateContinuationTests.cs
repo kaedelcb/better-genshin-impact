@@ -351,6 +351,40 @@ public sealed class CompletionStateContinuationTests
         Assert.Equal(cancelled, batch.PolicyTerminalResult.Cancelled);
         Assert.NotNull(batch.CompletionActionWarning);
     }
+    [Theory]
+    [InlineData(TaskConflictPolicy.Resume, "failed", true)]
+    [InlineData(TaskConflictPolicy.Resume, "queueCancelled", false)]
+    [InlineData(TaskConflictPolicy.RunSpecified, "failed", true)]
+    [InlineData(TaskConflictPolicy.RunSpecified, "queueCancelled", false)]
+    public async Task PriorityCompletionCancellationCannotCreateAnotherAttempt(TaskConflictPolicy policy,
+        string status, bool cancelled)
+    {
+        var batch = Create(policy, priority: true);
+        var originalKey = batch.PolicyRequestKey;
+        var starts = 0;
+        var acknowledgements = 0;
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            CanRetryNativeResume = policy == TaskConflictPolicy.Resume,
+            ExpectedRequestKey = () => batch.PolicyRequestKey,
+            Prepare = _ => Task.FromResult(true),
+            Start = _ => { starts++; return Task.FromResult(Accepted()); },
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch, status, cancelled)),
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (_, _) => { acknowledgements++; return Task.FromResult(true); },
+            Delay = token => Task.Delay(1, token),
+        }, budget.Token);
+        Assert.Equal(1, starts);
+        Assert.Equal(1, acknowledgements);
+        Assert.Equal(status, batch.PolicyTerminalResult!.Status);
+        Assert.Equal(cancelled, batch.PolicyTerminalResult.Cancelled);
+        Assert.Equal(originalKey, batch.PolicyRequestKey);
+        Assert.False(batch.NativeResumeRetryPending);
+        Assert.Empty(batch.FailedPolicyAttempts);
+    }
+
     [Fact]
     public async Task ResumeResultIsNotAcknowledgedUntilOriginalPlanHasStoredIt()
     {
