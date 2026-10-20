@@ -130,6 +130,7 @@ internal static class ExternalInterfaceCommandPlane
                 acceptedStateContinuation: request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true))
         {
             Preempt = preempt,
+            TakeoverTicket = takeoverTicket,
             CoordinatedHoeing = InstanceIpcProtocol.GetStringOrNull(request.Data, "coordinatedHoeing") == "v1",
             IdempotencyKey = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey"),
             PayloadFingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request),

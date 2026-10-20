@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.IO;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
@@ -205,6 +206,28 @@ public sealed partial class TaskCenterHost
         {
             Interlocked.Exchange(ref _manualResetActive, 0);
             throw;
+        }
+    }
+
+    // Physical exclusion belongs to the closed send gate and BGI's targeted suspend.
+    // The old plan's recovery bookkeeping must never veto a priority hoeing request.
+    internal OnlineHoeingPreparation PreparePriorityOnlineHoeing(int generation,
+        CommandExecutor.ExecutionBoundarySnapshot snapshot)
+    {
+        if (!_onlineSendGate.IsClosed || !snapshot.Known
+            || snapshot.Active is null && snapshot.SlotOccupied)
+            return new OnlineHoeingPreparation(false, null, "等待普通任务派发暂停及 BGI 实际执行状态");
+        try
+        {
+            var prepared = PrepareOnlineHoeing(generation, snapshot, stateContinuation: true);
+            if (prepared.Ready) return prepared;
+            _log?.Invoke("[联机优先] 原计划恢复信息待补，不阻止 BGI 让位：" + prepared.Reason);
+            return new OnlineHoeingPreparation(true, null, prepared.Reason);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            _log?.Invoke("[联机优先] 原计划记录暂不可用，不阻止 BGI 让位：" + ex.Message);
+            return new OnlineHoeingPreparation(true, null, ex.Message);
         }
     }
 

@@ -40,12 +40,13 @@ public sealed class CoordinatedBatchLocalFinishTests
         internal int Exchanges, ReadJobsAfterTerminal, Submits, Cancels, Releases, Abandons, Finalizes;
         internal string? LastNonemptyResult;
 
-        internal Scenario(int bindings = 1)
+        internal Scenario(int bindings = 1, bool priorityRecovery = false)
         {
             var items = Enumerable.Range(0, bindings).Select(i => new CoordinatedHoeingBinding("group" + i, "group")).ToArray();
             Batch = new OnlineHoeingBatch(new("local-finish", 19, 0, 0, 0, "registering", "")
             {
                 Protocol = "hoeing.start.v2", Source = "manual", ParticipantUids = ["self", "peer"],
+                PriorityRecovery = priorityRecovery,
                 Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
                 {
                     ["self"] = items, ["peer"] = items
@@ -159,6 +160,34 @@ public sealed class CoordinatedBatchLocalFinishTests
             AuthorityContactTimeout = TimeSpan.FromMilliseconds(100),
             RequireFinishEvidence = RequireEvidence
         }).RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task PriorityCompletion_WaitsForJointCompletionBeforeStartingBoundAction()
+    {
+        var s = new Scenario(priorityRecovery: true)
+        { Terminal = new() { Status = "completed", ExecutionExitConfirmed = true } };
+        var running = s.Run();
+        await s.SucceededReported.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(s.FinalizeStarted.Task.IsCompleted);
+        s.CompleteTeam = true;
+        Assert.True(await running);
+        Assert.Equal(1, s.Finalizes);
+        Assert.Equal(0, s.Cancels);
+    }
+
+    [Fact]
+    public async Task PriorityJointAbort_AfterLocalSuccess_DoesNotWaitForeverOrStartCompletion()
+    {
+        var s = new Scenario(priorityRecovery: true)
+        { Terminal = new() { Status = "completed", ExecutionExitConfirmed = true } };
+        var running = s.Run();
+        await s.SucceededReported.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        s.AbortReason = "participant_cancelled:peer:running";
+        Assert.False(await running);
+        Assert.Equal(0, s.Finalizes);
+        Assert.Equal(0, s.Cancels);
+        Assert.Equal("participant_cancelled:peer:running", s.Batch.TeamFailureReason);
     }
 
     [Fact]

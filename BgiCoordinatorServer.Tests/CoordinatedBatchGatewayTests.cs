@@ -180,7 +180,7 @@ public class CoordinatedBatchGatewayTests
     }
 
     [Fact]
-    public async Task KnownParticipantFailureEntersBoundedRecoveryWithOwnerIdentity()
+    public async Task KnownParticipantFailureRetainsPriorityRecoveryWithOwnerIdentity()
     {
         var (h, clients, _) = await Setup();
         var state = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
@@ -188,7 +188,11 @@ public class CoordinatedBatchGatewayTests
         Assert.Equal("running", retry.Phase);
         Assert.Equal(1, retry.Attempt);
         Assert.Equal("shared_recovery", retry.Reason);
-        Assert.Equal("recovery_budget_exhausted", Snapshot(await Update(h, clients[0], retry, result: "failed")).Reason);
+        Assert.True(retry.PriorityRecovery);
+        var next = Snapshot(await Update(h, clients[0], retry, result: "failed"));
+        Assert.Equal("shared_recovery", next.Reason);
+        Assert.Equal("running", next.Phase);
+        Assert.Equal(2, next.Attempt);
     }
 
     [Fact]

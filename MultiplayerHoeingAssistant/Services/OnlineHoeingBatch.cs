@@ -215,6 +215,22 @@ public sealed class OnlineHoeingBatch
     }
     private Task? _localFinalization;
     private int _localFinishedWithErrors;
+    internal bool PriorityRecoveryEnabled => Start?.PriorityRecovery == true;
+
+    // A member's local success is provisional until the joint item has completed for everyone.
+    internal void RetryUnfinishedJointItem()
+    {
+        lock (_policyGate)
+        {
+            if (!PriorityRecoveryEnabled || _localFinalization is not null || LocalExecutionReleased
+                || PolicyExecution is not null || IsCancellationRequested)
+                throw new InvalidOperationException("本端后续已经起步或批次已停止，不能重跑共同项");
+            Volatile.Write(ref _localSucceeded, 0);
+            Volatile.Write(ref _localFinishedWithErrors, 0);
+            LocalSuccessEpoch = null;
+        }
+    }
+
     internal bool LocalSucceeded => Volatile.Read(ref _localSucceeded) != 0;
     internal bool LocalCompletionReady => LocalSucceeded || Volatile.Read(ref _localFinishedWithErrors) != 0;
     internal string CompletionOutcome => LocalTasksFailed ? "completed_with_errors" : "succeeded";

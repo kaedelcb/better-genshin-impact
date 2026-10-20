@@ -89,6 +89,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// <summary>[A6] 抢占式下发（联机锄地批次/按键抢占）：等槽窗口缩短为 3s（让位点通常即刻腾槽），
         /// 未果则转入执行段的主动抢占（有界退出契约）。默认 false = 旧 15s 等槽语义不变。</summary>
         public bool Preempt { get; init; }
+        public string? TakeoverTicket { get; init; }
         public string? IdempotencyKey { get; init; }
         /// <summary>可信入口按完整 ext 请求计算的规范化指纹；与发送键共同确定一次提交。</summary>
         public string? PayloadFingerprint { get; init; }
@@ -180,6 +181,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
     private PendingTask? _current;
     private Task? _pumpTask;
+    // Only the single pump touches deferred notifications. Pending remains the capacity authority.
+    private readonly Queue<PendingTask> _deferredNotifications = new();
     private bool _disposed;
 
     /// <summary>最近一次执行完成的 task.start 代序号+名（从 InstanceRequestHandler._lastExecutedTask 迁入，单一事实源）。</summary>
@@ -563,7 +566,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             // 背压语义门 = 在队登记数（pump 出队后等槽位的项仍算在队，只信 Channel 占用会把
             // "等槽位中的项"误判为已消化——实测姿势见 BgiTaskCoordinatorTests.Backpressure）。
-            if (_pending.Count >= QueueCapacity)
+            // One reserved entry lets the takeover owner pass a full ordinary queue.
+            // It does not create a second dispatcher or bypass the physical execution slot.
+            if (_pending.Count >= QueueCapacity + (submission.CoordinatedHoeing ? 1 : 0))
             {
                 item.DisposeCtsOnce();
             if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
@@ -719,12 +724,11 @@ internal sealed class BgiTaskCoordinator : IDisposable
         var pumpToken = _disposeCts.Token;
         try
         {
-            while (await _channel.Reader.WaitToReadAsync(pumpToken).ConfigureAwait(false))
+            while (true)
             {
-                while (_channel.Reader.TryRead(out var item))
-                {
+                while (_deferredNotifications.TryDequeue(out var item) || _channel.Reader.TryRead(out item))
                     await DispatchItemAsync(item, pumpToken).ConfigureAwait(false);
-                }
+                if (!await _channel.Reader.WaitToReadAsync(pumpToken).ConfigureAwait(false)) break;
             }
         }
         catch (OperationCanceledException)
@@ -744,10 +748,43 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
     }
 
+    private bool ConsumePriorityNotification(PendingTask priority)
+    {
+        var found = false;
+        var deferredCount = _deferredNotifications.Count;
+        for (var i = 0; i < deferredCount; i++)
+        {
+            var queued = _deferredNotifications.Dequeue();
+            if (ReferenceEquals(queued, priority)) found = true;
+            else if (_pending.ContainsKey(queued.TaskHandle)) _deferredNotifications.Enqueue(queued);
+        }
+        if (found) return true;
+        while (_channel.Reader.TryRead(out var queued))
+        {
+            if (ReferenceEquals(queued, priority)) return true;
+            if (_pending.ContainsKey(queued.TaskHandle)) _deferredNotifications.Enqueue(queued);
+        }
+        return false;
+    }
+
     private async Task DispatchItemAsync(PendingTask item, CancellationToken pumpToken)
     {
-        while (!await DispatchItemOnceAsync(item, pumpToken).ConfigureAwait(false))
+        while (true)
+        {
+            PendingTask? priority = null;
+            lock (_submitLock)
+            {
+                // A priority item may have consumed its original channel notification later.
+                if (!_pending.ContainsKey(item.TaskHandle)) return;
+                if (PreemptionGate.IsArmed && !PreemptionGate.Authorize(item.Submission.TakeoverTicket))
+                    priority = _pending.Values.FirstOrDefault(candidate => candidate != item
+                        && PreemptionGate.Authorize(candidate.Submission.TakeoverTicket));
+            }
+            if (priority is not null && ConsumePriorityNotification(priority))
+                await DispatchItemAsync(priority, pumpToken).ConfigureAwait(false);
+            else if (await DispatchItemOnceAsync(item, pumpToken).ConfigureAwait(false)) return;
             await Task.Delay(_slotPollInterval, pumpToken).ConfigureAwait(false);
+        }
     }
 
     private async Task<bool> DispatchItemOnceAsync(PendingTask item, CancellationToken pumpToken)
@@ -767,9 +804,13 @@ internal sealed class BgiTaskCoordinator : IDisposable
             return true;
         }
 
+        // Queued ordinary work remains queued while the takeover owner executes.
+        if (PreemptionGate.IsArmed && !PreemptionGate.Authorize(item.Submission.TakeoverTicket)) return false;
+
         // 1. 等槽位空（只读轮询 CurrentCount，绝不 WaitAsync 抢占；15s 兜底防旧任务卡死）
         // [A6] preempt 项：3s 短窗（租约门让位点通常即刻腾槽），未果不判死，转入执行段主动抢占
         var slotFree = await WaitSlotFreeAsync(item, pumpToken).ConfigureAwait(false);
+        if (PreemptionGate.IsArmed && !PreemptionGate.Authorize(item.Submission.TakeoverTicket)) return false;
         if (!slotFree && item.Submission.Preempt && !item.Cts.IsCancellationRequested)
         {
             _logger.LogInformation("[task.queue] preempt 项等槽未果，转入主动抢占（有界退出契约）: {Name}", item.Submission.Name);

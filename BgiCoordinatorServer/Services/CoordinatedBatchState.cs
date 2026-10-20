@@ -23,6 +23,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
     public bool UseCompletionActions { get; init; }
     public bool StateContinuation { get; init; }
+    public bool PriorityRecovery { get; init; }
     public bool CleanupComplete { get; init; }
 }
 
@@ -68,6 +69,7 @@ public sealed class CoordinatedBatchState
     public string QuickCommandKey { get; }
     public bool UseCompletionActions { get; }
     public bool StateContinuation { get; }
+    public bool PriorityRecovery { get; }
     public int Index { get; private set; }
     public int Attempt { get; private set; }
     public long Revision { get; private set; }
@@ -82,14 +84,15 @@ public sealed class CoordinatedBatchState
         IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>>? bindings = null,
         IReadOnlyDictionary<string, int>? intentGenerations = null,
         IReadOnlyDictionary<string, string>? executorInstances = null,
-        bool useCompletionActions = false, string quickCommandKey = "", bool stateContinuation = false)
+        bool useCompletionActions = false, string quickCommandKey = "", bool stateContinuation = false, bool priorityRecovery = false)
     {
         Generation = generation;
         Source = source;
         RequestId = requestId;
         QuickCommandKey = quickCommandKey;
         UseCompletionActions = useCompletionActions;
-        StateContinuation = stateContinuation;
+        StateContinuation = stateContinuation || priorityRecovery;
+        PriorityRecovery = priorityRecovery;
         _created = _phaseStarted = now;
         _members = uids.Distinct(StringComparer.Ordinal).ToDictionary(u => u, _ => new Member(now), StringComparer.Ordinal);
         if (_members.Count is < 1 or > 4 || _members.Keys.Any(string.IsNullOrWhiteSpace))
@@ -129,6 +132,7 @@ public sealed class CoordinatedBatchState
         Bindings = _bindings,
         UseCompletionActions = UseCompletionActions,
         StateContinuation = StateContinuation,
+        PriorityRecovery = PriorityRecovery,
         Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason) { Result = p.Value.Result }).ToArray(),
         MissingRegistrationUids = Reason == "registration_timeout"
             ? _members.Where(p => p.Value.Token.Length == 0).Select(p => p.Key).ToArray() : [],
@@ -231,6 +235,9 @@ public sealed class CoordinatedBatchState
         { member.Reason = reason; Revision++; }
         if (result == "local_tasks_failed" && Phase is not ("running" or "stopping"))
             throw new InvalidOperationException("batch_not_started");
+        // A failed joint item may be retried only after every original member has exited.
+        // Completed earlier indices are never revisited. Explicit cancellation still aborts.
+        if (PriorityRecovery && result == "local_failed") result = "failed";
         if (result == "local_failed")
         {
             member.Result = result;
@@ -280,7 +287,7 @@ public sealed class CoordinatedBatchState
             if (result == "local_tasks_failed") { member.Reason = reason; member.HadLocalTaskError = true; }
             if (result == "failed" && Phase == "running")
             {
-                if (_members.Values.Any(HasEndedCurrentItem))
+                if (!PriorityRecovery && _members.Values.Any(HasEndedCurrentItem))
                 {
                     Abort("participant_failed_after_peer_completed:" + uid);
                     return Snapshot();
@@ -313,12 +320,12 @@ public sealed class CoordinatedBatchState
         else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0
                      && (!StateContinuation || m.Result != "unknown")))
         {
-            if (_members.Values.Any(HasEndedCurrentItem))
+            if (!PriorityRecovery && _members.Values.Any(HasEndedCurrentItem))
             {
                 Abort("partial_completion_no_replay");
                 return Snapshot();
             }
-            if (Attempt >= 1) Abort("recovery_budget_exhausted");
+            if (!PriorityRecovery && Attempt >= 1) Abort("recovery_budget_exhausted");
             else
             {
                 Attempt++;

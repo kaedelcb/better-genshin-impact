@@ -8,6 +8,7 @@ namespace MultiplayerHoeingAssistant.Services.Gateway;
 public static class GatewayProtocol
 {
     public const string LocalTaskFailureCapability = "hoeing.localTaskFailure.v1";
+    public const string HoeingPriorityRecoveryCapability = "hoeing.priorityRecovery.v1";
     public const string LocalFinishCapability = "hoeing.localFinish.v1";
     public const string QuickCommandCompletionCapability = "hoeing.quickCommandCompletion.v1";
     public const string CompletionChoiceCapability = "hoeing.completionChoice.v1";

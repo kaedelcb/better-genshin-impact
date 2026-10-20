@@ -153,3 +153,44 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 - 原报告、原TRX和失败日志均保留。原70/197/176结果复用有源码对应依据；新增/改变的验证只重跑受影响范围，不把重复运行计作额外产品成果。
 
 当前所有本轮已确认缺陷均已修复并验证；无需新增用户确认或重置步骤来接续这些可恢复情况。明确停止仍取消原意图和任务；真正锄地未完成不伪装完成；永久通信不可达和跨进程/断电恢复保持原范围边界。本次本地提交的确切身份由最终答复和git log提供。
+
+## 最高优先级与异常接续追加修复（2026-10-20，用户明确授权）
+
+补齐用户确认的实际故障：旧计划记录仍挡开锄、BGI/助手异常后不能接续、后续本体失败被当作处理完。前次cef55430仅证明原限定范围，不能作为本轮通过。
+
+- [ ] T-17（in_progress）：解除旧记录准入阻塞并落实联机优先；验证R-17/R-18。
+- [ ] T-18（pending）：原批次/执行/停止恢复及重启接回；验证R-19/R-20/R-22。
+- [ ] T-19（pending）：绑定后续异常接续及进度丢失退路；验证R-21。
+- [ ] T-20（pending）：故障定向测试、生产入口受控验证及独立复审，修复本范围发现后提交。现有同进程证据不足以证明重启恢复；各R项有对应通过结果且无未解决本次阻断后结束验证。
+
+本轮基线cef55430ce5e169adebc60b95da6dbfbd0c5aee6，源码备份及编码/换行/hash：Build/hoeing-priority-recovery-20261020-01a156d7/before-manifest.json。未操作真实User/游戏或运行实例。
+
+### 追加修复当前真实状态与接力点
+
+状态：实施中，绝非完整交付。T-17局部已实现、T-18/T-19未完成，全部复选框保持未勾选。已有代码不能被当作“异常都能恢复”的版本。
+
+已写入并通过定向组件验证：旧计划准备失败可让BGI实际让位继续；retained suspend保存回调异常仍准确取消原root并保留内存snapshot；BGI普通队列在持票期间暂停，优先项消费原Channel通知后串行执行；新hoeing.priorityRecovery.v1协商后，全队未完成的当前绑定共同重试不受一次预算限制，旧执行退出前不重开，后续延至全队completed。旧协议行为保持。
+
+- validation-1/server：46通过/1失败，失败为旧Gateway测试期望第二次失败终止，与新需求冲突；原件保留。更新该用例为新协议继续恢复，旧协议bounded测试仍保留。
+- validation-2/server：47通过，退出0。
+- validation-2/assistant及bgi：编译失败CS0103（新增catch缺System.IO引用），已修复，原失败保留。
+- validation-3/assistant：67通过，退出0。包含新全队完成前不启动后续、aborted不无限等、旧记录读取失败仍放行等。
+- validation-3/bgi：150通过，退出0。包含原root保存失败、满普通队列连续两个优先项及无并发执行。
+- 所有上述有效运行的Job Object终态active_processes=0，未操作真实User/游戏或用户进程。复用受控artifacts：Build/hoeing-state-continuation-20261020-01a156d7/validation/artifacts。不要移动/删除历史证据。
+- 当前来源/hash与TRX：Build/hoeing-priority-recovery-20261020-01a156d7/component-evidence.json。
+
+本次独立只读Agent /root/priority_recovery_design_review 使用gpt-6.1-sol/high。原始第一部分复核报告在同证据目录review-part1-original.md。F1队列通知耗满、F2全队终止后本端等待不结束已修改并有validation-3定向通过；尚未由该Agent做改后确认。F3旧ticket复用不同目标导致takeover_identity_mismatch永久重试仍开放，必须修，不得标闭合。稳定完整实现后的整范围复审尚未执行。
+
+唯一下一项：首先修F3旧票据的继承/结清，打通原批次执行身份恢复，接着完成T-18/T-19；不能把本地台账宽松返回Ready视为全部开锄入口已修好。
+
+后续必做，已获用户授权，不再逐项请求确认：
+1. F3：CommandExecutor.ExecuteSuspendCoreAsync仍复用旧_takeoverTicket，BGI回执原target与新空闲target不同；需按实际原receipt/退出事实继承或结清原责任，绝不删除BGI目标身份校验，不对新根盲用旧票据。PreparePriorityOnlineHoeing对非IO的普通账本异常、CloseOnlineHoeingSendAsync等待在途发送也需一并核实（后者_mutex等待可能先于BGI实际预留，尚未修）。
+2. 助手重启：OnlineBatch仍拒收非registering/pending，OnlineHoeingBatch.Token随机内存，loop内部_index/_attempt/_item/_epoch不恢复。ClientInstanceId已持久化且服务器按其匹配席位，可复用；恢复需同原成员/token/原job身份。现有SignalR AdoptConnected会RestoreCoordinatedAuthorityAsync。不能重启后冒认另一个Windows会话/活助手。
+3. BGI变化：CoordinatedBatch/OnlineBatch/StateContinuation仍多处epoch变化撤权。要确认旧PID+启动时间死亡后重建准备/接管，分配新共同执行代次；旧进程活着/不明确不能重发。共同游戏房身份必须含Attempt，现有batchId每次重试未变化。房主退出删游戏房，现有路线rerun只有内存token，不能作为跨进程恢复。
+4. 明确停止：ExecutionScope.StopVersion静态内存、BGI恢复现场AllConfig.SuspendedTaskContext为JsonIgnore；要保存可跨重启的停止意图，普通异常不能冒充人为停止。考虑保存失败但另一端仍有事实时补存，所有身份/事实全丢不能虚构。BGI guardian只监测PID消失，助手重启与卡死恢复尚未实现。App现有退出/自启动边界应复用，勿新增用户流程。
+5. 后续：StateContinuation worker failed/queueCancelled仍只记录结束；RequiresAuthority仍绑定旧epoch；Reconcile仍可能永等；一次守卫缓存失败；RunSpecified首次执行才读配置内容，未冻结任务实体；Resume原现场仅内存。需要稳定key接回已执行项，确认退出后新尝试，已知任务丢进度重跑，缺任务身份只报该项无法恢复不锁其他项。保存/ack必须与执行释放分开但不能丢原Runner尚未消费的结果。
+6. 真实生产组合的隔离故障验证仍需覆盖：助手重建原BGI仍执行不双跑、BGI真退出全队恢复、丢进度重跑、各保存点持续失败、后续失败和丢回复、停止跨重启不复活。既有四连接夹具FourMemberFinishEntryTests.StateContinuation可复用，必须按新全队完成后才后续调整合理断言；不操作四个真实游戏客户端。
+
+施工约束：当前源码根E:/Program Files/better-genshin-impact-LCB-source，main-OldTeaBag-B182；旧根只读不扫描。当前所有差异均本聊天新增（开工tracked干净），168个既有untracked不动。禁止部署/push/改真实User/第三方JS。本地WIP可保存，但源码预检baseline维持cef55430，未完成不得前移。历史门本目标此前已运行matches=[]并读索引，不重复扫描。源码入口技能及AGENTS已读；Spec完整目标不因本组件通过缩小。
+
+原生Goal为完整用户要求，接班必须继续同一完整结果而非只修F3。本聊天实际最新turn_context为gpt-6-astra/high，collaboration_mode.settings一致（全局默认sol/ultra不是来源模型）。来源rollout E:/CodexData/home/sessions/2026/10/20/rollout-2026-10-20T09-05-25-01a156d7-7bb3-7d12-83b9-fc334ac8cf86.jsonl。

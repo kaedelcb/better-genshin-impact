@@ -632,7 +632,8 @@ public partial class MainViewModel
             if (!ReferenceEquals(_activeBatch, batch) || !ReferenceEquals(_commandExecutor, executor)
                 || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0)
                 throw new OperationCanceledException("本批收尾权限已被本机停止或重置撤销");
-        if (!batch.LocalCompletionReady) throw new InvalidOperationException("本机最后绑定的锄地完成与执行退出尚未确认");
+        if (!batch.LocalCompletionReady || batch.PriorityRecoveryEnabled && !batch.CoordinatedSucceeded)
+            throw new InvalidOperationException("全队锄地尚未完成，不提前执行绑定后续");
         if (batch.StateContinuationEnabled)
         {
             await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", false, batch.TakeoverTicket);
@@ -901,13 +902,19 @@ public partial class MainViewModel
         }
         context.Executor = _commandExecutor ?? throw new InvalidOperationException("本机执行器未配置");
         context.Host = IsExecutorMode ? TaskCenterHost : null;
-        if (context.Host != null) await context.Host.RecoverOnlineHandoffsBeforeStartAsync();
+        if (context.Host != null)
+        {
+            try { await context.Host.RecoverOnlineHandoffsBeforeStartAsync(); }
+            catch (Exception ex) when (batch.PriorityRecoveryEnabled
+                && ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            { AddLog("[联机优先] 旧记录稍后处理，不阻止当前 BGI 准备：" + ex.Message); }
+        }
         ct.ThrowIfCancellationRequested();
         var boundary = await context.Executor.CaptureExecutionBoundarySnapshotAsync();
         if (!boundary.Known || boundary.SlotOccupied && boundary.Active is null)
             throw new InvalidOperationException("BGI 执行身份未确认，保留原任务");
         EnsureHoeingAllowsCoordinatedStart(boundary);
-        if (context.Executor.TakeoverTicketSnapshot != null)
+        if (!batch.PriorityRecoveryEnabled && context.Executor.TakeoverTicketSnapshot != null)
             throw new InvalidOperationException("原接管尚未结清，保留当前执行");
     }
 
@@ -953,7 +960,9 @@ public partial class MainViewModel
                     if (context.Host is null) return current;
                     try
                     {
-                        context.Plan = context.Host.PrepareOnlineHoeing(batch.Generation, current, stateContinuation: true);
+                        context.Plan = batch.PriorityRecoveryEnabled
+                            ? context.Host.PreparePriorityOnlineHoeing(batch.Generation, current)
+                            : context.Host.PrepareOnlineHoeing(batch.Generation, current, stateContinuation: true);
                         if (context.Plan.Ready) return current;
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

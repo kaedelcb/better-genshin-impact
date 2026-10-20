@@ -354,7 +354,7 @@ public sealed class ExecutionScope : IDisposable
     /// </summary>
     internal static bool TrySuspendTarget(string ticket, Guid? expectedInstanceId, long? expectedStateRevision,
         long expectedStopVersion, TimeSpan manualStopCooldown, Action<SuspendContextCapture.Snapshot?, long> saveRecovery,
-        out TargetedSuspendTarget? target, out string? errorCode)
+        out TargetedSuspendTarget? target, out string? errorCode, bool continueOnRecoveryFailure = false)
     {
         ExecutionScope? victim;
         target = null;
@@ -403,9 +403,17 @@ public sealed class ExecutionScope : IDisposable
                 errorCode = "takeover_identity_mismatch";
                 return false;
             }
+            string? recoveryWarning = null;
             try { saveRecovery(victim?.Checkpoint, _stopVersion); }
+            catch (Exception ex) when (continueOnRecoveryFailure)
+            {
+                // The captured root/physical slot, not a successful auxiliary save, owns exclusion.
+                // Retain the actual snapshot in memory so the caller can still recover the task.
+                recoveryWarning = ex.Message;
+            }
             catch { PreemptionGate.Release(ticket); throw; }
-            target = new TargetedSuspendTarget(victim);
+            target = new TargetedSuspendTarget(victim)
+            { RecoverySnapshot = victim?.Checkpoint, RecoveryWarning = recoveryWarning };
             if (victim is not null)
             {
                 victim._suspendTarget = target;
@@ -424,6 +432,8 @@ public sealed class ExecutionScope : IDisposable
         private readonly ExecutionScope? _victim;
         private bool _quiesced;
         internal TargetedSuspendTarget(ExecutionScope? victim) { _victim = victim; _quiesced = victim is null; }
+        internal SuspendContextCapture.Snapshot? RecoverySnapshot { get; init; }
+        internal string? RecoveryWarning { get; init; }
 
         internal bool ObserveQuiescence()
         {

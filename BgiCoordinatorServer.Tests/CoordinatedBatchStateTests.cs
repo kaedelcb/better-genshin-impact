@@ -16,6 +16,45 @@ public class CoordinatedBatchStateTests
             foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid, stage: stage);
     }
 
+    [Fact]
+    public void PriorityRecovery_RetriesOnlyUnfinishedJointIndex_AfterAllOriginalExecutionsExit()
+    {
+        var s = new CoordinatedBatchState(7, new[] { "a", "b", "c", "d" }, _now,
+            priorityRecovery: true);
+        Enroll(s);
+        foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid, "succeeded");
+        Assert.Equal(1, s.Index); // The first jointly completed binding stays complete.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            Send(s, "a", "succeeded", index: 1, attempt: attempt);
+            Assert.Equal("stopping", Send(s, "b", "local_failed", index: 1, attempt: attempt).Phase);
+            Send(s, "c", "stopped", index: 1, attempt: attempt);
+            Assert.Equal(attempt, s.Attempt); // Fourth original execution has not exited.
+            var ready = Send(s, "d", "stopped", index: 1, attempt: attempt);
+            Assert.Equal("running", ready.Phase);
+            Assert.Equal(attempt + 1, ready.Attempt);
+            Assert.Equal(1, ready.Index);
+            // A delayed old failure cannot advance the new attempt a second time.
+            Assert.Equal(attempt + 1, Send(s, "b", "local_failed", index: 1, attempt: attempt).Attempt);
+        }
+        foreach (var uid in new[] { "a", "b", "c", "d" }) Send(s, uid, "succeeded", index: 1, attempt: 3);
+        Assert.Equal("completed", s.Phase);
+    }
+
+    [Fact]
+    public void PriorityRecovery_ExplicitStopCannotBeRevivedByLateRecoveryResults()
+    {
+        var s = new CoordinatedBatchState(7, new[] { "a", "b", "c", "d" }, _now,
+            priorityRecovery: true);
+        Enroll(s);
+        Send(s, "a", "failed");
+        s.Abort("user_stop_all");
+        foreach (var uid in new[] { "b", "c", "d" }) Send(s, uid, "stopped");
+        Assert.Equal("aborted", s.Phase);
+        Assert.Equal("user_stop_all", s.Reason);
+        Assert.Equal(0, s.Attempt);
+    }
+
     [Fact] public void DoesNotStartUntilAllFourEnroll()
     {
         var s = Create();

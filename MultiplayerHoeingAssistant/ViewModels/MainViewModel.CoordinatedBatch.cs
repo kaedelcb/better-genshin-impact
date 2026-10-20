@@ -210,7 +210,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         if (snapshot.Protocol != "hoeing.start.v2" || snapshot.BatchId != batch.BatchId
             || snapshot.Generation != batch.Generation || snapshot.Revision < _revision
             || snapshot.Index < _index || snapshot.Index > batch.Bindings.Count
-            || snapshot.Attempt is < 0 or > 1
+            || snapshot.Attempt < 0 || !batch.PriorityRecoveryEnabled && snapshot.Attempt > 1
             || snapshot.ParticipantUids.Count != start.ParticipantUids.Count
             || !new HashSet<string>(start.ParticipantUids, StringComparer.Ordinal).SetEquals(snapshot.ParticipantUids)
             || !snapshot.Bindings.TryGetValue(batch.SelfUid, out var bindings) || !batch.Bindings.SequenceEqual(bindings))
@@ -310,7 +310,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                             && readError is not ControlContextRevokedException
                             && readError is IOException or TimeoutException or OperationCanceledException or System.Text.Json.JsonException)
                         { ObservationUnavailable("原任务观察暂不可用：" + readError.Message); }
-                        if (batch.LocalCompletionReady) await ObserveLocalFinalizationAsync();
+                        if (batch.LocalCompletionReady && !batch.PriorityRecoveryEnabled) await ObserveLocalFinalizationAsync();
                     }
                     io.Status("reconciling", "控制通道暂不可用，保留原任务并继续连接");
                     await Task.Delay(remaining < io.PollInterval ? remaining : io.PollInterval, ct);
@@ -336,6 +336,14 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     batch.Message = "当前绑定已完成；因成员普通任务失败，后续绑定未启动";
                     io.Status("cleaning", batch.Message);
                     return false;
+                }
+                if (team.Phase == "aborted" && batch.PriorityRecoveryEnabled
+                    && batch.LocalCompletionReady && !batch.CoordinatedSucceeded)
+                {
+                    // The local receipt remains in the item/history. It cannot authorize a
+                    // completion action after the joint operation has been revoked.
+                    batch.TeamFailureReason = team.Reason;
+                    batch.RetryUnfinishedJointItem();
                 }
                 if (team.Phase == "aborted" && batch.PreserveLocalSuccess(team.Reason))
                 {
@@ -438,7 +446,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     {
                         ObservationUnavailable("原任务观察暂不可用：" + ex.Message);
                     }
-                    if (batch.LocalCompletionReady) await ObserveLocalFinalizationAsync();
+                    if (batch.LocalCompletionReady && !batch.PriorityRecoveryEnabled) await ObserveLocalFinalizationAsync();
                 }
                 else throw new InvalidOperationException("未知联机批次阶段: " + team.Phase);
                 await Task.Delay(io.PollInterval, ct);
@@ -475,6 +483,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     private async Task<bool> ObserveLocalFinalizationAsync()
     {
         if (!batch.LocalCompletionReady || io.FinalizeLocal is null) return true;
+        if (batch.PriorityRecoveryEnabled && !batch.CoordinatedSucceeded) return false;
         var epoch = batch.LocalSuccessEpoch ?? throw new InvalidOperationException("本端成功缺少原 BGI 身份");
         var finalize = batch.BeginLocalFinalization(async () =>
         {
@@ -493,15 +502,18 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         if (team.Index != _index || team.Attempt != _attempt)
         {
-            if (batch.LocalCompletionReady)
+            if (batch.LocalCompletionReady && !batch.PriorityRecoveryEnabled)
                 throw new InvalidOperationException("本端最后一项已完成并进入收尾，不重放旧批次");
             var nextItem = team.Index == _index + 1 && team.Attempt == 0
                 && (_result == "succeeded" || ContinueByState && _result == "local_tasks_failed");
-            var recovery = team.Index == _index && team.Attempt == _attempt + 1 && _result is "failed" or "stopped" or "succeeded";
+            var recovery = team.Index == _index && team.Attempt == _attempt + 1
+                && (_result is "failed" or "stopped" or "succeeded"
+                    || batch.PriorityRecoveryEnabled && _result is "local_failed" or "local_tasks_failed");
             if (_item?.State != BatchItemState.TerminalConfirmed || (!nextItem && !recovery))
                 throw new InvalidOperationException("旧项未确认退出或恢复推进不合法");
-            if (team.Index == _index && _completedNative > 0)
+            if (!batch.PriorityRecoveryEnabled && team.Index == _index && _completedNative > 0)
                 throw new InvalidOperationException("本项已有联机锄地完成证据，不整组重跑");
+            if (recovery && batch.PriorityRecoveryEnabled) batch.RetryUnfinishedJointItem();
             _index = team.Index; _attempt = team.Attempt;
             _item = null; _result = ""; _reason = ""; _cancelSent = false; _completedNative = 0;
             batch.SetControlItemSubmitted(false);
@@ -515,7 +527,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             { RequestKey = RequestKey(batch.BatchId, batch.SelfUid, _index, _attempt) };
         if (_item.State == BatchItemState.TerminalConfirmed && _result.Length > 0)
             return; // Already observed terminal evidence survives a later disconnect or BGI restart.
-        io.Status(team.Phase, $"第 {_index + 1}/{batch.Bindings.Count} 项：{binding.Name}（恢复 {_attempt}/1）");
+        io.Status(team.Phase, $"第 {_index + 1}/{batch.Bindings.Count} 项：{binding.Name}（恢复 {_attempt} 次）");
         using var rpc = CancellationTokenSource.CreateLinkedTokenSource(ct);
         rpc.CancelAfter(TimeSpan.FromSeconds(10));
         var jobs = await ReadJobsForObservationAsync(rpc.Token);
@@ -559,7 +571,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         if (!ContinueByState && _item.State == BatchItemState.Submitted && _item.JobId == null
             && DateTime.UtcNow - _submittedAt > io.SubmissionReconcileTimeout)
             throw new TimeoutException("启动回执未知且按原请求键未找到作业，禁止重发");
-        if (team.Phase == "stopping" && _result.Length == 0 && (!ContinueByState || batch.ExplicitStopRequested))
+        if (team.Phase == "stopping" && _result.Length == 0
+            && (!ContinueByState || batch.PriorityRecoveryEnabled || batch.ExplicitStopRequested))
         {
             if (_item.State == BatchItemState.PendingSubmit)
             { _item.State = BatchItemState.TerminalConfirmed; _result = "stopped"; }

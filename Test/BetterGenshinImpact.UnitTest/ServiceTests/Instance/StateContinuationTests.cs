@@ -33,6 +33,95 @@ public class StateContinuationTests
         };
 
     [Fact]
+    public async Task PriorityTakeover_FullOrdinaryQueue_AllowsSuccessivePriorityItems()
+    {
+        PreemptionGate.Disarm();
+        var ticket = Guid.NewGuid().ToString("N");
+        PreemptionGate.Arm(ticket);
+        using var coordinator = NewCoordinator();
+        var ordinaryStarts = 0;
+        try
+        {
+            for (var i = 0; i < BgiTaskCoordinator.QueueCapacity; i++)
+                Assert.Equal(BgiTaskCoordinator.SubmitStatus.Queued,
+                    coordinator.Submit(Submission("waiting/" + i, (_, _) =>
+                    { Interlocked.Increment(ref ordinaryStarts); return Task.FromResult(false); })).Status);
+            var first = Submission("priority/1", (_, _) => Task.FromResult(false)) with
+                { CoordinatedHoeing = true, TakeoverTicket = ticket };
+            BgiTaskCoordinator.SubmitResult accepted = default;
+            await Until(() => (accepted = coordinator.Submit(first)).Status is
+                BgiTaskCoordinator.SubmitStatus.Queued or BgiTaskCoordinator.SubmitStatus.Adopted);
+            await Until(() => coordinator.QueryItemStatus(accepted.TaskHandle).ExecutionExitConfirmed);
+            var second = coordinator.Submit(Submission("priority/2", (_, _) => Task.FromResult(false)) with
+                { CoordinatedHoeing = true, TakeoverTicket = ticket });
+            Assert.Equal(BgiTaskCoordinator.SubmitStatus.Queued, second.Status);
+            await Until(() => coordinator.QueryItemStatus(second.TaskHandle).ExecutionExitConfirmed);
+            Assert.Equal(0, ordinaryStarts);
+            PreemptionGate.Release(ticket);
+            await Until(() => Volatile.Read(ref ordinaryStarts) == BgiTaskCoordinator.QueueCapacity);
+        }
+        finally { PreemptionGate.Release(ticket); }
+    }
+
+    [Fact]
+    public async Task PriorityTakeover_PassesQueuedOrdinaryWork_WithoutRunningTwoExecutors()
+    {
+        PreemptionGate.Disarm();
+        var ticket = Guid.NewGuid().ToString("N");
+        PreemptionGate.Arm(ticket);
+        Assert.True(PreemptionGate.RetainUntilReleased(ticket));
+        using var coordinator = NewCoordinator();
+        var order = new List<string>();
+        var active = 0;
+        var maximum = 0;
+        Task<bool> Execute(string name)
+        {
+            var count = Interlocked.Increment(ref active);
+            maximum = Math.Max(maximum, count);
+            lock (order) order.Add(name);
+            Interlocked.Decrement(ref active);
+            return Task.FromResult(false);
+        }
+        try
+        {
+            var ordinary = coordinator.Submit(Submission("ordinary-paused", (_, _) => Execute("ordinary")));
+            var priority = coordinator.Submit(Submission("priority-hoeing", (_, _) => Execute("hoeing")) with
+                { CoordinatedHoeing = true, TakeoverTicket = ticket });
+            await Until(() => coordinator.QueryItemStatus(priority.TaskHandle).ExecutionExitConfirmed);
+            lock (order) Assert.Equal(new[] { "hoeing" }, order);
+            Assert.Equal("pending", coordinator.QueryItemStatus(ordinary.TaskHandle).Status);
+            PreemptionGate.Release(ticket);
+            await Until(() => coordinator.QueryItemStatus(ordinary.TaskHandle).ExecutionExitConfirmed);
+            lock (order) Assert.Equal(new[] { "hoeing", "ordinary" }, order);
+            Assert.Equal(1, maximum);
+        }
+        finally { PreemptionGate.Release(ticket); }
+    }
+
+    [Fact]
+    public void PrioritySuspend_RecoverySaveFailureStillCancelsOnlyCapturedRoot()
+    {
+        PreemptionGate.Disarm();
+        using var root = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, "priority-original", JobSource.Ui));
+        var snapshot = ExecutionScope.GetActiveSnapshot();
+        Assert.NotNull(snapshot);
+        var ticket = Guid.NewGuid().ToString("N");
+        try
+        {
+            Assert.True(ExecutionScope.TrySuspendTarget(ticket, snapshot!.ExecutionInstanceId,
+                snapshot.StateRevision, ExecutionScope.StopVersionNow, TimeSpan.Zero,
+                (_, _) => throw new System.IO.IOException("simulated recovery write failure"),
+                out var target, out var refusal, continueOnRecoveryFailure: true));
+            Assert.Null(refusal);
+            Assert.NotNull(target);
+            Assert.Equal("simulated recovery write failure", target!.RecoveryWarning);
+            Assert.True(root.Token.IsCancellationRequested);
+            Assert.False(target.ObserveQuiescence()); // Cancellation is not proof that the root exited.
+        }
+        finally { PreemptionGate.Release(ticket); }
+    }
+
+    [Fact]
     public void MissingRetainedRequest_EchoesOriginalQueryKey_WithoutInventingAcceptance()
     {
         using var coordinator = NewCoordinator();

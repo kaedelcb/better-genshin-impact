@@ -1745,7 +1745,8 @@ internal sealed class InstanceRequestHandler
                             context.TakeoverTicket = ticket;
                             context.StopVersion = capturedStopVersion;
                         }
-                    }, out var target, out var refusal))
+                    }, out var target, out var refusal,
+                    continueOnRecoveryFailure: request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true))
                     return InstanceIpcEnvelope.Failure(request, refusal!, "接管目标已经变化或身份不可用；未取消当前任务，也不构成退出证明");
                 if (request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true
                     && !PreemptionGate.RetainUntilReleased(ticket))
@@ -1755,8 +1756,10 @@ internal sealed class InstanceRequestHandler
                     return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管期间票据已被停止或撤销，未授权启动新任务");
                 var data = Newtonsoft.Json.Linq.JObject.FromObject(new
                 {
-                    status = context == null ? "no_task" : "suspended",
-                    liveTask = context != null, quiesceConfirmed = confirmed, takeoverTicket = ticket,
+                    status = context == null && target!.RecoverySnapshot is null ? "no_task" : "suspended",
+                    liveTask = expectedInstanceId != null, quiesceConfirmed = confirmed, takeoverTicket = ticket,
+                    recoveryWarning = target!.RecoveryWarning,
+                    recoverySnapshot = target.RecoverySnapshot,
                     expectedExecutionInstanceId = expectedInstanceId?.ToString("N"), expectedStateRevision = expectedRevision,
                     replayed = false,
                     taskType = context?.TaskType, groupName = context?.GroupName, taskIndex = context?.TaskIndex,
@@ -1997,6 +2000,7 @@ internal sealed class InstanceRequestHandler
                     RegistryKind = context.TaskType == "solo" ? JobKind.Solo : null,
                     RegistryName = context.TaskType == "solo" ? context.ProjectName : null,
                     RegistrySource = JobSource.Resume, ExpectedStopVersion = originalStopVersion,
+                    TakeoverTicket = ticket,
                     RetainUntilAcknowledged = true,
                     OnCancelledBeforeStart = handle =>
                     {

@@ -78,6 +78,36 @@ public sealed class OnlineHoeingAtomicSuspendTests : IDisposable
     }
 
     [Fact]
+    public async Task PriorityPreparation_UnreadableRecordsStillAllowsActualIdleTakeover()
+    {
+        var fixture = await Prepare();
+        fixture.Host.Runs.FileOperationFaultForTest = operation => operation == "enumerate" ? new IOException("simulated record read failure") : null;
+        try
+        {
+            var result = fixture.Host.PreparePriorityOnlineHoeing(8,
+                new CommandExecutor.ExecutionBoundarySnapshot(true, false, 42, 99, null));
+            Assert.True(result.Ready);
+            Assert.Contains("simulated record read failure", result.Reason);
+        }
+        finally { fixture.Host.Runs.FileOperationFaultForTest = null; }
+    }
+
+    [Fact]
+    public async Task PriorityPreparation_StaleHandoffDoesNotVetoRealIdleBoundary()
+    {
+        var fixture = await Prepare();
+        var before = fixture.Host.Runs.Load(fixture.Run.RunId)!;
+        var actualIdle = new CommandExecutor.ExecutionBoundarySnapshot(true, false, 42, 99, null);
+        Assert.False(fixture.Host.PrepareOnlineHoeing(8, actualIdle, stateContinuation: true).Ready);
+        var priority = fixture.Host.PreparePriorityOnlineHoeing(8, actualIdle);
+        Assert.True(priority.Ready);
+        Assert.NotNull(priority.Reason); // Preserve the original recovery issue; never claim it was repaired.
+        var after = fixture.Host.Runs.Load(fixture.Run.RunId)!;
+        Assert.Equal(before.OnlineHoeingHandoff!.Generation, after.OnlineHoeingHandoff!.Generation);
+        Assert.Equal(before.CurrentSubmission!.Key, after.CurrentSubmission!.Key);
+    }
+
+    [Fact]
     public async Task NeverAcceptedPreparation_CanRefreshWithoutAdvancingOrStoppingOriginalPlan()
     {
         var fixture = await Prepare();
