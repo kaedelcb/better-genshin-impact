@@ -13,16 +13,18 @@ public sealed partial class FourMemberFinishEntryTests
 {
     // Called in the existing STA/Application round. The actual MainVM, SDK, gateway and
     // completion worker run unchanged; only the private BGI protocol endpoint is controlled.
-    private static async Task RunStateContinuationCompletionEntryAsync(bool configurationRemoved = false)
+    private static async Task RunStateContinuationCompletionEntryAsync(bool configurationRemoved = false, bool priorityRecovery = false, bool stopDuringRecovery = false)
     {
         string[] uids = ["100000031", "100000032", "100000033", "100000034"];
         const string bound = "隔离增强锄地绑定";
         const string completion = "隔离绑定收尾任务";
+        const string nextBound = "隔离第二项联机任务";
+        string[] bindings = priorityRecovery ? [bound, nextBound] : [bound];
         var previousIpc = IpcClient.PipeNameOverrideForTest;
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
         await using var server = await IsolatedCoordinator.StartAsync("retained-bound-completion");
         await using var pipe = new BgiInstancePipeDouble();
-        var bgi = new FinishBgiPeer(bound, completion, stateContinuation: true)
+        var bgi = new FinishBgiPeer(bound, completion, priorityRecovery ? nextBound : null, stateContinuation: true)
         {
             CompletionSlotBusy = true, DropNextCompletionReply = true,
         };
@@ -38,9 +40,12 @@ public sealed partial class FourMemberFinishEntryTests
         SignalRClient? local = null;
         MainViewModel? vm = null;
         using var peersStop = new CancellationTokenSource();
-        var peers = new[] { new ControlledPeer(second, uids[1], false),
-            new ControlledPeer(third, uids[2], false), new ControlledPeer(tail, uids[3], true) };
+        var peers = new[] { new ControlledPeer(second, uids[1], false, priorityRecovery),
+            new ControlledPeer(third, uids[2], false, priorityRecovery), new ControlledPeer(tail, uids[3], true, priorityRecovery) };
         Task[] peerTasks = [];
+        FileStream? blockedProgress = null;
+        peers[2].CompleteTail = priorityRecovery;
+        peers[2].HoldRecoveryExit = stopDuringRecovery;
         try
         {
             Assert.Equal(BgiExternalLinkState.Ready, await external.StartAsync());
@@ -51,7 +56,7 @@ public sealed partial class FourMemberFinishEntryTests
                 ServerUrl = server.Url, PlayerUid = uids[0], PlayerName = "小鲨鱼完成动作隔离入口",
                 TeamUids = uids.ToList(), ControlRoomPassword = "isolated-completion-only",
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
-                OnlineHoeingGroupNames = [bound], OnlineHoeingGroupTypes = ["group"],
+                OnlineHoeingGroupNames = bindings.ToList(), OnlineHoeingGroupTypes = bindings.Select(_ => "group").ToList(),
                 OnlineHoeingCompletionPolicy = "runSpecified", OnlineHoeingSpecifiedTaskType = "group",
                 OnlineHoeingSpecifiedTaskName = completion, ExpectedHoeingPlayers = 4,
                 DisclaimerAccepted = true, BypassSystemProxy = true,
@@ -79,8 +84,8 @@ public sealed partial class FourMemberFinishEntryTests
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
                     PlayerUid = uids[i], PlayerName = "增强隔离成员" + i, BgiStatus = "running",
-                    ConfigGroups = [bound, completion], OnlineHoeingGroupNames = [bound],
-                    OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 4,
+                    ConfigGroups = bindings.Append(completion).ToList(), OnlineHoeingGroupNames = bindings.ToList(),
+                    OnlineHoeingGroupTypes = bindings.Select(_ => "group").ToList(), ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = i == 0 ? new("runSpecified", "group", completion, 0)
                         : new("stop", "group", "", 0),
                 });
@@ -95,6 +100,7 @@ public sealed partial class FourMemberFinishEntryTests
                 && peers.All(p => p.Last?.Phase == "running"), diagnostics);
             var batch = Active(vm)!;
             Assert.True(batch.StateContinuationEnabled);
+            Assert.Equal(priorityRecovery, batch.PriorityRecoveryEnabled);
             var preparedHost = (TaskCenterHost)typeof(MainViewModel)
                 .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
             var preparedGate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost)
@@ -103,7 +109,57 @@ public sealed partial class FourMemberFinishEntryTests
             Assert.Equal(TaskConflictPolicy.RunSpecified, batch.Policy!.Policy);
             Assert.Equal(completion, batch.Policy.SpecifiedTaskName);
 
+            if (priorityRecovery)
+            {
+                await WaitAsync(() => peers[2].Last?.Members.Single(m => m.Uid == uids[3]).Result == "succeeded", diagnostics);
+                peers[2].CompleteTail = false;
+                var progressDirectory = Path.Combine(AssistantDataDirectory.Root, "coordinated-recovery", AssistantInstanceScope.CurrentSuffix);
+                var progressFile = Directory.EnumerateFiles(progressDirectory, "*.json").Single(path =>
+                    System.Text.Json.JsonSerializer.Deserialize<CoordinatedRecoverySnapshot>(File.ReadAllBytes(path))?.Start.BatchId == batch.BatchId);
+                var preservedBytes = File.ReadAllBytes(progressFile);
+                blockedProgress = new FileStream(progressFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+                bgi.CompleteCooperative();
+                await WaitAsync(() => bgi.CooperativeStarts == 2 && peers[2].Last?.Index == 1, diagnostics);
+                var beforeStop = batch.CaptureRecovery();
+                bgi.FailCooperativeNative();
+                if (stopDuringRecovery)
+                {
+                    await WaitAsync(() => peers[2].Last?.Phase == "stopping", diagnostics);
+                    var lateState = (await local.GetCurrentCoordinatedBatchAsync())!;
+                    var reset = await local.ResetCoordinatedBatchAsync("isolated-stop-" + Guid.NewGuid().ToString("N"),
+                        uids, batch.Generation, batch.BatchId);
+                    Assert.True(reset.Found);
+                    await WaitAsync(() => batch.IsCancellationRequested && batch.RunTask?.IsCompleted == true, diagnostics);
+                    peers[2].HoldRecoveryExit = false;
+                    Replay(local, GatewayProtocol.Events.ControlBatchState, lateState);
+                    var staleRecovery = OnlineHoeingBatch.Restore(beforeStop);
+                    staleRecovery.ObserveRecoveryStopSignal();
+                    Assert.True(staleRecovery.IsCancellationRequested);
+                    staleRecovery.RecoveryStopSignal?.Dispose();
+                    await Task.Delay(1200);
+                    Assert.Equal(2, bgi.CooperativeStarts);
+                    Assert.Equal(0, bgi.ManualStarts);
+                    Assert.Equal(preservedBytes, File.ReadAllBytes(progressFile));
+                    return;
+                }
+                await WaitAsync(() => bgi.CooperativeStarts == 3 && peers[2].Last is { Index: 1, Attempt: 1 }, diagnostics);
+                Assert.Equal(preservedBytes, File.ReadAllBytes(progressFile));
+                blockedProgress.Dispose(); blockedProgress = null;
+                var native = pipe.Received.Where(r => r.Operation == "ext.task.start" && r.Data is { } data
+                    && data.TryGetProperty("coordinatedHoeing", out var flag) && flag.GetString() == "v1").Select(r => r.Data!.Value).ToArray();
+                Assert.Single(native.Where(d => d.GetProperty("groupName").GetString() == bound));
+                var retried = native.Where(d => d.GetProperty("groupName").GetString() == nextBound).ToArray();
+                Assert.Equal(2, retried.Length);
+                Assert.NotEqual(retried[0].GetProperty("idempotencyKey").GetString(), retried[1].GetProperty("idempotencyKey").GetString());
+                Assert.NotEqual(retried[0].GetProperty("hoeingBatchId").GetString(), retried[1].GetProperty("hoeingBatchId").GetString());
+            }
             bgi.CompleteCooperative();
+            if (priorityRecovery)
+            {
+                await WaitAsync(() => batch.LocalCompletionReady, diagnostics);
+                Assert.Equal(0, bgi.ManualStarts);
+                peers[2].CompleteTail = true;
+            }
             await WaitAsync(() => batch.LocalSucceeded && bgi.CompletionBusyStatusReads >= 2, diagnostics);
             Assert.Equal(0, bgi.ManualStarts);
             Assert.False(batch.IsCancellationRequested);
@@ -140,30 +196,43 @@ public sealed partial class FourMemberFinishEntryTests
             Assert.Equal(completion, submitted[0].Data!.Value.GetProperty("groupName").GetString());
             Assert.True(submitted[0].Data!.Value.GetProperty("retainUntilAcknowledged").GetBoolean());
 
-            // A real gateway failure of the unfinished peer and a delayed prior batch notification
-            // must preserve this endpoint's actual running completion job.
-            peers[2].ReportUnknown = true;
-            await WaitAsync(() => peers[2].Last?.Phase == "aborted", diagnostics);
-            var terminalTeam = (await local.GetCurrentCoordinatedBatchAsync())!;
-            Replay(local, GatewayProtocol.Events.ControlBatchState, terminalTeam);
-            await Task.Delay(1300);
-            Assert.True(batch.LocalSucceeded);
-            Assert.False(batch.IsCancellationRequested);
-            Assert.True(bgi.ManualRunning);
-            Assert.Equal(0, bgi.CancelCount);
-            Assert.Equal(1, bgi.ManualStarts);
-            Assert.Equal(1, bgi.CooperativeStarts);
+            if (priorityRecovery)
+            {
+                var failed = bgi.ManualJobId;
+                bgi.FailManual();
+                await WaitAsync(() => bgi.ManualStarts == 2 && batch.PolicyExecution?.JobId == bgi.ManualJobId, diagnostics);
+                Assert.NotEqual(failed, bgi.ManualJobId);
+                Assert.Single(batch.FailedPolicyAttempts);
+                Assert.Equal(3, bgi.CooperativeStarts);
+            }
+            else
+            {
+                // A real gateway failure of the unfinished peer and a delayed prior batch notification
+                // must preserve this endpoint's actual running completion job.
+                peers[2].ReportUnknown = true;
+                await WaitAsync(() => peers[2].Last?.Phase == "aborted", diagnostics);
+                var terminalTeam = (await local.GetCurrentCoordinatedBatchAsync())!;
+                Replay(local, GatewayProtocol.Events.ControlBatchState, terminalTeam);
+                await Task.Delay(1300);
+                Assert.True(batch.LocalSucceeded);
+                Assert.False(batch.IsCancellationRequested);
+                Assert.True(bgi.ManualRunning);
+                Assert.Equal(0, bgi.CancelCount);
+                Assert.Equal(1, bgi.ManualStarts);
+                Assert.Equal(1, bgi.CooperativeStarts);
+            }
 
             bgi.CompleteManual();
             await WaitAsync(() => batch.PolicyTerminalResult?.Status == "completed"
                 && batch.PolicyResultAcknowledged && batch.LocalExecutionReleased, diagnostics);
-            Assert.Equal(1, bgi.CompletionAcknowledgements);
+            Assert.Equal(priorityRecovery ? 2 : 1, bgi.CompletionAcknowledgements);
             Assert.Equal(0, bgi.CancelCount);
             Assert.Equal(0, pipe.CountOf("ext.task.stop"));
-            Assert.Equal(1, bgi.ManualStarts);
+            Assert.Equal(priorityRecovery ? 2 : 1, bgi.ManualStarts);
         }
         finally
         {
+            blockedProgress?.Dispose();
             peersStop.Cancel();
             try { await Task.WhenAll(peerTasks).WaitAsync(TimeSpan.FromSeconds(5)); } catch { }
             if (vm is not null)
@@ -180,6 +249,7 @@ public sealed partial class FourMemberFinishEntryTests
             IpcClient.PipeNameOverrideForTest = previousIpc;
             BgiExternalClient.PipeNameOverrideForTest = previousExt;
             if (local is not null) await local.DisposeAsync();
+            bgi.Dispose();
         }
     }
 }

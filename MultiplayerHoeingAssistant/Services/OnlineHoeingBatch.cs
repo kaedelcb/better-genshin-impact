@@ -128,7 +128,7 @@ public sealed class OnlineHoeingBatch
             Settled = Volatile.Read(ref _settled) != 0, LocalSucceeded = LocalCompletionReady,
             LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
             LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
-            NativeResumeRetryPending = NativeResumeRetryPending,
+            NativeResumeRetryPending = NativeResumeRetryPending, ManagedRunId = ManagedRunId,
             CompletionRecoveryReservationAcquired = CompletionRecoveryReservationAcquired,
             PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
             PolicyRequestIdentity = _policyRequestIdentity,
@@ -145,7 +145,7 @@ public sealed class OnlineHoeingBatch
         var batch = new OnlineHoeingBatch(saved.Start, saved.SelfUid, saved.Policy)
         {
             _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
-            NativeResumeRetryPending = saved.NativeResumeRetryPending,
+            NativeResumeRetryPending = saved.NativeResumeRetryPending, ManagedRunId = saved.ManagedRunId,
             CompletionRecoveryReservationAcquired = saved.CompletionRecoveryReservationAcquired,
             Token = saved.Token, RestoredFromRecovery = true, RecoveryProgress = saved.Progress,
             ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,
@@ -215,6 +215,7 @@ public sealed class OnlineHoeingBatch
         + (_policyAttempt == 0 ? "" : "/attempt/" + _policyAttempt);
 
     internal bool NativeResumeRetryPending { get; set; }
+    internal string? ManagedRunId { get; set; }
     internal bool RetryFailedCompletion(bool allowNativeResume = false)
     {
         lock (_policyGate)
@@ -245,6 +246,26 @@ public sealed class OnlineHoeingBatch
             return true;
         }
     }
+    internal bool AdoptManagedCompletionRetry(string runId, string requestKey, HoeingPolicyExecution execution)
+    {
+        lock (_policyGate)
+        {
+            if (ManagedRunId != runId || Policy?.Policy != TaskConflictPolicy.Resume || !PriorityRecoveryEnabled
+                || IsCancellationRequested || ExplicitStopRequested || string.IsNullOrWhiteSpace(requestKey)
+                || _policyTerminalResult is not { Status: "failed", ExecutionExitConfirmed: true } previous
+                || _policyExecution is not { } old || old.JobId == execution.JobId) return false;
+            _failedPolicyAttempts.Add(previous);
+            _policyAttempt++;
+            _policyExecution = execution;
+            _policyRequestIdentity = requestKey;
+            _policyTerminalResult = null;
+            _policyStartAttempted = true; // The original Runner already accepted this attempt; never send it here.
+            _policyResultAcknowledged = false;
+            PolicySendUnknown = false;
+            return true;
+        }
+    }
+
     private string? _policyRequestIdentity;
     internal string? PolicyRequestIdentity
     {

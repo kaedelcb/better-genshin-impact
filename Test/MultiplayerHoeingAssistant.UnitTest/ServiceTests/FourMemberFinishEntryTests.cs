@@ -47,6 +47,8 @@ public sealed partial class FourMemberFinishEntryTests
                         await RunLocalTaskFailureEntryAsync();
                         await RunStateContinuationCompletionEntryAsync();
                         await RunStateContinuationCompletionEntryAsync(configurationRemoved: true);
+                        await RunStateContinuationCompletionEntryAsync(priorityRecovery: true);
+                        await RunStateContinuationCompletionEntryAsync(priorityRecovery: true, stopDuringRecovery: true);
                         await RunChangedRoomCancellationEntryAsync(replyLost: false);
                         await RunChangedRoomCancellationEntryAsync(replyLost: true);
                         finished.TrySetResult();
@@ -539,8 +541,18 @@ public sealed partial class FourMemberFinishEntryTests
         }
     }
 
-    private sealed class ControlledPeer(SignalRClient client, string uid, bool hasLongTail)
+    private sealed class ControlledPeer
     {
+        private readonly SignalRClient client;
+        private readonly string uid;
+        private readonly bool hasLongTail;
+        public bool HoldRecoveryExit;
+        public ControlledPeer(SignalRClient client, string uid, bool hasLongTail, bool priorityRecovery = false)
+        {
+            this.client = client; this.uid = uid; this.hasLongTail = hasLongTail;
+            if (!priorityRecovery) client.AdvertisedCapabilitiesForTest = MhaGatewayClient.DefaultCapabilities
+                .Where(c => c != GatewayProtocol.HoeingPriorityRecoveryCapability).ToArray();
+        }
         private readonly string _token = Guid.NewGuid().ToString("N");
         public volatile bool ReportUnknown;
         public volatile bool CompleteTail;
@@ -566,6 +578,9 @@ public sealed partial class FourMemberFinishEntryTests
                             if (current.Phase == "takeover") stage = "takeoverConfirmed";
                             if (current.Phase == "running") result = ReportUnknown ? "local_failed"
                                 : hasLongTail && !CompleteTail ? "" : "succeeded";
+                            if (current.Phase == "stopping")
+                                result = current.Members.Single(m => m.Uid == uid).Result is { Length: > 0 } saved
+                                    ? saved : HoldRecoveryExit ? "" : "stopped";
                             if (current.Phase is "completed" or "aborted") stage = "cleaned";
                         }
                         Last = await client.UpdateCoordinatedBatchAsync(current.Generation, _token, current.BatchId,
@@ -586,7 +601,7 @@ public sealed partial class FourMemberFinishEntryTests
                 snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
     }
 
-    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = true)
+    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = true) : IDisposable
     {
         private sealed record Job(string Id, string Key, string Name, bool Cooperative)
         {
@@ -600,13 +615,15 @@ public sealed partial class FourMemberFinishEntryTests
         public volatile bool CompletionSlotBusy, DropNextCompletionReply, CompletionConfigMissing;
         public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements;
         private readonly int _pid = Environment.ProcessId;
+        private readonly List<Mistletoe.Shared.CoordinatedStopSignal> _stopSignals = [];
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
+        public void Dispose() { lock (_gate) { foreach (var signal in _stopSignals) signal.Dispose(); _stopSignals.Clear(); } }
         public Action? BeforeFailedJobIdentityReply;
         private object Epoch => new { processId = _pid, startTicksUtc = _ticks };
         public int CooperativeStarts { get { lock (_gate) return _jobs.Count(j => j.Cooperative); } }
         public int ManualStarts { get { lock (_gate) return _jobs.Count(j => !j.Cooperative); } }
         public string? CooperativeJobId { get { lock (_gate) return _jobs.FirstOrDefault(j => j.Cooperative)?.Id; } }
-        public string? ManualJobId { get { lock (_gate) return _jobs.FirstOrDefault(j => !j.Cooperative)?.Id; } }
+        public string? ManualJobId { get { lock (_gate) return _jobs.LastOrDefault(j => !j.Cooperative)?.Id; } }
         public bool ManualRunning { get { lock (_gate) return _jobs.Any(j => !j.Cooperative && !j.Completed && !j.Cancelled && !j.Failed); } }
         public bool CooperativeTailRunning { get { lock (_gate) return _jobs.Any(j => j.Cooperative && j.BodyCompleted && !j.Completed && !j.Cancelled && !j.Failed); } }
         public int TailSteps { get { lock (_gate) return _jobs.FirstOrDefault(j => j.Cooperative)?.TailSteps ?? 0; } }
@@ -643,7 +660,8 @@ public sealed partial class FourMemberFinishEntryTests
                 job.Revision++;
             }
         }
-        public void CompleteManual() { lock (_gate) _jobs.Single(j => !j.Cooperative).Completed = true; }
+        public void CompleteManual() { lock (_gate) _jobs.Last(j => !j.Cooperative).Completed = true; }
+        public void FailManual() { lock (_gate) _jobs.Last(j => !j.Cooperative).Failed = true; }
         private static string? Value(JsonElement? data, string name) => data is { } d && d.TryGetProperty(name, out var v)
             && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
@@ -671,7 +689,8 @@ public sealed partial class FourMemberFinishEntryTests
                         });
                     case "task.status":
                     case "ext.task.status":
-                        var completionBusy = stateContinuation && CompletionSlotBusy && _jobs.Any(j => j.Cooperative && j.Completed);
+                        var completionBusy = stateContinuation && CompletionSlotBusy && _jobs.LastOrDefault(j => j.Cooperative) is { Completed: true } lastNative
+                            && lastNative.Name == (nextBoundGroup ?? boundGroup);
                         if (completionBusy) CompletionBusyStatusReads++;
                         var queriedRoot = Value(data, "executionInstanceId");
                         var exited = _jobs.Any(j => j.Id == queriedRoot && (j.Completed || j.Cancelled || j.Failed));
@@ -722,6 +741,12 @@ public sealed partial class FourMemberFinishEntryTests
                     case "task.suspend":
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
                             return (false, "not_current", "替身只接受空闲接管", null);
+                        if (Value(data, "recoveryStopSignal") is { } signalName)
+                        {
+                            var signal = Mistletoe.Shared.CoordinatedStopSignal.Open(signalName);
+                            if (signal is null || signal.IsStopped) { signal?.Dispose(); return (false, "manual_stop_fence", "stop signal unavailable", null); }
+                            _stopSignals.Add(signal);
+                        }
                         _ticket = ticket;
                         return (true, null, null, new { takeoverTicket = ticket, quiesceConfirmed = true,
                             liveTask = false, expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });
@@ -747,7 +772,7 @@ public sealed partial class FourMemberFinishEntryTests
                         return (true, null, null, new { status = "queued", taskHandle = job.Id, queuePosition = 0 });
                     case "ext.task.queueStatus":
                         var queryKey = stateContinuation ? Value(data, "idempotencyKey") : null;
-                        var queried = _jobs.SingleOrDefault(j => queryKey is not null ? j.Key == queryKey : j.Id == Value(data, "taskHandle"));
+                        var queried = _jobs.SingleOrDefault(j => (queryKey is not null ? j.Key == queryKey : j.Id == Value(data, "taskHandle")));
                         if (queried is null && stateContinuation)
                             return (true, null, null, new { status = "not_found", taskHandle = (string?)null,
                                 idempotencyKey = queryKey, bgiEpoch = Epoch, executionExitConfirmed = false });

@@ -42,6 +42,7 @@ internal sealed record CoordinatedRecoverySnapshot
     public bool CoordinatedSucceeded { get; init; }
     public bool LocalReleased { get; init; }
     public bool NativeResumeRetryPending { get; init; }
+    public string? ManagedRunId { get; init; }
     public bool CompletionRecoveryReservationAcquired { get; init; }
     public int PolicyAttempt { get; init; }
     public IReadOnlyList<BgiTaskQueueStatus> FailedPolicyAttempts { get; init; } = [];
@@ -95,6 +96,7 @@ internal sealed class CoordinatedRecoveryStore(string directory, string identity
             || saved.TakenOver && (saved.Epoch is not { ProcessId: > 0, StartTicksUtc: > 0 } || saved.StopVersion is null or < 0)
             || saved.CompletionRecoveryReservationAcquired
                 && (saved.ProcessRecoveryPreviousEpoch is null || string.IsNullOrWhiteSpace(saved.Ticket))
+            || saved.ManagedRunId is not null && string.IsNullOrWhiteSpace(saved.ManagedRunId)
             || saved.Version != 1 || saved.ControlIdentity != identity
             || saved.OwnerSession != Process.GetCurrentProcess().SessionId
             || saved.Start.BatchId != current.BatchId || saved.Start.Generation != current.Generation

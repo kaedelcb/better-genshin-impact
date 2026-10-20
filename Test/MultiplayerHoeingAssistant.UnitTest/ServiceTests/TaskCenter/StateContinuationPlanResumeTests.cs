@@ -146,6 +146,7 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         internal int RetryFailures;
         internal Action<WorkflowRunRecord>? BeforeHandoff;
         internal TaskCompletionSource? HostTakeover;
+        internal TaskCompletionSource? RetryCompletion;
         private bool _preempted;
         private readonly Dictionary<string, string> _jobs = [];
         public bool SingleNativeSupported => false;
@@ -161,7 +162,10 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
         {
             if (_jobs[jobId] != "B" || _preempted)
+            {
+                if (_jobs[jobId] == "B" && RetryCompletion is not null) await RetryCompletion.Task.WaitAsync(ct);
                 return BoundaryTerminalResult.Observed(RetryFailures-- > 0 ? "failed" : "succeeded");
+            }
             _preempted = true;
             if (HostTakeover is not null)
             {
@@ -268,6 +272,115 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         Assert.Equal(0, port.Sends);
     }
 
+    [Theory]
+    [InlineData("resumeRequested", false)]
+    [InlineData("observing", false)]
+    [InlineData("terminal", false)]
+    [InlineData("resumeRequested", true)]
+    public async Task ReconstructedHostKeepsOriginalResumeIdentityAndContinuesCOnce(string savedPhase, bool stopped)
+    {
+        var originalHost = Host(out var workflows, out var document);
+        var run = originalHost.Runs.CreateRun(document.WorkflowId!, workflows.LoadSnapshot(document.WorkflowId!).Revision);
+        var oldJob = Guid.NewGuid().ToString("D");
+        var original = new WorkflowSubmission
+        {
+            Key = RunStore.DeriveSubmissionKey(run.RunId, "B", 0, 0, 1), NodeId = "B", Attempt = 1,
+            JobId = oldJob, Intent = SubmitIntentState.Accepted, SendAttempted = true, Epoch = "42:99",
+            WireRunId = run.WireRunId, Fingerprint = "original-frozen", ExpiresAtUtc = "2030-01-01T00:00:00Z",
+            ObservedTerminal = "cancelled", ExecutionExitConfirmed = true,
+            ExecutionExitDisposition = "execution_exited", EffectState = "cancelled",
+        };
+        run.State = WorkflowRunState.OnlineHoeingParking;
+        run.Cursor = new() { NodeId = "B", Attempt = 1 };
+        run.CurrentSubmission = original;
+        run.OnlineHoeingHandoff = new()
+        {
+            StateContinuation = true, PriorityRecovery = true, Generation = 7, Ticket = "original-ticket",
+            Epoch = "42:99", NodeId = "B", Attempt = 1, OriginalJobId = oldJob,
+            OriginalSubmissionKey = original.Key, Phase = "parked",
+        };
+        originalHost.Runs.Update(run);
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var request = await originalHost.PreparePlanResumeAsync(run.RunId, "original-ticket", budget.Token);
+        Assert.NotNull(request);
+        var resumeJob = Guid.NewGuid().ToString("D");
+        var port = new Port { Missing = 0, Job = Finished(run, (string)request!["idempotencyKey"]!, resumeJob,
+            savedPhase == "terminal" ? "succeeded" : "running") };
+        if (savedPhase != "resumeRequested")
+        {
+            Assert.True(originalHost.AcceptPlanResumeJob(run.RunId, "original-ticket", resumeJob));
+            using var previousObserver = new CancellationTokenSource();
+            var oldObservation = originalHost.AwaitOnlineHoeingContinuationAsync(new(port, originalHost.Runs), run, original,
+                BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted"), previousObserver.Token);
+            if (savedPhase == "terminal") await oldObservation.WaitAsync(budget.Token);
+            else
+            {
+                await Until(() => originalHost.Runs.Load(run.RunId)!.OnlineHoeingHandoff!.Phase == "observing");
+                previousObserver.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => oldObservation);
+            }
+        }
+        if (stopped) originalHost.Runs.UpdateMergingIf(run.RunId, current => { current.StopRequested = true; return true; }, out _);
+        await originalHost.ShutdownAsync();
+        var originalBatch = new OnlineHoeingBatch(new("restored-plan", 7, 0, 0, 1, "completed", "")
+        {
+            Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
+            ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+                { ["self"] = [new("original", "group")] }
+        }, "self", new() { Policy = TaskConflictPolicy.Resume })
+        {
+            ExecutionEpoch = new() { ProcessId = 42, StartTicksUtc = 99 }, StateContinuationStopVersion = 0,
+            StateContinuationEnabled = true, TakenOver = true, TakeoverTicket = "original-ticket", ManagedRunId = run.RunId,
+            PolicyStartAttempted = true, PlanResumeContinuation = request,
+        };
+        originalBatch.MarkLocalSuccess(originalBatch.ExecutionEpoch);
+        originalBatch.EnsureRecoveryStopSignal();
+        var batch = OnlineHoeingBatch.Restore(originalBatch.CaptureRecovery());
+        Body? body = null;
+        var builds = 0;
+        TaskCenterHost? reconstructed = null;
+        reconstructed = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"), Path.Combine(_root, "new-catalog.json"),
+            () => null, null, (_, w, r) =>
+            {
+                Interlocked.Increment(ref builds);
+                body = new Body(r);
+                var resumed = new BgiWorkflowExecutionBoundary(port, r);
+                return new WorkflowRunner(w, r, body, new Prerequisite(), new Terminal(),
+                    new WorkflowRunnerOptions { OnlineHoeingContinuation = (current, sub, terminal, token)
+                        => reconstructed!.AwaitOnlineHoeingContinuationAsync(resumed, current, sub, terminal, token) });
+            }, () => (true, null), onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
+        try
+        {
+            var restoredRun = await reconstructed.RestorePriorityPlanAsync(batch);
+            if (stopped)
+            {
+                Assert.Null(restoredRun); Assert.True(batch.IsCancellationRequested); Assert.Equal(0, builds);
+                return;
+            }
+            Assert.Equal(run.RunId, restoredRun);
+            Assert.Equal(run.RunId, reconstructed.OnlineHoeingManagedRun(7));
+            if (savedPhase != "terminal")
+            {
+                Assert.Equal(run.RunId, await reconstructed.RestorePriorityPlanAsync(batch));
+                Assert.Equal(1, builds);
+                Assert.True(reconstructed.AcceptPlanResumeJob(run.RunId, "original-ticket", resumeJob));
+                await Until(() => reconstructed.Runs.Load(run.RunId)!.OnlineHoeingHandoff?.Phase == "observing");
+                Assert.Empty(body!.Submitted);
+                port.Job = Finished(run, (string)request!["idempotencyKey"]!, resumeJob);
+            }
+            await Until(() => reconstructed.Runs.Load(run.RunId)?.State == WorkflowRunState.Succeeded);
+            Assert.Equal(new[] { "C" }, body!.Submitted);
+            Assert.Single(reconstructed.Runs.Load(run.RunId)!.OnlineHoeingHistory);
+            Assert.Single(reconstructed.Runs.Load(run.RunId)!.NodeOutcomes.Where(o => o.SubmissionKey == request!["idempotencyKey"] as string));
+            Assert.Equal(0, port.Sends); Assert.Equal(0, port.Cancels);
+        }
+        finally
+        {
+            await reconstructed.ShutdownAsync();
+            batch.RecoveryStopSignal?.Dispose(); originalBatch.RecoveryStopSignal?.Dispose();
+        }
+    }
+
     [Fact]
     public async Task LiveHostPriorityPreparationRetainsOriginalRunnerWhenRecordDirectoryFails()
     {
@@ -331,6 +444,69 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
             host.Runs.PublishFaultForTest = null;
             await host.ShutdownAsync();
         }
+    }
+
+    [Fact]
+    public async Task BoundCompletionFollowsOriginalRunnerRetryInsteadOfFinishingOnFirstResumeFailure()
+    {
+        var host = Host(out var workflows, out var document);
+        var port = new Port { Missing = 0 };
+        var resumed = new BgiWorkflowExecutionBoundary(port, host.Runs);
+        var body = new Body(host.Runs, true) { RetryCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var runner = new WorkflowRunner(workflows, host.Runs, body, new Prerequisite(), new Terminal(),
+            new WorkflowRunnerOptions { OnlineHoeingContinuation = (run, original, result, ct)
+                => host.AwaitOnlineHoeingContinuationAsync(resumed, run, original, result, ct) });
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var driving = runner.StartAsync(document.WorkflowId!, ct: budget.Token);
+        WorkflowRunRecord? parked = null;
+        await Until(() => (parked = host.Runs.List().FirstOrDefault(r => r.OnlineHoeingHandoff?.Phase == "parked")) != null);
+        var request = await host.PreparePlanResumeAsync(parked!.RunId, "original-ticket", budget.Token);
+        var oldJob = Guid.NewGuid().ToString("D");
+        port.Job = Finished(parked, (string)request!["idempotencyKey"]!, oldJob, "failed");
+        var batch = new OnlineHoeingBatch(new("managed-retry", 7, 0, 0, 1, "completed", "")
+        {
+            Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
+            ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+                { ["self"] = [new("original", "group")] }
+        }, "self", new() { Policy = TaskConflictPolicy.Resume })
+        { ExecutionEpoch = new() { ProcessId = 42, StartTicksUtc = 99 }, ManagedRunId = parked.RunId,
+            PlanResumeContinuation = request, StateContinuationEnabled = true, PolicyTicketReleased = true, PolicyStartAttempted = true };
+        batch.MarkLocalSuccess(batch.ExecutionEpoch);
+        batch.RecordPolicyExecution(new(oldJob, batch.ExecutionEpoch, true));
+        batch.PolicyTerminalResult = new() { TaskHandle = oldJob, Epoch = batch.ExecutionEpoch,
+            IdempotencyKey = (string)request["idempotencyKey"]!, Status = "failed", ExecutionExitConfirmed = true };
+        Assert.True(host.AcceptPlanResumeJob(parked.RunId, "original-ticket", oldJob));
+        var worker = ViewModels.MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => budget.Token.ThrowIfCancellationRequested(),
+            Prepare = _ => throw new InvalidOperationException("only the original Runner may submit retries"),
+            Start = _ => throw new InvalidOperationException("completion worker must not start another task"),
+            Reconcile = _ => Task.FromResult(host.ObserveManagedCompletionRetry(batch, parked.RunId)),
+            ExpectedRequestKey = () => batch.PolicyRequestIdentity ?? (string)request["idempotencyKey"]!,
+            Query = _ =>
+            {
+                var saved = host.Runs.Load(parked.RunId)!;
+                var sub = saved.SubmissionHistory.Concat(saved.CurrentSubmission is { } current ? new[] { current } : [])
+                    .Single(s => s.JobId == batch.PolicyExecution!.JobId);
+                return Task.FromResult<BgiTaskQueueStatus?>(new() { TaskHandle = sub.JobId,
+                    IdempotencyKey = sub.Key, Epoch = batch.ExecutionEpoch, ExecutionExitConfirmed = sub.ExecutionExitConfirmed,
+                    Status = sub.ObservedTerminal == "succeeded" ? "completed" : sub.ObservedTerminal ?? "running" });
+            },
+            Acknowledge = (_, _) => Task.FromResult(true), Delay = ct => Task.Delay(10, ct),
+        }, budget.Token);
+        try
+        {
+            await Until(() => body.Submitted.Count == 2 && batch.PolicyRequestIdentity is not null);
+            Assert.False(worker.IsCompleted);
+            Assert.NotEqual(oldJob, batch.PolicyExecution!.JobId);
+            Assert.Equal(oldJob, Assert.Single(batch.FailedPolicyAttempts).TaskHandle);
+            body.RetryCompletion.SetResult();
+            await worker.WaitAsync(budget.Token);
+            Assert.Equal(WorkflowRunState.Succeeded, (await driving.WaitAsync(budget.Token)).State);
+            Assert.Equal(new[] { "B", "B", "C" }, body.Submitted);
+            Assert.Equal("completed", batch.PolicyTerminalResult!.Status);
+        }
+        finally { body.RetryCompletion.TrySetResult(); budget.Cancel(); }
     }
 
     [Fact]

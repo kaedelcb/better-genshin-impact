@@ -18,6 +18,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public class SignalRClient : IAsyncDisposable
 {
     private MhaGatewayClient? _gateway;
+    internal string[]? AdvertisedCapabilitiesForTest { get; set; }
     private string _roomCode = string.Empty;
     private string _playerUid = string.Empty;
     private string _playerName = string.Empty;
@@ -189,7 +190,7 @@ public class SignalRClient : IAsyncDisposable
             OnLog?.Invoke("[连接] 配置的服务器地址带旧格式 /hub 尾巴，已自动归一化为基地址（新协议固定走 /gateway）");
         }
 
-        var gateway = new MhaGatewayClient();
+        var gateway = new MhaGatewayClient { AdvertisedCapabilitiesForTest = AdvertisedCapabilitiesForTest };
 
         gateway.EnvelopeReceived += DispatchEvt;
 

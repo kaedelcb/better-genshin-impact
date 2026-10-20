@@ -210,7 +210,7 @@ public partial class MainViewModel
         lock (_taskCenterHostGate) host = _taskCenterHost;
         var runId = host?.OnlineHoeingManagedRun(batch.Generation);
         var policy = batch.Policy ?? throw new InvalidOperationException("本批完成策略未冻结");
-        var nativeResume = policy.Policy == TaskConflictPolicy.Resume && runId is null
+        var nativeResume = policy.Policy == TaskConflictPolicy.Resume && runId is null && batch.ManagedRunId is null
             && CommandExecutor.TryReadNativeResumeSnapshot(batch.SuspendedRawData, out _);
         var epoch = batch.ExecutionEpoch ?? throw new IOException("原 BGI 进程尚未确认");
         var ct = batch.Cts.Token;
@@ -225,6 +225,7 @@ public partial class MainViewModel
             if (batch.NativeResumeRetryPending)
                 return batch.TakeoverTicket is { } pending ? "resume/" + pending : null;
             if (policy.Policy != TaskConflictPolicy.Resume || gapResume) return null;
+            if (runId is not null && batch.PolicyRequestIdentity is { } managedKey) return managedKey;
             return batch.PlanResumeContinuation?.TryGetValue("idempotencyKey", out var key) == true
                 ? key as string : ticket is not null ? "resume/" + ticket : null;
         }
@@ -286,6 +287,25 @@ public partial class MainViewModel
                 }
             }
             if (!(policy.Policy == TaskConflictPolicy.Resume ? associatedResume : stoppedPlan)) return false;
+            var priorManagedExecution = batch.PolicyExecution;
+            var priorManagedKey = CompletionRequestKey();
+            var priorManagedWasRetained = batch.PolicyRequestIdentity is null;
+            var managedResultReady = !batch.PriorityRecoveryEnabled || runId is null
+                || policy.Policy != TaskConflictPolicy.Resume || gapResume
+                || host.ObserveManagedCompletionRetry(batch, runId);
+            if (priorManagedWasRetained && priorManagedExecution is { } retired && priorManagedKey is not null
+                && batch.PolicyExecution?.JobId != retired.JobId)
+            {
+                // The original Runner has saved the failed resume and accepted its retry.
+                // Release only the original retained receipt, never a later ordinary node result.
+                try
+                {
+                    if (CommandExecutor.ProbeOriginalBgiProcess(retired.Epoch) != false)
+                        await External().AcknowledgeTaskResultAsync(priorManagedKey, retired.JobId, retired.Epoch, token).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (!token.IsCancellationRequested)
+                { Waiting("原恢复尝试已保存，结果确认待补：" + ex.Message); }
+            }
             if (runId is not null && policy.Policy == TaskConflictPolicy.Resume && !gapResume
                 && batch.PolicyTerminalResult is not null)
             {
@@ -307,7 +327,7 @@ public partial class MainViewModel
             if (policy.Policy != TaskConflictPolicy.RunSpecified || batch.PolicyExecution is not null
                 || batch.PolicyRejectedBeforeStart)
                 await host.OpenOnlineHoeingSendAsync(priorityRecovery: batch.PriorityRecoveryEnabled).ConfigureAwait(false);
-            return true;
+            return managedResultReady;
         }
 
         async Task<bool> ReconcileWithPriority(CancellationToken token)
@@ -334,6 +354,25 @@ public partial class MainViewModel
         {
             try
             {
+                if (batch.RestoredFromRecovery && !nativeResume)
+                {
+                    if (host is null && batch.ManagedRunId is not null)
+                        throw new IOException("原计划执行宿主暂不可用，保留原恢复安排");
+                    if (host is not null)
+                    {
+                        var restored = await host.RestorePriorityPlanAsync(batch).ConfigureAwait(false);
+                        if (restored is not null && runId != restored)
+                        {
+                            runId = restored;
+                            batch.ManagedRunId ??= restored;
+                            nativeResume = false;
+                            stoppedPlan = false;
+                            associatedResume = false;
+                            batch.PersistRecovery?.Invoke();
+                        }
+                        if (runId is null && batch.ManagedRunId is not null) return false;
+                    }
+                }
                 return await EnsureCompletionExecutorAsync(batch, executor, () => _externalClient,
                     EnsureTaskCenterExecutionReadyAsync, CompletionRequestKey, nativeResume, RequireAuthority, token).ConfigureAwait(false);
             }
@@ -478,7 +517,9 @@ public partial class MainViewModel
                     await executor.ReconcileCompletionTicketAsync(batch, token).ConfigureAwait(false);
                     return executor.TakeoverTicketSnapshot is null;
                 },
-                Acknowledge = (result, token) => result.Epoch is { } original
+                Acknowledge = (result, token) => runId is not null && batch.PolicyRequestIdentity is not null
+                    ? Task.FromResult(true) // The original Runner owns its ordinary retried job's result.
+                    : result.Epoch is { } original
                     && CommandExecutor.ProbeOriginalBgiProcess(original) == false ? Task.FromResult(true)
                     : External().AcknowledgeTaskResultAsync(result.IdempotencyKey!, result.TaskHandle!, result.Epoch!, token),
             }, ct).ConfigureAwait(false);

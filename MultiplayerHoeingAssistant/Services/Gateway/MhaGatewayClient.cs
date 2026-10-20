@@ -22,6 +22,10 @@ namespace MultiplayerHoeingAssistant.Services.Gateway;
 public sealed class MhaGatewayClient : IAsyncDisposable
 {
     private HubConnection? _connection;
+    internal string[]? AdvertisedCapabilitiesForTest { get; init; }
+    internal static string[] DefaultCapabilities => ["hoeing.start.v2", GatewayProtocol.CompletionChoiceCapability,
+        GatewayProtocol.QuickCommandCompletionCapability, GatewayProtocol.LocalFinishCapability,
+        GatewayProtocol.LocalTaskFailureCapability, GatewayProtocol.HoeingPriorityRecoveryCapability];
 
     /// <summary>evt 信封到达（服务器 → 客户端广播/定向）。在 SignalR 回调线程触发，订阅方不得外抛异常。</summary>
     public event Action<GatewayEnvelope>? EnvelopeReceived;
@@ -143,7 +147,7 @@ public sealed class MhaGatewayClient : IAsyncDisposable
             clientKind = "assistant",
             clientVersion = typeof(MhaGatewayClient).Assembly.GetName().Version?.ToString() ?? "",
             protocolVersion = GatewayProtocol.ProtocolVersion,
-            capabilities = new[] { "hoeing.start.v2", GatewayProtocol.CompletionChoiceCapability, GatewayProtocol.QuickCommandCompletionCapability, GatewayProtocol.LocalFinishCapability, GatewayProtocol.LocalTaskFailureCapability, GatewayProtocol.HoeingPriorityRecoveryCapability },
+            capabilities = AdvertisedCapabilitiesForTest ?? DefaultCapabilities,
         }, null, ct);
 
         ServerCapabilities = resp.Get<string[]>("capabilities") ?? [];

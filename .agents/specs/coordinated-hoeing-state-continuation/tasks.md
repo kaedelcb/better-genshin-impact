@@ -292,3 +292,14 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 - 新进程恢复准备使用ProcessRecoveryPreviousEpoch及CompletionRecoveryReservationAcquired持久化已取得/待释放阶段；同一重入不再分配完成动作attempt。已经成功的旧结果不因进程退出重跑；旧进程消失只解除其内存ACK义务。原停止信号缺失/已停、新停止水位不匹配、旧PID/start存活或未知均不能借恢复获得权限。
 
 下一具体入口：RunAcceptedHoeingBatchAsync的RestoredFromRecovery目前只关门，未恢复TaskCenterHost._onlineHoeingRunId/_stateContinuationRuns，也未重建原Runner观察。应先用经过原owner死亡验证的批次快照及原ticket/run/node/提交事实恢复同一关联，沿原Runner消费已存在resume job后继续C；不能让managed快照走原生退路。当前快照没有ManagedRunId/原计划进度，持久记录丢失时仍需补退路。managed跨BGI还涉及原StopAuthority固定旧epoch，应保留原停止来源而非直接刷新权限。完整Goal保持active。
+
+
+#### 原计划接回与四成员入口（c8f9bf之后，仍为完整目标的WIP）
+
+- 助手重建后，按原批次、原ticket、原run及节点提交身份接回原Runner；明确停止/执行重置不恢复。现仅覆盖原BGI仍在、原计划记录完整的路径，不能冒称跨BGI或丢记录完成。
+- 原恢复任务失败后，完成动作跟踪原Runner已受理的同节点下一attempt，不自行另发任务、不提前结清。原失败保留，恢复任务成功后原计划继续下一节点。
+- validation-19原失败保留：58项中3项新宿主重建用例的替身把退出处置误写成preempted；改为实际契约execution_exited（preempted是错误原因），未放宽产品判据。validation-20仅重验受影响4项通过；validation-21完整StateContinuationPlanResumeTests 19项通过。三轮进程树均已回收，20/21 exit0。
+- validation-22使用当前源码隔离构建协调服务器，实际WPF MainVM、真实SDK/私有IPC、4条真实网关连接完成既有7个及新增2个场景；单Fact内9场景全部通过，TRX实际duration为2分00秒。覆盖锁住进度文件仍推进、共同完成的第一项不重跑、第二项失败仅当前项换attempt、后续受理丢回复与失败重试、恢复期间明确停止、旧通知/旧恢复快照不再启动。BGI端是受控私管替身，不是游戏实跑或真正BGI重启。
+- validation-22 server/entry均exit0、Job active_processes=0。此前受控自有进程退出的原生/指定后续证据validation-18继续复用，不另跑相同组件证明。
+
+剩余核心实现：原计划跨BGI退出后的同安排接续及持久记录丢失退路；完成后进行原定集中复核并修复实际问题。原完整Goal继续active，T17—T20不勾，不推进baseline、不部署、不push。没有新增精简重构阶段。

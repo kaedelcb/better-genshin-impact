@@ -377,6 +377,11 @@ public sealed partial class TaskCenterHost
         string? runId;
         lock (_gate) { runId = _onlineHoeingGeneration == generation ? _onlineHoeingRunId : null; }
         if (runId is null) return true;
+        return ConfirmOnlineHoeingSuspendForRun(runId, generation, ticket, rawData);
+    }
+
+    private bool ConfirmOnlineHoeingSuspendForRun(string runId, int generation, string? ticket, string? rawData)
+    {
         if (string.IsNullOrWhiteSpace(ticket) || string.IsNullOrWhiteSpace(rawData)) return false;
         JsonElement data;
         try { data = JsonSerializer.Deserialize<JsonElement>(rawData); }
@@ -413,6 +418,118 @@ public sealed partial class TaskCenterHost
             current.NextTaskIndex = Int(data, "planNextTaskIndex");
             return true;
         }, out _);
+    }
+
+    internal async Task<string?> RestorePriorityPlanAsync(OnlineHoeingBatch batch)
+    {
+        if (!batch.RestoredFromRecovery || !batch.PriorityRecoveryEnabled || batch.IsCancellationRequested
+            || batch.ExplicitStopRequested || batch.TakeoverTicket is not { } ticket) return null;
+        batch.ObserveRecoveryStopSignal();
+        batch.Cts.Token.ThrowIfCancellationRequested();
+        var currentEpoch = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
+        if (!ViewModels.CoordinatedBatchLoop.SameEpoch(batch.ExecutionEpoch, currentEpoch)) return null;
+        await EnsureRecoveredAsync().ConfigureAwait(false);
+        if (batch.ManagedRunId is { } managed && _runs.Load(managed) is { } savedIntent
+            && (savedIntent.StopRequested || IsExecutionResetReleased(savedIntent)))
+        { batch.Cancel(); return null; }
+        string? wire = null;
+        if (batch.SuspendedRawData is { } raw)
+        {
+            try
+            {
+                using var receipt = JsonDocument.Parse(raw);
+                if (receipt.RootElement.TryGetProperty("workflowRunId", out var field) && field.ValueKind == JsonValueKind.String)
+                    wire = field.GetString();
+            }
+            catch (JsonException) { return null; }
+        }
+        var matches = _runs.List().Where(run => !run.StopRequested && !IsExecutionResetReleased(run)
+            && (batch.ManagedRunId is null || run.RunId == batch.ManagedRunId)
+            && run.OnlineHoeingHandoff is { StateContinuation: true, PriorityRecovery: true } h
+            && h.Generation == batch.Generation && h.Epoch == WorkflowStopAuthority.Epoch(currentEpoch)
+            && (h.Ticket == ticket || h.Ticket is null && Guid.TryParse(wire, out var originalWire)
+                && Guid.TryParse(run.WireRunId, out var savedWire) && originalWire == savedWire)).ToArray();
+        if (matches.Length != 1) return null;
+        var original = matches[0];
+        var handoff = original.OnlineHoeingHandoff!;
+        if (batch.Policy?.Policy == TaskConflictPolicy.Resume && handoff.Phase is not
+            ("preparedGap" or "gap" or "prepared" or "suspended" or "parked" or "resumeRequested" or "resumeAccepted" or "observing" or "terminal"))
+            return null;
+        if (handoff.Ticket is null && !ConfirmOnlineHoeingSuspendForRun(original.RunId, batch.Generation,
+                ticket, batch.SuspendedRawData)) return null;
+        lock (_gate)
+        {
+            if (_shutdown || _manualResetActive != 0 || _onlineHoeingGeneration > batch.Generation
+                || _onlineHoeingGeneration == batch.Generation && _onlineHoeingRunId is { } other && other != original.RunId)
+                return null;
+            _onlineHoeingGeneration = batch.Generation;
+            _onlineHoeingRunId = original.RunId;
+            _stateContinuationRuns[original.RunId] = batch.Generation;
+            if (batch.Policy?.Policy != TaskConflictPolicy.Resume || handoff.Phase is "preparedGap" or "gap"
+                || _drives.ContainsKey(original.WorkflowId) || _reservedWorkflows.Contains(original.WorkflowId))
+                return original.RunId;
+            if (!_runs.UpdateMergingIf(original.RunId, latest =>
+            {
+                if (latest.StopRequested || latest.OnlineHoeingHandoff is not { } held
+                    || held.Generation != batch.Generation || held.Ticket != ticket || latest.WireRunId != original.WireRunId)
+                    return false;
+                latest.State = held.Phase is "observing" or "terminal"
+                    ? WorkflowRunState.Running : WorkflowRunState.OnlineHoeingParking;
+                return true;
+            }, out var retained) || retained is null) return null;
+            _runs.RetainPriorityProgress(retained);
+            _reservedWorkflows.Add(original.WorkflowId);
+        }
+        try
+        {
+            var runner = CreateRunner(_clientAccessor());
+            var accepted = LaunchDrive(original.WorkflowId, runner,
+                cts => runner.ResumeOnlineContinuationAsync(original.RunId, cts.Token),
+                "已接回原计划的联机恢复观察", original.RunId);
+            return accepted.Ok ? original.RunId : null;
+        }
+        catch
+        {
+            lock (_gate) _reservedWorkflows.Remove(original.WorkflowId);
+            throw;
+        }
+    }
+
+    internal bool ObserveManagedCompletionRetry(OnlineHoeingBatch batch, string runId)
+    {
+        if (batch.PlanResumeContinuation?.GetValueOrDefault("idempotencyKey") is not string originalKey) return true;
+        var run = _runs.Load(runId);
+        if (run is null) return false;
+        if (run.StopRequested || IsExecutionResetReleased(run)) { batch.Cancel(); return false; }
+        var handoff = run.OnlineHoeingHandoff?.ResumeKey == originalKey ? run.OnlineHoeingHandoff
+            : run.OnlineHoeingHistory.SingleOrDefault(h => h.ResumeKey == originalKey && h.Generation == batch.Generation);
+        if (handoff is not { PriorityRecovery: true, ResumeAttempt: not null }) return true;
+        var submissions = run.SubmissionHistory.Concat(run.CurrentSubmission is { } current ? [current] : [])
+            .Where(s => s.NodeId == handoff.NodeId && s.Occurrence == handoff.Occurrence
+                && s.LoopIteration == handoff.LoopIteration && s.Attempt >= handoff.ResumeAttempt
+                && s.Intent == SubmitIntentState.Accepted && Guid.TryParse(s.JobId, out _)).ToArray();
+        var latest = submissions.OrderByDescending(s => s.Attempt).FirstOrDefault();
+        if (latest is null) return false;
+        if (batch.PolicyExecution is { } known && !string.Equals(known.JobId, latest.JobId, StringComparison.OrdinalIgnoreCase))
+        {
+            static bool SameJob(string? a, string? b) => Guid.TryParse(a, out var x) && Guid.TryParse(b, out var y) && x == y;
+            if (!SameJob(known.JobId, latest.JobId))
+            {
+                var old = submissions.SingleOrDefault(s => SameJob(s.JobId, known.JobId));
+                if (old is not { ObservedTerminal: "failed", ExecutionExitConfirmed: true }) return false;
+                batch.PolicyTerminalResult ??= new BgiTaskQueueStatus
+                { TaskHandle = known.JobId, Epoch = known.Epoch, IdempotencyKey = old.Key, Status = "failed", ExecutionExitConfirmed = true };
+                var parts = latest.Epoch?.Split(':');
+                if (parts is not { Length: 2 } || !int.TryParse(parts[0], out var pid) || !long.TryParse(parts[1], out var ticks)) return false;
+                batch.ManagedRunId ??= runId;
+                if (!batch.AdoptManagedCompletionRetry(runId, latest.Key, new(latest.JobId!, new() { ProcessId = pid, StartTicksUtc = ticks }, true)))
+                    return false;
+                batch.PersistRecovery?.Invoke();
+            }
+        }
+        // A failed original resume remains this same arrangement until its original Runner
+        // has taken and completed a later attempt of the same node occurrence.
+        return latest.ExecutionExitConfirmed && latest.ObservedTerminal == "succeeded";
     }
 
     internal string? OnlineHoeingManagedRun(int generation)

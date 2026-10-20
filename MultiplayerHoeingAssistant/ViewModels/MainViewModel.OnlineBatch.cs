@@ -1047,7 +1047,12 @@ public partial class MainViewModel
                         context.Plan = batch.PriorityRecoveryEnabled
                             ? context.Host.PreparePriorityOnlineHoeing(batch.Generation, current)
                             : context.Host.PrepareOnlineHoeing(batch.Generation, current, stateContinuation: true);
-                        if (context.Plan.Ready) return current;
+                        if (context.Plan.Ready)
+                        {
+                            batch.ManagedRunId ??= context.Plan.ManagedRunId;
+                            batch.PersistRecovery?.Invoke();
+                            return current;
+                        }
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     { AddLog("[联机接管] 原计划暂未登记，保留同一请求：" + ex.Message); }

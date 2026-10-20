@@ -659,6 +659,47 @@ public sealed partial class WorkflowRunner
         }
     }
 
+    internal async Task<WorkflowRunRecord> ResumeOnlineContinuationAsync(string runId, CancellationToken ct)
+    {
+        var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
+        if (!_controls.TryAdd(runId, control))
+        { control.RunCts.Dispose(); throw new InvalidOperationException("原计划已有执行控制，未创建第二个驱动"); }
+        try
+        {
+            var run = _runs.Load(runId) ?? throw new IOException("原计划记录暂不可读");
+            if (run.StopRequested || TaskCenterHost.IsExecutionResetReleased(run)
+                || run.OnlineHoeingHandoff is not { StateContinuation: true, PriorityRecovery: true } handoff
+                || _opt.OnlineHoeingContinuation is not { } continueOnline)
+                throw new InvalidOperationException("原计划的联机恢复关联无效，未重放任务");
+            var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
+            if (snapshot.Revision != run.WorkflowRevision)
+                throw new InvalidOperationException("原计划内容已变化，未按新内容冒认旧恢复任务");
+            var plan = new WorkflowPlan(snapshot.Document);
+            var original = run.CurrentSubmission?.Key == handoff.OriginalSubmissionKey ? run.CurrentSubmission
+                : run.SubmissionHistory.SingleOrDefault(s => s.Key == handoff.OriginalSubmissionKey);
+            if (original is null || original.JobId != handoff.OriginalJobId || original.NodeId != handoff.NodeId
+                || original.Occurrence != handoff.Occurrence || original.LoopIteration != handoff.LoopIteration
+                || original.Attempt != handoff.Attempt)
+                throw new InvalidOperationException("原计划恢复的节点或原提交身份不匹配");
+            await VerifyStopAuthorityAsync(run, control.RunCts.Token).ConfigureAwait(false);
+            var preempted = original.ObservedTerminal == "cancelled" && original.ExecutionExitConfirmed
+                ? BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted", exitConfirmed: true,
+                    exitDisposition: original.ExecutionExitDisposition)
+                : await _boundary.AwaitSubmissionExitAsync(run, original, control.RunCts.Token).ConfigureAwait(false);
+            if (preempted.Uncertain || !preempted.ExecutionExitConfirmed || preempted.Terminal != "cancelled"
+                || preempted.ErrorCode != "preempted")
+                throw new IOException("原任务的让位退出事实尚未确认，未提交恢复");
+            var observed = await continueOnline(run, original, preempted, control.RunCts.Token).ConfigureAwait(false);
+            if (observed is null || observed.Uncertain)
+                throw new IOException("原恢复作业仍未完成事实核对，未重发");
+            await RebaseOnlineContinuationAsync(run, control.RunCts.Token).ConfigureAwait(false);
+            // DriveAsync's existing observed-terminal branch consumes this same result once,
+            // applies the existing retry policy and continues at the original plan cursor.
+            return await DriveAsync(run, plan, control).ConfigureAwait(false);
+        }
+        finally { _controls.TryRemove(runId, out _); control.RunCts.Dispose(); }
+    }
+
     private async Task<WorkflowRunRecord> DriveAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control)
     {
         var ct = control.RunCts.Token;
