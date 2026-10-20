@@ -37,22 +37,22 @@ public sealed class NormalizeWindowsLauncherIntegrity : Task
                 var sid = ReadLabel(path, out descriptor, out sacl, out ace);
                 if (sid != "S-1-16-4096") continue;
 
-                // 保留原 mandatory policy，只把 Low SID 改为 Medium，并取消此文件的继承标记。
-                Marshal.WriteByte(ace, 1, 0);
-                Marshal.WriteInt32(IntPtr.Add(ace, 8), 8, 8192);
-                Check(SetNamedSecurityInfo(path, 1, 0x10, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, sacl));
+                // 移除异常标签，让原来的调用者及提权路径决定等级，不固定 Medium 上限。
+                // SetNamedSecurityInfo 会重新继承父目录 Low；单文件设置避免再次自动继承。
+                Marshal.WriteInt16(sacl, 4, 0); // ACL.AceCount：LABEL 查询只返回 mandatory-label ACE。
+                if (!SetFileSecurity(path, 0x10, descriptor)) Check((uint)Marshal.GetLastWin32Error());
 
                 IntPtr verifiedDescriptor = IntPtr.Zero;
                 try
                 {
                     IntPtr verifiedSacl, verifiedAce;
-                    if (ReadLabel(path, out verifiedDescriptor, out verifiedSacl, out verifiedAce) != "S-1-16-8192")
-                        throw new InvalidOperationException("写入后未确认 Medium 完整性标签。");
+                    if (ReadLabel(path, out verifiedDescriptor, out verifiedSacl, out verifiedAce) != null)
+                        throw new InvalidOperationException("写入后仍存在强制完整性标签。");
                 }
                 finally { if (verifiedDescriptor != IntPtr.Zero) LocalFree(verifiedDescriptor); }
 
                 SHChangeNotify(0x800, 0x1005, path, IntPtr.Zero);
-                Log.LogMessage(MessageImportance.Normal, "已修正启动文件的 Low 完整性标签：{0}", path);
+                Log.LogMessage(MessageImportance.Normal, "已移除启动文件的异常 Low 完整性标签：{0}", path);
             }
             catch (Exception ex)
             {
@@ -97,9 +97,9 @@ public sealed class NormalizeWindowsLauncherIntegrity : Task
     [DllImport("advapi32.dll", EntryPoint = "ConvertSidToStringSidW", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ConvertSidToStringSid(IntPtr sid, out IntPtr text);
-    [DllImport("advapi32.dll", EntryPoint = "SetNamedSecurityInfoW", CharSet = CharSet.Unicode)]
-    private static extern uint SetNamedSecurityInfo(string path, uint type, uint information,
-        IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
+    [DllImport("advapi32.dll", EntryPoint = "SetFileSecurityW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetFileSecurity(string path, uint information, IntPtr descriptor);
     [DllImport("kernel32.dll")]
     private static extern IntPtr LocalFree(IntPtr memory);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
