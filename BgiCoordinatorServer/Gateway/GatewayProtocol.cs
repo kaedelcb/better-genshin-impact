@@ -13,6 +13,7 @@ public static class GatewayProtocol
     public const string CompletionChoiceCapability = "hoeing.completionChoice.v1";
     public const string QuickCommandCompletionCapability = "hoeing.quickCommandCompletion.v1";
     public const string HoeingStartCapability = "hoeing.start.v2";
+    public const string HoeingStateContinuationCapability = "hoeing.stateContinuation.v1";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
 
@@ -21,7 +22,7 @@ public static class GatewayProtocol
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
     public static readonly string[] ServerCapabilities =
-        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability];
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability, HoeingStateContinuationCapability];
 
     public static class MessageTypes
     {

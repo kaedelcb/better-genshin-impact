@@ -28,6 +28,7 @@ public static class PreemptionGate
     private static DateTime _armedAtUtc;
     private static int _savedForEpoch;
     private static string? _ticket;
+    private static readonly System.Collections.Generic.HashSet<string> RetainedTickets = new();
     private static readonly System.Collections.Generic.HashSet<string> Revoked = new();
     private static readonly System.Collections.Generic.Queue<string> RevokedOrder = new();
 
@@ -58,6 +59,21 @@ public static class PreemptionGate
             _armedAtUtc = DateTime.UtcNow;
             return _epoch;
         }
+    }
+
+    public static bool RetainUntilReleased(string ticket)
+    {
+        lock (Sync)
+        {
+            if (_ticket != ticket || !IsArmedCore()) return false;
+            RetainedTickets.Add(ticket);
+            return true;
+        }
+    }
+
+    public static bool WasRetained(string ticket)
+    {
+        lock (Sync) return RetainedTickets.Contains(ticket);
     }
 
     public static bool Renew(string? ticket)
@@ -190,7 +206,8 @@ public static class PreemptionGate
     private static bool IsArmedCore()
     {
         return _armedAtUtc != DateTime.MinValue
-               && DateTime.UtcNow - _armedAtUtc <= IntentTtl;
+               && (_ticket != null && RetainedTickets.Contains(_ticket)
+                   || DateTime.UtcNow - _armedAtUtc <= IntentTtl);
     }
 }
 

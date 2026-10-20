@@ -22,7 +22,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 /// Run alone in a fresh testhost with a unique explicit NEXUSBGI_DATA_ROOT.
 /// </summary>
 [Collection("TaskCenterPipeTransport")]
-public sealed class FourMemberFinishEntryTests
+public sealed partial class FourMemberFinishEntryTests
 {
     [Fact]
     public async Task CompletedLocalMemberCanStartManualTaskWhilePeerTailRuns_AndLateTeamFinishCannotStopIt()
@@ -45,6 +45,7 @@ public sealed class FourMemberFinishEntryTests
                         await RunEntryAsync(peerFails: true, reconnectAfterLocalFinish: false);
                         await RunEntryAsync(peerFails: false, reconnectAfterLocalFinish: true);
                         await RunLocalTaskFailureEntryAsync();
+                        await RunStateContinuationCompletionEntryAsync();
                         finished.TrySetResult();
                     }
                     catch (Exception error) { finished.TrySetException(error); }
@@ -589,7 +590,7 @@ public sealed class FourMemberFinishEntryTests
                         {
                             if (current.Phase == "preparing") stage = "prepared";
                             if (current.Phase == "takeover") stage = "takeoverConfirmed";
-                            if (current.Phase == "running") result = ReportUnknown ? "unknown"
+                            if (current.Phase == "running") result = ReportUnknown ? "local_failed"
                                 : hasLongTail && !CompleteTail ? "" : "succeeded";
                             if (current.Phase is "completed" or "aborted") stage = "cleaned";
                         }
@@ -611,7 +612,7 @@ public sealed class FourMemberFinishEntryTests
                 snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
     }
 
-    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null)
+    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = false)
     {
         private sealed record Job(string Id, string Key, string Name, bool Cooperative)
         {
@@ -622,6 +623,8 @@ public sealed class FourMemberFinishEntryTests
         private readonly List<Job> _jobs = [];
         private string? _ticket;
         private int _cancelCount;
+        public volatile bool CompletionSlotBusy, DropNextCompletionReply;
+        public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements;
         private readonly int _pid = Environment.ProcessId;
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
         public Action? BeforeFailedJobIdentityReply;
@@ -687,11 +690,14 @@ public sealed class FourMemberFinishEntryTests
                                 ["event.push"] = true, ["task.queue"] = true, ["task.takeover"] = true,
                                 ["hoeing.batchOutcome.v1"] = true, ["hoeing.coordinatedStart.v1"] = true,
                                 ["hoeing.finishEvidence.v1"] = true,
+                                ["task.stateContinuation.v1"] = stateContinuation,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
                             }
                         });
                     case "task.status":
                     case "ext.task.status":
+                        var completionBusy = stateContinuation && CompletionSlotBusy && _jobs.Any(j => j.Cooperative && j.Completed);
+                        if (completionBusy) CompletionBusyStatusReads++;
                         var queriedRoot = Value(data, "executionInstanceId");
                         var exited = _jobs.Any(j => j.Id == queriedRoot && (j.Completed || j.Cancelled || j.Failed));
                         return (true, null, null, new
@@ -699,15 +705,16 @@ public sealed class FourMemberFinishEntryTests
                             running = active != null, taskRunning = active != null,
                             autoHoeingRunning = active?.Cooperative == true,
                             autoHoeingMultiplayer = active?.Cooperative == true ? (bool?)true : null,
-                            slotOccupied = active != null, executionSlotOccupied = active != null,
+                            slotOccupied = active != null || completionBusy, executionSlotOccupied = active != null || completionBusy,
                             executionIdentityAvailable = active != null, executionInstanceId = active?.Id,
                             executionJobId = active?.Id, executionStateRevision = 1, stateRevision = 1,
                             executionIdle = active == null, executionExitConfirmed = exited,
                             executionExitQueryInstanceId = queriedRoot, executionExitAtUtc = DateTime.UtcNow,
                             executionExitOrder = 1L, executionExitReason = exited ? "confirmed" : active == null ? "no_active_root" : "not_exited",
                             bgiEpoch = Epoch, takeoverActive = _ticket != null, hasSuspendedTaskContext = false,
-                            queueDepth = 0, currentTaskHandle = active?.Id,
+                            queueDepth = 0, currentTaskHandle = active?.Id, stopVersion = 0L,
                         });
+                    case "config.list":
                     case "ext.config.list":
                         return (true, null, null, new { configGroups = new[] { boundGroup, manualGroup, nextBoundGroup }
                             .Where(n => n != null).ToArray(), oneClickConfigs = Array.Empty<string>() });
@@ -745,17 +752,34 @@ public sealed class FourMemberFinishEntryTests
                             liveTask = false, expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });
                     case "ext.task.start":
                         var cooperative = Value(data, "coordinatedHoeing") == "v1";
+                        if (stateContinuation && Value(data, "idempotencyKey") is { } key
+                            && _jobs.SingleOrDefault(j => j.Key == key) is { } adopted)
+                            return (true, null, null, new { status = "adopted", taskHandle = adopted.Id, queuePosition = 0 });
                         if (active != null || cooperative && (_ticket == null || Value(data, "takeoverTicket") != _ticket)
                             || !cooperative && _ticket != null)
                             return (false, "task_busy", "新任务不能借用旧票据或覆盖活动任务", null);
                         var job = new Job(Guid.NewGuid().ToString("N"), Value(data, "idempotencyKey")!,
                             Value(data, "groupName")!, cooperative);
                         _jobs.Add(job);
+                        if (stateContinuation && !cooperative && DropNextCompletionReply)
+                        {
+                            DropNextCompletionReply = false;
+                            CompletionReplyDrops++;
+                            // The original task is already accepted. Close this private connection before
+                            // its reply is written, then let the production client reconnect and query it.
+                            throw new IOException("Fixture drops the accepted completion reply");
+                        }
                         return (true, null, null, new { status = "queued", taskHandle = job.Id, queuePosition = 0 });
                     case "ext.task.queueStatus":
-                        var queried = _jobs.SingleOrDefault(j => j.Id == Value(data, "taskHandle"));
+                        var queryKey = stateContinuation ? Value(data, "idempotencyKey") : null;
+                        var queried = _jobs.SingleOrDefault(j => queryKey is not null ? j.Key == queryKey : j.Id == Value(data, "taskHandle"));
+                        if (queried is null && stateContinuation)
+                            return (true, null, null, new { status = "not_found", taskHandle = (string?)null,
+                                idempotencyKey = queryKey, bgiEpoch = Epoch, executionExitConfirmed = false });
                         return queried == null ? (false, "not_found", "未知句柄", null) : (true, null, null, new
                         {
+                            taskHandle = queried.Id, idempotencyKey = queried.Key, bgiEpoch = Epoch,
+                            executionExitConfirmed = queried.Completed || queried.Cancelled || queried.Failed,
                             status = queried.Failed ? "failed" : queried.Completed || queried.Cancelled ? "completed" : "running",
                             cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : queried.Failed ? "task_start_failed" : null,
                             hoeingEvidence = queried.Cooperative ? new
@@ -766,6 +790,14 @@ public sealed class FourMemberFinishEntryTests
                                 jobResult = queried.Completed ? "Ran" : queried.Cancelled ? "Cancelled" : queried.Failed ? "Failed" : null, revision = queried.Revision,
                             } : null,
                         });
+                    case "ext.task.acknowledge" when stateContinuation:
+                        var acknowledged = _jobs.SingleOrDefault(j => j.Key == Value(data, "submissionKey")
+                            && Guid.TryParse(j.Id, out var knownHandle)
+                            && Guid.TryParse(Value(data, "taskHandle"), out var requestedHandle) && knownHandle == requestedHandle);
+                        if (acknowledged is null || !(acknowledged.Completed || acknowledged.Cancelled || acknowledged.Failed))
+                            return (false, "result_not_terminal", "替身结果尚未完成，不能确认", null);
+                        if (!acknowledged.Cooperative) CompletionAcknowledgements++;
+                        return (true, null, null, new { status = "acknowledged" });
                     case "ext.task.cancel":
                         var owned = _jobs.SingleOrDefault(j => j.Id == Value(data, "taskHandle"));
                         if (owned == null || Value(data, "ownedOnly") != "v1") return (false, "invalid_request", "只允许本句柄取消", null);
@@ -845,7 +877,8 @@ public sealed class FourMemberFinishEntryTests
             var repo = new DirectoryInfo(AppContext.BaseDirectory);
             while (repo != null && !File.Exists(Path.Combine(repo.FullName, "BgiCoordinatorServer", "BgiCoordinatorServer.csproj"))) repo = repo.Parent;
             Assert.NotNull(repo);
-            var serverDll = Path.Combine(repo!.FullName, "BgiCoordinatorServer", "bin", "Debug", "net8.0", "BgiCoordinatorServer.dll");
+            var serverDll = Environment.GetEnvironmentVariable("NEXUSBGI_TEST_COORDINATOR_DLL")
+                ?? Path.Combine(repo!.FullName, "BgiCoordinatorServer", "bin", "Debug", "net8.0", "BgiCoordinatorServer.dll");
             Assert.True(File.Exists(serverDll), "先使用 DeployToBgiTools=false 构建本次源码的 Debug server。");
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();

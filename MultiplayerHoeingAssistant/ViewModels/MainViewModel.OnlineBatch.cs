@@ -221,6 +221,11 @@ public partial class MainViewModel
 
     private async Task ApplyCoordinatedPolicyTeardownAsync(OnlineHoeingBatch batch, string description, string? ticket)
     {
+        if (batch.StateContinuationEnabled)
+        {
+            await ApplyStateContinuationPolicyTeardownAsync(batch, description, ticket);
+            return;
+        }
         var executor = _commandExecutor ?? throw new InvalidOperationException("本批收尾执行器不可用");
         TaskCenterHost? host;
         lock (_taskCenterHostGate) host = _taskCenterHost;
@@ -442,6 +447,11 @@ public partial class MainViewModel
         OnlineHoeingBatch? batch;
         lock (_batchGate) batch = _activeBatch;
         if (batch?.BatchId != state.BatchId) return;
+        if (batch.StateContinuationEnabled && state.Phase == "aborted" && OnlineHoeingBatch.IsExplicitStopReason(state.Reason))
+        {
+            batch.Cancel();
+            return;
+        }
         if (batch.RunTask?.IsCompleted == true && _localResetGate.CurrentCount > 0)
         {
             ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "联机清理回执补报");
@@ -623,6 +633,16 @@ public partial class MainViewModel
                 || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0)
                 throw new OperationCanceledException("本批收尾权限已被本机停止或重置撤销");
         if (!batch.LocalSucceeded) throw new InvalidOperationException("本机整个最后配置组尚未确认成功");
+        if (batch.StateContinuationEnabled)
+        {
+            await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", false, batch.TakeoverTicket);
+            ct.ThrowIfCancellationRequested();
+            batch.CleanupConfirmed = true;
+            batch.LocalCleanupConfirmed = true;
+            batch.MarkLocalExecutionReleased();
+            UpdateHoeingBatchStatus(batch, "localCompleted", "本端锄地与绑定完成动作已结束，等待队友收口");
+            return;
+        }
         if (CommandExecutor.ProbeOriginalBgiProcess(epoch) == false)
         {
             if (!await AbandonExitedCoordinatedBatchOwnershipAsync(batch, executor, batch.TakeoverTicket, epoch, ct))
@@ -662,6 +682,9 @@ public partial class MainViewModel
     private async Task<bool> ReconcileLocalCoordinatedCleanupAsync(OnlineHoeingBatch batch, CancellationToken ct)
     {
         if (batch.LocalExecutionReleased || batch.LocalCleanupConfirmed) return true;
+        // An unfinished completion action is still owned by its single worker, not generic cleanup.
+        if (batch.StateContinuationEnabled && batch.LocalSucceeded && !batch.ExplicitStopRequested)
+            return false;
         if (batch.RunTask?.IsCompleted != true || batch.LocalFinalizationTask?.IsCompleted == false) return false;
         var executor = _commandExecutor;
         var epoch = batch.ExecutionEpoch;
@@ -838,6 +861,16 @@ public partial class MainViewModel
         if (ready != null) throw new InvalidOperationException(ready);
         ct.ThrowIfCancellationRequested();
         var ext = GetBoundTaskCenterClient() ?? throw new InvalidOperationException("BGI 通道身份未确认");
+        if (ext.HasCapability(BgiExternalClient.StateContinuationCapability) && _signalRClient?.SupportsStateContinuation == true)
+        {
+            batch.StateContinuationEnabled = true;
+            if (batch.StateContinuationStopVersion is null)
+            {
+                var originalEpoch = ext.ServerEpoch ?? throw new IOException("原 BGI 身份暂不可读");
+                batch.StateContinuationStopVersion = await ext.ReadStateContinuationStopVersionAsync(originalEpoch, ct)
+                    ?? throw new IOException("原 BGI 停止状态暂不可读，保留同一准备请求");
+            }
+        }
         foreach (var capability in new[] { "task.queue", "hoeing.batchOutcome.v1", "hoeing.coordinatedStart.v1", "execution.targetedSuspend.v1", "config.applied", "hoeing.finishEvidence.v1" })
             if (!ext.HasCapability(capability)) throw new InvalidOperationException("BGI 缺少统一开锄能力 " + capability + "，未中断原任务");
         var cfg = await ext.SendCommandAsync("ext.config.list", null, TimeSpan.FromSeconds(10), ct);
@@ -879,6 +912,105 @@ public partial class MainViewModel
     }
 
     private async Task TakeOverForCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
+    {
+        if (!batch.StateContinuationEnabled)
+        {
+            await TakeOverForLegacyCoordinatedStartAsync(batch, context, ct);
+            return;
+        }
+        var executor = context.Executor ?? throw new InvalidOperationException("执行器未准备");
+        void RequireOriginalContext()
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(executor, _commandExecutor) || batch.ControlContext != CurrentControlContext())
+                throw new ControlContextRevokedException("原接管上下文已撤销，未向新实例发送", ct);
+        }
+        while (!context.SendGateClosed && context.Host is not null)
+        {
+            RequireOriginalContext();
+            try
+            {
+                using var call = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                call.CancelAfter(TimeSpan.FromSeconds(15));
+                await context.Host.CloseOnlineHoeingSendAsync(call.Token);
+                context.SendGateClosed = true;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
+            { UpdateHoeingBatchStatus(batch, "takeover", "原计划发送门暂未确认，继续同一次接管"); }
+            if (!context.SendGateClosed) await Task.Delay(1000, ct);
+        }
+        async Task<CommandExecutor.ExecutionBoundarySnapshot> CaptureAndPrepare()
+        {
+            while (true)
+            {
+                RequireOriginalContext();
+                var current = await executor.CaptureExecutionBoundarySnapshotAsync();
+                if (current.Known)
+                {
+                    if (batch.ExecutionEpoch is { } epoch && (current.ProcessId != epoch.ProcessId || current.StartTicksUtc != epoch.StartTicksUtc))
+                        throw new ControlContextRevokedException("原 BGI 已变化，未向后继进程重放接管", ct);
+                    EnsureHoeingAllowsCoordinatedStart(current);
+                    if (context.Host is null) return current;
+                    try
+                    {
+                        context.Plan = context.Host.PrepareOnlineHoeing(batch.Generation, current, stateContinuation: true);
+                        if (context.Plan.Ready) return current;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    { AddLog("[联机接管] 原计划暂未登记，保留同一请求：" + ex.Message); }
+                }
+                UpdateHoeingBatchStatus(batch, "takeover", "原任务接管条件尚未齐备，继续等待");
+                await Task.Delay(1000, ct);
+            }
+        }
+        var boundary = await CaptureAndPrepare();
+        CommandResult result;
+        while (true)
+        {
+            RequireOriginalContext();
+            try { result = await executor.ExecuteSuspendAsync("联机批次 " + batch.BatchId, boundary,
+                retainUntilAcknowledged: true, expectedStopVersion: batch.StateContinuationStopVersion); }
+            finally { batch.TakeoverTicket = executor.TakeoverTicketSnapshot; }
+            if (result.RawData is not null) batch.SuspendedRawData = result.RawData;
+            if (result.Status == "success") break;
+            if ((result.ErrorCode is "not_current" or "execution_identity_unavailable")
+                && executor.TakeoverTicketSnapshot is null
+                && (context.Host is null || context.Host.RefreshUnacceptedOnlineHoeingPreparation(batch.Generation)))
+            {
+                context.Plan = null;
+                boundary = await CaptureAndPrepare();
+                continue;
+            }
+            if (result.ErrorCode is "manual_stop_fence" or "manual_stop_cooldown" or "reset_superseded" or "reset_in_progress")
+            {
+                batch.Cancel();
+                ct.ThrowIfCancellationRequested();
+            }
+            if (result.ErrorCode is "stale_epoch" or "cross_session")
+                throw new ControlContextRevokedException("原 BGI 身份已改变，未重放接管", ct);
+            UpdateHoeingBatchStatus(batch, "takeover", "原 BGI 尚未确认让位，继续原票据接管：" + result.Message);
+            await Task.Delay(1000, ct);
+        }
+        while (!await executor.WaitTaskSlotSettledAsync("[联机开始]", AddLog, boundary.Active))
+        {
+            RequireOriginalContext();
+            UpdateHoeingBatchStatus(batch, "takeover", "原任务尚未退出或槽位仍忙，继续等待原任务让位");
+            await Task.Delay(1000, ct);
+        }
+        RequireOriginalContext();
+        if (context.Plan?.ManagedRunId is not null)
+        {
+            try
+            {
+                if (!context.Host!.ConfirmOnlineHoeingSuspend(batch.Generation, batch.TakeoverTicket, batch.SuspendedRawData))
+                    AddLog("[联机接管] BGI 已确认让位，原恢复信息保留在本批，助手关联稍后补齐");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { AddLog("[联机接管] BGI 已确认让位，助手记录稍后补写：" + ex.Message); }
+        }
+    }
+
+    private async Task TakeOverForLegacyCoordinatedStartAsync(OnlineHoeingBatch batch, HoeingStartPreparation context, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var executor = context.Executor ?? throw new InvalidOperationException("执行器未准备");

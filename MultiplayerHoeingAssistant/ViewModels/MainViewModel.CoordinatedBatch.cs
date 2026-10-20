@@ -12,6 +12,8 @@ public partial class MainViewModel
         Func<CancellationToken, Task> prepare, Func<CancellationToken, Task> takeover)
     {
         CommandExecutor? owner = null;
+        batch.StateContinuationEnabled = _externalClient?.HasCapability("task.stateContinuation.v1") == true
+            && _signalRClient?.SupportsStateContinuation == true;
         BgiExternalClient External() => _externalClient is { State: BgiExternalLinkState.Ready } ext
             ? ext : throw new IOException("BGI 外部接口尚未就绪");
         async Task<bool?> ConfirmLocalTaskExit(string jobId, BgiEpoch epoch, string requestKey,
@@ -38,7 +40,13 @@ public partial class MainViewModel
             Exchange = (stage, result, reason, index, attempt, ct) => ExchangeCoordinatedControlAsync(
                 batch, stage, result, reason, index, attempt, ct),
             ReadJobs = ct => External().QueryJobListAsync(ct),
+            ReadBoundEpoch = () => _externalClient is { State: BgiExternalLinkState.Ready } bound ? bound.ServerEpoch : null,
             ReadTerminal = (jobId, ct) => External().QueryTaskQueueStatusAsync(jobId, ct),
+            StateContinuationEnabled = batch.StateContinuationEnabled,
+            StateContinuationAvailable = () => _externalClient?.HasCapability("task.stateContinuation.v1") == true
+                && _signalRClient?.SupportsStateContinuation == true,
+            ResolveOriginal = (key, ct) => External().QueryTaskQueueStatusByKeyAsync(key, ct),
+            Acknowledge = (key, jobId, epoch, ct) => External().AcknowledgeTaskResultAsync(key, jobId, epoch, ct),
             CancelOwned = async (jobId, ct) => { await External().CancelOwnedTaskAsync(jobId, ct); },
             Submit = (item, epoch, ct) => SubmitCoordinatedControlAsync(batch, async admittedToken =>
             {
@@ -53,6 +61,8 @@ public partial class MainViewModel
                     || !ReferenceEquals(owner, _commandExecutor) || owner.TakeoverTicketSnapshot != batch.TakeoverTicket
                     || ext.TakeoverTicket != batch.TakeoverTicket)
                     throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "本批接管票据已变化，启动未发送");
+                if (batch.StateContinuationEnabled && batch.StateContinuationStopVersion is null)
+                    throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "本批原停止围栏尚未绑定，未发送");
                 if (!batch.ConfigRevisions.TryGetValue(OnlineHoeingBatch.ConfigurationKey(item.Name, item.IsOneDragon), out var revision))
                     throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "本批任务配置修订未冻结，启动未发送");
                 return await ext.SubmitTaskStartAsync(item.IsOneDragon ? null : item.Name,
@@ -62,7 +72,9 @@ public partial class MainViewModel
                     expectedConfigRevision: revision,
                     bgiEpoch: new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc },
                     coordinatedHoeing: true, hoeingBatchId: batch.BatchId,
-                    hoeingParticipantUids: batch.Start!.ParticipantUids);
+                    hoeingParticipantUids: batch.Start!.ParticipantUids,
+                    retainUntilAcknowledged: batch.StateContinuationEnabled,
+                    expectedStopVersion: batch.StateContinuationStopVersion);
             }, ct),
             ReleaseTicket = async (ticket, epoch, ct) =>
             {
@@ -104,8 +116,13 @@ internal sealed class CoordinatedBatchRuntime
     internal required Func<CancellationToken, Task> Takeover { get; init; }
     internal required Func<string, string, string, int, int, CancellationToken, Task<CoordinatedBatchSnapshot>> Exchange { get; init; }
     internal required Func<CancellationToken, Task<BgiJobListSnapshot?>> ReadJobs { get; init; }
+    internal Func<BgiEpoch?>? ReadBoundEpoch { get; init; }
     internal required Func<string, CancellationToken, Task<BgiTaskQueueStatus?>> ReadTerminal { get; init; }
     internal required Func<string, CancellationToken, Task> CancelOwned { get; init; }
+    internal bool StateContinuationEnabled { get; init; }
+    internal Func<bool>? StateContinuationAvailable { get; init; }
+    internal Func<string, CancellationToken, Task<BgiTaskQueueStatus?>>? ResolveOriginal { get; init; }
+    internal Func<string, string, BgiEpoch, CancellationToken, Task<bool>>? Acknowledge { get; init; }
     internal required Func<BatchExpectedItem, BgiEpoch, CancellationToken, Task<BgiTaskSubmitResult>> Submit { get; init; }
     internal required Func<string, BgiEpoch, CancellationToken, Task<bool>> ReleaseTicket { get; init; }
     // Finalization owns only this endpoint. Its task may run while the loop keeps the team lease alive.
@@ -148,6 +165,18 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     private bool _cancelSent;
     private int _completedNative;
     private DateTime? _observationUnavailableSince;
+    private CoordinatedBatchSnapshot? _lastObservedTeam;
+    private readonly Dictionary<string, (string JobId, BgiEpoch Epoch)> _pendingAcknowledgements = new(StringComparer.Ordinal);
+    private bool ContinueByState
+    {
+        get
+        {
+            var enabled = batch.StateContinuationEnabled || io.StateContinuationEnabled
+                || io.StateContinuationAvailable?.Invoke() == true;
+            if (enabled) batch.StateContinuationEnabled = true;
+            return enabled;
+        }
+    }
 
     internal static bool SameEpoch(BgiEpoch? expected, BgiEpoch? actual) => expected != null && actual != null
         && expected.ProcessId == actual.ProcessId && expected.StartTicksUtc == actual.StartTicksUtc;
@@ -158,6 +187,9 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         && SameEpoch(epoch, job.Epoch) && job.IdempotencyKey == requestKey
         && job.State == (cancelled ? "cancelled" : "failed") && job.WasCancelled == cancelled
         && job.ExecutionExitConfirmed;
+
+    private static bool SameJob(string left, string right) => Guid.TryParse(left, out var a)
+        && Guid.TryParse(right, out var b) ? a == b : string.Equals(left, right, StringComparison.Ordinal);
 
     internal static string RequestKey(string batchId, string uid, int index, int attempt) => "hoeing.v2/"
         + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{batchId}\n{uid}\n{index}\n{attempt}"))).ToLowerInvariant();
@@ -192,7 +224,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         _stageCancellation?.Dispose();
         _stageCancellation = CancellationTokenSource.CreateLinkedTokenSource(batch.Cts.Token);
-        _stageCancellation.CancelAfter(io.StageTimeout);
+        if (!ContinueByState) _stageCancellation.CancelAfter(io.StageTimeout);
         _stageStarted = DateTime.UtcNow;
         var token = _stageCancellation.Token;
         var task = Task.Run(() => action(token), CancellationToken.None);
@@ -202,13 +234,27 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
 
     private async Task<bool> ObserveStageAsync(Task task, string failure, CancellationToken ct)
     {
-        if (!task.IsCompleted && DateTime.UtcNow - _stageStarted < io.StageTimeout) return false;
+        if (!task.IsCompleted && (ContinueByState || DateTime.UtcNow - _stageStarted < io.StageTimeout)) return false;
         try
         {
             if (!task.IsCompleted) throw new TimeoutException($"本机阶段执行超过{io.StageTimeout.TotalSeconds:0.###}秒，已停止本轮");
             await task;
             ct.ThrowIfCancellationRequested();
             return true;
+        }
+        catch (BgiStateContinuationStoppedException)
+        {
+            batch.Cancel();
+            throw;
+        }
+        catch (Exception ex) when (ContinueByState && !batch.IsCancellationRequested
+            && ex is not ControlContextRevokedException)
+        {
+            // Retry only after the previous stage has ended; its ticket/frozen request stays on this batch.
+            io.Status("reconciling", "本机准备尚未完成，按原批次继续：" + ex.Message);
+            if (ReferenceEquals(task, _prepare)) _prepare = null;
+            if (ReferenceEquals(task, _takeover)) _takeover = null;
+            return false;
         }
         catch (Exception ex) when (!batch.IsCancellationRequested)
         {
@@ -222,15 +268,17 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         if (batch.Start == null || batch.Bindings.Count == 0 || string.IsNullOrWhiteSpace(batch.SelfUid))
             throw new InvalidOperationException("统一开始缺少冻结批次、成员或绑定");
+        if (ContinueByState) batch.StateContinuationEnabled = true;
         var ct = batch.Cts.Token;
         var lastContact = io.Clock.GetTimestamp();
-        TimeSpan RemainingContactBudget() => batch.RemainingRunningControlBudget
-            ?? io.AuthorityContactTimeout - io.Clock.GetElapsedTime(lastContact);
+        TimeSpan RemainingContactBudget() => ContinueByState ? TimeSpan.MaxValue
+            : batch.RemainingRunningControlBudget ?? io.AuthorityContactTimeout - io.Clock.GetElapsedTime(lastContact);
         try
         {
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
+                await RetryAcknowledgementsAsync(ct);
                 if (batch.LocalSucceeded && batch.LocalFinalizationTask is not null)
                     await ObserveLocalFinalizationAsync();
                 CoordinatedBatchSnapshot team;
@@ -244,6 +292,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                         throw new TimeoutException("控制回应到达时原批次等待预算已耗尽");
                     lastContact = io.Clock.GetTimestamp();
                     batch.RecordControlContact(team, io.Clock, io.RunningAuthorityContactTimeout);
+                    _lastObservedTeam = team;
                 }
                 catch (Exception ex) when (!batch.IsCancellationRequested && ex is not ControlContextRevokedException
                     && ex is IOException or TimeoutException or OperationCanceledException
@@ -251,8 +300,25 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 {
                     var remaining = RemainingContactBudget();
                     if (remaining <= TimeSpan.Zero) throw;
+                    if (ContinueByState && _lastObservedTeam is { Phase: "running" or "stopping" } last
+                        && _item?.State == BatchItemState.Submitted)
+                    {
+                        // A lost control link cannot erase BGI execution facts, nor authorize another send.
+                        try { await RunItemAsync(last, ct, allowSubmit: false); }
+                        catch (Exception readError) when (!batch.IsCancellationRequested
+                            && readError is not ControlContextRevokedException
+                            && readError is IOException or TimeoutException or OperationCanceledException or System.Text.Json.JsonException)
+                        { ObservationUnavailable("原任务观察暂不可用：" + readError.Message); }
+                        if (batch.LocalSucceeded) await ObserveLocalFinalizationAsync();
+                    }
+                    io.Status("reconciling", "控制通道暂不可用，保留原任务并继续连接");
                     await Task.Delay(remaining < io.PollInterval ? remaining : io.PollInterval, ct);
                     continue; // 没有权威回应时只能续等，不能启动或推进。
+                }
+                if (ContinueByState && team.Phase == "aborted" && OnlineHoeingBatch.IsExplicitStopReason(team.Reason))
+                {
+                    batch.Cancel();
+                    ct.ThrowIfCancellationRequested();
                 }
                 if (_result == "local_tasks_failed" && batch.ObserveLocalTasksFailureAccepted(team))
                 {
@@ -274,6 +340,11 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 {
                     batch.TeamFailureReason = team.Reason;
                     if (!await ObserveLocalFinalizationAsync())
+                    {
+                        await Task.Delay(io.PollInterval, ct);
+                        continue;
+                    }
+                    if (ContinueByState && _pendingAcknowledgements.Count != 0)
                     {
                         await Task.Delay(io.PollInterval, ct);
                         continue;
@@ -302,6 +373,11 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                         await Task.Delay(io.PollInterval, ct);
                         continue;
                     }
+                    if (ContinueByState && _pendingAcknowledgements.Count != 0)
+                    {
+                        await Task.Delay(io.PollInterval, ct);
+                        continue;
+                    }
                     _complete = true;
                     batch.Outcome = "succeeded";
                     io.Status("completed", "全队任务完成，正在按本批策略收尾");
@@ -316,13 +392,15 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     if (!batch.Prepared && await ObserveStageAsync(_prepare!, "preparation_failed", ct))
                     {
                         var jobs = await ReadJobsForObservationAsync(ct);
-                        if (jobs is null)
+                        // Prepare already proved readiness; registry projection loss is not loss of the bound process.
+                        var preparedEpoch = jobs?.Epoch ?? (ContinueByState ? io.ReadBoundEpoch?.Invoke() : null);
+                        if (preparedEpoch is not { ProcessId: > 0, StartTicksUtc: > 0 })
                         {
                             await Task.Delay(io.PollInterval, ct);
                             continue;
                         }
                         _observationUnavailableSince = null;
-                        _epoch = jobs.Epoch!;
+                        _epoch = preparedEpoch;
                         batch.ExecutionEpoch = _epoch;
                         batch.Prepared = true;
                         _stage = "prepared";
@@ -336,12 +414,14 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     if (!batch.TakenOver && await ObserveStageAsync(_takeover!, "takeover_failed", ct))
                     {
                         var jobs = await ReadJobsForObservationAsync(ct);
-                        if (jobs is null)
+                        // Takeover has independently proved original-root exit and the real execution slot.
+                        var takeoverEpoch = jobs?.Epoch ?? (ContinueByState ? io.ReadBoundEpoch?.Invoke() : null);
+                        if (takeoverEpoch is null)
                         {
                             await Task.Delay(io.PollInterval, ct);
                             continue;
                         }
-                        if (!SameEpoch(_epoch, jobs.Epoch)) throw new InvalidOperationException("接管期间 BGI 纪元已改变");
+                        if (!SameEpoch(_epoch, takeoverEpoch)) throw new InvalidOperationException("接管期间 BGI 纪元已改变");
                         _observationUnavailableSince = null;
                         batch.TakenOver = true;
                         _stage = "takeoverConfirmed";
@@ -350,7 +430,13 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 else if (team.Phase is "running" or "stopping")
                 {
                     if (!batch.TakenOver) throw new InvalidOperationException("本端接管未确认，禁止业务项起步");
-                    await RunItemAsync(team, ct);
+                    try { await RunItemAsync(team, ct); }
+                    catch (Exception ex) when (ContinueByState && !batch.IsCancellationRequested
+                        && ex is not ControlContextRevokedException
+                        && ex is IOException or TimeoutException or OperationCanceledException or System.Text.Json.JsonException)
+                    {
+                        ObservationUnavailable("原任务观察暂不可用：" + ex.Message);
+                    }
                     if (batch.LocalSucceeded) await ObserveLocalFinalizationAsync();
                 }
                 else throw new InvalidOperationException("未知联机批次阶段: " + team.Phase);
@@ -402,7 +488,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         return true;
     }
 
-    private async Task RunItemAsync(CoordinatedBatchSnapshot team, CancellationToken ct)
+    private async Task RunItemAsync(CoordinatedBatchSnapshot team, CancellationToken ct, bool allowSubmit = true)
     {
         if (team.Index != _index || team.Attempt != _attempt)
         {
@@ -421,6 +507,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
         if (_index >= batch.Bindings.Count) throw new InvalidOperationException("运行项越过冻结绑定范围");
         var binding = batch.Bindings[_index];
+        if (ContinueByState && io.ReadBoundEpoch?.Invoke() is { } boundEpoch && !SameEpoch(_epoch, boundEpoch))
+            throw new ControlContextRevokedException("原 BGI 已明确变化，撤销旧批次的新启动权限", batch.Cts.Token);
         _item ??= new BatchExpectedItem(binding.Name, binding.Type == "onedragon")
             { RequestKey = RequestKey(batch.BatchId, batch.SelfUid, _index, _attempt) };
         if (_item.State == BatchItemState.TerminalConfirmed && _result.Length > 0)
@@ -429,13 +517,47 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         using var rpc = CancellationTokenSource.CreateLinkedTokenSource(ct);
         rpc.CancelAfter(TimeSpan.FromSeconds(10));
         var jobs = await ReadJobsForObservationAsync(rpc.Token);
-        if (jobs is null) return;
-        if (!SameEpoch(_epoch, jobs.Epoch)) throw new InvalidOperationException("BGI 纪元已变化，不向后继进程重放");
-        AttachOriginalJob(jobs);
-        if (_item.State == BatchItemState.Submitted && _item.JobId == null
+        if (jobs is null && !ContinueByState) return;
+        if (jobs is not null)
+        {
+            if (!SameEpoch(_epoch, jobs.Epoch)) throw new InvalidOperationException("BGI 纪元已变化，不向后继进程重放");
+            AttachOriginalJob(jobs);
+        }
+        BgiTaskQueueStatus? original = null;
+        if (ContinueByState && _item.State == BatchItemState.Submitted && io.ResolveOriginal is not null)
+        {
+            original = await ReadObservationAsync(token => io.ResolveOriginal(_item.RequestKey, token), rpc.Token);
+            if (original is not null)
+            {
+                if (!SameEpoch(_epoch, original.Epoch))
+                    throw new InvalidOperationException("原请求查询的 BGI 纪元已变化，不重放");
+                if (original.IdempotencyKey != _item.RequestKey)
+                    throw new InvalidOperationException("原请求查询返回了不同请求编号，不重放");
+                if (!string.IsNullOrWhiteSpace(original.TaskHandle))
+                {
+                    if (_item.JobId is not null && !SameJob(_item.JobId, original.TaskHandle))
+                        throw new InvalidOperationException("原请求对应的任务编号冲突，不重放");
+                    _item.JobId = original.TaskHandle;
+                }
+                else if (original.Status == "not_found" && _item.JobId is null)
+                {
+                    // Only the retained-key authority can prove absence; an empty ordinary JobRegistry cannot.
+                    _item.State = BatchItemState.PendingSubmit;
+                    batch.SetControlItemSubmitted(false);
+                }
+            }
+        }
+        if (jobs is null && original is null)
+        {
+            // Only a never-sent item may use the already completed takeover and a still-bound epoch.
+            // Missing queue/registry facts for a submitted request never authorize a replacement send.
+            if (!ContinueByState || _item.State != BatchItemState.PendingSubmit
+                || !SameEpoch(_epoch, io.ReadBoundEpoch?.Invoke())) return;
+        }
+        if (!ContinueByState && _item.State == BatchItemState.Submitted && _item.JobId == null
             && DateTime.UtcNow - _submittedAt > io.SubmissionReconcileTimeout)
             throw new TimeoutException("启动回执未知且按原请求键未找到作业，禁止重发");
-        if (team.Phase == "stopping" && _result.Length == 0)
+        if (team.Phase == "stopping" && _result.Length == 0 && (!ContinueByState || batch.ExplicitStopRequested))
         {
             if (_item.State == BatchItemState.PendingSubmit)
             { _item.State = BatchItemState.TerminalConfirmed; _result = "stopped"; }
@@ -444,7 +566,13 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
         if (_item.State == BatchItemState.Submitted && _item.JobId != null && _result.Length == 0)
         {
-            var terminal = await ReadObservationAsync(token => io.ReadTerminal(_item.JobId, token), rpc.Token);
+            var terminal = original is { TaskHandle: not null, Status: not "not_found" }
+                ? original : await ReadObservationAsync(token => io.ReadTerminal(_item.JobId, token), rpc.Token);
+            if (ContinueByState && terminal is { Status: "completed" or "failed" or "queueCancelled", ExecutionExitConfirmed: false })
+            {
+                ObservationUnavailable("本批任务已报告终态，仍在等待实际退出");
+                return;
+            }
             if (terminal?.Status is null or "" or "not_found")
             {
                 ObservationUnavailable("本批作业终态暂不可读");
@@ -489,6 +617,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             {
                 _item.State = BatchItemState.TerminalConfirmed;
                 batch.SetControlItemSubmitted(false); // A terminal item only needs the original receipt/cleanup budget.
+                if (ContinueByState) _pendingAcknowledgements[_item.RequestKey] = (_item.JobId!, _epoch!);
             }
             if (_result == "local_failed")
                 _reason = LimitReason($"联机锄地已完成 {_completedNative} 次，本机配置组后续失败，禁止整组重跑；" + _reason);
@@ -505,13 +634,21 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 if (_index == batch.Bindings.Count - 1) batch.MarkLocalSuccess(_epoch!);
             }
         }
-        if (team.Phase != "running" || _result.Length != 0 || _item.State != BatchItemState.PendingSubmit) return;
+        if (!allowSubmit || team.Phase != "running" || _result.Length != 0 || _item.State != BatchItemState.PendingSubmit) return;
         _observationUnavailableSince = null;
         _item.State = BatchItemState.Submitted; // 发送前保留唯一请求身份；任何不确定都不得生成第二次提交。
         batch.SetControlItemSubmitted(true); // Includes a possible send whose response/observation is unknown.
         _submittedAt = DateTime.UtcNow;
         BgiTaskSubmitResult submitted;
         try { submitted = await io.Submit(_item, _epoch!, rpc.Token); }
+        catch (BgiStateContinuationStoppedException)
+        {
+            // The first frozen request was rejected before any task.start frame was sent.
+            _item.State = BatchItemState.PendingSubmit;
+            batch.SetControlItemSubmitted(false);
+            batch.Cancel();
+            throw;
+        }
         catch (ControlSubmissionDeferredException) when (!batch.IsCancellationRequested)
         {
             // The admission gate guarantees no BGI send was invoked. Keep the same request key.
@@ -522,14 +659,34 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
         catch (BgiNotSentException ex) when (BgiNotSentException.IsKnownEvidenceCode(ex.EvidenceCode))
         {
+            if (ContinueByState)
+            {
+                _item.State = BatchItemState.PendingSubmit;
+                batch.SetControlItemSubmitted(false);
+                ObservationUnavailable("本批原请求尚未发送，条件恢复后继续：" + ex.Message);
+                return;
+            }
             _item.State = BatchItemState.TerminalConfirmed;
             batch.SetControlItemSubmitted(false);
             _result = "failed"; _reason = LimitReason(ex.Message); return;
         }
         catch (Exception ex) when (!batch.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
         { io.Log("[全队批次] 启动回执未确认，将按原请求键补查: " + ex.Message); return; }
+        if (ContinueByState && !submitted.Success && submitted.ErrorCode == "manual_stop_fence")
+        {
+            // The same key might have been accepted before its reply was lost: reconcile/cancel it, never create a new key.
+            batch.Cancel();
+            throw new BgiStateContinuationStoppedException("BGI 已确认用户停止原批次，不再继续启动");
+        }
         if (!submitted.Success && KnownRejection(submitted.ErrorCode))
         {
+            if (ContinueByState && submitted.ErrorCode is ("queue_full" or "queue_unavailable" or "task_busy"))
+            {
+                _item.State = BatchItemState.PendingSubmit;
+                batch.SetControlItemSubmitted(false);
+                ObservationUnavailable("BGI 尚未接收原请求，等待后继续：" + submitted.ErrorCode);
+                return;
+            }
             _item.State = BatchItemState.TerminalConfirmed;
             batch.SetControlItemSubmitted(false);
             _result = submitted.ErrorCode == "manual_stop_cooldown" ? "cancelled" : "failed";
@@ -569,7 +726,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         var now = DateTime.UtcNow;
         _observationUnavailableSince ??= now;
-        if (now - _observationUnavailableSince >= io.ObservationReconcileTimeout)
+        if (!ContinueByState && now - _observationUnavailableSince >= io.ObservationReconcileTimeout)
             throw new TimeoutException(message + "，有界补查后仍未确认；未重发任务");
         io.Status("reconciling", message + "，正在按原任务身份补查；未重发任务");
     }
@@ -578,7 +735,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         if (_item == null || _item.State != BatchItemState.Submitted) return;
         var matches = jobs.Jobs.Where(j => j.IdempotencyKey == _item.RequestKey).ToList();
-        if (matches.Count > 1 || (matches.Count == 1 && _item.JobId != null && matches[0].JobId != _item.JobId))
+        if (matches.Count > 1 || (matches.Count == 1 && _item.JobId != null && !SameJob(matches[0].JobId, _item.JobId)))
             throw new InvalidOperationException("原请求键对应的作业身份冲突");
         if (matches.Count == 1) _item.JobId ??= matches[0].JobId;
     }
@@ -589,6 +746,27 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         while (!ct.IsCancellationRequested)
         {
             if (OriginalProcessExited()) return true;
+            if (ContinueByState && io.ResolveOriginal is not null)
+            {
+                var retained = await ReadObservationAsync(token => io.ResolveOriginal(_item.RequestKey, token), ct);
+                if (retained is not null)
+                {
+                    if (!SameEpoch(_epoch, retained.Epoch) || retained.IdempotencyKey != _item.RequestKey)
+                        return OriginalProcessExited();
+                    if (!string.IsNullOrWhiteSpace(retained.TaskHandle))
+                    {
+                        if (_item.JobId is not null && !SameJob(_item.JobId, retained.TaskHandle)) return false;
+                        _item.JobId = retained.TaskHandle;
+                        if (retained.Status is "completed" or "failed" or "queueCancelled"
+                            && retained.ExecutionExitConfirmed)
+                        { _item.State = BatchItemState.TerminalConfirmed; return true; }
+                        if (!batch.ExplicitStopRequested) return false;
+                        if (!_cancelSent) { await io.CancelOwned(_item.JobId, ct); _cancelSent = true; }
+                        await Task.Delay(io.PollInterval, ct);
+                        continue;
+                    }
+                }
+            }
             var jobs = await ReadObservationAsync(io.ReadJobs, ct);
             if (jobs?.Epoch is null)
             {
@@ -599,9 +777,11 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             AttachOriginalJob(jobs);
             if (_item.JobId == null) return false; // 查无作业不是未发送；不能释放本批责任。
             var terminal = await io.ReadTerminal(_item.JobId, ct);
-            if (terminal?.Status is "completed" or "failed" or "queueCancelled")
+            if (terminal?.Status is "completed" or "failed" or "queueCancelled"
+                && (!ContinueByState || terminal.ExecutionExitConfirmed))
             { _item.State = BatchItemState.TerminalConfirmed; return true; }
             if (jobs!.Jobs.All(j => j.JobId != _item.JobId || j.IdempotencyKey != _item.RequestKey)) return false;
+            if (ContinueByState && !batch.ExplicitStopRequested) return false;
             if (!_cancelSent) { await io.CancelOwned(_item.JobId, ct); _cancelSent = true; }
             await Task.Delay(io.PollInterval, ct);
         }
@@ -616,6 +796,12 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         {
             batch.CleanupConfirmed = true;
             return; // This loop no longer owns BGI; delayed team failures cannot reclaim a successor.
+        }
+        if (ContinueByState && !batch.ExplicitStopRequested && !OriginalProcessExited()
+            && (_item?.State != BatchItemState.TerminalConfirmed || batch.LocalSucceeded))
+        {
+            io.Status("reconciling", "原任务或完成动作仍待确认，保留请求与恢复现场，不自动取消");
+            return;
         }
         _stageCancellation?.Cancel();
         using var cleanup = new CancellationTokenSource(io.CleanupTimeout);
@@ -650,6 +836,24 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         io.Status(batch.CleanupConfirmed ? "aborted" : "cleanupPending",
             batch.CleanupConfirmed ? "本批已中止并清理" : "本批清理尚未确认，保留执行责任");
         // cleaned ACK 由外层在策略及整个调用栈收口后发送，本循环不抢先宣称已清理。
+    }
+
+    private async Task RetryAcknowledgementsAsync(CancellationToken ct)
+    {
+        if (!ContinueByState || io.Acknowledge is null) return;
+        foreach (var pending in _pendingAcknowledgements.ToArray())
+        {
+            using var call = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            call.CancelAfter(io.AuthorityRpcTimeout);
+            try
+            {
+                if (await io.Acknowledge(pending.Key, pending.Value.JobId, pending.Value.Epoch, call.Token))
+                    _pendingAcknowledgements.Remove(pending.Key);
+            }
+            catch (Exception ex) when (!batch.IsCancellationRequested
+                && ex is IOException or TimeoutException or OperationCanceledException)
+            { io.Log("[全队批次] 原任务终态已保留，结果确认稍后补报：" + ex.Message); }
+        }
     }
 
     private static string LimitReason(string reason) => reason.Length <= 512 ? reason : reason[..512];

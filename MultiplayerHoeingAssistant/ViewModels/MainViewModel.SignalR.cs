@@ -36,7 +36,9 @@ public partial class MainViewModel
         _controlAuthority.Revoke();
         OnlineHoeingBatch? batch;
         lock (_batchGate) batch = _activeBatch;
-        if (batch is not null) ObserveOnlineTask(Task.Run(() => batch.Cancel()), "房间身份变化撤销原批次");
+        if (batch is not null)
+            ObserveOnlineTask(Task.Run(() => batch.Cancel(userInitiated: !batch.StateContinuationEnabled)),
+                "房间身份变化撤销原批次启动权限");
     }
 
     private void RequireCoordinatedControlContext(OnlineHoeingBatch batch, CancellationToken ct, bool terminalReport = false)

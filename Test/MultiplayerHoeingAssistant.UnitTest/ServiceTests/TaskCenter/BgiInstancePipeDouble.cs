@@ -66,6 +66,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
     public int? ReportedProcessIdOverride { get; set; }
     public long? ReportedStartTicksOverride { get; set; }
     public bool OmitHelloData { get; set; }
+    internal bool StateContinuationForTest { get; set; }
 
     internal Func<string, JsonElement?, (bool Success, string? ErrorCode, string? ErrorMessage, object? Payload)?>? BodyForTest { get; set; }
 
@@ -296,6 +297,7 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                         {
                             ["event.push"] = true,
                             ["task.queue"] = true,
+                            ["task.stateContinuation.v1"] = StateContinuationForTest,
                             ["execution.contract.v1"] = false,
                         },
                     });

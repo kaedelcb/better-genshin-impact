@@ -72,6 +72,8 @@ public class CoordinatedBatchGatewayTests
         await h.Ops.ReportOnlineEventAsync(clients[0], 7, true);
         var state = Snapshot(await h.Dispatcher.DispatchAsync(clients[0], Command(GatewayProtocol.Names.ControlBatchCurrent, new { })));
         Assert.Equal("registering", state.Phase);
+        Assert.True(state.StateContinuation);
+        Assert.Contains(GatewayProtocol.HoeingStateContinuationCapability, GatewayProtocol.ServerCapabilities);
         Assert.Equal("online", state.Source);
         Assert.Equal(7, state.IntentGenerations["u0"]);
         Assert.True(state.Generation > 0);
@@ -130,7 +132,7 @@ public class CoordinatedBatchGatewayTests
     [Fact]
     public async Task CompletedAndAbortedBatchesKeepOwnershipUntilEveryRegisteredMemberCleans()
     {
-        foreach (var result in new[] { "succeeded", "unknown" })
+        foreach (var result in new[] { "succeeded", "cancelled" })
         {
             var (h, clients, _) = await Setup();
             var state = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
@@ -190,14 +192,26 @@ public class CoordinatedBatchGatewayTests
     }
 
     [Fact]
-    public async Task UnknownResultCarriesParticipantIdentityWithoutPretendingSuccess()
+    public async Task UnknownResultKeepsOriginalRequestUntilTheActualResultArrives()
     {
         var (h, clients, _) = await Setup();
         var state = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
-        var unknown = Snapshot(await Update(h, clients[0], state, result: "unknown"));
-        Assert.Equal("aborted", unknown.Phase);
-        Assert.Equal("participant_unknown:u0:running", unknown.Reason);
-        Assert.Equal(0, unknown.Attempt);
+        var unknown = Snapshot(await Update(h, clients[0], state, result: "unknown", reason: "reply_lost"));
+        Assert.True(unknown.StateContinuation);
+        Assert.Equal("running", unknown.Phase);
+        var member = Assert.Single(unknown.Members);
+        Assert.Equal("u0", member.Uid);
+        Assert.Equal("unknown", member.Result);
+        Assert.Equal("reply_lost", member.Reason);
+        Assert.Equal(state.BatchId, unknown.BatchId);
+        Assert.Equal(state.Index, unknown.Index);
+        Assert.Equal(state.Attempt, unknown.Attempt);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "replacement")));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, clients[0], unknown, stage: "cleaned")));
+        var completed = Snapshot(await Update(h, clients[0], unknown, result: "succeeded"));
+        Assert.Equal("completed", completed.Phase);
+        Assert.Equal(state.BatchId, completed.BatchId);
+        Assert.Equal("succeeded", Assert.Single(completed.Members).Result);
     }
 
     [Fact]

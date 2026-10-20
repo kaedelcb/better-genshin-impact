@@ -141,6 +141,7 @@ public class SignalRClient : IAsyncDisposable
     public Action<string>? OnLog { get; set; }
 
     public bool IsConnected => _gateway?.IsConnected == true;
+    public bool SupportsStateContinuation => _gateway?.ServerCapabilities.Contains("hoeing.stateContinuation.v1", StringComparer.Ordinal) == true;
     public bool SupportsCoordinatedStart => _gateway?.ServerCapabilities.Contains("hoeing.start.v2", StringComparer.Ordinal) == true;
     public bool SupportsLocalTaskFailure => _gateway?.ServerCapabilities.Contains(GatewayProtocol.LocalTaskFailureCapability, StringComparer.Ordinal) == true;
     public bool SupportsLocalFinish => _gateway?.ServerCapabilities.Contains(GatewayProtocol.LocalFinishCapability, StringComparer.Ordinal) == true;

@@ -662,11 +662,17 @@ public partial class OneDragonFlowViewModel : ViewModel
         }
         using var rootLifetime = scope;
         var registry = BetterGenshinImpact.Service.Execution.JobRegistry.Instance;
-        var parent = descriptor.JobId is { } id ? registry.Query(id) : null;
-        parent ??= registry.Submit(descriptor.Kind, descriptor.Name, descriptor.Source,
-            descriptor.Generation, descriptor.IdempotencyKey, jobId: descriptor.JobId, identity: descriptor.ExecutionIdentity).Job;
-        _currentDragonJobId = parent.JobId;
-        registry.TryMarkRunning(parent.JobId);
+        var parentId = descriptor.JobId!.Value;
+        _currentDragonJobId = parentId;
+        TryProjectDragonJob(() =>
+        {
+            if (registry.Query(parentId) == null)
+                registry.Submit(descriptor.Kind, descriptor.Name, descriptor.Source,
+                    descriptor.Generation, descriptor.IdempotencyKey, jobId: parentId, identity: descriptor.ExecutionIdentity,
+                    requestFingerprint: descriptor.RequestFingerprint, requestOperation: descriptor.RequestOperation,
+                    retainUntilAcknowledged: descriptor.RetainUntilAcknowledged);
+            registry.TryMarkRunning(parentId);
+        });
         scope.SetDragonNode(string.Empty);
         _finishMark = false;
         _preserveExecutionSource = descriptor.ConfigRevision != null ||
@@ -703,18 +709,27 @@ public partial class OneDragonFlowViewModel : ViewModel
         finally
         {
             var cancelled = result is TaskRunResult.Cancelled or TaskRunResult.Preempted;
-            registry.TryMarkTerminal(parent.JobId,
+            TryProjectDragonJob(() => registry.TryMarkTerminal(parentId,
                 result == TaskRunResult.Ran ? BetterGenshinImpact.Service.Execution.JobState.Succeeded
                     : cancelled ? BetterGenshinImpact.Service.Execution.JobState.Cancelled
                     : BetterGenshinImpact.Service.Execution.JobState.Failed,
                 result == TaskRunResult.Ran ? null : result == TaskRunResult.Preempted ? "preempted"
-                    : cancelled ? scope.StopReason : failureCode, null, cancelled);
+                    : cancelled ? scope.StopReason : failureCode, null, cancelled));
             _currentDragonJobId = null;
             _runningConfig = null;
             _preserveExecutionSource = false;
             if (result != TaskRunResult.Ran) _finishMark = false;
         }
         return result;
+    }
+
+    private void TryProjectDragonJob(Action project)
+    {
+        try { project(); }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "一条龙作业记录暂未更新，原执行结果与任务编号保留");
+        }
     }
 
     private OneDragonFlowConfig? _runningConfig;

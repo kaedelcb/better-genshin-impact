@@ -56,6 +56,12 @@ public sealed partial class JobRegistry
 
     /// <summary>全部已知作业（在队/在跑 + 未淘汰的终态）。</summary>
     private readonly Dictionary<Guid, BgiJob> _jobs = new();
+    private readonly HashSet<Guid> _retainedJobs = new();
+
+    internal void ReleaseRetainedJob(Guid handle)
+    {
+        lock (_gate) _retainedJobs.Remove(handle);
+    }
 
     /// <summary>终态淘汰顺序（队首最旧）。</summary>
     private readonly Queue<Guid> _terminalOrder = new();
@@ -100,14 +106,18 @@ public sealed partial class JobRegistry
     /// </summary>
     public JobSubmitResult Submit(JobKind kind, string name, JobSource source, int? generation = null,
         string? idempotencyKey = null, Guid? parentJobId = null, Guid? jobId = null, JobExecutionIdentity? identity = null,
-        string? requestFingerprint = null, string? requestOperation = null)
+        string? requestFingerprint = null, string? requestOperation = null,
+        bool retainUntilAcknowledged = false)
     {
         BgiJob? created = null;
         JobSubmitResult result;
         lock (_gate)
         {
             if (jobId is { } explicitId && _jobs.TryGetValue(explicitId, out var existing))
+            {
+                if (retainUntilAcknowledged) _retainedJobs.Add(explicitId);
                 return new JobSubmitResult(existing, true);
+            }
             if (jobId is null)
             {
                 if (!string.IsNullOrEmpty(idempotencyKey)
@@ -132,6 +142,7 @@ public sealed partial class JobRegistry
             created = new BgiJob(kind, name, source, generation, idempotencyKey, parentJobId, jobId, identity,
                 requestFingerprint, requestOperation);
             _jobs[created.JobId] = created;
+            if (retainUntilAcknowledged) _retainedJobs.Add(created.JobId);
             if (!string.IsNullOrEmpty(idempotencyKey))
             {
                 _activeByIdempotencyKey[idempotencyKey] = created.JobId;
@@ -223,7 +234,8 @@ public sealed partial class JobRegistry
             while (_terminalOrder.Count > TerminalCapacity && evictionAttempts-- > 0)
             {
                 var evicted = _terminalOrder.Dequeue();
-                if (_jobs.TryGetValue(evicted, out var held) && held.WorkflowRunId is not null && !held.ExitConfirmed)
+                if (_retainedJobs.Contains(evicted)
+                    || _jobs.TryGetValue(evicted, out var held) && held.WorkflowRunId is not null && !held.ExitConfirmed)
                 { _terminalOrder.Enqueue(evicted); continue; }
                 _jobs.Remove(evicted);
             }

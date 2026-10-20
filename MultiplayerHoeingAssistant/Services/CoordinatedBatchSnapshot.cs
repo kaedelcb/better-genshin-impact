@@ -13,6 +13,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public IReadOnlyDictionary<string, IReadOnlyList<CoordinatedHoeingBinding>> Bindings { get; init; }
         = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>();
     public IReadOnlyList<CoordinatedHoeingMember> Members { get; init; } = [];
+    public bool StateContinuation { get; init; }
     public bool UseCompletionActions { get; init; }
     public bool CleanupComplete { get; init; }
 }

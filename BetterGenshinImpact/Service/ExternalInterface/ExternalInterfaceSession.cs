@@ -79,7 +79,20 @@ internal sealed class ExternalInterfaceSession
             {
                 // Expiry prevents a NEW execution, not retrieval of an existing outcome.
                 if (Execution.ExecutionRequestContract.Validate(request, allowExpiredReplay: true) is { } rejection) return rejection;
+                if (ExternalInterfaceCommandPlane.ValidateStateContinuationRequest(request) is { } invalidContinuation)
+                    return invalidContinuation;
+                // 原目标已经取消过；同票据只重读其退出状态，不缓存最初的 quiesce=false。
+                if (request.Operation == ExternalInterfaceOperations.TaskSuspend
+                    && request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true)
+                    return await DispatchToPlaneAsync(handler, request, cancellationToken).ConfigureAwait(false);
                 var idempotencyKey = request.Data?["idempotencyKey"]?.ToString();
+                if (request.Operation == ExternalInterfaceOperations.TaskStart
+                    && request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true
+                    && idempotencyKey is { Length: > 0 } && BgiTaskCoordinator.IsCreated
+                    && BgiTaskCoordinator.Instance.TryReplayRetainedStart(idempotencyKey,
+                        Execution.ExecutionRequestContract.Fingerprint(request), out var existing))
+                    return ExternalInterfaceCommandPlane.MapTaskStartQueueResult(request, existing,
+                        request.Data?["generation"]?.Value<int>() ?? 0);
                 var windowKey = idempotencyKey is { Length: > 0 }
                     ? $"key:{idempotencyKey}"
                     : $"rid:{request.RequestId}";

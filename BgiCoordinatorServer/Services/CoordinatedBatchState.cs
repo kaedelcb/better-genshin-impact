@@ -22,6 +22,7 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public IReadOnlyList<CoordinatedBatchMemberSnapshot> Members { get; init; } = [];
     public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
     public bool UseCompletionActions { get; init; }
+    public bool StateContinuation { get; init; }
     public bool CleanupComplete { get; init; }
 }
 
@@ -65,6 +66,7 @@ public sealed class CoordinatedBatchState
     public string RequestId { get; }
     public string QuickCommandKey { get; }
     public bool UseCompletionActions { get; }
+    public bool StateContinuation { get; }
     public int Index { get; private set; }
     public int Attempt { get; private set; }
     public long Revision { get; private set; }
@@ -79,13 +81,14 @@ public sealed class CoordinatedBatchState
         IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>>? bindings = null,
         IReadOnlyDictionary<string, int>? intentGenerations = null,
         IReadOnlyDictionary<string, string>? executorInstances = null,
-        bool useCompletionActions = false, string quickCommandKey = "")
+        bool useCompletionActions = false, string quickCommandKey = "", bool stateContinuation = false)
     {
         Generation = generation;
         Source = source;
         RequestId = requestId;
         QuickCommandKey = quickCommandKey;
         UseCompletionActions = useCompletionActions;
+        StateContinuation = stateContinuation;
         _created = _phaseStarted = now;
         _members = uids.Distinct(StringComparer.Ordinal).ToDictionary(u => u, _ => new Member(now), StringComparer.Ordinal);
         if (_members.Count is < 1 or > 4 || _members.Keys.Any(string.IsNullOrWhiteSpace))
@@ -124,6 +127,7 @@ public sealed class CoordinatedBatchState
         IntentGenerations = _intentGenerations,
         Bindings = _bindings,
         UseCompletionActions = UseCompletionActions,
+        StateContinuation = StateContinuation,
         Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason) { Result = p.Value.Result }).ToArray(),
         MissingRegistrationUids = Reason == "registration_timeout"
             ? _members.Where(p => p.Value.Token.Length == 0).Select(p => p.Key).ToArray() : [],
@@ -142,7 +146,9 @@ public sealed class CoordinatedBatchState
 
     public void CheckTimeout(DateTime now)
     {
-        if (ExecutionEnded) return;
+        // Elapsed server time cannot prove that the original BGI request failed or exited.
+        // Explicit stop/reset still calls Abort and fences every late report.
+        if (ExecutionEnded || StateContinuation) return;
         if (Phase == "registering" && now - _created > TimeSpan.FromMinutes(3)) Abort("registration_timeout");
         else if (Phase == "preparing" && now - _phaseStarted > TimeSpan.FromMinutes(3)) Abort("preparation_timeout");
         else if (Phase == "takeover" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("takeover_timeout");
@@ -211,6 +217,17 @@ public sealed class CoordinatedBatchState
             if (reason.Length > 0 && member.Reason != reason) { member.Reason = reason; Revision++; }
             return Snapshot();
         }
+        if (StateContinuation && result == "unknown")
+        {
+            // Keep the same item/attempt pending until its actual queue result is known.
+            // A missed observation cannot replace an already known terminal failure/stop.
+            if (member.Result is "failed" or "stopped") return Snapshot();
+            if (member.Result != result || member.Reason != reason)
+            { member.Result = result; member.Reason = reason; Revision++; }
+            return Snapshot();
+        }
+        if (StateContinuation && result.Length == 0 && reason.Length > 0 && member.Reason != reason)
+        { member.Reason = reason; Revision++; }
         if (result == "local_tasks_failed" && Phase is not ("running" or "stopping"))
             throw new InvalidOperationException("batch_not_started");
         if (result == "local_failed")
@@ -232,12 +249,16 @@ public sealed class CoordinatedBatchState
             if (stage == "prepared" && member.Stage == "registered")
             {
                 if (Phase == "takeover") throw new InvalidOperationException("batch_preparation_phase");
-                member.Stage = "prepared"; Revision++;
+                member.Stage = "prepared";
+                if (StateContinuation) { member.Result = ""; member.Reason = ""; }
+                Revision++;
             }
             if (stage == "takeoverConfirmed" && member.Stage != "takeoverConfirmed")
             {
                 if (Phase != "takeover" || member.Stage != "prepared") throw new InvalidOperationException("batch_takeover_not_authorized");
-                member.Stage = "takeoverConfirmed"; Revision++;
+                member.Stage = "takeoverConfirmed";
+                if (StateContinuation) { member.Result = ""; member.Reason = ""; }
+                Revision++;
             }
             if (Phase == "registering" && _members.Values.All(m => m.Token.Length > 0)) SetPhase("preparing", now);
             if (Phase == "preparing" && _members.Values.All(m => m.Stage == "prepared")) SetPhase("takeover", now);
@@ -248,6 +269,8 @@ public sealed class CoordinatedBatchState
         if (index != Index || attempt != Attempt) return Snapshot();
         if (result.Length > 0)
         {
+            if (StateContinuation && member.Result == "unknown")
+            { member.Result = ""; member.Reason = ""; }
             if (member.Result.Length > 0 && member.Result != result)
             { Abort("conflicting_terminal_result"); return Snapshot(); }
             if (result == "stopped" && Phase != "stopping") { Abort("unexpected_stop"); return Snapshot(); }
@@ -281,7 +304,8 @@ public sealed class CoordinatedBatchState
                 foreach (var m in _members.Values) m.Result = "";
             SetPhase(Index == _count ? "completed" : "running", now);
         }
-        else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0))
+        else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0
+                     && (!StateContinuation || m.Result != "unknown")))
         {
             if (_members.Values.Any(HasEndedCurrentItem))
             {

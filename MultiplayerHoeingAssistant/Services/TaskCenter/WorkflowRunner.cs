@@ -928,7 +928,10 @@ public sealed partial class WorkflowRunner
                     return run;
                 }
                 var retryNextAttempt = ResourceRetryAttempt(run, plan, occurrence, outcome.Result, outcome.RawTerminal);
-                CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal, retryNextAttempt);
+                if (run.OnlineHoeingHandoff is { StateContinuation: true, Phase: "terminal" })
+                    await CommitOnlineContinuationOutcomeAsync(run, plan, occurrence, outcome.Result,
+                        outcome.Reason, outcome.RawTerminal, retryNextAttempt, ct).ConfigureAwait(false);
+                else CommitOutcome(run, plan, occurrence, outcome.Result, outcome.Reason, outcome.RawTerminal, retryNextAttempt);
                 if (outcome.Result == "cancelled") throw new OperationCanceledException(); // BGI 取消事实 → 流程取消（D12）
                 if (IsSingleNodeTarget(run, occurrence) && retryNextAttempt is null) break;
                 if (retryNextAttempt is null && (outcome.Result is "failed" or "rejected")
@@ -1418,7 +1421,9 @@ public sealed partial class WorkflowRunner
                         return ("unknown", "联机锄地恢复结果不可考：" + Sanitize(continued.Reason), null);
                     }
                     terminal = continued;
-                    if (_runs.Load(run.RunId) is { } resumedRecord) RunStore.RebaseOnto(run, resumedRecord);
+                    if (run.OnlineHoeingHandoff?.StateContinuation == true)
+                        await RebaseOnlineContinuationAsync(run, leaf.Token).ConfigureAwait(false);
+                    else if (_runs.Load(run.RunId) is { } resumedRecord) RunStore.RebaseOnto(run, resumedRecord);
                     submission = run.CurrentSubmission
                         ?? throw new InvalidOperationException("联机恢复后缺少新作业提交记录");
                 }
@@ -2883,6 +2888,67 @@ public sealed partial class WorkflowRunner
     /// 四轮阻断 5：unknown/cancelUnconfirmed 游标不推进（调用方先置 Unknown 状态再进本方法，保持单次原子落盘）；
     /// I3/四轮重要 10：持久化原因统一脱敏。
     /// </summary>
+    private static bool OnlineContinuationRecordUnavailable(Exception exception)
+        => exception is System.IO.IOException or UnauthorizedAccessException or System.Text.Json.JsonException;
+
+    private async Task RebaseOnlineContinuationAsync(WorkflowRunRecord run, CancellationToken ct)
+    {
+        var key = run.CurrentSubmission?.Key;
+        var job = run.CurrentSubmission?.JobId;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (_runs.Load(run.RunId) is { } latest)
+                {
+                    if (latest.StopRequested) throw new OperationCanceledException("原计划已明确停止", ct);
+                    if (latest.CurrentSubmission?.Key != key || latest.CurrentSubmission?.JobId != job)
+                        throw new InvalidOperationException("在线恢复提交身份已改变，未推进其他节点");
+                    RunStore.RebaseOnto(run, latest);
+                    return;
+                }
+            }
+            catch (Exception exception) when (OnlineContinuationRecordUnavailable(exception) && !ct.IsCancellationRequested) { }
+            await Task.Delay(100, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CommitOnlineContinuationOutcomeAsync(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence occurrence, string result, string? reason, string? rawTerminal,
+        int? retryNextAttempt, CancellationToken ct)
+    {
+        var key = run.CurrentSubmission!.Key;
+        var job = run.CurrentSubmission.JobId;
+        var attempt = run.CurrentSubmission.Attempt;
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (_runs.Load(run.RunId) is { } latest)
+                {
+                    if (latest.StopRequested) throw new OperationCanceledException("原计划已明确停止", ct);
+                    if (latest.NodeOutcomes.Any(outcome => outcome.SubmissionKey == key && outcome.Attempt == attempt
+                        && outcome.RawTerminal == rawTerminal && outcome.Result == result))
+                    {
+                        RunStore.RebaseOnto(run, latest);
+                        return; // 上次原子发布已成功，只是调用方没有取回结果；不能再加历史或推进游标。
+                    }
+                    if (latest.OnlineHoeingHandoff is not { StateContinuation: true, Phase: "terminal" } handoff
+                        || latest.CurrentSubmission?.Key != key || latest.CurrentSubmission.JobId != job
+                        || handoff.ResumeJobId != job || handoff.ResumeTerminal != rawTerminal)
+                        throw new InvalidOperationException("在线恢复终态身份已改变，未重复消费结果");
+                    CommitOutcome(latest, plan, occurrence, result, reason, rawTerminal, retryNextAttempt);
+                    RunStore.RebaseOnto(run, latest);
+                    return;
+                }
+            }
+            catch (Exception exception) when (OnlineContinuationRecordUnavailable(exception) && !ct.IsCancellationRequested) { }
+            await Task.Delay(100, ct).ConfigureAwait(false);
+        }
+    }
+
     private void CommitOutcome(WorkflowRunRecord run, WorkflowPlan plan, WorkflowNodeOccurrence occurrence,
         string result, string? reason, string? rawTerminal = null, int? retryNextAttempt = null)
     {

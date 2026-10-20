@@ -535,6 +535,7 @@ public sealed class WorkflowSubmission
 /// <summary>仅用于本机任务中心拥有的运行；保存原提交与 BGI 恢复作业的两段事实。</summary>
 public sealed class OnlineHoeingHandoffRecord
 {
+    [JsonPropertyName("stateContinuation")] public bool StateContinuation { get; set; }
     [JsonPropertyName("generation")] public int Generation { get; set; }
     [JsonPropertyName("ticket")] public string? Ticket { get; set; }
     [JsonPropertyName("ticketHash")] public string? TicketHash { get; set; }

@@ -1,0 +1,199 @@
+using System.IO;
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.ViewModels;
+using Xunit;
+
+namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
+
+public sealed class CompletionStateContinuationTests
+{
+    private static readonly BgiEpoch Epoch = new() { ProcessId = 19, StartTicksUtc = 190 };
+    private static readonly string Job = Guid.NewGuid().ToString("N");
+
+    private static OnlineHoeingBatch Create(TaskConflictPolicy policy = TaskConflictPolicy.RunSpecified) => new(new("completion", 7, 0, 0, 1, "completed", "")
+    {
+        Protocol = "hoeing.start.v2",
+        ParticipantUids = ["shark"],
+        Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+            { ["shark"] = [new("联机精英", "group")] },
+    }, "shark", new TaskConflictPolicySettings
+    {
+        Policy = policy, SpecifiedTaskType = "onedragon", SpecifiedTaskName = "收尾任务",
+    }) { ExecutionEpoch = Epoch, StateContinuationEnabled = true };
+
+    private static CommandResult Accepted() => new()
+    {
+        Status = "success", JobId = Job, TargetProcessId = Epoch.ProcessId,
+        TargetStartTicksUtc = Epoch.StartTicksUtc.ToString(),
+    };
+
+    private static BgiTaskQueueStatus Terminal(OnlineHoeingBatch batch, string status = "completed", bool cancelled = false,
+        string? key = null) => new()
+    {
+        TaskHandle = Job, Epoch = Epoch, IdempotencyKey = key ?? batch.PolicyRequestKey,
+        Status = status, Cancelled = cancelled, ExecutionExitConfirmed = true,
+    };
+
+    [Fact]
+    public async Task SharkBusyThenIdleStartsTheSameFrozenCompletionWithoutAnotherOnlineOrReset()
+    {
+        var batch = Create();
+        var prepares = 0; var starts = 0; var delays = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => Task.FromResult(++prepares > 1),
+            Start = _ => { starts++; batch.PolicyStartAttempted = true; return Task.FromResult(Accepted()); },
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch)),
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = _ => { delays++; return Task.CompletedTask; },
+        }, batch.Cts.Token);
+        Assert.Equal(2, prepares);
+        Assert.Equal(1, starts);
+        Assert.True(delays > 0);
+        Assert.Equal(Job, batch.PolicyExecution!.JobId);
+        Assert.Equal("completed", batch.PolicyTerminalResult!.Status);
+        Assert.True(batch.PolicyResultAcknowledged);
+    }
+
+    [Fact]
+    public async Task AcceptedActionSurvivesRecordFailuresAndLostAcknowledgementWithoutStartingAgain()
+    {
+        var batch = Create();
+        var prepares = 0; var starts = 0; var records = 0; var reads = 0; var acknowledgements = 0;
+        var ports = new MainViewModel.CompletionContinuationPorts
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => { prepares++; return Task.FromResult(true); },
+            Start = _ => { starts++; batch.PolicyStartAttempted = true; return Task.FromResult(Accepted()); },
+            Query = _ => { reads++; return Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch)); },
+            Reconcile = _ => ++records <= 1 ? throw new IOException("record store unavailable") : Task.FromResult(true),
+            Acknowledge = (result, _) =>
+            {
+                Assert.Same(result, batch.PolicyTerminalResult);
+                Assert.True(batch.LocalExecutionReleased);
+                return Task.FromResult(++acknowledgements > 1);
+            },
+            Delay = _ => Task.CompletedTask,
+        };
+        await MainViewModel.RunCompletionContinuationAsync(batch, ports, batch.Cts.Token);
+        await MainViewModel.RunCompletionContinuationAsync(batch, ports, batch.Cts.Token);
+        Assert.Equal(1, starts);
+        Assert.Equal(1, prepares);
+        Assert.Equal(1, reads);
+        Assert.Equal(2, acknowledgements);
+        Assert.True(batch.PolicyResultAcknowledged);
+        Assert.True(batch.LocalExecutionReleased);
+    }
+
+    [Theory]
+    [InlineData("resume/original-ticket")]
+    [InlineData("original-plan-resume-key")]
+    public async Task LostResumeReplyUsesItsActualRetainedKeyAndAcknowledgesOnlyThatResult(string resumeKey)
+    {
+        var batch = Create(TaskConflictPolicy.Resume);
+        var starts = 0; var prepares = 0; var acknowledgements = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, ExpectedRequestKey = () => resumeKey,
+            Prepare = _ => { prepares++; return Task.FromResult(true); },
+            Start = _ =>
+            {
+                starts++; batch.PolicyStartAttempted = true;
+                throw new IOException("original resume accepted but reply lost");
+            },
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch, key: resumeKey)),
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (terminal, _) =>
+            {
+                acknowledgements++;
+                Assert.Equal(resumeKey, terminal.IdempotencyKey);
+                Assert.NotEqual(batch.PolicyRequestKey, terminal.IdempotencyKey);
+                Assert.True(batch.LocalExecutionReleased);
+                return Task.FromResult(true);
+            },
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token);
+        Assert.Equal(1, starts);
+        Assert.Equal(1, prepares);
+        Assert.Equal(1, acknowledgements);
+        Assert.Equal(Job, batch.PolicyExecution!.JobId);
+    }
+
+    [Fact]
+    public async Task LostStartReplyIsResolvedByOriginalKeyInsteadOfStartingAnotherAction()
+    {
+        var batch = Create();
+        var starts = 0; var prepares = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => { prepares++; return Task.FromResult(true); },
+            Start = _ =>
+            {
+                starts++; batch.PolicyStartAttempted = true;
+                throw new IOException("accepted reply lost");
+            },
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch)),
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token);
+        Assert.Equal(1, starts);
+        Assert.Equal(1, prepares);
+        Assert.Equal(Job, batch.PolicyExecution!.JobId);
+        Assert.True(batch.PolicyResultAcknowledged);
+    }
+
+    [Fact]
+    public async Task ExplicitStopRetainsLateAcceptedJobForExactCancellationAndDoesNotReviveIt()
+    {
+        var batch = Create();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = new TaskCompletionSource<CommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var starts = 0; var cancels = 0;
+        batch.ConfigurePolicyCancellation(_ => { Interlocked.Increment(ref cancels); return Task.FromResult(true); });
+        var task = MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => Task.FromResult(true),
+            Start = _ => { starts++; entered.TrySetResult(); return reply.Task; },
+            Query = _ => throw new InvalidOperationException("Stopped action must not be observed as new work"),
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        batch.Cancel(userInitiated: true);
+        reply.SetResult(Accepted());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        Assert.Equal(Job, batch.PolicyExecution!.JobId);
+        Assert.True(await batch.WaitPolicyCancellationAsync().WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, starts);
+        Assert.Equal(1, cancels);
+        Assert.Null(batch.PolicyTerminalResult);
+    }
+
+    [Theory]
+    [InlineData("failed", false)]
+    [InlineData("queueCancelled", true)]
+    [InlineData("completed", true)]
+    public async Task TrueFailureAndCancellationAreRetainedWithoutRetryingTheCompletedExecution(string state, bool cancelled)
+    {
+        var batch = Create();
+        var starts = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => Task.FromResult(true),
+            Start = _ => { starts++; return Task.FromResult(Accepted()); },
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch, state, cancelled)),
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token);
+        Assert.Equal(1, starts);
+        Assert.Equal(state, batch.PolicyTerminalResult!.Status);
+        Assert.Equal(cancelled, batch.PolicyTerminalResult.Cancelled);
+        Assert.NotNull(batch.CompletionActionWarning);
+    }
+}

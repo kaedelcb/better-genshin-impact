@@ -1,0 +1,84 @@
+using System.Text.Json;
+using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.ViewModels;
+
+namespace MultiplayerHoeingAssistant.Services;
+
+public partial class CommandExecutor
+{
+    private string? _retainedSuspendFenceTicket;
+    private long? _retainedSuspendStopVersion;
+
+    // This is the frozen completion action of a completed coordinated batch, not a new manual start.
+    // The caller retains the batch/epoch/stop authority and waits for an actually available slot.
+    internal async Task<CommandResult> StartRetainedCompletionActionAsync(OnlineHoeingBatch batch,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!batch.StateContinuationEnabled || !batch.LocalSucceeded || batch.ExplicitStopRequested
+            || batch.Policy is not { Policy: TaskConflictPolicy.RunSpecified } policy)
+            return new CommandResult { ErrorCode = "completion_not_authorized", Message = "原批次完成动作授权已撤销，未发送" };
+        var ext = _externalClientProvider?.Invoke();
+        var epoch = batch.ExecutionEpoch ?? batch.LocalSuccessEpoch;
+        if (ext is not { State: BgiExternalLinkState.Ready } || epoch is null
+            || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+            return new CommandResult { ErrorCode = "state_unavailable", Message = "原 BGI 通道暂不可用，保留完成动作" };
+
+        var frozen = batch.PolicySubmitPayload;
+        if (frozen is null)
+        {
+            var name = policy.SpecifiedTaskName?.Trim() ?? "";
+            var oneDragon = policy.SpecifiedTaskType == "onedragon";
+            if (name.Length == 0) return new CommandResult { ErrorCode = "specified_task_missing", Message = "完成动作未配置任务名称" };
+            var listed = await SendIpcPreferredAsync("config.list", null, 3000).ConfigureAwait(false);
+            if (listed is not { Success: true, Data: not null })
+                return new CommandResult { ErrorCode = "state_unavailable", Message = "完成动作配置暂不可读，保留原动作" };
+            using var doc = JsonDocument.Parse(listed.Data);
+            if (!doc.RootElement.TryGetProperty(oneDragon ? "oneClickConfigs" : "configGroups", out var names)
+                || names.ValueKind != JsonValueKind.Array
+                || !names.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String && item.GetString() == name))
+                return new CommandResult { ErrorCode = "specified_task_missing", Message = "完成动作配置不存在：" + name };
+            var described = await ext.SendCommandAsync("ext.config.describe", new
+            {
+                groupName = oneDragon ? null : name,
+                configName = oneDragon ? name : null
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            string? revision = null;
+            if (described is { Success: true, Data: not null })
+            {
+                using var config = JsonDocument.Parse(described.Data);
+                if (TryParseEpoch(described.Data, out var pid, out var ticks)
+                    && pid == epoch.ProcessId && ticks == epoch.StartTicksUtc
+                    && config.RootElement.TryGetProperty("configRevision", out var value) && value.ValueKind == JsonValueKind.String
+                    && config.RootElement.TryGetProperty("tasks", out var tasks) && tasks.ValueKind == JsonValueKind.Array
+                    && tasks.EnumerateArray().Any(item => item.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True))
+                    revision = value.GetString();
+            }
+            if (string.IsNullOrWhiteSpace(revision))
+                return new CommandResult { ErrorCode = "state_unavailable", Message = "完成动作配置版本暂不可读，保留原动作" };
+            batch.PolicySubmitPayload = new Dictionary<string, object?>
+            {
+                ["name"] = name, ["oneDragon"] = oneDragon, ["revision"] = revision
+            };
+            frozen = batch.PolicySubmitPayload!;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        if (batch.ExplicitStopRequested || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
+            return new CommandResult { ErrorCode = "completion_not_authorized", Message = "原完成动作已撤销，未发送" };
+        var frozenName = (string)frozen["name"]!;
+        var frozenOneDragon = (bool)frozen["oneDragon"]!;
+        batch.PolicyStartAttempted = true;
+        var submitted = await ext.SubmitTaskStartAsync(frozenOneDragon ? null : frozenName,
+            frozenOneDragon ? frozenName : null, 0, 0, cancellationToken: cancellationToken,
+            idempotencyKey: batch.PolicyRequestKey, expectedConfigRevision: (string)frozen["revision"]!,
+            bgiEpoch: new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc },
+            retainUntilAcknowledged: true, expectedStopVersion: batch.StateContinuationStopVersion).ConfigureAwait(false);
+        if (!submitted.Success || string.IsNullOrWhiteSpace(submitted.TaskHandle))
+            return new CommandResult { ErrorCode = submitted.ErrorCode ?? "result_unknown", Message = submitted.ErrorMessage ?? "原完成动作受理结果尚未取回" };
+        return new CommandResult
+        {
+            Status = "success", JobId = submitted.TaskHandle, TargetProcessId = epoch.ProcessId,
+            TargetStartTicksUtc = epoch.StartTicksUtc.ToString(), Message = "原完成动作已受理：" + frozenName
+        };
+    }
+}

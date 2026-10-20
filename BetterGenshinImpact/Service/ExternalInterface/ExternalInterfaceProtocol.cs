@@ -22,6 +22,7 @@ internal static class ExternalInterfaceOperations
     public const string TaskCancel = "ext.task.cancel";
     public const string TaskSuspend = "ext.task.suspend";
     public const string TaskResume = "ext.task.resume";
+    public const string TaskAcknowledge = "ext.task.acknowledge";
     public const string ConfigSetTaskEnabled = "ext.config.setTaskEnabled";
     public const string ConfigDescribe = "ext.config.describe";
     public const string ConfigOpenResourceEditor = "ext.config.openResourceEditor";
@@ -66,7 +67,7 @@ internal static class ExternalInterfaceOperations
 
     /// <summary>写操作集合：重复投递必须去重；查询/握手/订阅类天然幂等，不进窗口。</summary>
     public static bool IsWriteOperation(string operation) => operation is
-        TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume
+        TaskStart or TaskStop or TaskCancel or TaskSuspend or TaskResume or TaskAcknowledge
         or ConfigSetTaskEnabled or ConfigApplyTaskState or ConfigApplyTaskLayout or ConfigPullGroup or ConfigOpenRemoteEditor
         or ConfigRemoteEditorResult or ConfigApplyGroup or ConfigOpenResourceEditor or ConfigMigrateStandard
         or ActionExecuteHotkey or ActionCloseGame
@@ -164,6 +165,7 @@ internal static class ExternalInterfaceProtocol
             ["capabilities"] = new JObject
             {
                 ["task.start"] = true,
+                ["task.stateContinuation.v1"] = true,
                 ["task.stop"] = true,
                 ["task.suspend"] = true,
                 ["task.takeover"] = true,

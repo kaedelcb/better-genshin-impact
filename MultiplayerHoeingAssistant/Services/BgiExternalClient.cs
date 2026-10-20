@@ -105,6 +105,11 @@ public sealed class BgiTaskSubmitResult
 /// <summary>[终态可拉取] ext.task.queueStatus 响应投影：pending/running/completed/failed/queueCancelled/not_found。</summary>
 public sealed class BgiTaskQueueStatus
 {
+    public string? TaskHandle { get; init; }
+    public string? IdempotencyKey { get; init; }
+    public BgiEpoch? Epoch { get; init; }
+    public bool ExecutionExitConfirmed { get; init; }
+
     public CoordinatedHoeingEvidence? HoeingEvidence { get; init; }
 
     public string? Status { get; init; }
@@ -249,7 +254,7 @@ public sealed class BgiExternalResponse
 /// IpcClient/CommandExecutor 旧路径（§3.9 优雅降级链），全程无报错。
 /// 帧格式与 IpcClient 完全一致：[4字节 length][1字节 type=1][JSON]，length 不含 type 字节。
 /// </summary>
-public sealed class BgiExternalClient : IDisposable
+public sealed partial class BgiExternalClient : IDisposable
 {
     public string? TakeoverTicket { get; set; }
     public BgiEpoch? ServerEpoch { get; private set; }
@@ -582,7 +587,8 @@ public sealed class BgiExternalClient : IDisposable
         string? expectedConfigRevision = null, object? bgiEpoch = null, DateTimeOffset? expiresAtUtc = null, bool coordinatedHoeing = false,
         // R3 原生身份：一条龙起点为字符串任务 ID（组内游标仍走 startFromIndex）
         string? startFromTaskId = null, string? hoeingBatchId = null,
-        IReadOnlyList<string>? hoeingParticipantUids = null)
+        IReadOnlyList<string>? hoeingParticipantUids = null, bool retainUntilAcknowledged = false,
+        long? expectedStopVersion = null)
     {
         var payload = new Dictionary<string, object?>
         {
@@ -601,6 +607,14 @@ public sealed class BgiExternalClient : IDisposable
             payload["hoeingBatchId"] = hoeingBatchId;
             payload["hoeingParticipantUids"] = hoeingParticipantUids;
         }
+        if (retainUntilAcknowledged)
+        {
+            if (expectedStopVersion is < 0) throw new ArgumentOutOfRangeException(nameof(expectedStopVersion));
+            if (expectedStopVersion is { } stopVersion) payload["expectedStopVersion"] = stopVersion;
+            payload["retainUntilAcknowledged"] = true;
+            payload = await FreezeRetainedStartPayloadAsync(payload, idempotencyKey, cancellationToken).ConfigureAwait(false);
+        }
+        if (retainUntilAcknowledged) RequireRetainedStartEpoch(payload);
         var response = await SendCommandAsync(
                 ExternalOperations.TaskStart,
                 payload,
@@ -655,34 +669,7 @@ public sealed class BgiExternalClient : IDisposable
             return null;
         }
 
-        using var doc = JsonDocument.Parse(response.Data);
-        var root = doc.RootElement;
-        CoordinatedHoeingEvidence? evidence = null;
-        if (root.TryGetProperty("hoeingEvidence", out var evidenceElement)
-            && evidenceElement.ValueKind == JsonValueKind.Object)
-        {
-            try
-            {
-                var parsed = evidenceElement.Deserialize<CoordinatedHoeingEvidence>(
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (parsed?.IsValid == true) evidence = parsed;
-            }
-            catch (JsonException) { /* Invalid optional evidence must not create a completion fact. */ }
-        }
-        return new BgiTaskQueueStatus
-        {
-            HoeingEvidence = evidence,
-            Status = root.TryGetProperty("status", out var stEl) && stEl.ValueKind == JsonValueKind.String
-                ? stEl.GetString()
-                : null,
-            Cancelled = root.TryGetProperty("cancelled", out var cEl) && cEl.ValueKind == JsonValueKind.True,
-            ErrorCode = root.TryGetProperty("errorCode", out var ecEl) && ecEl.ValueKind == JsonValueKind.String
-                ? ecEl.GetString()
-                : null,
-            ErrorMessage = root.TryGetProperty("message", out var msgEl) && msgEl.ValueKind == JsonValueKind.String
-                ? msgEl.GetString()
-                : null,
-        };
+        return ParseStateContinuationQueueStatus(response.Data);
     }
 
     /// <summary>

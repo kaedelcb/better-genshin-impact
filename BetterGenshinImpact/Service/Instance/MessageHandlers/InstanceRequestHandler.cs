@@ -883,9 +883,10 @@ internal sealed class InstanceRequestHandler
         CancellationToken cancellationToken = default, Action? onAdmitted = null,
         JobSource source = JobSource.V2, Guid? workflowRunId = null,
         JobExecutionIdentity? executionIdentity = null, InstanceIpcEnvelope? executionRequest = null,
-        string? resumeIdempotencyKey = null)
+        string? resumeIdempotencyKey = null, bool acceptedStateContinuation = false,
+        string? acceptedRequestFingerprint = null, string? acceptedRequestOperation = null)
     {
-        if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } rejected)
+        if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest, allowExpiredReplay: acceptedStateContinuation) is { } rejected)
             throw new ExecutionNotStartedException(jobId, rejected.ErrorCode + ": " + rejected.ErrorMessage);
         if (executionRequest != null && ValidateCoordinatedHoeingRequest(executionRequest) is { } invalidHoeing)
             throw new ExecutionNotStartedException(jobId, invalidHoeing.ErrorMessage!, invalidHoeing.ErrorCode!);
@@ -917,12 +918,13 @@ internal sealed class InstanceRequestHandler
                     throw new ExecutionNotStartedException(jobId, "启动前已取消");
                 if (stopVersion != ExecutionScope.StopVersionNow) throw new ExecutionNotStartedException(jobId, "启动前已被用户停止");
                 if (ExecutionScope.HasActive) throw new ExecutionNotStartedException(jobId, "task_busy");
-                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } expired)
+                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest, allowExpiredReplay: acceptedStateContinuation) is { } expired)
                     throw new ExecutionNotStartedException(jobId, expired.ErrorCode + ": " + expired.ErrorMessage);
                 var descriptor = new JobDescriptor(string.IsNullOrEmpty(groupName) ? JobKind.OneDragon : JobKind.Group,
                     groupName ?? configName ?? throw new ArgumentException("缺少任务名"),
                     jobId.HasValue && source != JobSource.Resume ? JobSource.Ext : source,
-                    generation > 0 ? generation : null, IdempotencyKey: resumeIdempotencyKey,
+                    generation > 0 ? generation : null,
+                    IdempotencyKey: resumeIdempotencyKey ?? InstanceIpcProtocol.GetStringOrNull(executionRequest?.Data, "idempotencyKey"),
                     JobId: jobId, TakeoverTicket: takeoverTicket,
                     OnAdmitted: () =>
                     {
@@ -937,10 +939,13 @@ internal sealed class InstanceRequestHandler
                     ExpectedStopVersion: stopVersion,
                     // R4.6 E2-9/E4'：期望 UID 复验 + 收尾抑制（仅严格合同请求携带；旧入口 null/false 零变化）
                     ExpectedUid: executionRequest == null ? null : ExecutionRequestContract.ReadExpectedUid(executionRequest.Data),
-                    SuppressConfigCompletionAction: executionRequest != null && ExecutionRequestContract.ReadSuppressConfigCompletionAction(executionRequest.Data));
+                    SuppressConfigCompletionAction: executionRequest != null && ExecutionRequestContract.ReadSuppressConfigCompletionAction(executionRequest.Data),
+                    RequestFingerprint: acceptedRequestFingerprint ?? (executionRequest == null ? null : ExecutionRequestContract.Fingerprint(executionRequest)),
+                    RequestOperation: acceptedRequestOperation ?? executionRequest?.Operation,
+                    RetainUntilAcknowledged: acceptedStateContinuation);
                 var prepared = executionRequest == null ? (Snapshot: (TaskConfigurationContract.Snapshot?)null, SingleIndex: (int?)null)
                     : await PrepareExecutionBeforeRootAsync(executionRequest, jobId);
-                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest) is { } staleBeforeExecution)
+                if (executionRequest != null && ExecutionRequestContract.Validate(executionRequest, allowExpiredReplay: acceptedStateContinuation) is { } staleBeforeExecution)
                     throw new ExecutionNotStartedException(jobId, staleBeforeExecution.ErrorCode + ": " + staleBeforeExecution.ErrorMessage);
                 if (!string.IsNullOrEmpty(groupName))
                 {
@@ -1678,7 +1683,7 @@ internal sealed class InstanceRequestHandler
         => BetterGenshinImpact.Service.Execution.SuspendContextCapture.IsOnlineSignalTask(projectName, folderName);
 
     private sealed record TargetedSuspendReceipt(Guid? InstanceId, long? StateRevision, long StopVersion,
-        Newtonsoft.Json.Linq.JObject Data);
+        Newtonsoft.Json.Linq.JObject Data, ExecutionScope.TargetedSuspendTarget? Target = null);
     private static readonly SemaphoreSlim TargetedSuspendGate = new(1, 1);
     private static readonly Dictionary<string, TargetedSuspendReceipt> TargetedSuspendReceipts = new();
     private static readonly Queue<string> TargetedSuspendReceiptOrder = new();
@@ -1701,6 +1706,14 @@ internal sealed class InstanceRequestHandler
                 || startTicksUtc != JobRegistry.CurrentEpoch.StartTicksUtc)
                 return InstanceIpcEnvelope.Failure(request, "stale_epoch", "BGI 进程身份已改变或未知，不能重放旧接管意图");
             var stopVersion = ExecutionScope.StopVersionNow;
+            if (request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true)
+            {
+                if (request.Data?["expectedStopVersion"] is not { Type: JTokenType.Integer } frozenStop)
+                    return InstanceIpcEnvelope.Failure(request, "invalid_request", "状态接续接管必须冻结首次请求的 expectedStopVersion");
+                if (frozenStop.Value<long>() != stopVersion)
+                    return InstanceIpcEnvelope.Failure(request, "manual_stop_fence", "用户已停止原批次，迟到接管不得重新执行");
+                stopVersion = frozenStop.Value<long>();
+            }
             if (!await TargetedSuspendGate.WaitAsync(PreemptionGate.QuiesceBound))
                 return InstanceIpcEnvelope.Failure(request, "takeover_busy", "另一接管请求尚未完成，本请求未产生副作用");
             try
@@ -1715,6 +1728,8 @@ internal sealed class InstanceRequestHandler
                     if (!PreemptionGate.Renew(ticket))
                         return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管票据已撤销或过期，不能重放旧回执");
                     var replay = (Newtonsoft.Json.Linq.JObject)previous.Data.DeepClone();
+                    if (PreemptionGate.WasRetained(ticket) && previous.Target != null)
+                        replay["quiesceConfirmed"] = previous.Target.ObserveQuiescence();
                     replay["replayed"] = true;
                     return InstanceIpcEnvelope.Response(request, replay);
                 }
@@ -1732,6 +1747,9 @@ internal sealed class InstanceRequestHandler
                         }
                     }, out var target, out var refusal))
                     return InstanceIpcEnvelope.Failure(request, refusal!, "接管目标已经变化或身份不可用；未取消当前任务，也不构成退出证明");
+                if (request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true
+                    && !PreemptionGate.RetainUntilReleased(ticket))
+                    return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管已经明确撤销，不能继续原动作");
                 var confirmed = await WaitSuspendTargetReleasedBoundedAsync(target!);
                 if (!PreemptionGate.Authorize(ticket) || stopVersion != ExecutionScope.StopVersionNow)
                     return InstanceIpcEnvelope.Failure(request, "stale_ticket", "接管期间票据已被停止或撤销，未授权启动新任务");
@@ -1753,10 +1771,15 @@ internal sealed class InstanceRequestHandler
                     planNextDragonTaskId = context?.PlanNextDragonTaskId,
                     planPreExecution = context?.PlanPreExecution
                 });
-                TargetedSuspendReceipts[ticket] = new(expectedInstanceId, expectedRevision, stopVersion, (JObject)data.DeepClone());
+                TargetedSuspendReceipts[ticket] = new(expectedInstanceId, expectedRevision, stopVersion, (JObject)data.DeepClone(), target);
                 TargetedSuspendReceiptOrder.Enqueue(ticket);
-                while (TargetedSuspendReceiptOrder.Count > 256)
-                    TargetedSuspendReceipts.Remove(TargetedSuspendReceiptOrder.Dequeue());
+                var suspendEvictions = TargetedSuspendReceiptOrder.Count;
+                while (TargetedSuspendReceiptOrder.Count > 256 && suspendEvictions-- > 0)
+                {
+                    var old = TargetedSuspendReceiptOrder.Dequeue();
+                    if (PreemptionGate.WasRetained(old)) { TargetedSuspendReceiptOrder.Enqueue(old); continue; }
+                    TargetedSuspendReceipts.Remove(old);
+                }
                 return InstanceIpcEnvelope.Response(request, data);
             }
             finally { TargetedSuspendGate.Release(); }
@@ -1798,7 +1821,13 @@ internal sealed class InstanceRequestHandler
     }
 
     private readonly SemaphoreSlim _resumeGate = new(1, 1);
-    private readonly Dictionary<string, (Guid AttemptId, string Status)> _resumeReceipts = new();
+    private readonly object _resumeReceiptsSync = new();
+    private readonly Dictionary<string, (Guid AttemptId, string Status, string? SubmissionKey)> _resumeReceipts = new();
+
+    private bool TryGetResumeReceipt(string ticket, out (Guid AttemptId, string Status, string? SubmissionKey) receipt)
+    {
+        lock (_resumeReceiptsSync) return _resumeReceipts.TryGetValue(ticket, out receipt);
+    }
 
     internal static int ResumeGroupStartIndex(BetterGenshinImpact.Core.Config.SuspendedTaskContext context,
         bool planContinuation)
@@ -1816,8 +1845,9 @@ internal sealed class InstanceRequestHandler
         try
         {
             var ticket = InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket");
-            if (ticket != null && _resumeReceipts.TryGetValue(ticket, out var receipt))
-                return InstanceIpcEnvelope.Response(request, new { status = receipt.Status, attemptId = receipt.AttemptId });
+            if (ticket != null && TryGetResumeReceipt(ticket, out var receipt))
+                return InstanceIpcEnvelope.Response(request, new { status = receipt.Status, attemptId = receipt.AttemptId,
+                    idempotencyKey = receipt.SubmissionKey });
             if (!PreemptionGate.Authorize(ticket))
                 return InstanceIpcEnvelope.Failure(request, "stale_ticket", "恢复/释放票据无效");
             var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
@@ -1871,6 +1901,7 @@ internal sealed class InstanceRequestHandler
             var admissionSync = new object();
             var expired = false;
             var attempt = Guid.NewGuid();
+            string? acceptedResumeKey = null;
             void OnAdmitted()
             {
                 lock (admissionSync)
@@ -1879,7 +1910,7 @@ internal sealed class InstanceRequestHandler
                     if (ReferenceEquals(config.SuspendedTaskContext, context))
                         config.SuspendedTaskContext = null;
                     PreemptionGate.Release(ticket);
-                    RememberResume(ticket, attempt, "resumed");
+                    RememberResume(ticket, attempt, "resumed", acceptedResumeKey);
                     admitted.TrySetResult(true);
                 }
             }
@@ -1898,6 +1929,73 @@ internal sealed class InstanceRequestHandler
                 && context.Iteration is { } iteration
                 ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
                     context.Occurrence, planResumeAttempt ?? context.Attempt) : null;
+            if (ticket != null && PreemptionGate.WasRetained(ticket) && context.TaskType is "group" or "onedragon")
+            {
+                acceptedResumeKey = planResumeKey ?? "resume/" + ticket;
+                var fingerprint = ExecutionRequestContract.Fingerprint(request);
+                var originalStopVersion = context.StopVersion;
+                var queued = BgiTaskCoordinator.Instance.Submit(new BgiTaskCoordinator.TaskSubmission(
+                    0, context.TaskType == "group" ? context.GroupName : null,
+                    context.TaskType == "onedragon" ? context.GroupName : null,
+                    context.TaskType == "group" ? resumeIndex : 0,
+                    async (handle, token) =>
+                    {
+                        attempt = handle;
+                        if (originalStopVersion != ExecutionScope.StopVersionNow)
+                            throw new ExecutionNotStartedException(handle, "恢复排队后已被用户停止");
+                        if (context.TaskType == "onedragon" && !string.IsNullOrEmpty(context.SubTaskGroupName)
+                            && !(planContinuation is not null && context.PlanCheckpointPhase == "betweenDragon"))
+                            config.NextScheduledTask = [(context.SubTaskGroupName, resumeIndex,
+                                planContinuation is not null && context.PlanCheckpointPhase == "between"
+                                    ? context.PlanNextFolderName ?? "" : context.FolderName,
+                                planContinuation is not null && context.PlanCheckpointPhase == "between"
+                                    ? context.PlanNextProjectName ?? "" : context.ProjectName)];
+                        return await ExecuteTaskStartCoreAsync(service,
+                            context.TaskType == "group" ? context.GroupName : null,
+                            context.TaskType == "onedragon" ? context.GroupName : null,
+                            context.TaskType == "group" ? resumeIndex : 0,
+                            startFromTaskId: context.TaskType == "onedragon"
+                                ? ResumeDragonStartTaskId(context, planContinuation is not null) : null,
+                            jobId: handle, takeoverTicket: ticket, cancellationToken: token,
+                            onAdmitted: OnAdmitted, source: JobSource.Resume, workflowRunId: context.RootRunId,
+                            executionIdentity: resumeExecutionIdentity,
+                            executionRequest: InstanceIpcEnvelope.Request("task.start", new
+                            {
+                                groupName = context.TaskType == "group" ? context.GroupName : null,
+                                configName = context.TaskType == "onedragon" ? context.GroupName : null,
+                                taskId = context.TaskId, expectedConfigRevision = context.ConfigRevision,
+                                suppressConfigCompletionAction = context.SuppressCompletionAction,
+                                expectedUid = context.ExpectedUid, expectedStopVersion = originalStopVersion,
+                                bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId,
+                                    startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
+                            }), resumeIdempotencyKey: acceptedResumeKey, acceptedStateContinuation: true,
+                            acceptedRequestFingerprint: fingerprint, acceptedRequestOperation: request.Operation).ConfigureAwait(false);
+                    })
+                {
+                    IdempotencyKey = acceptedResumeKey, PayloadFingerprint = fingerprint,
+                    RequestOperation = request.Operation, Identity = resumeExecutionIdentity,
+                    RegistrySource = JobSource.Resume, ExpectedStopVersion = originalStopVersion,
+                    RetainUntilAcknowledged = true,
+                    OnCancelledBeforeStart = handle =>
+                    {
+                        lock (admissionSync)
+                        {
+                            if (ReferenceEquals(config.SuspendedTaskContext, context)) config.SuspendedTaskContext = null;
+                            PreemptionGate.Release(ticket);
+                            RememberResume(ticket, handle, "cleared_not_resumed", acceptedResumeKey);
+                        }
+                    },
+                });
+                if (queued.Status is not (BgiTaskCoordinator.SubmitStatus.Queued or BgiTaskCoordinator.SubmitStatus.Adopted))
+                    return ExternalInterfaceCommandPlane.MapTaskStartQueueResult(request, queued, 0);
+                lock (admissionSync)
+                {
+                    if (!TryGetResumeReceipt(ticket, out var current) || current.AttemptId != queued.TaskHandle)
+                        RememberResume(ticket, queued.TaskHandle, "queued", acceptedResumeKey);
+                }
+                return InstanceIpcEnvelope.Response(request, new { status = "queued", attemptId = queued.TaskHandle,
+                    idempotencyKey = acceptedResumeKey });
+            }
             Guid? planResumeJobId = null;
             if (planContinuation is not null)
             {
@@ -1977,11 +2075,18 @@ internal sealed class InstanceRequestHandler
         finally { _resumeGate.Release(); }
     }
 
-    private void RememberResume(string? ticket, Guid attempt, string status)
+    private void RememberResume(string? ticket, Guid attempt, string status, string? submissionKey = null)
     {
         if (ticket == null) return;
-        _resumeReceipts[ticket] = (attempt, status);
-        if (_resumeReceipts.Count > 256) _resumeReceipts.Remove(_resumeReceipts.Keys.First());
+        lock (_resumeReceiptsSync)
+        {
+            _resumeReceipts[ticket] = (attempt, status, submissionKey);
+            if (_resumeReceipts.Count > 256)
+            {
+                var removable = _resumeReceipts.Keys.FirstOrDefault(key => !PreemptionGate.WasRetained(key));
+                if (removable != null) _resumeReceipts.Remove(removable);
+            }
+        }
     }
 
     internal static bool TryRegisterPlanResumeJob(JobRegistry registry,

@@ -502,6 +502,8 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
     {
         if (!Guid.TryParse(jobId, out var parsedJobId))
             return BoundaryTerminalResult.UncertainWith("恢复作业 ID 不可识别");
+        if (handoff.StateContinuation)
+            return await AwaitRetainedOnlineResumeJobAsync(run, handoff, parsedJobId, resumeKey, resumeAttempt, ct).ConfigureAwait(false);
         // BGI 会先发布业务终态，再等执行根、子作业和任务槽位真正退出。
         // 计划表接续必须等后一个凭证；只看到 succeeded 时马上判定会误停在原节点。
         var identity = new BgiJobTerminalPolling.FrozenIdentity(handoff.Epoch, resumeKey,
@@ -527,6 +529,53 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             ? BoundaryTerminalResult.UncertainWith("恢复作业终态词不可识别")
             : BoundaryTerminalResult.Observed(word, resultReason ?? reason, job.ErrorCode,
                 exitConfirmed: true, exitDisposition: job.ExecutionExitDisposition);
+    }
+
+    private async Task<BoundaryTerminalResult> AwaitRetainedOnlineResumeJobAsync(WorkflowRunRecord run,
+        OnlineHoeingHandoffRecord handoff, Guid jobId, string resumeKey, int resumeAttempt, CancellationToken ct)
+    {
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var epoch = WorkflowStopAuthority.Epoch(_port.ServerEpoch);
+            if (epoch != null && epoch != handoff.Epoch)
+                return BoundaryTerminalResult.UncertainWith("原恢复任务的 BGI 进程已变化，未重放");
+            BgiJobInfo? job = null;
+            if (_port.IsReady && epoch == handoff.Epoch)
+            {
+                using var call = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                call.CancelAfter(TimeSpan.FromSeconds(15));
+                try
+                {
+                    var observed = await _port.QueryJobStatusAsync(jobId.ToString("N"), call.Token)
+                        .WaitAsync(call.Token).ConfigureAwait(false);
+                    job = observed.Job;
+                }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                { /* 查询不可用、not_found、单次调用超时仅续等同一任务，绝不重发恢复。 */ }
+                var after = WorkflowStopAuthority.Epoch(_port.ServerEpoch);
+                if (after != null && after != handoff.Epoch)
+                    return BoundaryTerminalResult.UncertainWith("查询期间原 BGI 进程已变化，未重放");
+            }
+            if (job != null)
+            {
+                if (WorkflowStopAuthority.Epoch(job.Epoch) != handoff.Epoch
+                    || !Guid.TryParse(job.WorkflowRunId, out var wire) || !Guid.TryParse(run.WireRunId, out var expectedWire)
+                    || wire != expectedWire || job.NodeId != handoff.NodeId || job.Occurrence != handoff.Occurrence
+                    || job.Iteration != handoff.LoopIteration || job.Attempt != resumeAttempt || job.IdempotencyKey != resumeKey
+                    || !string.Equals(job.Source, "Resume", StringComparison.OrdinalIgnoreCase)
+                    || !Guid.TryParse(job.JobId, out var observedId) || observedId != jobId)
+                    return BoundaryTerminalResult.UncertainWith("恢复作业身份、来源或 BGI 进程与原计划不符");
+                if (job.ExecutionExitConfirmed && job.ExecutionExitDisposition is "execution_exited" or "never_started"
+                    && BgiJobTerminalPolling.IsTerminal(job.State))
+                {
+                    var (word, reason) = InterpretNodeJob(job);
+                    if (word != null) return BoundaryTerminalResult.Observed(word, reason, job.ErrorCode,
+                        exitConfirmed: true, exitDisposition: job.ExecutionExitDisposition);
+                }
+            }
+            await Task.Delay(200, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>请求远端取消（ext.task.cancel，ownedOnly=v1；best-effort——应答不代表清理完成，终态以观察为准）。</summary>

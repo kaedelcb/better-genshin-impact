@@ -97,11 +97,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public JobExecutionIdentity? Identity { get; init; }
         /// <summary>非配置组作业由可信提交入口指定真实类型及名称；缺省保持任务启动旧映射。</summary>
         public JobKind? RegistryKind { get; init; }
+        public JobSource? RegistrySource { get; init; }
+        public long? ExpectedStopVersion { get; init; }
         public string? RegistryName { get; init; }
         /// <summary>前置／收尾入口显式启用作业结果投影；普通 Task&lt;bool&gt; 执行体保持旧合同。</summary>
         public bool ProjectRegistryOutcome { get; init; }
         /// <summary>Set by the trusted task.start route, never inferred from a name or a generic exception.</summary>
         public bool CoordinatedHoeing { get; init; }
+        /// <summary>本次动作及真实结果保留到调用方确认；未确认不能按缓存期限遗忘。</summary>
+        public bool RetainUntilAcknowledged { get; init; }
+        public Action<Guid>? OnCancelledBeforeStart { get; init; }
     }
 
     public readonly record struct SubmitResult(SubmitStatus Status, Guid TaskHandle, int QueuePosition);
@@ -114,7 +119,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// </summary>
     public readonly record struct QueueItemStatusResult(
         string Status, bool Cancelled, string? ErrorCode, string? Message,
-        CoordinatedHoeingEvidence? HoeingEvidence = null);
+        CoordinatedHoeingEvidence? HoeingEvidence = null,
+        Guid TaskHandle = default, string? IdempotencyKey = null, bool ExecutionExitConfirmed = false);
 
     /// <summary>[终态可拉取] 终态登记表条目。</summary>
     private sealed record TerminalRecord(string Status, bool Cancelled, string? ErrorCode, string? Message);
@@ -126,12 +132,17 @@ internal sealed class BgiTaskCoordinator : IDisposable
         public required CancellationTokenSource Cts { get; init; }
         public bool OwnedCancellationRequested { get; set; }
         public DateTime EnqueuedAtUtc { get; init; } = DateTime.UtcNow;
+        public TerminalRecord? Outcome { get; set; }
+        public bool ExecutionExitConfirmed { get; set; }
 
         /// <summary>终态事件（queueCancelled/failed）只发一次：取消路径与 pump 谁先观察到取消谁发。</summary>
         private int _terminalEventPublished;
 
         /// <summary>CTS 只 Dispose 一次（出队/取消/退出路径都可能触发）。</summary>
         private int _ctsDisposed;
+        private int _cancelBeforeStartNotified;
+
+        public bool TryNotifyCancellation() => Interlocked.Exchange(ref _cancelBeforeStartNotified, 1) == 0;
 
         public bool TryMarkTerminalEventPublished()
             => Interlocked.CompareExchange(ref _terminalEventPublished, 1, 0) == 0;
@@ -193,6 +204,18 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// <summary>终态登记顺序（容量淘汰用），与 _terminals 写入一起由 _terminalsLock 串行。</summary>
     private readonly Queue<Guid> _terminalOrder = new();
     private readonly object _terminalsLock = new();
+    // 原队列项拥有执行事实；这里仅延长同一对象的生命，不以 JobRegistry 写入成功为准入条件。
+    private readonly Dictionary<string, PendingTask> _retainedByKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<Guid, PendingTask> _retainedByHandle = new();
+    private sealed record SettledTask(Guid Handle, string Key, string Fingerprint, TerminalRecord Outcome);
+    private readonly Dictionary<string, SettledTask> _settledByKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<Guid, SettledTask> _settledByHandle = new();
+    private readonly Action<Guid, TaskSubmission>? _registerQueued;
+
+    public bool IsRetained(Guid handle)
+    {
+        lock (_submitLock) return _retainedByHandle.ContainsKey(handle);
+    }
 
     /// <summary>
     /// 测试友好构造：槽位判定/事件发布/等锁节奏全部可注入。
@@ -203,12 +226,14 @@ internal sealed class BgiTaskCoordinator : IDisposable
         Action<string, object?>? publish = null,
         ILogger? logger = null,
         TimeSpan? slotPollInterval = null,
-        TimeSpan? slotWaitTimeout = null)
+        TimeSpan? slotWaitTimeout = null,
+        Action<Guid, TaskSubmission>? registerQueued = null)
     {
         _isSlotFree = isSlotFree ?? (static () => !ExecutionScope.HasActive && GameTask.Common.TaskControl.TaskSemaphore.CurrentCount != 0);
         _publish = publish ?? ((name, payload) => ExternalInterfaceEventHub.Instance.Publish(name, payload));
         _slotPollInterval = slotPollInterval ?? DefaultSlotPollInterval;
         _slotWaitTimeout = slotWaitTimeout ?? DefaultSlotWaitTimeout;
+        _registerQueued = registerQueued;
         if (logger is not null)
         {
             _logger = logger;
@@ -281,15 +306,33 @@ internal sealed class BgiTaskCoordinator : IDisposable
     private void RecordQueueObservation(Guid taskHandle, string status, bool cancelled = false,
         string? errorCode = null, string? message = null)
     {
-        _terminals[taskHandle] = new TerminalRecord(status, cancelled, errorCode, message);
-        lock (_terminalsLock)
+        lock (_submitLock)
         {
-            _terminalOrder.Enqueue(taskHandle);
-            while (_terminalOrder.Count > TerminalRegistryCapacity)
+            var outcome = new TerminalRecord(status, cancelled, errorCode, message);
+            _terminals[taskHandle] = outcome;
+            if (_retainedByHandle.TryGetValue(taskHandle, out var retained))
             {
-                var expired = _terminalOrder.Dequeue();
-                _terminals.TryRemove(expired, out _);
-                _hoeingEvidence.TryRemove(expired, out _);
+                retained.Outcome = outcome;
+                if (_current?.TaskHandle != taskHandle)
+                {
+                    retained.ExecutionExitConfirmed = true;
+                    if (status == "queueCancelled" && retained.TryNotifyCancellation())
+                    {
+                        try { retained.Submission.OnCancelledBeforeStart?.Invoke(taskHandle); }
+                        catch (Exception exception) { _logger.LogWarning(exception, "取消后的恢复现场尚待清理 taskHandle={Handle}", taskHandle); }
+                    }
+                }
+                return;
+            }
+            lock (_terminalsLock)
+            {
+                _terminalOrder.Enqueue(taskHandle);
+                while (_terminalOrder.Count > TerminalRegistryCapacity)
+                {
+                    var expired = _terminalOrder.Dequeue();
+                    _terminals.TryRemove(expired, out _);
+                    _hoeingEvidence.TryRemove(expired, out _);
+                }
             }
         }
 
@@ -338,6 +381,20 @@ internal sealed class BgiTaskCoordinator : IDisposable
         lock (_submitLock)
         {
             _hoeingEvidence.TryGetValue(taskHandle, out var evidence);
+            if (_settledByHandle.TryGetValue(taskHandle, out var settled))
+                return new(settled.Outcome.Status, settled.Outcome.Cancelled, settled.Outcome.ErrorCode,
+                    settled.Outcome.Message, TaskHandle: settled.Handle, IdempotencyKey: settled.Key, ExecutionExitConfirmed: true);
+            if (_retainedByHandle.TryGetValue(taskHandle, out var retained))
+            {
+                var outcome = retained.Outcome;
+                if (outcome is { Status: "completed" or "failed" or "queueCancelled" }
+                    && !retained.ExecutionExitConfirmed && _current?.TaskHandle != taskHandle && _isSlotFree()
+                    && ExecutionScope.GetActiveSnapshot()?.JobId != taskHandle)
+                    retained.ExecutionExitConfirmed = true;
+                var status = outcome?.Status ?? (_current?.TaskHandle == taskHandle ? "running" : "pending");
+                return new(status, outcome?.Cancelled ?? false, outcome?.ErrorCode, outcome?.Message,
+                    evidence, taskHandle, retained.Submission.IdempotencyKey, retained.ExecutionExitConfirmed);
+            }
             // 与 _current 清理及未决登记共用锁；同一查询不能先漏看未决、后漏看当前。
             if (_unresolved.TryGetValue(taskHandle, out var unresolved))
                 return new QueueItemStatusResult(unresolved.Status, unresolved.Cancelled, unresolved.ErrorCode, unresolved.Message, evidence);
@@ -352,6 +409,74 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
 
         return new QueueItemStatusResult("not_found", false, null, null);
+    }
+
+    public QueueItemStatusResult QueryItemStatus(string idempotencyKey)
+    {
+        lock (_submitLock)
+        {
+            if (_retainedByKey.TryGetValue(idempotencyKey, out var item)) return QueryItemStatus(item.TaskHandle);
+            if (_settledByKey.TryGetValue(idempotencyKey, out var settled)) return QueryItemStatus(settled.Handle);
+            var active = _current?.Submission.IdempotencyKey == idempotencyKey ? _current
+                : _pending.Values.FirstOrDefault(p => p.Submission.IdempotencyKey == idempotencyKey);
+            return active == null
+                ? new QueueItemStatusResult("not_found", false, null, null) { IdempotencyKey = idempotencyKey }
+                : QueryItemStatus(active.TaskHandle) with { TaskHandle = active.TaskHandle, IdempotencyKey = idempotencyKey };
+        }
+    }
+
+    internal sealed record RetainedJobSnapshot(Guid Handle, TaskSubmission Submission,
+        QueueItemStatusResult Status, DateTime EnqueuedAtUtc);
+
+    internal RetainedJobSnapshot? QueryRetainedJob(Guid handle)
+    {
+        lock (_submitLock)
+            return _retainedByHandle.TryGetValue(handle, out var item)
+                ? new(handle, item.Submission, QueryItemStatus(handle), item.EnqueuedAtUtc) : null;
+    }
+
+    internal bool TryReplayRetainedStart(string key, string fingerprint, out SubmitResult result)
+    {
+        lock (_submitLock)
+        {
+            if (_retainedByKey.TryGetValue(key, out var item))
+            {
+                if (!_disposed && _pending.ContainsKey(item.TaskHandle)) EnsurePumpStartedNoLock();
+                result = new(item.Submission.PayloadFingerprint == fingerprint ? SubmitStatus.Adopted
+                    : SubmitStatus.IdempotencyConflict, item.TaskHandle, 0);
+                return true;
+            }
+            if (_settledByKey.TryGetValue(key, out var settled))
+            {
+                result = new(settled.Fingerprint == fingerprint ? SubmitStatus.Adopted
+                    : SubmitStatus.IdempotencyConflict, settled.Handle, 0);
+                return true;
+            }
+            result = default;
+            return false;
+        }
+    }
+
+    public bool Acknowledge(string key, Guid handle)
+    {
+        lock (_submitLock)
+        {
+            if (_settledByKey.TryGetValue(key, out var existing)) return existing.Handle == handle;
+            if (!_retainedByKey.TryGetValue(key, out var item) || item.TaskHandle != handle
+                || !item.ExecutionExitConfirmed || item.Outcome is not { Status: "completed" or "failed" or "queueCancelled" } outcome)
+                return false;
+            var settled = new SettledTask(handle, key, item.Submission.PayloadFingerprint!, outcome);
+            _settledByKey[key] = settled;
+            _settledByHandle[handle] = settled;
+            _retainedByKey.Remove(key);
+            _retainedByHandle.Remove(handle);
+            _terminals.TryRemove(handle, out _);
+            _hoeingEvidence.TryRemove(handle, out _);
+            _unresolved.TryRemove(handle, out _);
+            _unresolvedByKey.Remove(key);
+            JobRegistry.Instance.ReleaseRetainedJob(handle);
+            return true;
+        }
     }
 
     /// <summary>
@@ -372,6 +497,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             if (submission.IdempotencyKey is { } key && string.IsNullOrWhiteSpace(submission.PayloadFingerprint))
                 return new SubmitResult(SubmitStatus.InvalidSubmission, Guid.Empty, 0);
+
+            if (submission.RetainUntilAcknowledged && string.IsNullOrWhiteSpace(submission.IdempotencyKey))
+                return new SubmitResult(SubmitStatus.InvalidSubmission, Guid.Empty, 0);
+            if (submission.IdempotencyKey is { } retainedKey
+                && TryReplayRetainedStart(retainedKey, submission.PayloadFingerprint!, out var retainedResult))
+                return retainedResult;
 
             // 未决发送键跨入口共享：普通 task.start 不能绕过前置／收尾的 Unknown 占用。
             if (submission.IdempotencyKey is { } pendingKey
@@ -455,6 +586,11 @@ internal sealed class BgiTaskCoordinator : IDisposable
             }
 
             _pending[item.TaskHandle] = item;
+            if (submission.RetainUntilAcknowledged)
+            {
+                _retainedByKey[submission.IdempotencyKey!] = item;
+                _retainedByHandle[item.TaskHandle] = item;
+            }
             TryRegistrySubmitQueued(item); // [A2.4] 入队即建 Queued 作业（jobId==taskHandle 别名）
             EnsurePumpStartedNoLock();
             var position = _pending.Count;
@@ -610,6 +746,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
     private async Task DispatchItemAsync(PendingTask item, CancellationToken pumpToken)
     {
+        while (!await DispatchItemOnceAsync(item, pumpToken).ConfigureAwait(false))
+            await Task.Delay(_slotPollInterval, pumpToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> DispatchItemOnceAsync(PendingTask item, CancellationToken pumpToken)
+    {
         // 取消路径已处理的项：静默跳过（queueCancelled 由取消路径发布，CTS 已 Dispose）
         if (item.Cts.IsCancellationRequested)
         {
@@ -622,7 +764,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             item.DisposeCtsOnce();
             if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
-            return;
+            return true;
         }
 
         // 1. 等槽位空（只读轮询 CurrentCount，绝不 WaitAsync 抢占；15s 兜底防旧任务卡死）
@@ -660,7 +802,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             item.DisposeCtsOnce();
             if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
-            return;
+            return true;
         }
 
         // 2. 进入执行转换（与取消路径在 _submitLock 下串行，消除"取消与执行"竞态窗口）
@@ -688,11 +830,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
 
             item.DisposeCtsOnce();
             if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
-            return;
+            return true;
         }
 
         var startedAt = DateTime.UtcNow;
         var executorWasInvoked = false;
+        var retryUnstarted = false;
         var typedNeverStarted = false;
         try
         {
@@ -713,7 +856,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
             if (item.Submission.ProjectRegistryOutcome)
             {
                 PublishProjectedRegistryOutcome(item, cancelled, startedAt);
-                return;
+                return true;
             }
             if (!cancelled && item.Submission.Generation > 0)
                 RegisterExecuted(item.Submission.Generation, item.Submission.Name);
@@ -730,6 +873,34 @@ internal sealed class BgiTaskCoordinator : IDisposable
         }
         catch (Exception exception)
         {
+            if (item.Submission.RetainUntilAcknowledged && exception is ExecutionNotStartedException stoppedBeforeStart
+                && stoppedBeforeStart.JobId == item.TaskHandle
+                && (item.Cts.IsCancellationRequested || item.Submission.ExpectedStopVersion is { } fence && fence != ExecutionScope.StopVersionNow))
+            {
+                typedNeverStarted = true;
+                if (item.TryNotifyCancellation())
+                {
+                    try { item.Submission.OnCancelledBeforeStart?.Invoke(item.TaskHandle); }
+                    catch (Exception cleanupError) { _logger.LogWarning(cleanupError, "停止后的原恢复现场尚待清理"); }
+                }
+                RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Cancelled);
+                RecordTerminal(item.TaskHandle, "queueCancelled");
+                PublishSafe(ExternalInterfaceEventNames.TaskQueueCancelled, new { taskHandle = item.TaskHandle.ToString("N") });
+                return true;
+            }
+            if (item.Submission.RetainUntilAcknowledged && !item.Cts.IsCancellationRequested
+                && exception is ExecutionNotStartedException notStarted && notStarted.JobId == item.TaskHandle
+                && notStarted.Message.StartsWith("task_busy", StringComparison.Ordinal))
+            {
+                // 空槽检查与建根之间又被占用；明确尚未开始，原项继续等，不另建任务。
+                retryUnstarted = true;
+                lock (_submitLock)
+                {
+                    if (_hoeingEvidence.TryGetValue(item.TaskHandle, out var noWork) && noWork.Started == 0)
+                        _hoeingEvidence.TryRemove(item.TaskHandle, out _);
+                }
+                return false;
+            }
             typedNeverStarted = exception is ExecutionNotStartedException noExecution
                 && noExecution.JobId == item.TaskHandle;
             if (typedNeverStarted)
@@ -739,7 +910,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
                     refusal.ReasonCode, exception.Message, false);
                 RecordNeverStartedHoeingEvidence(item, GameTask.TaskRunResult.Failed);
                 RecordTerminal(item.TaskHandle, "failed", errorCode: refusal.ReasonCode, message: exception.Message);
-                return;
+                return true;
             }
             if (exception is OperationCanceledException && item.Submission.CoordinatedHoeing
                 && _hoeingEvidence.TryGetValue(item.TaskHandle, out var cancelledEvidence)
@@ -759,7 +930,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
                         durationMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds,
                     });
                 }
-                return;
+                return true;
             }
             _logger.LogError(exception, "[task.queue] 任务执行失败 taskHandle={Handle}", item.TaskHandle);
             if (item.Submission.ProjectRegistryOutcome)
@@ -767,7 +938,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 // 前置／收尾可能已产生副作用；逃逸异常本身不证明动作未发生。
                 JobRegistry.Instance.TryMarkUnknown(item.TaskHandle, "result_unknown", exception.GetBaseException().Message);
                 RecordUnknown(item, "result_unknown", exception.GetBaseException().Message);
-                return;
+                return true;
             }
             if (item.TryMarkTerminalEventPublished())
             {
@@ -790,13 +961,16 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 if (ReferenceEquals(_current, item))
                 {
+                    item.ExecutionExitConfirmed = !retryUnstarted && _isSlotFree()
+                        && ExecutionScope.GetActiveSnapshot()?.JobId != item.TaskHandle;
                     _current = null;
+                    if (retryUnstarted) _pending[item.TaskHandle] = item;
                 }
             }
 
-            item.DisposeCtsOnce();
-            if (JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
-            if (executorWasInvoked && JobRegistry.IsCreated)
+            if (!retryUnstarted) item.DisposeCtsOnce();
+            if (!retryUnstarted && JobRegistry.IsCreated) JobRegistry.Instance.TryConfirmNeverStarted(item.TaskHandle);
+            if (!retryUnstarted && executorWasInvoked && JobRegistry.IsCreated)
             {
                 var registry = JobRegistry.Instance;
                 registry.RecordExecutorCleanupCompleted(item.TaskHandle);
@@ -804,6 +978,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
                 else registry.TryConfirmExecutionExited(item.TaskHandle, _isSlotFree(), ExecutionScope.HasActive);
             }
         }
+        return true;
     }
 
     private void RecordUnknown(PendingTask item, string errorCode, string? message)
@@ -811,7 +986,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
         // 在 _current 清理前登记同键未决身份，Submit 不会跨过这一转换重发。
         lock (_submitLock)
         {
-            _unresolved[item.TaskHandle] = new TerminalRecord("result_unknown", false, errorCode, message);
+            var unknown = new TerminalRecord("result_unknown", false, errorCode, message);
+            _unresolved[item.TaskHandle] = unknown;
+            if (item.Submission.RetainUntilAcknowledged) item.Outcome = unknown;
             if (item.Submission.IdempotencyKey is { } key && item.Submission.PayloadFingerprint is { } fingerprint)
                 _unresolvedByKey[key] = (item.TaskHandle, fingerprint);
         }
@@ -866,7 +1043,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     {
         var timeout = item.Submission.Preempt ? TimeSpan.FromSeconds(3) : _slotWaitTimeout;
         var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        while (item.Submission.RetainUntilAcknowledged || DateTime.UtcNow < deadline)
         {
             if (_isSlotFree())
             {
@@ -917,13 +1094,19 @@ internal sealed class BgiTaskCoordinator : IDisposable
     {
         try
         {
+            if (_registerQueued != null)
+            {
+                _registerQueued(item.TaskHandle, item.Submission);
+                return;
+            }
             var kind = item.Submission.RegistryKind
                 ?? (!string.IsNullOrEmpty(item.Submission.GroupName) ? JobKind.Group : JobKind.OneDragon);
-            JobRegistry.Instance.Submit(kind, item.Submission.RegistryName ?? item.Submission.Name ?? "未知", JobSource.Ext,
+            JobRegistry.Instance.Submit(kind, item.Submission.RegistryName ?? item.Submission.Name ?? "未知", item.Submission.RegistrySource ?? JobSource.Ext,
                 item.Submission.Generation > 0 ? item.Submission.Generation : null,
                 idempotencyKey: item.Submission.IdempotencyKey,
                 jobId: item.TaskHandle, identity: item.Submission.Identity,
-                requestFingerprint: item.Submission.PayloadFingerprint, requestOperation: item.Submission.RequestOperation);
+                requestFingerprint: item.Submission.PayloadFingerprint, requestOperation: item.Submission.RequestOperation,
+                retainUntilAcknowledged: item.Submission.RetainUntilAcknowledged);
         }
         catch (Exception exception)
         {

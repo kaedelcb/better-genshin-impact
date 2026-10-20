@@ -117,6 +117,8 @@ internal static class ExternalInterfaceQueryPlane
             return InstanceIpcEnvelope.Failure(request, "invalid_request", "jobId 缺失或格式错误");
         }
 
+        if (BgiTaskCoordinator.IsCreated && BgiTaskCoordinator.Instance.QueryRetainedJob(jobId) is { } retained)
+            return MapRetainedJobStatusResponse(request, retained);
         var registry = BetterGenshinImpact.Service.Execution.JobRegistry.IsCreated
             ? BetterGenshinImpact.Service.Execution.JobRegistry.Instance : null;
         registry?.TryConfirmExecutionExited(jobId,
@@ -132,6 +134,37 @@ internal static class ExternalInterfaceQueryPlane
     private static string JobStateWord(BetterGenshinImpact.Service.Execution.JobState state) =>
         state == BetterGenshinImpact.Service.Execution.JobState.ResultUnknown
             ? "result_unknown" : state.ToString().ToLowerInvariant();
+
+    internal static InstanceIpcEnvelope MapRetainedJobStatusResponse(InstanceIpcEnvelope request,
+        BgiTaskCoordinator.RetainedJobSnapshot retained)
+    {
+        var submission = retained.Submission;
+        var outcome = retained.Status;
+        var identity = submission.Identity;
+        var state = outcome.Status switch
+        {
+            "pending" => "queued", "running" => "running", "queueCancelled" => "cancelled",
+            "completed" => outcome.Cancelled ? "cancelled" : "succeeded", "failed" => "failed", _ => "result_unknown",
+        };
+        return InstanceIpcEnvelope.Response(request, new
+        {
+            status = state, bgiEpoch = EpochPayload(), job = new
+            {
+                jobId = retained.Handle.ToString("N"), idempotencyKey = submission.IdempotencyKey,
+                requestFingerprint = submission.PayloadFingerprint, requestFingerprintVersion = 1,
+                requestOperation = submission.RequestOperation, parentJobId = (string?)null,
+                workflowRunId = identity?.WorkflowRunId.ToString("N"), nodeId = identity?.NodeId,
+                iteration = identity?.Iteration, attemptId = retained.Handle.ToString("N"), taskId = identity?.TaskId,
+                configRevision = identity?.ConfigRevision, occurrence = identity?.Occurrence, attempt = identity?.Attempt,
+                kind = (submission.RegistryKind ?? (submission.GroupName == null ? Execution.JobKind.OneDragon : Execution.JobKind.Group)).ToString(),
+                name = submission.RegistryName ?? submission.Name, source = (submission.RegistrySource ?? Execution.JobSource.Ext).ToString(),
+                generation = submission.Generation > 0 ? (int?)submission.Generation : null, state,
+                errorCode = outcome.ErrorCode, errorMessage = outcome.Message, wasCancelled = outcome.Cancelled || outcome.Status == "queueCancelled",
+                exitConfirmed = outcome.ExecutionExitConfirmed, exitDisposition = outcome.ExecutionExitConfirmed ? "execution_exited" : null,
+                enqueuedAtUtc = retained.EnqueuedAtUtc,
+            },
+        });
+    }
 
     /// <summary>[A3.2] ext.job.list：全量快照（reconcile 输入）。附带触发器总开关状态（A2.5 只读视图出口）。</summary>
     private static InstanceIpcEnvelope HandleJobList(InstanceIpcEnvelope request)
@@ -155,13 +188,21 @@ internal static class ExternalInterfaceQueryPlane
     /// </summary>
     private static InstanceIpcEnvelope HandleTaskQueueStatus(InstanceIpcEnvelope request)
     {
+        var key = InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey");
         var handleRaw = request.Data?["taskHandle"]?.ToString();
+        if (key != null)
+        {
+            var byKey = BgiTaskCoordinator.Instance.QueryItemStatus(key);
+            if (handleRaw != null && (!Guid.TryParse(handleRaw, out var expected) || byKey.TaskHandle != expected))
+                return InstanceIpcEnvelope.Failure(request, "task_identity_mismatch", "请求编号与任务编号不对应");
+            return MapTaskQueueStatusResponse(request, byKey);
+        }
         if (!Guid.TryParse(handleRaw, out var handle))
         {
             return InstanceIpcEnvelope.Failure(request, "invalid_request", "taskHandle 缺失或格式错误");
         }
 
-        var status = BgiTaskCoordinator.Instance.QueryItemStatus(handle);
+        var status = BgiTaskCoordinator.Instance.QueryItemStatus(handle) with { TaskHandle = handle };
         return MapTaskQueueStatusResponse(request, status);
     }
 
@@ -173,6 +214,10 @@ internal static class ExternalInterfaceQueryPlane
             cancelled = status.Cancelled,
             errorCode = status.ErrorCode,
             message = status.Message,
+            taskHandle = status.TaskHandle == Guid.Empty ? null : status.TaskHandle.ToString("N"),
+            idempotencyKey = status.IdempotencyKey,
+            bgiEpoch = EpochPayload(),
+            executionExitConfirmed = status.ExecutionExitConfirmed,
             hoeingEvidence = status.HoeingEvidence is { } evidence ? new
             {
                 started = evidence.Started,

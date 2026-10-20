@@ -17,6 +17,93 @@ internal sealed record LocalTaskFailureReport(int Index, int Attempt, string Job
 public sealed class OnlineHoeingBatch
 {
     private int _settled;
+    private int _stateContinuationEnabled;
+    private int _explicitStopRequested;
+    internal bool StateContinuationEnabled
+    {
+        get => Volatile.Read(ref _stateContinuationEnabled) != 0;
+        set => Volatile.Write(ref _stateContinuationEnabled, value ? 1 : 0);
+    }
+    internal static bool IsExplicitStopReason(string reason) => reason is "manual_reset" or "user_stop_all";
+    internal bool ExplicitStopRequested => Volatile.Read(ref _explicitStopRequested) != 0;
+    private long? _stateContinuationStopVersion;
+    internal long? StateContinuationStopVersion
+    {
+        get { lock (_policyGate) return _stateContinuationStopVersion; }
+        set
+        {
+            lock (_policyGate)
+            {
+                if (value is < 0) throw new ArgumentOutOfRangeException(nameof(value));
+                if (_stateContinuationStopVersion is { } frozen && value != frozen)
+                    throw new InvalidOperationException("本批停止围栏已经冻结，不能替换或清除");
+                _stateContinuationStopVersion = value;
+            }
+        }
+    }
+    private string? _suspendedRawData;
+    internal string? SuspendedRawData
+    {
+        get { lock (_policyGate) return _suspendedRawData; }
+        set { lock (_policyGate) _suspendedRawData = value; }
+    }
+    internal string PolicyRequestKey => "post-hoeing/" + BatchId + "/" + SelfUid;
+    private string? _policyRequestIdentity;
+    internal string? PolicyRequestIdentity
+    {
+        get { lock (_policyGate) return _policyRequestIdentity; }
+        set
+        {
+            lock (_policyGate)
+            {
+                if (!string.IsNullOrEmpty(_policyRequestIdentity) && _policyRequestIdentity != value)
+                    throw new InvalidOperationException("完成动作请求身份已经冻结，不能替换");
+                _policyRequestIdentity = value;
+            }
+        }
+    }
+    private IReadOnlyDictionary<string, object?>? _policySubmitPayload;
+    internal IReadOnlyDictionary<string, object?>? PolicySubmitPayload
+    {
+        get { lock (_policyGate) return _policySubmitPayload; }
+        set { lock (_policyGate) _policySubmitPayload ??= value is null ? null : new Dictionary<string, object?>(value); }
+    }
+    private bool _policyStartAttempted;
+    internal bool PolicyStartAttempted
+    {
+        get { lock (_policyGate) return _policyStartAttempted; }
+        set { lock (_policyGate) _policyStartAttempted |= value; }
+    }
+    private BgiTaskQueueStatus? _policyTerminalResult;
+    internal BgiTaskQueueStatus? PolicyTerminalResult
+    {
+        get { lock (_policyGate) return _policyTerminalResult; }
+        set
+        {
+            lock (_policyGate)
+            {
+                if (value is null) return;
+                if (value.Status is not ("completed" or "failed" or "queueCancelled") || !value.ExecutionExitConfirmed)
+                    throw new InvalidOperationException("完成动作尚未确认真实退出，不能保存为终态");
+                if (_policyTerminalResult is { } previous && (previous.TaskHandle != value.TaskHandle
+                    && !(Guid.TryParse(previous.TaskHandle, out var a) && Guid.TryParse(value.TaskHandle, out var b) && a == b)))
+                    throw new InvalidOperationException("完成动作终态对应不同任务，保留原结果");
+                _policyTerminalResult ??= value;
+            }
+        }
+    }
+    private bool _policyResultAcknowledged;
+    internal bool PolicyResultAcknowledged
+    {
+        get { lock (_policyGate) return _policyResultAcknowledged; }
+        set { lock (_policyGate) _policyResultAcknowledged |= value; }
+    }
+    private IReadOnlyDictionary<string, object?>? _planResumeContinuation;
+    internal IReadOnlyDictionary<string, object?>? PlanResumeContinuation
+    {
+        get { lock (_policyGate) return _planResumeContinuation; }
+        set { lock (_policyGate) _planResumeContinuation ??= value is null ? null : new Dictionary<string, object?>(value); }
+    }
     internal string ControlContext { get; private set; } = "";
     internal CoordinatedControlAuthority.Grant? ControlGrant { get; set; }
     private TimeProvider _controlClock = TimeProvider.System;
@@ -55,7 +142,7 @@ public sealed class OnlineHoeingBatch
         get
         {
             lock (_policyGate)
-                return _hasControlContact && TakenOver && _lastControlPhase == "running"
+                return !StateContinuationEnabled && _hasControlContact && TakenOver && _lastControlPhase == "running"
                     && Volatile.Read(ref _controlItemSubmitted) != 0
                     && !ControlExecutionEnded && !IsCancellationRequested && !LocalExecutionReleased && !LocalCleanupConfirmed
                     && Volatile.Read(ref _settled) == 0
@@ -192,6 +279,7 @@ public sealed class OnlineHoeingBatch
     {
         lock (_policyGate)
         {
+            if (StateContinuationEnabled && !ExplicitStopRequested) return;
             if (_policyCancellation is not null || _policyExecution is null || _cancelPolicy is null) return;
             var execution = _policyExecution;
             var cancel = _cancelPolicy;
@@ -311,8 +399,12 @@ public sealed class OnlineHoeingBatch
     {
         lock (_policyGate)
         {
-        if (Volatile.Read(ref _settled) != 0 || !userInitiated && LocalExecutionReleased) return;
-        if (userInitiated) Outcome = "cancelled";
+        if (Volatile.Read(ref _settled) != 0 || !userInitiated && (StateContinuationEnabled || LocalExecutionReleased)) return;
+        if (userInitiated)
+        {
+            Volatile.Write(ref _explicitStopRequested, 1);
+            Outcome = "cancelled";
+        }
         try
         {
             Cts.Cancel();

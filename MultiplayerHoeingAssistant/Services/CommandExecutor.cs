@@ -1948,16 +1948,16 @@ public partial class CommandExecutor
         finally { _suspendGate.Release(); }
     }
 
-    internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected)
+    internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected, bool retainUntilAcknowledged = false, long? expectedStopVersion = null)
     {
         var resetVersion = Volatile.Read(ref _resetVersion);
         if (IsManualResetActive) return ResetInProgress();
         await _suspendGate.WaitAsync();
-        try { return await ExecuteSuspendCoreAsync(description, expected, resetVersion); }
+        try { return await ExecuteSuspendCoreAsync(description, expected, resetVersion, retainUntilAcknowledged, expectedStopVersion); }
         finally { _suspendGate.Release(); }
     }
 
-    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected, int resetVersion)
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected, int resetVersion, bool retainUntilAcknowledged = false, long? expectedStopVersion = null)
     {
         if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
         if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
@@ -1995,10 +1995,30 @@ public partial class CommandExecutor
                 ticket = _takeoverTicket;
                 if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
             }
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { takeoverTicket = ticket,
-                expectedExecutionInstanceId = expected.Active?.InstanceId.ToString("N"),
-                expectedStateRevision = expected.Active?.StateRevision,
-                bgiEpoch = new { processId = expected.ProcessId, startTicksUtc = expected.StartTicksUtc } });
+            var suspendFields = new Dictionary<string, object?>
+            {
+                ["takeoverTicket"] = ticket,
+                ["expectedExecutionInstanceId"] = expected.Active?.InstanceId.ToString("N"),
+                ["expectedStateRevision"] = expected.Active?.StateRevision,
+                ["bgiEpoch"] = new { processId = expected.ProcessId, startTicksUtc = expected.StartTicksUtc }
+            };
+            if (retainUntilAcknowledged)
+            {
+                if (_retainedSuspendFenceTicket != ticket || _retainedSuspendStopVersion is null)
+                {
+                    var fence = await capable.ReadStateContinuationStopVersionAsync(new BgiEpoch
+                        { ProcessId = expected.ProcessId, StartTicksUtc = expected.StartTicksUtc }).ConfigureAwait(false);
+                    if (fence is null) return new CommandResult { ErrorCode = "state_unavailable", Message = "原 BGI 停止状态暂不可读，继续原接管请求" };
+                    if (expectedStopVersion is { } originalFence && originalFence != fence.Value)
+                        return new CommandResult { ErrorCode = "manual_stop_fence", Message = "原批次已被 BGI 明确停止，接管未发送" };
+                    if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
+                    _retainedSuspendFenceTicket = ticket;
+                    _retainedSuspendStopVersion = expectedStopVersion ?? fence;
+                }
+                suspendFields["retainUntilAcknowledged"] = true;
+                suspendFields["expectedStopVersion"] = _retainedSuspendStopVersion.Value;
+            }
+            var payload = System.Text.Json.JsonSerializer.Serialize(suspendFields);
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);
             if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             if (response.Success)
@@ -2045,8 +2065,9 @@ public partial class CommandExecutor
                 // 退出证明、票据与目标必须同时匹配；未确认时保留责任，不强杀或改认后继根。
                 if (quiesceConfirmed != true || confirmedTicket != ticket || !targetConfirmed)
                 {
-                    NotifyLoud("接管未完成", "BGI 未确认原流程退出，本次启动已中止，不自动重启 BGI。");
-                    return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", Message = "原流程未退出或对端缺少可靠接管能力" };
+                    if (!retainUntilAcknowledged)
+                        NotifyLoud("接管未完成", "BGI 未确认原流程退出，本次启动已中止，不自动重启 BGI。");
+                    return new CommandResult { Status = "failed", ErrorCode = "quiesce_timeout", RawData = response.Data, Message = "原流程退出尚未确认，保留原接管票据" };
                 }
 
                 // [A6] liveTask=false = suspend 到达时无活体任务（组间缝隙）：BGI 已声明抢占意图门

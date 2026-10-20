@@ -132,7 +132,7 @@ public sealed partial class RoomOperations
         var generation = Interlocked.Increment(ref _nextBatchGeneration);
         if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");
         var batch = new CoordinatedBatchState(generation, uids, DateTime.UtcNow, source, requestId,
-            bindings, intentGenerations, instances, useCompletionActions, quickCommandKey);
+            bindings, intentGenerations, instances, useCompletionActions, quickCommandKey, stateContinuation: true);
         _controlBatches[group] = batch;
         _batchRequests[key] = batch;
         created = true;

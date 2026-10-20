@@ -34,6 +34,7 @@ internal static class ExternalInterfaceCommandPlane
                 await ExternalInterfaceConfigurationPlane.DispatchAsync(request),
             ExternalInterfaceOperations.TaskStart =>
                 await DispatchTaskStartAsync(handler, connection, request),
+            ExternalInterfaceOperations.TaskAcknowledge => DispatchTaskAcknowledge(request),
             ExternalInterfaceOperations.TaskStop =>
                 DispatchTaskStop(handler, connection, request),
             ExternalInterfaceOperations.TaskCancel =>
@@ -76,6 +77,8 @@ internal static class ExternalInterfaceCommandPlane
         InstanceConnection connection,
         InstanceIpcEnvelope request)
     {
+        if (ValidateStateContinuationRequest(request) is { } invalidContinuation)
+            return Task.FromResult(invalidContinuation);
         // 显式 "key":null 归一化为 C# null（否则 Name 被 "" 短路、幂等去重误判，见 GetStringOrNull 注释）
         if (Execution.ExecutionRequestContract.Validate(request) is { } invalid) return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request, invalid));
         if (InstanceRequestHandler.ValidateCoordinatedHoeingRequest(request) is { } invalidHoeing)
@@ -123,7 +126,8 @@ internal static class ExternalInterfaceCommandPlane
             (handle, token) => handler.ExecuteTaskStartCoreAsync(scriptService, groupName, configName, startFromIndex, startFromTaskId, batchGroupNames, generation, handle, preempt,
                 InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket"), token,
                 workflowRunId: identity?.WorkflowRunId, executionIdentity: identity,
-                executionRequest: request))
+                executionRequest: request,
+                acceptedStateContinuation: request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true))
         {
             Preempt = preempt,
             CoordinatedHoeing = InstanceIpcProtocol.GetStringOrNull(request.Data, "coordinatedHoeing") == "v1",
@@ -131,10 +135,39 @@ internal static class ExternalInterfaceCommandPlane
             PayloadFingerprint = BetterGenshinImpact.Service.Execution.ExecutionRequestContract.Fingerprint(request),
             RequestOperation = request.Operation,
             Identity = identity,
+            RetainUntilAcknowledged = request.Data?["retainUntilAcknowledged"]?.Value<bool>() == true,
+            ExpectedStopVersion = Execution.ExecutionRequestContract.ReadExpectedStopVersion(request.Data),
         };
 
         var result = BgiTaskCoordinator.Instance.Submit(submission);
         return Task.FromResult(MapTaskStartQueueResult(request, result, generation));
+    }
+
+    internal static InstanceIpcEnvelope? ValidateStateContinuationRequest(InstanceIpcEnvelope request)
+    {
+        if (request.Operation != ExternalInterfaceOperations.TaskStart
+            || request.Data?["retainUntilAcknowledged"]?.Value<bool>() != true) return null;
+        if (request.Data?["expectedStopVersion"] is not { Type: JTokenType.Integer }
+            || request.Data?["bgiEpoch"] is not JObject
+            || string.IsNullOrWhiteSpace(InstanceIpcProtocol.GetStringOrNull(request.Data, "idempotencyKey")))
+            return Execution.ExecutionRequestContract.RejectBeforeAcceptance(request,
+                InstanceIpcEnvelope.Failure(request, "invalid_request", "状态接续启动必须冻结原停止围栏、BGI 进程及请求编号"));
+        return null;
+    }
+
+    internal static InstanceIpcEnvelope DispatchTaskAcknowledge(InstanceIpcEnvelope request)
+    {
+        var key = InstanceIpcProtocol.GetStringOrNull(request.Data, "submissionKey");
+        if (string.IsNullOrWhiteSpace(key) || !Guid.TryParse(request.Data?["taskHandle"]?.ToString(), out var handle)
+            || request.Data?["bgiEpoch"] is not JObject epoch)
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "结果确认需要 submissionKey、taskHandle 与原 bgiEpoch");
+        if (epoch["processId"]?.Value<int>() != Execution.JobRegistry.CurrentEpoch.ProcessId
+            || epoch["startTicksUtc"]?.Value<long>() != Execution.JobRegistry.CurrentEpoch.StartTicksUtc)
+            return InstanceIpcEnvelope.Failure(request, "stale_epoch", "不能确认另一 BGI 进程的任务");
+        if (!BgiTaskCoordinator.IsCreated || !BgiTaskCoordinator.Instance.Acknowledge(key, handle))
+            return InstanceIpcEnvelope.Failure(request, "result_not_terminal", "原任务尚未退出并取得真实终态，现场继续保留");
+        Execution.JobRegistry.Instance.AcknowledgeRetainedRequest(key);
+        return InstanceIpcEnvelope.Response(request, new { status = "acknowledged", submissionKey = key, taskHandle = handle.ToString("N") });
     }
 
     private static async Task<InstanceIpcEnvelope> DispatchTaskLayoutAsync(
