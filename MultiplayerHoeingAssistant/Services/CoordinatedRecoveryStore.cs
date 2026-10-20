@@ -41,6 +41,7 @@ internal sealed record CoordinatedRecoverySnapshot
     public bool LocalTasksFailed { get; init; }
     public bool CoordinatedSucceeded { get; init; }
     public bool LocalReleased { get; init; }
+    public bool NativeResumeRetryPending { get; init; }
     public int PolicyAttempt { get; init; }
     public IReadOnlyList<BgiTaskQueueStatus> FailedPolicyAttempts { get; init; } = [];
     public bool PolicyStartAttempted { get; init; }

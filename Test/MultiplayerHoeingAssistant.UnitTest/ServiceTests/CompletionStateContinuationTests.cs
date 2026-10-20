@@ -36,6 +36,71 @@ public sealed class CompletionStateContinuationTests
     };
 
     [Fact]
+    public async Task NativeResumeFailureReentersWithFreshReservationAfterExit_KeepingOriginalSnapshot()
+    {
+        var batch = Create(TaskConflictPolicy.Resume, priority: true);
+        batch.TakeoverTicket = "original-resume";
+        batch.PolicyTicketReleased = true;
+        batch.PolicyStartAttempted = true;
+        batch.SuspendedRawData = System.Text.Json.JsonSerializer.Serialize(new { recoverySnapshot = new
+        { TaskType = "solo", ProjectName = "原独立任务", NodeId = (string?)null, ManagedByWorkflow = false,
+            SoloSettingsJson = "{\"mode\":\"original\"}" } });
+        batch.RecordPolicyExecution(new(Job, Epoch, true));
+        var raw = batch.SuspendedRawData;
+        var nextJob = Guid.NewGuid().ToString("N");
+        var reads = 0; var starts = 0; var reservations = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, CanRetryNativeResume = true,
+            ExpectedRequestKey = () => batch.TakeoverTicket is { } ticket ? "resume/" + ticket : null,
+            Prepare = _ =>
+            {
+                Assert.True(reads >= 3); Assert.True(batch.NativeResumeRetryPending);
+                Assert.Null(batch.TakeoverTicket);
+                Assert.True(CommandExecutor.TryReadNativeResumeSnapshot(batch.SuspendedRawData, out var snapshot));
+                Assert.Equal("{\"mode\":\"original\"}", snapshot.GetProperty("SoloSettingsJson").GetString());
+                batch.TakeoverTicket = "new-resume-attempt"; batch.PolicyTicketReleased = false; reservations++;
+                return Task.FromResult(true);
+            },
+            Start = _ =>
+            {
+                starts++; batch.PolicyStartAttempted = true; batch.PolicyTicketReleased = true;
+                return Task.FromResult(new CommandResult { Status = "success", JobId = nextJob,
+                    TargetProcessId = Epoch.ProcessId, TargetStartTicksUtc = Epoch.StartTicksUtc.ToString() });
+            },
+            Query = _ =>
+            {
+                reads++;
+                return Task.FromResult<BgiTaskQueueStatus?>(new() { TaskHandle = starts == 0 ? Job : nextJob,
+                    Epoch = Epoch, IdempotencyKey = "resume/" + batch.TakeoverTicket,
+                    Status = starts == 0 ? reads < 3 ? "running" : "failed" : "completed",
+                    ExecutionExitConfirmed = starts > 0 || reads >= 3 });
+            },
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = ct => Task.Delay(1, ct)
+        }, batch.Cts.Token).WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, reservations); Assert.Equal(1, starts);
+        Assert.Equal(raw, batch.SuspendedRawData);
+        Assert.Equal(nextJob, batch.PolicyExecution!.JobId);
+        Assert.Single(batch.FailedPolicyAttempts);
+        var restored = OnlineHoeingBatch.Restore(batch.CaptureRecovery());
+        Assert.True(restored.NativeResumeRetryPending);
+        Assert.Equal(raw, restored.SuspendedRawData);
+        Assert.Equal("new-resume-attempt", restored.TakeoverTicket);
+    }
+
+    [Fact]
+    public void NativeRetryDoesNotAcceptManagedOrUnclassifiedSnapshots()
+    {
+        static string Raw(bool? managed, string? node) => System.Text.Json.JsonSerializer.Serialize(new
+        { recoverySnapshot = new { TaskType = "group", GroupName = "原配置组", ManagedByWorkflow = managed, NodeId = node } });
+        Assert.True(CommandExecutor.TryReadNativeResumeSnapshot(Raw(false, null), out _));
+        Assert.False(CommandExecutor.TryReadNativeResumeSnapshot(Raw(true, "original-node"), out _));
+        Assert.False(CommandExecutor.TryReadNativeResumeSnapshot(Raw(false, "original-node"), out _));
+        Assert.False(CommandExecutor.TryReadNativeResumeSnapshot(Raw(null, null), out _));
+    }
+
+    [Fact]
     public async Task FailedSpecifiedActionRetriesOnlyAfterConfirmedExit_AndRetainsFailure()
     {
         var batch = Create(priority: true);

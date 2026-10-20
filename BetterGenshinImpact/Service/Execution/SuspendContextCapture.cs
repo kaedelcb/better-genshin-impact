@@ -42,7 +42,7 @@ internal static class SuspendContextCapture
         string? PlanNextFolderName = null,
         string? PlanNextProjectName = null,
         string? PlanNextDragonTaskId = null,
-        bool PlanPreExecution = false);
+        bool PlanPreExecution = false, bool ManagedByWorkflow = false);
 
     /// <summary>
     /// 判定"当前在跑的项目"是否为「联机锄地上线」信号任务。

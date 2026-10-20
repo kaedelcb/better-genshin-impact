@@ -53,10 +53,10 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
             () => null, null, null, () => (true, null),
             onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
     }
-    private static BgiJobInfo Finished(WorkflowRunRecord run, string key, string job) => new()
+    private static BgiJobInfo Finished(WorkflowRunRecord run, string key, string job, string state = "succeeded") => new()
     {
         Epoch = new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 }, JobId = Guid.Parse(job).ToString("N"),
-        Source = "Resume", State = "succeeded", WorkflowRunId = run.WireRunId, NodeId = "B",
+        Source = "Resume", State = state, WorkflowRunId = run.WireRunId, NodeId = "B",
         Occurrence = 0, Iteration = 0, Attempt = 2, IdempotencyKey = key,
         ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited",
     };
@@ -139,32 +139,46 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         Assert.Equal(0, port.Cancels);
     }
 
-    private sealed class Body(RunStore runs) : IWorkflowExecutionBoundary
+    private sealed class Body(RunStore runs, bool priorityRecovery = false) : IWorkflowExecutionBoundary
     {
         internal readonly List<string> Submitted = [];
+        internal readonly List<string> Keys = [];
+        internal int RetryFailures;
+        internal Action<WorkflowRunRecord>? BeforeHandoff;
+        internal TaskCompletionSource? HostTakeover;
+        private bool _preempted;
         private readonly Dictionary<string, string> _jobs = [];
         public bool SingleNativeSupported => false;
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         {
             Submitted.Add(request.Node.NodeId!);
+            Keys.Add(request.Run.CurrentSubmission!.Key);
             TerminalReleaseFixtureFacts.FreezeBody(request);
             var job = Guid.NewGuid().ToString("D");
             _jobs.Add(job, request.Node.NodeId!);
             return Task.FromResult(BoundarySubmitResult.AcceptedWith(job));
         }
-        public Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
+        public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string jobId, CancellationToken ct)
         {
-            if (_jobs[jobId] != "B") return Task.FromResult(BoundaryTerminalResult.Observed("succeeded"));
+            if (_jobs[jobId] != "B" || _preempted)
+                return BoundaryTerminalResult.Observed(RetryFailures-- > 0 ? "failed" : "succeeded");
+            _preempted = true;
+            if (HostTakeover is not null)
+            {
+                await HostTakeover.Task.WaitAsync(ct);
+                return BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted");
+            }
             var run = runs.List().Single(candidate => candidate.CurrentSubmission?.JobId == jobId);
             var sub = run.CurrentSubmission!;
+            BeforeHandoff?.Invoke(run);
             run.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
             {
-                StateContinuation = true, Generation = 7, Ticket = "original-ticket", Epoch = "42:99",
+                StateContinuation = true, PriorityRecovery = priorityRecovery, Generation = 7, Ticket = "original-ticket", Epoch = "42:99",
                 NodeId = "B", Occurrence = sub.Occurrence, LoopIteration = sub.LoopIteration, Attempt = sub.Attempt,
                 OriginalJobId = jobId, OriginalSubmissionKey = sub.Key, Phase = "suspended",
             };
             runs.Update(run);
-            return Task.FromResult(BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted"));
+            return BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted");
         }
     }
     private sealed class Prerequisite : IWorkflowPrerequisiteAdapter
@@ -223,6 +237,300 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         Assert.Equal(0, port.Sends);
         Assert.Equal(0, port.Cancels);
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PriorityOriginalRunnerRetriesFailedResumePastOrdinaryLimitAndThenContinues(bool priority)
+    {
+        var host = Host(out var workflows, out var document);
+        var port = new Port { Missing = 0 };
+        var resumed = new BgiWorkflowExecutionBoundary(port, host.Runs);
+        var body = new Body(host.Runs, priority) { RetryFailures = 4 };
+        var runner = new WorkflowRunner(workflows, host.Runs, body, new Prerequisite(), new Terminal(),
+            new WorkflowRunnerOptions { OnlineHoeingContinuation = (run, original, result, ct)
+                => host.AwaitOnlineHoeingContinuationAsync(resumed, run, original, result, ct) });
+        using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(16));
+        var driving = runner.StartAsync(document.WorkflowId!, ct: ct.Token);
+        WorkflowRunRecord? parked = null;
+        await Until(() => (parked = host.Runs.List().FirstOrDefault(r => r.OnlineHoeingHandoff?.Phase == "parked")) != null);
+        var request = await host.PreparePlanResumeAsync(parked!.RunId, "original-ticket", ct.Token);
+        Assert.NotNull(request);
+        var job = Guid.NewGuid().ToString("D");
+        port.Job = Finished(parked, (string)request!["idempotencyKey"]!, job, "failed");
+        Assert.True(host.AcceptPlanResumeJob(parked.RunId, "original-ticket", job));
+        var finished = await driving.WaitAsync(ct.Token);
+        Assert.Equal(priority ? WorkflowRunState.Succeeded : WorkflowRunState.Failed, finished.State);
+        Assert.Equal(priority ? new[] { "B", "B", "B", "B", "B", "B", "C" } : new[] { "B" }, body.Submitted);
+        Assert.Equal(body.Keys.Count, body.Keys.Distinct().Count());
+        Assert.Equal(priority ? 5 : 1, finished.NodeOutcomes.Count(o => o.RawTerminal == "failed"));
+        Assert.Single(finished.OnlineHoeingHistory);
+        Assert.Equal(priority, finished.OnlineHoeingHistory[0].PriorityRecovery);
+        Assert.Equal(0, port.Sends);
+    }
+
+    [Fact]
+    public async Task LiveHostPriorityPreparationRetainsOriginalRunnerWhenRecordDirectoryFails()
+    {
+        var flows = Path.Combine(_root, "host-flows");
+        var runs = Path.Combine(_root, "host-runs");
+        var workflows = new WorkflowStore(flows);
+        var document = new WorkflowDocument
+        {
+            Name = "实际宿主原计划", Activation = new() { Status = "active" },
+            Nodes = new[] { "B", "C" }.Select(id => new WorkflowNode
+            { NodeId = id, Kind = "resource.configGroup", Ref = new() { Config = id, ConfigKey = id + "#k", Revision = "rev-1" } }).ToList(),
+        };
+        workflows.Save(document, null);
+        var port = new Port { Missing = 0 };
+        Body? body = null;
+        TaskCenterHost? host = null;
+        host = new TaskCenterHost(flows, runs, Path.Combine(_root, "host-catalog.json"), () => null, null,
+            (_, w, r) =>
+            {
+                body = new Body(r, true) { HostTakeover = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+                var resumed = new BgiWorkflowExecutionBoundary(port, r);
+                return new WorkflowRunner(w, r, body, new Prerequisite(), new Terminal(),
+                    new WorkflowRunnerOptions { OnlineHoeingContinuation = (run, sub, result, ct)
+                        => host!.AwaitOnlineHoeingContinuationAsync(resumed, run, sub, result, ct) });
+            }, () => (true, null), onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
+        try
+        {
+            Assert.True((await host.StartWorkflowAsync(document.WorkflowId!)).Ok);
+            await Until(() => body?.Submitted.Count == 1 && host.Runs.List().Any(r => r.CurrentSubmission?.JobId is not null));
+            var original = host.Runs.List().Single();
+            var job = Guid.Parse(original.CurrentSubmission!.JobId!);
+            await host.CloseOnlineHoeingSendAsync(priority: true);
+            host.Runs.FileOperationFaultForTest = op => op == "enumerate" ? new IOException("directory unreadable") : null;
+            host.Runs.PublishFaultForTest = _ => new IOException("progress unwritable");
+            var prepared = host.PreparePriorityOnlineHoeing(7, new(true, true, 42, 99,
+                new(Guid.NewGuid(), 42, 99, Guid.Parse(original.WireRunId), job)));
+            Assert.True(prepared.Ready);
+            Assert.Equal(original.RunId, prepared.ManagedRunId);
+            Assert.True(host.Runs.HasPriorityProgress(original.RunId));
+            Assert.True(host.ConfirmOnlineHoeingSuspend(7, "original-ticket", System.Text.Json.JsonSerializer.Serialize(new
+            { status = "suspended", workflowRunId = original.WireRunId, nodeId = "B", originalJobId = job,
+                occurrence = 0, iteration = 0, attempt = 1, planCheckpointPhase = "inside", planNextTaskIndex = 0 })));
+            body!.HostTakeover!.SetResult();
+            await Until(() => host.Runs.Load(original.RunId)!.OnlineHoeingHandoff?.Phase == "parked");
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+            var request = await host.PreparePlanResumeAsync(original.RunId, "original-ticket", budget.Token);
+            Assert.NotNull(request);
+            var resumedJob = Guid.NewGuid().ToString("D");
+            port.Job = Finished(original, (string)request!["idempotencyKey"]!, resumedJob);
+            Assert.True(host.AcceptPlanResumeJob(original.RunId, "original-ticket", resumedJob));
+            Assert.True(host.CanOpenRetainedPrioritySend(7, original.RunId));
+            Assert.False(host.CanOpenRetainedPrioritySend(8, original.RunId));
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            await Until(() => host.Runs.Load(original.RunId)!.State == WorkflowRunState.Succeeded);
+            Assert.Equal(new[] { "B", "C" }, body.Submitted);
+            Assert.Equal(0, port.Sends);
+        }
+        finally
+        {
+            host.Runs.FileOperationFaultForTest = null;
+            host.Runs.PublishFaultForTest = null;
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Fact]
+    public async Task OriginalRunnerConsumesResumeAndContinuesWhileProgressReadsAndWritesKeepFailing()
+    {
+        var host = Host(out var workflows, out var document);
+        var port = new Port { Missing = 0 };
+        var resumed = new BgiWorkflowExecutionBoundary(port, host.Runs);
+        var body = new Body(host.Runs, true);
+        byte[]? originalFile = null;
+        string? runFile = null;
+        body.BeforeHandoff = run =>
+        {
+            host.Runs.RetainPriorityProgress(run);
+            runFile = Path.Combine(_root, "runs", run.RunId + ".run.json");
+            originalFile = File.ReadAllBytes(runFile);
+            host.Runs.PublishFaultForTest = _ => new IOException("persistent progress publication failure");
+            host.Runs.BeforeLoadForTest = _ => throw new IOException("persistent progress read failure");
+        };
+        var runner = new WorkflowRunner(workflows, host.Runs, body, new Prerequisite(), new Terminal(),
+            new WorkflowRunnerOptions { OnlineHoeingContinuation = (run, original, result, ct)
+                => host.AwaitOnlineHoeingContinuationAsync(resumed, run, original, result, ct) });
+        using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var driving = runner.StartAsync(document.WorkflowId!, ct: ct.Token);
+        WorkflowRunRecord? parked = null;
+        await Until(() => (parked = host.Runs.List().FirstOrDefault(r => r.OnlineHoeingHandoff?.Phase == "parked")) != null);
+        var request = await host.PreparePlanResumeAsync(parked!.RunId, "original-ticket", ct.Token);
+        Assert.NotNull(request);
+        var job = Guid.NewGuid().ToString("D");
+        port.Job = Finished(parked, (string)request!["idempotencyKey"]!, job);
+        Assert.True(host.AcceptPlanResumeJob(parked.RunId, "original-ticket", job));
+        var finished = await driving.WaitAsync(ct.Token);
+        Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+        Assert.Equal(new[] { "B", "C" }, body.Submitted);
+        Assert.NotNull(host.Runs.PriorityPersistenceError(finished.RunId));
+        Assert.Equal(originalFile, File.ReadAllBytes(runFile!));
+        Assert.Single(finished.OnlineHoeingHistory);
+        Assert.Equal(0, port.Sends);
+        host.Runs.PublishFaultForTest = null;
+        host.Runs.BeforeLoadForTest = null;
+        while (host.Runs.HasUnpublishedPriorityProgress(finished.RunId))
+            host.Runs.FlushPriorityProgress(finished.RunId);
+        Assert.Null(host.Runs.PriorityPersistenceError(finished.RunId));
+        var disk = new RunStore(Path.Combine(_root, "runs")).Load(finished.RunId)!;
+        Assert.Equal(finished.RecordRevision, disk.RecordRevision);
+        Assert.Equal(WorkflowRunState.Succeeded, disk.State);
+        Assert.Equal(finished.NodeOutcomes.Count, disk.NodeOutcomes.Count);
+        Assert.Single(disk.OnlineHoeingHistory);
+        Assert.Equal(finished.CurrentSubmission!.Key, disk.CurrentSubmission!.Key);
+    }
+
+    [Fact]
+    public async Task ExplicitStopDuringPriorityRetryDelayPreventsNextSubmission()
+    {
+        var host = Host(out var workflows, out var document);
+        var port = new Port { Missing = 0 };
+        var resumed = new BgiWorkflowExecutionBoundary(port, host.Runs);
+        var body = new Body(host.Runs, true) { RetryFailures = 100 };
+        var runner = new WorkflowRunner(workflows, host.Runs, body, new Prerequisite(), new Terminal(),
+            new WorkflowRunnerOptions { OnlineHoeingContinuation = (run, original, result, ct)
+                => host.AwaitOnlineHoeingContinuationAsync(resumed, run, original, result, ct) });
+        using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var driving = runner.StartAsync(document.WorkflowId!, ct: ct.Token);
+        WorkflowRunRecord? parked = null;
+        await Until(() => (parked = host.Runs.List().FirstOrDefault(r => r.OnlineHoeingHandoff?.Phase == "parked")) != null);
+        var request = await host.PreparePlanResumeAsync(parked!.RunId, "original-ticket", ct.Token);
+        var job = Guid.NewGuid().ToString("D");
+        port.Job = Finished(parked, (string)request!["idempotencyKey"]!, job, "failed");
+        Assert.True(host.AcceptPlanResumeJob(parked.RunId, "original-ticket", job));
+        await Until(() => host.Runs.Load(parked.RunId)!.NodeOutcomes.Any(o => o.RawTerminal == "failed"));
+        ct.Cancel();
+        var stopped = await driving.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.True(stopped.StopRequested);
+        Assert.Equal(new[] { "B" }, body.Submitted);
+        Assert.DoesNotContain(stopped.NodeOutcomes, o => o.Result == "succeeded");
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public async Task PriorityWaiterRecoveryDoesNotReopenANewerBatchGate(bool newerBatch, bool temporarilyUnavailable, bool runningPublicationFails)
+    {
+        var flows = Path.Combine(_root, "wake-flows");
+        var runs = Path.Combine(_root, "wake-runs");
+        var workflows = new WorkflowStore(flows);
+        var document = new WorkflowDocument
+        {
+            Name = "等待恢复C", Activation = new() { Status = "active" },
+            Nodes = [new() { NodeId = "C", Kind = "resource.configGroup",
+                Ref = new() { Config = "C", ConfigKey = "C#k", Revision = "rev-1" } }],
+        };
+        workflows.Save(document, null);
+        var body = new Body(new RunStore(runs));
+        var ready = !temporarilyUnavailable;
+        var host = new TaskCenterHost(flows, runs, Path.Combine(_root, "wake-catalog.json"), () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, body, new Prerequisite(), new Terminal()),
+            () => (ready, ready ? null : "controlled environment not ready"), onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
+        var gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost).GetField("_onlineSendGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        try
+        {
+            var run = host.Runs.CreateRun(document.WorkflowId!, workflows.LoadSnapshot(document.WorkflowId!).Revision);
+            run.State = WorkflowRunState.LocalWaitParking;
+            run.TriggerConsumed = true;
+            run.OnlineHoeingGateParked = true;
+            run.Cursor = new() { NodeId = "C", Attempt = 1 };
+            host.Runs.Update(run);
+            await host.CloseOnlineHoeingSendAsync(priority: true);
+            host.Runs.FileOperationFaultForTest = op => op == "enumerate" ? new IOException("old records unavailable") : null;
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            Assert.False(gate.IsClosed);
+            Assert.Empty(body.Submitted);
+            if (newerBatch) await host.CloseOnlineHoeingSendAsync(priority: true);
+            host.Runs.FileOperationFaultForTest = null;
+            var publicationFailures = 0;
+            if (runningPublicationFails)
+                host.Runs.PublishFaultForTest = current => current.State == WorkflowRunState.Running
+                    && Interlocked.CompareExchange(ref publicationFailures, 1, 0) == 0
+                        ? new IOException("one Running publication failure") : null;
+            host.RetryPriorityWaiterWake();
+            if (temporarilyUnavailable || runningPublicationFails)
+            {
+                await Until(() => typeof(TaskCenterHost).GetField("_priorityWaiterWakeTask",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host) is Task { IsCompleted: true });
+                Assert.Empty(body.Submitted);
+                Assert.True(host.Runs.Load(run.RunId)!.OnlineHoeingGateParked);
+                if (runningPublicationFails)
+                {
+                    await Until(() => !host.IsDriving(document.WorkflowId!)
+                        && host.Runs.Load(run.RunId)!.State == WorkflowRunState.Interrupted);
+                    Assert.Equal(1, publicationFailures);
+                }
+                ready = true;
+                host.RetryPriorityWaiterWake();
+            }
+            if (newerBatch)
+            {
+                await Task.Delay(100);
+                Assert.True(gate.IsClosed);
+                Assert.Empty(body.Submitted);
+                await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            }
+            await Until(() => host.Runs.Load(run.RunId)?.State == WorkflowRunState.Succeeded);
+            Assert.Equal(new[] { "C" }, body.Submitted);
+            Assert.False(host.Runs.Load(run.RunId)!.OnlineHoeingGateParked);
+        }
+        finally { host.Runs.FileOperationFaultForTest = null; host.Runs.PublishFaultForTest = null; await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task PriorityWaiterRemainsPendingWhenOriginalDriverTakesLongerThanWakeWindowToExit()
+    {
+        var flows = Path.Combine(_root, "late-drive-flows");
+        var runs = Path.Combine(_root, "late-drive-runs");
+        var workflows = new WorkflowStore(flows);
+        var document = new WorkflowDocument
+        {
+            Name = "原驱动慢退出", Activation = new() { Status = "active" },
+            Nodes = [new() { NodeId = "C", Kind = "resource.configGroup",
+                Ref = new() { Config = "C", ConfigKey = "C#k", Revision = "rev-1" } }],
+        };
+        workflows.Save(document, null);
+        using var release = new ManualResetEventSlim();
+        var parkedDriver = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = 0;
+        var body = new Body(new RunStore(runs));
+        TaskCenterOnlineSendGate? gate = null;
+        var host = new TaskCenterHost(flows, runs, Path.Combine(_root, "late-drive-catalog.json"), () => null,
+            log: message =>
+            {
+                if (message.Contains("终态：LocalWaitParking") && Interlocked.CompareExchange(ref held, 1, 0) == 0)
+                { parkedDriver.SetResult(); Assert.True(release.Wait(TimeSpan.FromSeconds(12))); }
+            },
+            runnerFactory: (_, w, r) => new WorkflowRunner(w, r, body, new Prerequisite(), new Terminal(),
+                new WorkflowRunnerOptions { OnlineHoeingSendClosed = () => gate!.IsClosed }),
+            readinessOverride: () => (true, null), onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
+        gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost).GetField("_onlineSendGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        try
+        {
+            await host.CloseOnlineHoeingSendAsync(priority: true);
+            var starting = Task.Run(() => host.StartWorkflowAsync(document.WorkflowId!));
+            await parkedDriver.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var run = host.Runs.List().Single();
+            Assert.True(host.IsDriving(document.WorkflowId!));
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            Assert.True(host.Runs.Load(run.RunId)!.OnlineHoeingGateParked);
+            Assert.Empty(body.Submitted);
+            release.Set();
+            Assert.True((await starting).Ok);
+            await Until(() => !host.IsDriving(document.WorkflowId!));
+            host.RetryPriorityWaiterWake();
+            await Until(() => host.Runs.Load(run.RunId)?.State == WorkflowRunState.Succeeded);
+            Assert.Equal(new[] { "C" }, body.Submitted);
+        }
+        finally { release.Set(); await host.ShutdownAsync(); }
+    }
+
     [Fact]
     public async Task GapReleasePublicationThenReadFailureRetriesSameTicketAndRunsOnlyNextNode()
     {

@@ -902,6 +902,17 @@ public sealed partial class TaskCenterHost
                     var renew = _admissionStore!.TryRenewLatest(_admissionLeaseId!, _admissionOwnerEpoch!);
                     if (!renew.Success)
                         _log?.Invoke("[任务中心] 仲裁租约续期被拒（" + renew.Reason + "）——后续提交将响亮拒绝。");
+                    else
+                    {
+                        // Drain progress with one original write per lock hold. Renew between writes
+                        // and yield so a long disk-recovery backlog cannot starve explicit stop.
+                        RetryPriorityWaiterWake();
+                        while (!ct.IsCancellationRequested && _runs.FlushOneRetainedPriorityProgress())
+                        {
+                            await Task.Delay(1, ct).ConfigureAwait(false);
+                            if (!_admissionStore.TryRenewLatest(_admissionLeaseId!, _admissionOwnerEpoch!).Success) break;
+                        }
+                    }
                 }
                 catch (OperationCanceledException) { return; }
                 catch (IOException) { /* 锁争用：下一周期再试（单次操作持锁极短） */ }

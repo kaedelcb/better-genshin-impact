@@ -393,7 +393,8 @@ public sealed partial class RunStore
         lock (_gate)
         {
             var file = PathFor(runId);
-            var currentText = TryReadAllTextOrNull(file, "read-merging");   // 「不存在」与「拒绝访问」在此分流
+            var currentText = _priorityProgress.TryGetValue(runId, out var retained)
+                ? JsonSerializer.Serialize(retained.Current) : TryReadAllTextOrNull(file, "read-merging");   // 「不存在」与「拒绝访问」在此分流
             if (currentText is null)
             {
                 latest = null;                        // 已确认不存在（拒绝访问会在此抛出，不落此分支）
@@ -446,10 +447,17 @@ public sealed partial class RunStore
     }
 
     /// <summary>读取运行记录（不存在返回 null；解析失败抛 JsonException——调用方按隔离处理，不回空）。</summary>
-    internal bool IsStartupSourceRevoked(WorkflowStopAuthorityRecord authority)
+    internal bool IsStartupSourceRevoked(WorkflowStopAuthorityRecord authority) => IsStartupSourceRevoked(authority, null);
+
+    internal bool IsStartupSourceRevoked(WorkflowStopAuthorityRecord authority, string? priorityRunId)
     {
         lock (_gate)
         {
+            if (priorityRunId is not null && _priorityProgress.ContainsKey(priorityRunId))
+            {
+                using var fence = PriorityOwnerFence();
+                return _knownProgress.Values.Any(r => r.StopRequested && r.StopAuthority == authority);
+            }
             var snapshot = ListWithIntegrity("read-startup-source");
             if (snapshot.UnknownFiles.Count != 0)
                 throw new InvalidDataException("来源停止记录不可完全核对，禁止猜测原挂载仍有效。");
@@ -459,12 +467,18 @@ public sealed partial class RunStore
 
     public WorkflowRunRecord? Load(string runId)
     {
+        lock (_gate)
+        {
+        if (_priorityProgress.TryGetValue(runId, out var retained)) return CopyProgress(retained.Current);
         BeforeLoadForTest?.Invoke(runId);
         var file = PathFor(runId);
         // [第三轮会诊阻断项处置] **不得用 `File.Exists` 探测**（它会把「拒绝访问」静默折成 false ⇒ 误判为不存在）：
         // 直接读——NotFound ⇒ null（合法「无记录」）；争用 ⇒ 有界重试后原样抛出。
         var text = TryReadAllTextOrNull(file, "read-load");
-        return text is null ? null : JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
+        var loaded = text is null ? null : JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
+        if (loaded is not null) RememberProgress(loaded);
+        return loaded;
+        }
     }
 
     /// <summary>
@@ -481,7 +495,9 @@ public sealed partial class RunStore
             {
                 try
                 {
-                    var text = TryReadAllTextOrNull(file, readOperation);
+                    var retained = _priorityProgress.Values.FirstOrDefault(p => PathFor(p.Current.RunId) == file);
+                    var text = retained is not null ? JsonSerializer.Serialize(retained.Current)
+                        : TryReadAllTextOrNull(file, readOperation);
                     if (text is null) continue;               // 读取前已被移除＝已确认不存在
                     var rec = JsonSerializer.Deserialize<WorkflowRunRecord>(text, JsonOptions);
                     if (rec is null || string.IsNullOrWhiteSpace(rec.RunId))
@@ -490,6 +506,7 @@ public sealed partial class RunStore
                         continue;
                     }
                     list.Add(rec);
+                    RememberProgress(rec);
                 }
                 catch (Exception ex) when (IsFileContention(ex))
                 {
@@ -503,6 +520,8 @@ public sealed partial class RunStore
                 }
             }
 
+            foreach (var retained in _priorityProgress.Values)
+                if (list.All(r => r.RunId != retained.Current.RunId)) list.Add(CopyProgress(retained.Current));
             list.Sort((a, b) => a.CreatedAt.CompareTo(b.CreatedAt));
             bad.Sort(StringComparer.Ordinal);
             return new RunStoreListSnapshot(list.AsReadOnly(), bad.AsReadOnly());
@@ -646,7 +665,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void Persist(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null)
+    private void PersistDisk(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null)
     {
         lock (_gate)
         {

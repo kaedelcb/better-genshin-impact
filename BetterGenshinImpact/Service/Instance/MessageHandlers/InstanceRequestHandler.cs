@@ -1861,6 +1861,56 @@ internal sealed class InstanceRequestHandler
         => planContinuation && context.PlanCheckpointPhase == "betweenDragon"
             ? context.PlanNextDragonTaskId : context.OneDragonTaskId;
 
+    private static readonly object NativeRetrySnapshotGate = new();
+    private static readonly Dictionary<string, JObject> NativeRetrySnapshots = new();
+
+    internal static void ReleaseUnadmittedResume(string ticket,
+        BetterGenshinImpact.Core.Config.SuspendedTaskContext context, bool admitted)
+    {
+        if (admitted) return;
+        if (PreemptionGate.Release(ticket))
+        {
+            var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+            if (ReferenceEquals(config.SuspendedTaskContext, context)) config.SuspendedTaskContext = null;
+        }
+        lock (NativeRetrySnapshotGate) NativeRetrySnapshots.Remove(ticket);
+    }
+
+    internal static string? RestoreNativeRetrySnapshot(string ticket, JObject raw, long expectedStopVersion,
+        string recoveryStopSignal)
+    {
+        if (!PreemptionGate.WasRetained(ticket) || !PreemptionGate.Authorize(ticket)) return "stale_ticket";
+        if (expectedStopVersion != ExecutionScope.StopVersionNow) return "manual_stop_fence";
+        if (!ExecutionScope.RegisterCoordinatedStopSignal(recoveryStopSignal, expectedStopVersion, out var signalError))
+            return signalError;
+        SuspendContextCapture.Snapshot? snapshot;
+        try { snapshot = raw.ToObject<SuspendContextCapture.Snapshot>(); }
+        catch (Exception) { return "invalid_recovery_snapshot"; }
+        if (snapshot is null || raw.GetValue("ManagedByWorkflow", StringComparison.OrdinalIgnoreCase)?.Type != JTokenType.Boolean
+            || snapshot.ManagedByWorkflow || snapshot.NodeId is not null) return "managed_resume_required";
+        if (snapshot.TaskType is not ("group" or "onedragon" or "solo")
+            || string.IsNullOrWhiteSpace(snapshot.TaskType == "solo" ? snapshot.ProjectName : snapshot.GroupName))
+            return "invalid_recovery_snapshot";
+        lock (NativeRetrySnapshotGate)
+        {
+            var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+            if (NativeRetrySnapshots.TryGetValue(ticket, out var previous))
+            {
+                if (!JToken.DeepEquals(previous, raw)) return "recovery_snapshot_conflict";
+            }
+            else if (config.SuspendedTaskContext is not null) return "recovery_context_conflict";
+            if (!ExecutionScope.RestoreRecoveryIfStillOwned(ticket, expectedStopVersion, () =>
+                {
+                    if (config.SuspendedTaskContext is null && SuspendContextCapture.Save(
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, snapshot, "原生恢复重试")
+                        && config.SuspendedTaskContext is { } restored)
+                    { restored.TakeoverTicket = ticket; restored.StopVersion = expectedStopVersion; }
+                    NativeRetrySnapshots[ticket] = (JObject)raw.DeepClone();
+                })) return "task_busy";
+            return null;
+        }
+    }
+
     internal async Task<string?> RestoreLostOriginalSuspendContextAsync(string ticket)
     {
         await TargetedSuspendGate.WaitAsync();
@@ -1897,6 +1947,15 @@ internal sealed class InstanceRequestHandler
             if (!PreemptionGate.Authorize(ticket))
                 return InstanceIpcEnvelope.Failure(request, "stale_ticket", "恢复/释放票据无效");
             var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+            if (request.Data?["recoverySnapshot"] is JObject retrySnapshot)
+            {
+                if (request.Data?["planContinuation"] is JObject || ticket is null
+                    || request.Data?["expectedStopVersion"] is not { Type: JTokenType.Integer } expectedStop
+                    || InstanceIpcProtocol.GetStringOrNull(request.Data, "recoveryStopSignal") is not { } stopSignal)
+                    return InstanceIpcEnvelope.Failure(request, "invalid_recovery_snapshot", "原生重跑必须保留具体快照及停止围栏，不能替代计划接续");
+                if (RestoreNativeRetrySnapshot(ticket, retrySnapshot, expectedStop.Value<long>(), stopSignal) is { } retryError)
+                    return InstanceIpcEnvelope.Failure(request, retryError, "原生恢复重跑尚未取得原快照与当前执行条件");
+            }
             if (config.SuspendedTaskContext is null && ticket is not null
                 && request.Data?["cancel"]?.Value<bool>() != true
                 && await RestoreLostOriginalSuspendContextAsync(ticket) is { } restoreError)
@@ -1961,6 +2020,7 @@ internal sealed class InstanceRequestHandler
                         config.SuspendedTaskContext = null;
                     PreemptionGate.Release(ticket);
                     RememberResume(ticket, attempt, "resumed", acceptedResumeKey);
+                    if (ticket is not null) lock (NativeRetrySnapshotGate) NativeRetrySnapshots.Remove(ticket);
                     admitted.TrySetResult(true);
                 }
             }
@@ -1990,6 +2050,8 @@ internal sealed class InstanceRequestHandler
                     context.TaskType == "group" ? resumeIndex : 0,
                     async (handle, token) =>
                     {
+                        try
+                        {
                         attempt = handle;
                         if (originalStopVersion != ExecutionScope.StopVersionNow)
                             throw new ExecutionNotStartedException(handle, "恢复排队后已被用户停止");
@@ -2040,6 +2102,13 @@ internal sealed class InstanceRequestHandler
                                     startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc },
                             }), resumeIdempotencyKey: acceptedResumeKey, acceptedStateContinuation: true,
                             acceptedRequestFingerprint: fingerprint, acceptedRequestOperation: request.Operation).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            // A queued resume can fail before OnAdmitted. It has still exited;
+                            // do not strand its ticket and prevent the verified next attempt.
+                            ReleaseUnadmittedResume(ticket, context, admitted.Task.IsCompletedSuccessfully);
+                        }
                     })
                 {
                     IdempotencyKey = acceptedResumeKey, PayloadFingerprint = fingerprint,

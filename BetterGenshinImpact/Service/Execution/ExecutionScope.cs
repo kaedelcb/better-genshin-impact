@@ -273,6 +273,7 @@ public sealed class ExecutionScope : IDisposable
                 : snapshot;
             Checkpoint = Checkpoint with { RootRunId = RunId, AttemptId = Descriptor.JobId,
                 NodeId = Descriptor.NodeId, Iteration = Descriptor.Iteration,
+                ManagedByWorkflow = Descriptor.WorkflowRunId is not null && Descriptor.NodeId is not null,
                 TaskId = Descriptor.TaskId, ConfigRevision = Descriptor.ConfigRevision,
                 SuppressCompletionAction = Descriptor.SuppressConfigCompletionAction, // R4.6 B6：抑制权限随恢复现场携带
                 Occurrence = Descriptor.Occurrence, Attempt = Descriptor.Attempt, // R4.6 B1

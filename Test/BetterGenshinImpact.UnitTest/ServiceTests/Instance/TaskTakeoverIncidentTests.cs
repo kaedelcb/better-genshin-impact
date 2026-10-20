@@ -500,6 +500,81 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
         Assert.Equal("stale_ticket", (await handler.HandleTaskSuspend(null!, idle)).ErrorCode);
     }
 
+    [Theory]
+    [InlineData("group")]
+    [InlineData("onedragon")]
+    [InlineData("solo")]
+    public void NativeRetryPreservesSpecificTaskAndSettings_AndRejectsChangedSnapshotOrStop(string type)
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        PreemptionGate.Arm(ticket); Assert.True(PreemptionGate.RetainUntilReleased(ticket));
+        using var signal = Mistletoe.Shared.CoordinatedStopSignal.Create();
+        var snapshot = new SuspendContextCapture.Snapshot(type, "原配置", 0, "folder", "原独立任务", "dragon-task",
+            null, "{\"mode\":\"original\"}", false, ManagedByWorkflow: false);
+        var raw = Newtonsoft.Json.Linq.JObject.FromObject(snapshot);
+        Assert.Null(InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, raw, ExecutionScope.StopVersionNow, signal.Name));
+        var restored = config.SuspendedTaskContext!;
+        Assert.Equal(type, restored.TaskType); Assert.Equal("原配置", restored.GroupName);
+        Assert.Equal("原独立任务", restored.ProjectName); Assert.Equal(snapshot.SoloSettingsJson, restored.SoloSettingsJson);
+        Assert.Equal(0, restored.TaskIndex); Assert.Equal("dragon-task", restored.OneDragonTaskId);
+        Assert.Null(InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, raw, ExecutionScope.StopVersionNow, signal.Name));
+        var changed = (Newtonsoft.Json.Linq.JObject)raw.DeepClone(); changed["GroupName"] = "其他配置";
+        Assert.Equal("recovery_snapshot_conflict", InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, changed,
+            ExecutionScope.StopVersionNow, signal.Name));
+        signal.Stop();
+        Assert.Equal("manual_stop_fence", InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, raw,
+            ExecutionScope.StopVersionNow, signal.Name));
+        InstanceRequestHandler.ReleaseUnadmittedResume(ticket, restored, admitted: false);
+        Assert.True(PreemptionGate.Authorize(null));
+    }
+
+    [Fact]
+    public void NativeRetryCannotBypassManagedRunnerOrReplaceAnOccupiedRoot()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        PreemptionGate.Arm(ticket); Assert.True(PreemptionGate.RetainUntilReleased(ticket));
+        using var signal = Mistletoe.Shared.CoordinatedStopSignal.Create();
+        var snapshot = new SuspendContextCapture.Snapshot("group", "原组", 0, null, null, null, null, null, false,
+            NodeId: "managed-node", ManagedByWorkflow: true);
+        var raw = Newtonsoft.Json.Linq.JObject.FromObject(snapshot);
+        Assert.Equal("managed_resume_required", InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, raw,
+            ExecutionScope.StopVersionNow, signal.Name));
+        raw = Newtonsoft.Json.Linq.JObject.FromObject(snapshot with { NodeId = null, ManagedByWorkflow = false });
+        using (var active = ExecutionScope.Start(new(JobKind.Group, "仍在执行", JobSource.Ext, TakeoverTicket: ticket)))
+        {
+            Assert.Equal("task_busy", InstanceRequestHandler.RestoreNativeRetrySnapshot(ticket, raw,
+                ExecutionScope.StopVersionNow, signal.Name));
+            Assert.False(active.Token.IsCancellationRequested);
+            Assert.Null(config.SuspendedTaskContext);
+        }
+        PreemptionGate.Release(ticket);
+    }
+
+    [Fact]
+    public async Task FailedQueuedResumeBeforeAdmissionReleasesOnlyItsOwnReservationAfterExecutorExit()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        PreemptionGate.Arm(ticket); Assert.True(PreemptionGate.RetainUntilReleased(ticket));
+        var context = new SuspendedTaskContext { TaskType = "solo", ProjectName = "missing-task", TakeoverTicket = ticket };
+        config.SuspendedTaskContext = context;
+        using var coordinator = new BgiTaskCoordinator(() => true, (_, _) => { }, NullLogger.Instance,
+            TimeSpan.FromMilliseconds(1), TimeSpan.FromSeconds(1));
+        var submission = new BgiTaskCoordinator.TaskSubmission(0, null, null, 0, async (_, _) =>
+        {
+            try { await Task.Yield(); throw new InvalidOperationException("task unavailable before admission"); }
+            finally { InstanceRequestHandler.ReleaseUnadmittedResume(ticket, context, admitted: false); }
+        }) { IdempotencyKey = "native-failure/" + ticket, TakeoverTicket = ticket, RetainUntilAcknowledged = true,
+            PayloadFingerprint = new string('A', 64), RequestOperation = "task.resume" };
+        var accepted = coordinator.Submit(submission);
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (!coordinator.QueryItemStatus(accepted.TaskHandle).ExecutionExitConfirmed && DateTime.UtcNow < deadline)
+            await Task.Delay(5);
+        Assert.True(coordinator.QueryItemStatus(accepted.TaskHandle).ExecutionExitConfirmed);
+        Assert.Equal("failed", coordinator.QueryItemStatus(accepted.TaskHandle).Status);
+        Assert.True(PreemptionGate.Authorize(null));
+        Assert.Null(config.SuspendedTaskContext);
+    }
+
     [Fact]
     public void SurvivingBgiCheckpointPreservesLatestOriginalOwner_RejectsForgedOwnerAndOlderRevision()
     {

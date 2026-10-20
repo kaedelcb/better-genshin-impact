@@ -647,6 +647,7 @@ public sealed partial class WorkflowRunner
             FreezeLegacyFixedTriggerPolicy(run, snapshot);
             run.WorkflowRevision = snapshot.Revision; // 恢复即对账到当前修订（节点边界语义）
             run.State = WorkflowRunState.Running;
+            run.OnlineHoeingGateParked = false; // 原Runner接收恢复时才消费自动唤醒责任。
             run.Note = AppendNote(run.Note, "显式恢复运行（游标身份重定位，不重放已完成节点）。");
             _runs.Update(run);
             return await DriveAsync(run, plan, control).ConfigureAwait(false);
@@ -776,6 +777,8 @@ public sealed partial class WorkflowRunner
                     if (IsSingleNodeTarget(run, occurrence) && resumedRetry is null) break;
                     if (resumedRetry is null && (mapped.Result is "failed" or "rejected")
                         && !WorkflowFailurePolicy.Resolve(plan.Document, plan.NodeAt(occurrence), _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
+                    if (resumedRetry is not null && IsPriorityOnlineContinuation(run))
+                        await Task.Delay(1000, ct).ConfigureAwait(false);
                     occurrence = Relocate(run, plan);
                     continue;
                 }
@@ -936,6 +939,8 @@ public sealed partial class WorkflowRunner
                 if (IsSingleNodeTarget(run, occurrence) && retryNextAttempt is null) break;
                 if (retryNextAttempt is null && (outcome.Result is "failed" or "rejected")
                     && !WorkflowFailurePolicy.Resolve(plan.Document, node, _opt.ContinueOnNodeFailure).ContinueAfterFailure) break;
+                if (retryNextAttempt is not null && IsPriorityOnlineContinuation(run))
+                    await Task.Delay(1000, ct).ConfigureAwait(false);
                 occurrence = Relocate(run, plan);
             }
 
@@ -1950,7 +1955,7 @@ public sealed partial class WorkflowRunner
         {
             using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
             budget.CancelAfter(TimeSpan.FromSeconds(5));
-            current = _runs.IsStartupSourceRevoked(authority) ? false
+            current = _runs.IsStartupSourceRevoked(authority, run.RunId) ? false
                 : await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -2996,7 +3001,9 @@ public sealed partial class WorkflowRunner
         {
             ApplyRelocation(run, occurrence);
             run.Cursor!.Attempt = nextAttempt;
-            run.Note = AppendNote(run.Note, $"任务明确失败且已退出；同一出现将按设置重试（尝试 {nextAttempt}，最多额外3次）。");
+            run.Note = AppendNote(run.Note, IsPriorityOnlineContinuation(run)
+                ? $"原安排任务失败且已退出，将自动重试同一任务（尝试 {nextAttempt}）；明确停止仍生效。"
+                : $"任务明确失败且已退出；同一出现将按设置重试（尝试 {nextAttempt}，最多额外3次）。");
         }
         else if (result is "unknown" or "cancelUnconfirmed" or LocalWaitResultWord)
             ApplyRelocation(run, occurrence); // 结果不确定／确定等待：游标留在当前出现，绝不推进
@@ -3005,11 +3012,18 @@ public sealed partial class WorkflowRunner
         _runs.Update(run);
     }
 
+    private static bool IsPriorityOnlineContinuation(WorkflowRunRecord run)
+        => run.OnlineHoeingHandoff is { StateContinuation: true, PriorityRecovery: true,
+                Phase: "terminal", ResumeJobId: not null }
+            || run.OnlineHoeingHistory.Any(h => h.StateContinuation && h.PriorityRecovery
+                && (h.Phase == "released" || h.Phase == "terminal" && h.ResumeJobId is not null));
+
     private int? ResourceRetryAttempt(WorkflowRunRecord run, WorkflowPlan plan,
         WorkflowNodeOccurrence occurrence, string result, string? rawTerminal)
     {
+        var priorityContinuation = IsPriorityOnlineContinuation(run);
         if (result != "failed" || rawTerminal != "failed" || run.StopRequested
-            || run.OnlineHoeingHandoff is { Phase: "terminal", ResumeJobId: { } resumed }
+            || !priorityContinuation && run.OnlineHoeingHandoff is { Phase: "terminal", ResumeJobId: { } resumed }
                 && run.CurrentSubmission?.JobId == resumed
             || !plan.NodeAt(occurrence).Kind.StartsWith("resource.", StringComparison.Ordinal)
             || run.CurrentSubmission is not { Intent: SubmitIntentState.Accepted, ExecutionExitConfirmed: true } sub
@@ -3017,7 +3031,7 @@ public sealed partial class WorkflowRunner
             || sub.Occurrence != occurrence.Occurrence || sub.LoopIteration != occurrence.LoopIteration
             || sub.Attempt != run.Cursor?.Attempt) return null;
         var policy = WorkflowFailurePolicy.Resolve(plan.Document, plan.NodeAt(occurrence), _opt.ContinueOnNodeFailure);
-        if (sub.Attempt > policy.MaxRetries) return null;
+        if (sub.Attempt == int.MaxValue || !priorityContinuation && sub.Attempt > policy.MaxRetries) return null;
         sub.ObservedTerminal = rawTerminal;
         if (RunStore.HasUnresolvedExternalFact(run)) return null;
         // CommitOutcome persists the failed attempt and next cursor together. The next

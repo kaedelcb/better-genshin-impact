@@ -25,6 +25,32 @@ public partial class CommandExecutor
         catch (JsonException) { return false; }
     }
 
+    internal static bool TryReadNativeResumeSnapshot(string? raw, out JsonElement snapshot)
+    {
+        snapshot = default;
+        try
+        {
+            using var document = JsonDocument.Parse(raw ?? "{}");
+            if (!document.RootElement.TryGetProperty("recoverySnapshot", out var source)
+                || source.ValueKind != JsonValueKind.Object) return false;
+            string? Text(string name) => source.EnumerateObject().FirstOrDefault(p =>
+                string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)).Value is { ValueKind: JsonValueKind.String } value
+                    ? value.GetString() : null;
+            var managed = source.EnumerateObject().FirstOrDefault(p =>
+                string.Equals(p.Name, "ManagedByWorkflow", StringComparison.OrdinalIgnoreCase)).Value;
+            var node = source.EnumerateObject().FirstOrDefault(p =>
+                string.Equals(p.Name, "NodeId", StringComparison.OrdinalIgnoreCase)).Value;
+            if (managed.ValueKind != JsonValueKind.False || node.ValueKind is not (JsonValueKind.Null or JsonValueKind.Undefined))
+                return false; // Unknown/managed snapshots stay with the original plan runner.
+            var type = Text("TaskType");
+            if (type is not ("group" or "onedragon" or "solo")
+                || string.IsNullOrWhiteSpace(Text(type == "solo" ? "ProjectName" : "GroupName"))) return false;
+            snapshot = source.Clone();
+            return true;
+        }
+        catch (JsonException) { return false; }
+    }
+
     internal Action<string, BgiEpoch>? CoordinatedTakeoverAllocated { get; set; }
 
     internal void RestoreCoordinatedTakeover(OnlineHoeingBatch batch)
@@ -44,6 +70,18 @@ public partial class CommandExecutor
             _takeoverEpoch = epoch;
             if (_externalClientProvider?.Invoke() is { } ext
                 && !IsBgiEpochChanged(epoch, ext.ServerEpoch)) ext.TakeoverTicket = ticket;
+        }
+    }
+
+    internal async Task ReconcileCompletionTicketAsync(OnlineHoeingBatch batch, CancellationToken ct)
+    {
+        if (batch.PolicyExecution is null || batch.ExecutionEpoch is not { } epoch
+            || batch.TakeoverTicket is not { } ticket || _takeoverTicket != ticket) return;
+        if (await ConfirmTakeoverRevokedAsync(epoch, batch.TakenOver, ct).ConfigureAwait(false))
+        {
+            ClearTicket(ticket);
+            batch.PolicyTicketReleased = true;
+            batch.PersistRecovery?.Invoke();
         }
     }
 
@@ -109,6 +147,7 @@ public partial class CommandExecutor
         var frozenName = (string)frozen["name"]!;
         var frozenOneDragon = (bool)frozen["oneDragon"]!;
         batch.PolicyStartAttempted = true;
+        batch.PersistRecovery?.Invoke();
         var submitted = await ext.SubmitTaskStartAsync(frozenOneDragon ? null : frozenName,
             frozenOneDragon ? frozenName : null, 0, 0, cancellationToken: cancellationToken,
             idempotencyKey: batch.PolicyRequestKey, expectedConfigRevision: (string)frozen["revision"]!,

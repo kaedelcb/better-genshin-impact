@@ -536,6 +536,7 @@ public sealed class WorkflowSubmission
 public sealed class OnlineHoeingHandoffRecord
 {
     [JsonPropertyName("stateContinuation")] public bool StateContinuation { get; set; }
+    [JsonPropertyName("priorityRecovery")] public bool PriorityRecovery { get; set; }
     [JsonPropertyName("generation")] public int Generation { get; set; }
     [JsonPropertyName("ticket")] public string? Ticket { get; set; }
     [JsonPropertyName("ticketHash")] public string? TicketHash { get; set; }

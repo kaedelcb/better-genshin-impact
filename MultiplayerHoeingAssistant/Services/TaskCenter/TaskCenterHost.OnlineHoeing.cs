@@ -22,6 +22,9 @@ public sealed partial class TaskCenterHost
     private sealed record OnlineResumeSignal(string? JobId, string? FailureReason);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<OnlineResumeSignal>> _onlineResumeSignals = new();
     private int _manualResetActive;
+    private int _priorityWaiterWakePending;
+    private Task? _priorityWaiterWakeTask;
+    private readonly SemaphoreSlim _onlineWaiterWakeGate = new(1, 1);
     private readonly ConcurrentDictionary<string, int> _stateContinuationRuns = new();
 
     private bool OriginalOnlineHandoffProcessExited(OnlineHoeingHandoffRecord handoff, string? currentEpoch)
@@ -226,7 +229,9 @@ public sealed partial class TaskCenterHost
             return new OnlineHoeingPreparation(false, null, "等待普通任务派发暂停及 BGI 实际执行状态");
         try
         {
-            var prepared = PrepareOnlineHoeing(generation, snapshot, stateContinuation: true);
+            var prepared = PrepareOnlineHoeing(generation, snapshot, stateContinuation: true, priorityRecovery: true);
+            if (_runs.PriorityPreparationReadError is { } readError)
+                prepared = prepared with { Reason = readError + (prepared.Reason is null ? "" : "；" + prepared.Reason) };
             if (prepared.Ready) return prepared;
             _log?.Invoke("[联机优先] 原计划恢复信息待补，不阻止 BGI 让位：" + prepared.Reason);
             return new OnlineHoeingPreparation(true, null, prepared.Reason);
@@ -239,7 +244,7 @@ public sealed partial class TaskCenterHost
     }
 
     internal OnlineHoeingPreparation PrepareOnlineHoeing(int generation,
-        CommandExecutor.ExecutionBoundarySnapshot snapshot, bool stateContinuation = false)
+        CommandExecutor.ExecutionBoundarySnapshot snapshot, bool stateContinuation = false, bool priorityRecovery = false)
     {
         if (!_onlineSendGate.IsClosed)
             return new OnlineHoeingPreparation(false, null, "任务中心接管闸门尚未关闭");
@@ -251,7 +256,8 @@ public sealed partial class TaskCenterHost
             return new OnlineHoeingPreparation(false, null, "BGI 进程纪元在接管前发生变化");
 
         WorkflowRunRecord? target = null;
-        var currentRuns = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList();
+        var currentRuns = (priorityRecovery ? _runs.ReadPriorityPreparationRecords() : _runs.List())
+            .Where(run => !IsExecutionResetReleased(run)).ToList();
         if (currentRuns.Any(r => BlocksCurrentOnlineBatch(r, epoch)))
             return new OnlineHoeingPreparation(false, null, "上一轮计划接管或恢复作业尚未结清");
         var runs = currentRuns.Where(r => !r.IsTerminal).ToList();
@@ -297,6 +303,13 @@ public sealed partial class TaskCenterHost
                 "任务间隙仍有未确认的节点提交或终态，不能按空闲接管");
         if (target.Cursor is not { } cursor)
             return new OnlineHoeingPreparation(false, null, "计划运行缺当前节点游标");
+        if (priorityRecovery)
+        {
+            lock (_gate)
+                if (_drives.TryGetValue(target.WorkflowId, out var originalDriver)
+                    && !originalDriver.Cts.IsCancellationRequested && !originalDriver.Task.IsCompleted)
+                    _runs.RetainPriorityProgress(target);
+        }
         var expectedJob = target.CurrentSubmission?.JobId;
         if (!_runs.UpdateMergingIf(target.RunId, latest =>
             {
@@ -311,6 +324,7 @@ public sealed partial class TaskCenterHost
                 {
                     Generation = generation,
                     StateContinuation = stateContinuation,
+                    PriorityRecovery = priorityRecovery,
                     Epoch = epoch,
                     NodeId = cursor.NodeId,
                     Occurrence = cursor.Occurrence,
@@ -406,29 +420,82 @@ public sealed partial class TaskCenterHost
         lock (_gate) return _onlineHoeingGeneration == generation ? _onlineHoeingRunId : null;
     }
 
-    internal async Task OpenOnlineHoeingSendAsync(string? skipAutoRunId = null)
+    internal bool CanOpenRetainedPrioritySend(int generation, string runId)
+    {
+        if (Volatile.Read(ref _manualResetActive) != 0 || !_runs.HasPriorityProgress(runId)) return false;
+        lock (_gate)
+        {
+            if (_onlineHoeingGeneration != generation || _onlineHoeingRunId != runId) return false;
+            var original = _runs.Load(runId);
+            if (original is null || original.StopRequested) return false;
+            return original.OnlineHoeingHandoff is { StateContinuation: true, PriorityRecovery: true,
+                       Phase: "resumeAccepted" or "observing" or "terminal" } handoff && handoff.Generation == generation
+                || original.OnlineHoeingHistory.Any(h => h.StateContinuation && h.PriorityRecovery
+                    && h.Generation == generation && h.Phase is "terminal" or "released");
+        }
+    }
+
+    internal async Task OpenOnlineHoeingSendAsync(string? skipAutoRunId = null, bool priorityRecovery = false)
     {
         if (Volatile.Read(ref _manualResetActive) != 0) return;
         await _onlineSendGate.OpenAsync().ConfigureAwait(false);
-        foreach (var parked in _runs.List().Where(run => !IsExecutionResetReleased(run)).Where(r => r.OnlineHoeingGateParked
-                     && r.OnlineHoeingHandoff is null && r.State == WorkflowRunState.LocalWaitParking
-                     && r.RunId != skipAutoRunId))
+        try { await WakeOnlineHoeingWaitersAsync(skipAutoRunId).ConfigureAwait(false); }
+        catch (Exception ex) when (priorityRecovery && OnlineRecordTemporarilyUnavailable(ex))
         {
-            for (var i = 0; i < 20 && IsDriving(parked.WorkflowId); i++)
-                await Task.Delay(100).ConfigureAwait(false);
-            if (IsDriving(parked.WorkflowId)) continue;
-            if (_runs.UpdateMergingIf(parked.RunId, latest =>
-                {
-                    if (latest.State != WorkflowRunState.LocalWaitParking || !latest.OnlineHoeingGateParked
-                        || latest.OnlineHoeingHandoff is not null || latest.StopRequested) return false;
-                    latest.OnlineHoeingGateParked = false;
-                    return true;
-                }, out _))
-            {
-                var resumed = await ResumeRunAsync(parked.RunId).ConfigureAwait(false);
-                if (!resumed.Ok) _log?.Invoke("[任务中心] 锄地后等待计划未能自动接续：" + resumed.Message);
-            }
+            Interlocked.Exchange(ref _priorityWaiterWakePending, 1);
+            _log?.Invoke("[联机优先] 实际派发已恢复，旧等待计划记录稍后自动补查：" + ex.Message);
         }
+    }
+
+    // Called by the existing owner heartbeat. It never opens a gate closed by a newer batch.
+    internal void RetryPriorityWaiterWake()
+    {
+        lock (_gate)
+        {
+            if (_shutdown || Volatile.Read(ref _priorityWaiterWakePending) == 0 || _onlineSendGate.IsClosed
+                || Volatile.Read(ref _manualResetActive) != 0 || _priorityWaiterWakeTask is { IsCompleted: false }) return;
+            _priorityWaiterWakeTask = Task.Run(async () =>
+            {
+                try { await WakeOnlineHoeingWaitersAsync(null).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (_shutdownCts.IsCancellationRequested) { }
+                catch (Exception ex) { _log?.Invoke("[联机优先] 旧等待计划仍待自动补查：" + ex.Message); }
+            });
+        }
+    }
+
+    private async Task WakeOnlineHoeingWaitersAsync(string? skipAutoRunId)
+    {
+        await _onlineWaiterWakeGate.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+        try { await WakeOnlineHoeingWaitersCoreAsync(skipAutoRunId).ConfigureAwait(false); }
+        finally { _onlineWaiterWakeGate.Release(); }
+    }
+
+    private static bool IsPendingOnlineWaiter(WorkflowRunRecord run)
+        => !run.StopRequested && run.OnlineHoeingGateParked && run.OnlineHoeingHandoff is null
+            && !IsExecutionResetReleased(run) && !RunStore.HasUnresolvedExternalFact(run)
+            && run.State is WorkflowRunState.LocalWaitParking or WorkflowRunState.Interrupted;
+
+    private async Task WakeOnlineHoeingWaitersCoreAsync(string? skipAutoRunId)
+    {
+        if (_onlineSendGate.IsClosed || Volatile.Read(ref _manualResetActive) != 0 || _shutdownCts.IsCancellationRequested) return;
+        var pending = false;
+        foreach (var parked in _runs.List().Where(r => IsPendingOnlineWaiter(r) && r.RunId != skipAutoRunId))
+        {
+            if (_onlineSendGate.IsClosed || Volatile.Read(ref _manualResetActive) != 0 || _shutdownCts.IsCancellationRequested) return;
+            for (var i = 0; i < 20 && IsDriving(parked.WorkflowId); i++)
+                await Task.Delay(100, _shutdownCts.Token).ConfigureAwait(false);
+            if (_onlineSendGate.IsClosed || Volatile.Read(ref _manualResetActive) != 0 || _shutdownCts.IsCancellationRequested) return;
+            if (IsDriving(parked.WorkflowId)) { pending = true; continue; }
+            var current = _runs.Load(parked.RunId);
+            if (current is null || !IsPendingOnlineWaiter(current)) continue;
+            // The original Runner consumes this marker in the same write that changes it to Running.
+            // A refusal or failed publication therefore cannot lose the only automatic wake request.
+            var resumed = await ResumeRunAsync(parked.RunId).ConfigureAwait(false);
+            if (!resumed.Ok) _log?.Invoke("[任务中心] 锄地后等待计划未能自动接续：" + resumed.Message);
+            var remaining = _runs.Load(parked.RunId);
+            pending |= remaining is not null && IsPendingOnlineWaiter(remaining);
+        }
+        Interlocked.Exchange(ref _priorityWaiterWakePending, pending ? 1 : 0);
         NotifyStateChanged();
     }
 

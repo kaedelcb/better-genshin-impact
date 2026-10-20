@@ -87,6 +87,7 @@ public sealed class OnlineHoeingBatch
             Settled = Volatile.Read(ref _settled) != 0, LocalSucceeded = LocalCompletionReady,
             LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
             LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
+            NativeResumeRetryPending = NativeResumeRetryPending,
             PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
             PolicyRequestIdentity = _policyRequestIdentity,
             PolicyPayload = _policySubmitPayload is null ? null : new(_policySubmitPayload),
@@ -102,6 +103,7 @@ public sealed class OnlineHoeingBatch
         var batch = new OnlineHoeingBatch(saved.Start, saved.SelfUid, saved.Policy)
         {
             _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
+            NativeResumeRetryPending = saved.NativeResumeRetryPending,
             Token = saved.Token, RestoredFromRecovery = true, RecoveryProgress = saved.Progress,
             ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,
             StateContinuationEnabled = true,
@@ -169,18 +171,26 @@ public sealed class OnlineHoeingBatch
     internal string PolicyRequestKey => "post-hoeing/" + BatchId + "/" + SelfUid
         + (_policyAttempt == 0 ? "" : "/attempt/" + _policyAttempt);
 
-    internal bool RetryFailedSpecifiedCompletion()
+    internal bool NativeResumeRetryPending { get; set; }
+    internal bool RetryFailedCompletion(bool allowNativeResume = false)
     {
         lock (_policyGate)
         {
             if (!PriorityRecoveryEnabled || IsCancellationRequested || ExplicitStopRequested
-                || Policy?.Policy != TaskConflictPolicy.RunSpecified
+                || !(Policy?.Policy == TaskConflictPolicy.RunSpecified
+                    || allowNativeResume && Policy?.Policy == TaskConflictPolicy.Resume)
                 || _policyTerminalResult is not { ExecutionExitConfirmed: true, Status: "failed" or "queueCancelled" } failed
                 || _policyExecution is not { } execution
                 || !Guid.TryParse(failed.TaskHandle, out var failedJob) || !Guid.TryParse(execution.JobId, out var runningJob)
                 || failedJob != runningJob || !ViewModels.CoordinatedBatchLoop.SameEpoch(failed.Epoch, execution.Epoch))
                 return false;
             _failedPolicyAttempts.Add(failed);
+            if (Policy?.Policy == TaskConflictPolicy.Resume)
+            {
+                NativeResumeRetryPending = true;
+                TakeoverTicket = null; // The prior resume released it; a new attempt obtains its own idle reservation.
+                PolicyTicketReleased = true;
+            }
             _policyAttempt++;
             _policyExecution = null;
             _policyTerminalResult = null;

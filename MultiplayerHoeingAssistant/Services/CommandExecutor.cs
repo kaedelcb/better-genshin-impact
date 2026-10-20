@@ -2135,7 +2135,9 @@ public partial class CommandExecutor
 
     /// <summary>恢复原任务：IPC 发 task.resume。cancel=true 时清除上下文但不恢复。</summary>
     public async Task<CommandResult> ExecuteResumeAsync(bool cancel = false, string? expectedTicket = null,
-        IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default)
+        IReadOnlyDictionary<string, object?>? planContinuation = null, CancellationToken cancellationToken = default,
+        System.Text.Json.JsonElement? recoverySnapshot = null, long? expectedStopVersion = null,
+        string? recoveryStopSignal = null)
     {
         var resetVersion = Volatile.Read(ref _resetVersion);
         if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
@@ -2156,7 +2158,9 @@ public partial class CommandExecutor
                 return new CommandResult { Status = "failed", ErrorCode = "stale_ticket", Message = "接管票据已变化，恢复未执行" };
             if (!cancel && cancellationToken.IsCancellationRequested)
                 return new CommandResult { Status = "cancelled", ErrorCode = "start_cancelled", Message = "本批已取消，未发送恢复请求" };
-            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket, planContinuation });
+            var payload = System.Text.Json.JsonSerializer.Serialize(new { cancel, takeoverTicket = ticket, planContinuation,
+                recoverySnapshot, expectedStopVersion, recoveryStopSignal,
+                assistantRecovery = _externalClientProvider?.Invoke()?.RecoveryCheckpointElement() });
             var response = await client.SendCommandAsync(new IpcRequest { OpCode = "task.resume", Payload = payload }, TimeSpan.FromSeconds(35));
             if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
             if (!response.Success)

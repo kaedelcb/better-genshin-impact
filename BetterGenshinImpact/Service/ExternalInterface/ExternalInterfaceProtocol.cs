@@ -173,6 +173,7 @@ internal static class ExternalInterfaceProtocol
                 ["task.takeoverReceipt.v1"] = true,
                 ["task.coordinatedRecoveryStop.v1"] = true,
                 ["task.coordinatedRecoverySnapshot.v1"] = true,
+                ["task.nativeResumeRetry.v1"] = true,
                 ["hoeing.coordinatedStart.v1"] = true,
                 ["hoeing.finishEvidence.v1"] = true,
                 ["execution.contract.v1"] = true,

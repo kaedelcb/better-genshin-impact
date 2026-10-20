@@ -250,3 +250,33 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 - 仍须补后续执行期间BGI崩溃、旧账持续失败和丢位置退路，再跑生产四成员/实际自有进程异常组合入口。原四成员仅补了私有BGI新能力，新增完整场景仍未运行。最后同一集中复审身份核完整稳定版本并修闭本次缺口，再提交正式修复。
 
 完整Goal继续active；用户无需重复授权/粘贴提示词。当前仍WIP，不推进预检baseline、不push、不部署，不宣称全项完成。
+
+
+#### 原生恢复重试与原Runner进度退路（本地WIP，仍未完成）
+
+- 既有WIP提交d2837c7a1已保存前述组件，validation-7最终助手70/BGI105、exit0/tree0；本节是该提交之后尚未提交的增量，不代表整项完成。
+- 原生Resume失败且真实退出后，保留完整原任务快照（含具体solo及设置），核明确ManagedByWorkflow=false，按同stop信号取得新reservation再恢复；managed快照不能走原生退路。BGI对新票据/空闲根/stop/快照不变校验，未admitted的排队恢复失败仅释放自己的reservation。
+- R-F5：受理丢回复后执行器残留旧ticket，status暂时失效时不能清旧job/票据。worker已先确认实际执行器票据结清才重试；validation-9真实SDK/private pipe连续4次status失败后只取1张新票据、总2次resume，助手39/39 exit0/tree0，同一复核Agent确认闭合。原发现保留。
+- validation-8助手37/38：旧测试返回同一个旧job给所有新key，与新增恢复前原key查询冲突；仅改替身对未提交key返回not_found，原断言保留。BGI110/110 exit0/tree0，含具体原生快照、managed拒绝及未admitted释放。validation-9已验证助手修正。
+- 原Runner的优先接续只在同run的已消费priority handoff/释放历史上启用：resource真实failed+exit沿原Runner新attempt重试，不受普通3次上限；保留失败，1秒等待可被原取消令牌中断。普通策略未变。validation-10因新测试事后给init-only State赋值编译失败，改为初始化时传state；validation-11助手17/17 exit0/tree0，覆盖多次失败后B成功继续C及明确停止阻止下一次发送。同一Agent源码未发现新增双跑/扩大范围。
+- 现新增RunStorePriorityContinuation：仅原host仍持活跃/未cancel的原Runner时捕获原run进度；每次推进仍验证原ownerFence、revision CAS、RunStoreEvidenceGuard和停止基线。持续进度IO故障期间该原Runner从内存消费原job结果并继续同安排；待补存仅保存增量变化，恢复后按原顺序经过PersistDisk验证。
+- R-F6原发现：整backlog持有owner/运行锁会耗尽租约且阻塞停止。已改每次只补1条，既有heartbeat在锁外让出并续期后补下一条；不新增timer/后台服务。
+- R-F7原发现：每次完整历史快照导致积压内存平方增长。已改字段差异、数组追加、备注后缀，仅保存新增内容；Current/Published各一份。以上两项源码补核已确认根因解除，实际验证仍待validation-13。
+- validation-12：助手38/40，新持续读写故障原Runner完整B恢复→C→顺序补存通过。两项旧真实进程围栏测试因缺ControlledWriterProbe依赖未启动，不是通过；原失败保留。validation-13正在先构建该依赖，复制明确的probe dll/deps/runtimeconfig到隔离测试产物，再跑RunStore/原Runner/原子接管回归，结果以TRX及进程树终态为准。
+
+此处仍不能勾T17—T20。剩余主要缺口：进度退路的生产MainVM/host真实入口绑定、整目录失效后发送门/非关联等待的独立处理、助手重启后managed进度接回、后续执行期间BGI真正退出后的接续，以及完整四成员/自有进程故障组合。当前进度缓存不是跨进程持久恢复事实，不能把助手死亡后的旧缓存当存活。所有身份均丢失仍不猜测。当前完整Goal保持active，用户无需管理下一批，禁止push/部署/推进baseline。
+
+
+#### 生产宿主进度/等待接线补充（完整Goal仍未完成）
+
+- validation-13助手54/54、probe构建exit0，两者tree0；原两项真实进程依赖失败已按新鲜ControlledWriterProbe补齐后通过。R-F6/R-F7由同一Agent读取实际结果后闭合，原报告及闭合原文分存review-native-and-progress-original.md和review-native-and-progress-closure.md。
+- 生产host只在同workflow原_drives还活着/未cancel时保留实时进度；MainVM只在同generation+原run已受理恢复、且存在该原缓存时，可依据原消费责任恢复发送门。旧目录IO异常不会否定已完成的物理工作。旧GateParked计划的补查沿既有租约heartbeat触发，串行且纳入Shutdown；补查从不重开新批次关闭的门。validation-14助手88/88 exit0/tree0，包含真实Host.StartWorkflow/PreparePriority/ConfirmSuspend/原Runner消费，在enumerate与publish持续失败下B恢复→C的入口测试。
+- R-F8[P1]独立复核发现：提前清等待标记、或原drive两秒仍未退就清pending，导致临时未受理永久不再自动唤醒。已将标记消费移到原Runner实际写Running的同次发布，保留未受理责任；原drive尚未退出保留pending。
+- validation-15助手89/90 exit1，唯一环境首次未就绪用例实际复现同根的Interrupted窗口：恢复扫描可先把LocalWaitParking改Interrupted，原筛选遗漏。进一步复核也指出首次Running发布失败后Converge改Interrupted的同类路径。原失败不删。
+- 当前统一IsPendingOnlineWaiter只接受原GateParked=true、未Stop、无handoff、无未决外部发送、未重置的LocalWaitParking/Interrupted。普通Interrupted不自动恢复。新增一次Running发布失败、Converge成功、下一heartbeat C只执行一次的用例；原drive超两秒窗口已在15通过。validation-16已启动，结果待真实TRX与进程树收尾；R-F8源码补核通过，不能在结果出来前标验证闭合。
+
+后续唯一施工重点仍是原安排跨助手/跨BGI的实际接续：完成动作RequireAuthority目前捕获旧epoch并在BGI变化时撤权；managed原Runner的StopAuthority也固定旧epoch，不能简单刷新为新权限。需在旧PID/start确切退出、原共享停止信号仍有效及新BGI实际停止状态匹配时沿原执行链恢复，保留原停止来源/历史，活着或身份不明禁止双跑。当前内存进度不是跨进程恢复存档，不能用本节组件证据替代该缺口或四成员故障组合验收。
+
+- validation-16实际助手91/91通过，包括R-F8首次环境拒绝、原drive慢退、首次Running发布失败后Interrupted继续；脚本正在最终计量，exit/tree以process-result/tree-terminal读回为准。旧validation-15的89/90失败保留。当前源码未在16构建后继续修改。
+- 本阶段待保存中文WIP本地提交；完整Goal仍active，T17—T20不勾，外部分支预检baseline仍cef55430。下一项是上述跨BGI/助手安排接续，不能因91个组件用例通过说整项可交付。
+- validation-16最终exit0/tree0已读回；同一Agent据源码+实际结果确认R-F8闭合。保持原R-F8报告与validation-15失败，后续完整目标仍未完成。

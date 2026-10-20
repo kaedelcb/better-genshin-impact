@@ -1807,7 +1807,7 @@ public sealed partial class TaskCenterHost
     {
         var cancellations = drives.Select(d => CancelIsolatedAsync(d.Cts)).Append(CancelIsolatedAsync(_shutdownCts));
         Task[] waitWorkers;
-        lock (_gate) waitWorkers = new[] { _localWaitMonitorTask, _localWaitReevaluationTask }.OfType<Task>().ToArray();
+        lock (_gate) waitWorkers = new[] { _localWaitMonitorTask, _localWaitReevaluationTask, _priorityWaiterWakeTask }.OfType<Task>().ToArray();
         var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)).Concat(waitWorkers));
         await Task.WhenAny(complete, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
         // Both cancellation callbacks and terminal writeback consume the original 10s budget.
