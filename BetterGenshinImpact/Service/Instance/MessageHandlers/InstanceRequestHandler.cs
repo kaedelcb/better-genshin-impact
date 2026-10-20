@@ -1929,7 +1929,7 @@ internal sealed class InstanceRequestHandler
                 && context.Iteration is { } iteration
                 ? new JobExecutionIdentity(run, node, iteration, context.TaskId, context.ConfigRevision,
                     context.Occurrence, planResumeAttempt ?? context.Attempt) : null;
-            if (ticket != null && PreemptionGate.WasRetained(ticket) && context.TaskType is "group" or "onedragon")
+            if (ticket != null && PreemptionGate.WasRetained(ticket) && context.TaskType is "group" or "onedragon" or "solo")
             {
                 acceptedResumeKey = planResumeKey ?? "resume/" + ticket;
                 var fingerprint = ExecutionRequestContract.Fingerprint(request);
@@ -1943,6 +1943,26 @@ internal sealed class InstanceRequestHandler
                         attempt = handle;
                         if (originalStopVersion != ExecutionScope.StopVersionNow)
                             throw new ExecutionNotStartedException(handle, "恢复排队后已被用户停止");
+                        if (context.TaskType == "solo")
+                        {
+                            var settings = string.IsNullOrEmpty(context.SoloSettingsJson) ? null
+                                : JsonConvert.DeserializeObject<Dictionary<string, object?>>(context.SoloSettingsJson);
+                            var solo = BetterGenshinImpact.GameTask.SoloTaskRegistry.CreateTask(
+                                context.ProjectName, null, settings, context.GroupName)
+                                ?? throw new InvalidOperationException("恢复任务已不存在");
+                            var descriptor = new JobDescriptor(JobKind.Solo, context.ProjectName, JobSource.Resume,
+                                IdempotencyKey: acceptedResumeKey, JobId: handle, TakeoverTicket: ticket,
+                                OnAdmitted: OnAdmitted, WorkflowRunId: context.RootRunId, NodeId: context.NodeId,
+                                Iteration: context.Iteration, Occurrence: context.Occurrence,
+                                Attempt: planResumeAttempt ?? context.Attempt, ExpectedUid: context.ExpectedUid,
+                                ExpectedStopVersion: originalStopVersion, RequestFingerprint: fingerprint,
+                                RequestOperation: request.Operation, RetainUntilAcknowledged: true);
+                            return await ExecuteRetainedSoloResumeAsync(descriptor, async job =>
+                            {
+                                await BetterGenshinImpact.Service.OneDragon.ExpectedUidGate.VerifyOrThrowAsync(job.ExpectedUid, token);
+                                await new BetterGenshinImpact.GameTask.TaskRunner().RunSoloTaskAsync(solo, JobSource.Resume, job);
+                            }, token).ConfigureAwait(false);
+                        }
                         if (context.TaskType == "onedragon" && !string.IsNullOrEmpty(context.SubTaskGroupName)
                             && !(planContinuation is not null && context.PlanCheckpointPhase == "betweenDragon"))
                             config.NextScheduledTask = [(context.SubTaskGroupName, resumeIndex,
@@ -1974,6 +1994,8 @@ internal sealed class InstanceRequestHandler
                 {
                     IdempotencyKey = acceptedResumeKey, PayloadFingerprint = fingerprint,
                     RequestOperation = request.Operation, Identity = resumeExecutionIdentity,
+                    RegistryKind = context.TaskType == "solo" ? JobKind.Solo : null,
+                    RegistryName = context.TaskType == "solo" ? context.ProjectName : null,
                     RegistrySource = JobSource.Resume, ExpectedStopVersion = originalStopVersion,
                     RetainUntilAcknowledged = true,
                     OnCancelledBeforeStart = handle =>
@@ -2654,5 +2676,25 @@ internal sealed class InstanceRequestHandler
             // 规范化失败不影响使用，保留原始值
         }
     }
+    internal static async Task<bool> ExecuteRetainedSoloResumeAsync(JobDescriptor descriptor,
+        Func<JobDescriptor, Task> execute, CancellationToken token)
+    {
+        if (token.IsCancellationRequested)
+            throw new ExecutionNotStartedException(descriptor.JobId, "恢复启动前已取消");
+        using var root = ExecutionScope.Start(descriptor);
+        using var cancellation = token.Register(root.Cancel);
+        root.ThrowIfStopped();
+        try { await execute(descriptor).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested
+            || root.Result is BetterGenshinImpact.GameTask.TaskRunResult.Cancelled or BetterGenshinImpact.GameTask.TaskRunResult.Preempted)
+        { root.Observe(BetterGenshinImpact.GameTask.TaskRunResult.Cancelled); }
+        if (token.IsCancellationRequested) root.Cancel();
+        if (root.Result is BetterGenshinImpact.GameTask.TaskRunResult.Failed
+            or BetterGenshinImpact.GameTask.TaskRunResult.RejectedSlotBusy)
+            throw new InvalidOperationException("独立任务恢复执行失败：" + root.Result);
+        return root.Result is BetterGenshinImpact.GameTask.TaskRunResult.Cancelled
+            or BetterGenshinImpact.GameTask.TaskRunResult.Preempted;
+    }
+
 }
 

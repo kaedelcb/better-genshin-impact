@@ -26,7 +26,7 @@ public sealed class CoordinatedStateContinuationTests
         internal volatile bool HoldPrepare, LoseAuthority, LoseReads, AllowFinish, LoseAcknowledgements;
         internal bool OrdinaryRegistryEmpty, OrdinaryRegistryUnavailable, LoseFirstReply, DropFirstRequest;
         internal bool ManualStopBeforeSend, ManualStopFenceReply;
-        internal volatile bool BoundEpochUnknown;
+        internal volatile bool BoundEpochUnknown, CapabilitiesUnknown;
         internal BgiEpoch? BoundEpochOverride;
         internal int FirstBusy, PrepareFailures;
         internal int Preparations, Submissions, Executions, Cancels, Releases, Finalizations, KeyQueries, AckAttempts;
@@ -35,12 +35,12 @@ public sealed class CoordinatedStateContinuationTests
         private bool _cancelled;
         private long _revision;
 
-        internal Run()
+        internal Run(bool serverContinuation = false)
         {
             string[] members = ["self", "peer1", "peer2", "peer3"];
             Batch = new(new CoordinatedBatchSnapshot("state-continuation", 43, 0, 0, 0, "registering", "")
             {
-                Protocol = "hoeing.start.v2", ParticipantUids = members,
+                Protocol = "hoeing.start.v2", ParticipantUids = members, StateContinuation = serverContinuation,
                 Bindings = members.ToDictionary(uid => uid,
                     _ => (IReadOnlyList<CoordinatedHoeingBinding>)[new("联机锄地", "group")])
             }, "self", new TaskConflictPolicySettings());
@@ -60,7 +60,8 @@ public sealed class CoordinatedStateContinuationTests
 
         internal Task<bool> Start() => new CoordinatedBatchLoop(Batch, new()
         {
-            StateContinuationEnabled = true,
+            StateContinuationEnabled = !CapabilitiesUnknown,
+            StateContinuationAvailable = () => !CapabilitiesUnknown,
             Clock = Time,
             PollInterval = TimeSpan.FromMilliseconds(2),
             StageTimeout = TimeSpan.FromMilliseconds(15),
@@ -307,4 +308,20 @@ public sealed class CoordinatedStateContinuationTests
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         while (!condition()) await Task.Delay(2, timeout.Token);
     }
+    [Fact]
+    public async Task ServerAcceptedColdStartWaitsPastOldBudgetBeforeBgiCapabilitiesAreKnown()
+    {
+        var run = new Run(serverContinuation: true) { CapabilitiesUnknown = true, HoldPrepare = true, AllowFinish = true };
+        var pending = run.Start();
+        await run.Preparing.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        await Task.Delay(70); // actual elapsed time exceeds this fixture's 15ms legacy stage budget
+        Assert.False(pending.IsCompleted);
+        Assert.Equal(0, run.Executions);
+        run.CapabilitiesUnknown = false;
+        run.PrepareAllowed.SetResult();
+        Assert.True(await pending);
+        Assert.Equal(1, run.Executions);
+        Assert.Equal(0, run.Cancels);
+    }
+
 }

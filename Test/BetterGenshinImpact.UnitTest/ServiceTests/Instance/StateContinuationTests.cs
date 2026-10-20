@@ -388,4 +388,45 @@ public class StateContinuationTests
         Assert.Equal("manual_stop_fence", ExecutionRequestContract.Validate(request, allowExpiredReplay: true)?.ErrorCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RetainedSoloResumeUsesOneHandleAndCanBeObservedOrExactlyStopped(bool stop)
+    {
+        PreemptionGate.Disarm();
+        using var coordinator = NewCoordinator();
+        var key = "resume/solo-" + Guid.NewGuid().ToString("N");
+        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runs = 0;
+        var item = Submission(key, (handle, token) =>
+            BetterGenshinImpact.Service.Instance.MessageHandlers.InstanceRequestHandler.ExecuteRetainedSoloResumeAsync(
+                new JobDescriptor(JobKind.Solo, "原独立任务", JobSource.Resume, IdempotencyKey: key,
+                    JobId: handle, RetainUntilAcknowledged: true, ExpectedStopVersion: ExecutionScope.StopVersionNow),
+                async descriptor =>
+                {
+                    Assert.Equal(handle, ExecutionScope.Current!.Descriptor.JobId);
+                    Assert.Equal(key, descriptor.IdempotencyKey);
+                    Interlocked.Increment(ref runs); entered.SetResult(true);
+                    if (stop) await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                    else await finish.Task;
+                }, token)) with { RegistryKind = JobKind.Solo, RegistrySource = JobSource.Resume };
+        var accepted = coordinator.Submit(item);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(accepted.TaskHandle, coordinator.Submit(item).TaskHandle);
+        if (stop) Assert.Equal(BgiTaskCoordinator.CancelOutcome.StopRequestedRunning,
+            coordinator.CancelByHandle(accepted.TaskHandle, ownedOnly: true));
+        else finish.SetResult(true);
+        await Until(() => coordinator.QueryItemStatus(key).ExecutionExitConfirmed);
+        var ended = coordinator.QueryItemStatus(key);
+        Assert.Equal(accepted.TaskHandle, ended.TaskHandle);
+        Assert.Equal(key, ended.IdempotencyKey);
+        Assert.Equal("completed", ended.Status);
+        Assert.Equal(stop, ended.Cancelled);
+        Assert.Equal(1, runs);
+        Assert.True(coordinator.Acknowledge(key, accepted.TaskHandle));
+        Assert.Equal(accepted.TaskHandle, coordinator.Submit(item).TaskHandle);
+        Assert.Equal(1, runs);
+    }
+
 }

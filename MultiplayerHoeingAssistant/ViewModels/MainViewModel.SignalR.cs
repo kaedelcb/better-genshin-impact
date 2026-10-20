@@ -32,6 +32,7 @@ public partial class MainViewModel
 
     private void InvalidateCoordinatedControlContext()
     {
+        CancelPendingCoordinatedBegin();
         Interlocked.Increment(ref _controlContextVersion);
         _controlAuthority.Revoke();
         OnlineHoeingBatch? batch;

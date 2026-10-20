@@ -12,7 +12,8 @@ public partial class MainViewModel
         Func<CancellationToken, Task> prepare, Func<CancellationToken, Task> takeover)
     {
         CommandExecutor? owner = null;
-        batch.StateContinuationEnabled = _externalClient?.HasCapability("task.stateContinuation.v1") == true
+        batch.StateContinuationEnabled = batch.Start?.StateContinuation == true
+            || _externalClient?.HasCapability("task.stateContinuation.v1") == true
             && _signalRClient?.SupportsStateContinuation == true;
         BgiExternalClient External() => _externalClient is { State: BgiExternalLinkState.Ready } ext
             ? ext : throw new IOException("BGI 外部接口尚未就绪");
@@ -171,7 +172,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         get
         {
-            var enabled = batch.StateContinuationEnabled || io.StateContinuationEnabled
+            var enabled = batch.StateContinuationEnabled || batch.Start?.StateContinuation == true || io.StateContinuationEnabled
                 || io.StateContinuationAvailable?.Invoke() == true;
             if (enabled) batch.StateContinuationEnabled = true;
             return enabled;
@@ -279,7 +280,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             {
                 ct.ThrowIfCancellationRequested();
                 await RetryAcknowledgementsAsync(ct);
-                if (batch.LocalSucceeded && batch.LocalFinalizationTask is not null)
+                if (batch.LocalCompletionReady && batch.LocalFinalizationTask is not null)
                     await ObserveLocalFinalizationAsync();
                 CoordinatedBatchSnapshot team;
                 try
@@ -309,7 +310,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                             && readError is not ControlContextRevokedException
                             && readError is IOException or TimeoutException or OperationCanceledException or System.Text.Json.JsonException)
                         { ObservationUnavailable("原任务观察暂不可用：" + readError.Message); }
-                        if (batch.LocalSucceeded) await ObserveLocalFinalizationAsync();
+                        if (batch.LocalCompletionReady) await ObserveLocalFinalizationAsync();
                     }
                     io.Status("reconciling", "控制通道暂不可用，保留原任务并继续连接");
                     await Task.Delay(remaining < io.PollInterval ? remaining : io.PollInterval, ct);
@@ -320,14 +321,14 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     batch.Cancel();
                     ct.ThrowIfCancellationRequested();
                 }
-                if (_result == "local_tasks_failed" && batch.ObserveLocalTasksFailureAccepted(team))
+                if (_result == "local_tasks_failed" && batch.ObserveLocalTasksFailureAccepted(team) && !ContinueByState)
                 {
                     batch.Outcome = "failed";
                     io.Status("cleaning", "联机锄地已完成，本机普通任务失败；正在释放本机执行权，队友继续当前项");
                     return false; // Cleanup only releases this exact job/ticket. No success policy is run.
                 }
-                if (team.Phase == "aborted" && team.Reason.StartsWith("local_tasks_failed:", StringComparison.Ordinal)
-                    && batch.CurrentBindingSucceeded && !batch.LocalSucceeded && !batch.IsCancellationRequested)
+                if (!ContinueByState && team.Phase == "aborted" && team.Reason.StartsWith("local_tasks_failed:", StringComparison.Ordinal)
+                    && batch.CurrentBindingSucceeded && !batch.LocalCompletionReady && !batch.IsCancellationRequested)
                 {
                     batch.PendingBindingsSkipped = true;
                     batch.Outcome = "partial_completed";
@@ -350,7 +351,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                         continue;
                     }
                     _complete = true;
-                    batch.Outcome = "succeeded";
+                    batch.Outcome = batch.CompletionOutcome;
                     io.Status("completed", "本端已完成；队友异常不撤销本端结果或后继任务");
                     return true;
                 }
@@ -364,7 +365,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 }
                 if (team.Phase == "completed")
                 {
-                    if (_item?.State != BatchItemState.TerminalConfirmed || _result != "succeeded"
+                    if (_item?.State != BatchItemState.TerminalConfirmed || !(_result == "succeeded" || ContinueByState && _result == "local_tasks_failed")
                         || team.Index != batch.Bindings.Count || !batch.TakenOver)
                         throw new InvalidOperationException("服务端完成与本端任务终态不一致");
                     batch.CoordinatedSucceeded = true;
@@ -379,7 +380,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                         continue;
                     }
                     _complete = true;
-                    batch.Outcome = "succeeded";
+                    batch.Outcome = batch.CompletionOutcome;
                     io.Status("completed", "全队任务完成，正在按本批策略收尾");
                     return true; // 正常结束的票据归外层冻结策略，不在这里释放。
                 }
@@ -437,7 +438,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     {
                         ObservationUnavailable("原任务观察暂不可用：" + ex.Message);
                     }
-                    if (batch.LocalSucceeded) await ObserveLocalFinalizationAsync();
+                    if (batch.LocalCompletionReady) await ObserveLocalFinalizationAsync();
                 }
                 else throw new InvalidOperationException("未知联机批次阶段: " + team.Phase);
                 await Task.Delay(io.PollInterval, ct);
@@ -445,9 +446,9 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
         catch (Exception ex)
         {
-            if (batch.LocalSucceeded && !batch.IsCancellationRequested)
+            if (batch.LocalCompletionReady && !batch.IsCancellationRequested)
             {
-                batch.Outcome = "succeeded";
+                batch.Outcome = batch.CompletionOutcome;
                 batch.FailureReason ??= "本端任务已完成，收尾待确认：" + ex.Message;
                 io.Log($"[全队批次] {batch.BatchId} 本端成功结果保留，收尾待确认: {ex.Message}");
                 io.Status("cleanupPending", batch.FailureReason);
@@ -473,7 +474,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
 
     private async Task<bool> ObserveLocalFinalizationAsync()
     {
-        if (!batch.LocalSucceeded || io.FinalizeLocal is null) return true;
+        if (!batch.LocalCompletionReady || io.FinalizeLocal is null) return true;
         var epoch = batch.LocalSuccessEpoch ?? throw new InvalidOperationException("本端成功缺少原 BGI 身份");
         var finalize = batch.BeginLocalFinalization(async () =>
         {
@@ -492,9 +493,10 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     {
         if (team.Index != _index || team.Attempt != _attempt)
         {
-            if (batch.LocalSucceeded)
+            if (batch.LocalCompletionReady)
                 throw new InvalidOperationException("本端最后一项已完成并进入收尾，不重放旧批次");
-            var nextItem = team.Index == _index + 1 && team.Attempt == 0 && _result == "succeeded";
+            var nextItem = team.Index == _index + 1 && team.Attempt == 0
+                && (_result == "succeeded" || ContinueByState && _result == "local_tasks_failed");
             var recovery = team.Index == _index && team.Attempt == _attempt + 1 && _result is "failed" or "stopped" or "succeeded";
             if (_item?.State != BatchItemState.TerminalConfirmed || (!nextItem && !recovery))
                 throw new InvalidOperationException("旧项未确认退出或恢复推进不合法");
@@ -590,6 +592,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 && terminal.HoeingEvidence?.IsLocalTasksCancellation(terminal) == true;
             var localTasksFailure = io.RequireLocalTaskFailureIsolation
                 && (terminal.HoeingEvidence?.IsLocalTasksFailure(terminal) == true || localTasksCancellation);
+            if (ContinueByState && terminal.HoeingEvidence?.PlannedNativeCount is { } planned
+                && terminal.HoeingEvidence.Completed < planned) localTasksFailure = false;
             if (localTasksFailure)
             {
                 bool? identityConfirmed = null;
@@ -624,14 +628,20 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             if (_result == "local_tasks_failed")
             {
                 var outcome = localTasksCancellation ? "已完成锄地后的本机任务已取消或切换" : "本机普通任务失败";
-                _reason = LimitReason($"{outcome}；本项全部 {_completedNative} 次联机锄地已完成，不重跑且不执行成功完成动作；" + _reason);
+                _reason = LimitReason($"{outcome}；本项已完成 {_completedNative} 次联机锄地，"
+                    + (ContinueByState ? "保留错误并继续后续绑定与设定动作；" : "不重跑且不执行成功完成动作；") + _reason);
                 batch.RecordLocalTasksFailure(_epoch!, _reason, _index, _attempt, _item.JobId!, _item.RequestKey);
             }
             if (_result == "unknown") throw new InvalidOperationException("本批任务终态未知");
-            if (_item.State == BatchItemState.TerminalConfirmed && _result == "succeeded")
+            if (_item.State == BatchItemState.TerminalConfirmed
+                && (_result == "succeeded" || ContinueByState && _result == "local_tasks_failed"))
             {
                 batch.MarkCurrentBindingSucceeded();
-                if (_index == batch.Bindings.Count - 1) batch.MarkLocalSuccess(_epoch!);
+                if (_index == batch.Bindings.Count - 1)
+                {
+                    if (batch.LocalTasksFailed) batch.MarkLocalFinishedWithTaskErrors(_epoch!);
+                    else batch.MarkLocalSuccess(_epoch!);
+                }
             }
         }
         if (!allowSubmit || team.Phase != "running" || _result.Length != 0 || _item.State != BatchItemState.PendingSubmit) return;
@@ -798,7 +808,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             return; // This loop no longer owns BGI; delayed team failures cannot reclaim a successor.
         }
         if (ContinueByState && !batch.ExplicitStopRequested && !OriginalProcessExited()
-            && (_item?.State != BatchItemState.TerminalConfirmed || batch.LocalSucceeded))
+            && (_item?.State != BatchItemState.TerminalConfirmed || batch.LocalCompletionReady))
         {
             io.Status("reconciling", "原任务或完成动作仍待确认，保留请求与恢复现场，不自动取消");
             return;

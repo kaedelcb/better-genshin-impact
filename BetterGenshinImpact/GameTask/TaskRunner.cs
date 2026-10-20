@@ -264,13 +264,13 @@ public class TaskRunner
         return await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName, job: job));
     }
 
-    public async Task RunSoloTaskAsync(ISoloTask soloTask, JobSource source = JobSource.Ui)
+    public async Task RunSoloTaskAsync(ISoloTask soloTask, JobSource source = JobSource.Ui, JobDescriptor? job = null)
     {
         ExecutionScope? owned = null;
         try
         {
             if (ExecutionScope.Current == null)
-                owned = ExecutionScope.Start(new JobDescriptor(JobKind.Solo, soloTask.Name, source));
+                owned = ExecutionScope.Start(job ?? new JobDescriptor(JobKind.Solo, soloTask.Name, source));
         }
         catch (InvalidOperationException ex) { _logger.LogWarning(ex, "独立任务未获执行权: {Name}", soloTask.Name); return; }
         using var root = owned;
@@ -287,16 +287,18 @@ public class TaskRunner
         if (CancellationContext.Instance.IsCancellationRequested)
         {
             _logger.LogInformation("独立任务在启动阶段被取消: {Name}", soloTask.Name);
+            ExecutionScope.Current!.Observe(TaskRunResult.Cancelled);
             CancellationContext.Instance.Clear();
             return;
         }
         
-        await Task.Run(() => RunCurrentAsync(
+        var outcome = await Task.Run(() => RunCurrentAsync(
             async () => await soloTask.Start(CancellationContext.Instance.Cts.Token),
             resetCancellationContext: false,
             clearCancellationContextOnLockFailure: true,
             soloTaskName: soloTask.Name,
-            job: new JobDescriptor(JobKind.Solo, soloTask.Name, source)));
+            job: job ?? new JobDescriptor(JobKind.Solo, soloTask.Name, source)));
+        if (job?.RetainUntilAcknowledged == true) ExecutionScope.Current!.Observe(outcome);
     }
 
     /// <summary>[A2] 注册表状态推进的容错留痕包装：观察性故障绝不影响任务执行（纪律 §3）。</summary>

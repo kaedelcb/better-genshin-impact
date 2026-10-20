@@ -518,33 +518,43 @@ public sealed partial class TaskCenterHost
     internal async Task<bool> FinishOnlineGapAfterReleaseAsync(string runId, string ticket)
     {
         if (Volatile.Read(ref _manualResetActive) != 0) return false;
-        if (!_runs.UpdateMergingIf(runId, latest =>
-            {
-                if (latest.StopRequested || latest.IsTerminal || RunStore.HasUnresolvedExternalFact(latest)
-                    || latest.OnlineHoeingHandoff is not { Phase: "gap" } handoff
-                    || handoff.Ticket != ticket) return false;
-                handoff.Phase = "released";
-                latest.OnlineHoeingHistory.Add(handoff.Archived());
-                latest.OnlineHoeingHandoff = null;
-                return true;
-            }, out var fresh) || fresh is null) return false;
+        var existing = _runs.Load(runId);
+        if (existing is null || existing.StopRequested) return false;
+        var ticketHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ticket)));
+        bool SameRelease(OnlineHoeingHandoffRecord h) => h.Phase == "released"
+            && (h.Ticket == ticket || h.TicketHash == ticketHash);
+        var released = existing.OnlineHoeingHistory.LastOrDefault(SameRelease);
+        if (existing.OnlineHoeingHandoff is not null || released is null)
+        {
+            if (!_runs.UpdateMergingIf(runId, latest =>
+                {
+                    if (latest.StopRequested || latest.IsTerminal || RunStore.HasUnresolvedExternalFact(latest)
+                        || latest.OnlineHoeingHandoff is not { Phase: "gap" } handoff
+                        || handoff.Ticket != ticket) return false;
+                    handoff.Phase = "released";
+                    latest.OnlineHoeingHistory.Add(handoff.Archived());
+                    latest.OnlineHoeingHandoff = null;
+                    return true;
+                }, out var fresh) || fresh is null) return false;
+            released = fresh.OnlineHoeingHistory.Last(SameRelease);
+        }
+        // The release publication may have succeeded before a later List/Load failed.
+        // Resume the remaining steps from the same archived ticket, without another release.
         await OpenOnlineHoeingSendAsync(skipAutoRunId: runId).ConfigureAwait(false);
         if (Volatile.Read(ref _manualResetActive) != 0) return false;
         var afterOpen = _runs.Load(runId);
         if (afterOpen is null || afterOpen.StopRequested) return false;
-        if (!IsDriving(afterOpen.WorkflowId) && afterOpen.State == WorkflowRunState.LocalWaitParking)
+        if (afterOpen.IsTerminal || IsDriving(afterOpen.WorkflowId)) return true;
+        if (afterOpen.State == WorkflowRunState.LocalWaitParking)
         {
             var resumed = await ResumeRunAsync(runId).ConfigureAwait(false);
-            if (!resumed.Ok)
-            {
+            if (!resumed.Ok && !released.StateContinuation)
                 MarkReleasedGapUnknown(runId, resumed.Message);
-                return false;
-            }
-            return true;
+            return resumed.Ok;
         }
-        var continued = IsDriving(afterOpen.WorkflowId) || afterOpen.State is WorkflowRunState.Running
-            or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking or WorkflowRunState.Succeeded;
-        if (!continued) MarkReleasedGapUnknown(runId, "计划状态未进入可接续执行");
+        var continued = afterOpen.State is WorkflowRunState.Running or WorkflowRunState.Waiting;
+        if (!continued && !released.StateContinuation)
+            MarkReleasedGapUnknown(runId, "计划状态未进入可接续执行");
         return continued;
     }
 

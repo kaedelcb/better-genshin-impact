@@ -30,14 +30,14 @@ public sealed class CoordinatedLocalTaskFailureTests
         internal bool ReleaseAccepted = true;
         internal int Submits, Confirms, Cancels, Releases, Finalizes;
 
-        internal Scenario(int bindingCount = 1, BgiEpoch? epoch = null)
+        internal Scenario(int bindingCount = 1, BgiEpoch? epoch = null, bool continuation = false)
         {
             Epoch = epoch ?? new() { ProcessId = 17, StartTicksUtc = 170 };
             var bindings = Enumerable.Range(0, bindingCount).Select(i => new AuthorityBinding("group" + i, "group")).ToArray();
             Server = new(47, ["self", "peer"], DateTime.UtcNow, bindings: new Dictionary<string, IReadOnlyList<AuthorityBinding>>
             {
                 ["self"] = bindings, ["peer"] = bindings
-            });
+            }, stateContinuation: continuation);
             Batch = new(Client(Server.Snapshot()), "self", new() { Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskName = "must-not-start" });
         }
 
@@ -59,6 +59,8 @@ public sealed class CoordinatedLocalTaskFailureTests
                     Server.Apply("peer", "peer-token", Batch.BatchId, actualLayout, index, attempt, "", now, "prepared");
                 if (Server.Phase == "takeover")
                     Server.Apply("peer", "peer-token", Batch.BatchId, actualLayout, index, attempt, "", now, "takeoverConfirmed");
+                if (Server.StateContinuation && Server.Phase == "running" && result is "succeeded" or "local_tasks_failed")
+                    Server.Apply("peer", "peer-token", Batch.BatchId, actualLayout, index, attempt, "succeeded", now);
                 if (Server.Phase == "running" && PeerLocalTaskFailure && result == "succeeded")
                     Server.Apply("peer", "peer-token", Batch.BatchId, actualLayout, index, attempt, "local_tasks_failed", now);
                 if (Server.Phase == "stopping")
@@ -73,7 +75,13 @@ public sealed class CoordinatedLocalTaskFailureTests
             Takeover = _ => { Batch.TakeoverTicket = "own-ticket"; return Task.CompletedTask; },
             Exchange = Exchange,
             ReadJobs = _ => Task.FromResult<BgiJobListSnapshot?>(new() { Epoch = Epoch, Jobs = _jobs.Values.ToArray() }),
-            ReadTerminal = (_, _) => Task.FromResult<BgiTaskQueueStatus?>(Terminal),
+            ReadTerminal = (id, _) => Task.FromResult<BgiTaskQueueStatus?>(Server.StateContinuation ? new()
+            {
+                Status = Terminal.Status, Cancelled = Terminal.Cancelled, HoeingEvidence = Terminal.HoeingEvidence,
+                ErrorCode = Terminal.ErrorCode, TaskHandle = id, IdempotencyKey = _jobs[id].IdempotencyKey,
+                Epoch = Epoch, ExecutionExitConfirmed = true,
+            } : Terminal),
+            Acknowledge = (_, _, _, _) => Task.FromResult(true),
             Submit = (item, epoch, _) =>
             {
                 Assert.True(CoordinatedBatchLoop.SameEpoch(Epoch, epoch));
@@ -383,4 +391,23 @@ public sealed class CoordinatedLocalTaskFailureTests
         new() { Status = "failed", ErrorCode = "hoeing_incomplete", HoeingEvidence = evidence };
     private static CoordinatedBatchSnapshot Client(BgiCoordinatorServer.Services.CoordinatedBatchSnapshot snapshot) =>
         JsonSerializer.Deserialize<CoordinatedBatchSnapshot>(JsonSerializer.Serialize(snapshot))!;
+    [Fact]
+    public async Task NewModeOrdinaryFailuresContinueAllBindingsAndTheConfiguredFinalActionOnce()
+    {
+        var s = new Scenario(bindingCount: 2, continuation: true);
+        Assert.True(await s.Run());
+        Assert.Equal(2, s.Submits);
+        Assert.Equal(2, s.Confirms);
+        Assert.Equal(1, s.Finalizes);
+        Assert.Equal(0, s.Cancels);
+        Assert.Equal(0, s.Releases);
+        Assert.True(s.Batch.LocalCompletionReady);
+        Assert.False(s.Batch.LocalSucceeded);
+        Assert.True(s.Batch.LocalTasksFailed);
+        Assert.Equal("completed_with_errors", s.Batch.Outcome);
+        Assert.Equal("completed", s.Server.Phase);
+        Assert.Equal(2, s.Server.Index);
+        Assert.Contains("self", s.Server.Reason);
+    }
+
 }

@@ -195,4 +195,20 @@ public sealed class CoordinatedStateContinuationTests
         Assert.Equal("aborted", mismatched.Phase);
         Assert.Equal("batch_layout_mismatch:a", mismatched.Reason);
     }
+    [Fact]
+    public void OrdinaryTaskErrorContinuesNextBindingAndCompletesWithErrorFacts()
+    {
+        var state = Create(); Enroll(state);
+        Send(state, "a", result: "local_tasks_failed", reason: "ordinary task failed after hoeing");
+        foreach (var uid in Uids.Skip(1)) Send(state, uid, result: "succeeded");
+        Assert.Equal("running", state.Phase); Assert.Equal(1, state.Index); Assert.Equal(0, state.Attempt);
+        foreach (var uid in Uids) Send(state, uid, result: uid == "b" ? "local_tasks_failed" : "succeeded",
+            index: 1, reason: uid == "b" ? "another ordinary failure" : "");
+        var done = state.Snapshot();
+        Assert.Equal("completed", done.Phase); Assert.Equal(2, done.Index); Assert.Equal(0, done.Attempt);
+        Assert.Equal("completed_with_task_errors:a,b", done.Reason);
+        Assert.Equal("local_tasks_failed", done.Members.Single(m => m.Uid == "b").Result);
+        Assert.Contains("ordinary task failed", done.Members.Single(m => m.Uid == "a").Reason);
+    }
+
 }

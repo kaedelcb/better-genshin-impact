@@ -187,7 +187,14 @@ public sealed class OnlineHoeingBatch
                 ? report : null;
     }
 
-    internal void MarkCurrentBindingStarted() => Volatile.Write(ref _currentBindingSucceeded, 0);
+    internal void MarkCurrentBindingStarted()
+    {
+        lock (_policyGate)
+        {
+            Volatile.Write(ref _currentBindingSucceeded, 0);
+            if (StateContinuationEnabled) { _localTaskFailureReport = null; LocalTasksFailureAccepted = false; }
+        }
+    }
     internal void MarkCurrentBindingSucceeded() => Volatile.Write(ref _currentBindingSucceeded, 1);
     internal void RecordLocalTasksFailure(BgiEpoch epoch, string reason, int index, int attempt, string jobId, string requestKey)
     {
@@ -207,7 +214,22 @@ public sealed class OnlineHoeingBatch
         }
     }
     private Task? _localFinalization;
+    private int _localFinishedWithErrors;
     internal bool LocalSucceeded => Volatile.Read(ref _localSucceeded) != 0;
+    internal bool LocalCompletionReady => LocalSucceeded || Volatile.Read(ref _localFinishedWithErrors) != 0;
+    internal string CompletionOutcome => LocalTasksFailed ? "completed_with_errors" : "succeeded";
+
+    internal void MarkLocalFinishedWithTaskErrors(BgiEpoch epoch)
+    {
+        lock (_policyGate)
+        {
+            if (IsCancellationRequested) return;
+            LocalSuccessEpoch ??= epoch;
+            Volatile.Write(ref _localFinishedWithErrors, 1);
+            Outcome = "completed_with_errors";
+            CompletionActionWarning ??= "锄地已完成，普通任务有错误，仍按设定执行后续：" + FailureReason;
+        }
+    }
     internal bool LocalExecutionReleased => Volatile.Read(ref _localExecutionReleased) != 0;
     internal BgiEpoch? ExecutionEpoch { get; set; }
     internal BgiEpoch? LocalSuccessEpoch { get; private set; }
@@ -241,7 +263,7 @@ public sealed class OnlineHoeingBatch
     }
 
     // A team reason cannot revoke another endpoint's completed result. An explicit local stop cancels Cts first.
-    internal bool PreserveLocalSuccess(string reason) => LocalSucceeded && !IsCancellationRequested;
+    internal bool PreserveLocalSuccess(string reason) => LocalCompletionReady && !IsCancellationRequested;
     private readonly Dictionary<string, string> _configRevisions = new(StringComparer.Ordinal);
     private readonly object _policyGate = new();
     private HoeingPolicyExecution? _policyExecution;
@@ -254,6 +276,7 @@ public sealed class OnlineHoeingBatch
     internal bool CancelledPolicyCleanupConfirmed => _policyCleanup is { IsCompletedSuccessfully: true } task && task.Result;
     internal bool PolicySendUnknown { get; set; }
     internal bool PolicyTicketReleased { get; set; }
+    internal bool PolicyRejectedBeforeStart { get; set; }
     internal HoeingPolicyExecution? PolicyExecution { get { lock (_policyGate) return _policyExecution; } }
 
     internal void ConfigurePolicyCancellation(Func<HoeingPolicyExecution, Task<bool>> cancel)

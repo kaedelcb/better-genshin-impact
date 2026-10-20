@@ -46,6 +46,9 @@ public sealed partial class FourMemberFinishEntryTests
                         await RunEntryAsync(peerFails: false, reconnectAfterLocalFinish: true);
                         await RunLocalTaskFailureEntryAsync();
                         await RunStateContinuationCompletionEntryAsync();
+                        await RunStateContinuationCompletionEntryAsync(configurationRemoved: true);
+                        await RunChangedRoomCancellationEntryAsync(replyLost: false);
+                        await RunChangedRoomCancellationEntryAsync(replyLost: true);
                         finished.TrySetResult();
                     }
                     catch (Exception error) { finished.TrySetException(error); }
@@ -104,6 +107,8 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
+            executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止停止真实进程");
             Set(vm, "_config", config);
             Set(vm, "_externalClient", external);
@@ -191,12 +196,11 @@ public sealed partial class FourMemberFinishEntryTests
 
             if (reconnectAfterLocalFinish)
             {
-                // Force a real transport loss. The old production loop must finish on its own;
-                // a replacement client retains the same executor identity and the same old batch.
+                // The same loop now survives the old 30s contact budget and adopts the reconnected client.
+                var originalLoop = oldBatch.RunTask;
                 await local.DisposeAsync();
-                await WaitAsync(() => oldBatch.RunTask?.IsCompleted == true,
-                    () => Diagnostics(vm, bgi, peers, server));
                 await Task.Delay(TimeSpan.FromSeconds(31));
+                Assert.False(originalLoop!.IsCompleted);
                 Assert.True(oldBatch.LocalSucceeded);
                 Assert.True(oldBatch.LocalExecutionReleased);
                 Assert.True(bgi.ManualRunning);
@@ -213,7 +217,8 @@ public sealed partial class FourMemberFinishEntryTests
                 Assert.Equal(started.BatchId, restored!.BatchId);
                 Assert.Equal("running", restored.Phase);
                 Assert.Same(oldBatch, Active(vm));
-                Assert.True(oldBatch.RunTask!.IsCompleted);
+                Assert.Same(originalLoop, oldBatch.RunTask);
+                Assert.False(oldBatch.RunTask!.IsCompleted);
                 Assert.False(vm.HasLocalCoordinatedExecutionResponsibility);
             }
 
@@ -291,8 +296,8 @@ public sealed partial class FourMemberFinishEntryTests
     {
         string[] uids = ["100000021", "100000022", "100000023", "100000024"];
         const string group = "隔离联机及两个神像";
-        const string next = "失败后禁止开始的第二联机项";
-        const string manual = "后置失败清理后的手动任务";
+        const string next = "普通失败后继续第二联机项";
+        const string manual = "普通失败后仍执行的绑定收尾";
         var previousIpc = IpcClient.PipeNameOverrideForTest;
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
         await using var server = await IsolatedCoordinator.StartAsync("local-task-failure-isolation");
@@ -326,10 +331,14 @@ public sealed partial class FourMemberFinishEntryTests
                 TeamUids = uids.ToList(), ControlRoomPassword = "isolated-local-failure",
                 ClientInstanceId = Guid.NewGuid().ToString("N"), BgiPath = Environment.ProcessPath!,
                 OnlineHoeingGroupNames = [group, next], OnlineHoeingGroupTypes = ["group", "group"],
+                OnlineHoeingCompletionPolicy = "runSpecified", OnlineHoeingSpecifiedTaskType = "group",
+                OnlineHoeingSpecifiedTaskName = manual,
                 ExpectedHoeingPlayers = 4, DisclaimerAccepted = true, BypassSystemProxy = true,
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
+            executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("禁止触碰真实进程");
             Set(vm, "_config", config);
             Set(vm, "_externalClient", external);
@@ -350,7 +359,7 @@ public sealed partial class FourMemberFinishEntryTests
                     PlayerUid = uids[i], PlayerName = "隔离不同后置成员" + i, BgiStatus = "running",
                     ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
                     OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
-                    HoeingCompletionAction = new("stop", "group", "", 0),
+                    HoeingCompletionAction = i == 0 ? new("runSpecified", "group", manual, 0) : new("stop", "group", "", 0),
                 });
             }
             peerTasks = [zeroTail.RunAsync(stopPeers.Token), failedPeer.RunAsync(stopPeers.Token),
@@ -358,66 +367,36 @@ public sealed partial class FourMemberFinishEntryTests
             Func<string> diagnostics = () => Diagnostics(vm, bgi, [zeroTail, waitingTail], server)
                 + "\nproduction-loop-peer=" + failedPeer.Last?.Phase + "/" + failedPeer.Error;
             var started = await local.BeginCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), uids,
-                DateTimeOffset.UtcNow.AddMinutes(1), useCompletionActions: false);
+                DateTimeOffset.UtcNow.AddMinutes(1), useCompletionActions: true);
             await WaitAsync(() => bgi.CooperativeStarts == 1 && Active(vm)?.Phase == "running"
                 && failedPeer.SubmitCount == 1, diagnostics);
             var ownBatch = Active(vm)!;
 
-            // Native has finished; two ordinary local steps still belong to the same running group.
+            // Finished native work must not be replayed when an ordinary tail step fails.
             bgi.CompleteCooperativeBody();
             await WaitAsync(() => pipe.Received.Count(r => r.Operation == "ext.task.queueStatus") > 1, diagnostics);
-            var duringTail = await external.QueryTaskQueueStatusAsync(bgi.CooperativeJobId!);
-            Assert.Equal("running", duringTail!.Status);
-            Assert.Equal(1, duringTail.HoeingEvidence!.Completed);
-            Assert.Equal(0, duringTail.HoeingEvidence.Active);
-            Assert.False(duringTail.HoeingEvidence.Sealed);
             Assert.True(bgi.CooperativeTailRunning);
-            Assert.False(ownBatch.LocalSucceeded);
-            Assert.True(vm.HasLocalCoordinatedExecutionResponsibility);
-            Assert.Equal(0, bgi.TailSteps);
-
-            // A different member's real production loop observes a sealed ordinary-task failure.
+            Assert.False(ownBatch.LocalCompletionReady);
             failedPeer.FailTail = true;
-            await WaitAsync(() => failedPeer.Last?.Members.Single(m => m.Uid == uids[2]).Result
+            await WaitAsync(() => failedPeer.Last?.Members.Single(member => member.Uid == uids[2]).Result
                 == "local_tasks_failed", diagnostics);
-            var peerFailed = (await local.GetCurrentCoordinatedBatchAsync())!;
-            Assert.Equal("running", peerFailed.Phase);
-            Assert.Equal(0, peerFailed.Index);
-            Assert.Equal(0, peerFailed.Attempt);
-            Assert.True(bgi.CooperativeTailRunning);
-            Assert.False(ownBatch.IsCancellationRequested);
+            Assert.Equal(0, (await local.GetCurrentCoordinatedBatchAsync())!.Index);
             Assert.Equal(0, bgi.CancelCount);
-            Assert.Equal(0, failedPeer.CancelCount);
-
             bgi.CompleteTailStep();
-            await Task.Delay(350);
             Assert.True(bgi.CooperativeTailRunning);
-            Assert.Equal(1, bgi.TailSteps);
-            Assert.False(ownBatch.IsCancellationRequested);
-            var disconnectedBeforeAck = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             bgi.BeforeFailedJobIdentityReply = () =>
             {
-                // The old control transport is actually gone before BGI's identity reply arrives.
-                // Thus the production loop can classify the failure but cannot ACK it next round.
                 originalLocal.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
-                disconnectedBeforeAck.TrySetResult();
+                disconnected.TrySetResult();
             };
             bgi.CompleteTailStep(failed: true);
-            await WaitAsync(() => disconnectedBeforeAck.Task.IsCompleted && ownBatch.LocalTasksFailed
-                && ownBatch.RunTask?.IsCompleted == true && ownBatch.LocalCleanupConfirmed
-                && !vm.HasLocalCoordinatedExecutionResponsibility && executor.TakeoverTicketSnapshot == null, diagnostics);
-            Assert.Equal(2, bgi.TailSteps);
+            await WaitAsync(() => disconnected.Task.IsCompleted && ownBatch.LocalTasksFailed, diagnostics);
+            Assert.False(ownBatch.RunTask!.IsCompleted);
             Assert.False(ownBatch.LocalSucceeded);
-            Assert.False(ownBatch.LocalTasksFailureAccepted);
-            Assert.True(ownBatch.LocalCleanupConfirmed);
-            Assert.Equal("failed", ownBatch.Outcome);
-            Assert.Null(external.TakeoverTicket);
-            Assert.True(pipe.CountOf("ext.job.status") > 0); // Exact job/epoch/key/exit confirmation was exercised.
-            var unacknowledged = (await zeroTailClient.GetCurrentCoordinatedBatchAsync())!;
-            Assert.Equal("running", unacknowledged.Phase);
-            Assert.Equal("", unacknowledged.Members.Single(m => m.Uid == uids[0]).Result);
-            Assert.Equal(0, unacknowledged.Index);
-            Assert.Equal(0, unacknowledged.Attempt);
+            Assert.Equal(1, bgi.CooperativeStarts);
+            Assert.Equal(0, bgi.ManualStarts);
 
             reconnected = await ConnectProductionClientAsync(vm);
             local = reconnected;
@@ -426,52 +405,45 @@ public sealed partial class FourMemberFinishEntryTests
                 PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
                 ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
                 OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
-                HoeingCompletionAction = new("stop", "group", "", 0),
+                HoeingCompletionAction = new("runSpecified", "group", manual, 0),
             });
-            await WaitAsync(() => ownBatch.LocalTasksFailureAccepted
-                && waitingTail.Last?.Members.Single(m => m.Uid == uids[0]).Result == "local_tasks_failed", diagnostics);
-            var acknowledged = (await local.GetCurrentCoordinatedBatchAsync())!;
-            Assert.Equal("running", acknowledged.Phase);
-            Assert.Equal(0, acknowledged.Index);
-            Assert.Equal(0, acknowledged.Attempt);
-            Assert.True(ownBatch.RunTask!.IsCompleted); // No replacement loop or repeated BGI submission.
-
-            await zeroTailClient.SendRemoteCommandAsync(new RemoteCommand
-            {
-                Cmd = "start_group", Target = [uids[0]], CommandId = Guid.NewGuid().ToString("N"),
-                Params = new() { ["groupName"] = manual }, ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(30),
-            });
-            await WaitAsync(() => bgi.ManualStarts == 1, diagnostics);
-            var manualJob = bgi.ManualJobId;
-            Assert.True(bgi.ManualRunning);
-            var resumesBeforeTerminal = pipe.CountOf("task.resume");
-
+            await WaitAsync(() => ownBatch.LocalTasksFailureAccepted, diagnostics);
+            var firstFinished = (await local.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal("running", firstFinished.Phase);
+            Assert.Equal(0, firstFinished.Index); // The final peer still owns its real tail.
+            Assert.Equal("local_tasks_failed", firstFinished.Members.Single(member => member.Uid == uids[0]).Result);
             waitingTail.CompleteTail = true;
-            await WaitAsync(() => waitingTail.Last?.Phase == "aborted" && Active(vm) == null, diagnostics);
-            var terminal = (await local.GetCurrentCoordinatedBatchAsync())!;
-            Assert.StartsWith("local_tasks_failed:", terminal.Reason);
-            Assert.Contains(uids[0], terminal.Reason);
-            Assert.Contains(uids[2], terminal.Reason);
-            Assert.Equal(0, terminal.Index);
-            Assert.Equal(0, terminal.Attempt);
-            Assert.Equal(1, failedPeer.SubmitCount);
-            Assert.Equal(1, bgi.CooperativeStarts);
-            Assert.DoesNotContain(pipe.Received, r => r.Operation == "ext.task.start"
-                && r.Data is { } d && d.TryGetProperty("groupName", out var name) && name.GetString() == next);
-            await waitingTail.SendDelayedCleanupAsync(terminal);
-            Replay(local, GatewayProtocol.Events.ControlBatchState, terminal);
-            Replay(local, GatewayProtocol.Events.ControlBatchState, terminal with { CleanupComplete = true });
-            Replay(local, GatewayProtocol.Events.ControlBatchStart, started);
-            await Task.Delay(1300);
+            await WaitAsync(() => bgi.CooperativeStarts == 2 && failedPeer.SubmitCount == 2, diagnostics);
+            Assert.Equal(0, bgi.ManualStarts);
+            bgi.CompleteCooperative();
+            await WaitAsync(() => bgi.ManualStarts == 1 && ownBatch.PolicyExecution is not null, diagnostics);
+            Assert.True(ownBatch.LocalCompletionReady);
+            Assert.False(ownBatch.LocalSucceeded); // Do not relabel the ordinary failure as success.
+            Assert.Equal("completed_with_errors", ownBatch.Outcome);
             Assert.True(bgi.ManualRunning);
-            Assert.Equal(manualJob, bgi.ManualJobId);
             Assert.Equal(0, bgi.CancelCount);
             Assert.Equal(0, failedPeer.CancelCount);
-            Assert.Equal(0, pipe.CountOf("ext.task.stop"));
-            Assert.Equal(resumesBeforeTerminal, pipe.CountOf("task.resume"));
+            // Local completion starts before the next control heartbeat reports its terminal.
+            await WaitAsync(() => waitingTail.Last?.Phase == "completed", diagnostics);
+            var completed = (await local.GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal("completed", completed.Phase);
+            Assert.Equal(2, completed.Index);
+            Assert.Contains(uids[0], completed.Reason);
+            Assert.Contains(uids[2], completed.Reason);
+            var firstResult = await external.QueryTaskQueueStatusAsync(bgi.CooperativeJobId!);
+            Assert.Equal("failed", firstResult!.Status);
+            Assert.Equal(1, firstResult.HoeingEvidence!.Completed);
             bgi.CompleteManual();
-            await Task.Delay(300);
+            await WaitAsync(() => Active(vm) == null && ownBatch.LocalExecutionReleased, diagnostics);
+            Assert.Equal(2, bgi.CooperativeStarts);
+            Assert.Equal(1, bgi.ManualStarts);
+            Assert.Equal(1, bgi.CompletionAcknowledgements);
+            Assert.Equal(0, pipe.CountOf("ext.task.stop"));
+            foreach (var name in new[] { group, next, manual })
+                Assert.Single(pipe.Received.Where(request => request.Operation == "ext.task.start"
+                    && request.Data is { } data && data.TryGetProperty("groupName", out var value) && value.GetString() == name));
         }
+
         finally
         {
             stopPeers.Cancel();
@@ -531,6 +503,7 @@ public sealed partial class FourMemberFinishEntryTests
                     ReadTerminal = (_, _) => Task.FromResult<BgiTaskQueueStatus?>(new()
                     {
                         Status = FailTail ? "failed" : "running", ErrorCode = FailTail ? "task_start_failed" : null,
+                        TaskHandle = _jobId, IdempotencyKey = _requestKey, Epoch = _epoch, ExecutionExitConfirmed = FailTail,
                         HoeingEvidence = new() { Started = 1, Completed = 1, Active = 0, Sealed = FailTail,
                             JobResult = FailTail ? "Failed" : null, Revision = FailTail ? 4 : 3 },
                     }),
@@ -544,6 +517,7 @@ public sealed partial class FourMemberFinishEntryTests
                         && CoordinatedBatchLoop.SameEpoch(epoch, _epoch) && key == _requestKey),
                     CancelOwned = (_, _) => { CancelCount++; return Task.CompletedTask; },
                     ReleaseTicket = (_, _, _) => Task.FromResult(true),
+                    Acknowledge = (_, _, _, _) => Task.FromResult(true),
                     RequireFinishEvidence = true, RequireLocalTaskFailureIsolation = true,
                     PollInterval = TimeSpan.FromMilliseconds(100),
                 });
@@ -612,7 +586,7 @@ public sealed partial class FourMemberFinishEntryTests
                 snapshot.Index, snapshot.Attempt, "", CancellationToken.None, "cleaned");
     }
 
-    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = false)
+    private sealed class FinishBgiPeer(string boundGroup, string manualGroup, string? nextBoundGroup = null, bool stateContinuation = true)
     {
         private sealed record Job(string Id, string Key, string Name, bool Cooperative)
         {
@@ -623,7 +597,7 @@ public sealed partial class FourMemberFinishEntryTests
         private readonly List<Job> _jobs = [];
         private string? _ticket;
         private int _cancelCount;
-        public volatile bool CompletionSlotBusy, DropNextCompletionReply;
+        public volatile bool CompletionSlotBusy, DropNextCompletionReply, CompletionConfigMissing;
         public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements;
         private readonly int _pid = Environment.ProcessId;
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
@@ -641,18 +615,18 @@ public sealed partial class FourMemberFinishEntryTests
         {
             lock (_gate)
             {
-                var job = _jobs.Single(j => j.Cooperative);
+                var job = _jobs.Last(j => j.Cooperative);
                 job.BodyCompleted = job.Completed = true;
                 job.Revision++;
             }
         }
         public void CompleteCooperativeBody()
-        { lock (_gate) { var job = _jobs.Single(j => j.Cooperative); job.BodyCompleted = true; job.Revision++; } }
+        { lock (_gate) { var job = _jobs.Last(j => j.Cooperative); job.BodyCompleted = true; job.Revision++; } }
         public void CompleteTailStep(bool failed = false)
         {
             lock (_gate)
             {
-                var job = _jobs.Single(j => j.Cooperative);
+                var job = _jobs.Last(j => j.Cooperative);
                 Assert.True(job.BodyCompleted && !job.Completed && !job.Cancelled && !job.Failed);
                 job.TailSteps++;
                 job.Failed = failed;
@@ -663,7 +637,7 @@ public sealed partial class FourMemberFinishEntryTests
         {
             lock (_gate)
             {
-                var job = _jobs.Single(j => j.Cooperative);
+                var job = _jobs.Last(j => j.Cooperative);
                 job.Failed = job.NativeFailed = true;
                 job.BodyCompleted = false;
                 job.Revision++;
@@ -717,7 +691,7 @@ public sealed partial class FourMemberFinishEntryTests
                     case "config.list":
                     case "ext.config.list":
                         return (true, null, null, new { configGroups = new[] { boundGroup, manualGroup, nextBoundGroup }
-                            .Where(n => n != null).ToArray(), oneClickConfigs = Array.Empty<string>() });
+                            .Where(n => n != null && (!CompletionConfigMissing || n != manualGroup)).ToArray(), oneClickConfigs = Array.Empty<string>() });
                     case "ext.config.describe":
                         return (true, null, null, new { bgiEpoch = Epoch, configRevision = "finish-entry-r1",
                             tasks = nextBoundGroup != null && Value(data, "groupName") == boundGroup
@@ -784,7 +758,7 @@ public sealed partial class FourMemberFinishEntryTests
                             cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : queried.Failed ? "task_start_failed" : null,
                             hoeingEvidence = queried.Cooperative ? new
                             {
-                                started = 1, completed = queried.BodyCompleted ? 1 : 0, failed = queried.NativeFailed ? 1 : 0,
+                                plannedNativeCount = 1, started = 1, completed = queried.BodyCompleted ? 1 : 0, failed = queried.NativeFailed ? 1 : 0,
                                 cancelled = queried.Cancelled && !queried.BodyCompleted ? 1 : 0, active = queried.BodyCompleted || queried.Completed || queried.Cancelled || queried.Failed ? 0 : 1,
                                 @sealed = queried.Completed || queried.Cancelled || queried.Failed,
                                 jobResult = queried.Completed ? "Ran" : queried.Cancelled ? "Cancelled" : queried.Failed ? "Failed" : null, revision = queried.Revision,

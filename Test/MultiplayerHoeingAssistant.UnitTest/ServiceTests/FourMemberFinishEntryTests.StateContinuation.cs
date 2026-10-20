@@ -13,7 +13,7 @@ public sealed partial class FourMemberFinishEntryTests
 {
     // Called in the existing STA/Application round. The actual MainVM, SDK, gateway and
     // completion worker run unchanged; only the private BGI protocol endpoint is controlled.
-    private static async Task RunStateContinuationCompletionEntryAsync()
+    private static async Task RunStateContinuationCompletionEntryAsync(bool configurationRemoved = false)
     {
         string[] uids = ["100000031", "100000032", "100000033", "100000034"];
         const string bound = "隔离增强锄地绑定";
@@ -58,6 +58,8 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
+            executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止停止真实进程");
             Set(vm, "_config", config);
             Set(vm, "_externalClient", external);
@@ -84,13 +86,20 @@ public sealed partial class FourMemberFinishEntryTests
                 });
             }
             peerTasks = peers.Select(p => p.RunAsync(peersStop.Token)).ToArray();
-            var started = await local.BeginCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), uids,
-                DateTimeOffset.UtcNow.AddMinutes(1), useCompletionActions: true);
+            var beginMethod = typeof(MainViewModel).GetMethod("BeginCoordinatedWithContinuationAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var started = await (Task<CoordinatedBatchSnapshot>)beginMethod.Invoke(vm,
+                [Guid.NewGuid().ToString("N"), uids, true, ""])!;
             Func<string> diagnostics = () => Diagnostics(vm, bgi, peers, server);
             await WaitAsync(() => bgi.CooperativeStarts == 1 && Active(vm)?.Phase == "running"
                 && peers.All(p => p.Last?.Phase == "running"), diagnostics);
             var batch = Active(vm)!;
             Assert.True(batch.StateContinuationEnabled);
+            var preparedHost = (TaskCenterHost)typeof(MainViewModel)
+                .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
+            var preparedGate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost)
+                .GetField("_onlineSendGate", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(preparedHost)!;
+            Assert.True(preparedGate.IsClosed);
             Assert.Equal(TaskConflictPolicy.RunSpecified, batch.Policy!.Policy);
             Assert.Equal(completion, batch.Policy.SpecifiedTaskName);
 
@@ -101,7 +110,25 @@ public sealed partial class FourMemberFinishEntryTests
             Assert.Same(batch, Active(vm));
 
             // Only the actual BGI availability changes. No reset, second online event or manual start.
+            bgi.CompletionConfigMissing = configurationRemoved;
             bgi.CompletionSlotBusy = false;
+            if (configurationRemoved)
+            {
+                peers[2].CompleteTail = true;
+                await WaitAsync(() => batch.PolicyRejectedBeforeStart && batch.LocalExecutionReleased && Active(vm) == null, diagnostics);
+                var host = (TaskCenterHost)typeof(MainViewModel)
+                    .GetField("_taskCenterHost", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
+                var gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost)
+                    .GetField("_onlineSendGate", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(host)!;
+                Assert.False(gate.IsClosed);
+                using var permitWait = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await using var permit = await gate.EnterAsync(permitWait.Token);
+                Assert.Contains("配置不存在", batch.CompletionActionWarning);
+                Assert.Equal(0, bgi.ManualStarts);
+                Assert.Null(batch.PolicyExecution);
+                Assert.Equal(0, bgi.CancelCount);
+                return;
+            }
             await WaitAsync(() => bgi.ManualStarts == 1 && bgi.CompletionReplyDrops == 1
                 && batch.PolicyExecution is not null, diagnostics);
             Assert.True(bgi.ManualRunning);

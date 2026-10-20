@@ -2930,6 +2930,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// [P1] 状态部分（含 int.MaxValue 封口语义）收编进 OnlineIntentLifecycle；BGI 实际 gen 的 IPC 读取留在本类。</summary>
     private async Task ClearLocalOnline(bool preserveScheduledOnline = false)
     {
+        CancelPendingCoordinatedBegin();
         // 清除当前上线及挂起补报；仅“清除上线”置手动抑制，状态重置保留未来定时的原有决定。
         if (preserveScheduledOnline)
             _intentLifecycle.OnResetCleared();
@@ -3013,6 +3014,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     return new CommandResult { Status = "failed", ErrorCode = "stale_reset", Message = "批次身份已改变，未影响当前任务" };
                 batchToWait = _activeBatch;
             }
+            CancelPendingCoordinatedBegin();
             _intentLifecycle.OnResetCleared();
             _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
             _resumeTimeoutTimer?.Dispose();
@@ -7030,11 +7032,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             var requestId = "quick_" + Guid.NewGuid().ToString("N");
             try
             {
-                var batch = await _signalRClient.BeginCoordinatedBatchAsync(requestId,
-                    selected.Select(m => m.PlayerUid).ToArray(), DateTimeOffset.UtcNow.AddMinutes(2),
-                    useCompletionActions: true, quickCommandKey: key);
+                var batch = await BeginCoordinatedWithContinuationAsync(requestId,
+                    selected.Select(m => m.PlayerUid).ToArray(), useCompletionActions: true, quickCommandKey: key);
                 AddLog($"{key}已受理，批次 {batch.BatchId}，完成后使用各成员绑定动作");
             }
+            catch (OperationCanceledException) { AddLog($"{key}原开始请求已取消"); }
             catch (Services.Gateway.GatewayErrorException ex) { AddLog($"{key}未受理：{ex.Message}"); }
             catch (Exception ex)
             {
@@ -7153,10 +7155,11 @@ public partial class MainViewModel : INotifyPropertyChanged
         var requestId = "hoeing_" + Guid.NewGuid().ToString("N");
         try
         {
-            var batch = await _signalRClient.BeginCoordinatedBatchAsync(requestId, targets,
-                DateTimeOffset.UtcNow.AddMinutes(2), useCompletionActions: confirmation.UseCompletionActions);
+            var batch = await BeginCoordinatedWithContinuationAsync(requestId, targets,
+                useCompletionActions: confirmation.UseCompletionActions);
             AddLog($"一键锄地已受理，批次 {batch.BatchId}，等待 {batch.ParticipantUids.Count} 名成员准备完成");
         }
+        catch (OperationCanceledException) { AddLog("一键锄地原开始请求已取消"); }
         catch (Services.Gateway.GatewayErrorException ex)
         {
             AddLog("一键锄地未受理，当前任务保持执行：" + ex.Message);

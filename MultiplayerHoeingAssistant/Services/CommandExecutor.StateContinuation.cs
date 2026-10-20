@@ -15,7 +15,7 @@ public partial class CommandExecutor
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!batch.StateContinuationEnabled || !batch.LocalSucceeded || batch.ExplicitStopRequested
+        if (!batch.StateContinuationEnabled || !batch.LocalCompletionReady || batch.ExplicitStopRequested
             || batch.Policy is not { Policy: TaskConflictPolicy.RunSpecified } policy)
             return new CommandResult { ErrorCode = "completion_not_authorized", Message = "原批次完成动作授权已撤销，未发送" };
         var ext = _externalClientProvider?.Invoke();

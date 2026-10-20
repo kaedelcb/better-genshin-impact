@@ -223,4 +223,49 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
         Assert.Equal(0, port.Sends);
         Assert.Equal(0, port.Cancels);
     }
+    [Fact]
+    public async Task GapReleasePublicationThenReadFailureRetriesSameTicketAndRunsOnlyNextNode()
+    {
+        var flows = Path.Combine(_root, "gap-flows");
+        var runs = Path.Combine(_root, "gap-runs");
+        var workflows = new WorkflowStore(flows);
+        var document = new WorkflowDocument
+        {
+            Name = "B已完成只继续C", Activation = new() { Status = "active" },
+            Nodes = new[] { "B", "C" }.Select(id => new WorkflowNode
+            { NodeId = id, Kind = "resource.configGroup", Ref = new() { Config = id, ConfigKey = id + "#k", Revision = "rev-1" } }).ToList(),
+        };
+        workflows.Save(document, null);
+        var body = new Body(new RunStore(runs));
+        var host = new TaskCenterHost(flows, runs, Path.Combine(_root, "gap-catalog.json"), () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, body, new Prerequisite(), new Terminal()),
+            () => (true, null), onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 99 });
+        var run = host.Runs.CreateRun(document.WorkflowId!, workflows.LoadSnapshot(document.WorkflowId!).Revision);
+        run.State = WorkflowRunState.LocalWaitParking; run.TriggerConsumed = true; run.OnlineHoeingGateParked = true;
+        run.Cursor = new() { NodeId = "C", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        run.NodeOutcomes.Add(new() { NodeId = "B", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0, Result = "succeeded" });
+        run.OnlineHoeingHandoff = new() { StateContinuation = true, Generation = 7, Ticket = "gap-ticket", Epoch = "42:99",
+            NodeId = "C", Occurrence = 0, LoopIteration = 0, Attempt = 1, Phase = "gap" };
+        host.Runs.Update(run);
+        await host.CloseOnlineHoeingSendAsync();
+        var armed = 0; var faults = 0;
+        host.Runs.PublishFaultForTest = candidate =>
+        {
+            if (candidate.OnlineHoeingHandoff is null && candidate.OnlineHoeingHistory.Any(h => h.Phase == "released")
+                && Interlocked.CompareExchange(ref armed, 1, 0) == 0)
+                host.Runs.BeforeLoadForTest = _ =>
+                { if (Interlocked.Increment(ref faults) == 1) throw new IOException("read after release publication"); };
+            return null;
+        };
+        await Assert.ThrowsAsync<IOException>(() => host.FinishOnlineGapAfterReleaseAsync(run.RunId, "gap-ticket"));
+        Assert.Null(host.Runs.Load(run.RunId)!.OnlineHoeingHandoff);
+        Assert.True(await host.FinishOnlineGapAfterReleaseAsync(run.RunId, "gap-ticket"));
+        await Until(() => host.Runs.Load(run.RunId)?.State == WorkflowRunState.Succeeded);
+        Assert.True(await host.FinishOnlineGapAfterReleaseAsync(run.RunId, "gap-ticket"));
+        Assert.Equal(new[] { "C" }, body.Submitted);
+        Assert.Single(host.Runs.Load(run.RunId)!.OnlineHoeingHistory);
+        Assert.False(await host.FinishOnlineGapAfterReleaseAsync(run.RunId, "other-ticket"));
+        await host.ShutdownAsync();
+    }
+
 }

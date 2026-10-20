@@ -21,8 +21,6 @@ public partial class MainViewModel
         internal bool RegisteredJob { get; init; } = true;
     }
 
-    private sealed class CompletionPolicyRejectedException(string message) : InvalidOperationException(message);
-
     // The same worker is used by the actual UI path and deterministic transport fixtures.
     internal static async Task RunCompletionContinuationAsync(OnlineHoeingBatch batch,
         CompletionContinuationPorts io, CancellationToken ct)
@@ -32,6 +30,8 @@ public partial class MainViewModel
         string? ExpectedKey() => io.ExpectedRequestKey?.Invoke()
             ?? (io.RetainedResult ? batch.PolicyRequestKey : null);
         var noExecutionNeeded = false;
+        try
+        {
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -51,7 +51,7 @@ public partial class MainViewModel
                 {
                     if (recordsReady) batch.MarkLocalExecutionReleased();
                     // Save the actual result before acknowledging. An acknowledgement failure never restarts it.
-                    if (!batch.PolicyResultAcknowledged)
+                    if (recordsReady && !batch.PolicyResultAcknowledged)
                     {
                         batch.PolicyResultAcknowledged = ExpectedKey() is null
                             || await io.Acknowledge(terminal, ct).ConfigureAwait(false);
@@ -120,6 +120,12 @@ public partial class MainViewModel
                         }
                         ct.ThrowIfCancellationRequested();
                         io.RequireAuthority();
+                        if (result.ErrorCode is "manual_stop_cooldown" or "manual_stop_fence"
+                            or "reset_superseded" or "reset_in_progress" or "start_cancelled")
+                        {
+                            batch.Cancel();
+                            ct.ThrowIfCancellationRequested();
+                        }
                         if (result.ErrorCode is "manual_stop_cooldown" or "stale_epoch" or "stale_ticket"
                             or "stale_context" or "already_revoked" or "reset_superseded" or "start_cancelled"
                             or "manual_stop_fence" or "completion_not_authorized" or "takeover_conflict")
@@ -130,7 +136,14 @@ public partial class MainViewModel
                                 noExecutionNeeded = true;
                             else if (result.ErrorCode is "specified_task_missing" or "invalid_request"
                                 or "idempotency_conflict" or "configuration_revision_mismatch" or "config_revision_mismatch")
-                                throw new CompletionPolicyRejectedException(result.Message);
+                            {
+                                // BGI has rejected this action before execution. Keep the error, but
+                                // finish this worker so an unavailable configuration cannot lock the batch.
+                                batch.CompletionActionWarning = "绑定完成动作未启动：" + result.Message;
+                                batch.PolicySendUnknown = false;
+                                batch.PolicyRejectedBeforeStart = true;
+                                noExecutionNeeded = true;
+                            }
                             else
                             {
                                 batch.PolicySendUnknown = batch.PolicyStartAttempted;
@@ -147,10 +160,12 @@ public partial class MainViewModel
                 throw;
             }
             catch (Exception ex) when (ex is not ControlContextRevokedException
-                && ex is not CompletionPolicyRejectedException && !ct.IsCancellationRequested)
+                && !ct.IsCancellationRequested)
             { io.Waiting?.Invoke("绑定完成动作待接续：" + ex.Message); }
             await io.Delay(ct).ConfigureAwait(false);
         }
+        }
+        finally { batch.MarkPolicyPhaseFinished(); }
     }
 
     private async Task ApplyStateContinuationPolicyTeardownAsync(OnlineHoeingBatch batch,
@@ -166,7 +181,6 @@ public partial class MainViewModel
         var gapResume = false;
         var stoppedPlan = runId is null;
         var associatedResume = runId is null;
-        var completed = false;
         string? lastWaiting = null;
 
         string? CompletionRequestKey()
@@ -184,7 +198,7 @@ public partial class MainViewModel
             lock (_batchGate)
                 if (!ReferenceEquals(_commandExecutor, executor) || !ReferenceEquals(_activeBatch, batch)
                     || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0
-                    || batch.ExplicitStopRequested || !batch.LocalSucceeded)
+                    || batch.ExplicitStopRequested || !batch.LocalCompletionReady)
                     throw new ControlContextRevokedException("本批绑定完成动作已被停止或替换", ct);
             if (_externalClient?.ServerEpoch is { } current && !CoordinatedBatchLoop.SameEpoch(current, epoch))
                 throw new ControlContextRevokedException("原 BGI 已变化，禁止向新进程重放完成动作", ct);
@@ -247,7 +261,8 @@ public partial class MainViewModel
             }
             if (!host.CanOpenOnlineSendAfterBatch) return false;
             // Keep the original plan's send gate closed until the successor is actually accepted.
-            if (policy.Policy != TaskConflictPolicy.RunSpecified || batch.PolicyExecution is not null)
+            if (policy.Policy != TaskConflictPolicy.RunSpecified || batch.PolicyExecution is not null
+                || batch.PolicyRejectedBeforeStart)
                 await host.OpenOnlineHoeingSendAsync().ConfigureAwait(false);
             return true;
         }
@@ -354,18 +369,14 @@ public partial class MainViewModel
                 Acknowledge = (result, token) => External().AcknowledgeTaskResultAsync(result.IdempotencyKey!,
                     result.TaskHandle!, result.Epoch!, token),
             }, ct).ConfigureAwait(false);
-            completed = true;
             AddLog("[绑定完成动作] " + description + "后的绑定动作已收口"
                 + (batch.CompletionActionWarning is { } warning ? "：" + warning : ""));
         }
-        catch (ControlContextRevokedException)
-        {
-            completed = true;
-            throw;
-        }
         finally
         {
-            if (completed || ct.IsCancellationRequested) batch.MarkPolicyPhaseFinished();
+            // This worker has exited even on a definite rejection or revoked authority.
+            // Cancellation cleanup must never wait for a phase that can no longer complete.
+            batch.MarkPolicyPhaseFinished();
         }
     }
 }

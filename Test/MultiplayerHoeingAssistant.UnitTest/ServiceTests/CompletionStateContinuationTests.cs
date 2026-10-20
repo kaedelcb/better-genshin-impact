@@ -196,4 +196,76 @@ public sealed class CompletionStateContinuationTests
         Assert.Equal(cancelled, batch.PolicyTerminalResult.Cancelled);
         Assert.NotNull(batch.CompletionActionWarning);
     }
+    [Fact]
+    public async Task ResumeResultIsNotAcknowledgedUntilOriginalPlanHasStoredIt()
+    {
+        var batch = Create(TaskConflictPolicy.Resume);
+        var ready = false; var acknowledgements = 0; var waits = 0;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, ExpectedRequestKey = () => "resume/original",
+            Prepare = _ => Task.FromResult(true), Start = _ => Task.FromResult(Accepted()),
+            Query = _ => Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch, key: "resume/original")),
+            Reconcile = _ => Task.FromResult(ready),
+            // Count the attempt before asserting outside the worker: its error retry must not swallow a test assertion.
+            Acknowledge = (_, _) => { acknowledgements++; return Task.FromResult(true); },
+            Delay = _ =>
+            {
+                if (batch.PolicyTerminalResult is not null && ++waits == 3)
+                {
+                    Assert.Equal(0, acknowledgements);
+                    Assert.False(batch.LocalExecutionReleased);
+                    ready = true;
+                }
+                return Task.CompletedTask;
+            },
+        }, batch.Cts.Token).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, acknowledgements);
+        Assert.Equal(Job, batch.PolicyExecution!.JobId);
+    }
+
+    [Fact]
+    public async Task MissingCompletionConfigurationFinishesPhaseAndLaterStopCleansUp()
+    {
+        var batch = Create(); var starts = 0; var cleanup = 0;
+        batch.ConfigurePolicyCleanup(() => { cleanup++; return Task.FromResult(true); });
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => { batch.PolicyTicketReleased = true; return Task.FromResult(true); },
+            Start = _ => { starts++; return Task.FromResult(new CommandResult { ErrorCode = "specified_task_missing", Message = "配置已移除" }); },
+            Query = _ => throw new InvalidOperationException("Never accepted"),
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (_, _) => throw new InvalidOperationException("No accepted result to acknowledge"),
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(1, starts);
+        Assert.Contains("配置已移除", batch.CompletionActionWarning);
+        Assert.Null(batch.PolicyExecution);
+        batch.Cancel();
+        Assert.True(await batch.WaitCancelledPolicyCleanupAsync().WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, cleanup);
+    }
+
+    [Theory]
+    [InlineData("manual_stop_fence")]
+    [InlineData("manual_stop_cooldown")]
+    public async Task BgiExplicitStopDuringResumeCancelsTheWorkerAndCompletesItsPhase(string code)
+    {
+        var batch = Create(TaskConflictPolicy.Resume); var cleanup = 0;
+        batch.ConfigurePolicyCleanup(() => { cleanup++; return Task.FromResult(true); });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, ExpectedRequestKey = () => "resume/original",
+            Prepare = _ => Task.FromResult(true),
+            Start = _ => Task.FromResult(new CommandResult { ErrorCode = code, Message = "BGI stopped" }),
+            Query = _ => throw new InvalidOperationException("No further observation after explicit stop"),
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token));
+        Assert.True(batch.ExplicitStopRequested);
+        Assert.True(await batch.WaitCancelledPolicyCleanupAsync().WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(1, cleanup);
+    }
+
 }

@@ -47,6 +47,7 @@ public sealed class CoordinatedBatchState
         public string Result = "";
         public string Stage = "pending";
         public string Reason = "";
+        public bool HadLocalTaskError;
         public DateTime LastSeen = now;
     }
     private static bool HasEndedCurrentItem(Member member)
@@ -276,7 +277,7 @@ public sealed class CoordinatedBatchState
             if (result == "stopped" && Phase != "stopping") { Abort("unexpected_stop"); return Snapshot(); }
             if (result == "local_tasks_failed" && member.Result != result) Revision++;
             member.Result = result;
-            if (result == "local_tasks_failed") member.Reason = reason;
+            if (result == "local_tasks_failed") { member.Reason = reason; member.HadLocalTaskError = true; }
             if (result == "failed" && Phase == "running")
             {
                 if (_members.Values.Any(HasEndedCurrentItem))
@@ -291,7 +292,7 @@ public sealed class CoordinatedBatchState
         if (Phase == "running" && _members.Values.All(HasEndedCurrentItem))
         {
             var localFailures = _members.Where(p => p.Value.Result == "local_tasks_failed").Select(p => p.Key).ToArray();
-            if (localFailures.Length > 0)
+            if (localFailures.Length > 0 && !StateContinuation)
             {
                 // Every participant has exited this item. Do not cancel peers to obtain this boundary,
                 // invent success, replay completed hoeing, or advance to a later binding.
@@ -302,6 +303,11 @@ public sealed class CoordinatedBatchState
             Attempt = 0;
             if (Index < _count)
                 foreach (var m in _members.Values) m.Result = "";
+            if (StateContinuation && Index == _count)
+            {
+                var errors = _members.Where(p => p.Value.HadLocalTaskError).Select(p => p.Key).ToArray();
+                if (errors.Length > 0) Reason = "completed_with_task_errors:" + string.Join(",", errors);
+            }
             SetPhase(Index == _count ? "completed" : "running", now);
         }
         else if (Phase == "stopping" && _members.Values.All(m => m.Result.Length > 0
