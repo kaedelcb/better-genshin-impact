@@ -1,4 +1,8 @@
 ﻿using Microsoft.Win32;
+using Serilog;
+using System;
+using System.IO;
+using System.Security;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -32,8 +36,7 @@ internal static partial class UrlProtocolHelper
         else
         {
             using RegistryKey keyUser = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
-            using RegistryKey keyUserSub = keyUser.OpenSubKey(ProtocolUserSubKey)!;
-            RegistryKey? keyScheme = keyUserSub.OpenSubKey(ProtocolName);
+            RegistryKey? keyScheme = keyUser.OpenSubKey(ProtocolUserSubKey + ProtocolName);
 
             return keyScheme;
         }
@@ -51,8 +54,9 @@ internal static partial class UrlProtocolHelper
         else
         {
             using RegistryKey keyUser = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64);
-            using RegistryKey keyUserSub = keyUser.OpenSubKey(ProtocolUserSubKey, true)!;
-            RegistryKey keyScheme = keyUserSub.CreateSubKey(ProtocolName);
+            // Access only our protocol key; requesting write access to the Classes
+            // parent can be denied even when this child is writable.
+            RegistryKey keyScheme = keyUser.CreateSubKey(ProtocolUserSubKey + ProtocolName);
 
             return keyScheme;
         }
@@ -77,8 +81,12 @@ internal static partial class UrlProtocolHelper
     public static bool IsRegistered()
     {
         using RegistryKey? keyScheme = OpenSchemeKey();
+        return IsRegistered(keyScheme);
+    }
 
-        if (keyScheme != null)
+    internal static bool IsRegistered(RegistryKey? keyScheme)
+    {
+        if (keyScheme?.GetValue("URL Protocol") is string)
         {
             using RegistryKey? keyShell = keyScheme.OpenSubKey("shell");
             using RegistryKey? keyOpen = keyShell?.OpenSubKey("open");
@@ -129,7 +137,11 @@ internal static partial class UrlProtocolHelper
     public static void Register()
     {
         using RegistryKey keyScheme = CreateSchemeKey();
+        Register(keyScheme);
+    }
 
+    internal static void Register(RegistryKey keyScheme)
+    {
         keyScheme.SetValue(string.Empty, ProtocolName);
         keyScheme.SetValue("URL Protocol", string.Empty);
 
@@ -168,12 +180,24 @@ internal static partial class UrlProtocolHelper
         }
     }
 
-    public static async Task RegisterAsync()
+    public static Task RegisterAsync() => RegisterAsync(IsRegistered, Register);
+
+    internal static async Task RegisterAsync(Func<bool> isRegistered, Action register)
     {
-        await Task.Run(() =>
+        try
         {
-            Register();
-        });
+            await Task.Run(() =>
+            {
+                if (!isRegistered()) register();
+            });
+        }
+        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
+        {
+            // Protocol association is optional. A restricted registry must not abort
+            // the application after its host has already started.
+            Log.Warning(ex, "无法注册 {ProtocolName} URL 协议（{RegistryKey}）；程序继续启动，协议链接唤起可能不可用。",
+                ProtocolName, ProtocolKeyFull);
+        }
     }
 
     public static void Launch(string param = null!)
