@@ -67,6 +67,68 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         Assert.Equal(1, _pipe.CountOf("ext.task.status"));
     }
 
+    [Fact]
+    public async Task ConfirmedExitedOldBatchClearsTicketAndFenceBeforeNextBatchSuspends()
+    {
+        var previousV2 = IpcClient.PipeNameOverrideForTest;
+        IpcClient.PipeNameOverrideForTest = _pipe.PipeName;
+        var executor = new CommandExecutor(null!, "unused", () => _client) { BgiRunningProbeOverride = () => true };
+        var stopVersion = 6L;
+        var suspends = new List<JsonElement>();
+        using var oldSignal = Mistletoe.Shared.CoordinatedStopSignal.Create();
+        using var newSignal = Mistletoe.Shared.CoordinatedStopSignal.Create();
+        _pipe.BodyForTest = (operation, data) =>
+        {
+            if (operation == WorkflowStopAuthority.Operation) return (true, null, null, Fence(stopVersion));
+            if (operation == "task.suspend")
+            {
+                var request = data!.Value;
+                suspends.Add(request.Clone());
+                return (true, null, null, new { status = "no_task", liveTask = false, quiesceConfirmed = true,
+                    takeoverTicket = request.GetProperty("takeoverTicket").GetString(),
+                    expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });
+            }
+            if (operation == "task.resume") return (false, "stale_ticket", "old batch was manually stopped", null);
+            if (operation is "task.status" or "ext.task.status")
+                return (true, null, null, new { running = false, slotOccupied = true, executionSlotOccupied = true,
+                    takeoverActive = false, hasSuspendedTaskContext = false,
+                    bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
+            return null;
+        };
+        try
+        {
+            var idle = new CommandExecutor.ExecutionBoundarySnapshot(true, false, Epoch.ProcessId, Epoch.StartTicksUtc, null);
+            Assert.Equal("success", (await executor.ExecuteSuspendAsync("old batch", idle, true,
+                expectedStopVersion: 6, recoveryStopSignal: oldSignal.Name)).Status);
+            var original = executor.TakeoverTicketSnapshot!;
+            oldSignal.Stop(); stopVersion = 7;
+            var release = await executor.ExecuteResumeAsync(cancel: true, expectedTicket: original);
+            Assert.Equal("failed", release.Status);
+            Assert.Equal("stale_ticket", release.ErrorCode);
+            Assert.Equal(original, executor.TakeoverTicketSnapshot); // Internal ownedExit=false cannot dismiss the busy slot.
+            Assert.True(await executor.ConfirmTakeoverRevokedAndClearAsync(original, Epoch,
+                ownedExecutionExited: true, CancellationToken.None));
+            Assert.Null(executor.TakeoverTicketSnapshot);
+            Assert.Null(_client.TakeoverTicket);
+            var privateFields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            Assert.Null(typeof(CommandExecutor).GetField("_retainedSuspendFenceTicket", privateFields)!.GetValue(executor));
+            Assert.Null(typeof(CommandExecutor).GetField("_retainedSuspendStopVersion", privateFields)!.GetValue(executor));
+            Assert.Equal("success", (await executor.ExecuteSuspendAsync("new explicit batch", idle, true,
+                expectedStopVersion: 7, recoveryStopSignal: newSignal.Name)).Status);
+            var replacement = executor.TakeoverTicketSnapshot;
+            Assert.NotNull(replacement); Assert.NotEqual(original, replacement);
+            Assert.Equal(2, suspends.Count);
+            Assert.Equal(6, suspends[0].GetProperty("expectedStopVersion").GetInt64());
+            Assert.Equal(7, suspends[1].GetProperty("expectedStopVersion").GetInt64());
+            Assert.Equal(original, suspends[0].GetProperty("takeoverTicket").GetString());
+            Assert.Equal(replacement, suspends[1].GetProperty("takeoverTicket").GetString());
+            Assert.Equal(newSignal.Name, suspends[1].GetProperty("recoveryStopSignal").GetString());
+            Assert.Equal(2, _pipe.CountOf(WorkflowStopAuthority.Operation));
+            Assert.Empty(Starts());
+        }
+        finally { IpcClient.PipeNameOverrideForTest = previousV2; }
+    }
+
     [Theory]
     [InlineData("missing")]
     [InlineData("negative")]

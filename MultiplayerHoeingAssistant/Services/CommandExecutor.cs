@@ -2207,8 +2207,36 @@ public partial class CommandExecutor
             if (_takeoverTicket != ticket) return;
             _takeoverTicket = null;
             _takeoverEpoch = null;
+            if (_retainedSuspendFenceTicket == ticket)
+            {
+                _retainedSuspendFenceTicket = null;
+                _retainedSuspendStopVersion = null;
+            }
             if (_externalClientProvider?.Invoke() is { } ext && ext.TakeoverTicket == ticket) ext.TakeoverTicket = null;
         }
+    }
+
+    internal async Task<bool> ConfirmTakeoverRevokedAndClearAsync(string expectedTicket, BgiEpoch expectedEpoch,
+        bool ownedExecutionExited, CancellationToken ct)
+    {
+        await _suspendGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            bool SameOriginal() => _takeoverTicket == expectedTicket && _takeoverEpoch is { } held
+                && held.ProcessId == expectedEpoch.ProcessId && held.StartTicksUtc == expectedEpoch.StartTicksUtc;
+            lock (_resetStateGate)
+                if (!SameOriginal()) return false;
+            if (!await ConfirmTakeoverRevokedAsync(expectedEpoch, ownedExecutionExited, ct).ConfigureAwait(false))
+                return false;
+            ct.ThrowIfCancellationRequested();
+            lock (_resetStateGate)
+            {
+                if (!SameOriginal()) return false;
+                ClearTicket(expectedTicket);
+                return true;
+            }
+        }
+        finally { _suspendGate.Release(); }
     }
 
     internal async Task<bool> ConfirmTakeoverRevokedAsync(BgiEpoch expectedEpoch,

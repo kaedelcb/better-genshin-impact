@@ -1096,6 +1096,7 @@ public partial class MainViewModel
             }
             if (result.ErrorCode is "manual_stop_fence" or "manual_stop_cooldown" or "reset_superseded" or "reset_in_progress")
             {
+                AddLog($"[联机接管] 接管被拒绝（{result.ErrorCode}）：{result.Message}");
                 batch.Cancel();
                 ct.ThrowIfCancellationRequested();
             }

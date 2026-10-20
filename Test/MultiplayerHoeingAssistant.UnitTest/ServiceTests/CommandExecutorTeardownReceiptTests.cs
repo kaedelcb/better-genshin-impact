@@ -86,6 +86,37 @@ public sealed class CommandExecutorTeardownReceiptTests : IAsyncLifetime
         Assert.Equal(0, _pipe.CountOf("ext.task.start"));
     }
 
+    [Theory]
+    [InlineData("unreadable")]
+    [InlineData("reply_epoch_changed")]
+    [InlineData("ticket_before_query")]
+    [InlineData("ticket_during_query")]
+    [InlineData("epoch_during_query")]
+    public async Task RevocationClearRequiresSameOriginalTicketAndEpochBeforeAndAfterProof(string condition)
+    {
+        var epoch = Epoch();
+        var original = Guid.NewGuid().ToString("N");
+        var successor = Guid.NewGuid().ToString("N");
+        var changedEpoch = new BgiEpoch { ProcessId = epoch.ProcessId, StartTicksUtc = epoch.StartTicksUtc + 1 };
+        var executor = Seed(original, epoch);
+        if (condition == "ticket_before_query") executor.SeedTakeoverStateForTest(successor, epoch);
+        _pipe.BodyForTest = (operation, _) =>
+        {
+            if (operation != "task.status") return null;
+            if (condition == "unreadable") return (false, "state_unavailable", "temporary unavailable", null);
+            if (condition == "ticket_during_query") executor.SeedTakeoverStateForTest(successor, epoch);
+            if (condition == "epoch_during_query") executor.SeedTakeoverStateForTest(original, changedEpoch);
+            return (true, null, null, Status(condition == "reply_epoch_changed" ? changedEpoch : epoch, true));
+        };
+        Assert.False(await executor.ConfirmTakeoverRevokedAndClearAsync(original, epoch,
+            ownedExecutionExited: true, CancellationToken.None));
+        Assert.Equal(condition is "ticket_before_query" or "ticket_during_query" ? successor : original,
+            executor.TakeoverTicketSnapshot);
+        Assert.Equal(condition == "ticket_before_query" ? 0 : 1, _pipe.CountOf("task.status"));
+        Assert.Equal(0, _pipe.CountOf("task.resume"));
+        Assert.Equal(0, _pipe.CountOf("task.suspend"));
+    }
+
     [Fact]
     public async Task ResumeWhenStatusIsUnreadable_FailsAndPreservesResponsibilityWithoutSendingResume()
     {

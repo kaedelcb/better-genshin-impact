@@ -86,7 +86,7 @@ public partial class MainViewModel
                 if (!CoordinatedBatchLoop.SameEpoch(epoch, current?.Epoch)) return false;
                 var release = await owner.ExecuteResumeAsync(cancel: true, expectedTicket: ticket).WaitAsync(ct);
                 return release.Status == "success" || release.ErrorCode is "stale_ticket" or "stale_context"
-                    && await owner.ConfirmTakeoverRevokedAsync(epoch, batch.TakenOver, ct);
+                    && await owner.ConfirmTakeoverRevokedAndClearAsync(ticket, epoch, batch.TakenOver, ct);
             },
             RequireFinishEvidence = true,
             RequireLocalTaskFailureIsolation = true,

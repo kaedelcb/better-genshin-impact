@@ -46,6 +46,7 @@ public sealed partial class FourMemberFinishEntryTests
                         await RunEntryAsync(peerFails: false, reconnectAfterLocalFinish: true);
                         await RunLocalTaskFailureEntryAsync();
                         await RunLegacyCompletionCancellationEntryAsync();
+                        await RunMidRunStopAndNewIntentEntryAsync();
                         await RunStateContinuationCompletionEntryAsync();
                         await RunStateContinuationCompletionEntryAsync(configurationRemoved: true);
                         await RunStateContinuationCompletionEntryAsync(priorityRecovery: true);
@@ -584,10 +585,21 @@ public sealed partial class FourMemberFinishEntryTests
                                     ? saved : HoldRecoveryExit ? "" : "stopped";
                             if (current.Phase is "completed" or "aborted") stage = "cleaned";
                         }
-                        Last = await client.UpdateCoordinatedBatchAsync(current.Generation, _token, current.BatchId,
-                            string.Join(",", current.Bindings[uid].Select(b => b.Type)),
-                            current.Index, current.Attempt, result, ct, stage,
-                            ReportUnknown ? "controlled_peer_after_body_failed" : "");
+                        try
+                        {
+                            Last = await client.UpdateCoordinatedBatchAsync(current.Generation, _token, current.BatchId,
+                                string.Join(",", current.Bindings[uid].Select(b => b.Type)),
+                                current.Index, current.Attempt, result, ct, stage,
+                                ReportUnknown ? "controlled_peer_after_body_failed" : "");
+                        }
+                        catch (GatewayErrorException error) when (error.Code == "internal_error"
+                            && error.Message.EndsWith(" batch_not_found", StringComparison.Ordinal))
+                        {
+                            // A new explicit batch may replace the completed one between this peer's read and update.
+                            var latest = await client.GetCurrentCoordinatedBatchAsync(ct);
+                            if (latest is not null && latest.BatchId != current.BatchId) continue;
+                            throw;
+                        }
                         registered = true;
                     }
                     await Task.Delay(150, ct);
@@ -615,6 +627,12 @@ public sealed partial class FourMemberFinishEntryTests
         private readonly List<Job> _jobs = [];
         private string? _ticket;
         private int _cancelCount;
+        private long _manualStopVersion;
+        private long? _lastManualStopTimestamp;
+        private bool _revokedStatusBusyPending;
+        public bool SimulateManualStopFence;
+        public int StaleResumeReplies, RevokedStatusBusyReads;
+        public long ManualStopVersion { get { lock (_gate) return _manualStopVersion; } }
         public volatile bool CompletionSlotBusy, DropNextCompletionReply, CompletionConfigMissing, ManualTerminalUnavailable;
         public int CompletionBusyStatusReads, CompletionReplyDrops, CompletionAcknowledgements, ManualUnknownStatusReads;
         private readonly int _pid = Environment.ProcessId;
@@ -638,6 +656,21 @@ public sealed partial class FourMemberFinishEntryTests
                 var job = _jobs.Last(j => j.Cooperative);
                 job.BodyCompleted = job.Completed = true;
                 job.Revision++;
+            }
+        }
+        public void ManualStopCooperative()
+        {
+            lock (_gate)
+            {
+                Assert.True(SimulateManualStopFence);
+                var job = _jobs.Last(j => j.Cooperative);
+                Assert.False(job.Completed || job.Cancelled || job.Failed);
+                job.Cancelled = true;
+                job.Revision++;
+                _ticket = null;
+                _manualStopVersion++;
+                _lastManualStopTimestamp = Stopwatch.GetTimestamp();
+                foreach (var signal in _stopSignals) signal.Stop();
             }
         }
         public void CompleteCooperativeBody()
@@ -694,13 +727,15 @@ public sealed partial class FourMemberFinishEntryTests
                             }
                         });
                     case "ext.execution.manualStopFence":
-                        return (true, null, null, new { bgiEpoch = Epoch, stopVersion = 0L,
-                            lastManualStopTimestamp = (long?)null, monotonicFrequency = Stopwatch.Frequency });
+                        return (true, null, null, new { bgiEpoch = Epoch, stopVersion = _manualStopVersion,
+                            lastManualStopTimestamp = _lastManualStopTimestamp, monotonicFrequency = Stopwatch.Frequency });
                     case "task.status":
                     case "ext.task.status":
                         var completionBusy = stateContinuation && CompletionSlotBusy && _jobs.LastOrDefault(j => j.Cooperative) is { Completed: true } lastNative
                             && lastNative.Name == (nextBoundGroup ?? boundGroup);
                         if (completionBusy) CompletionBusyStatusReads++;
+                        var revokedSlotBusy = _revokedStatusBusyPending;
+                        if (revokedSlotBusy) { _revokedStatusBusyPending = false; RevokedStatusBusyReads++; }
                         var queriedRoot = Value(data, "executionInstanceId");
                         var exited = _jobs.Any(j => j.Id == queriedRoot && (j.Completed || j.Cancelled || j.Failed));
                         return (true, null, null, new
@@ -708,7 +743,8 @@ public sealed partial class FourMemberFinishEntryTests
                             running = active != null, taskRunning = active != null,
                             autoHoeingRunning = active?.Cooperative == true,
                             autoHoeingMultiplayer = active?.Cooperative == true ? (bool?)true : null,
-                            slotOccupied = active != null || completionBusy, executionSlotOccupied = active != null || completionBusy,
+                            slotOccupied = active != null || completionBusy || revokedSlotBusy,
+                            executionSlotOccupied = active != null || completionBusy || revokedSlotBusy,
                             executionIdentityAvailable = active != null, executionInstanceId = active?.Id,
                             executionJobId = active?.Id, executionStateRevision = 1, stateRevision = 1,
                             executionIdle = active == null, executionExitConfirmed = exited,
@@ -752,6 +788,10 @@ public sealed partial class FourMemberFinishEntryTests
                                 exitDisposition = !TerminalUnavailable(exactJob) && (exactJob.Completed || exactJob.Cancelled || exactJob.Failed) ? "terminal" : null,
                             } });
                     case "task.suspend":
+                        if (SimulateManualStopFence && (data is not { } fenceRequest
+                            || !fenceRequest.TryGetProperty("expectedStopVersion", out var expectedFence)
+                            || !expectedFence.TryGetInt64(out var stopVersion) || stopVersion != _manualStopVersion))
+                            return (false, "manual_stop_fence", "接管必须携带当前停止版本", null);
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
                             return (false, "not_current", "替身只接受空闲接管", null);
                         if (Value(data, "recoveryStopSignal") is { } signalName)
@@ -824,6 +864,11 @@ public sealed partial class FourMemberFinishEntryTests
                         if (!owned.Cancelled) { owned.Cancelled = true; _cancelCount++; }
                         return (true, null, null, new { status = "cancel_requested" });
                     case "task.resume":
+                        if (SimulateManualStopFence && _ticket is null && _manualStopVersion > 0)
+                        {
+                            if (++StaleResumeReplies == 1) _revokedStatusBusyPending = true;
+                            return (false, "stale_context", "原票据已由F11撤销", null);
+                        }
                         if (active != null || _ticket == null || Value(data, "takeoverTicket") != _ticket)
                             return (false, "stale_ticket", "替身收尾条件不满足", null);
                         _ticket = null;
@@ -914,6 +959,7 @@ public sealed partial class FourMemberFinishEntryTests
             start.ArgumentList.Add(serverDll); start.ArgumentList.Add("--urls"); start.ArgumentList.Add(url);
             start.Environment["ROOM_LOG_ROOT"] = Path.Combine(Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT")!, "four-member-finish-" + caseName + "-room-logs");
             start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            start.Environment["Logging__EventLog__LogLevel__Default"] = "None"; // Console/fixture logs remain; no Windows Event Log permission is needed.
             var process = new Process { StartInfo = start, EnableRaisingEvents = true };
             var owned = new IsolatedCoordinator(process, url, caseName);
             process.OutputDataReceived += (_, e) => { if (e.Data != null) owned._output.Enqueue(e.Data); };
