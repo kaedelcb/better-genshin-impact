@@ -11,9 +11,9 @@ public sealed class CompletionStateContinuationTests
     private static readonly BgiEpoch Epoch = new() { ProcessId = 19, StartTicksUtc = 190 };
     private static readonly string Job = Guid.NewGuid().ToString("N");
 
-    private static OnlineHoeingBatch Create(TaskConflictPolicy policy = TaskConflictPolicy.RunSpecified) => new(new("completion", 7, 0, 0, 1, "completed", "")
+    private static OnlineHoeingBatch Create(TaskConflictPolicy policy = TaskConflictPolicy.RunSpecified, bool priority = false) => new(new("completion", 7, 0, 0, 1, "completed", "")
     {
-        Protocol = "hoeing.start.v2",
+        Protocol = "hoeing.start.v2", PriorityRecovery = priority,
         ParticipantUids = ["shark"],
         Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
             { ["shark"] = [new("联机精英", "group")] },
@@ -34,6 +34,63 @@ public sealed class CompletionStateContinuationTests
         TaskHandle = Job, Epoch = Epoch, IdempotencyKey = key ?? batch.PolicyRequestKey,
         Status = status, Cancelled = cancelled, ExecutionExitConfirmed = true,
     };
+
+    [Fact]
+    public async Task FailedSpecifiedActionRetriesOnlyAfterConfirmedExit_AndRetainsFailure()
+    {
+        var batch = Create(priority: true);
+        var starts = 0; var reads = 0; var active = 0; var maximumActive = 0;
+        var keys = new List<string>();
+        string? job = null;
+        await MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => Task.FromResult(active == 0),
+            Start = _ =>
+            {
+                starts++; active++; maximumActive = Math.Max(maximumActive, active);
+                job = Guid.NewGuid().ToString("N"); keys.Add(batch.PolicyRequestKey);
+                batch.PolicyStartAttempted = true;
+                return Task.FromResult(new CommandResult { Status = "success", JobId = job,
+                    TargetProcessId = Epoch.ProcessId, TargetStartTicksUtc = Epoch.StartTicksUtc.ToString() });
+            },
+            Query = _ =>
+            {
+                reads++;
+                var exited = starts == 2 || reads >= 3;
+                if (exited) active = 0;
+                return Task.FromResult<BgiTaskQueueStatus?>(new() { TaskHandle = job, Epoch = Epoch,
+                    IdempotencyKey = batch.PolicyRequestKey, Status = starts == 1 ? "failed" : "completed",
+                    ErrorMessage = starts == 1 ? "ordinary failure" : null, ExecutionExitConfirmed = exited });
+            },
+            Reconcile = _ => starts == 1 ? throw new IOException("old ledger unavailable") : Task.FromResult(true),
+            Acknowledge = (_, _) => Task.FromResult(true), Delay = _ => Task.CompletedTask,
+        }, batch.Cts.Token).WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, starts);
+        Assert.Equal(1, maximumActive);
+        Assert.NotEqual(keys[0], keys[1]);
+        Assert.Single(batch.FailedPolicyAttempts);
+        Assert.Equal("ordinary failure", batch.FailedPolicyAttempts[0].ErrorMessage);
+        Assert.Equal("completed", batch.PolicyTerminalResult!.Status);
+    }
+
+    [Fact]
+    public async Task ExplicitStopAfterFailedExitPreventsNextCompletionAttempt()
+    {
+        var batch = Create(priority: true);
+        var starts = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true,
+            Prepare = _ => Task.FromResult(true),
+            Start = _ => { starts++; batch.PolicyStartAttempted = true; return Task.FromResult(Accepted()); },
+            Query = _ => { batch.Cancel(); return Task.FromResult<BgiTaskQueueStatus?>(Terminal(batch, "failed")); },
+            Reconcile = _ => Task.FromResult(true), Acknowledge = (_, _) => Task.FromResult(true),
+            Delay = ct => Task.Delay(1, ct)
+        }, batch.Cts.Token));
+        Assert.Equal(1, starts);
+        Assert.True(batch.ExplicitStopRequested);
+    }
 
     [Fact]
     public async Task SharkBusyThenIdleStartsTheSameFrozenCompletionWithoutAnotherOnlineOrReset()

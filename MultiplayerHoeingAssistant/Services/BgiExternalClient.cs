@@ -382,6 +382,13 @@ public sealed partial class BgiExternalClient : IDisposable
         return State;
     }
 
+    internal string? CoordinatedRecoveryCheckpointJson { get; set; }
+    internal JsonElement? RecoveryCheckpointElement()
+    {
+        try { return CoordinatedRecoveryCheckpointJson is { } json ? JsonSerializer.Deserialize<JsonElement>(json) : null; }
+        catch (JsonException) { return null; }
+    }
+
     /// <summary>发送 ext.* 命令并等待响应。通道未就绪时抛 InvalidOperationException（调用方降级）。</summary>
     public async Task<BgiExternalResponse> SendCommandAsync(
         string operation,
@@ -420,6 +427,15 @@ public sealed partial class BgiExternalClient : IDisposable
                 if (!fields.ContainsKey("takeoverTicket") && TakeoverTicket is { } ticket) fields["takeoverTicket"] = ticket;
                 if (fields["bgiEpoch"] == null && ServerEpoch is { } epoch)
                     fields["bgiEpoch"] = System.Text.Json.JsonSerializer.SerializeToNode(new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc });
+                payload = fields;
+            }
+            // Only observation requests carry the auxiliary checkpoint. Never change a
+            // task.start/ack fingerprint when local recovery bookkeeping advances.
+            if (operation is "ext.task.status" or "ext.job.list" or "ext.task.queueStatus"
+                && HasCapability("task.coordinatedRecoverySnapshot.v1") && RecoveryCheckpointElement() is { } checkpoint)
+            {
+                var fields = System.Text.Json.JsonSerializer.SerializeToNode(payload ?? new { })!.AsObject();
+                fields["assistantRecovery"] = System.Text.Json.JsonSerializer.SerializeToNode(checkpoint);
                 payload = fields;
             }
             await WriteEnvelopeAsync(pipe, operation, requestId, payload, cancellationToken)

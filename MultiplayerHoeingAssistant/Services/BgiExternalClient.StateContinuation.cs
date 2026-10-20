@@ -9,6 +9,25 @@ internal sealed class BgiStateContinuationStoppedException(string message) : Ope
 public sealed partial class BgiExternalClient
 {
     public const string StateContinuationCapability = "task.stateContinuation.v1";
+    internal async Task EnsureCoordinatedRecoveryStopAsync(OnlineHoeingBatch batch, CancellationToken ct)
+    {
+        if (!HasCapability("task.coordinatedRecoveryStop.v1"))
+            throw new System.IO.IOException("BGI 尚不支持跨进程停止事实，等待配套执行通道");
+        if (batch.RecoveryStopSignalMissing || batch.RestoredFromRecovery && batch.RecoveryStopSignal is null)
+        {
+            var original = ServerEpoch ?? throw new System.IO.IOException("原进程暂未确认");
+            if (!ViewModels.CoordinatedBatchLoop.SameEpoch(batch.ExecutionEpoch, original))
+                throw new System.IO.IOException("原停止事实丢失且进程已变化，不能猜测恢复授权");
+            var actualStop = await ReadStateContinuationStopVersionAsync(original, ct)
+                ?? throw new System.IO.IOException("等待同一原进程的停止围栏");
+            batch.ConfirmOriginalProcessStopFence(original, actualStop);
+        }
+        batch.EnsureRecoveryStopSignal();
+        batch.ObserveRecoveryStopSignal();
+        batch.Cts.Token.ThrowIfCancellationRequested();
+        ct.ThrowIfCancellationRequested();
+    }
+
     private readonly SemaphoreSlim _retainedStartPayloadGate = new(1, 1);
     private readonly Dictionary<string, (string Input, Dictionary<string, object?> Payload)> _retainedStartPayloads = new(StringComparer.Ordinal);
 

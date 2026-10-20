@@ -195,8 +195,15 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>先封住全部任务中心发送，再读取 BGI 的同纪元执行根。</summary>
-    internal Task CloseOnlineHoeingSendAsync(CancellationToken ct = default)
-        => _onlineSendGate.CloseAsync(ct);
+    internal Task CloseOnlineHoeingSendAsync(CancellationToken ct = default, bool priority = false)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!priority) return _onlineSendGate.CloseAsync(ct);
+        // BGI's retained takeover excludes already-sent ordinary work at execution admission.
+        // A lost reply on that old send must not delay claiming the physical execution slot.
+        _onlineSendGate.CloseForPriority();
+        return Task.CompletedTask;
+    }
 
     internal async Task BeginManualResetAsync(CancellationToken ct)
     {
@@ -224,7 +231,7 @@ public sealed partial class TaskCenterHost
             _log?.Invoke("[联机优先] 原计划恢复信息待补，不阻止 BGI 让位：" + prepared.Reason);
             return new OnlineHoeingPreparation(true, null, prepared.Reason);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log?.Invoke("[联机优先] 原计划记录暂不可用，不阻止 BGI 让位：" + ex.Message);
             return new OnlineHoeingPreparation(true, null, ex.Message);

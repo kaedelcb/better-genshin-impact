@@ -34,7 +34,9 @@ public partial class MainViewModel
         {
         while (true)
         {
+            batch.ObserveRecoveryStopSignal();
             ct.ThrowIfCancellationRequested();
+            batch.PersistRecovery?.Invoke();
             io.RequireAuthority();
             try
             {
@@ -49,6 +51,18 @@ public partial class MainViewModel
 
                 if (batch.PolicyTerminalResult is { } terminal)
                 {
+                    if (batch.RetryFailedSpecifiedCompletion())
+                    {
+                        // Only a confirmed exit can allocate the next attempt. Save the failed
+                        // receipt first; auxiliary acknowledgement/old-plan records cannot veto retry.
+                        batch.PersistRecovery?.Invoke();
+                        try { await io.Acknowledge(terminal, ct).ConfigureAwait(false); }
+                        catch (Exception ex) when (!ct.IsCancellationRequested)
+                        { io.Waiting?.Invoke("前次失败已保留，结果确认待补：" + ex.Message); }
+                        io.Waiting?.Invoke("绑定后续执行失败，原执行已退出，继续同一安排的下一次尝试");
+                        await io.Delay(ct).ConfigureAwait(false);
+                        continue;
+                    }
                     if (recordsReady) batch.MarkLocalExecutionReleased();
                     // Save the actual result before acknowledging. An acknowledgement failure never restarts it.
                     if (recordsReady && !batch.PolicyResultAcknowledged)
@@ -267,6 +281,26 @@ public partial class MainViewModel
             return true;
         }
 
+        async Task<bool> ReconcileWithPriority(CancellationToken token)
+        {
+            try { if (await Reconcile(token).ConfigureAwait(false)) return true; }
+            catch (Exception ex) when (batch.PriorityRecoveryEnabled && !token.IsCancellationRequested
+                && ex is not ControlContextRevokedException)
+            { Waiting("原计划记录待补：" + ex.Message); }
+            // A specified successor/stop has no original runner consuming its result. Once
+            // its physical work is over, an unrelated old ledger cannot retain the send gate.
+            if (batch.PriorityRecoveryEnabled && policy.Policy != TaskConflictPolicy.Resume
+                && (batch.PolicyTerminalResult is { ExecutionExitConfirmed: true, Status: "completed", Cancelled: false }
+                    || batch.PolicyRejectedBeforeStart
+                    || policy.Policy == TaskConflictPolicy.Stop && batch.PolicyTicketReleased))
+            {
+                RequireAuthority();
+                if (host is not null) await host.OpenOnlineHoeingSendAsync().ConfigureAwait(false);
+                return true;
+            }
+            return false;
+        }
+
         async Task<bool> Prepare(CancellationToken token)
         {
             External();
@@ -363,7 +397,7 @@ public partial class MainViewModel
             await RunCompletionContinuationAsync(batch, new CompletionContinuationPorts
             {
                 RequireAuthority = RequireAuthority, Prepare = Prepare, Start = Start, Query = Query,
-                Reconcile = Reconcile, Waiting = Waiting,
+                Reconcile = ReconcileWithPriority, Waiting = Waiting,
                 ExpectedRequestKey = CompletionRequestKey,
                 RegisteredJob = true,
                 Acknowledge = (result, token) => External().AcknowledgeTaskResultAsync(result.IdempotencyKey!,

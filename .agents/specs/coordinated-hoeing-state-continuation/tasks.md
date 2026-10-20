@@ -194,3 +194,59 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 施工约束：当前源码根E:/Program Files/better-genshin-impact-LCB-source，main-OldTeaBag-B182；旧根只读不扫描。当前所有差异均本聊天新增（开工tracked干净），168个既有untracked不动。禁止部署/push/改真实User/第三方JS。本地WIP可保存，但源码预检baseline维持cef55430，未完成不得前移。历史门本目标此前已运行matches=[]并读索引，不重复扫描。源码入口技能及AGENTS已读；Spec完整目标不因本组件通过缩小。
 
 原生Goal为完整用户要求，接班必须继续同一完整结果而非只修F3。本聊天实际最新turn_context为gpt-6-astra/high，collaboration_mode.settings一致（全局默认sol/ultra不是来源模型）。来源rollout E:/CodexData/home/sessions/2026/10/20/rollout-2026-10-20T09-05-25-01a156d7-7bb3-7d12-83b9-fc334ac8cf86.jsonl。
+
+
+### 唯一接班 01a15932 当前施工记录（未完成，2026-10-20）
+
+本接班原生完整 Goal 已创建并读回 active，实际 cwd/main-OldTeaBag-B182/HEAD287bf4e2 与 gpt-6-astra/high及settings一致；取码预检complete/issues=[]。同一Goal历史门matches=[]结果复用。未部署、push、操作真实User/游戏/用户程序；原169个untracked保留。当前新增源码均未提交，属于WIP，不推进外部baseline。
+
+已写入但只按下列证据限定：
+- `task.takeoverReceipt.v1`：task.suspend的receiptOnly只读原回执，继续校验原stop/ticket；助手在当前实际空闲时继承原已退出现场，普通改绑仍takeover_identity_mismatch。F3的空闲旧票据场景已有定向通过；旧票据下另一个活跃根的接管仍须完整入口审查，不能把F3整体提前标闭合。
+- priority任务中心发送门可立即阻止新普通发送，不等待旧在途请求丢回执；BGI既有接管负责物理排他。旧台账一般异常不挡优先接管。
+- `CoordinatedRecoveryStore`将原token、批次/绑定策略、epoch、stop、票据、loop项、指定后续尝试/失败写入助手数据根的coordinated-recovery/session目录，写失败不取消在跑安排。读取只接受同控制身份/成员/冻结绑定、原助手PID+start已死；未知/活着不接管。恢复原BGI时先按原key查作业；不是新的独立调度器。
+- `Mistletoe.Shared/CoordinatedStopSignal.cs`：BGI/助手共同持有Windows命名manual-reset事件，StopActive(true)或batch.Cancel置位。任一进程死后存活端仍保留停止事实，不依赖进度文件写入成功；两端所有句柄都丢失不能猜测恢复授权。另一个closed事件区分正常退出与崩溃。尚未宣称整机断电恢复通过。
+- BGI确切旧PID/start退出后，循环上报当前共同项failed；服务器新共同Attempt后才准备新BGI/接管/重跑，游戏房身份加入Index/Attempt。重复崩溃准备使用ProcessRecoveryPreviousEpoch；item自身epoch单独保留，旧死进程ACK不发给新进程。
+- 指定后续RunSpecified失败且ExecutionExitConfirmed后新attempt，保留旧失败；普通记录失败不否决重试。Resume完整退路仍未完成。
+- `CoordinatedAssistantRecovery`复用BGI JobRegistry现有30秒心跳，核实际peerPID/start/session/path死亡且当前会话无助手后同路径--minimized --manual-start重启；正常App退出设置suppression。App废弃Mutex按已取得处理；可恢复批次致命异常不再弹阻挡进程退出的对话框。这些只构建/组件层，未有真实双进程自动拉起验收。
+- BGI卡死处理接原CoordinatedBatchLoop：全部执行观察连续失联3分钟后，再核窗口无响应持续30秒，沿原monitor进程门只结束精确PID/start/session/executable，不杀进程树；没有确切退出仍不重发。未做真实挂死产品进程验收。
+
+本接班证据根：`Build/hoeing-priority-recovery-20261020-01a156d7/successor-01a15932/`；11份起始原件及hash/编码换行在before-manifest.json/before中。后续原件来自干净HEAD287bf4e2，变更前hash/大小/编码换行已在本轮工具输出记录。复用前述validation/artifacts；所有测试DeployToBgiTools=false、独立TEMP/TMP、--disable-build-servers，后续均设置NEXUSBGI_DATA_ROOT到当前受控phase/data。
+- validation-1：包装器recovery_directory误用storage-control，入口拒绝，未启动构建；原失败不清理。
+- validation-2：助手16通过；BGI新测试把IsCancellationRequested属性写成方法，编译失败，已修。
+- validation-3：BGI83通过1失败；新测试Request helper会冻结目标，所谓idle仍是旧目标。已显式null/null，保留原身份拒绝断言，不改产品校验。
+- validation-4：助手49/BGI84通过，退出0，Job active_processes=0。此后新增指定后续失败重试、跨进程停止信号与新尝试恢复。
+- validation-5：助手53/BGI104通过，退出0，Job active_processes=0；其后新增自动助手拉起、卡死判断、原itemEpoch及死进程ACK修正和复审修复，不把旧结果当成这些新代码验收。
+- validation-6：执行中。助手54通过1失败，唯一新R-F1测试自身3秒预算不足（4个失联阶段的真实只读重试至少约4秒），已仅改该测试等待10秒，尚未重跑；原断言/失败TRX保留。BGI正在收尾，结果须从真实进程终态读取。
+
+当前一次集中独立复审Agent：`/root/priority_recovery_final_review`，gpt-6.1-sol/high，独立只读不构建；同一身份后续核直接修复与最终稳定版本，不另开新轮。原第一部分F1/F2/F3报告继续保留。当前新增发现：
+- R-F1 [P1] 间歇失联未清时钟会误判持续卡死。已改ReadObservation成功后清连续失联计时并通知monitor清无响应候选，终止前再核；新增RecoveredObservationRestartsBothContinuousHangBudgets，首跑因上述测试时间预算失败，待重跑与独立确认。
+- R-F2 [P1] 恢复到prepared时StartStage根据_stage把Prepare放进_takeover，可能无真正让位。已改显式preparation槽并已Prepared不重复Prepare；RestoredPreparedStageMustPerformActualTakeoverExactlyOnce在validation-6实际通过，待独立改后核验。
+
+必须继续，不能告知完成：
+1. 完成当前组件验证并修复本轮独立复审新增实际问题；尤其普通CloseAsync取消后的门状态应保留原合同（priority单独立即关门），新代码还需相称回归。
+2. 助手journal全部丢失/持续写失败后重启的退路未接通。目前OnCoordinatedBatchStart仍在无本地记录时拒绝旧阶段并有旧“状态重置”提示，必须移除该用户步骤。拟沿BGI现有查询/挂起请求保留一份原恢复快照，仅内存记录，不把其成功作为开锄门槛；旧BGI存活时可取回原token/策略/epoch/stop/key，恢复先查原key，不能生成第二份。这个计划尚未实施，不能当完成。
+3. 后续Resume丢上下文/位置的已知任务重跑、旧RunStore持续失败不锁其他安排、后续执行中BGI进程死亡接续尚未完成。不得把no_context当已执行；仍要保留原Runner消费责任。所有任务身份全丢只报告该项不能恢复，不虚构或锁其他安排。
+4. 自动助手拉起、确切BGI卡死回收、prepared恢复期间再次换进程等必须做自有进程/私有IPC/生产MainVM的受控入口验证；当前组件测试不是实际四端重启证据。
+5. 四连接入口需要加入新priority能力场景、共同重试新游戏房、丢记录/丢进度/丢回复、后续失败和明确停止不复活。仅给原私有BGI握手补了task.coordinatedRecoveryStop.v1能力；新整场景未写/未运行。
+6. 更新requirements/design实际实现与验收边界，集中复审闭合，本地中文commit --only明确归属文件；全部完成前T17-T20仍不勾。不要推进baseline、push或部署。
+
+
+#### 本接班后续实现与验证更新（仍未完成）
+
+- validation-6最终：助手54/55（唯一R-F1测试自身3秒上限失败，已改10秒）；BGI104/104；退出码助手1/BGI0，两个Job终态active_processes=0。原TRX保留。
+- 新增存活BGI内存快照退路，实际peerPID/start/session与原控制身份验证，query/suspend附带快照，启动/ACK指纹不附带；MainVM在本地与BGI有效快照中选较新Revision。旧“请状态重置”提示已去掉，BGI通道恢复会自动重新查原服务器批次。双方进程及所有身份同时丢失仍不能猜测授权，也未被伪装成恢复成功。
+- BGI原生Resume在context丢失时按原TargetedSuspendReceipt.RecoverySnapshot恢复，保留stop/ticket/原退出/当前根空闲检查；原票据撤销后不能重建。
+- R-F3 [P1] 已释放后续票据被恢复成SDK发送资格：已修RestoreCoordinatedTakeover(batch)只恢复未释放责任；真实SDK/私有管道/worker覆盖旧job活着不再起、失败exit后新attempt不带旧票据。
+- R-F4 [P1] prepared恢复跳过Prepare同时漏补共享停止事件：已将同原epoch+原stopVersion确认抽为BgiExternalClient.EnsureCoordinatedRecoveryStopAsync，在Prepare和真正Takeover前调用。旧信号全部丢失时Ensure不能自行新建；只在同原进程围栏仍匹配时补建。prepared恢复新用例验证补建、存活peer持有和stop变化拒绝。
+- 普通CloseAsync维持取发送mutex后才关闭的旧取消合同，只有priority专用入口立即关门，新增普通关闭取消不残留closed门回归。
+- validation-7：助手70/70，包含R-F1/R-F2/R-F3/R-F4、存活端快照恢复、SDK指纹稳定和停止；BGI105/105，包括原snapshot重建与撤销拒绝、辅助快照身份/Revision、共享停止、原队列/票据回归。当前工具包装器在做最终计量/收尾，最终退出与进程树结果以其真实结果为准。源码测试不等于实际四端或真实进程异常验收。
+- 当前集中复审原文已保存`successor-01a15932/review-original.md`；同一只读Agent已代码确认R-F1/R-F2/R-F3根因修复，R-F4直接补核已发出，原报告不覆盖。最新补充结论需单独保存。
+
+唯一下一施工重点：R21原计划Resume的记录依赖及恢复任务失败接续，沿原Runner而不是另一套执行器。
+- 独立复核定位：TaskCenterHost.OnlineHoeing.cs中_onlineResumeSignals只用于legacy；StateContinuation直接走AwaitStateContinuationResumeAsync（原1218附近），尚无权威内存接受槽。该方法持有原run+original；如补槽，须带完整run/node/occurrence/iteration/原key及新job/key/attempt/epoch，复用当前归档/CurrentSubmission绑定，不能只发jobId。
+- WorkflowRunner.RebaseOnlineContinuationAsync（原2894附近）/CommitOnlineContinuationOutcomeAsync（原2917附近）也以_runs为必需，会因持续IO失败永等；一般后继RecordIntent/CommitOutcome还有原持久准入合同，不能直接吞异常或改全局RunStore安全校验来假称完成。所有后续发送仍须同一原Runner消费责任和有效停止/owner边界。
+- managed恢复job的failed+exit目前被ResourceRetryAttempt（原3012附近）排除重试，并按节点/计划onFailure决定后继；默认ContinueOnNodeFailure=false。R21需明确priority策略继续/重试，保留真实failed，不能伪装succeeded。
+- 非managed原生group/onedragon失败退出后可用已知原snapshot配置和固定新attempt key走原task.start入口；旧resume ticket已释放且缓存旧receipt，不可拿旧票据再次执行。solo必须保留具体任务及设置，含原NodeId的managed snapshot不得绕开Runner走原生退路。
+- 仍须补后续执行期间BGI崩溃、旧账持续失败和丢位置退路，再跑生产四成员/实际自有进程异常组合入口。原四成员仅补了私有BGI新能力，新增完整场景仍未运行。最后同一集中复审身份核完整稳定版本并修闭本次缺口，再提交正式修复。
+
+完整Goal继续active；用户无需重复授权/粘贴提示词。当前仍WIP，不推进预检baseline、不push、不部署，不宣称全项完成。

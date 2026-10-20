@@ -666,6 +666,7 @@ public sealed partial class FourMemberFinishEntryTests
                                 ["hoeing.finishEvidence.v1"] = true,
                                 ["task.stateContinuation.v1"] = stateContinuation,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
+                                ["task.coordinatedRecoveryStop.v1"] = true,
                             }
                         });
                     case "task.status":

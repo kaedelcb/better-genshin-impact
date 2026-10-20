@@ -383,6 +383,29 @@ public partial class MainViewModel
         var uid = _config?.PlayerUid;
         if (string.IsNullOrWhiteSpace(uid) || !start.ParticipantUids.Contains(uid, StringComparer.Ordinal)) return;
         if (!IsExecutorMode || start.Protocol != "hoeing.start.v2") return;
+        var recoveryStore = new CoordinatedRecoveryStore(System.IO.Path.Combine(AssistantDataDirectory.Root,
+            "coordinated-recovery", AssistantInstanceScope.CurrentSuffix), ControlSettingsIdentity(_config, RoomCode),
+            message =>
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher is { HasShutdownStarted: false }) dispatcher.BeginInvoke(() => AddLog(message));
+            });
+        var recovered = start.PriorityRecovery ? recoveryStore.Load(start, uid) : null;
+        if (start.PriorityRecovery
+            && _externalClient is { State: BgiExternalLinkState.Ready } recoveryPeer
+            && recoveryPeer.HasCapability("task.coordinatedRecoverySnapshot.v1"))
+        {
+            try
+            {
+                var response = await recoveryPeer.SendCommandAsync(BgiExternalClient.ExternalOperations.TaskStatus,
+                    new { recoveryBatchId = start.BatchId, recoveryControlIdentity = ControlSettingsIdentity(_config, RoomCode) },
+                    TimeSpan.FromSeconds(5));
+                if (response is { Success: true, Data: not null }
+                    && recoveryStore.ReadSurvivingPeer(response.Data, start, uid) is { } remote
+                    && (recovered is null || remote.Revision > recovered.Revision)) recovered = remote;
+            }
+            catch (Exception ex) { AddLog("[联机恢复] 原 BGI 快照暂不可读，保留原安排：" + ex.Message); }
+        }
         OnlineHoeingBatch? batch = null;
         string? rejected = null;
         var recoveryPending = false;
@@ -399,7 +422,8 @@ public partial class MainViewModel
                 rejected = "本机状态重置尚未完成，未开始另一批次";
             else if (_ordinaryStopInProgress > 0)
                 rejected = "本机停止请求尚未完成，未开始另一批次";
-            else if (start.Phase != "registering" || start.Members.Any(m => m.Uid == uid && m.Stage != "pending"))
+            else if (recovered is null && (start.Phase != "registering"
+                || start.Members.Any(m => m.Uid == uid && m.Stage != "pending")))
             {
                 // 重启后没有原成员token，不能把旧作业冒认为新执行；显式重置按resetId结清。
                 recoveryPending = true;
@@ -408,9 +432,20 @@ public partial class MainViewModel
             {
                 try
                 {
-                    var candidate = new OnlineHoeingBatch(start, uid,
-                        SnapshotBatchCompletionPolicy(start));
+                    var candidate = recovered is null
+                        ? new OnlineHoeingBatch(start, uid, SnapshotBatchCompletionPolicy(start))
+                        : OnlineHoeingBatch.Restore(recovered);
                     candidate.FreezeControlContext(CurrentControlContext());
+                    candidate.PersistRecovery = () =>
+                    {
+                        try
+                        {
+                            if (_externalClient is { } peer)
+                                peer.CoordinatedRecoveryCheckpointJson = recoveryStore.CaptureForPeer(candidate);
+                        }
+                        catch (Exception ex) { System.Diagnostics.Trace.WriteLine("[联机恢复] 辅助快照待补：" + ex.Message); }
+                        recoveryStore.Save(candidate);
+                    };
                     batch = candidate;
                     _activeBatch = batch; // 从这里起Preparing也是busy，而不是等待RunTask出现。
                 }
@@ -419,7 +454,7 @@ public partial class MainViewModel
         }
         if (recoveryPending)
         {
-            NotifyBatchLoud("联机批次待核对", "发现旧批次仍未清理，保留当前任务；请使用状态重置完成同批次核对。");
+            AddLog("[联机恢复] 原批次身份暂不可读，等待原 BGI 或记录恢复后自动接回；不会另起一份任务。");
             return;
         }
         if (rejected != null)
@@ -429,15 +464,19 @@ public partial class MainViewModel
         }
         if (batch == null) return;
         var expectedIntent = start.IntentGenerations.TryGetValue(uid, out var ownIntent) ? (int?)ownIntent : null;
-        if (batch.IsCancellationRequested || !_intentLifecycle.TryBeginCoordinatedBatch(start.BatchId,
-                start.Generation, start.Source == "manual", expectedIntent))
+        if (!batch.RestoredFromRecovery && batch.IsCancellationRequested
+            || !_intentLifecycle.TryBeginCoordinatedBatch(start.BatchId,
+                start.Generation, start.Source == "manual", expectedIntent, resuming: batch.RestoredFromRecovery))
         {
             await RejectCoordinatedStartAsync(start, uid, "本机上线意图已改变或已取消，本次开始未接受");
             batch.MarkSettled();
             lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
             return;
         }
-        UpdateHoeingBatchStatus(batch, "preparing", "正在准备联机锄地");
+        batch.RecoveryStopSignal?.AllowRelaunch();
+        batch.PersistRecovery?.Invoke();
+        UpdateHoeingBatchStatus(batch, "preparing", batch.RestoredFromRecovery
+            ? "已接回原联机批次，正在核对原任务" : "正在准备联机锄地");
         batch.RunTask = RunAcceptedHoeingBatchAsync(batch);
         ObserveOnlineTask(batch.RunTask, "统一联机批次");
     }
@@ -516,11 +555,44 @@ public partial class MainViewModel
         ObserveOnlineTask(ReportStatusAsync(), "联机批次状态上报");
     }
 
+    internal bool HasRecoverableCoordinatedBatch
+    {
+        get { lock (_batchGate) return _activeBatch is { IsAlive: true, PriorityRecoveryEnabled: true,
+            ExplicitStopRequested: false, RecoveryStopSignal: { IsStopped: false } }; }
+    }
+
+    internal void PreserveCoordinatedIntentOnAssistantExit()
+    {
+        OnlineHoeingBatch? batch;
+        lock (_batchGate) batch = _activeBatch;
+        batch?.RecoveryStopSignal?.SuppressRelaunch();
+        batch?.PersistRecovery?.Invoke();
+    }
+
     private async Task RunAcceptedHoeingBatchAsync(OnlineHoeingBatch batch)
     {
         var preparation = new HoeingStartPreparation();
+        if (_commandExecutor is { } recoveryExecutor && batch.PriorityRecoveryEnabled)
+            recoveryExecutor.CoordinatedTakeoverAllocated = (ticket, epoch) =>
+            {
+                batch.TakeoverTicket = ticket;
+                batch.ExecutionEpoch ??= epoch;
+                batch.PersistRecovery?.Invoke();
+            };
         try
         {
+            if (batch.RestoredFromRecovery)
+            {
+                preparation.Executor = _commandExecutor;
+                preparation.Host = IsExecutorMode ? TaskCenterHost : null;
+                if (preparation.Host is not null)
+                {
+                    await preparation.Host.CloseOnlineHoeingSendAsync(priority: true);
+                    preparation.SendGateClosed = true;
+                }
+                if (preparation.Executor is { } restoredExecutor)
+                    batch.ConfigurePolicyCancellation(restoredExecutor.CancelHoeingPolicyExecutionAsync);
+            }
             await RunCoordinatedBatchAsync(batch,
                 ct => PrepareCoordinatedStartAsync(batch, preparation, ct),
                 ct => TakeOverForCoordinatedStartAsync(batch, preparation, ct));
@@ -567,6 +639,8 @@ public partial class MainViewModel
         }
         finally
         {
+            if (batch.RestoredFromRecovery && batch.IsCancellationRequested && batch.PolicyExecution is not null)
+                batch.CleanupConfirmed &= await batch.WaitPolicyCancellationAsync();
             if (batch.IsCancellationRequested && batch.HasPolicyCleanup)
                 batch.CleanupConfirmed = await batch.WaitCancelledPolicyCleanupAsync();
             if (!batch.LocalExecutionReleased && preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch != true)
@@ -870,8 +944,11 @@ public partial class MainViewModel
                 var originalEpoch = ext.ServerEpoch ?? throw new IOException("原 BGI 身份暂不可读");
                 batch.StateContinuationStopVersion = await ext.ReadStateContinuationStopVersionAsync(originalEpoch, ct)
                     ?? throw new IOException("原 BGI 停止状态暂不可读，保留同一准备请求");
+                if (batch.PriorityRecoveryEnabled) batch.ExecutionEpoch ??= originalEpoch;
             }
         }
+        if (batch.PriorityRecoveryEnabled)
+            await ext.EnsureCoordinatedRecoveryStopAsync(batch, ct);
         foreach (var capability in new[] { "task.queue", "hoeing.batchOutcome.v1", "hoeing.coordinatedStart.v1", "execution.targetedSuspend.v1", "config.applied", "hoeing.finishEvidence.v1" })
             if (!ext.HasCapability(capability)) throw new InvalidOperationException("BGI 缺少统一开锄能力 " + capability + "，未中断原任务");
         var cfg = await ext.SendCommandAsync("ext.config.list", null, TimeSpan.FromSeconds(10), ct);
@@ -905,8 +982,7 @@ public partial class MainViewModel
         if (context.Host != null)
         {
             try { await context.Host.RecoverOnlineHandoffsBeforeStartAsync(); }
-            catch (Exception ex) when (batch.PriorityRecoveryEnabled
-                && ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+            catch (Exception ex) when (batch.PriorityRecoveryEnabled && ex is not OperationCanceledException)
             { AddLog("[联机优先] 旧记录稍后处理，不阻止当前 BGI 准备：" + ex.Message); }
         }
         ct.ThrowIfCancellationRequested();
@@ -926,6 +1002,11 @@ public partial class MainViewModel
             return;
         }
         var executor = context.Executor ?? throw new InvalidOperationException("执行器未准备");
+        if (batch.PriorityRecoveryEnabled)
+        {
+            var recoveryPeer = GetBoundTaskCenterClient() ?? throw new IOException("等待原 BGI 接管通道恢复");
+            await recoveryPeer.EnsureCoordinatedRecoveryStopAsync(batch, ct);
+        }
         void RequireOriginalContext()
         {
             ct.ThrowIfCancellationRequested();
@@ -939,7 +1020,7 @@ public partial class MainViewModel
             {
                 using var call = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 call.CancelAfter(TimeSpan.FromSeconds(15));
-                await context.Host.CloseOnlineHoeingSendAsync(call.Token);
+                await context.Host.CloseOnlineHoeingSendAsync(call.Token, priority: batch.PriorityRecoveryEnabled);
                 context.SendGateClosed = true;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
@@ -978,7 +1059,8 @@ public partial class MainViewModel
         {
             RequireOriginalContext();
             try { result = await executor.ExecuteSuspendAsync("联机批次 " + batch.BatchId, boundary,
-                retainUntilAcknowledged: true, expectedStopVersion: batch.StateContinuationStopVersion); }
+                retainUntilAcknowledged: true, expectedStopVersion: batch.StateContinuationStopVersion,
+                recoveryStopSignal: batch.RecoveryStopSignal?.Name); }
             finally { batch.TakeoverTicket = executor.TakeoverTicketSnapshot; }
             if (result.RawData is not null) batch.SuspendedRawData = result.RawData;
             if (result.Status == "success") break;
@@ -1014,7 +1096,8 @@ public partial class MainViewModel
                 if (!context.Host!.ConfirmOnlineHoeingSuspend(batch.Generation, batch.TakeoverTicket, batch.SuspendedRawData))
                     AddLog("[联机接管] BGI 已确认让位，原恢复信息保留在本批，助手关联稍后补齐");
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (batch.PriorityRecoveryEnabled && ex is not OperationCanceledException
+                || ex is IOException or UnauthorizedAccessException)
             { AddLog("[联机接管] BGI 已确认让位，助手记录稍后补写：" + ex.Message); }
         }
     }

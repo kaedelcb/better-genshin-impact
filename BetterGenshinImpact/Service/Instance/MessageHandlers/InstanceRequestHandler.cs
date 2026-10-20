@@ -85,6 +85,9 @@ internal sealed class InstanceRequestHandler
                     $"跨会话请求被拒绝（clientSession={connection.ClientSessionId?.ToString() ?? "unknown"}，serverSession={_context.WindowsSessionId}）");
             }
 
+            CoordinatedAssistantRecovery.ObserveCheckpoint(connection.ClientProcessId, connection.ClientSessionId,
+                request.Data?["assistantRecovery"] as JObject);
+
             // [切片1·挂载点①] ext.* 统一分发到模块一 ExternalInterfaceSession（v2 的 22 个操作走原 switch，逐字节不变）
             if (request.Operation.StartsWith(ExternalInterfaceOperations.Prefix, StringComparison.Ordinal))
             {
@@ -1318,6 +1321,9 @@ internal sealed class InstanceRequestHandler
                 hasSuspendedTaskContext,
                 takeoverActive = PreemptionGate.IsArmed,
                 suspendedTakeoverTicket = suspendedCtx?.TakeoverTicket,
+                assistantRecovery = CoordinatedAssistantRecovery.ReadCheckpoint(
+                    InstanceIpcProtocol.GetStringOrNull(request.Data, "recoveryBatchId"),
+                    InstanceIpcProtocol.GetStringOrNull(request.Data, "recoveryControlIdentity")),
                 suspendedTaskType,
                 suspendedTaskName,
                 // [切片7] 任务协调层扩展（spec §4.4，纯增量字段）
@@ -1719,9 +1725,19 @@ internal sealed class InstanceRequestHandler
             try
             {
                 if (CheckManualStopCooldown(request, "task.suspend") is { } stopped) return stopped;
+                if (InstanceIpcProtocol.GetStringOrNull(request.Data, "recoveryStopSignal") is { } stopSignal)
+                {
+                    if (!ExecutionScope.RegisterCoordinatedStopSignal(stopSignal, stopVersion, out var stopError))
+                        return InstanceIpcEnvelope.Failure(request, stopError!, "原批次停止事实已撤销或不可确认，不能重放");
+                    CoordinatedAssistantRecovery.Register(connection?.ClientProcessId, connection?.ClientSessionId,
+                        stopSignal, InstanceIpcProtocol.GetStringOrNull(request.Data, "recoveryDataRoot"));
+                }
+                var receiptOnly = request.Data?["receiptOnly"]?.Value<bool>() == true;
                 if (TargetedSuspendReceipts.TryGetValue(ticket, out var previous))
                 {
-                    if (previous.InstanceId != expectedInstanceId || previous.StateRevision != expectedRevision)
+                    // A read does not bind this ticket to the caller's current root, cancel it,
+                    // or replace the recovery context. Actual suspend still requires the original identity.
+                    if (!receiptOnly && (previous.InstanceId != expectedInstanceId || previous.StateRevision != expectedRevision))
                         return InstanceIpcEnvelope.Failure(request, "takeover_identity_mismatch", "同一接管票据不能改绑另一执行目标");
                     if (previous.StopVersion != ExecutionScope.StopVersionNow)
                         return InstanceIpcEnvelope.Failure(request, "stale_ticket", "用户已停止原接管，不能重放旧回执");
@@ -1731,8 +1747,11 @@ internal sealed class InstanceRequestHandler
                     if (PreemptionGate.WasRetained(ticket) && previous.Target != null)
                         replay["quiesceConfirmed"] = previous.Target.ObserveQuiescence();
                     replay["replayed"] = true;
+                    replay["receiptOnly"] = receiptOnly;
                     return InstanceIpcEnvelope.Response(request, replay);
                 }
+                if (receiptOnly)
+                    return InstanceIpcEnvelope.Failure(request, "receipt_not_found", "原票据暂无接管回执；查询不会建立或更改接管");
                 var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
                 BetterGenshinImpact.Core.Config.SuspendedTaskContext? context = null;
                 if (!ExecutionScope.TrySuspendTarget(ticket, expectedInstanceId, expectedRevision, stopVersion, ManualStopCooldownWindow,
@@ -1842,6 +1861,30 @@ internal sealed class InstanceRequestHandler
         => planContinuation && context.PlanCheckpointPhase == "betweenDragon"
             ? context.PlanNextDragonTaskId : context.OneDragonTaskId;
 
+    internal async Task<string?> RestoreLostOriginalSuspendContextAsync(string ticket)
+    {
+        await TargetedSuspendGate.WaitAsync();
+        try
+        {
+            var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+            if (config.SuspendedTaskContext is not null) return null;
+            if (!TargetedSuspendReceipts.TryGetValue(ticket, out var original)
+                || original.Target?.RecoverySnapshot is not { } snapshot) return null;
+            if (original.StopVersion != ExecutionScope.StopVersionNow || !PreemptionGate.Authorize(ticket))
+                return "stale_ticket";
+            if (!original.Target.ObserveQuiescence()) return "task_busy";
+            if (!ExecutionScope.RestoreRecoveryIfStillOwned(ticket, original.StopVersion, () =>
+                {
+                    // The retained original snapshot is independent of auxiliary save/log callbacks.
+                    if (SuspendContextCapture.Save(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+                        snapshot, "原票据接续") && config.SuspendedTaskContext is { } restored)
+                    { restored.TakeoverTicket = ticket; restored.StopVersion = original.StopVersion; }
+                })) return "task_busy";
+            return null;
+        }
+        finally { TargetedSuspendGate.Release(); }
+    }
+
     internal async Task<InstanceIpcEnvelope> HandleTaskResume(InstanceConnection connection, InstanceIpcEnvelope request)
     {
         await _resumeGate.WaitAsync();
@@ -1854,6 +1897,10 @@ internal sealed class InstanceRequestHandler
             if (!PreemptionGate.Authorize(ticket))
                 return InstanceIpcEnvelope.Failure(request, "stale_ticket", "恢复/释放票据无效");
             var config = BetterGenshinImpact.GameTask.TaskContext.Instance().Config;
+            if (config.SuspendedTaskContext is null && ticket is not null
+                && request.Data?["cancel"]?.Value<bool>() != true
+                && await RestoreLostOriginalSuspendContextAsync(ticket) is { } restoreError)
+                return InstanceIpcEnvelope.Failure(request, restoreError, "原任务恢复现场仍待核对，未跳过或重跑其他任务");
             var context = config.SuspendedTaskContext;
             if (context != null && (context.TakeoverTicket != ticket || context.StopVersion != ExecutionScope.StopVersionNow))
                 return InstanceIpcEnvelope.Failure(request, "stale_context", "恢复现场不属于本次接管或已被用户停止");

@@ -23,6 +23,7 @@ public sealed class BatchExpectedItem
     /// <summary>提交应答拿到的 jobId（== taskHandle 别名）。应答帧丢失时为 null，靠 RequestKey 幂等键附着找回。</summary>
     public string? JobId { get; set; }
     public string RequestKey { get; set; } = Guid.NewGuid().ToString("N");
+    internal string? GameBatchId { get; set; }
 
     /// <summary>提交尝试次数（重提交限次的依据）。</summary>
     public int SubmitAttempts { get; set; }

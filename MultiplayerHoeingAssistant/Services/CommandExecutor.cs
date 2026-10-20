@@ -1948,16 +1948,16 @@ public partial class CommandExecutor
         finally { _suspendGate.Release(); }
     }
 
-    internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected, bool retainUntilAcknowledged = false, long? expectedStopVersion = null)
+    internal async Task<CommandResult> ExecuteSuspendAsync(string description, ExecutionBoundarySnapshot expected, bool retainUntilAcknowledged = false, long? expectedStopVersion = null, string? recoveryStopSignal = null)
     {
         var resetVersion = Volatile.Read(ref _resetVersion);
         if (IsManualResetActive) return ResetInProgress();
         await _suspendGate.WaitAsync();
-        try { return await ExecuteSuspendCoreAsync(description, expected, resetVersion, retainUntilAcknowledged, expectedStopVersion); }
+        try { return await ExecuteSuspendCoreAsync(description, expected, resetVersion, retainUntilAcknowledged, expectedStopVersion, recoveryStopSignal); }
         finally { _suspendGate.Release(); }
     }
 
-    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected, int resetVersion, bool retainUntilAcknowledged = false, long? expectedStopVersion = null)
+    private async Task<CommandResult> ExecuteSuspendCoreAsync(string hoeingGroupName, ExecutionBoundarySnapshot expected, int resetVersion, bool retainUntilAcknowledged = false, long? expectedStopVersion = null, string? recoveryStopSignal = null)
     {
         if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
         if (_externalClientProvider?.Invoke() is not { State: BgiExternalLinkState.Ready } capable
@@ -1995,9 +1995,15 @@ public partial class CommandExecutor
                 ticket = _takeoverTicket;
                 if (_externalClientProvider?.Invoke() is { } ext) ext.TakeoverTicket = ticket;
             }
+            if (retainUntilAcknowledged)
+                CoordinatedTakeoverAllocated?.Invoke(ticket!, new BgiEpoch
+                    { ProcessId = expected.ProcessId, StartTicksUtc = expected.StartTicksUtc });
             var suspendFields = new Dictionary<string, object?>
             {
                 ["takeoverTicket"] = ticket,
+                ["recoveryStopSignal"] = recoveryStopSignal,
+                ["recoveryDataRoot"] = recoveryStopSignal is null ? null : AssistantDataDirectory.Root,
+                ["assistantRecovery"] = recoveryStopSignal is null ? null : capable.RecoveryCheckpointElement(),
                 ["expectedExecutionInstanceId"] = expected.Active?.InstanceId.ToString("N"),
                 ["expectedStateRevision"] = expected.Active?.StateRevision,
                 ["bgiEpoch"] = new { processId = expected.ProcessId, startTicksUtc = expected.StartTicksUtc }
@@ -2017,6 +2023,25 @@ public partial class CommandExecutor
                 }
                 suspendFields["retainUntilAcknowledged"] = true;
                 suspendFields["expectedStopVersion"] = _retainedSuspendStopVersion.Value;
+            }
+            // Inherit the original receipt only while physically idle. Never resend an old
+            // ticket with a different root; a read cannot cancel a successor or overwrite its snapshot.
+            if (!createdTicket && retainUntilAcknowledged && expected.Active is null && !expected.SlotOccupied
+                && capable.HasCapability("task.takeoverReceipt.v1"))
+            {
+                var query = new Dictionary<string, object?>(suspendFields) { ["receiptOnly"] = true };
+                var receipt = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend",
+                    Payload = System.Text.Json.JsonSerializer.Serialize(query) }, V2TaskSuspendCommandTimeout);
+                if (WasResetSuperseded(resetVersion)) return ResetSuperseded();
+                if (receipt.Success && IsQuiescentTakeoverReceipt(receipt.Data, ticket!))
+                    return new CommandResult { Status = "success", RawData = receipt.Data,
+                        Message = "已继承原票据和已退出任务的恢复现场" };
+                if (receipt.ErrorCode != "receipt_not_found")
+                {
+                    if (receipt.ErrorCode == "stale_ticket") ClearTicket(ticket);
+                    return new CommandResult { ErrorCode = receipt.ErrorCode ?? "quiesce_timeout",
+                        Message = receipt.ErrorMessage ?? "原票据退出尚未确认，保留原恢复责任" };
+                }
             }
             var payload = System.Text.Json.JsonSerializer.Serialize(suspendFields);
             var response = await ipcClient.SendCommandAsync(new IpcRequest { OpCode = "task.suspend", Payload = payload }, V2TaskSuspendCommandTimeout);

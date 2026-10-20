@@ -48,7 +48,10 @@ public partial class App : Application
 
         LaunchIntent = StartupLaunchIntent.FromArguments(e.Args);
         // 单例检测：第二个实例时触发事件让第一个实例弹窗，然后退出
-        if (!_instanceMutex.Value.WaitOne(TimeSpan.Zero, true))
+        var ownsInstance = false;
+        try { ownsInstance = _instanceMutex.Value.WaitOne(TimeSpan.Zero, true); }
+        catch (AbandonedMutexException) { ownsInstance = true; } // The crashed owner is gone; this thread owns the mutex.
+        if (!ownsInstance)
         {
             try
             {
@@ -93,6 +96,11 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             var ex = args.ExceptionObject as Exception;
+            if (args.IsTerminating && _mainViewModel?.HasRecoverableCoordinatedBatch == true)
+            {
+                RuntimeLog.WriteLine("[联机恢复] 助手致命异常，保留原安排交给存活 BGI 接续：" + args.ExceptionObject);
+                return; // Do not leave a fatal-process dialog holding its PID alive indefinitely.
+            }
             MessageBox.Show($"未处理异常: {ex?.Message ?? args.ExceptionObject.ToString()}", "错误", 
                 MessageBoxButton.OK, MessageBoxImage.Error);
         };
@@ -388,6 +396,9 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // A deliberate application exit must not be mistaken for a crash by the surviving BGI.
+        try { _mainViewModel?.PreserveCoordinatedIntentOnAssistantExit(); }
+        catch (Exception ex) { RuntimeLog.WriteLine("[联机恢复] 退出意图记录失败：" + ex.Message); }
         // 清理定时器
         StopBgiWatchTimer();
 

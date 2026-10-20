@@ -533,7 +533,12 @@ public partial class MainViewModel
     {
         OnlineHoeingBatch? batch;
         lock (_batchGate) batch = _activeBatch;
-        if (batch is null) return;
+        if (batch is null)
+        {
+            if (_signalRClient is { IsControlRoomReady: true } authority)
+                ObserveOnlineTask(authority.RestoreCoordinatedAuthorityAsync(), "BGI 重连后恢复原联机身份");
+            return;
+        }
         if (batch.RunTask?.IsCompleted == true)
             ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "BGI 重连后的本端批次清理");
         else if (batch.RunTask is { } running)

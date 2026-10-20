@@ -259,13 +259,13 @@ public sealed class OnlineIntentLifecycle
         return gen;
     }
 
-    public bool TryBeginCoordinatedBatch(string batchId, int generation, bool manual, int? intentGeneration)
+    public bool TryBeginCoordinatedBatch(string batchId, int generation, bool manual, int? intentGeneration, bool resuming = false)
     {
         string? log;
         lock (_gate)
         {
             if (_activeCoordinatedBatchId is not null) return _activeCoordinatedBatchId == batchId;
-            if (!manual && (_state != OnlineIntentState.Armed || intentGeneration != _armedIntentGeneration)) return false;
+            if (!manual && !resuming && (_state != OnlineIntentState.Armed || intentGeneration != _armedIntentGeneration)) return false;
             _activeCoordinatedBatchId = batchId;
             _pendingOnlineReportGen = 0;
             log = TransitionLocked(OnlineIntentState.Executing, $"联机批次已受理 {batchId}（{(manual ? "一键" : "上线")}）");

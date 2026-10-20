@@ -416,6 +416,7 @@ public sealed partial class JobRegistry
 
     private void PublishHeartbeats()
     {
+        CoordinatedAssistantRecovery.Poll();
         List<BgiJob> running;
         lock (_gate)
         {

@@ -5,6 +5,22 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 public sealed class CommandExecutorTakeoverResetTests
 {
+    [Theory]
+    [InlineData(true, "held-ticket", true)]
+    [InlineData(false, "held-ticket", false)]
+    [InlineData(true, "different-ticket", false)]
+    public void InheritReceiptRequiresOriginalTicketAndConfirmedExit(bool exited, string ticket, bool accepted)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            receiptOnly = true, takeoverTicket = ticket, quiesceConfirmed = exited,
+            expectedExecutionInstanceId = Guid.NewGuid().ToString("N"), expectedStateRevision = 2
+        });
+        Assert.Equal(accepted, CommandExecutor.IsQuiescentTakeoverReceipt(json, "held-ticket"));
+        Assert.False(CommandExecutor.IsQuiescentTakeoverReceipt("{}", "held-ticket"));
+        Assert.False(CommandExecutor.IsQuiescentTakeoverReceipt("{", "held-ticket"));
+    }
+
     [Fact]
     public void EpochChangeIsTheOnlyKnownCrossProcessInvalidation()
     {

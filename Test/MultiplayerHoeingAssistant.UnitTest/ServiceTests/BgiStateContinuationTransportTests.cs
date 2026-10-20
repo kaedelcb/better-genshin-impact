@@ -58,6 +58,116 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         .Select(r => r.Data!.Value).ToArray();
 
     [Fact]
+    public async Task PreparedRecoveryRecreatesLostSignalOnlyFromOriginalProcessAndFrozenStopFence()
+    {
+        var original = new OnlineHoeingBatch(new("prepared-signal", 9, 0, 0, 1, "preparing", "")
+        {
+            Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
+            ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+                { ["self"] = [new("original", "group")] }
+        }, "self", new()) { ExecutionEpoch = Epoch, StateContinuationStopVersion = 7, Prepared = true };
+        original.EnsureRecoveryStopSignal();
+        var snapshot = original.CaptureRecovery();
+        original.RecoveryStopSignal!.Dispose(); // Prepared, no BGI holder yet: the old assistant has exited.
+        var restored = OnlineHoeingBatch.Restore(snapshot);
+        Assert.Null(restored.RecoveryStopSignal);
+        Assert.Throws<IOException>(restored.EnsureRecoveryStopSignal);
+        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(7)) : null;
+        await _client.EnsureCoordinatedRecoveryStopAsync(restored, CancellationToken.None);
+        Assert.NotNull(restored.RecoveryStopSignal);
+        Assert.NotEqual(snapshot.RecoveryStopSignalName, restored.RecoveryStopSignal!.Name);
+        using var bgiHolder = Mistletoe.Shared.CoordinatedStopSignal.Open(restored.RecoveryStopSignal.Name);
+        Assert.NotNull(bgiHolder);
+        var name = restored.RecoveryStopSignal.Name;
+        restored.RecoveryStopSignal.Dispose();
+        using var afterExit = Mistletoe.Shared.CoordinatedStopSignal.Open(name);
+        Assert.NotNull(afterExit);
+        var stopped = OnlineHoeingBatch.Restore(snapshot);
+        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(8)) : null;
+        await Assert.ThrowsAsync<BgiStateContinuationStoppedException>(() =>
+            _client.EnsureCoordinatedRecoveryStopAsync(stopped, CancellationToken.None));
+        Assert.Null(stopped.RecoveryStopSignal);
+    }
+
+    [Fact]
+    public async Task RestoredReleasedCompletionObservesLiveJob_ThenRetriesWithoutOldTicket()
+    {
+        var oldJob = Guid.NewGuid().ToString("N");
+        var newJob = Guid.NewGuid().ToString("N");
+        var starts = 0; var oldReads = 0;
+        var original = new OnlineHoeingBatch(new("restored-completion", 9, 0, 0, 1, "completed", "")
+        {
+            Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
+            ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+                { ["self"] = [new("original", "group")] }
+        }, "self", new() { Policy = Models.TaskConflictPolicy.RunSpecified, SpecifiedTaskName = "after" })
+        {
+            StateContinuationEnabled = true, ExecutionEpoch = Epoch, StateContinuationStopVersion = 0,
+            TakeoverTicket = "released-ticket", PolicyTicketReleased = true, PolicyStartAttempted = true,
+            PolicySubmitPayload = new Dictionary<string, object?> { ["name"] = "after", ["oneDragon"] = false, ["revision"] = "revision" }
+        };
+        original.MarkLocalSuccess(Epoch);
+        original.RecordPolicyExecution(new(oldJob, Epoch, true));
+        var batch = OnlineHoeingBatch.Restore(original.CaptureRecovery());
+        var executor = new CommandExecutor(null!, "unused", () => _client);
+        executor.RestoreCoordinatedTakeover(batch);
+        Assert.Null(_client.TakeoverTicket);
+        _pipe.BodyForTest = (op, data) =>
+        {
+            if (op == "ext.task.status") return (true, null, null, Status(0));
+            if (op == "ext.task.start")
+            {
+                Assert.True(oldReads >= 3);
+                if (data!.Value.TryGetProperty("takeoverTicket", out var ticket) && ticket.ValueKind != JsonValueKind.Null)
+                    return (false, "takeover_conflict", "released ticket", null);
+                starts++;
+                return (true, null, null, new { status = "queued", taskHandle = newJob });
+            }
+            if (op == "ext.task.queueStatus")
+            {
+                if (starts == 0) oldReads++;
+                return (true, null, null, new { taskHandle = starts == 0 ? oldJob : newJob,
+                    idempotencyKey = batch.PolicyRequestKey, status = starts == 0 ? oldReads < 3 ? "running" : "failed" : "completed",
+                    executionExitConfirmed = starts > 0 || oldReads >= 3,
+                    bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
+            }
+            if (op == "ext.task.acknowledge") return (true, null, null, new { status = "acknowledged" });
+            return null;
+        };
+        await ViewModels.MainViewModel.RunCompletionContinuationAsync(batch, new()
+        {
+            RequireAuthority = () => { }, RetainedResult = true, Prepare = _ => Task.FromResult(true),
+            Start = ct => executor.StartRetainedCompletionActionAsync(batch, ct),
+            Query = ct => _client.QueryTaskQueueStatusByKeyAsync(batch.PolicyRequestKey, ct),
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (result, ct) => _client.AcknowledgeTaskResultAsync(result.IdempotencyKey!, result.TaskHandle!, result.Epoch!, ct),
+            Delay = ct => Task.Delay(1, ct)
+        }, batch.Cts.Token).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, starts);
+        Assert.Equal(newJob, batch.PolicyExecution!.JobId);
+        Assert.Single(batch.FailedPolicyAttempts);
+        Assert.Null(executor.TakeoverTicketSnapshot);
+    }
+
+    [Fact]
+    public async Task RecoveryCheckpointTravelsOnlyOnObservation_NotOnFrozenStartFingerprint()
+    {
+        _pipe.BodyForTest = (op, _) => op == "ext.task.status" ? (true, null, null, Status(0)) : null;
+        _client.CoordinatedRecoveryCheckpointJson = "{\"Revision\":1}";
+        await _client.SendCommandAsync("ext.task.status");
+        Assert.Contains(_pipe.Received, frame => frame.Operation == "ext.task.status"
+            && frame.Data!.Value.TryGetProperty("assistantRecovery", out var value)
+            && value.GetProperty("Revision").GetInt32() == 1);
+        Assert.True((await Start("same-fingerprint")).Success);
+        _client.CoordinatedRecoveryCheckpointJson = "{\"Revision\":2}";
+        Assert.True((await Start("same-fingerprint")).Success);
+        var starts = Starts();
+        Assert.Equal(2, starts.Length);
+        Assert.False(starts[0].TryGetProperty("assistantRecovery", out _));
+        Assert.Equal(starts[0].GetRawText(), starts[1].GetRawText());
+    }
+
+    [Fact]
     public async Task RepeatedKeyKeepsOriginalStopFenceAndTicketInsteadOfAdoptingANewerStopState()
     {
         var stopVersion = 7L;

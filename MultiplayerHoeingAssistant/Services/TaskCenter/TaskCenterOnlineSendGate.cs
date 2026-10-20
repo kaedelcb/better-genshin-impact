@@ -10,6 +10,7 @@ namespace MultiplayerHoeingAssistant.Services;
 internal sealed class TaskCenterOnlineSendGate
 {
     private readonly SemaphoreSlim _mutex = new(1, 1);
+    private readonly object _stateGate = new();
     private TaskCompletionSource _opened = Completed();
     private volatile bool _closed;
 
@@ -27,35 +28,42 @@ internal sealed class TaskCenterOnlineSendGate
         while (true)
         {
             await _mutex.WaitAsync(ct).ConfigureAwait(false);
-            if (!_closed) return new SendLease(_mutex);
-            var opened = _opened.Task;
+            Task opened;
+            lock (_stateGate)
+            {
+                if (!_closed) return new SendLease(_mutex);
+                opened = _opened.Task;
+            }
             _mutex.Release();
             await opened.WaitAsync(ct).ConfigureAwait(false);
+        }
+    }
+
+    public void CloseForPriority()
+    {
+        lock (_stateGate)
+        {
+            if (_closed) return;
+            _closed = true;
+            _opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
     }
 
     public async Task CloseAsync(CancellationToken ct)
     {
         await _mutex.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_closed) return;
-            _closed = true;
-            _opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        }
+        try { CloseForPriority(); }
         finally { _mutex.Release(); }
     }
 
-    public async Task OpenAsync()
+    public Task OpenAsync()
     {
-        await _mutex.WaitAsync().ConfigureAwait(false);
-        try
+        lock (_stateGate)
         {
-            if (!_closed) return;
             _closed = false;
             _opened.TrySetResult();
         }
-        finally { _mutex.Release(); }
+        return Task.CompletedTask;
     }
 
     private sealed class SendLease(SemaphoreSlim mutex) : IAsyncDisposable

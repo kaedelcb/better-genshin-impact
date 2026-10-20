@@ -6,6 +6,47 @@ namespace MultiplayerHoeingAssistant.Services;
 
 public partial class CommandExecutor
 {
+    internal static bool IsQuiescentTakeoverReceipt(string? json, string ticket)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json ?? "{}");
+            var data = doc.RootElement;
+            return data.TryGetProperty("receiptOnly", out var read) && read.ValueKind == JsonValueKind.True
+                && data.TryGetProperty("takeoverTicket", out var actual) && actual.ValueKind == JsonValueKind.String
+                && actual.GetString() == ticket
+                && data.TryGetProperty("quiesceConfirmed", out var exited) && exited.ValueKind == JsonValueKind.True
+                && data.TryGetProperty("expectedExecutionInstanceId", out var root)
+                && data.TryGetProperty("expectedStateRevision", out var revision)
+                && (root.ValueKind == JsonValueKind.Null && revision.ValueKind == JsonValueKind.Null
+                    || root.ValueKind == JsonValueKind.String && Guid.TryParse(root.GetString(), out _)
+                    && revision.ValueKind == JsonValueKind.Number && revision.TryGetInt64(out var value) && value > 0);
+        }
+        catch (JsonException) { return false; }
+    }
+
+    internal Action<string, BgiEpoch>? CoordinatedTakeoverAllocated { get; set; }
+
+    internal void RestoreCoordinatedTakeover(OnlineHoeingBatch batch)
+    {
+        if (!batch.PolicyTicketReleased && batch.TakeoverTicket is { } ticket && batch.ExecutionEpoch is { } epoch)
+            RestoreCoordinatedTakeover(ticket, epoch);
+    }
+
+    private void RestoreCoordinatedTakeover(string ticket, BgiEpoch epoch)
+    {
+        lock (_resetStateGate)
+        {
+            if (_takeoverTicket is not null && (_takeoverTicket != ticket
+                || IsBgiEpochChanged(_takeoverEpoch, epoch)))
+                throw new InvalidOperationException("已有另一接管责任，不能覆盖为恢复记录");
+            _takeoverTicket = ticket;
+            _takeoverEpoch = epoch;
+            if (_externalClientProvider?.Invoke() is { } ext
+                && !IsBgiEpochChanged(epoch, ext.ServerEpoch)) ext.TakeoverTicket = ticket;
+        }
+    }
+
     private string? _retainedSuspendFenceTicket;
     private long? _retainedSuspendStopVersion;
 

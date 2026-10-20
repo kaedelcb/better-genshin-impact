@@ -6,6 +6,35 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public sealed class TaskCenterOnlineSendGateTests
 {
     [Fact]
+    public async Task PriorityCloseDoesNotWaitForLostReply_AndStillBlocksSuccessors()
+    {
+        var gate = new TaskCenterOnlineSendGate();
+        var inFlight = await gate.EnterAsync(CancellationToken.None);
+        gate.CloseForPriority();
+        Assert.True(gate.IsClosed);
+        var next = gate.EnterAsync(CancellationToken.None).AsTask();
+        Assert.False(next.IsCompleted);
+        await inFlight.DisposeAsync();
+        Assert.False(next.IsCompleted);
+        await gate.OpenAsync();
+        await using var accepted = await next.WaitAsync(TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public async Task CancelledOrdinaryCloseDoesNotLeaveAnUnownedClosedGate()
+    {
+        var gate = new TaskCenterOnlineSendGate();
+        var held = await gate.EnterAsync(CancellationToken.None);
+        using var cancellation = new CancellationTokenSource();
+        var close = gate.CloseAsync(cancellation.Token);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => close);
+        Assert.False(gate.IsClosed);
+        await held.DisposeAsync();
+        await using var next = await gate.EnterAsync(CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CloseWaitsForExistingSend_AndHoldsSuccessorUntilOpen()
     {
         var gate = new TaskCenterOnlineSendGate();

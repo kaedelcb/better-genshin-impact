@@ -298,6 +298,8 @@ internal sealed class BgiInstancePipeDouble : IAsyncDisposable
                             ["event.push"] = true,
                             ["task.queue"] = true,
                             ["task.stateContinuation.v1"] = StateContinuationForTest,
+                            ["task.coordinatedRecoverySnapshot.v1"] = StateContinuationForTest,
+                            ["task.coordinatedRecoveryStop.v1"] = StateContinuationForTest,
                             ["execution.contract.v1"] = false,
                         },
                     });

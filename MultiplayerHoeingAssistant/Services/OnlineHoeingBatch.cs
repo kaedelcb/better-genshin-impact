@@ -16,6 +16,121 @@ internal sealed record LocalTaskFailureReport(int Index, int Attempt, string Job
 /// </summary>
 public sealed class OnlineHoeingBatch
 {
+    private long _recoveryRevision;
+    internal Mistletoe.Shared.CoordinatedStopSignal? RecoveryStopSignal { get; private set; }
+    private string? _savedStopSignalName;
+    internal bool RecoveryStopSignalMissing => RecoveryStopSignal is null && _savedStopSignalName is not null;
+    internal void ConfirmOriginalProcessStopFence(BgiEpoch epoch, long stopVersion)
+    {
+        lock (_policyGate)
+        {
+            if (!ViewModels.CoordinatedBatchLoop.SameEpoch(epoch, ExecutionEpoch)
+                || stopVersion != _stateContinuationStopVersion || ExplicitStopRequested)
+                throw new BgiStateContinuationStoppedException("原进程停止围栏不符，不能重建停止事实");
+            _savedStopSignalName = null;
+        }
+    }
+    internal void EnsureRecoveryStopSignal()
+    {
+        lock (_policyGate)
+        {
+            if (RecoveryStopSignalMissing)
+                throw new System.IO.IOException("原停止事实已丢失，未取得同一原进程停止围栏前不能创建新授权");
+            RecoveryStopSignal ??= Mistletoe.Shared.CoordinatedStopSignal.Create();
+        }
+        PersistRecovery?.Invoke();
+    }
+    internal void ObserveRecoveryStopSignal()
+    {
+        if (RecoveryStopSignal?.IsStopped == true) Cancel();
+    }
+    internal BgiEpoch? ProcessRecoveryPreviousEpoch { get; private set; }
+    internal void RebindExitedProcess(BgiEpoch previous, BgiEpoch replacement)
+    {
+        lock (_policyGate)
+        {
+            if (!PriorityRecoveryEnabled || ExplicitStopRequested || IsCancellationRequested
+                || RecoveryStopSignal is null || RecoveryStopSignal.IsStopped
+                || !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, previous))
+                throw new InvalidOperationException("原批次停止事实不明或已撤销，不能向新进程恢复");
+            ProcessRecoveryPreviousEpoch = previous;
+            ExecutionEpoch = replacement;
+            _stateContinuationStopVersion = 0; // New process must still prove no manual stop before it binds this signal.
+            TakeoverTicket = null;
+            Prepared = false;
+            // TakenOver still describes the old exited owner until the current recovery completes.
+        }
+    }
+    internal void CompleteProcessRecovery()
+    {
+        lock (_policyGate)
+        {
+            Prepared = true;
+            TakenOver = true;
+            ProcessRecoveryPreviousEpoch = null;
+        }
+    }
+    internal CoordinatedRecoveryProgress? RecoveryProgress { get; set; }
+    internal bool RestoredFromRecovery { get; private set; }
+    internal Action? PersistRecovery { get; set; }
+
+    internal CoordinatedRecoverySnapshot CaptureRecovery()
+    {
+        lock (_policyGate) return new()
+        {
+            Revision = ++_recoveryRevision,
+            Start = Start!, SelfUid = SelfUid, Token = Token, Policy = Policy!, Progress = RecoveryProgress,
+            Epoch = ExecutionEpoch, StopVersion = _stateContinuationStopVersion, Ticket = TakeoverTicket,
+            RecoveryStopSignalName = RecoveryStopSignal?.Name ?? _savedStopSignalName, ProcessRecoveryPreviousEpoch = ProcessRecoveryPreviousEpoch,
+            SuspendReceipt = _suspendedRawData, ConfigRevisions = new(_configRevisions),
+            Prepared = Prepared, TakenOver = TakenOver, Stopped = ExplicitStopRequested,
+            Settled = Volatile.Read(ref _settled) != 0, LocalSucceeded = LocalCompletionReady,
+            LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
+            LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
+            PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
+            PolicyRequestIdentity = _policyRequestIdentity,
+            PolicyPayload = _policySubmitPayload is null ? null : new(_policySubmitPayload),
+            PlanContinuation = _planResumeContinuation is null ? null : new(_planResumeContinuation),
+            PolicyExecution = _policyExecution, PolicyTerminal = _policyTerminalResult,
+            PolicyAcknowledged = _policyResultAcknowledged, PolicyTicketReleased = PolicyTicketReleased,
+            PolicyRejected = PolicyRejectedBeforeStart
+        };
+    }
+
+    internal static OnlineHoeingBatch Restore(CoordinatedRecoverySnapshot saved)
+    {
+        var batch = new OnlineHoeingBatch(saved.Start, saved.SelfUid, saved.Policy)
+        {
+            _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
+            Token = saved.Token, RestoredFromRecovery = true, RecoveryProgress = saved.Progress,
+            ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,
+            StateContinuationEnabled = true,
+            StateContinuationStopVersion = saved.StopVersion, TakeoverTicket = saved.Ticket,
+            SuspendedRawData = saved.SuspendReceipt, Prepared = saved.Prepared, TakenOver = saved.TakenOver,
+            CoordinatedSucceeded = saved.CoordinatedSucceeded,
+            PolicyStartAttempted = saved.PolicyStartAttempted, PolicyRequestIdentity = saved.PolicyRequestIdentity,
+            PolicySubmitPayload = CoordinatedRecoveryStore.Materialize(saved.PolicyPayload),
+            PlanResumeContinuation = CoordinatedRecoveryStore.Materialize(saved.PlanContinuation),
+            PolicyTicketReleased = saved.PolicyTicketReleased, PolicyRejectedBeforeStart = saved.PolicyRejected,
+            PolicyResultAcknowledged = saved.PolicyAcknowledged
+        };
+        batch._savedStopSignalName = saved.RecoveryStopSignalName;
+        batch.RecoveryStopSignal = Mistletoe.Shared.CoordinatedStopSignal.Open(saved.RecoveryStopSignalName);
+        batch._failedPolicyAttempts.AddRange(saved.FailedPolicyAttempts);
+        if (saved.LocalTasksFailed) Volatile.Write(ref batch._localTasksFailed, 1);
+        foreach (var revision in saved.ConfigRevisions) batch._configRevisions.Add(revision.Key, revision.Value);
+        if (saved.LocalSucceeded && saved.Epoch is { } epoch)
+        {
+            if (saved.LocalTasksFailed) batch.MarkLocalFinishedWithTaskErrors(epoch);
+            else batch.MarkLocalSuccess(epoch);
+        }
+        if (saved.PolicyExecution is { } execution) batch.RecordPolicyExecution(execution);
+        if (saved.PolicyTerminal is { } terminal) batch.PolicyTerminalResult = terminal;
+        if (saved.LocalReleased) batch.MarkLocalExecutionReleased();
+        if (saved.Stopped || batch.RecoveryStopSignal?.IsStopped == true) batch.Cancel();
+        return batch;
+    }
+
     private int _settled;
     private int _stateContinuationEnabled;
     private int _explicitStopRequested;
@@ -47,7 +162,36 @@ public sealed class OnlineHoeingBatch
         get { lock (_policyGate) return _suspendedRawData; }
         set { lock (_policyGate) _suspendedRawData = value; }
     }
-    internal string PolicyRequestKey => "post-hoeing/" + BatchId + "/" + SelfUid;
+    private int _policyAttempt;
+    private readonly List<BgiTaskQueueStatus> _failedPolicyAttempts = [];
+    internal IReadOnlyList<BgiTaskQueueStatus> FailedPolicyAttempts
+    { get { lock (_policyGate) return _failedPolicyAttempts.ToArray(); } }
+    internal string PolicyRequestKey => "post-hoeing/" + BatchId + "/" + SelfUid
+        + (_policyAttempt == 0 ? "" : "/attempt/" + _policyAttempt);
+
+    internal bool RetryFailedSpecifiedCompletion()
+    {
+        lock (_policyGate)
+        {
+            if (!PriorityRecoveryEnabled || IsCancellationRequested || ExplicitStopRequested
+                || Policy?.Policy != TaskConflictPolicy.RunSpecified
+                || _policyTerminalResult is not { ExecutionExitConfirmed: true, Status: "failed" or "queueCancelled" } failed
+                || _policyExecution is not { } execution
+                || !Guid.TryParse(failed.TaskHandle, out var failedJob) || !Guid.TryParse(execution.JobId, out var runningJob)
+                || failedJob != runningJob || !ViewModels.CoordinatedBatchLoop.SameEpoch(failed.Epoch, execution.Epoch))
+                return false;
+            _failedPolicyAttempts.Add(failed);
+            _policyAttempt++;
+            _policyExecution = null;
+            _policyTerminalResult = null;
+            _policyRequestIdentity = null;
+            _policyStartAttempted = false;
+            _policyResultAcknowledged = false;
+            _policyCancellation = null;
+            PolicySendUnknown = false;
+            return true;
+        }
+    }
     private string? _policyRequestIdentity;
     internal string? PolicyRequestIdentity
     {
@@ -388,7 +532,7 @@ public sealed class OnlineHoeingBatch
     public CoordinatedBatchSnapshot? Start { get; }
     public string SelfUid { get; } = "";
     public string BatchId => Start?.BatchId ?? "legacy:" + Generation;
-    public string Token { get; } = Guid.NewGuid().ToString("N");
+    public string Token { get; private set; } = Guid.NewGuid().ToString("N");
     public IReadOnlyList<CoordinatedHoeingBinding> Bindings { get; } = [];
     public TaskConflictPolicySettings? Policy { get; }
     public IReadOnlyDictionary<string, string> ConfigRevisions => _configRevisions;
@@ -414,7 +558,11 @@ public sealed class OnlineHoeingBatch
     public void MarkSettled()
     {
         lock (_policyGate) Interlocked.Exchange(ref _settled, 1);
+        RecoveryStopSignal?.Stop();
+        PersistRecovery?.Invoke();
         _policyCancellationRegistration.Dispose();
+        RecoveryStopSignal?.Dispose();
+        RecoveryStopSignal = null;
     }
 
     /// <summary>本轮 AllReady 的代序号（服务端广播值，兼做策略收尾恰好一次守卫的批次键）。</summary>
@@ -442,6 +590,7 @@ public sealed class OnlineHoeingBatch
         if (userInitiated)
         {
             Volatile.Write(ref _explicitStopRequested, 1);
+            RecoveryStopSignal?.Stop();
             Outcome = "cancelled";
         }
         try
@@ -453,5 +602,6 @@ public sealed class OnlineHoeingBatch
             // 防御：理论上不 Dispose 不会命中，保留兜底
         }
         }
+        if (userInitiated) PersistRecovery?.Invoke();
     }
 }

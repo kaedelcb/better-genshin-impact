@@ -385,6 +385,65 @@ public class BgiProcessMonitor : IDisposable
         }
     }
 
+    private readonly object _unresponsiveGate = new();
+    private (int Pid, long Ticks)? _unresponsiveOwner;
+    private DateTime _unresponsiveSince;
+
+    internal bool ObserveCoordinatedWindow(BgiEpoch epoch, bool unresponsive, DateTime now)
+    {
+        lock (_unresponsiveGate)
+        {
+            var identity = (epoch.ProcessId, epoch.StartTicksUtc);
+            if (!unresponsive) { _unresponsiveOwner = null; return false; }
+            if (_unresponsiveOwner != identity)
+            { _unresponsiveOwner = identity; _unresponsiveSince = now; return false; }
+            return now - _unresponsiveSince >= TimeSpan.FromSeconds(30);
+        }
+    }
+
+    internal void ResetCoordinatedHangObservation(BgiEpoch epoch)
+        => ObserveCoordinatedWindow(epoch, false, DateTime.UtcNow);
+
+    // Called only after the coordinated loop has lost all executor observations for three minutes.
+    // A responsive process, another executable, another session, or unknown identity is never killed.
+    internal async Task<bool> TryTerminateUnresponsiveCoordinatedOwnerAsync(BgiEpoch epoch, CancellationToken ct)
+    {
+        await _processGate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_userStopHeld || epoch.ProcessId <= 0 || epoch.StartTicksUtc <= 0) return false;
+            using var process = Process.GetProcessById(epoch.ProcessId);
+            if (process.HasExited || process.SessionId != Process.GetCurrentProcess().SessionId
+                || process.StartTime.ToUniversalTime().Ticks != epoch.StartTicksUtc
+                || !string.Equals(System.IO.Path.GetFullPath(process.MainModule!.FileName!),
+                    System.IO.Path.GetFullPath(_bgiPath), StringComparison.OrdinalIgnoreCase)) return false;
+            if (process.Responding)
+            {
+                ResetCoordinatedHangObservation(epoch);
+                return false;
+            }
+            if (!ObserveCoordinatedWindow(epoch, true, DateTime.UtcNow)) return false;
+            ct.ThrowIfCancellationRequested();
+            process.Refresh();
+            if (process.Responding || process.StartTime.ToUniversalTime().Ticks != epoch.StartTicksUtc)
+            { ResetCoordinatedHangObservation(epoch); return false; }
+            if (!ObserveCoordinatedWindow(epoch, true, DateTime.UtcNow)) return false;
+            _log?.Invoke("[联机恢复] 原 BGI 持续无协议回应且窗口无响应，正在结束这一确切进程");
+            process.Kill(entireProcessTree: false);
+            await process.WaitForExitAsync(ct).WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+            ResetCoordinatedHangObservation(epoch);
+            return process.HasExited;
+        }
+        catch (ArgumentException) { return false; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log?.Invoke("[联机恢复] 原进程退出未确认，不能启动替代执行：" + ex.Message);
+            return false;
+        }
+        finally { _processGate.Release(); }
+    }
+
     public void KillBgi()
     {
         foreach (var proc in GetCurrentSessionBgiProcesses())

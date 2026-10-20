@@ -460,6 +460,99 @@ public sealed class TaskTakeoverIncidentTests : IDisposable
     }
 
     [Fact]
+    public async Task Suspend_ReceiptReadInheritsOriginalExitedRoot_WithoutRebindingIdleTarget()
+    {
+        var ticket = Guid.NewGuid().ToString("N");
+        var root = ExecutionScope.Start(new(JobKind.Group, "原配置组", JobSource.Ui));
+        root.SetCheckpoint(new("group", "原配置组", 1, "folder", "project", null, null, null, false));
+        var original = Request("task.suspend", ticket);
+        original.Data!["retainUntilAcknowledged"] = true;
+        original.Data["expectedStopVersion"] = ExecutionScope.StopVersionNow;
+        using var exit = root.Token.Register(root.Dispose);
+        var accepted = await handler.HandleTaskSuspend(null!, original);
+        Assert.True(accepted.Success);
+        var context = config.SuspendedTaskContext;
+        Assert.NotNull(context);
+        var idle = Request("task.suspend", ticket);
+        idle.Data!["expectedExecutionInstanceId"] = Newtonsoft.Json.Linq.JValue.CreateNull();
+        idle.Data["expectedStateRevision"] = Newtonsoft.Json.Linq.JValue.CreateNull();
+        Assert.Equal("takeover_identity_mismatch", (await handler.HandleTaskSuspend(null!, idle)).ErrorCode);
+        idle.Data!["receiptOnly"] = true;
+        var read = await handler.HandleTaskSuspend(null!, idle);
+        Assert.True(read.Success);
+        Assert.True(read.Data!["quiesceConfirmed"]!.ToObject<bool>());
+        Assert.Equal(original.Data["expectedExecutionInstanceId"], read.Data["expectedExecutionInstanceId"]);
+        Assert.Same(context, config.SuspendedTaskContext);
+        config.SuspendedTaskContext = null;
+        Assert.Null(await handler.RestoreLostOriginalSuspendContextAsync(ticket));
+        Assert.Equal("原配置组", config.SuspendedTaskContext!.GroupName);
+        Assert.Equal(1, config.SuspendedTaskContext.TaskIndex);
+        Assert.Equal(ticket, config.SuspendedTaskContext.TakeoverTicket);
+        using (var next = ExecutionScope.Start(new(JobKind.Group, "同票据后继", JobSource.Ext, TakeoverTicket: ticket)))
+        {
+            Assert.True((await handler.HandleTaskSuspend(null!, idle)).Success);
+            Assert.False(next.Token.IsCancellationRequested);
+        }
+        PreemptionGate.Release(ticket);
+        config.SuspendedTaskContext = null;
+        Assert.Equal("stale_ticket", await handler.RestoreLostOriginalSuspendContextAsync(ticket));
+        Assert.Null(config.SuspendedTaskContext);
+        Assert.Equal("stale_ticket", (await handler.HandleTaskSuspend(null!, idle)).ErrorCode);
+    }
+
+    [Fact]
+    public void SurvivingBgiCheckpointPreservesLatestOriginalOwner_RejectsForgedOwnerAndOlderRevision()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        var batchId = Guid.NewGuid().ToString("N");
+        var checkpoint = Newtonsoft.Json.Linq.JObject.FromObject(new
+        {
+            Version = 1, Revision = 2L, OwnerPid = process.Id, OwnerStartTicks = process.StartTime.ToUniversalTime().Ticks,
+            OwnerSession = process.SessionId, ControlIdentity = "isolated-room", Start = new { BatchId = batchId },
+            Token = "original-token", Stopped = true
+        });
+        CoordinatedAssistantRecovery.ObserveCheckpoint(process.Id, process.SessionId, checkpoint);
+        checkpoint["Revision"] = 1;
+        checkpoint["Stopped"] = false;
+        CoordinatedAssistantRecovery.ObserveCheckpoint(process.Id, process.SessionId, checkpoint);
+        Assert.True(CoordinatedAssistantRecovery.ReadCheckpoint(batchId, "isolated-room")!["Stopped"]!.ToObject<bool>());
+        checkpoint["Revision"] = 3;
+        checkpoint["OwnerPid"] = process.Id + 1;
+        CoordinatedAssistantRecovery.ObserveCheckpoint(process.Id, process.SessionId, checkpoint);
+        var actual = CoordinatedAssistantRecovery.ReadCheckpoint(batchId, "isolated-room")!;
+        Assert.Equal(2, actual["Revision"]!.ToObject<long>());
+        Assert.Equal("original-token", actual["Token"]!.ToString());
+        Assert.Null(CoordinatedAssistantRecovery.ReadCheckpoint(batchId, "other-room"));
+    }
+
+    [Fact]
+    public void RecoveryStopSignal_SurvivesPeerReopen_OrdinaryPreemptionDoesNotSetIt()
+    {
+        using var assistant = Mistletoe.Shared.CoordinatedStopSignal.Create();
+        Assert.True(ExecutionScope.RegisterCoordinatedStopSignal(assistant.Name, ExecutionScope.StopVersionNow, out _));
+        ExecutionScope.StopActive(manual: false);
+        Assert.False(assistant.IsStopped);
+        ExecutionScope.StopActive(manual: true);
+        Assert.True(assistant.IsStopped);
+        using var restartedAssistant = Mistletoe.Shared.CoordinatedStopSignal.Open(assistant.Name);
+        Assert.NotNull(restartedAssistant);
+        Assert.True(restartedAssistant!.IsStopped);
+        Assert.False(ExecutionScope.RegisterCoordinatedStopSignal(assistant.Name, ExecutionScope.StopVersionNow, out var error));
+        Assert.Equal("manual_stop_fence", error);
+    }
+
+    [Fact]
+    public async Task Suspend_ReceiptReadMissing_DoesNotCreateTicketOrCancelRoot()
+    {
+        using var root = ExecutionScope.Start(new(JobKind.Group, "正常任务", JobSource.Ui));
+        var query = Request("task.suspend", Guid.NewGuid().ToString("N"));
+        query.Data!["receiptOnly"] = true;
+        Assert.Equal("receipt_not_found", (await handler.HandleTaskSuspend(null!, query)).ErrorCode);
+        Assert.False(root.Token.IsCancellationRequested);
+        Assert.False(PreemptionGate.IsArmed);
+    }
+
+    [Fact]
     public async Task Suspend_LegacyTicketWithoutExplicitTarget_CannotCancelActiveRoot()
     {
         using var root = ExecutionScope.Start(new(JobKind.Group, "现有锄地", JobSource.Ui));

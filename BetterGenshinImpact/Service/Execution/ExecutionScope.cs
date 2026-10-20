@@ -14,6 +14,31 @@ public sealed class ExecutionScope : IDisposable
     private static readonly AsyncLocal<string?> AdmissionTicket = new();
     private static ExecutionScope? _active;
     private static long _stopVersion;
+    private static readonly Dictionary<string, Mistletoe.Shared.CoordinatedStopSignal> CoordinatedStops = new();
+
+    internal static bool RegisterCoordinatedStopSignal(string name, long expectedStopVersion, out string? error)
+    {
+        lock (Sync)
+        {
+            error = null;
+            if (_stopVersion != expectedStopVersion) { error = "manual_stop_fence"; return false; }
+            try
+            {
+                if (!CoordinatedStops.TryGetValue(name, out var signal))
+                {
+                    signal = Mistletoe.Shared.CoordinatedStopSignal.Open(name);
+                    if (signal is null) { error = "recovery_stop_unknown"; return false; }
+                    foreach (var retired in System.Linq.Enumerable.ToArray(CoordinatedStops))
+                        if (retired.Value.IsStopped)
+                        { retired.Value.Dispose(); CoordinatedStops.Remove(retired.Key); }
+                    CoordinatedStops[name] = signal;
+                }
+                if (signal.IsStopped) { error = "manual_stop_fence"; return false; }
+                return true;
+            }
+            catch (Exception) { error = "recovery_stop_unknown"; return false; }
+        }
+    }
     private static long? _lastManualStopTimestamp;
     private static long _stateRevisionCounter;
     /// <summary>[R5 A4 第二步] 执行根**释放顺序号**：在根锁内分配，作为退出凭证的线性化顺序（防迟到旧记录覆盖继任根）。</summary>
@@ -57,6 +82,16 @@ public sealed class ExecutionScope : IDisposable
     public static ExecutionScope? Current => Ambient.Value;
     public static bool HasActive { get { lock (Sync) return _active != null; } }
     public static long StopVersionNow { get { lock (Sync) return _stopVersion; } }
+    internal static bool RestoreRecoveryIfStillOwned(string ticket, long stopVersion, Action restore)
+    {
+        lock (Sync)
+        {
+            if (stopVersion != _stopVersion || !PreemptionGate.Authorize(ticket)
+                || _active is not null || GameTask.Common.TaskControl.TaskSemaphore.CurrentCount == 0) return false;
+            restore();
+            return true;
+        }
+    }
     // Version and timestamp share the final admission lock; a reader cannot mix two stops.
     public static (long StopVersion, long? LastManualStopTimestamp) GetManualStopFence()
     {
@@ -454,6 +489,7 @@ public sealed class ExecutionScope : IDisposable
             if (manual)
             {
                 _stopVersion++;
+                foreach (var signal in CoordinatedStops.Values) signal.Stop();
                 _lastManualStopTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             }
             active = _active;
