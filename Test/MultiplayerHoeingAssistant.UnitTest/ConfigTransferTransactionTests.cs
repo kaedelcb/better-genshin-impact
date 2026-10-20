@@ -278,6 +278,67 @@ public sealed class ConfigTransferTransactionTests
         Assert.Equal("peer-edit", File.ReadAllText(shared));
     }
 
+    [Fact]
+    public void ReadOnlyLockDoesNotPreventStartupRecoveryOrChangeTheLockFile()
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("assistant-config.json");
+        var original = Bytes("{\"playerName\":\"已有配置\"}");
+        File.WriteAllBytes(target, original);
+        var lockPath = fixture.Target(".config-transfer.lock");
+        File.WriteAllText(lockPath, "existing-lock");
+        var attributes = File.GetAttributes(lockPath);
+        File.SetAttributes(lockPath, attributes | FileAttributes.ReadOnly);
+        try
+        {
+            Assert.Throws<UnauthorizedAccessException>(() =>
+            {
+                using var rejected = new FileStream(lockPath, FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite, FileShare.None);
+            });
+
+            ConfigTransferService.RecoverInterruptedImport(fixture.DataRoot);
+
+            Assert.Equal(original, File.ReadAllBytes(target));
+            Assert.Equal("existing-lock", File.ReadAllText(lockPath));
+            Assert.Equal(attributes | FileAttributes.ReadOnly, File.GetAttributes(lockPath));
+            Assert.False(File.Exists(fixture.Pending));
+        }
+        finally { File.SetAttributes(lockPath, attributes); }
+    }
+
+    [Fact]
+    public void ReadOnlyLockStillExcludesConcurrentRecoveryAndRecoversPendingAfterRelease()
+    {
+        using var fixture = new Fixture();
+        var target = fixture.Target("pet_settings.json");
+        var before = Bytes("{\"sizePx\":180}");
+        var after = Bytes("{\"sizePx\":225}");
+        File.WriteAllBytes(target, after);
+        fixture.Publish(false, null, (target, true, before, after));
+        var lockPath = fixture.Target(".config-transfer.lock");
+        File.WriteAllBytes(lockPath, []);
+        var attributes = File.GetAttributes(lockPath);
+        File.SetAttributes(lockPath, attributes | FileAttributes.ReadOnly);
+        try
+        {
+            using (ConfigTransferTransaction.Acquire(fixture.DataRoot))
+            {
+                Assert.ThrowsAny<IOException>(() =>
+                    ConfigTransferService.RecoverInterruptedImport(fixture.DataRoot));
+                Assert.Equal(after, File.ReadAllBytes(target));
+                Assert.True(File.Exists(fixture.Pending));
+            }
+
+            ConfigTransferService.RecoverInterruptedImport(fixture.DataRoot);
+
+            Assert.Equal(before, File.ReadAllBytes(target));
+            Assert.False(File.Exists(fixture.Pending));
+            Assert.Equal(attributes | FileAttributes.ReadOnly, File.GetAttributes(lockPath));
+        }
+        finally { File.SetAttributes(lockPath, attributes); }
+    }
+
     private static byte[] Bytes(string text) => Encoding.UTF8.GetBytes(text);
     private static string Hash(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
 

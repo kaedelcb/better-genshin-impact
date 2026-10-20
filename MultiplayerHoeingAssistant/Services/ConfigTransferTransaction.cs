@@ -42,7 +42,8 @@ internal sealed class ConfigTransferTransaction
         Directory.CreateDirectory(root);
         var path = Path.Combine(root, ".config-transfer.lock");
         CheckPath(path);
-        try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+        // 锁文件只用于独占句柄；不要求旧锁可写，也不修改它的权限或属性。
+        try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None); }
         catch (IOException ex) { throw new IOException("其他进程正在迁移同一份助手配置，请稍后再试。", ex); }
     }
 

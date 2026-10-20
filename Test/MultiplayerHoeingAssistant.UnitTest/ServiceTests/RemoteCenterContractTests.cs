@@ -87,8 +87,14 @@ public sealed class RemoteCenterContractTests
             DisclaimerAccepted = true, ClientInstanceId = "center-smoke-" + Guid.NewGuid().ToString("N")
         };
         File.WriteAllText(Path.Combine(root, "assistant-config.json"), JsonSerializer.Serialize(config));
-        var exe = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
-            "../../../../../MultiplayerHoeingAssistant/bin/Debug/net8.0-windows/MultiplayerHoeingAssistant.exe"));
+        var lockPath = Path.Combine(root, ".config-transfer.lock");
+        File.WriteAllBytes(lockPath, []);
+        File.SetAttributes(lockPath, File.GetAttributes(lockPath) | FileAttributes.ReadOnly);
+        var configuredExe = Environment.GetEnvironmentVariable("NEXUSBGI_TEST_ASSISTANT_EXE");
+        var exe = string.IsNullOrWhiteSpace(configuredExe)
+            ? Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+                "../../../../../MultiplayerHoeingAssistant/bin/Debug/net8.0-windows/MultiplayerHoeingAssistant.exe"))
+            : Path.GetFullPath(configuredExe);
         Assert.True(File.Exists(exe), "先执行无部署助手构建再运行隔离进程测试");
         var start = new ProcessStartInfo(exe, "--no-auto-launch")
         {
@@ -355,6 +361,7 @@ public sealed class RemoteCenterContractTests
                 if (!restarted.HasExited) { restarted.Kill(); restarted.WaitForExit(10000); }
                 restarted.Dispose();
             }
+            File.SetAttributes(lockPath, File.GetAttributes(lockPath) & ~FileAttributes.ReadOnly);
             if (passed) DeleteTestRoot(root);
         }
     }
