@@ -18,6 +18,7 @@ public partial class MainViewModel
         internal Action<string>? Waiting { get; init; }
         internal bool RetainedResult { get; init; }
         internal bool CanRetryNativeResume { get; init; }
+        internal Func<CancellationToken, Task<bool>>? EnsureExecutor { get; init; }
         internal Func<CancellationToken, Task<bool>>? ConfirmRetryReservationReleased { get; init; }
         internal Func<string?>? ExpectedRequestKey { get; init; }
         internal bool RegisteredJob { get; init; } = true;
@@ -42,6 +43,14 @@ public partial class MainViewModel
             io.RequireAuthority();
             try
             {
+                if (io.EnsureExecutor is { } ensure && !await ensure(ct).ConfigureAwait(false))
+                {
+                    io.Waiting?.Invoke("原执行进程与恢复条件尚未确认，保留同一安排等待");
+                    await io.Delay(ct).ConfigureAwait(false);
+                    continue;
+                }
+                batch.ObserveRecoveryStopSignal();
+                ct.ThrowIfCancellationRequested();
                 var recordsReady = false;
                 if (batch.PolicyExecution is not null || batch.PolicyTicketReleased)
                 {
@@ -229,7 +238,8 @@ public partial class MainViewModel
                     || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0
                     || batch.ExplicitStopRequested || !batch.LocalCompletionReady)
                     throw new ControlContextRevokedException("本批绑定完成动作已被停止或替换", ct);
-            if (_externalClient?.ServerEpoch is { } current && !CoordinatedBatchLoop.SameEpoch(current, epoch))
+            if (!batch.PriorityRecoveryEnabled && _externalClient?.ServerEpoch is { } current
+                && !CoordinatedBatchLoop.SameEpoch(current, epoch))
                 throw new ControlContextRevokedException("原 BGI 已变化，禁止向新进程重放完成动作", ct);
         }
 
@@ -320,8 +330,20 @@ public partial class MainViewModel
             return false;
         }
 
+        async Task<bool> EnsureExecutor(CancellationToken token)
+        {
+            try
+            {
+                return await EnsureCompletionExecutorAsync(batch, executor, () => _externalClient,
+                    EnsureTaskCenterExecutionReadyAsync, CompletionRequestKey, nativeResume, RequireAuthority, token).ConfigureAwait(false);
+            }
+            finally { epoch = batch.ExecutionEpoch ?? epoch; ticket = batch.TakeoverTicket; }
+        }
+
         async Task<bool> Prepare(CancellationToken token)
         {
+            if (policy.Policy == TaskConflictPolicy.Stop && batch.PolicyTicketReleased
+                && CommandExecutor.ProbeOriginalBgiProcess(epoch) == false) return true;
             var current = External();
             if (batch.NativeResumeRetryPending && !batch.PolicyStartAttempted)
             {
@@ -448,7 +470,7 @@ public partial class MainViewModel
             await RunCompletionContinuationAsync(batch, new CompletionContinuationPorts
             {
                 RequireAuthority = RequireAuthority, Prepare = Prepare, Start = Start, Query = Query,
-                Reconcile = ReconcileWithPriority, Waiting = Waiting,
+                Reconcile = ReconcileWithPriority, Waiting = Waiting, EnsureExecutor = EnsureExecutor,
                 ExpectedRequestKey = CompletionRequestKey,
                 RegisteredJob = true, CanRetryNativeResume = nativeResume,
                 ConfirmRetryReservationReleased = async token =>
@@ -456,8 +478,9 @@ public partial class MainViewModel
                     await executor.ReconcileCompletionTicketAsync(batch, token).ConfigureAwait(false);
                     return executor.TakeoverTicketSnapshot is null;
                 },
-                Acknowledge = (result, token) => External().AcknowledgeTaskResultAsync(result.IdempotencyKey!,
-                    result.TaskHandle!, result.Epoch!, token),
+                Acknowledge = (result, token) => result.Epoch is { } original
+                    && CommandExecutor.ProbeOriginalBgiProcess(original) == false ? Task.FromResult(true)
+                    : External().AcknowledgeTaskResultAsync(result.IdempotencyKey!, result.TaskHandle!, result.Epoch!, token),
             }, ct).ConfigureAwait(false);
             AddLog("[绑定完成动作] " + description + "后的绑定动作已收口"
                 + (batch.CompletionActionWarning is { } warning ? "：" + warning : ""));

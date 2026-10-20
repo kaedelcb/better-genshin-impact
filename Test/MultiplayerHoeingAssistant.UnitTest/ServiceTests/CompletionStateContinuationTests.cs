@@ -35,6 +35,39 @@ public sealed class CompletionStateContinuationTests
         Status = status, Cancelled = cancelled, ExecutionExitConfirmed = true,
     };
 
+    [Theory]
+    [InlineData("alive")]
+    [InlineData("unknown")]
+    [InlineData("missing-stop")]
+    [InlineData("stopped")]
+    [InlineData("observed-success")]
+    [InlineData("managed")]
+    public void CompletionProcessRecoveryDoesNotInventExitPermissionOrRepeatKnownSuccess(string blocked)
+    {
+        var batch = Create(blocked == "managed" ? TaskConflictPolicy.Resume : TaskConflictPolicy.RunSpecified, priority: true);
+        batch.StateContinuationStopVersion = 7;
+        batch.TakeoverTicket = "original";
+        batch.MarkLocalSuccess(Epoch);
+        if (blocked != "missing-stop") batch.EnsureRecoveryStopSignal();
+        if (blocked == "stopped") batch.RecoveryStopSignal!.Stop();
+        batch.PolicyStartAttempted = true;
+        batch.RecordPolicyExecution(new(Job, Epoch, true));
+        if (blocked == "observed-success") batch.PolicyTerminalResult = Terminal(batch);
+        if (blocked == "managed") batch.SuspendedRawData = System.Text.Json.JsonSerializer.Serialize(new
+            { recoverySnapshot = new { TaskType = "group", ConfigName = "original", ManagedByWorkflow = true, NodeId = "B" } });
+        var key = batch.PolicyRequestKey;
+        try
+        {
+            Assert.False(batch.BeginCompletionProcessRecovery(Epoch, new() { ProcessId = 20, StartTicksUtc = 200 },
+                key, nativeResume: blocked == "managed", _ => blocked == "alive" ? true : blocked == "unknown" ? null : false));
+            Assert.Same(Epoch, batch.ExecutionEpoch);
+            Assert.Equal(key, batch.PolicyRequestKey);
+            Assert.Equal(Job, batch.PolicyExecution!.JobId);
+            Assert.Empty(batch.FailedPolicyAttempts);
+        }
+        finally { batch.RecoveryStopSignal?.Dispose(); }
+    }
+
     [Fact]
     public async Task NativeResumeFailureReentersWithFreshReservationAfterExit_KeepingOriginalSnapshot()
     {

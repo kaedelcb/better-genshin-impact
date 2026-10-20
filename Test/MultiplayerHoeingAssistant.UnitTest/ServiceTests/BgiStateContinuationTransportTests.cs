@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 using Xunit;
@@ -56,6 +57,131 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
 
     private JsonElement[] Starts() => _pipe.Received.Where(r => r.Operation == "ext.task.start")
         .Select(r => r.Data!.Value).ToArray();
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task OwnedExecutorExitRecoversFrozenCompletionOnlyAfterExitAndKeepsStopFence(bool native, bool loseReleaseReply)
+    {
+        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "WindowsPowerShell", "v1.0", "powershell.exe"))
+        { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
+        foreach (var arg in new[] { "-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 120" }) start.ArgumentList.Add(arg);
+        using var oldProcess = Process.Start(start)!;
+        var oldEpoch = new BgiEpoch { ProcessId = oldProcess.Id, StartTicksUtc = oldProcess.StartTime.ToUniversalTime().Ticks };
+        var previousV2 = IpcClient.PipeNameOverrideForTest;
+        IpcClient.PipeNameOverrideForTest = _pipe.PipeName;
+        string? heldTicket = null;
+        var reservations = 0; var releases = 0; var launches = 0;
+        var newJob = Guid.NewGuid().ToString("N");
+        Mistletoe.Shared.CoordinatedStopSignal? peerStop = null;
+        JsonElement? resumedPayload = null;
+        var batch = new OnlineHoeingBatch(new("process-completion", 9, 0, 0, 1, "completed", "")
+        {
+            Protocol = "hoeing.start.v2", PriorityRecovery = true, StateContinuation = true,
+            ParticipantUids = ["self"], Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
+                { ["self"] = [new("original", "group")] }
+        }, "self", new() { Policy = native ? Models.TaskConflictPolicy.Resume : Models.TaskConflictPolicy.RunSpecified,
+            SpecifiedTaskName = "frozen-config", SpecifiedTaskType = "group" })
+        {
+            ExecutionEpoch = oldEpoch, StateContinuationEnabled = true, StateContinuationStopVersion = 7,
+            TakenOver = true, TakeoverTicket = "old-reservation", PolicyStartAttempted = true,
+            PolicySubmitPayload = new Dictionary<string, object?> { ["name"] = "frozen-config", ["oneDragon"] = false, ["revision"] = "frozen-revision" },
+            SuspendedRawData = JsonSerializer.Serialize(new { recoverySnapshot = new { TaskType = "solo",
+                ProjectName = "original-solo", ManagedByWorkflow = false, NodeId = (string?)null, SoloSettingsJson = "{\"exact\":true}" } }),
+        };
+        batch.MarkLocalSuccess(oldEpoch); batch.EnsureRecoveryStopSignal();
+        var oldJob = Guid.NewGuid().ToString("N");
+        batch.RecordPolicyExecution(new(oldJob, oldEpoch, true));
+        var oldKey = native ? "resume/old-reservation" : batch.PolicyRequestKey;
+        var originalSnapshot = batch.SuspendedRawData;
+        var executor = new CommandExecutor(null!, "unused", () => _client);
+        executor.SeedTakeoverStateForTest("old-reservation", oldEpoch);
+        executor.CoordinatedTakeoverAllocated = (ticket, _) =>
+        { batch.TakeoverTicket = ticket; batch.PolicyTicketReleased = false; batch.CompletionRecoveryReservationAcquired = false; };
+        _pipe.BodyForTest = (op, data) =>
+        {
+            if (op is "task.status" or "ext.task.status")
+                return (true, null, null, new { running = false, slotOccupied = false, executionSlotOccupied = false,
+                    executionIdentityAvailable = false, takeoverActive = heldTicket is not null, hasSuspendedTaskContext = false,
+                    stopVersion = 0, bgiEpoch = new { processId = Epoch.ProcessId, startTicksUtc = Epoch.StartTicksUtc } });
+            if (op == "task.suspend")
+            {
+                reservations++; heldTicket = data!.Value.GetProperty("takeoverTicket").GetString();
+                Assert.Equal(0, data.Value.GetProperty("expectedStopVersion").GetInt64());
+                peerStop = Mistletoe.Shared.CoordinatedStopSignal.Open(data.Value.GetProperty("recoveryStopSignal").GetString());
+                Assert.NotNull(peerStop);
+                return (true, null, null, new { takeoverTicket = heldTicket, quiesceConfirmed = true, liveTask = false,
+                    expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });
+            }
+            if (op == "task.resume")
+            {
+                if (data!.Value.TryGetProperty("cancel", out var cancel) && cancel.ValueKind == JsonValueKind.True)
+                {
+                    releases++; heldTicket = null;
+                    if (loseReleaseReply && releases == 1) throw new IOException("release applied; reply lost");
+                    return (true, null, null, new { status = "cleared_not_resumed" });
+                }
+                resumedPayload = data.Value.Clone(); heldTicket = null;
+                return (true, null, null, new { status = "queued", attemptId = newJob, idempotencyKey = "resume/" + batch.TakeoverTicket });
+            }
+            if (op == "ext.task.start")
+                return (true, null, null, new { status = "queued", taskHandle = newJob, queuePosition = 0 });
+            return null;
+        };
+        async Task<bool> Recover() => await ViewModels.MainViewModel.EnsureCompletionExecutorAsync(batch, executor,
+            () => _client, _ => { launches++; return Task.FromResult<string?>(null); }, () => oldKey,
+            native, () => batch.Cts.Token.ThrowIfCancellationRequested(), batch.Cts.Token);
+        try
+        {
+            Assert.False(await Recover());
+            Assert.Equal(0, launches); Assert.Equal(0, reservations);
+            Assert.Same(oldEpoch, batch.ExecutionEpoch);
+            oldProcess.Kill(); await oldProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(await Recover());
+            Assert.Equal(1, launches); Assert.Equal(1, reservations);
+            Assert.Equal(native ? 0 : 1, releases);
+            Assert.Null(batch.ProcessRecoveryPreviousEpoch);
+            Assert.Equal(Epoch.ProcessId, batch.ExecutionEpoch!.ProcessId);
+            Assert.Equal(0, batch.StateContinuationStopVersion);
+            Assert.Equal(oldJob, Assert.Single(batch.FailedPolicyAttempts).TaskHandle);
+            Assert.Equal("executor_exited_result_unknown", batch.FailedPolicyAttempts[0].ErrorCode);
+            Assert.Equal(originalSnapshot, batch.SuspendedRawData);
+            Assert.True(await Recover());
+            Assert.Equal(1, reservations);
+            CommandResult sent;
+            if (native)
+            {
+                Assert.True(CommandExecutor.TryReadNativeResumeSnapshot(batch.SuspendedRawData, out var original));
+                sent = await executor.ExecuteResumeAsync(expectedTicket: batch.TakeoverTicket,
+                    recoverySnapshot: original, expectedStopVersion: batch.StateContinuationStopVersion,
+                    recoveryStopSignal: batch.RecoveryStopSignal!.Name);
+                Assert.Equal("original-solo", resumedPayload!.Value.GetProperty("recoverySnapshot").GetProperty("ProjectName").GetString());
+            }
+            else
+            {
+                sent = await executor.StartRetainedCompletionActionAsync(batch, batch.Cts.Token);
+                var request = Assert.Single(Starts());
+                Assert.Equal("frozen-config", request.GetProperty("groupName").GetString());
+                Assert.Equal("frozen-revision", request.GetProperty("expectedConfigRevision").GetString());
+                Assert.NotEqual(oldKey, request.GetProperty("idempotencyKey").GetString());
+                Assert.True(!request.TryGetProperty("takeoverTicket", out var releasedTicket) || releasedTicket.ValueKind == JsonValueKind.Null);
+                Assert.Null(executor.TakeoverTicketSnapshot);
+                Assert.Null(_client.TakeoverTicket);
+            }
+            Assert.Equal("success", sent.Status);
+            peerStop!.Stop();
+            batch.ObserveRecoveryStopSignal();
+            Assert.True(batch.IsCancellationRequested);
+        }
+        finally
+        {
+            if (!oldProcess.HasExited) { oldProcess.Kill(); await oldProcess.WaitForExitAsync(); }
+            peerStop?.Dispose(); batch.RecoveryStopSignal?.Dispose();
+            IpcClient.PipeNameOverrideForTest = previousV2;
+        }
+    }
 
     [Fact]
     public async Task NativeResumeLostReplyAndUnavailableReleaseStatusEventuallyUseOneFreshReservation()

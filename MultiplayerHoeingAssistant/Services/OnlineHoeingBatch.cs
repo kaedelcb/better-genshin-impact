@@ -45,6 +45,7 @@ public sealed class OnlineHoeingBatch
         if (RecoveryStopSignal?.IsStopped == true) Cancel();
     }
     internal BgiEpoch? ProcessRecoveryPreviousEpoch { get; private set; }
+    internal bool CompletionRecoveryReservationAcquired { get; set; }
     internal void RebindExitedProcess(BgiEpoch previous, BgiEpoch replacement)
     {
         lock (_policyGate)
@@ -54,6 +55,7 @@ public sealed class OnlineHoeingBatch
                 || !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, previous))
                 throw new InvalidOperationException("原批次停止事实不明或已撤销，不能向新进程恢复");
             ProcessRecoveryPreviousEpoch = previous;
+            CompletionRecoveryReservationAcquired = false;
             ExecutionEpoch = replacement;
             _stateContinuationStopVersion = 0; // New process must still prove no manual stop before it binds this signal.
             TakeoverTicket = null;
@@ -61,6 +63,44 @@ public sealed class OnlineHoeingBatch
             // TakenOver still describes the old exited owner until the current recovery completes.
         }
     }
+    internal bool BeginCompletionProcessRecovery(BgiEpoch previous, BgiEpoch replacement,
+        string? previousRequestKey, bool nativeResume, Func<BgiEpoch, bool?> originalProcessAlive)
+    {
+        lock (_policyGate)
+        {
+            if (!PriorityRecoveryEnabled || !LocalCompletionReady || ExplicitStopRequested || IsCancellationRequested
+                || RecoveryStopSignal is null || RecoveryStopSignal.IsStopped
+                || !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, previous)
+                || ViewModels.CoordinatedBatchLoop.SameEpoch(previous, replacement)
+                || originalProcessAlive(previous) != false
+                || _policyExecution is { } held && !ViewModels.CoordinatedBatchLoop.SameEpoch(held.Epoch, previous)
+                || _policyTerminalResult?.Epoch is { } resultEpoch && !ViewModels.CoordinatedBatchLoop.SameEpoch(resultEpoch, previous)
+                || !(Policy?.Policy == TaskConflictPolicy.RunSpecified
+                    || nativeResume && Policy?.Policy == TaskConflictPolicy.Resume
+                        && CommandExecutor.TryReadNativeResumeSnapshot(_suspendedRawData, out _))
+                || _policyTerminalResult is { Status: "completed", Cancelled: false }) return false;
+            if (_policyStartAttempted || _policyExecution is not null || _policyTerminalResult is not null)
+                _failedPolicyAttempts.Add(_policyTerminalResult ?? new BgiTaskQueueStatus
+                {
+                    TaskHandle = _policyExecution?.JobId, IdempotencyKey = previousRequestKey, Epoch = previous,
+                    Status = "failed", ExecutionExitConfirmed = true, ErrorCode = "executor_exited_result_unknown",
+                    ErrorMessage = "原执行进程已确认退出，未取得完成结果；保留原尝试并重跑已知任务。",
+                });
+            _policyAttempt++;
+            _policyExecution = null;
+            _policyTerminalResult = null;
+            _policyRequestIdentity = null;
+            _policyStartAttempted = false;
+            _policyResultAcknowledged = false;
+            _policyCancellation = null;
+            PolicySendUnknown = false;
+            PolicyTicketReleased = true; // The exited process cannot retain a live reservation.
+            NativeResumeRetryPending = nativeResume;
+            RebindExitedProcess(previous, replacement);
+            return true;
+        }
+    }
+
     internal void CompleteProcessRecovery()
     {
         lock (_policyGate)
@@ -68,6 +108,7 @@ public sealed class OnlineHoeingBatch
             Prepared = true;
             TakenOver = true;
             ProcessRecoveryPreviousEpoch = null;
+            CompletionRecoveryReservationAcquired = false;
         }
     }
     internal CoordinatedRecoveryProgress? RecoveryProgress { get; set; }
@@ -88,6 +129,7 @@ public sealed class OnlineHoeingBatch
             LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
             LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
             NativeResumeRetryPending = NativeResumeRetryPending,
+            CompletionRecoveryReservationAcquired = CompletionRecoveryReservationAcquired,
             PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
             PolicyRequestIdentity = _policyRequestIdentity,
             PolicyPayload = _policySubmitPayload is null ? null : new(_policySubmitPayload),
@@ -104,6 +146,7 @@ public sealed class OnlineHoeingBatch
         {
             _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
             NativeResumeRetryPending = saved.NativeResumeRetryPending,
+            CompletionRecoveryReservationAcquired = saved.CompletionRecoveryReservationAcquired,
             Token = saved.Token, RestoredFromRecovery = true, RecoveryProgress = saved.Progress,
             ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,
             StateContinuationEnabled = true,

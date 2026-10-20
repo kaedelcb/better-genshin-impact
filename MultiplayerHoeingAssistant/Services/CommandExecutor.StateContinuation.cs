@@ -75,7 +75,8 @@ public partial class CommandExecutor
 
     internal async Task ReconcileCompletionTicketAsync(OnlineHoeingBatch batch, CancellationToken ct)
     {
-        if (batch.PolicyExecution is null || batch.ExecutionEpoch is not { } epoch
+        if (batch.PolicyExecution is null && !(batch.ProcessRecoveryPreviousEpoch is not null && batch.CompletionRecoveryReservationAcquired)
+            || batch.ExecutionEpoch is not { } epoch
             || batch.TakeoverTicket is not { } ticket || _takeoverTicket != ticket) return;
         if (await ConfirmTakeoverRevokedAsync(epoch, batch.TakenOver, ct).ConfigureAwait(false))
         {

@@ -576,7 +576,9 @@ public partial class MainViewModel
             recoveryExecutor.CoordinatedTakeoverAllocated = (ticket, epoch) =>
             {
                 batch.TakeoverTicket = ticket;
-                if (batch.NativeResumeRetryPending) batch.PolicyTicketReleased = false;
+                batch.CompletionRecoveryReservationAcquired = false;
+                if (batch.NativeResumeRetryPending || batch.ProcessRecoveryPreviousEpoch is not null)
+                    batch.PolicyTicketReleased = false;
                 batch.ExecutionEpoch ??= epoch;
                 batch.PersistRecovery?.Invoke();
             };

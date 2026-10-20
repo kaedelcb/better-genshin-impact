@@ -1,7 +1,7 @@
 # 四人锄地按实际状态接续：任务与接力
 
 本次授权：按 Spec 实施、验证到完成；用户已明确从只读讨论转为修复。
-整体阶段：本轮E1/E2/C1-C4/R-16修复及独立复审闭合，开发侧验收通过；此前原失败保留
+整体阶段：R-17至R-22实施中，跨助手/BGI接续及完整组合验证尚未完成；此前同进程修复证据和原失败保留
 更新日期：2026-10-20
 依据：[requirements.md](requirements.md)；[design.md](design.md)
 
@@ -280,3 +280,15 @@ BGI过滤范围：StateContinuationTests、BgiTaskCoordinatorTests、JobRegistry
 - validation-16实际助手91/91通过，包括R-F8首次环境拒绝、原drive慢退、首次Running发布失败后Interrupted继续；脚本正在最终计量，exit/tree以process-result/tree-terminal读回为准。旧validation-15的89/90失败保留。当前源码未在16构建后继续修改。
 - 本阶段待保存中文WIP本地提交；完整Goal仍active，T17—T20不勾，外部分支预检baseline仍cef55430。下一项是上述跨BGI/助手安排接续，不能因91个组件用例通过说整项可交付。
 - validation-16最终exit0/tree0已读回；同一Agent据源码+实际结果确认R-F8闭合。保持原R-F8报告与validation-15失败，后续完整目标仍未完成。
+
+
+#### 后续动作跨BGI施工（0637ca5bd之后，未验证/未完成）
+
+本次继续同一完整Goal，补“绑定后续执行期间BGI退出仍自动接原安排”。已开始将原生/指定后续的旧epoch直接撤权改为确切旧PID/start退出、共享停止信号有效、新BGI无明确停止后重新准备；新进程先绑定停止信号，旧请求结果未知保留原因并分配新attempt，不向新进程ACK旧结果。已经观察成功的旧结果不重跑。原生快照保留具体solo及设置，managed原Runner仍须独立原身份接续，不能借原生通道绕过。
+当前新增MainViewModel.CompletionRecovery.cs抽出生产实际执行路径供受控私有IPC+自有旧进程测试直接调用；覆盖活旧进程不动作、确切退出后原生/指定后续、释放回执丢失、原停止信号。即将validation-17，源码候选不代表验证通过；跨助手/managed跨进程和四成员组合仍待完成。
+
+- validation-17助手40/42、exit1/tree0：两项指定后续测试误要求takeoverTicket字段完全不存在，SDK冻结payload实际保留null；改为缺失或null，并额外要求executor与SDK票据均null，原失败保留。原生跨自有进程路径首跑通过。
+- validation-18助手48/48、exit0/tree0：自有PowerShell等待进程真实存活/退出、生产EnsureCompletionExecutorAsync、真实SDK/v2私管、指定后续/原生恢复、释放丢回复及停止保护均过。同一Agent读实际证据后确认该段无已确认未闭问题；不包含managed/跨助手恢复，不声称真正BGI/游戏实跑。
+- 新进程恢复准备使用ProcessRecoveryPreviousEpoch及CompletionRecoveryReservationAcquired持久化已取得/待释放阶段；同一重入不再分配完成动作attempt。已经成功的旧结果不因进程退出重跑；旧进程消失只解除其内存ACK义务。原停止信号缺失/已停、新停止水位不匹配、旧PID/start存活或未知均不能借恢复获得权限。
+
+下一具体入口：RunAcceptedHoeingBatchAsync的RestoredFromRecovery目前只关门，未恢复TaskCenterHost._onlineHoeingRunId/_stateContinuationRuns，也未重建原Runner观察。应先用经过原owner死亡验证的批次快照及原ticket/run/node/提交事实恢复同一关联，沿原Runner消费已存在resume job后继续C；不能让managed快照走原生退路。当前快照没有ManagedRunId/原计划进度，持久记录丢失时仍需补退路。managed跨BGI还涉及原StopAuthority固定旧epoch，应保留原停止来源而非直接刷新权限。完整Goal保持active。
