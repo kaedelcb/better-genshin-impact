@@ -181,6 +181,7 @@
     <Copy SourceFiles="@(AssistOutput)"
           DestinationFiles="@(AssistOutput->'$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
+    <NormalizeWindowsLauncherIntegrity Files="$(OutDir)Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe;$(OutDir)Tools\MultiplayerHoeingAssistant\NexusBGI.Startup.exe;$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe;$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\NexusBGI.Startup.exe" Condition="'$(OS)' == 'Windows_NT'" />
   </Target>
 
 	<!-- 编译后复制 AutoHoeingUpdater 工具到 BGI 输出目录下的 Tools\AutoHoeingUpdater 子目录（含空目录结构） -->
@@ -458,4 +459,5 @@
 
 	<!-- User 默认文件只补缺，不覆盖现有用户数据。 -->
 	<Import Project="UserDefaults.targets" />
+  <Import Project="..\Build\WindowsLauncherIntegrity.targets" />
 </Project>

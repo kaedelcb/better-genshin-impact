@@ -13,4 +13,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="MultiplayerHoeingAssistant.UnitTest" />
   </ItemGroup>
+  <Import Project="..\..\Build\WindowsLauncherIntegrity.targets" />
 </Project>

@@ -1,0 +1,121 @@
+<Project>
+  <!-- 沙箱工作区的 Low 标签可能被新产物继承；仅修正已知启动文件，不改目录或用户数据。 -->
+  <UsingTask TaskName="NormalizeWindowsLauncherIntegrity" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <Task>
+      <Code Type="Class" Language="cs"><![CDATA[
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using Microsoft.Build.Framework;
+using Microsoft.Build.Utilities;
+
+public sealed class NormalizeWindowsLauncherIntegrity : Task
+{
+    [Required]
+    public ITaskItem[] Files { get; set; }
+
+    public override bool Execute()
+    {
+        foreach (var item in Files)
+        {
+            var path = Path.GetFullPath(item.ItemSpec);
+            if (!File.Exists(path)) continue;
+            var name = Path.GetFileName(path);
+            if (!string.Equals(name, "BetterGI.exe", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(name, "MultiplayerHoeingAssistant.exe", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(name, "NexusBGI.Startup.exe", StringComparison.OrdinalIgnoreCase))
+            {
+                Log.LogError("拒绝修改非产品启动文件的完整性标签：{0}", path);
+                return false;
+            }
+
+            IntPtr descriptor = IntPtr.Zero;
+            try
+            {
+                IntPtr sacl, ace;
+                var sid = ReadLabel(path, out descriptor, out sacl, out ace);
+                if (sid != "S-1-16-4096") continue;
+
+                // 保留原 mandatory policy，只把 Low SID 改为 Medium，并取消此文件的继承标记。
+                Marshal.WriteByte(ace, 1, 0);
+                Marshal.WriteInt32(IntPtr.Add(ace, 8), 8, 8192);
+                Check(SetNamedSecurityInfo(path, 1, 0x10, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, sacl));
+
+                IntPtr verifiedDescriptor = IntPtr.Zero;
+                try
+                {
+                    IntPtr verifiedSacl, verifiedAce;
+                    if (ReadLabel(path, out verifiedDescriptor, out verifiedSacl, out verifiedAce) != "S-1-16-8192")
+                        throw new InvalidOperationException("写入后未确认 Medium 完整性标签。");
+                }
+                finally { if (verifiedDescriptor != IntPtr.Zero) LocalFree(verifiedDescriptor); }
+
+                SHChangeNotify(0x800, 0x1005, path, IntPtr.Zero);
+                Log.LogMessage(MessageImportance.Normal, "已修正启动文件的 Low 完整性标签：{0}", path);
+            }
+            catch (Exception ex)
+            {
+                Log.LogError("修正启动文件完整性标签失败：{0}。{1}", path, ex.Message);
+                return false;
+            }
+            finally { if (descriptor != IntPtr.Zero) LocalFree(descriptor); }
+        }
+        return true;
+    }
+
+    private static string ReadLabel(string path, out IntPtr descriptor, out IntPtr sacl, out IntPtr labelAce)
+    {
+        labelAce = IntPtr.Zero;
+        Check(GetNamedSecurityInfo(path, 1, 0x10, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, out sacl, out descriptor));
+        if (sacl == IntPtr.Zero) return null;
+        var count = (ushort)Marshal.ReadInt16(sacl, 4);
+        for (uint index = 0; index < count; index++)
+        {
+            IntPtr ace;
+            if (!GetAce(sacl, index, out ace)) Check((uint)Marshal.GetLastWin32Error());
+            if (Marshal.ReadByte(ace) != 0x11) continue;
+            IntPtr text;
+            if (!ConvertSidToStringSid(IntPtr.Add(ace, 8), out text)) Check((uint)Marshal.GetLastWin32Error());
+            try { labelAce = ace; return Marshal.PtrToStringUni(text); }
+            finally { LocalFree(text); }
+        }
+        return null;
+    }
+
+    private static void Check(uint error)
+    {
+        if (error != 0) throw new InvalidOperationException("Windows 错误代码：" + error);
+    }
+
+    [DllImport("advapi32.dll", EntryPoint = "GetNamedSecurityInfoW", CharSet = CharSet.Unicode)]
+    private static extern uint GetNamedSecurityInfo(string path, uint type, uint information,
+        IntPtr owner, IntPtr group, IntPtr dacl, out IntPtr sacl, out IntPtr descriptor);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetAce(IntPtr acl, uint index, out IntPtr ace);
+    [DllImport("advapi32.dll", EntryPoint = "ConvertSidToStringSidW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ConvertSidToStringSid(IntPtr sid, out IntPtr text);
+    [DllImport("advapi32.dll", EntryPoint = "SetNamedSecurityInfoW", CharSet = CharSet.Unicode)]
+    private static extern uint SetNamedSecurityInfo(string path, uint type, uint information,
+        IntPtr owner, IntPtr group, IntPtr dacl, IntPtr sacl);
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern void SHChangeNotify(int eventId, uint flags, [MarshalAs(UnmanagedType.LPWStr)] string path, IntPtr unused);
+}
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="NormalizeBuiltWindowsLaunchers" AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(OS)' == 'Windows_NT' and '$(DesignTimeBuild)' != 'true' and '$(OutputType)' == 'WinExe'">
+    <ItemGroup>
+      <_BuiltWindowsLauncher Include="$(TargetDir)$(AssemblyName).exe" Condition="Exists('$(TargetDir)$(AssemblyName).exe')" />
+      <_BuiltWindowsLauncher Include="$(TargetDir)NexusBGI.Startup.exe"
+                             Condition="'$(MSBuildProjectName)' == 'MultiplayerHoeingAssistant' and Exists('$(TargetDir)NexusBGI.Startup.exe')" />
+    </ItemGroup>
+    <NormalizeWindowsLauncherIntegrity Files="@(_BuiltWindowsLauncher)" Condition="'@(_BuiltWindowsLauncher)' != ''" />
+  </Target>
+</Project>
