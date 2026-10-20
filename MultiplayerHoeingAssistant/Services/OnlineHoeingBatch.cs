@@ -543,6 +543,7 @@ public sealed class OnlineHoeingBatch
     private CancellationTokenRegistration _policyCancellationRegistration;
     private readonly TaskCompletionSource _policyPhaseFinished = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private Task<bool>? _policyCleanup;
+    private Func<Task<bool>>? _cleanupPolicy;
     internal bool HasPolicyCleanup { get; private set; }
     internal bool CancelledPolicyCleanupConfirmed => _policyCleanup is { IsCompletedSuccessfully: true } task && task.Result;
     internal bool PolicySendUnknown { get; set; }
@@ -574,7 +575,9 @@ public sealed class OnlineHoeingBatch
         lock (_policyGate)
         {
             if (StateContinuationEnabled && !ExplicitStopRequested) return;
-            if (_policyCancellation is not null || _policyExecution is null || _cancelPolicy is null) return;
+            if (_policyExecution is null || _cancelPolicy is null) return;
+            if (_policyCancellation is not null && (!_policyCancellation.IsCompleted
+                || _policyCancellation.IsCompletedSuccessfully && _policyCancellation.Result)) return;
             var execution = _policyExecution;
             var cancel = _cancelPolicy;
             _policyCancellation = Task.Run(async () =>
@@ -593,20 +596,29 @@ public sealed class OnlineHoeingBatch
 
     internal void ConfigurePolicyCleanup(Func<Task<bool>> cleanup)
     {
-        HasPolicyCleanup = true;
-        Cts.Token.Register(() =>
+        lock (_policyGate) { HasPolicyCleanup = true; _cleanupPolicy = cleanup; }
+        Cts.Token.Register(RequestPolicyCleanup);
+    }
+    private void RequestPolicyCleanup()
+    {
+        lock (_policyGate)
         {
-            lock (_policyGate) _policyCleanup ??= Task.Run(async () =>
+            if (!IsCancellationRequested || _cleanupPolicy is null) return;
+            if (_policyCleanup is not null && (!_policyCleanup.IsCompleted
+                || _policyCleanup.IsCompletedSuccessfully && _policyCleanup.Result)) return;
+            var cleanup = _cleanupPolicy;
+            _policyCleanup = Task.Run(async () =>
             {
                 await _policyPhaseFinished.Task.ConfigureAwait(false);
                 try { return await cleanup().ConfigureAwait(false); }
                 catch { return false; }
             });
-        });
+        }
     }
     internal void MarkPolicyPhaseFinished() => _policyPhaseFinished.TrySetResult();
     internal async Task<bool> WaitCancelledPolicyCleanupAsync()
     {
+        RequestPolicyCleanup();
         Task<bool>? cleanup;
         lock (_policyGate) cleanup = _policyCleanup;
         return cleanup is not null && await cleanup.ConfigureAwait(false);

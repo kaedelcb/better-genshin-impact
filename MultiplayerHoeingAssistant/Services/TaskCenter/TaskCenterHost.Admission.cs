@@ -143,10 +143,25 @@ public sealed partial class TaskCenterHost
     private static IEnumerable<OperationRecord> AllAdmissionOperations(LeaseHandoffSegment? handoff)
         => handoff is null ? [] : handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation));
 
+    // Terminal reconciliation alone can read retired original mappings. They remain invisible
+    // to scheduling and generic operation lookup; the stored Unknown snapshot is not reactivated.
+    private static IEnumerable<OperationRecord> TerminalAdmissionOperations(LeaseHandoffSegment? handoff)
+    {
+        foreach (var operation in AllAdmissionOperations(handoff)) yield return operation;
+        foreach (var retired in handoff?.RetiredUnknownOperations ?? [])
+        {
+            var operation = retired.Operation;
+            if (operation.TerminalReleaseEvidence is null) { yield return operation; continue; }
+            var closed = JsonSerializer.Deserialize<OperationRecord>(JsonSerializer.Serialize(operation))!;
+            closed.RequestState = OperationRequestState.TerminalCompleted;
+            yield return closed;
+        }
+    }
+
     private string? ReadTerminalReleaseEvidence(string submissionIdentity, int sendSeq)
     {
         var read = _admissionStore?.Read();
-        var matches = AllAdmissionOperations(read?.File?.Handoff).Where(o => o.SubmissionIdentity == submissionIdentity
+        var matches = TerminalAdmissionOperations(read?.File?.Handoff).Where(o => o.SubmissionIdentity == submissionIdentity
             && o.LastSendSeq == sendSeq && string.IsNullOrEmpty(o.MergedInto)).ToList();
         if (matches is not { Count: 1 } || matches[0].RunBinding is not { } runId) return null;
         var op = matches[0]; var run = _runs.Load(runId);
@@ -523,8 +538,9 @@ public sealed partial class TaskCenterHost
                 TakeoverTerminalConfirmed = (submissionIdentity, sendSeq) =>
                 {
                     var read = _admissionStore?.Read();
-                    var op = read.File?.Handoff?.Operations?.FirstOrDefault(
-                        o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal));
+                    var op = TerminalAdmissionOperations(read?.File?.Handoff).SingleOrDefault(
+                        o => string.Equals(o.SubmissionIdentity, submissionIdentity, StringComparison.Ordinal)
+                            && o.LastSendSeq == sendSeq);
                     // R5.3 §24.1-6（[落地批次会诊阻断处置]）：**按持久化类型分派**，未知类型 fail-closed。
                     // 外部启动的权威终态由 `ExternalStartLedger` 承载：**改查台账终态记录**（§24.1-6：仅同一
                     // `submissionIdentity+sendSeq` 记录为 `Terminal` 才为 true；不得用运行快照或「查询未命中」代替）。
@@ -3241,7 +3257,7 @@ public sealed partial class TaskCenterHost
             // Node scopes remain separately consumable; seal them before freezing the final run.
             var originalRead = _admissionStore.Read();
             if (!IsCompleteAdmissionRead(originalRead)) return AdmissionTerminalReconciliationOutcome.Pending;
-            var operations = AllAdmissionOperations(originalRead.File!.Handoff).ToList();
+            var operations = TerminalAdmissionOperations(originalRead.File!.Handoff).ToList();
             originalMappings = operations.Where(o => o.RunBinding == runId).ToList();
             if (!OriginalAdmissionMappingsPresent(run, originalMappings))
                 return AdmissionTerminalReconciliationOutcome.Pending;
@@ -3276,7 +3292,7 @@ public sealed partial class TaskCenterHost
                     await Task.Delay(20).ConfigureAwait(false);
                     continue;
                 }
-                current = AllAdmissionOperations(leaseRead.File?.Handoff)
+                current = TerminalAdmissionOperations(leaseRead.File?.Handoff)
                     .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList();
             }
             catch (IOException)
@@ -3363,7 +3379,7 @@ public sealed partial class TaskCenterHost
             var finalRead = _admissionStore.Read();
             if (!IsCompleteAdmissionRead(finalRead))
                 return AdmissionTerminalReconciliationOutcome.Pending;
-            current = AllAdmissionOperations(finalRead.File?.Handoff)
+            current = TerminalAdmissionOperations(finalRead.File?.Handoff)
                 .Where(op => string.Equals(op.RunBinding, runId, StringComparison.Ordinal)).ToList();
         }
         catch (Exception ex)

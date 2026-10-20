@@ -1111,6 +1111,11 @@ public sealed class ArbitrationLeaseStore
                     or OperationRequestState.Accepted)
                 || retiredOp.ExecutionResult is not null
                 || retiredOp.PendingTerminal is not null
+                || retiredOp.TerminalReleaseEvidence is { } seal && (retiredOp.RequestState != OperationRequestState.Accepted
+                    || retiredOp.OperationType is not (OperationType.NodeExecution or OperationType.FlowRegistration
+                        or OperationType.Recovery or OperationType.Handoff)
+                    || !seal.StartsWith("runstore-seal:", StringComparison.Ordinal)
+                    || !Guid.TryParseExact(seal["runstore-seal:".Length..], "N", out _))
                 || retiredOp.ConflictPending
                 || !string.Equals(retired.RunId, retiredOp.RunBinding, StringComparison.Ordinal))
             {

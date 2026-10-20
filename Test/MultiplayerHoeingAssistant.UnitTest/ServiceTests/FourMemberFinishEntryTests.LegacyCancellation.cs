@@ -112,6 +112,18 @@ public sealed partial class FourMemberFinishEntryTests
             Assert.True(vm.HasLocalCoordinatedExecutionResponsibility);
             Assert.False(batch.LocalExecutionReleased);
             Assert.False(batch.RunTask!.IsCompleted);
+            var startsBeforeScheduled = pipe.CountOf("ext.task.start");
+            var suspendsBeforeScheduled = pipe.CountOf("task.suspend");
+            var resumesBeforeScheduled = pipe.CountOf("task.resume");
+            var cooperativeBeforeScheduled = bgi.CooperativeStarts;
+            var manualBeforeScheduled = bgi.ManualStarts;
+            Assert.False(await (Task<bool>)Call(vm, "MarkOnlineAsync", "scheduled")!);
+            Assert.Same(batch, Active(vm));
+            Assert.Equal(startsBeforeScheduled, pipe.CountOf("ext.task.start"));
+            Assert.Equal(suspendsBeforeScheduled, pipe.CountOf("task.suspend"));
+            Assert.Equal(resumesBeforeScheduled, pipe.CountOf("task.resume"));
+            Assert.Equal(cooperativeBeforeScheduled, bgi.CooperativeStarts);
+            Assert.Equal(manualBeforeScheduled, bgi.ManualStarts);
             bgi.ManualTerminalUnavailable = false;
 
             await WaitAsync(() => Active(vm) is null && batch.RunTask!.IsCompleted, diagnostics);

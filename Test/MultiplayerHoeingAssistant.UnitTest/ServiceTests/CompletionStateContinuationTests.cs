@@ -414,6 +414,51 @@ public sealed class CompletionStateContinuationTests
     }
 
     [Fact]
+    public async Task CancelledCleanupRetriesOnlyTheSameFinishedResponsibilityAndSharesConcurrentRetry()
+    {
+        var batch = Create();
+        var execution = new HoeingPolicyExecution(Job, Epoch, true);
+        var factsReady = false;
+        var cancellations = 0; var cleanups = 0;
+        var retryEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRetry = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        batch.ConfigurePolicyCancellation(known =>
+        {
+            Interlocked.Increment(ref cancellations);
+            if (known != execution) return Task.FromException<bool>(new InvalidOperationException("changed execution"));
+            if (!factsReady) return Task.FromResult(false);
+            retryEntered.TrySetResult();
+            return releaseRetry.Task;
+        });
+        batch.RecordPolicyExecution(execution);
+        batch.ConfigurePolicyCleanup(async () =>
+        {
+            Interlocked.Increment(ref cleanups);
+            return await batch.WaitPolicyCancellationAsync();
+        });
+        batch.Cancel();
+        var first = batch.WaitCancelledPolicyCleanupAsync();
+        batch.MarkPolicyPhaseFinished();
+        Assert.False(await first.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.False(batch.CancelledPolicyCleanupConfirmed);
+        var priorCancellations = cancellations;
+        factsReady = true;
+        var second = batch.WaitCancelledPolicyCleanupAsync();
+        var concurrent = batch.WaitCancelledPolicyCleanupAsync();
+        await retryEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(2, cleanups);
+        Assert.Equal(priorCancellations + 1, cancellations);
+        Assert.False(second.IsCompleted);
+        releaseRetry.SetResult(true);
+        Assert.True(await second);
+        Assert.True(await concurrent);
+        Assert.True(await batch.WaitCancelledPolicyCleanupAsync());
+        Assert.Equal(2, cleanups);
+        Assert.Equal(priorCancellations + 1, cancellations);
+        Assert.Same(execution, batch.PolicyExecution);
+    }
+
+    [Fact]
     public async Task MissingCompletionConfigurationFinishesPhaseAndLaterStopCleansUp()
     {
         var batch = Create(); var starts = 0; var cleanup = 0;

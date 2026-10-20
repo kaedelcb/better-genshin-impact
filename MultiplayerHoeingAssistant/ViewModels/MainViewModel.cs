@@ -1483,12 +1483,17 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("上线锄地未受理：服务端不支持统一开始协议，请更新配套服务端");
             return false;
         }
+        OnlineHoeingBatch? previous;
+        lock (_batchGate) previous = _activeBatch;
+        if (mode == "scheduled" && previous is { IsAlive: true, RunTask.IsCompleted: true })
+            await RetryCoordinatedCleanupAsync(previous);
         bool activeHoeing;
         lock (_batchGate) activeHoeing = _activeBatch?.IsAlive == true;
         if (activeHoeing)
         {
             AddLog("已有联机批次正在执行或清理，本次普通上线不会重新开锄");
-            return true;
+            // 定时尚未受理，保留原闹钟，让既有宽限窗内的检查继续等清理完成。
+            return mode != "scheduled";
         }
         var gen = _intentLifecycle.RaiseLocalIntent(mode);
         AddLog($"已上线（{mode}）");

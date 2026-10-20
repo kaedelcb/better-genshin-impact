@@ -5632,7 +5632,7 @@ public sealed class ArbitrationAdmissionService
         var lease = read.File.Lease;
         var op = FindOp(read.File, requestIdentity);
         if (op is null)
-            return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "Operations 记录缺失=响亮拒绝。", requestIdentity);
+            return MarkRetiredUnknownOperationTerminal(read.File, requestIdentity, authoritativeTerminalEvidence);
         if (op.RequestState != OperationRequestState.Accepted)
             return AdmissionResult.Of(AdmissionResultKind.Error, "not_accepted", "仅已受理操作可终局完成（其余状态按各自判据）。", requestIdentity);
         // §24.15／§24.1-6（[Batch B 会诊阻断处置]）：外部启动**禁止**借通用终局入口的「台账布尔确认」旁路——
@@ -5664,6 +5664,45 @@ public sealed class ArbitrationAdmissionService
         return mutate.Success
             ? AdmissionResult.Of(AdmissionResultKind.Accepted, "terminal_completed", "权威终态完成（主槽位经迁移释放）。", requestIdentity)
             : AdmissionResult.Of(AdmissionResultKind.Error, mutate.Reason ?? "invalid_request", "终局落盘失败。", requestIdentity);
+    }
+
+    // A late, fully proved terminal may close a retired original without returning it to the
+    // primary operation slots. Preserve its retirement reason/time and every original send field.
+    private AdmissionResult MarkRetiredUnknownOperationTerminal(LogicalOwnerLeaseFile originalFile,
+        string requestIdentity, string authoritativeTerminalEvidence)
+    {
+        var retired = (originalFile.Handoff?.RetiredUnknownOperations ?? [])
+            .SingleOrDefault(item => item.Operation.RequestIdentity == requestIdentity);
+        var op = retired?.Operation;
+        if (op is null || originalFile.Lease is not { } lease)
+            return AdmissionResult.Of(AdmissionResultKind.Error, "stale_operation_identity", "原操作及隔离映射缺失，未关闭责任。", requestIdentity);
+        if (op.RequestState != OperationRequestState.Accepted || retired!.RunId != op.RunBinding
+            || op.OperationType is not (OperationType.NodeExecution or OperationType.FlowRegistration
+                or OperationType.Recovery or OperationType.Handoff))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "retired_operation_not_accepted", "隔离责任缺少原受理事实，未终局。", requestIdentity);
+        var releaseEvidence = _hooks.TakeoverTerminalEvidence?.Invoke(op.SubmissionIdentity, op.LastSendSeq);
+        if (_hooks.TakeoverTerminalConfirmed?.Invoke(op.SubmissionIdentity, op.LastSendSeq) != true
+            || releaseEvidence is null || releaseEvidence != authoritativeTerminalEvidence
+            || !releaseEvidence.StartsWith("runstore-seal:", StringComparison.Ordinal)
+            || !Guid.TryParseExact(releaseEvidence["runstore-seal:".Length..], "N", out _))
+            return AdmissionResult.Of(AdmissionResultKind.Error, "ledger_not_terminal", "原隔离责任的完整终态封印未确认，未终局。", requestIdentity);
+        if (op.TerminalReleaseEvidence is { } recorded)
+            return recorded == releaseEvidence
+                ? AdmissionResult.Of(AdmissionResultKind.Accepted, "terminal_completed", "原隔离责任终态封印已经确认。", requestIdentity)
+                : AdmissionResult.Of(AdmissionResultKind.Error, "release_seal_mismatch", "原隔离责任终态封印冲突。", requestIdentity);
+        var original = System.Text.Json.JsonSerializer.Serialize(retired);
+        var changed = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
+        {
+            var current = (file.Handoff?.RetiredUnknownOperations ?? [])
+                .SingleOrDefault(item => item.Operation.RequestIdentity == requestIdentity);
+            if (current is null || System.Text.Json.JsonSerializer.Serialize(current) != original)
+                return "retired_operation_changed";
+            current.Operation.TerminalReleaseEvidence = releaseEvidence;
+            return null;
+        });
+        return changed.Success
+            ? AdmissionResult.Of(AdmissionResultKind.Accepted, "terminal_completed", "原隔离责任已按真实终态封印结清，历史保留且未重发。", requestIdentity)
+            : AdmissionResult.Of(AdmissionResultKind.Error, changed.Reason ?? "invalid_request", "原隔离责任终态封印未发布。", requestIdentity);
     }
 
     /// <summary>统一关闭接口（§4.2c 两个合法分支共用：当前所有者+当前 revision+目标发送身份匹配；绝不消解 Pending；关闭即同次原子发布更新 Operations 并移除 Submission）。</summary>
