@@ -116,6 +116,115 @@ public class CoordinatedBatchGatewayTests
     }
 
     [Fact]
+    public async Task OfflinePostMemberReleasesOnlyItsWait_AndNextRoundCanStartAfterOnlinePeerCleans()
+    {
+        var (h, clients, room) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+        state = Snapshot(await Update(h, clients[1], state, "u1", result: "succeeded"));
+        Assert.Equal("completed", state.Phase);
+        await h.Ops.ReportControlStatusAsync(clients[1], new ControlStatus
+        {
+            RoomCode = room, PlayerUid = "u1", HoeingBatchId = state.BatchId,
+            HoeingStartPhase = "completionPending", HoeingStartMessage = "正在跟踪同一个绑定完成动作",
+            HoeingCompletionAction = new("runSpecified", "onedragon", "收尾一条龙", 0),
+        });
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        var released = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        var offline = Assert.Single(released.Members.Where(m => m.Uid == "u1"));
+        Assert.True(offline.CompletionWaitReleased);
+        Assert.Equal("succeeded", offline.Result);
+        Assert.NotEqual("cleaned", offline.Stage); // 没有伪造执行端的物理清理回执。
+        Assert.False(released.CleanupComplete); // 在线成员的后续仍须结束。
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0"])));
+        var row = Assert.Single(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Where(p => p.PlayerUid == "u1"));
+        Assert.False(row.Online);
+        Assert.Null(row.HoeingBatchId);
+        Assert.Equal("收尾一条龙", row.HoeingCompletionAction!.TaskName); // 只清运行状态，保留绑定配置。
+        Assert.Equal("offlineCompletion", row.HoeingStartPhase);
+        Assert.Equal("成员已离线，后续任务状态未确认，不影响下次联机锄地。", row.HoeingStartMessage);
+        state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+        Assert.True(state.CleanupComplete);
+        var next = Snapshot(await Begin(h, clients[0], "next", ["u0"]));
+        Assert.NotEqual(state.BatchId, next.BatchId);
+        // 旧成员重连后的旧回执不能清掉或改写新一轮。
+        var rejoined = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(rejoined, GatewayTestHarness.HelloEnvelope());
+        await h.Ops.JoinControlRoomAsync(rejoined, room, "pw", "u1", "name1", clientInstanceId: "instance1");
+        Assert.Null(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "u1").HoeingStartPhase);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, rejoined, state, "u1", stage: "cleaned")));
+        Assert.Equal(next.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
+        Assert.Equal("registering", h.Ops.CurrentCoordinatedBatch(clients[0])!.Phase);
+    }
+
+    [Fact]
+    public async Task MemberDisconnectsBeforeLastPeerFinishes_WaitReleasesOnlyAfterJointCompletion()
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        state = Snapshot(await Update(h, clients[1], state, "u1", result: "succeeded"));
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(clients[0])!.Members.Single(m => m.Uid == "u1").CompletionWaitReleased);
+        state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+        Assert.Equal("completed", state.Phase);
+        Assert.True(state.Members.Single(m => m.Uid == "u1").CompletionWaitReleased);
+        state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+        Assert.True(state.CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next", ["u0"])).BatchId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OfflineMemberCannotReleaseRunningOrAbortedHoeing(bool abort)
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        if (abort) state = Snapshot(await Update(h, clients[0], state, result: "cancelled"));
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        var current = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        Assert.False(current.Members.Single(m => m.Uid == "u1").CompletionWaitReleased);
+        Assert.False(current.CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0"])));
+        Assert.Equal(state.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
+    }
+
+    [Fact]
+    public async Task KnownCompletedCardIsPreservedWhenMemberDisconnectsAfterCleanup()
+    {
+        var (h, clients, room) = await Setup();
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
+        state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+        state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+        await h.Ops.ReportControlStatusAsync(clients[0], new ControlStatus
+        {
+            RoomCode = room, PlayerUid = "u0", HoeingBatchId = state.BatchId,
+            HoeingStartPhase = "completed", HoeingStartMessage = "联机锄地和后续任务全部完成。",
+        });
+        await h.Ops.HandleDisconnectAsync(clients[0], null);
+        var row = Assert.Single(h.RoomManager.GetControlRoomPlayers("CTRL_" + room));
+        Assert.Null(row.HoeingBatchId);
+        Assert.Equal("completed", row.HoeingStartPhase);
+        Assert.Equal("联机锄地和后续任务全部完成。", row.HoeingStartMessage);
+        Assert.True(state.CleanupComplete);
+    }
+
+    [Fact]
+    public async Task StaleDisconnectCannotReleaseReconnectedOnlinePostMember()
+    {
+        var (h, clients, room) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+        state = Snapshot(await Update(h, clients[1], state, "u1", result: "succeeded"));
+        var replacement = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(replacement, GatewayTestHarness.HelloEnvelope());
+        await h.Ops.JoinControlRoomAsync(replacement, room, "pw", "u1", "name1", clientInstanceId: "instance1");
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(clients[0])!.Members.Single(m => m.Uid == "u1").CompletionWaitReleased);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0"])));
+    }
+
+    [Fact]
     public async Task ManualReplayReturnsOriginalIdentityWithoutAnotherStart()
     {
         var (h, clients, _) = await Setup();

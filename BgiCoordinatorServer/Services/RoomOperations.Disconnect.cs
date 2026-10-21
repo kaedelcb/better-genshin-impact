@@ -120,6 +120,7 @@ public sealed partial class RoomOperations
                     if (group.StartsWith("CTRL_"))
                     {
                         _roomManager.RemoveFromControlRoom(group, ctx.ConnectionId);
+                        ReleaseDisconnectedCompletionWaits(group);
                         // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；
                         // 需单独清理遥控端连接登记，防止 _remoteControlConnections 残留。
                         _roomManager.RemoveRemoteConnection(group, ctx.ConnectionId);

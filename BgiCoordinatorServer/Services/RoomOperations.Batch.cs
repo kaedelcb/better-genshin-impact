@@ -11,6 +11,24 @@ public sealed partial class RoomOperations
     private static int _nextBatchGeneration = checked((int)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     private readonly Dictionary<string, CoordinatedBatchState> _batchRequests = new(StringComparer.Ordinal);
 
+    private bool ReleaseOfflineCompletionWaits(string group, CoordinatedBatchState state)
+    {
+        if (state.Phase != "completed") return false;
+        var revision = state.Revision;
+        var changed = false;
+        foreach (var uid in state.ParticipantUids)
+            changed |= _roomManager.ReleaseOfflineCompletionWait(group, uid, state.BatchId,
+                () => state.ReleaseOfflineCompletionWait(uid));
+        return changed || state.Revision != revision;
+    }
+
+    private void ReleaseDisconnectedCompletionWaits(string group)
+    {
+        lock (_batchGate)
+            if (_controlBatches.TryGetValue(group, out var state))
+                ReleaseOfflineCompletionWaits(group, state);
+    }
+
     public CoordinatedBatchSnapshot? CurrentCoordinatedBatch(GatewayHandlerContext ctx, string? batchId = null)
     {
         var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
@@ -200,6 +218,7 @@ public sealed partial class RoomOperations
         CoordinatedBatchState state;
         CoordinatedBatchSnapshot snapshot;
         bool notifyTerminal;
+        bool completionWaitsChanged;
         lock (_batchGate)
         {
             if (!_controlBatches.TryGetValue(group, out state!) || state.Generation != generation || state.BatchId != batchId)
@@ -208,8 +227,12 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("batch_executor_instance_mismatch");
             var previousPhase = state.Phase;
             snapshot = state.Apply(player.PlayerUid, token, batchId, layout, index, attempt, result, DateTime.UtcNow, stage, reason);
+            // 兼容先离线、后由最后一个队友完成共同锄地的顺序。
+            completionWaitsChanged = ReleaseOfflineCompletionWaits(group, state);
+            if (completionWaitsChanged) snapshot = state.Snapshot();
             notifyTerminal = previousPhase != snapshot.Phase && snapshot.Phase is ("completed" or "aborted");
         }
+        if (completionWaitsChanged) await BroadcastControlRoomPlayersAsync(group, forceFull: true);
         if (notifyTerminal) await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
         return snapshot;
     }

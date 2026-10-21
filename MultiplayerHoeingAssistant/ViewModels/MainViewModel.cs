@@ -7972,7 +7972,20 @@ public class MemberViewModel : INotifyPropertyChanged
     public string PlayerName { get => _playerName; set { if (_playerName != value) { _playerName = value; OnPropertyChanged(); } } }
 
     private bool _online;
-    public bool Online { get => _online; set { if (_online != value) { _online = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
+    public bool Online
+    {
+        get => _online;
+        set
+        {
+            if (_online == value) return;
+            _online = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRemoteEdit));
+            OnPropertyChanged(nameof(HoeingStartMessage));
+            OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+            OnPropertyChanged(nameof(IsPostHoeingTaskOffline));
+        }
+    }
 
     /// <summary>成员 UID 是否与当前助手相同；不等于与助手处于同一 Windows 用户/会话。</summary>
     private bool _isSelf;
@@ -8147,6 +8160,8 @@ public class MemberViewModel : INotifyPropertyChanged
     public string? HoeingBatchId { get => _hoeingBatchId; set { if (_hoeingBatchId != value) { _hoeingBatchId = value; OnPropertyChanged(); } } }
     public const string PostHoeingRunningMessage = "联机锄地已完成，后续任务执行中";
     public const string PostHoeingCompletedMessage = "联机锄地和后续任务全部完成。";
+    public const string PostHoeingOfflineMessage = "成员已离线，后续任务状态未确认";
+    public const string PostHoeingOfflineReleasedMessage = "成员已离线，后续任务状态未确认，不影响下次联机锄地。";
     public const string PostHoeingHelp = "全员后续任务结束或停止后可再次联机锄地，个人任务不受影响。";
 
     public string? HoeingStartPhase
@@ -8157,13 +8172,17 @@ public class MemberViewModel : INotifyPropertyChanged
             if (_hoeingStartPhase == value) return;
             _hoeingStartPhase = value;
             OnPropertyChanged();
+            OnPropertyChanged(nameof(HoeingStartMessage));
             OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+            OnPropertyChanged(nameof(IsPostHoeingTaskOffline));
         }
     }
     public string? HoeingStartMessage
     {
         // 兼容尚未更新的远端助手，仅转换展示文字，不改变上报状态或执行结果。
-        get => _hoeingStartMessage switch
+        get => IsPostHoeingTaskOffline
+            ? HoeingStartPhase == "offlineCompletion" ? PostHoeingOfflineReleasedMessage : PostHoeingOfflineMessage
+            : _hoeingStartMessage switch
         {
             "正在跟踪同一个绑定完成动作" => PostHoeingRunningMessage,
             "联机锄地已完整完成" => PostHoeingCompletedMessage,
@@ -8175,9 +8194,14 @@ public class MemberViewModel : INotifyPropertyChanged
             _hoeingStartMessage = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+            OnPropertyChanged(nameof(IsPostHoeingTaskOffline));
         }
     }
-    public bool IsPostHoeingTaskRunning => HoeingStartPhase == "completionPending"
+    // 离线只说明通道断开，保留原阶段/原文案，重连后继续由新上报决定结果。
+    public bool IsPostHoeingTaskOffline => !Online && (HoeingStartPhase == "offlineCompletion"
+        || HoeingStartPhase == "completionPending"
+        && _hoeingStartMessage is "正在跟踪同一个绑定完成动作" or PostHoeingRunningMessage);
+    public bool IsPostHoeingTaskRunning => Online && HoeingStartPhase == "completionPending"
         && HoeingStartMessage == PostHoeingRunningMessage;
     private CoordinatedCompletionAction? _hoeingCompletionAction;
     public CoordinatedCompletionAction? HoeingCompletionAction
@@ -8205,6 +8229,10 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(BgiVersion));
         OnPropertyChanged(nameof(BgiVersionDisplay));
         OnPropertyChanged(nameof(Online));
+        OnPropertyChanged(nameof(HoeingStartPhase));
+        OnPropertyChanged(nameof(HoeingStartMessage));
+        OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+        OnPropertyChanged(nameof(IsPostHoeingTaskOffline));
         OnPropertyChanged(nameof(BgiStatus));
         OnPropertyChanged(nameof(TaskRunning));
         OnPropertyChanged(nameof(TaskStatusAvailable));

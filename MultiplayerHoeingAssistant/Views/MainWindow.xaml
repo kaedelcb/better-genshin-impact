@@ -1116,16 +1116,26 @@
                                                                     Visibility="{Binding IsPostHoeingTaskRunning, Converter={StaticResource BoolToVis}}"
                                                                     AutomationProperties.Name="联机锄地后续任务说明"
                                                                     ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="15000"
+                                                                    Tag="{Binding ElementName=CompletionActionHelpPopup}"
                                                                     Style="{StaticResource TextAction}" Click="CompletionActionHintClick"
                                                                     IsVisibleChanged="CompletionActionHintVisibilityChanged">
                                                                 <Button.ToolTip>
-                                                                    <ToolTip Placement="Bottom" VerticalOffset="4" StaysOpen="False"
+                                                                    <ToolTip Placement="Bottom" VerticalOffset="4"
                                                                              Background="{StaticResource Card}" BorderBrush="{StaticResource GoldDeep}"
                                                                              Foreground="{StaticResource GoldText}" Padding="10,7" MaxWidth="300">
                                                                         <TextBlock Text="{x:Static vm:MemberViewModel.PostHoeingHelp}" FontSize="12" TextWrapping="Wrap"/>
                                                                     </ToolTip>
                                                                 </Button.ToolTip>
                                                             </Button>
+                                                            <Popup x:Name="CompletionActionHelpPopup" Placement="Bottom" VerticalOffset="4"
+                                                                   PlacementTarget="{Binding ElementName=CompletionActionHintButton}"
+                                                                   StaysOpen="False" AllowsTransparency="True">
+                                                                <Border Background="{StaticResource Card}" BorderBrush="{StaticResource GoldDeep}"
+                                                                        BorderThickness="1" CornerRadius="5" Padding="10,7" MaxWidth="300">
+                                                                    <TextBlock Text="{x:Static vm:MemberViewModel.PostHoeingHelp}" FontSize="12"
+                                                                               Foreground="{StaticResource GoldText}" TextWrapping="Wrap"/>
+                                                                </Border>
+                                                            </Popup>
                                                             <TextBlock x:Name="HoeingStatusText" Text="{Binding HoeingStartMessage}" FontSize="12"
                                                                        ToolTip="{Binding HoeingStartMessage}" TextTrimming="CharacterEllipsis">
                                                                 <TextBlock.Style>
@@ -1134,6 +1144,10 @@
                                                                         <Setter Property="TextWrapping" Value="Wrap"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsPostHoeingTaskRunning}" Value="True"><Setter Property="TextWrapping" Value="NoWrap"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsPostHoeingTaskOffline}" Value="True">
+                                                                                <Setter Property="TextWrapping" Value="NoWrap"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+                                                                            </DataTrigger>
                                                                             <DataTrigger Binding="{Binding HoeingStartPhase}" Value="failed"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
                                                                             <DataTrigger Binding="{Binding HoeingStartPhase}" Value="unknown"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
                                                                             <DataTrigger Binding="{Binding HoeingStartPhase}" Value="cleanupPending"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>

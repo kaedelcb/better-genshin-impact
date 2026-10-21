@@ -6,6 +6,7 @@ public sealed record CoordinatedBatchBinding(string Name, string Type);
 public sealed record CoordinatedBatchMemberSnapshot(string Uid, string Stage, string Reason)
 {
     public string Result { get; init; } = "";
+    public bool CompletionWaitReleased { get; init; }
 }
 
 public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, int Index, int Attempt,
@@ -49,6 +50,7 @@ public sealed class CoordinatedBatchState
         public string Stage = "pending";
         public string Reason = "";
         public bool HadLocalTaskError;
+        public bool CompletionWaitReleased;
         public DateTime LastSeen = now;
     }
     private static bool HasEndedCurrentItem(Member member)
@@ -76,7 +78,8 @@ public sealed class CoordinatedBatchState
     public string Phase { get; private set; } = "registering";
     public string Reason { get; private set; } = "";
     public bool ExecutionEnded => Phase is "completed" or "aborted";
-    public bool IsTerminal => ExecutionEnded && _members.Values.All(m => m.Stage == "cleaned");
+    public bool IsTerminal => ExecutionEnded
+        && _members.Values.All(m => m.Stage == "cleaned" || m.CompletionWaitReleased);
     public IReadOnlyList<string> ParticipantUids => _members.Keys.ToArray();
 
     public CoordinatedBatchState(int generation, IEnumerable<string> uids, DateTime now,
@@ -133,7 +136,8 @@ public sealed class CoordinatedBatchState
         UseCompletionActions = UseCompletionActions,
         StateContinuation = StateContinuation,
         PriorityRecovery = PriorityRecovery,
-        Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason) { Result = p.Value.Result }).ToArray(),
+        Members = _members.Select(p => new CoordinatedBatchMemberSnapshot(p.Key, p.Value.Stage, p.Value.Reason)
+        { Result = p.Value.Result, CompletionWaitReleased = p.Value.CompletionWaitReleased }).ToArray(),
         MissingRegistrationUids = Reason == "registration_timeout"
             ? _members.Where(p => p.Value.Token.Length == 0).Select(p => p.Key).ToArray() : [],
         CleanupComplete = IsTerminal,
@@ -160,6 +164,20 @@ public sealed class CoordinatedBatchState
         else if (Phase == "stopping" && now - _phaseStarted > TimeSpan.FromSeconds(90)) Abort("cleanup_timeout");
         else if ((Phase is "running" or "stopping") && _members.Values.Any(m => !HasEndedCurrentItem(m) && now - m.LastSeen > TimeSpan.FromSeconds(90)))
             Abort("participant_lease_expired");
+    }
+
+    // 仅解除已完成共同锄地后的服务端等待，不伪造该成员的停止、成功或物理清理回执。
+    internal bool ReleaseOfflineCompletionWait(string uid)
+    {
+        if (Phase != "completed" || !_members.TryGetValue(uid, out var member))
+            return false;
+        if (member.Stage == "cleaned") return true;
+        if (!member.CompletionWaitReleased)
+        {
+            member.CompletionWaitReleased = true;
+            Revision++;
+        }
+        return true;
     }
 
     public CoordinatedBatchSnapshot ConfirmResetCleaned(string uid)

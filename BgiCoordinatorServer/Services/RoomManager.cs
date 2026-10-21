@@ -1232,6 +1232,11 @@ public class RoomManager
             if (existing != null)
             {
                 existing.Online = true;
+                if (existing.HoeingStartPhase == "offlineCompletion")
+                {
+                    existing.HoeingStartPhase = null;
+                    existing.HoeingStartMessage = null;
+                }
                 existing.PlayerUid = playerUid;
                 existing.PlayerName = playerName;
                 existing.ClientInstanceId = clientInstanceId ?? "";
@@ -1483,6 +1488,30 @@ public class RoomManager
                 .Where(p => p.Online && command.Target.Contains(p.PlayerUid))
                 .Select(p => p.ConnectionId)
                 .ToList();
+        }
+    }
+
+    internal bool ReleaseOfflineCompletionWait(string group, string uid, string batchId, Func<bool> release)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return false;
+        lock (players)
+        {
+            var matches = players.Where(p => p.PlayerUid == uid).ToArray();
+            if (matches.Length != 1) return false;
+            var player = matches[0];
+            // 与重连使用同一把成员锁，旧连接断线不能清除新连接的在线责任。
+            if (player is null || player.Online || !release()) return false;
+            if (player.HoeingBatchId == batchId)
+            {
+                player.HoeingBatchId = null;
+                if (player.HoeingStartPhase == "completionPending")
+                {
+                    player.HoeingStartPhase = "offlineCompletion";
+                    player.HoeingStartMessage = "成员已离线，后续任务状态未确认，不影响下次联机锄地。";
+                }
+                return true;
+            }
+            return false;
         }
     }
 

@@ -199,12 +199,70 @@ public sealed class HoeingMemberStatusWindowTests
         var hint = Assert.IsType<ToolTip>(button.ToolTip);
         Assert.Equal(MemberViewModel.PostHoeingHelp, Assert.IsType<TextBlock>(hint.Content).Text);
         Assert.True(ToolTipService.GetIsEnabled(button));
+        Assert.True(hint.StaysOpen); // WPF ToolTipService 不支持 StaysOpen=false。
+        // 走日志中真正失败的 WPF 悬停服务，而非直接设置 ToolTip.IsOpen。
+        var serviceType = typeof(ToolTip).Assembly.GetType("System.Windows.Controls.PopupControlService", throwOnError: true)!;
+        var service = serviceType.GetProperty("Current", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(null)!;
+        var show = serviceType.GetMethod("ShowToolTip", BindingFlags.Instance | BindingFlags.NonPublic,
+            binder: null, types: [typeof(DependencyObject), typeof(bool)], modifiers: null)!;
+        var close = serviceType.GetMethod("DismissCurrentToolTip", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        close.Invoke(service, null); // 清理布局过程中其他控件可能已触发的提示，建立本次操作的明确前置状态。
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            // 离屏窗口没有真实鼠标悬停；在同一次调度内验证服务开关，避免让位后被输入系统自动收起。
+            show.Invoke(service, [button, false]);
+            Assert.True(hint.IsOpen, $"WPF 提示服务未打开浮层，attempt={attempt}");
+            close.Invoke(service, null);
+            Assert.False(hint.IsOpen);
+            await LayoutAsync(window);
+        }
+        var popup = Assert.IsType<System.Windows.Controls.Primitives.Popup>(button.Tag);
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         await LayoutAsync(window);
-        Assert.True(hint.IsOpen);
-        Assert.Same(button, hint.PlacementTarget);
+        Assert.True(popup.IsOpen);
+        Assert.Same(button, popup.PlacementTarget);
         Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
-        SaveWindow(hint, Path.Combine(AssistantDataDirectory.Root, "completion-help-popup.png"));
+        SaveWindow(Assert.IsAssignableFrom<FrameworkElement>(popup.Child), Path.Combine(AssistantDataDirectory.Root, "completion-help-popup.png"));
+
+        // 同一个成员断线时，旧执行中文字不能继续冒充当前状态；原阶段仍保留。
+        foreach (var message in new[] { "正在跟踪同一个绑定完成动作", MemberViewModel.PostHoeingRunningMessage })
+        {
+            preparing.HoeingStartMessage = message;
+            preparing.Online = false;
+            await LayoutAsync(window);
+            Assert.Equal(MemberViewModel.PostHoeingOfflineMessage, text.Text);
+            Assert.Equal("completionPending", preparing.HoeingStartPhase);
+            Assert.True(preparing.IsPostHoeingTaskOffline);
+            Assert.False(preparing.IsPostHoeingTaskRunning);
+            Assert.Equal(Visibility.Collapsed, button.Visibility);
+            Assert.False(popup.IsOpen);
+            Assert.Equal(((SolidColorBrush)window.FindResource("Dim")).Color,
+                Assert.IsType<SolidColorBrush>(text.Foreground).Color);
+            Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
+            SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "completion-offline-line.png"));
+
+            preparing.Online = true;
+            await LayoutAsync(window);
+            Assert.Equal(MemberViewModel.PostHoeingRunningMessage, text.Text);
+            Assert.False(preparing.IsPostHoeingTaskOffline);
+            Assert.True(button.IsVisible);
+        }
+        preparing.Online = false;
+        preparing.HoeingStartPhase = "offlineCompletion";
+        preparing.HoeingStartMessage = MemberViewModel.PostHoeingOfflineReleasedMessage;
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingOfflineReleasedMessage, text.Text);
+        Assert.False(button.IsVisible);
+        Assert.False(popup.IsOpen);
+        Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
+        SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "completion-offline-released-line.png"));
+        preparing.Online = true;
+
+        // 已知完成事实在断线后仍保留，不能改成未知或执行中。
+        running.Online = false;
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingCompletedMessage, running.HoeingStartMessage);
+        Assert.False(running.IsPostHoeingTaskOffline);
 
         // 完成、停止及未知状态都不能遗留执行中的说明图标或浮层。
         foreach (var phase in new[] { "completed", "cancelled", "unknown" })
@@ -214,7 +272,7 @@ public sealed class HoeingMemberStatusWindowTests
             await LayoutAsync(window);
             Assert.False(preparing.IsPostHoeingTaskRunning);
             Assert.Equal(Visibility.Collapsed, button.Visibility);
-            Assert.False(hint.IsOpen);
+            Assert.False(popup.IsOpen);
         }
         preparing.HoeingStartPhase = "completed";
         preparing.HoeingStartMessage = MemberViewModel.PostHoeingCompletedMessage;
