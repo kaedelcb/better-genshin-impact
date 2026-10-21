@@ -29,7 +29,13 @@ public sealed partial class RoomOperations
         // 广播前先剪同 UID 离线幽灵条目：存量幽灵（修复前残留）随任意一次广播自愈，
         // 避免离线条目在按 UID 键控的全量/增量广播中覆盖在线状态导致客户端"假离线"
         _roomManager.PruneOfflineControlRoomGhosts(group);
-        var players = _roomManager.GetControlRoomPlayers(group);
+        List<ControlRoomPlayer> players;
+        lock (_batchGate)
+        {
+            _controlBatches.TryGetValue(group, out var current);
+            if (current is not null) ReleaseOfflineCompletionWaits(group, current);
+            players = _roomManager.RefreshCompletionWaitDisplay(group, current?.Snapshot());
+        }
         var revision = _roomManager.NextControlRoomRevision(group);
         if (forceFull || !_roomManager.HasControlRoomSnapshot(group))
         {

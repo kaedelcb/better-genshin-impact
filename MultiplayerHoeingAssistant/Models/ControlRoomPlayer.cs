@@ -14,6 +14,8 @@ public class ControlRoomPlayer
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }
+    /// <summary>服务端确认该后续任务不再占用本轮等待；null 表示旧服务端或尚未确认。</summary>
+    public bool? HoeingCompletionWaitReleased { get; set; }
     public Services.CoordinatedCompletionAction? HoeingCompletionAction { get; set; }
     public List<string> ConfigGroups { get; set; } = [];
     public List<string> OneClickConfigs { get; set; } = [];

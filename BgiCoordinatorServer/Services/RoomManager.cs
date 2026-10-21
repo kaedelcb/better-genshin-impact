@@ -1491,6 +1491,30 @@ public class RoomManager
         }
     }
 
+    internal List<ControlRoomPlayer> RefreshCompletionWaitDisplay(string group, CoordinatedBatchSnapshot? current)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return [];
+        lock (players)
+        {
+            foreach (var player in players)
+            {
+                bool? released = null;
+                if (player.HoeingStartPhase is "completionPending" or "offlineCompletion")
+                {
+                    var member = current?.Members.SingleOrDefault(m => m.Uid == player.PlayerUid);
+                    // 当前没有旧轮次，或该上报不属于当前轮次，都不会阻挡房间下一轮。
+                    if (current is null || member is null || current.CleanupComplete
+                        || !string.IsNullOrEmpty(player.HoeingBatchId) && player.HoeingBatchId != current.BatchId
+                        || member.CompletionWaitReleased || member.Stage == "cleaned") released = true;
+                    else if (player.HoeingBatchId == current.BatchId) released = false;
+                }
+                player.HoeingCompletionWaitReleased = released;
+            }
+            // 把原状态和派生标记作为同一份快照发送，后续上报不能改写已排队的广播。
+            return players.Select(player => player.SnapshotForBroadcast()).ToList();
+        }
+    }
+
     internal bool ReleaseOfflineCompletionWait(string group, string uid, string batchId, Func<bool> release)
     {
         if (!_controlRooms.TryGetValue(group, out var players)) return false;

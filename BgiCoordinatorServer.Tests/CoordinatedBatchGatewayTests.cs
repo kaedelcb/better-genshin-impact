@@ -142,6 +142,7 @@ public class CoordinatedBatchGatewayTests
         Assert.Null(row.HoeingBatchId);
         Assert.Equal("收尾一条龙", row.HoeingCompletionAction!.TaskName); // 只清运行状态，保留绑定配置。
         Assert.Equal("offlineCompletion", row.HoeingStartPhase);
+        Assert.True(row.HoeingCompletionWaitReleased);
         Assert.Equal("成员已离线，后续任务状态未确认，不影响下次联机锄地。", row.HoeingStartMessage);
         state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
         Assert.True(state.CleanupComplete);
@@ -155,6 +156,15 @@ public class CoordinatedBatchGatewayTests
         Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, rejoined, state, "u1", stage: "cleaned")));
         Assert.Equal(next.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
         Assert.Equal("registering", h.Ops.CurrentCoordinatedBatch(clients[0])!.Phase);
+        // 旧任务在重连后重新上报执行中，释放事实仍须随成员列表下发。
+        await h.Ops.ReportControlStatusAsync(rejoined, new ControlStatus
+        {
+            RoomCode = room, PlayerUid = "u1", HoeingBatchId = state.BatchId,
+            HoeingStartPhase = "completionPending", HoeingStartMessage = "正在跟踪同一个绑定完成动作",
+        });
+        Assert.True(row.Online);
+        Assert.True(row.HoeingCompletionWaitReleased);
+        Assert.Equal(next.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
     }
 
     [Fact]
@@ -187,6 +197,37 @@ public class CoordinatedBatchGatewayTests
         Assert.False(current.CleanupComplete);
         Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0"])));
         Assert.Equal(state.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
+    }
+
+    [Fact]
+    public async Task OrphanedPostStatusBroadcastsReleasedFact_AndNewBatchDoesNotInheritIt()
+    {
+        var (h, clients, room) = await Setup();
+        ControlStatus Post(string batch) => new()
+        {
+            RoomCode = room, PlayerUid = "u0", HoeingBatchId = batch,
+            HoeingStartPhase = "completionPending", HoeingStartMessage = "正在跟踪同一个绑定完成动作",
+            OnlineHoeingGroupNames = ["group0"], OnlineHoeingGroupTypes = ["group"],
+        };
+        await h.Ops.ReportControlStatusAsync(clients[0], Post("old-server-before-restart"));
+        Assert.Null(h.Ops.CurrentCoordinatedBatch(clients[0]));
+        var row = Assert.Single(h.RoomManager.GetControlRoomPlayers("CTRL_" + room));
+        Assert.True(row.HoeingCompletionWaitReleased);
+        var invocation = h.LegacyGroupProxy.Invocations.Last(i => i.Arguments[0] as string == "ControlRoomPlayersUpdated");
+        var update = Assert.IsType<ControlRoomPlayersUpdate>(((object?[])invocation.Arguments[1])[0]);
+        var sent = Assert.Single(update.Changed!);
+        Assert.True(sent.HoeingCompletionWaitReleased);
+        var packet = JsonSerializer.SerializeToNode(update, GatewayJson.Options)!;
+        Assert.True(packet["changed"]![0]!["hoeingCompletionWaitReleased"]!.GetValue<bool>());
+
+        var current = Snapshot(await Begin(h, clients[0]));
+        await h.Ops.ReportControlStatusAsync(clients[0], Post(current.BatchId));
+        Assert.False(row.HoeingCompletionWaitReleased);
+        Assert.True(sent.HoeingCompletionWaitReleased); // 已排队广播不被新上报改写。
+        Assert.Equal("old-server-before-restart", sent.HoeingBatchId);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        await h.Ops.HandleDisconnectAsync(clients[0], null);
+        Assert.False(row.HoeingCompletionWaitReleased); // 当前轮尚未结束，离线不能伪造已解除。
     }
 
     [Fact]

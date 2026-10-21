@@ -1144,6 +1144,10 @@
                                                                         <Setter Property="TextWrapping" Value="Wrap"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsPostHoeingTaskRunning}" Value="True"><Setter Property="TextWrapping" Value="NoWrap"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsPostHoeingWaitReleased}" Value="True">
+                                                                                <Setter Property="TextWrapping" Value="NoWrap"/>
+                                                                                <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+                                                                            </DataTrigger>
                                                                             <DataTrigger Binding="{Binding IsPostHoeingTaskOffline}" Value="True">
                                                                                 <Setter Property="TextWrapping" Value="NoWrap"/>
                                                                                 <Setter Property="Foreground" Value="{StaticResource Dim}"/>

@@ -109,6 +109,7 @@ public sealed class HoeingMemberStatusWindowTests
                         }
 
                         await VerifyCompletionHintAsync(window, preparing, running, cleanup);
+                        await VerifyReleasedStatusUpdatesAsync(window, vm);
 
                         SaveWindow(window, Path.Combine(AssistantDataDirectory.Root, "hoeing-member-status-window.png"));
                         Assert.Null(vm.SignalR);
@@ -277,6 +278,58 @@ public sealed class HoeingMemberStatusWindowTests
         preparing.HoeingStartPhase = "completed";
         preparing.HoeingStartMessage = MemberViewModel.PostHoeingCompletedMessage;
         await LayoutAsync(window);
+    }
+
+    private static async Task VerifyReleasedStatusUpdatesAsync(MainWindow window, MainViewModel vm)
+    {
+        await using var client = new SignalRClient();
+        typeof(MainViewModel).GetMethod("WireSignalRClient", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, [client]);
+        var receive = (Action<ControlRoomPlayersUpdate>)typeof(SignalRClient)
+            .GetField("OnPlayersUpdated", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
+        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        ControlRoomPlayer Packet(bool online, bool? released) => System.Text.Json.JsonSerializer.Deserialize<ControlRoomPlayer>(
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                playerUid = "100000009", playerName = "Dream", online, hoeingBatchId = "old-post",
+                hoeingStartPhase = "completionPending", hoeingStartMessage = "正在跟踪同一个绑定完成动作",
+                hoeingCompletionWaitReleased = released,
+            }), options)!;
+
+        // 实际接收模型 → 全量新增 → 卡片，覆盖没有 offlineCompletion 新阶段的旧数据。
+        receive(new ControlRoomPlayersUpdate { Full = true, Revision = 1, Players = [Packet(false, true)] });
+        await LayoutAsync(window);
+        var member = Assert.Single(vm.Members);
+        var text = BoundText(window, member, nameof(MemberViewModel.HoeingStartMessage));
+        var line = Assert.IsType<DockPanel>(VisualTreeHelper.GetParent(text));
+        var button = Assert.Single(VisualChildren<Button>(line).Where(b => b.Name == "CompletionActionHintButton"));
+        var height = line.ActualHeight;
+        Assert.Equal(MemberViewModel.PostHoeingOfflineReleasedMessage, text.Text);
+        Assert.False(button.IsVisible);
+        SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "released-offline-line.png"));
+
+        // 增量重连仍在跑原后续：不重新显示会暗示占用本轮的说明图标。
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = 2, Changed = [Packet(true, true)] });
+        await LayoutAsync(window);
+        Assert.Same(member, Assert.Single(vm.Members));
+        Assert.Equal(MemberViewModel.PostHoeingReleasedRunningMessage, text.Text);
+        Assert.False(button.IsVisible);
+        Assert.InRange(Math.Abs(line.ActualHeight - height), 0, 0.5);
+        SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "released-reconnected-line.png"));
+
+        // 新轮次确实持有等待，不能继承旧后续“不影响”的显示。
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = 3, Changed = [Packet(true, false)] });
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingRunningMessage, text.Text);
+        Assert.True(button.IsVisible);
+
+        // 旧服务端没有提供解除事实时，只显示离线，不显示带有错误暗示的未确认短句。
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = 4, Changed = [Packet(false, null)] });
+        await LayoutAsync(window);
+        Assert.Equal("成员已离线", text.Text);
+        Assert.False(button.IsVisible);
+        Assert.DoesNotContain("状态未确认", text.Text);
+        Assert.DoesNotContain("不影响", text.Text);
+        SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "legacy-offline-line.png"));
     }
 
     private static MemberViewModel Member(string uid, string name, string phase, string message) => new()

@@ -2,9 +2,12 @@
 
 public class ControlRoomPlayer
 {
+    internal ControlRoomPlayer SnapshotForBroadcast() => (ControlRoomPlayer)MemberwiseClone();
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }
+    /// <summary>服务端确认该后续任务不再占用本轮等待；null 表示旧服务端或尚未确认。</summary>
+    public bool? HoeingCompletionWaitReleased { get; set; }
     public Services.CoordinatedCompletionAction? HoeingCompletionAction { get; set; }
     public string ConnectionId { get; set; } = string.Empty;
     public string PlayerUid { get; set; } = string.Empty;
