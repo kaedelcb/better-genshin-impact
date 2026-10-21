@@ -116,7 +116,7 @@ public partial class MainViewModel
                                 + "：" + (observed.ErrorMessage ?? observed.ErrorCode ?? observed.Status);
                         continue;
                     }
-                    io.Waiting?.Invoke("正在跟踪同一个绑定完成动作");
+                    io.Waiting?.Invoke("联机锄地已完成，后续任务执行中");
                 }
                 else if (noExecutionNeeded)
                 {

@@ -620,7 +620,7 @@ public partial class MainViewModel
                 batch.Message = batch.CompletionActionWarning is { } warning
                     ? "本端联机锄地已完成；" + warning
                     : batch.LocalExecutionReleased
-                    ? batch.CoordinatedSucceeded ? "联机锄地已完整完成" : "本端联机锄地已完成，队友结果单独记录"
+                    ? batch.CoordinatedSucceeded ? "联机锄地和后续任务全部完成。" : "本端联机锄地已完成，队友结果单独记录"
                     : "本端联机锄地已完成，本机收尾仍待确认：" + batch.FailureReason;
             }
             else
@@ -908,7 +908,7 @@ public partial class MainViewModel
                     ? "本端联机锄地已完成；" + warning
                     : batch.LocalFinalizationTask?.IsFaulted == true
                     ? "本端联机锄地已完成；完成动作未确认，未重发：" + batch.FailureReason
-                    : batch.CoordinatedSucceeded ? "联机锄地已完整完成" : "本端联机锄地已完成",
+                    : batch.CoordinatedSucceeded ? "联机锄地和后续任务全部完成。" : "本端联机锄地已完成",
                 "cancelled" => "联机锄地已取消，清理已确认",
                 "partial_completed" => "当前绑定已完成；因成员普通任务失败，后续绑定未启动",
                 "failed" => batch.Message,

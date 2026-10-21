@@ -1099,22 +1099,49 @@
                                                             </StackPanel>
                                                         </Grid>
 
-                                                        <!-- [远端任务回执] 本机作为发起方时显示该成员的远端启动结果
-                                                             （等待回执/成功/失败/已发送（无回执））；空串隐藏 -->
-                                                        <TextBlock Text="{Binding HoeingStartMessage}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap">
-                                                            <TextBlock.Style>
-                                                                <Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="{StaticResource Geo}"/>
+                                                        <!-- 复用原状态行；说明浮层不占布局高度，窄屏优先保留信息图标。 -->
+                                                        <DockPanel x:Name="HoeingStatusLine" Margin="0,4,0,0" HorizontalAlignment="Left">
+                                                            <DockPanel.Style>
+                                                                <Style TargetType="DockPanel">
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding HoeingStartMessage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                                                         <DataTrigger Binding="{Binding HoeingStartMessage}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
-                                                                        <DataTrigger Binding="{Binding HoeingStartPhase}" Value="failed"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
-                                                                        <DataTrigger Binding="{Binding HoeingStartPhase}" Value="unknown"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
-                                                                        <DataTrigger Binding="{Binding HoeingStartPhase}" Value="cleanupPending"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
-                                                            </TextBlock.Style>
-                                                        </TextBlock>
+                                                            </DockPanel.Style>
+                                                            <Button x:Name="CompletionActionHintButton" DockPanel.Dock="Right" Content="ⓘ"
+                                                                    Width="16" Height="{Binding ActualHeight, ElementName=HoeingStatusText}"
+                                                                    Margin="5,0,0,0" Padding="0" VerticalAlignment="Center"
+                                                                    FontFamily="Segoe UI Symbol" FontSize="12" Foreground="{StaticResource GoldText}" Opacity="0.7"
+                                                                    Visibility="{Binding IsPostHoeingTaskRunning, Converter={StaticResource BoolToVis}}"
+                                                                    AutomationProperties.Name="联机锄地后续任务说明"
+                                                                    ToolTipService.InitialShowDelay="250" ToolTipService.ShowDuration="15000"
+                                                                    Style="{StaticResource TextAction}" Click="CompletionActionHintClick"
+                                                                    IsVisibleChanged="CompletionActionHintVisibilityChanged">
+                                                                <Button.ToolTip>
+                                                                    <ToolTip Placement="Bottom" VerticalOffset="4" StaysOpen="False"
+                                                                             Background="{StaticResource Card}" BorderBrush="{StaticResource GoldDeep}"
+                                                                             Foreground="{StaticResource GoldText}" Padding="10,7" MaxWidth="300">
+                                                                        <TextBlock Text="{x:Static vm:MemberViewModel.PostHoeingHelp}" FontSize="12" TextWrapping="Wrap"/>
+                                                                    </ToolTip>
+                                                                </Button.ToolTip>
+                                                            </Button>
+                                                            <TextBlock x:Name="HoeingStatusText" Text="{Binding HoeingStartMessage}" FontSize="12"
+                                                                       ToolTip="{Binding HoeingStartMessage}" TextTrimming="CharacterEllipsis">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{StaticResource Geo}"/>
+                                                                        <Setter Property="TextWrapping" Value="Wrap"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsPostHoeingTaskRunning}" Value="True"><Setter Property="TextWrapping" Value="NoWrap"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="failed"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="unknown"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="cleanupPending"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </DockPanel>
                                                         <TextBlock FontSize="10" Margin="0,3,0,0" MaxWidth="520" TextTrimming="CharacterEllipsis"
                                                                    Text="{Binding RemoteStartResult}">
                                                             <TextBlock.Style>

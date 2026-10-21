@@ -8145,8 +8145,40 @@ public class MemberViewModel : INotifyPropertyChanged
     private string? _hoeingStartPhase;
     private string? _hoeingStartMessage;
     public string? HoeingBatchId { get => _hoeingBatchId; set { if (_hoeingBatchId != value) { _hoeingBatchId = value; OnPropertyChanged(); } } }
-    public string? HoeingStartPhase { get => _hoeingStartPhase; set { if (_hoeingStartPhase != value) { _hoeingStartPhase = value; OnPropertyChanged(); } } }
-    public string? HoeingStartMessage { get => _hoeingStartMessage; set { if (_hoeingStartMessage != value) { _hoeingStartMessage = value; OnPropertyChanged(); } } }
+    public const string PostHoeingRunningMessage = "联机锄地已完成，后续任务执行中";
+    public const string PostHoeingCompletedMessage = "联机锄地和后续任务全部完成。";
+    public const string PostHoeingHelp = "全员后续任务结束或停止后可再次联机锄地，个人任务不受影响。";
+
+    public string? HoeingStartPhase
+    {
+        get => _hoeingStartPhase;
+        set
+        {
+            if (_hoeingStartPhase == value) return;
+            _hoeingStartPhase = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+        }
+    }
+    public string? HoeingStartMessage
+    {
+        // 兼容尚未更新的远端助手，仅转换展示文字，不改变上报状态或执行结果。
+        get => _hoeingStartMessage switch
+        {
+            "正在跟踪同一个绑定完成动作" => PostHoeingRunningMessage,
+            "联机锄地已完整完成" => PostHoeingCompletedMessage,
+            _ => _hoeingStartMessage,
+        };
+        set
+        {
+            if (_hoeingStartMessage == value) return;
+            _hoeingStartMessage = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+        }
+    }
+    public bool IsPostHoeingTaskRunning => HoeingStartPhase == "completionPending"
+        && HoeingStartMessage == PostHoeingRunningMessage;
     private CoordinatedCompletionAction? _hoeingCompletionAction;
     public CoordinatedCompletionAction? HoeingCompletionAction
     {

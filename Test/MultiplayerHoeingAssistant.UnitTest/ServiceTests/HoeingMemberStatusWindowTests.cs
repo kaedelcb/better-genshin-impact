@@ -108,6 +108,8 @@ public sealed class HoeingMemberStatusWindowTests
                             Assert.False(emptyResult.IsVisible);
                         }
 
+                        await VerifyCompletionHintAsync(window, preparing, running, cleanup);
+
                         SaveWindow(window, Path.Combine(AssistantDataDirectory.Root, "hoeing-member-status-window.png"));
                         Assert.Null(vm.SignalR);
                     }
@@ -151,6 +153,74 @@ public sealed class HoeingMemberStatusWindowTests
         Assert.True(File.Exists(Path.Combine(AssistantDataDirectory.Root, "hoeing-member-status-window.png")));
     }
 
+    private static async Task VerifyCompletionHintAsync(MainWindow window, MemberViewModel preparing,
+        MemberViewModel running, MemberViewModel cleanup)
+    {
+        preparing.PlayerName = "小鲨鱼";
+        preparing.HoeingStartPhase = "completed";
+        preparing.HoeingStartMessage = MemberViewModel.PostHoeingCompletedMessage;
+        await LayoutAsync(window);
+        var text = BoundText(window, preparing, nameof(MemberViewModel.HoeingStartMessage));
+        var line = Assert.IsType<DockPanel>(VisualTreeHelper.GetParent(text));
+        var baselineHeight = line.ActualHeight;
+        var button = Assert.Single(VisualChildren<Button>(line)
+            .Where(item => item.Name == "CompletionActionHintButton"));
+        Assert.Equal(Visibility.Collapsed, button.Visibility);
+
+        // 远端旧版文案也转换为当前展示；不要求对方更新程序。
+        preparing.HoeingStartPhase = "completionPending";
+        preparing.HoeingStartMessage = "正在跟踪同一个绑定完成动作";
+        running.HoeingStartPhase = "completed";
+        running.HoeingStartMessage = "联机锄地已完整完成";
+        cleanup.HoeingStartPhase = "completed";
+        cleanup.HoeingStartMessage = MemberViewModel.PostHoeingCompletedMessage;
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingRunningMessage, text.Text);
+        Assert.Equal(MemberViewModel.PostHoeingCompletedMessage, running.HoeingStartMessage);
+        Assert.True(preparing.IsPostHoeingTaskRunning);
+        Assert.True(button.IsVisible);
+        Assert.Equal(TextWrapping.NoWrap, text.TextWrapping);
+        Assert.Equal(TextTrimming.CharacterEllipsis, text.TextTrimming);
+        Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
+        Assert.InRange(Bounds(button, window).Left - Bounds(text, window).Right, 0, 8);
+        SaveWindow(window, Path.Combine(AssistantDataDirectory.Root, "completion-running-window.png"));
+
+        // 验证狭窄可用宽度下文字让位于图标，而非新增一行或溢出。
+        line.MaxWidth = 190;
+        await LayoutAsync(window);
+        Assert.True(text.ActualWidth < 190);
+        Assert.True(button.IsVisible && button.ActualWidth > 0);
+        Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
+        Assert.True(Bounds(button, window).Right <= Bounds(line, window).Right + 0.5);
+        SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "completion-narrow-line.png"));
+        line.ClearValue(FrameworkElement.MaxWidthProperty);
+        await LayoutAsync(window);
+
+        var hint = Assert.IsType<ToolTip>(button.ToolTip);
+        Assert.Equal(MemberViewModel.PostHoeingHelp, Assert.IsType<TextBlock>(hint.Content).Text);
+        Assert.True(ToolTipService.GetIsEnabled(button));
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        await LayoutAsync(window);
+        Assert.True(hint.IsOpen);
+        Assert.Same(button, hint.PlacementTarget);
+        Assert.InRange(Math.Abs(line.ActualHeight - baselineHeight), 0, 0.5);
+        SaveWindow(hint, Path.Combine(AssistantDataDirectory.Root, "completion-help-popup.png"));
+
+        // 完成、停止及未知状态都不能遗留执行中的说明图标或浮层。
+        foreach (var phase in new[] { "completed", "cancelled", "unknown" })
+        {
+            preparing.HoeingStartPhase = phase;
+            preparing.HoeingStartMessage = phase == "completed" ? MemberViewModel.PostHoeingCompletedMessage : "本轮已结束";
+            await LayoutAsync(window);
+            Assert.False(preparing.IsPostHoeingTaskRunning);
+            Assert.Equal(Visibility.Collapsed, button.Visibility);
+            Assert.False(hint.IsOpen);
+        }
+        preparing.HoeingStartPhase = "completed";
+        preparing.HoeingStartMessage = MemberViewModel.PostHoeingCompletedMessage;
+        await LayoutAsync(window);
+    }
+
     private static MemberViewModel Member(string uid, string name, string phase, string message) => new()
     {
         PlayerUid = uid, PlayerName = name, Online = true, IsSelected = true,
@@ -189,7 +259,15 @@ public sealed class HoeingMemberStatusWindowTests
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth), (int)Math.Ceiling(window.ActualHeight),
             96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+        if (window is Window) bitmap.Render(window);
+        else
+        {
+            // 子控件带有父布局偏移，使用 VisualBrush 将其自身内容绘制到截图原点。
+            var drawing = new DrawingVisual();
+            using (var context = drawing.RenderOpen())
+                context.DrawRectangle(new VisualBrush(window), null, new Rect(0, 0, window.ActualWidth, window.ActualHeight));
+            bitmap.Render(drawing);
+        }
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Reflection;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
@@ -17,6 +18,21 @@ public partial class MainWindow : Window
     };
 
     private bool _copyingRoomCode;
+
+    private void CompletionActionHintClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { IsVisible: true, ToolTip: ToolTip hint } button)
+        {
+            hint.PlacementTarget = button;
+            hint.IsOpen = true;
+            e.Handled = true;
+        }
+    }
+
+    private void CompletionActionHintVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is Button { IsVisible: false, ToolTip: ToolTip hint }) hint.IsOpen = false;
+    }
 
     private async void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
