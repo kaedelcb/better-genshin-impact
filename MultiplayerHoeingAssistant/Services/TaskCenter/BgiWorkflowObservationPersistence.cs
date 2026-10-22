@@ -63,6 +63,13 @@ internal static class BgiWorkflowObservationPersistence
             if (job is not null && !binding.Identity.Matches(job)) return false;
             (live.ObservedTerminal, live.ExecutionExitConfirmed, live.ExecutionExitDisposition, live.EffectState) =
                 Merge(live.ObservedTerminal, live.ExecutionExitConfirmed, live.ExecutionExitDisposition, live.EffectState, job);
+            if (job is { ExecutionExitConfirmed: true } && BgiJobTerminalPolling.IsTerminal(job.State)
+                && job.ExecutionExitDisposition is "execution_exited" or "never_started")
+            {
+                if (live.ErrorCode is not null && live.ErrorCode != job.ErrorCode)
+                    throw new RunRecordConflictException("原前置错误码冲突，拒绝改变准备执行证据。");
+                live.ErrorCode = job.ErrorCode;
+            }
             live.JobId = jobId;
             return true;
         }, out var merged);

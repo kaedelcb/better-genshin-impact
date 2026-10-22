@@ -386,7 +386,7 @@ public sealed partial class RunStore
     }
 
     private bool UpdateMergingCore(string runId, Func<WorkflowRunRecord, bool> applyOwnedFields,
-        out WorkflowRunRecord? latest, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, PriorityProcessContinuation? authorizedProcess = null)
+        out WorkflowRunRecord? latest, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, PriorityProcessContinuation? authorizedProcess = null, AccountPreparationProcessContinuation? authorizedAccountPreparation = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runId);
         ArgumentNullException.ThrowIfNull(applyOwnedFields);
@@ -422,7 +422,7 @@ public sealed partial class RunStore
                 return false;
             }
 
-            Persist(current, current.RecordRevision, authorizedPermit: authorizedPermit, authorizedMapping: authorizedMapping, authorizedProcess: authorizedProcess);   // 以最新修订发布
+            Persist(current, current.RecordRevision, authorizedPermit: authorizedPermit, authorizedMapping: authorizedMapping, authorizedProcess: authorizedProcess, authorizedAccountPreparation: authorizedAccountPreparation);   // 以最新修订发布
             latest = current;
             return true;
         }
@@ -665,7 +665,7 @@ public sealed partial class RunStore
             }
         });
     }
-    private void PersistDisk(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null)
+    private void PersistDisk(WorkflowRunRecord rec, int expectedRecordRevision, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, AdmissionParentSource? authorizedParent = null, RunAdmissionMapping? authorizedMapping = null, bool authorizedDiagnostic = false, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null, AccountPreparationProcessContinuation? authorizedAccountPreparation = null)
     {
         lock (_gate)
         {
@@ -733,6 +733,8 @@ public sealed partial class RunStore
             throw new RunRecordConflictException("新运行不得补造执行重置释放证据。");
         if (currentText is null && rec.PriorityProcessContinuations.Count != 0)
             throw new RunRecordConflictException("新记录不能补造原批次的跨进程接续授权。");
+        if (currentText is null && rec.AccountPreparationProcessContinuations.Count != 0)
+            throw new RunRecordConflictException("新记录不能补造账号准备的跨进程接续授权。");
         if (currentText is null && rec.RecoveryAssociations.Count != 0)
             throw new RunRecordConflictException("新运行记录不得自造历史恢复关联。");
         if (currentText is not null)
@@ -753,7 +755,7 @@ public sealed partial class RunStore
                 && !rec.SubmissionHistory.Any(s => JsonSerializer.Serialize(s) == JsonSerializer.Serialize(previous))
                 && TerminalReleaseEvidence.BodySettled(current, previous))
                 rec.SubmissionHistory.Add(JsonSerializer.Deserialize<WorkflowSubmission>(JsonSerializer.Serialize(previous))!);
-            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed, authorizedReset, authorizedProcess);
+            if (current is not null) RunStoreEvidenceGuard.Validate(current, rec, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation, authorizedPermit, authorizedMapping, authorizedRouting, authorizedEntrySeed, authorizedReset, authorizedProcess, authorizedAccountPreparation);
             if (current?.StopRequested == true) rec.StopRequested = true;
             if (current is not null && current.StopAuthority != rec.StopAuthority)
                 throw new RunRecordConflictException("停止授权创建即固定，禁止恢复/旧对象刷新或移除基线。");

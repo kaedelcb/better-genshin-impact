@@ -66,7 +66,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         // 引擎刚落盘的 Intent 记录 = 同出现身份+kind+账号标识的最新一条（单驱动循环串行，无并发歧义）
         var record = run.PrerequisiteActions.LastOrDefault(r =>
             r.NodeId == occurrence.NodeId && r.Occurrence == occurrence.Occurrence
-            && r.LoopIteration == occurrence.LoopIteration && r.Attempt == 1
+            && r.LoopIteration == occurrence.LoopIteration
             && r.Kind == strategy.Kind && r.AccountKey == accountKey);
         if (record is not null && (record.SendAttempted || !string.IsNullOrEmpty(record.JobId)))
             return new PrerequisiteResult(PrerequisiteStatus.Unknown, "该意图已有发送责任；仅允许只读对账，不再次提交", record.JobId);
@@ -96,7 +96,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
         record.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(ExpireWindow).ToString("O");
         record.IdempotencyKey = RunStore.DeriveSubmissionKey(run.RunId,
             $"{occurrence.NodeId}#{record.StrategyIndex}:{strategy.Kind}:{record.AccountKey}",
-            occurrence.Occurrence, occurrence.LoopIteration, 1);
+            occurrence.Occurrence, occurrence.LoopIteration, record.Attempt);
         var operation = strategy.Kind == "prerequisite.account"
             ? BgiExternalClient.ExternalOperations.PrerequisiteAccount
             : BgiExternalClient.ExternalOperations.PrerequisiteRedeemCode;
@@ -112,7 +112,7 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
             nodeId = occurrence.NodeId,
             iteration = occurrence.LoopIteration,
             occurrence = occurrence.Occurrence,
-            attempt = 1,
+            attempt = record.Attempt,
             uid,
             bindingCode = strategy.Kind == "prerequisite.account" ? strategy.GetString("bindingCode") : null,
         };
@@ -255,7 +255,13 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
             observed => BgiWorkflowObservationPersistence.Save(_runs, run, record, binding, jobId, jobId, observed)).ConfigureAwait(false);
         if (Identity(record) != identity || record.JobId != job?.JobId && job is not null)
             return new(PrerequisiteStatus.Unknown, "观察期间记录身份变化", record.JobId);
-        var result = MapOutcome(outcome, job, reason, record.JobId);
+        var result = outcome == "failed" && record.Kind == "prerequisite.account"
+            && job is { Kind: "prerequisite", Name: "prerequisite.account", WasCancelled: false,
+                ErrorCode: AccountPreparationRecovery.NotStartedCode, ExecutionExitConfirmed: true }
+            && job.ExecutionExitDisposition is "execution_exited" or "never_started"
+            ? new PrerequisiteResult(PrerequisiteStatus.PreparationNotStarted,
+                "游戏窗口尚未准备就绪，已确认账号操作未开始；可沿原运行继续准备", record.JobId)
+            : MapOutcome(outcome, job, reason, record.JobId);
         record.State = result.Status switch { PrerequisiteStatus.Proceed => PrerequisiteActionState.Succeeded,
             PrerequisiteStatus.Cancelled => PrerequisiteActionState.Cancelled,
             PrerequisiteStatus.Unknown => PrerequisiteActionState.Unknown, _ => PrerequisiteActionState.Failed };

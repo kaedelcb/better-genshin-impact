@@ -231,6 +231,9 @@ public sealed class VerifiedAccountRunMarker
 public sealed record PriorityProcessContinuation(string PreviousEpoch, WorkflowStopAuthorityRecord Authority,
     string BatchId, int Generation, string StopSignalName);
 
+public sealed record AccountPreparationProcessContinuation(string PreviousEpoch, WorkflowStopAuthorityRecord Authority,
+    string SafeJobId, int SafeAttempt);
+
 public sealed class WorkflowRunRecord
 {
     /// <summary>运行身份（"run-" + 12 位十六进制，创建即固定）。</summary>
@@ -271,6 +274,9 @@ public sealed class WorkflowRunRecord
 
     [JsonPropertyName("priorityProcessContinuations")]
     public List<PriorityProcessContinuation> PriorityProcessContinuations { get; set; } = [];
+
+    [JsonPropertyName("accountPreparationProcessContinuations")]
+    public List<AccountPreparationProcessContinuation> AccountPreparationProcessContinuations { get; set; } = [];
 
     /// <summary>当前节点游标（运行水位，C06 入口的落地处）。</summary>
     [JsonPropertyName("cursor")]
@@ -626,6 +632,8 @@ public sealed class PrerequisiteActionRecord
     [JsonPropertyName("jobId")] public string? JobId { get; set; }
     [JsonPropertyName("state")] public PrerequisiteActionState State { get; set; } = PrerequisiteActionState.Intent;
     [JsonPropertyName("reason")] public string? Reason { get; set; }
+    /// <summary>同冻结身份作业确认退出时观察到的受控错误码；旧记录缺省不授予准备重试。</summary>
+    [JsonPropertyName("errorCode")] public string? ErrorCode { get; set; }
     [JsonPropertyName("redeliveryCount")] public int RedeliveryCount { get; set; }
     [JsonPropertyName("recordedAt")] public DateTimeOffset RecordedAt { get; set; }
 

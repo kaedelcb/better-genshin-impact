@@ -75,6 +75,8 @@ public static class JobErrorCodes
 
     /// <summary>R4.6 E2-9：执行权取得后 UID 复验不符（受保护执行阶段拒绝，账号未被验证前不产生资源副作用）。</summary>
     public const string AccountMismatch = "account_mismatch";
+    /// <summary>账号前置全部核对均在首次游戏输入前失焦，且从未尝试切号；可确认尚未执行。</summary>
+    public const string AccountPreparationNotStarted = "account_preparation_not_started";
     /// <summary>R4.6 D8：前置动作执行失败（真实结果，非取消非跳过）。</summary>
     public const string PrerequisiteFailed = "prerequisite_failed";
     /// <summary>R4.6 I4：前置副作用结果不明（如切号后未进主界面）——不自动重复副作用，按失败保守处置。</summary>

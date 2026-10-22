@@ -1199,7 +1199,10 @@ public sealed class ArbitrationAdmissionService
                 Candidate = candidate,
                 RunBinding = request.RunId, // 绑定登记即固定（不可改写）
                 RecoveryBranch = request.RestoreBranch, // A6 原票据恢复豁免只对 interrupted-relocate 生效
+                OperationType = OperationType.Recovery,
             };
+            // 固定来源身份保留；仅宿主已耐久核准的账号准备接续可选择替换实例。
+            targetEpoch = _hooks.PriorityNodeEpoch?.Invoke(inner) ?? targetEpoch;
             register = MutateOwned(lease.LeaseId, lease.OwnerEpoch, file =>
             {
                 var capacity = EnsureCapacityForCreate(file, now);

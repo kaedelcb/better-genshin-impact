@@ -1317,7 +1317,8 @@ public sealed partial class TaskCenterHost
                 $"此前已受理同一计划出现（运行 {hit.RunId} 当前 {hit.State}，可在运行状态卡显式恢复，禁止自动换键重跑）",
             _ => $"此前已受理同一计划出现（运行 {hit.RunId} 当前 {hit.State}）",
         };
-        return HandoffRegisterResult.AlreadyAccepted(hit.RunId, note, hit.State);
+        return new HandoffRegisterResult(HandoffOutcome.AlreadyAccepted, hit.RunId, note,
+            hit.State == WorkflowRunState.Unknown ? HandoffReasonCodes.Unknown : null, hit.State);
     }
 
     /// <summary>台账查询统一入口（I5 三态：Incomplete → Rejected LedgerIncomplete；命中 → 内容核对回执；未命中 → null 放行新受理）。</summary>
@@ -1470,7 +1471,7 @@ public sealed partial class TaskCenterHost
 
         // 台账查询（读路径无副作用）：命中 → 内容核对（§2）；不完整 → 拒绝新受理（I5）
         if (LedgerGate(request) is { } receipt)
-            return receipt;
+            return await ReplayAccountPreparationAsync(request, receipt, ct).ConfigureAwait(false);
 
         // 环境确保（2026-09-20 修复+会诊处置：台账之后、快照之前——受理事实优先（重放同键由 LedgerGate 先回执，不触发拉起）；
         // 锁外有界等待，取消随调用方 ct 与宿主退出联动。失败经台账复核回执：等待期间同键可能已被并发请求受理，

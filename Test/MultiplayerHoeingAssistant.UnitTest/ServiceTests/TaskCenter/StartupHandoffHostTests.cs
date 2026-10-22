@@ -133,6 +133,173 @@ public class StartupHandoffHostTests : IDisposable
         return rec;
     }
 
+    private WorkflowRunRecord SeedSafeAccountPreparation(string workflowId, string key,
+        string epoch = "2147483647:1", bool withAdmissionSource = false)
+    {
+        var authority = new WorkflowStopAuthorityRecord(epoch, 0, "original-intent", 100,
+            System.Diagnostics.Stopwatch.Frequency);
+        var run = _runs.CreateRun(workflowId, _workflows.LoadSnapshot(workflowId).Revision,
+            handoff: new HandoffIdentity { IntentKey = key, ExecutionId = "original-execution",
+                StepId = "step-1", Mode = StartupHandoffModes.Start },
+            admissionSourceScope: withAdmissionSource ? "bgi:local:" + epoch : null, stopAuthority: authority);
+        run.State = WorkflowRunState.Interrupted;
+        run.TriggerConsumed = true;
+        run.Cursor = new() { NodeId = "n-1", Occurrence = 0, LoopIteration = 0, Attempt = 1 };
+        run.PrerequisiteActions.Add(new()
+        {
+            Kind = "prerequisite.account", NodeId = "n-1", Occurrence = 0, LoopIteration = 0,
+            Attempt = 1, StrategyIndex = 0, AccountKey = "account-hash", State = PrerequisiteActionState.Failed,
+            ErrorCode = AccountPreparationRecovery.NotStartedCode, SendAttempted = true,
+            WireRunId = run.WireRunId, Epoch = epoch, IdempotencyKey = "original-account-key",
+            Fingerprint = "original-fingerprint", ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(10).ToString("O"),
+            JobId = "original-account-job", ExecutionExitConfirmed = true,
+            ExecutionExitDisposition = "execution_exited", ObservedTerminal = "failed", EffectState = "failed",
+        });
+        _runs.Update(run);
+        return run;
+    }
+
+    [Fact]
+    public async Task AccountPreparationReplay_SameDay_ResumesOriginalRunOnlyOnce()
+    {
+        const string key = "startup:main:2026-10-22";
+        var workflowId = Seed("账号准备等待");
+        var run = SeedSafeAccountPreparation(workflowId, key);
+        var (host, boundary) = MakeHost();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        boundary.OnAwait = async (_, ct) => { await gate.Task.WaitAsync(ct); return "succeeded"; };
+        try
+        {
+            var replies = await Task.WhenAll(host.RegisterHandoffAsync(Req(workflowId, key)),
+                host.RegisterHandoffAsync(Req(workflowId, key)));
+            await WaitUntilAsync(() => boundary.Submissions.Count == 1);
+            Assert.All(replies, r => { Assert.Equal(HandoffOutcome.AlreadyAccepted, r.Outcome); Assert.Equal(run.RunId, r.RunId); });
+            Assert.Single(_runs.List());
+            Assert.Single(boundary.Submissions);
+            Assert.Equal("original-account-job", Assert.Single(_runs.Load(run.RunId)!.PrerequisiteActions).JobId);
+            Assert.Equal(key, Assert.Single(_runs.Load(run.RunId)!.Handoffs).IntentKey);
+        }
+        finally { gate.TrySetResult(); await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task AccountPreparationReplay_EnvironmentNotReady_PreservesOriginalRunAndReportsPending()
+    {
+        const string key = "startup:main:2026-10-22";
+        var workflowId = Seed("账号准备通道等待");
+        var run = SeedSafeAccountPreparation(workflowId, key);
+        var (host, boundary) = MakeHost(ready: false);
+        var replay = await host.RegisterHandoffAsync(Req(workflowId, key));
+        Assert.Equal(HandoffOutcome.AlreadyAccepted, replay.Outcome);
+        Assert.Equal(HandoffReasonCodes.NotReady, replay.ReasonCode);
+        Assert.Equal(run.RunId, replay.RunId);
+        Assert.Empty(boundary.Submissions);
+        Assert.Single(_runs.List());
+        Assert.Equal(WorkflowRunState.Interrupted, _runs.Load(run.RunId)!.State);
+        await host.ShutdownAsync();
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("effect_unknown")]
+    [InlineData("stopped")]
+    [InlineData("body")]
+    [InlineData("tail")]
+    [InlineData("newer_account")]
+    [InlineData("wrong_kind")]
+    [InlineData("missing_identity")]
+    public void AccountPreparationRecovery_RejectsUnprovenOrChangedFacts(string change)
+    {
+        var run = SeedSafeAccountPreparation(Seed("账号准备严格边界"), "startup:main:2026-10-22");
+        Assert.True(AccountPreparationRecovery.CanResume(run));
+        var record = run.PrerequisiteActions[0];
+        switch (change)
+        {
+            case "unknown": run.State = WorkflowRunState.Unknown; break;
+            case "effect_unknown": record.EffectState = "unknown"; break;
+            case "stopped": run.StopRequested = true; break;
+            case "body": run.CurrentSubmission = new(); break;
+            case "tail": run.TailReached = true; break;
+            case "newer_account": run.PrerequisiteActions.Add(new() { Kind = record.Kind, NodeId = record.NodeId,
+                Occurrence = record.Occurrence, LoopIteration = record.LoopIteration, Attempt = 2 }); break;
+            case "wrong_kind": record.Kind = "prerequisite.redeemCode"; break;
+            case "missing_identity": record.WireRunId = null; break;
+        }
+        Assert.False(AccountPreparationRecovery.CanResume(run));
+    }
+
+    [Fact]
+    public void AccountPreparationContinuation_ExitedOldProcess_AppendsAuthorityWithoutReplacingOriginalIntent()
+    {
+        var run = SeedSafeAccountPreparation(Seed("账号准备跨实例"), "startup:main:2026-10-22");
+        var original = run.StopAuthority!;
+        var fence = new ManualStopFence("2147483646:2", 0, null, original.MonotonicFrequency);
+        var source = new WorkflowStopAuthorityRecord(fence.Epoch, 0, "new-startup-source", 200, fence.Frequency);
+        Assert.True(_runs.AppendAccountPreparationProcessContinuation(run.RunId, "original-account-job", 1,
+            fence, source, out var retained));
+        Assert.Equal(original, retained!.StopAuthority);
+        Assert.Equal(fence.Epoch, WorkflowStopAuthority.Current(retained)!.Epoch);
+        Assert.Equal(original.IntentId, WorkflowStopAuthority.Current(retained)!.IntentId);
+        Assert.Equal(original, WorkflowStopAuthority.ForEpoch(retained, original.Epoch));
+        Assert.Equal("original-account-job", Assert.Single(retained.AccountPreparationProcessContinuations).SafeJobId);
+        Assert.Empty(retained.PriorityProcessContinuations);
+        var forged = _runs.Load(run.RunId)!;
+        forged.AccountPreparationProcessContinuations.Add(forged.AccountPreparationProcessContinuations[0]);
+        Assert.Throws<RunRecordConflictException>(() => _runs.Update(forged));
+    }
+
+    [Fact]
+    public async Task AccountPreparationReplay_WiredRecovery_UsesAppendedEpochAndOriginalScope()
+    {
+        const string key = "startup:main:2026-10-22";
+        const string nextEpoch = "2147483646:2";
+        var workflowId = Seed("账号准备跨实例准入");
+        var run = SeedSafeAccountPreparation(workflowId, key, withAdmissionSource: true);
+        var originalScope = run.AdmissionSourceScope;
+        var fence = new ManualStopFence(nextEpoch, 0, null, run.StopAuthority!.MonotonicFrequency);
+        var source = new WorkflowStopAuthorityRecord(nextEpoch, 0, "new-startup-source", 200, fence.Frequency);
+        Assert.True(_runs.AppendAccountPreparationProcessContinuation(run.RunId, "original-account-job", 1,
+            fence, source, out _));
+        var boundary = new FakeBoundary();
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        boundary.OnAwait = async (_, ct) => { await gate.Task.WaitAsync(ct); return "succeeded"; };
+        var host = new TaskCenterHost(Path.Combine(_dir, "flows"), Path.Combine(_dir, "runs"),
+            Path.Combine(_dir, "catalog-cache.json"), () => null, null,
+            (_, w, r) => new WorkflowRunner(w, r, boundary, new NoopPrerequisite(), new NoopTerminal()),
+            () => (true, null), admissionWired: true,
+            admissionSeams: new TaskCenterAdmissionSeams { Epoch = nextEpoch });
+        try
+        {
+            var replay = await host.RegisterHandoffAsync(Req(workflowId, key));
+            Assert.Equal(HandoffOutcome.AlreadyAccepted, replay.Outcome);
+            Assert.Equal(run.RunId, replay.RunId);
+            Assert.Null(replay.ReasonCode);
+            await WaitUntilAsync(() => boundary.Submissions.Count == 1);
+            var lease = new ArbitrationLeaseStore(Path.Combine(_dir, "arbitration")).Read();
+            var recovery = Assert.Single(lease.File!.Handoff!.Operations.Where(o => o.OperationType == OperationType.Recovery));
+            Assert.Equal(nextEpoch, recovery.TargetEpoch);
+            Assert.Equal(originalScope, recovery.Candidate!.Scope);
+            Assert.True(recovery.LastSendSeq > 0);
+            Assert.NotEqual("stale_epoch", recovery.LastPrecheckResult?.ReasonCode);
+            Assert.Single(boundary.Submissions);
+            Assert.Single(host.Runs.List());
+            Assert.Equal(originalScope, host.Runs.Load(run.RunId)!.AdmissionSourceScope);
+        }
+        finally { gate.TrySetResult(); await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public void AccountPreparationContinuation_StopAfterOriginalIntent_RejectsNewerStartupPermission()
+    {
+        var run = SeedSafeAccountPreparation(Seed("账号准备旧意图已停止"), "startup:main:2026-10-22");
+        var frequency = run.StopAuthority!.MonotonicFrequency;
+        var fence = new ManualStopFence("2147483646:2", 1, 150, frequency);
+        var source = new WorkflowStopAuthorityRecord(fence.Epoch, 1, "new-startup-source", 200, frequency);
+        Assert.False(_runs.AppendAccountPreparationProcessContinuation(run.RunId, "original-account-job", 1,
+            fence, source, out _));
+        Assert.Empty(_runs.Load(run.RunId)!.AccountPreparationProcessContinuations);
+    }
+
     [Fact]
     public async Task Start_Accepted_RunCarriesIdentity_LedgerRoundtrip()
     {
@@ -281,6 +448,7 @@ public class StartupHandoffHostTests : IDisposable
         Assert.Equal(HandoffOutcome.AlreadyAccepted, replay.Outcome);
         Assert.Equal(rec.RunId, replay.RunId);
         Assert.Equal(WorkflowRunState.Unknown, replay.CurrentRunState);
+        Assert.Equal(HandoffReasonCodes.Unknown, replay.ReasonCode);
         Assert.Contains("对账", replay.Reason);
         Assert.Single(_runs.List());
         Assert.False(host.IsDriving(workflowId));

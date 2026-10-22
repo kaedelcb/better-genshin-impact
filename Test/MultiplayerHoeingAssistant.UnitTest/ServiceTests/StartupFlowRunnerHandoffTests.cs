@@ -363,6 +363,27 @@ public class StartupFlowRunnerHandoffTests
         Assert.False(EverRan(wait));
     }
 
+    [Theory]
+    [InlineData(HandoffReasonCodes.Unknown, "待核对")]
+    [InlineData(HandoffReasonCodes.NotReady, "尚未继续")]
+    public async Task AlreadyAccepted_PendingRun_IsNotShownAsSuccess(string reasonCode, string hint)
+    {
+        var handoff = Handoff();
+        var tail = new StartupStep { Kind = StartupStepKinds.StopBgi };
+        _handoffResult = new(HandoffOutcome.AlreadyAccepted, "run-original", "原准备事实保留", reasonCode, false);
+        var runner = MakeRunner();
+
+        await runner.RunAsync([handoff, tail], CancellationToken.None);
+
+        Assert.Single(_handoffRequests);
+        Assert.Equal(NodeRunState.Failed, LastReport(handoff)!.Value.State);
+        Assert.Contains(hint, LastReport(handoff)!.Value.Note);
+        Assert.DoesNotContain(_reports, r => r.StepId == handoff.Id && r.State == NodeRunState.Success);
+        Assert.Empty(_bgiCommands);
+        Assert.False(EverRan(tail));
+        Assert.Contains(_logs, l => l.Contains(hint));
+    }
+
     [Fact]
     public async Task UnknownRejected_TerminatesChain_WithFailureReport()
     {

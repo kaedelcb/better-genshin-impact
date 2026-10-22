@@ -7,6 +7,7 @@ public sealed partial class TaskCenterHost
 {
     private string? PriorityNodeExecutionEpoch(AdmissionRequest request)
     {
+        if (AccountPreparationExecutionEpoch(request) is { } preparedEpoch) return preparedEpoch;
         if (request.OperationType != OperationType.NodeExecution || request.ParentSource is not { } parent
             || request.Candidate.RunId is not { } runId || parent.RunId != runId
             || parent.Scope != request.Candidate.Scope) return null;

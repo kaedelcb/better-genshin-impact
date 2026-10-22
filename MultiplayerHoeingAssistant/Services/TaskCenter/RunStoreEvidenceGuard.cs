@@ -25,7 +25,7 @@ internal static class RunStoreEvidenceGuard
     private static bool Frozen(BgiWorkflowObservationPersistence.Binding binding)
         => binding.Identity.Complete && !string.IsNullOrEmpty(binding.Fingerprint);
 
-    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null)
+    internal static void Validate(WorkflowRunRecord current, WorkflowRunRecord next, LocalNoSendProof? authorizedNoSend = null, TerminalReleaseSeal? authorizedSeal = null, RecoveryAssociationRecord? authorizedRecoveryAssociation = null, PreparedSendPermit? authorizedPermit = null, RunAdmissionMapping? authorizedMapping = null, bool? authorizedRouting = null, string? authorizedEntrySeed = null, ExecutionResetReleaseRecord? authorizedReset = null, PriorityProcessContinuation? authorizedProcess = null, AccountPreparationProcessContinuation? authorizedAccountPreparation = null)
     {
         var oldProcesses = current.PriorityProcessContinuations;
         var processes = next.PriorityProcessContinuations;
@@ -39,6 +39,22 @@ internal static class RunStoreEvidenceGuard
                 && authorizedProcess.Authority.IntentTimestamp == origin.IntentTimestamp
                 && authorizedProcess.Authority.MonotonicFrequency == origin.MonotonicFrequency
                 && authorizedProcess.Authority.Version == 0 && !current.StopRequested);
+        var oldPreparations = current.AccountPreparationProcessContinuations;
+        var preparations = next.AccountPreparationProcessContinuations;
+        Require(preparations is not null && oldPreparations is not null
+            && preparations.Count == oldPreparations.Count + (authorizedAccountPreparation is null ? 0 : 1));
+        for (var i = 0; i < oldPreparations.Count; i++) Require(oldPreparations[i] == preparations[i]);
+        if (authorizedAccountPreparation is { } prepared)
+        {
+            var safe = AccountPreparationRecovery.LatestNotStarted(current);
+            Require(AccountPreparationRecovery.CanResume(current) && safe is not null
+                && preparations[^1] == prepared && prepared.SafeJobId == safe.JobId && prepared.SafeAttempt == safe.Attempt
+                && prepared.PreviousEpoch == WorkflowStopAuthority.Current(current)?.Epoch
+                && prepared.Authority.Epoch != prepared.PreviousEpoch && prepared.Authority.Version >= 0
+                && current.StopAuthority is { } intent && prepared.Authority.IntentId == intent.IntentId
+                && prepared.Authority.IntentTimestamp == intent.IntentTimestamp
+                && prepared.Authority.MonotonicFrequency == intent.MonotonicFrequency);
+        }
         if (current.ExecutionResetRelease is { } reset)
             Require(JsonSerializer.Serialize(next.ExecutionResetRelease) == JsonSerializer.Serialize(reset) && ExecutionResetEvidence.Valid(next));
         else if (next.ExecutionResetRelease is { } newReset)
@@ -179,6 +195,7 @@ internal static class RunStoreEvidenceGuard
             Require(!priorAction.ExecutionExitConfirmed || priorAction.ExecutionExitDisposition == live.ExecutionExitDisposition);
             Require(priorAction.EffectState is null or "unknown" || priorAction.EffectState == live.EffectState);
             Require(priorAction.ServerRejectionEvidence is null || priorAction.ServerRejectionEvidence == live.ServerRejectionEvidence);
+            Require(priorAction.ErrorCode is null || priorAction.ErrorCode == live.ErrorCode);
         }
 
         if (current.PendingCompletion is { SendAttempted: true } pending)

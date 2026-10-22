@@ -87,6 +87,83 @@ public class AccountUidSequenceTests
         Assert.Equal(0, switches);
     }
 
+    [Fact]
+    public async Task EveryPreparationStoppedBeforeInput_ReportsConfirmedNotStartedWithoutSwitching()
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ =>
+            {
+                reads++;
+                return Task.FromResult(Verify(OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted));
+            },
+            (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(JobErrorCodes.AccountPreparationNotStarted, error.Code);
+        Assert.Equal(3, reads);
+        Assert.Equal(0, switches);
+    }
+
+    [Theory]
+    [InlineData(OneDragonAccountCapability.UidVerifyStatus.Mismatch)]
+    [InlineData(OneDragonAccountCapability.UidVerifyStatus.ReadFailed)]
+    public async Task EarlierVerificationMayHaveOperatedGame_LaterFocusFailureRemainsUnknown(
+        OneDragonAccountCapability.UidVerifyStatus firstStatus)
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 1 ? firstStatus :
+                OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted)),
+            (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Equal(3, reads);
+        Assert.Equal(0, switches);
+    }
+
+    [Fact]
+    public async Task ReadFailureBetweenPreparationFailures_DoesNotForgetPossibleGameInput()
+    {
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 2 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed :
+                OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted)),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Equal(3, reads);
+    }
+
+    [Fact]
+    public async Task FocusFailureAfterSwitch_RemainsUnknownWithoutAnotherSwitch()
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads <= 3 ? OneDragonAccountCapability.UidVerifyStatus.Mismatch :
+                OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted)),
+            (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Equal(6, reads);
+        Assert.Equal(1, switches);
+    }
+
+    [Fact]
+    public async Task FocusRecoversOnNextVerification_ContinuesWithoutSwitching()
+    {
+        var reads = 0;
+        var switched = await AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted :
+                OneDragonAccountCapability.UidVerifyStatus.Matched)),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None);
+
+        Assert.False(switched);
+        Assert.Equal(2, reads);
+    }
+
     private static OneDragonAccountCapability.UidVerifyResult Verify(OneDragonAccountCapability.UidVerifyStatus status)
         => new(status, null);
 }

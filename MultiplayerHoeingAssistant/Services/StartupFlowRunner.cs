@@ -675,6 +675,15 @@ public sealed class StartupFlowRunner
                 Report(step, NodeRunState.Failed, $"{result.ReasonCode}：{result.Reason}（执行 {ctx.ShortId}）");
             return result;
         }
+        if (result.Outcome == HandoffOutcome.AlreadyAccepted
+            && result.ReasonCode is HandoffReasonCodes.Unknown or HandoffReasonCodes.NotReady)
+        {
+            var pending = result.ReasonCode == HandoffReasonCodes.Unknown ? "原运行结果待核对" : "原运行尚未继续";
+            var note = $"同一计划此前已受理（运行 {result.RunId}），{pending}：{result.Reason}";
+            _log($"[槲寄生] {indent}「{display}」{note}（执行 {ctx.ShortId}）");
+            Report(step, NodeRunState.Failed, $"{note}（执行 {ctx.ShortId}）");
+            return result;
+        }
         // S4：保留宿主回执 Reason（含「受理≠执行成功/驱动激活受阻」等说明）+ 执行短码（§7/S10 并发可区分）
         var okNote = (result.Outcome == HandoffOutcome.Accepted
             ? $"已移交任务中心（运行 {result.RunId}），任务中心接管"
@@ -689,6 +698,10 @@ public sealed class StartupFlowRunner
     private static string HandoffChainEndMessage(StartupHandoffResult r) => r.Outcome switch
     {
         HandoffOutcome.Accepted => "已移交任务中心，本次启动链到此终止（后续节点不再执行）",
+        HandoffOutcome.AlreadyAccepted when r.ReasonCode == HandoffReasonCodes.Unknown =>
+            "同一计划此前已受理，但原运行结果待核对，本次启动链到此终止（未重新发送任务）",
+        HandoffOutcome.AlreadyAccepted when r.ReasonCode == HandoffReasonCodes.NotReady =>
+            "同一计划此前已受理，但原运行尚未继续，本次启动链到此终止（原因见移交结果）",
         HandoffOutcome.AlreadyAccepted => "同一计划出现已受理，本次启动链到此终止（后续节点不再执行）",
         _ => $"移交被拒绝（{r.ReasonCode}），按策略终止本次启动链（后续节点不再执行）",
     };

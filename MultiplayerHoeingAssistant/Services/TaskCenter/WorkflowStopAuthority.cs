@@ -23,11 +23,28 @@ internal static class WorkflowStopAuthority
     {
         if (run.StopAuthority is not { } original) return null;
         if (epoch == original.Epoch) return original;
-        return run.PriorityProcessContinuations.SingleOrDefault(c => c.Authority.Epoch == epoch)?.Authority;
+        return run.PriorityProcessContinuations.Where(c => c.Authority.Epoch == epoch).Select(c => c.Authority)
+            .Concat(run.AccountPreparationProcessContinuations.Where(c => c.Authority.Epoch == epoch).Select(c => c.Authority))
+            .SingleOrDefault();
     }
 
     internal static WorkflowStopAuthorityRecord? Current(WorkflowRunRecord run)
-        => run.PriorityProcessContinuations.LastOrDefault()?.Authority ?? run.StopAuthority;
+    {
+        if (run.AccountPreparationProcessContinuations.Count == 0)
+            return run.PriorityProcessContinuations.LastOrDefault()?.Authority ?? run.StopAuthority;
+        var current = run.StopAuthority;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (current is not null && seen.Add(current.Epoch))
+        {
+            var next = run.PriorityProcessContinuations.Where(c => c.PreviousEpoch == current.Epoch).Select(c => c.Authority)
+                .Concat(run.AccountPreparationProcessContinuations.Where(c => c.PreviousEpoch == current.Epoch).Select(c => c.Authority))
+                .ToList();
+            if (next.Count == 0) return current;
+            if (next.Count != 1) return null;
+            current = next[0];
+        }
+        return null; // 冲突或循环不得签发当前停止授权。
+    }
 
     internal static bool TryEpoch(string? value, out BgiEpoch epoch)
     {

@@ -125,6 +125,8 @@ public enum PrerequisiteStatus
     Cancelled,
     /// <summary>结果不确定（禁止续跑/重发，标 Unknown 待对账）。</summary>
     Unknown,
+    /// <summary>原作业已退出，BGI 确证整个账号前置尚未发送游戏输入；保留游标等待接续。</summary>
+    PreparationNotStarted,
 }
 
 /// <summary>前置结果（R4.6 B3 结构化；JobId 受理即回报，供引擎落盘 submitted 事实）。</summary>
@@ -918,6 +920,28 @@ public sealed partial class WorkflowRunner
                 // 前置段已建立叶子令牌，SkipCurrent 可取消在飞前置并经确认链对账）
                 if (await ExecutePrerequisitesAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false) is { } prereqOutcome)
                 {
+                    if (prereqOutcome.Result == "preparationNotStarted")
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        if (run.CurrentSubmission is { } previous)
+                        {
+                            if (previous.NodeId == occurrence.NodeId && previous.Occurrence == occurrence.Occurrence
+                                && previous.LoopIteration == occurrence.LoopIteration
+                                || !TerminalReleaseEvidence.BodySettled(run, previous))
+                            {
+                                run.State = WorkflowRunState.Unknown;
+                                run.Note = AppendNote(run.Note, "账号准备之外仍有主体责任，保留原身份待核对");
+                                _runs.Update(run);
+                                return run;
+                            }
+                            // RunStore 将同身份已结清的上一节点原样归档，接续不会回头重做。
+                            run.CurrentSubmission = null;
+                        }
+                        run.State = WorkflowRunState.Interrupted;
+                        run.Note = AppendNote(run.Note, prereqOutcome.Reason);
+                        _runs.Update(run); // 未完成节点不记终态、不推进游标，已完成任务保持原记录。
+                        return run;
+                    }
                     if (prereqOutcome.Result is "unknown" or "cancelUnconfirmed")
                     {
                         // B3/四轮阻断 5：结果不确定——先置状态再 CommitOutcome（单次原子落盘，游标不推进；不触发收尾、禁止自动重跑）
@@ -1643,9 +1667,19 @@ public sealed partial class WorkflowRunner
                 var accountKey = RunStore.DeriveAccountKey(effective.GetString("uid"));
 
                 // 四轮阻断 3：完整动作身份比对（出现身份 + 策略索引 + 操作类型 + 账号标识哈希）
-                var record = run.PrerequisiteActions.FirstOrDefault(r =>
-                    r.Matches(occurrence.NodeId, occurrence.Occurrence, occurrence.LoopIteration, 1, i,
-                        effective.Kind, accountKey));
+                var record = run.PrerequisiteActions.LastOrDefault(r =>
+                    r.NodeId == occurrence.NodeId && r.Occurrence == occurrence.Occurrence
+                    && r.LoopIteration == occurrence.LoopIteration && r.StrategyIndex == i
+                    && r.Kind == effective.Kind && r.AccountKey == accountKey);
+                var prerequisiteAttempt = 1;
+                if (record is not null && record.WireRunId == run.WireRunId
+                    && AccountPreparationRecovery.IsNotStarted(record))
+                {
+                    if (record.Attempt == int.MaxValue)
+                        return ("failed", "账号准备尝试次数已达上限，未发送");
+                    prerequisiteAttempt = record.Attempt + 1;
+                    record = null; // 仅确证未操作的账号准备允许新尝试；旧事实保留。
+                }
                 var currentEpoch = effective.Kind == "prerequisite.account"
                     ? _prerequisites.CurrentServerEpoch : null;
                 if (record is null && effective.Kind == "prerequisite.account"
@@ -1708,6 +1742,10 @@ public sealed partial class WorkflowRunner
                         RememberVerifiedAccount(run, control, occurrence, effective.GetString("uid")!, record.Epoch);
                     _runs.Update(run);
                     if (record.State == PrerequisiteActionState.Succeeded) continue;
+                    if (reconciled.Status == PrerequisiteStatus.PreparationNotStarted)
+                        return AccountPreparationRecovery.IsNotStarted(record)
+                            ? ("preparationNotStarted", "原账号作业已核对为尚未操作；保留当前进度等待继续准备")
+                            : ("unknown", "账号准备未开始的对账证据不完整，保留原身份待核对");
                     if (record.State == PrerequisiteActionState.Unknown)
                         return ("unknown", $"前置策略 {effective.Kind} 结果不确定（对账未决）：{Sanitize(reconciled.Reason)}");
                     return (record.State == PrerequisiteActionState.Cancelled ? "cancelled" : "failed",
@@ -1720,7 +1758,7 @@ public sealed partial class WorkflowRunner
                     NodeId = occurrence.NodeId,
                     Occurrence = occurrence.Occurrence,
                     LoopIteration = occurrence.LoopIteration,
-                    Attempt = 1,
+                    Attempt = prerequisiteAttempt,
                     StrategyIndex = i,
                     Kind = effective.Kind,
                     AccountKey = accountKey,
@@ -1767,6 +1805,10 @@ public sealed partial class WorkflowRunner
                 switch (result.Status)
                 {
                     case PrerequisiteStatus.Proceed: continue;
+                    case PrerequisiteStatus.PreparationNotStarted:
+                        return AccountPreparationRecovery.IsNotStarted(record)
+                            ? ("preparationNotStarted", "账号准备尚未开始；已保留当前进度，下一次启动可继续准备")
+                            : ("unknown", "账号准备未开始的证据不完整，保留原身份待核对");
                     case PrerequisiteStatus.Rejected:
                         return ("rejected", $"前置策略 {effective.Kind} 被拒绝：{Sanitize(result.Reason)}");
                     case PrerequisiteStatus.Cancelled:
@@ -1990,7 +2032,8 @@ public sealed partial class WorkflowRunner
         if (_runs.Load(run.RunId) is { } saved)
         {
             if (saved.StopRequested) throw new OperationCanceledException("运行已耐久停止，不允许恢复或推进", ct);
-            if (saved.PriorityProcessContinuations.Count > run.PriorityProcessContinuations.Count)
+            if (saved.PriorityProcessContinuations.Count > run.PriorityProcessContinuations.Count
+                || saved.AccountPreparationProcessContinuations.Count > run.AccountPreparationProcessContinuations.Count)
                 RunStore.RebaseOnto(run, saved);
         }
         if (WorkflowStopAuthority.Current(run) is not { } authority)

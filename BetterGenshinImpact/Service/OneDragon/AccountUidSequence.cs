@@ -14,6 +14,8 @@ internal static class AccountUidSequence
         Func<int, CancellationToken, Task<bool>> switchAccount, CancellationToken ct)
     {
         OneDragonAccountCapability.UidVerifyResult? last = null;
+        // 跨全部核对和切号累计；本次失焦不能抹掉之前已读取 UID 或已操作游戏的事实。
+        var allPreparationsNotStarted = true;
         for (var switchCount = 0; switchCount <= 2; switchCount++)
         {
             var allMismatched = true;
@@ -21,6 +23,7 @@ internal static class AccountUidSequence
             {
                 ct.ThrowIfCancellationRequested();
                 last = await verify(ct);
+                allPreparationsNotStarted &= last.Status == OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted;
                 if (last.Matched) return switchCount > 0;
                 if (last.Status == OneDragonAccountCapability.UidVerifyStatus.InvalidExpected)
                     throw new AccountMismatchException(last.Reason ?? "期望 UID 无效");
@@ -30,10 +33,16 @@ internal static class AccountUidSequence
 
             // 窗口未聚焦、未回主页或剪贴板未读到 UID 时没有“不匹配”证据，不能据此切号。
             if (!allMismatched)
+            {
+                if (allPreparationsNotStarted && switchCount == 0)
+                    throw new PrerequisiteFailedException(JobErrorCodes.AccountPreparationNotStarted,
+                        last?.Reason ?? "账号前置尚未取得游戏焦点，未发送游戏键鼠");
                 throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown,
                     last?.Reason ?? "UID 未能可靠读取，不切换账号");
+            }
             if (switchCount == 2) break;
             // 切号结果可能不明；此时不执行下一次切号，保留 Unknown 供人工核对。
+            allPreparationsNotStarted = false;
             if (!await switchAccount(switchCount + 1, ct))
                 throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteOutcomeUnknown,
                     "切号完成确认失败（结果不明，不自动重试）");

@@ -500,7 +500,7 @@ public class OneDragonAccountCapability
     }
 
     /// <summary>严格 UID 验证结果（受控词表）。</summary>
-    public enum UidVerifyStatus { Matched, Mismatch, ReadFailed, InvalidExpected }
+    public enum UidVerifyStatus { Matched, Mismatch, ReadFailed, InvalidExpected, PreparationNotStarted }
 
     public sealed record UidVerifyResult(UidVerifyStatus Status, string? Reason)
     {
@@ -511,7 +511,15 @@ public class OneDragonAccountCapability
     /// R4.6 E2-9 严格 UID 验证：规范化完整相等（非 Contains）；空期望 UID 拒绝；无 accountBinding 豁免分支。
     /// 读取路径与旧连续一条龙同源（激活游戏 → 回主界面 → ESC → 复制 UID → 剪贴板）。
     /// </summary>
-    public async Task<UidVerifyResult> VerifyUidStrictAsync(string? expectedUid, CancellationToken ct)
+    public Task<UidVerifyResult> VerifyUidStrictAsync(string? expectedUid, CancellationToken ct)
+        => VerifyUidStrictCoreAsync(expectedUid, ct, prepareAccountFocus: false);
+
+    /// <summary>仅账号前置延长首次输入前的焦点准备；其他严格校验入口保持原有准备行为。</summary>
+    internal Task<UidVerifyResult> VerifyAccountUidStrictAsync(string? expectedUid, CancellationToken ct)
+        => VerifyUidStrictCoreAsync(expectedUid, ct, prepareAccountFocus: true);
+
+    private async Task<UidVerifyResult> VerifyUidStrictCoreAsync(string? expectedUid, CancellationToken ct,
+        bool prepareAccountFocus)
     {
         var expected = NormalizeUid(expectedUid);
         if (expected is null)
@@ -522,17 +530,33 @@ public class OneDragonAccountCapability
         if (gameHandle == IntPtr.Zero)
             return new UidVerifyResult(UidVerifyStatus.ReadFailed, "游戏窗口未绑定，未执行 UID 点击");
         var focused = false;
-        for (var attempt = 0; attempt < 3; attempt++)
+        if (prepareAccountFocus)
         {
-            ct.ThrowIfCancellationRequested();
-            SystemControl.MinimizeAndActivateWindow(gameHandle);
-            await Task.Delay(120, ct); // 窗口激活和游戏截图均有帧延迟，确认前不发送键鼠。
-            if (!SystemControl.IsGenshinImpactActive()) continue;
-            focused = true;
-            break;
+            var preparation = await UidFocusPreparation.WaitAsync(
+                () => SystemControl.MinimizeAndActivateWindow(gameHandle),
+                () => TaskContext.Instance().GameHandle == gameHandle &&
+                    SystemControl.GetForegroundWindowHandle() == gameHandle, ct);
+            focused = preparation.Focused;
+            if (!focused)
+                _logger.LogWarning("账号前置焦点准备超时：目标窗口 {TargetHandle}，前台窗口 {ForegroundHandle}，前台进程 {ForegroundProcess}，激活尝试 {Attempts} 次；尚未发送游戏键鼠",
+                    gameHandle, SystemControl.GetForegroundWindowHandle(), SystemControl.GetActiveByProcess(),
+                    preparation.ActivationAttempts);
+        }
+        else
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                ct.ThrowIfCancellationRequested();
+                SystemControl.MinimizeAndActivateWindow(gameHandle);
+                await Task.Delay(120, ct); // 窗口激活和游戏截图均有帧延迟，确认前不发送键鼠。
+                if (!SystemControl.IsGenshinImpactActive()) continue;
+                focused = true;
+                break;
+            }
         }
         if (!focused)
-            return new UidVerifyResult(UidVerifyStatus.ReadFailed, "原神窗口未获得前台焦点，未执行 UID 点击");
+            return new UidVerifyResult(prepareAccountFocus ? UidVerifyStatus.PreparationNotStarted : UidVerifyStatus.ReadFailed,
+                "原神窗口未获得前台焦点，未执行 UID 点击");
 
         var entryFailure = await UidGameEntry.EnterIfNeededAsync(() => HandleUidGameEntryScreen(ct), ct);
         if (entryFailure is not null)
