@@ -147,10 +147,18 @@
             <Setter Property="Width" Value="72"/>
         </Style>
 
+        <!-- 行内副标签：同一行里后续字段的小标签，不占固定宽度，避免大空隙 -->
+        <Style x:Key="FieldInlineLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="{DynamicResource Dim}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="12,0,0,0"/>
+        </Style>
+
         <!-- 编辑器字段行（默认折叠，由各类型的 DataTrigger 展开） -->
         <Style x:Key="FieldGroup" TargetType="WrapPanel">
             <Setter Property="Visibility" Value="Collapsed"/>
-            <Setter Property="Margin" Value="0,4,0,0"/>
+            <Setter Property="Margin" Value="0,7,0,0"/>
         </Style>
 
         <!-- 节点卡 -->
@@ -507,7 +515,7 @@
                                     <TextBox Text="{Binding TimeEnd, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
                                     <TextBlock Text="HH:mm，起点大于终点表示跨零点" FontSize="10" Foreground="{DynamicResource Dim}"
-                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                               VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="220" TextWrapping="Wrap"/>
                                 </WrapPanel>
 
                                 <!-- weekday -->
@@ -620,14 +628,14 @@
                                             <ComboBoxItem Content="按启动顺序" Style="{StaticResource GoldComboItem}"/>
                                             <ComboBoxItem Content="按用户名" Style="{StaticResource GoldComboItem}"/>
                                         </ComboBox>
-                                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                                        <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
                                             <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsOrderSource}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                                            <TextBlock Text="序号" Style="{StaticResource FieldLabel}"/>
-                                            <TextBox Width="55" Style="{StaticResource GoldInput}" Text="{Binding StatusTargetOrderText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                            <TextBlock Text="序号" Style="{StaticResource FieldInlineLabel}" Margin="0"/>
+                                            <TextBox Width="55" Margin="6,0,0,0" Style="{StaticResource GoldInput}" Text="{Binding StatusTargetOrderText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
                                         </StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="8,0,0,0">
+                                        <StackPanel Orientation="Horizontal" Margin="12,0,0,0">
                                             <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsUserSource}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                                            <TextBlock Text="用户名" Style="{StaticResource FieldLabel}"/>
+                                            <TextBlock Text="用户名" Style="{StaticResource FieldInlineLabel}" Margin="0"/>
                                             <TextBox Width="160" Style="{StaticResource GoldInput}" Text="{Binding StatusTargetUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" ToolTip="Windows 用户名，支持 DOMAIN\user"/>
                                         </StackPanel>
                                     </WrapPanel>
@@ -682,8 +690,8 @@
                                             </Style.Triggers>
                                         </Style>
                                     </WrapPanel.Style>
-                                    <CheckBox IsChecked="{Binding KillBeforeStart, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"/>
-                                    <TextBlock Text="启动前先关闭 BGI" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
+                                    <CheckBox IsChecked="{Binding KillBeforeStart, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="启动前先关闭 BGI" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                     <TextBlock Text="（已在运行的 BGI 不会因新参数自动重启——不抢占策略；勾选后先强制关闭本会话 BGI 再带参数启动，让参数生效）"
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="360"/>
                                 </WrapPanel>
@@ -836,10 +844,10 @@
                                     <TextBox Text="{Binding TriggerTime, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"
                                              ToolTip="HH:mm，24 小时制；今天的该时刻已过则顺延到明天"/>
-                                    <CheckBox IsChecked="{Binding RepeatDaily, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="14,0,4,0"/>
+                                    <CheckBox IsChecked="{Binding RepeatDaily, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="14,0,4,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="每天重复" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
                                     <TextBlock Text="（流程跑到此节点时挂载定时器，到点执行下方「到点执行」链）" FontSize="10" Foreground="{DynamicResource Dim}"
-                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                               VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="280" TextWrapping="Wrap"/>
                                 </WrapPanel>
 
                                 <!-- watchdog：盯什么 + 间隔 + 重复 -->
@@ -862,11 +870,11 @@
                                         <ComboBoxItem Content="BGI 任务状态" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="BGI 当前任务名" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
-                                    <TextBlock Text="间隔(秒)" Style="{StaticResource FieldLabel}" Margin="12,0,0,0"/>
-                                    <TextBox Text="{Binding WatchIntervalSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                    <TextBlock Text="间隔(秒)" Style="{StaticResource FieldInlineLabel}"/>
+                                    <TextBox Text="{Binding WatchIntervalSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="6,0,0,0"
                                              Style="{StaticResource GoldInput}" Width="52" Padding="6,2" HorizontalContentAlignment="Center"
                                              ToolTip="每隔多少秒检查一次被盯条件（最低 1 秒）。发现新状态后按下方「防抖复核」参数复核，一致才认定翻转——确认窗口不随间隔放大"/>
-                                    <TextBlock Text="触发后" Style="{StaticResource FieldLabel}" Margin="14,0,0,0"/>
+                                    <TextBlock Text="触发后" Style="{StaticResource FieldInlineLabel}"/>
                                     <ComboBox Width="96" Style="{StaticResource GoldComboBox}"
                                               SelectedIndex="{Binding WatchAfterFireIndex, Mode=TwoWay}"
                                               ToolTip="继续循环（默认）=条件每次由不成立变成立都触发；停止=触发一次后自动撤下这只电子狗。触发执行链为空时仅显示监控状态，始终继续盯梢；新增动作需撤下重挂。">
@@ -887,15 +895,15 @@
                                         </Style>
                                     </WrapPanel.Style>
                                     <TextBlock Text="防抖复核" Style="{StaticResource FieldLabel}"/>
-                                    <TextBlock Text="每" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                    <TextBlock Text="每" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,4,0"/>
                                     <TextBox Text="{Binding WatchConfirmSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="40" Padding="6,2" HorizontalContentAlignment="Center"
                                              ToolTip="发现新状态后每隔这么久复核一轮（1~60 秒，默认 1）"/>
-                                    <TextBlock Text="秒复核" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="4,0,4,0"/>
+                                    <TextBlock Text="秒复核" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="4,0,4,0"/>
                                     <TextBox Text="{Binding WatchConfirmTimesText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="40" Padding="6,2" HorizontalContentAlignment="Center"
                                              ToolTip="复核轮数（1~10，默认 1）；全部轮一致为新状态才认定翻转"/>
-                                    <TextBlock Text="次，全一致才认定翻转" FontSize="11" Foreground="{DynamicResource White}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    <TextBlock Text="次，全一致才认定翻转" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="4,0,0,0"/>
                                 </WrapPanel>
 
                                 <!-- watchdog 子参数：进程类（bgiRunning/gameRunning/processRunning）与任务状态（bgiTaskRunning）的期望状态 -->
@@ -1002,7 +1010,7 @@
                                     <TextBox Text="{Binding LogKeyword, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                              Style="{StaticResource GoldInput}" Width="220"
                                              ToolTip="本机 BGI 新日志的正文/来源/异常段包含该文本即触发（不区分大小写，纯文本包含匹配）"/>
-                                    <TextBlock Text="触发后" Style="{StaticResource FieldLabel}" Margin="14,0,0,0"/>
+                                    <TextBlock Text="触发后" Style="{StaticResource FieldInlineLabel}"/>
                                     <ComboBox Width="96" Style="{StaticResource GoldComboBox}"
                                               SelectedIndex="{Binding WatchAfterFireIndex, Mode=TwoWay}"
                                               ToolTip="继续循环（默认）=执行完触发链后继续盯日志，命中再次触发；停止=触发一次后自动撤下这个触发器">
@@ -1010,7 +1018,7 @@
                                         <ComboBoxItem Content="停止" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
                                     <TextBlock Text="（流程跑到此节点时挂载监听，只盯挂载后的本机 BGI 新日志；命中执行下方「触发执行」链，执行完再循环）"
-                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="280" TextWrapping="Wrap"/>
                                 </WrapPanel>
 
                                 <!-- enterTaskCenter：目标任务中心流程 + 移交语义（R4.9 §5） -->
