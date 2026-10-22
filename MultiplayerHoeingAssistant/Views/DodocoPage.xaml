@@ -1214,7 +1214,7 @@
                             <StackPanel>
                                 <Grid Margin="0,0,0,9">
                                     <TextBlock Text="每日运行日报" Style="{DynamicResource SectionTitle}"/>
-                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="96,0,0,0"/>
+                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="96,0,308,0"/>
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                                         <ComboBox Width="140" ItemsSource="{Binding Stats.DailyReport.DateItems}"
                                                   SelectedItem="{Binding Stats.DailyReport.SelectedDateItem}"
