@@ -633,6 +633,23 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
 
     public RelayCommand SearchCommand => new(_ => StartSearch());
 
+    /// <summary>清除搜索结果并收起下方结果区（Esc / 结果区「✕」按钮调用）。
+    /// 清空 SearchResults 后其 ListBox 的 HasItems=False 触发器会自动 Collapsed；
+    /// 同时清掉高亮词，避免查看区残留黄色高亮，并复位状态栏。</summary>
+    public RelayCommand ClearSearchResultsCommand => new(_ => ClearSearchResults());
+
+    private void ClearSearchResults()
+    {
+        _searchCts?.Cancel();
+        _searchCts = null;
+        SearchResults.Clear();
+        _selectedResult = null;
+        OnPropertyChanged(nameof(SelectedResult));
+        HighlightPattern = "";
+        HighlightIsRegex = false;
+        ViewStatus = "已清除搜索结果";
+    }
+
     private void StartSearch()
     {
         if (_selectedFile == null || string.IsNullOrWhiteSpace(SearchText)) return;

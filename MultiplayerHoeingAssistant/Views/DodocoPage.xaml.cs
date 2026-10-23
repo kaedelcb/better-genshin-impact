@@ -315,6 +315,17 @@ public partial class DodocoPage : UserControl
     private void SearchResults_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (sender is not ListBox list) return;
+        // Esc：清除搜索结果并收起结果区
+        if (e.Key == Key.Escape)
+        {
+            if (DataContext is DodocoViewModel vm)
+            {
+                vm.Browser.ClearSearchResultsCommand.Execute(null);
+                BrowserList.Focus();
+                e.Handled = true;
+            }
+            return;
+        }
         CopySelectedOnCtrlC(list, e, item => ((SearchResultItem)item).FullText);
     }
 

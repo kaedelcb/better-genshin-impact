@@ -778,34 +778,57 @@
                             </TextBlock>
                         </Grid>
 
-                        <!-- 搜索结果（显示行头时间而非行号；命中关键字鎏金高亮；点中行跳转；Ctrl+C 复制命中行原文） -->
-                        <ListBox Grid.Row="4" ItemsSource="{Binding Browser.SearchResults}"
-                                 SelectedItem="{Binding Browser.SelectedResult}"
-                                 SelectionMode="Extended"
-                                 MaxHeight="130" Background="#1E262660" BorderThickness="1" BorderBrush="#40D4AF37"
-                                 Margin="0,6,0,0" Padding="4" FontSize="11" Foreground="{DynamicResource White}"
-                                 PreviewKeyDown="SearchResults_PreviewKeyDown">
-                            <ListBox.Style>
-                                <Style TargetType="ListBox">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
+                        <!-- 搜索结果（显示行头时间而非行号；命中关键字鎏金高亮；点中行跳转；Ctrl+C 复制命中行原文）
+                             整块只在有结果时显示；标题栏右侧「✕」或按 Esc 可清除结果、收起此栏 -->
+                        <Border Grid.Row="4" Background="#1E262660" BorderThickness="1" BorderBrush="#40D4AF37"
+                                Margin="0,6,0,0" Padding="4" CornerRadius="3">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <!-- 默认可见；仅当无结果（Count=0 或 null）时收起。
+                                         Count>0 不命中任何 Trigger → 保持默认 Visible。 -->
+                                    <Setter Property="Visibility" Value="Visible"/>
                                     <Style.Triggers>
-                                        <!-- 有搜索结果时才显示结果区 -->
-                                        <Trigger Property="HasItems" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </Trigger>
+                                        <DataTrigger Binding="{Binding Browser.SearchResults.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Browser.SearchResults.Count}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </ListBox.Style>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <views:HighlightTextBlock FontSize="11" Foreground="{DynamicResource White}"
-                                                              TextWrapping="Wrap"
-                                                              SourceText="{Binding DisplayText, Mode=OneWay}"
-                                                              HighlightPattern="{Binding DataContext.Browser.HighlightPattern, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
-                                                              IsRegexHighlight="{Binding DataContext.Browser.HighlightIsRegex, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"/>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                            </Border.Style>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <!-- 结果区标题栏：说明 + 关闭按钮 -->
+                                <Grid Grid.Row="0" Margin="2,0,2,2">
+                                    <TextBlock Text="搜索结果（按 Esc 或点 ✕ 关闭）" FontSize="10"
+                                               Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                    <Button Content="✕" Style="{DynamicResource TextAction}" FontSize="12"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Command="{Binding Browser.ClearSearchResultsCommand}"
+                                            ToolTip="清除搜索结果并关闭此栏（也可按 Esc）"/>
+                                </Grid>
+                                <ListBox Grid.Row="1" ItemsSource="{Binding Browser.SearchResults}"
+                                         SelectedItem="{Binding Browser.SelectedResult}"
+                                         SelectionMode="Extended"
+                                         MaxHeight="130" Background="Transparent" BorderThickness="0"
+                                         Padding="0" FontSize="11" Foreground="{DynamicResource White}"
+                                         PreviewKeyDown="SearchResults_PreviewKeyDown">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <views:HighlightTextBlock FontSize="11" Foreground="{DynamicResource White}"
+                                                                      TextWrapping="Wrap"
+                                                                      SourceText="{Binding DisplayText, Mode=OneWay}"
+                                                                      HighlightPattern="{Binding DataContext.Browser.HighlightPattern, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"
+                                                                      IsRegexHighlight="{Binding DataContext.Browser.HighlightIsRegex, RelativeSource={RelativeSource AncestorType=ListBox}, Mode=OneWay}"/>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
                     </Grid>
                 </Border>
             </Grid>
