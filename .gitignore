@@ -33,6 +33,9 @@ github_actions_cache/
 # 截图调试残留
 [0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*-[0-9a-f]*.png
 
+# AI 自验截图目录（本地临时，不入库）
+_ui_shots/
+
 # Build 目录产物
 Build/*.7z
 Build/*.exe
