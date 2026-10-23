@@ -619,6 +619,27 @@ public partial class PathExecutor
         if (coordinator != null) await coordinator.EnsureExecutionAllowedAsync(token, replay);
     }
 
+    // 只消费仍需前进的跳段；恢复期间已进入目标路线时，确认现有进度并继续。
+    internal static async Task HandleCollectiveSkipAsync(MultiplayerCoordinator? coordinator,
+        bool replay, long currentProgress, Func<CollectiveSkipRequest, Task> prepareSkip, CancellationToken token)
+    {
+        if (coordinator == null || replay) return;
+        token.ThrowIfCancellationRequested();
+        if (!coordinator.TryConsumeCollectiveSkip(out var request) || request == null) return;
+
+        if (request.TargetProgress >= 0 && currentProgress >= request.TargetProgress)
+        {
+            await coordinator.ReportCollectiveSkipAppliedAsync(true, currentProgress, "already-at-target");
+            token.ThrowIfCancellationRequested();
+            return;
+        }
+
+        await prepareSkip(request);
+        token.ThrowIfCancellationRequested();
+        throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
+            request.TargetProgress, request.SkipId);
+    }
+
     public async Task Pathing(PathingTask task)
     {
         var previousInstance = CurrentActiveInstance;
@@ -742,20 +763,6 @@ public partial class PathExecutor
             }
 
             await CheckMultiplayerBoundaryAsync();
-            // === 集体卡死跳段消费点 2（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
-            // 段切换前消费一次：避免跨段残留信号位 + 段开始前若已收到跳段请求立即处理。
-            // 段切换点不在 MoveForward 持按状态，故无需 KeyUp。
-            if (CooperativeContext?.IsReplay != true
-                && MultiplayerCoordinator != null
-                && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var segSkipRequest))
-            {
-                Logger.LogWarning("[联机] 段循环切换点收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
-                    segSkipRequest?.SkipId, segSkipRequest?.TargetProgress);
-                await TpStatueOfTheSeven(requireLoadingScreen: true);
-                throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
-                    segSkipRequest?.TargetProgress ?? -1, segSkipRequest?.SkipId ?? "");
-            }
-
             // === 协作重跑：会话已被中止 → 立即停止游戏动作（安全取消语义）===
             // 服务端因成员掉线租约到期、任一方失败/取消或经验上限而 Abort 时，其余成员不能继续跑完整条线路；
             // 这里在每段开始时同步判定一次（快照由会话轮询维护）。无协作上下文（单机/正常旧路径）恒不触发。
@@ -801,6 +808,14 @@ public partial class PathExecutor
             {
                 try
                 {
+                    // 段入口也受原 RetryException 分支保护；使用本段起点，避免上段路点残留。
+                    await HandleCollectiveSkipAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                        ComputeProgress(CurWaypoints.Item1, 0), async request =>
+                        {
+                            Logger.LogWarning("[联机] 段循环切换点收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                                request.SkipId, request.TargetProgress);
+                            await TpStatueOfTheSeven(requireLoadingScreen: true);
+                        }, ct);
                     ResetRecoveryStateForNewAttempt();
                     
                     await ResolveAnomalies(); // 异常场景处理
@@ -1489,15 +1504,13 @@ public partial class PathExecutor
 
                                     // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
                                     // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
-                                    if (CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
-                                        && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var fightSkipRequest))
-                                    {
-                                        Logger.LogWarning("[联机] 战斗结束收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
-                                            fightSkipRequest?.SkipId, fightSkipRequest?.TargetProgress);
-                                        await TpStatueOfTheSeven(requireLoadingScreen: true);
-                                        throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
-                                            fightSkipRequest?.TargetProgress ?? -1, fightSkipRequest?.SkipId ?? "");
-                                    }
+                                    await HandleCollectiveSkipAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                                        ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1), async request =>
+                                        {
+                                            Logger.LogWarning("[联机] 战斗结束收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                                                request.SkipId, request.TargetProgress);
+                                            await TpStatueOfTheSeven(requireLoadingScreen: true);
+                                        }, ct);
 
                                     if(!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex)) PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
                                     // fix-kazuha-collect-layer1-dead-code：清空前把战斗快照副本交给聚物协调器，
@@ -3423,16 +3436,15 @@ public partial class PathExecutor
             // === 集体卡死跳段消费点 1（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
             // isPoint==true 仅普通寻路段触发；MultiplayerCoordinator==null 单机模式直接 short-circuit。
             // 与上面的复苏信号消费点完全独立（preservation §3.4），抛不同 RetryException 文案便于日志追溯。
-            if (isPoint && CooperativeContext?.IsReplay != true && MultiplayerCoordinator != null
-                && MultiplayerCoordinator.TryConsumeCollectiveSkip(out var moveSkipRequest))
-            {
-                InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
-                Logger.LogWarning("[联机] 走路中收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
-                    moveSkipRequest?.SkipId, moveSkipRequest?.TargetProgress);
-                await TpStatueOfTheSeven(requireLoadingScreen: true);
-                throw new CollectiveSkipRetryException("[联机] 集体大部队请求跳段",
-                    moveSkipRequest?.TargetProgress ?? -1, moveSkipRequest?.SkipId ?? "");
-            }
+            if (isPoint)
+                await HandleCollectiveSkipAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                    ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1), async request =>
+                    {
+                        InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                        Logger.LogWarning("[联机] 走路中收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                            request.SkipId, request.TargetProgress);
+                        await TpStatueOfTheSeven(requireLoadingScreen: true);
+                    }, ct);
 
             num++;
 
