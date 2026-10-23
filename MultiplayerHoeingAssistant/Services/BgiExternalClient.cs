@@ -258,6 +258,8 @@ public sealed partial class BgiExternalClient : IDisposable
 {
     public string? TakeoverTicket { get; set; }
     public BgiEpoch? ServerEpoch { get; private set; }
+    // 连接断开时 ServerEpoch 必须失效；单独保存最后验证身份供重连比较，不能丢失重启边沿。
+    private BgiEpoch? _lastVerifiedServerEpoch;
     private const int MaxPayloadLength = 1024 * 1024;
     private static readonly TimeSpan CommandTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(5);
@@ -1145,6 +1147,7 @@ public sealed partial class BgiExternalClient : IDisposable
                     || claimedProcess.ValueKind != JsonValueKind.Number
                     || !claimedProcess.TryGetInt32(out var claimedProcessId)
                     || claimedSessionId != pipeServer.SessionId
+                    || claimedSessionId != System.Diagnostics.Process.GetCurrentProcess().SessionId
                     || claimedProcessId != pipeServer.ProcessId
                     || reportedEpoch?.ProcessId != pipeServer.ProcessId
                     || reportedEpoch.StartTicksUtc != pipeServer.StartTicksUtc)
@@ -1168,13 +1171,14 @@ public sealed partial class BgiExternalClient : IDisposable
 
                     SessionId = sidEl.GetString();
                 }
-                var previousEpoch = ServerEpoch;
+                var previousEpoch = _lastVerifiedServerEpoch;
                 ServerEpoch = reportedEpoch;
+                _lastVerifiedServerEpoch = reportedEpoch;
                 var epochChanged = reportedEpoch is not null
                     && ((previousEpoch is not null
                          && (previousEpoch.ProcessId != reportedEpoch.ProcessId
                              || previousEpoch.StartTicksUtc != reportedEpoch.StartTicksUtc))
-                        // DisposePipe 清空了旧纪元后重连；只要本客户端仍持有票据，
+                        // 首次握手没有历史身份时，如果本客户端已有票据，
                         // 新握手纪元同样必须触发一次旧票据清理。
                         || (previousEpoch is null && TakeoverTicket is not null));
                 if (epochChanged)
