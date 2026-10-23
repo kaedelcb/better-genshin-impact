@@ -39,6 +39,8 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
         RemoteFilesView = new ListCollectionView(RemoteFiles);
         RemoteFilesView.Filter = obj => obj is MemberLogFileDescriptor file && MatchesRemoteDateFilter(file);
         RemoteFiles.CollectionChanged += (_, _) => RebuildRemoteDateFilterItems();
+        // 结果集合增删后同步 HasSearchResults（结果框显隐 / 收起冗余状态栏行）
+        SearchResults.CollectionChanged += OnSearchResultsChanged;
     }
 
     // ========== 文件列表 ==========
@@ -618,6 +620,14 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     public bool HighlightIsRegex { get => _highlightIsRegex; set => SetProperty(ref _highlightIsRegex, value); }
 
     public ObservableCollection<SearchResultItem> SearchResults { get; } = new();
+
+    /// <summary>结果集合是否有元素（驱动结果区显隐，以及隐藏冗余的状态栏行）。</summary>
+    public bool HasSearchResults => SearchResults.Count > 0;
+
+    // SearchResults 每次 Clear/Add 后同步通知 HasSearchResults，供 XAML 收起冗余状态栏、
+    // 在结果框标题栏内直接显示条数（不再单独占一行）。
+    private void OnSearchResultsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        => OnPropertyChanged(nameof(HasSearchResults));
 
     private SearchResultItem? _selectedResult;
     /// <summary>选中搜索结果 → 跳转到对应位置并高亮。</summary>

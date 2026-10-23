@@ -759,8 +759,18 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- 状态栏 -->
+                        <!-- 状态栏（结果框出现时收起，条数已并入结果框标题栏，避免重复占高度） -->
                         <Grid Grid.Row="3" Margin="0,6,0,0">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Browser.HasSearchResults}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
                             <TextBlock Text="{Binding Browser.ViewStatus}" FontSize="11" Foreground="{DynamicResource Dim}"
                                        VerticalAlignment="Center"/>
                             <TextBlock Text="加载中…" FontSize="11" Foreground="{DynamicResource Gold}"
@@ -802,10 +812,16 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <!-- 结果区标题栏：说明 + 关闭按钮 -->
+                                <!-- 结果区标题栏：条数内嵌（不单独占一行）+ 关闭按钮 -->
                                 <Grid Grid.Row="0" Margin="2,0,2,2">
-                                    <TextBlock Text="搜索结果（按 Esc 或点 ✕ 关闭）" FontSize="10"
-                                               Foreground="{DynamicResource Dim}" VerticalAlignment="Center"/>
+                                    <TextBlock FontSize="10" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat="搜索结果 · 共 {0} 条（Esc 或点 ✕ 关闭）">
+                                                <Binding Path="Browser.SearchResults.Count"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
                                     <Button Content="✕" Style="{DynamicResource TextAction}" FontSize="12"
                                             HorizontalAlignment="Right" VerticalAlignment="Center"
                                             Command="{Binding Browser.ClearSearchResultsCommand}"
