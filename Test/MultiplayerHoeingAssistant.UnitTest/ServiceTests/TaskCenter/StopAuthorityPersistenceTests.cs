@@ -25,7 +25,7 @@ public class StopAuthorityPersistenceTests
     {
         var now = Stopwatch.GetTimestamp();
         var fence = new ManualStopFence("42:99", 7, now - 40 * Stopwatch.Frequency, Stopwatch.Frequency);
-        Assert.Throws<InvalidOperationException>(() => WorkflowStopAuthority.FromExplicitIntent(
+        Assert.Throws<StartupSourceStoppedException>(() => WorkflowStopAuthority.FromExplicitIntent(
             fence, "old-intent", now - 60 * Stopwatch.Frequency));
         var fresh = WorkflowStopAuthority.FromExplicitIntent(fence, "new-explicit-intent", now);
         Assert.Equal(7, fresh.Version);

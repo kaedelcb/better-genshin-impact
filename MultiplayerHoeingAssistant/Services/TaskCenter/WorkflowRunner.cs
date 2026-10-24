@@ -2010,7 +2010,7 @@ public sealed partial class WorkflowRunner
     {
         var authority = await _boundary.AcquireStopAuthorityAsync(intentId, timestamp, ct).ConfigureAwait(false);
         if (_boundary.RequiresStopAuthority && authority is null)
-            throw new InvalidOperationException("BGI 停止权威不可确认，未创建运行；请核对当前连接和能力。");
+            throw new StartupSourceUnavailableException("BGI 停止权威不可确认，未创建运行；请核对当前连接和能力。");
         return authority;
     }
 
@@ -2022,8 +2022,11 @@ public sealed partial class WorkflowRunner
             throw new InvalidOperationException("来源停止授权缺失；禁止以当前版本代替原挂载/启动意图。");
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
         budget.CancelAfter(TimeSpan.FromSeconds(5));
-        if (await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false) != true)
-            throw new InvalidOperationException("来源停止授权已撤销或不可确认；未创建新运行。");
+        var current = await _boundary.InspectStopAuthorityAsync(authority, budget.Token).ConfigureAwait(false);
+        if (current is null)
+            throw new StartupSourceUnavailableException("来源停止授权不可确认；未创建新运行。");
+        if (current == false)
+            throw new StartupSourceStoppedException("来源停止授权已撤销；未创建新运行。");
     }
 
     private async Task VerifyStopAuthorityAsync(WorkflowRunRecord run, CancellationToken ct)

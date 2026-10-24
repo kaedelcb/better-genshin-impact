@@ -1216,8 +1216,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         try { authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct); }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // 监控端拒绝表示当前角色不能执行；未知、停止和基线冲突继续持久拒绝。
-            if (!source.Revoked && ex is not StartupModeUnavailableException) RevokeCurrentAutomaticAuthorization(source);
+            // 只有权威确认停止才撤销持久许可；通信失败和未知仅中止本次来源。
+            if (!source.Revoked && ex is StartupSourceStoppedException) RevokeCurrentAutomaticAuthorization(source);
             throw;
         }
         // 模式切换或明确全停后，旧的在途查询也不能回写来源基线。

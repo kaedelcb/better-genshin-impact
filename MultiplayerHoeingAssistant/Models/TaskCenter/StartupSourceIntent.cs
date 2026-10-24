@@ -60,9 +60,9 @@ public sealed class StartupSourceIntent
     {
         if (Authority is not null || AutomaticPredecessor is not { } previous) return;
         if (revoked(previous))
-            throw new InvalidOperationException("原自动启动来源已经耐久停止；需要新的明确启动操作");
+            throw new StartupSourceStoppedException("原自动启动来源已经耐久停止；需要新的明确启动操作");
         if (string.IsNullOrWhiteSpace(currentEpoch))
-            throw new InvalidOperationException("本次 BGI 实例不可确认，未更新自动启动授权");
+            throw new StartupSourceUnavailableException("本次 BGI 实例不可确认，未更新自动启动授权");
         // 同一个 BGI 中的停止版本变化必须拒绝。只有确定是新进程时，才使用持久许可开启新运行。
         if (currentEpoch == previous.Epoch) await validate(previous, ct).ConfigureAwait(false);
     }
@@ -106,3 +106,9 @@ public sealed class StartupSourceIntent
 
 /// <summary>角色暂时不允许本机执行；中止旧来源，但不能据此永久撤销用户的自动启动许可。</summary>
 internal sealed class StartupModeUnavailableException(string message) : InvalidOperationException(message);
+
+/// <summary>权威已确认旧意图被手动或耐久停止；只有此类结果可撤销持久自动启动许可。</summary>
+internal sealed class StartupSourceStoppedException(string message) : InvalidOperationException(message);
+
+/// <summary>停止权威暂时不可确认；终止本次来源，保留用户的自动启动设置供新启动复核。</summary>
+internal sealed class StartupSourceUnavailableException(string message) : InvalidOperationException(message);

@@ -475,12 +475,12 @@ public sealed partial class TaskCenterHost
                 throw new StartupModeUnavailableException("当前为监控端（无本地执行能力），任务中心执行入口由能力守卫统一拒绝");
         }
         if (source.Authority is { } original && _runs.IsStartupSourceRevoked(original))
-            throw new InvalidOperationException("原来源已经耐久停止，自动回调不得以新 runId 恢复旧意图。");
+            throw new StartupSourceStoppedException("原来源已经耐久停止，自动回调不得以新 runId 恢复旧意图。");
         var client = _clientAccessor();
         if (client?.State != BgiExternalLinkState.Ready)
         {
             if (!required) return null;
-            if (source.Authority is not null) throw new InvalidOperationException("已冻结来源目标离线，禁止启动新目标洗白原基线");
+            if (source.Authority is not null) throw new StartupSourceUnavailableException("已冻结来源目标离线，禁止启动新目标洗白原基线");
             if (await EnsureExecutionEnvironmentAsync(ct).ConfigureAwait(false) is { } error)
                 throw new InvalidOperationException(error);
             client = _clientAccessor();

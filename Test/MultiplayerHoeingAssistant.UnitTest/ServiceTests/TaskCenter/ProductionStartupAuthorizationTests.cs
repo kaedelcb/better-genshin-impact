@@ -182,22 +182,46 @@ public sealed class ProductionStartupAuthorizationTests
                 Assert.Equal("43:100", store.LoadChecked().Config.AutomaticStopAuthority!.Epoch);
                 Close();
 
-                // 普通查询失败仍保留原有停止边界；重启不得把无法确认的旧来源洗成新授权。
-                boundary.InspectionFailure = new IOException("隔离停止权威查询暂时失败");
-                (window, shell) = Open();
-                shell.OnAppInitialized();
-                PumpUntil(() => !shell.IsRunning && shell.StatusText.StartsWith("执行中止"));
-                Assert.True(store.LoadChecked().Config.AutomaticAuthorization!.Revoked);
-                AssertOldSourceCannotRefresh(ConfiguredSource(shell));
-                boundary.InspectionFailure = null;
-                Close();
-                (window, shell) = Open();
-                shell.OnAppInitialized();
-                PumpUntil(() => !shell.IsRunning && shell.StatusText.Contains("自动启动许可已停止"));
-                shell.RunNowCommand.Execute(null); // 明确手动启动才授予新来源。
-                PumpUntil(() => !shell.IsRunning && shell.StatusText.StartsWith("上次执行完成"));
-                Assert.False(store.LoadChecked().Config.AutomaticAuthorization!.Revoked);
-                Close();
+                // 查询异常、超时和未知都只废弃本次来源；持久许可和旧基线保留，旧回调仍不能复活。
+                foreach (var failureKind in new[] { "io", "timeout", "unknown", "cancelled" })
+                foreach (var recovery in new[] { "auto", "manual" })
+                {
+                    var savedAuthority = store.LoadChecked().Config.AutomaticStopAuthority;
+                    boundary.InspectionFailure = failureKind switch
+                    {
+                        "io" => new IOException("隔离停止权威查询暂时失败"),
+                        "timeout" => new TimeoutException("隔离停止权威查询超时"),
+                        "cancelled" => new OperationCanceledException("隔离查询内部超时取消"),
+                        _ => null,
+                    };
+                    boundary.InspectionUnknown = failureKind == "unknown";
+                    (window, shell) = Open();
+                    shell.OnAppInitialized();
+                    PumpUntil(() => !shell.IsRunning && shell.StatusText.StartsWith("执行中止"));
+                    Assert.False(store.LoadChecked().Config.AutomaticAuthorization!.Revoked);
+                    Assert.Equal(savedAuthority, store.LoadChecked().Config.AutomaticStopAuthority);
+                    var failedSource = ConfiguredSource(shell);
+                    Assert.True(failedSource.Revoked);
+                    AssertOldSourceCannotRefresh(failedSource);
+                    boundary.InspectionFailure = null;
+                    boundary.InspectionUnknown = false;
+                    if (recovery == "auto")
+                    {
+                        Close();
+                        (window, shell) = Open();
+                        shell.OnAppInitialized(); // 故障解除后，新助手自动复核旧基线，无需先手动清许可。
+                    }
+                    else
+                    {
+                        shell.RunNowCommand.Execute(null); // 同一助手的显式手动操作使用新来源。
+                    }
+                    PumpUntil(() => !shell.IsRunning && shell.StatusText.StartsWith("上次执行完成"));
+                    Assert.NotEqual(failedSource.IntentId, ConfiguredSource(shell).IntentId);
+                    AssertOldSourceCannotRefresh(failedSource);
+                    Assert.False(store.LoadChecked().Config.AutomaticAuthorization!.Revoked);
+                    Assert.Equal(0, boundary.Submissions);
+                    Close();
+                }
 
                 boundary.Version++;
                 (window, shell) = Open();
@@ -418,6 +442,7 @@ public sealed class ProductionStartupAuthorizationTests
         public long Version { get; set; }
         public int Submissions { get; private set; }
         public Exception? InspectionFailure { get; set; }
+        public bool InspectionUnknown { get; set; }
         public TaskCompletionSource<bool?>? InspectionCompletion { get; set; }
         public int InspectionCalls { get; private set; }
         public bool SingleNativeSupported => false;
@@ -429,7 +454,7 @@ public sealed class ProductionStartupAuthorizationTests
             InspectionCalls++;
             return InspectionCompletion?.Task
                 ?? (InspectionFailure is { } failure ? Task.FromException<bool?>(failure)
-                    : Task.FromResult<bool?>(authority.Epoch == Epoch && authority.Version == Version));
+                    : Task.FromResult<bool?>(InspectionUnknown ? null : authority.Epoch == Epoch && authority.Version == Version));
         }
         public Task<BoundarySubmitResult> SubmitAsync(WorkflowSubmitRequest request, CancellationToken ct)
         { Submissions++; throw new InvalidOperationException("此入口检查不得提交任务"); }

@@ -54,7 +54,7 @@ public class StartupSourceStopAuthorityTests
     {
         var source = new StartupSourceIntent("before-ready", 123);
         Assert.Null(await source.GetOrCheckAsync((_, _, _) => Task.FromResult<WorkflowStopAuthorityRecord?>(null), false, default));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetOrCheckAsync((intent, _, _) =>
+        await Assert.ThrowsAsync<StartupSourceStoppedException>(() => source.GetOrCheckAsync((intent, _, _) =>
             Task.FromResult<WorkflowStopAuthorityRecord?>(WorkflowStopAuthority.FromExplicitIntent(
                 new ManualStopFence("42:99", 7, 200, System.Diagnostics.Stopwatch.Frequency), intent.IntentId, intent.IntentTimestamp)), true, default));
         Assert.True(source.Revoked);

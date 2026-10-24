@@ -88,8 +88,10 @@ internal static class WorkflowStopAuthority
 
     internal static WorkflowStopAuthorityRecord FromExplicitIntent(ManualStopFence fence, string intentId, long timestamp)
     {
-        if (string.IsNullOrWhiteSpace(intentId) || timestamp <= 0 || fence.LastManualStopTimestamp >= timestamp)
-            throw new InvalidOperationException("启动意图已被手动停止撤销；需要新的明确启动操作");
+        if (string.IsNullOrWhiteSpace(intentId) || timestamp <= 0)
+            throw new InvalidOperationException("启动意图缺少有效身份或时间");
+        if (fence.LastManualStopTimestamp >= timestamp)
+            throw new StartupSourceStoppedException("启动意图已被手动停止撤销；需要新的明确启动操作");
         return new(fence.Epoch, fence.Version, intentId, timestamp, fence.Frequency);
     }
 }

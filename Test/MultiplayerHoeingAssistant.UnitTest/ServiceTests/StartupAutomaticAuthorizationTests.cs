@@ -27,10 +27,38 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         Assert.Equal(explicitSource.IntentTimestamp, automatic.IntentTimestamp);
         Assert.Null(await automatic.GetOrCheckAsync((_, _, _) => Task.FromResult<WorkflowStopAuthorityRecord?>(null), false, default));
         var original = automatic.IntentTimestamp;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => automatic.GetOrCheckAsync((intent, _, _) =>
+        await Assert.ThrowsAsync<StartupSourceStoppedException>(() => automatic.GetOrCheckAsync((intent, _, _) =>
             Task.FromResult<WorkflowStopAuthorityRecord?>(WorkflowStopAuthority.FromExplicitIntent(
                 new("42:99", 1, original + 1, Stopwatch.Frequency), intent.IntentId, intent.IntentTimestamp)), true, default));
         Assert.True(automatic.Revoked);
+    }
+
+    [Fact]
+    public async Task PendingPermit_AfterTimeoutKeepsOriginalTimeAndRejectsInterveningManualStop()
+    {
+        var original = StartupSourceIntent.Explicit();
+        Store.SaveConfirmed(new() { Enabled = true,
+            AutomaticAuthorization = StartupAutomaticAuthorization.FromExplicit(original) });
+        var failed = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, true,
+            Store.LoadChecked().Config.AutomaticAuthorization)!;
+        await Assert.ThrowsAsync<TimeoutException>(() => failed.GetOrCheckAsync(
+            (_, _, _) => throw new TimeoutException("通道未就绪"), true, default));
+        Assert.True(failed.Revoked);
+        var retried = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, true,
+            Store.LoadChecked().Config.AutomaticAuthorization)!;
+        Assert.Equal(original.IntentId, retried.IntentId);
+        Assert.Equal(original.IntentTimestamp, retried.IntentTimestamp);
+        await Assert.ThrowsAsync<StartupSourceStoppedException>(() => retried.GetOrCheckAsync((intent, _, _) =>
+            Task.FromResult<WorkflowStopAuthorityRecord?>(WorkflowStopAuthority.FromExplicitIntent(
+                new("42:99", 1, original.IntentTimestamp + 1, Stopwatch.Frequency), intent.IntentId, intent.IntentTimestamp)), true, default));
+        Assert.True(retried.Revoked);
+        var oldCallbackRan = false;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => failed.GetOrCheckAsync((_, _, _) =>
+        {
+            oldCallbackRan = true;
+            return Task.FromResult<WorkflowStopAuthorityRecord?>(null);
+        }, false, default));
+        Assert.False(oldCallbackRan);
     }
 
     [Theory]
@@ -68,7 +96,7 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         var previous = new WorkflowStopAuthorityRecord("42:99", 7, "original", 123, Stopwatch.Frequency);
         var source = StartupSourceIntent.Automatic(new("permit", 123), previous);
         var acquired = false;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetOrCheckAsync(async (intent, _, ct) =>
+        await Assert.ThrowsAnyAsync<InvalidOperationException>(() => source.GetOrCheckAsync(async (intent, _, ct) =>
         {
             await intent.ValidateAutomaticPredecessorAsync(epoch, _ => durableStop,
                 (_, _) => throw new InvalidOperationException("手动停止版本已变化"), ct);
@@ -121,7 +149,7 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         stopped.State = WorkflowRunState.Cancelled;
         runs.Update(stopped);
         var source = StartupSourceIntent.Automatic(new("permit", 123), previous);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => source.GetOrCheckAsync(async (intent, _, ct) =>
+        await Assert.ThrowsAsync<StartupSourceStoppedException>(() => source.GetOrCheckAsync(async (intent, _, ct) =>
         {
             await intent.ValidateAutomaticPredecessorAsync("43:100", runs.IsStartupSourceRevoked,
                 (_, _) => Task.CompletedTask, ct);
