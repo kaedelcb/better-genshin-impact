@@ -98,25 +98,28 @@ internal static class ExternalInterfaceCommandPlane
         // ext 通道直接拒绝、绝不入队。v2 通道行为冻结，不加此校验。
         if (groupName is null && configName is null)
         {
-            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "invalid_request", "task.start 需要提供 groupName 或 configName"));
+            return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request,
+                InstanceIpcEnvelope.Failure(request, "invalid_request", "task.start 需要提供 groupName 或 configName")));
         }
 
-        // [手动停止冷却] 先于入队：F11/停止热键后窗口内拒绝外部 task.start（与 v2 同守卫，零副作用）
+        // 入队前拒绝附上原请求证明；新严格意图由停止围栏保护，旧接口仍受30秒冷却约束。
         if (InstanceRequestHandler.CheckManualStopCooldown(request, "ext") is { } cooldownRejection)
         {
-            return Task.FromResult(cooldownRejection);
+            return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request, cooldownRejection));
         }
 
         var scriptService = App.ServiceProvider.GetService<BetterGenshinImpact.Service.Interface.IScriptService>();
         if (scriptService == null)
         {
-            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用"));
+            return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request,
+                InstanceIpcEnvelope.Failure(request, "service_unavailable", "脚本服务不可用")));
         }
 
         var takeoverTicket = InstanceIpcProtocol.GetStringOrNull(request.Data, "takeoverTicket");
         if (!BetterGenshinImpact.Service.Execution.PreemptionGate.Authorize(takeoverTicket)
             || preempt && string.IsNullOrEmpty(takeoverTicket))
-            return Task.FromResult(InstanceIpcEnvelope.Failure(request, "takeover_conflict", "接管票据无效或原流程尚未完成可靠接管"));
+            return Task.FromResult(Execution.ExecutionRequestContract.RejectBeforeAcceptance(request,
+                InstanceIpcEnvelope.Failure(request, "takeover_conflict", "接管票据无效或原流程尚未完成可靠接管")));
         var submission = new BgiTaskCoordinator.TaskSubmission(
             generation,
             groupName,

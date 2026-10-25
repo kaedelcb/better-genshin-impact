@@ -156,6 +156,27 @@ public sealed class SingleTaskControlTests
                     if (action == "preparing") Assert.Empty(boundary.SubmittedNodes);
                     else Assert.Equal(new[] { "single-job" }, boundary.CancelledJobs);
                 }
+                if (action == "stop")
+                {
+                    // 同一页面连续启停，分别走本地宿主和监控端真实命名管道入口。
+                    for (var cycle = 0; cycle < 3; cycle++)
+                    {
+                        boundary.BodyEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        boundary.BodyResult = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        var previousCount = host.Runs.List().Count;
+                        Pump(view, () => ButtonOf(view, "启动单任务").IsEnabled);
+                        ButtonOf(view, "启动单任务").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        Pump(view, () => boundary.BodyEntered.Task.IsCompleted && host.Runs.List().Count == previousCount + 1);
+                        var next = host.Runs.List().Single(r => r.State == WorkflowRunState.Running);
+                        Assert.NotEqual(run.RunId, next.RunId);
+                        Pump(view, () => panel.CurrentPlanRuns.Any(r => r.RunId == next.RunId && r.CanStop));
+                        controlButton.Command.Execute(panel.CurrentPlanRuns.Single(r => r.RunId == next.RunId));
+                        Pump(view, () => host.Runs.Load(next.RunId)?.State == WorkflowRunState.Cancelled && !host.IsDriving(workflowId));
+                        Assert.DoesNotContain(host.Runs.List(), r => r.State == WorkflowRunState.Unknown);
+                    }
+                    Assert.Equal(4, boundary.SubmittedNodes.Count);
+                    Assert.Equal(4, boundary.CancelledJobs.Count);
+                }
                 Assert.DoesNotContain("later", boundary.SubmittedNodes);
                 Assert.Equal(0, boundary.TerminalCalls);
                 done.SetResult();
@@ -220,7 +241,7 @@ public sealed class SingleTaskControlTests
         {
             TerminalReleaseFixtureFacts.FreezeBody(request);
             SubmittedNodes.Add(request.Node.NodeId);
-            return Task.FromResult(BoundarySubmitResult.AcceptedWith("single-job"));
+            return Task.FromResult(BoundarySubmitResult.AcceptedWith(SubmittedNodes.Count == 1 ? "single-job" : "single-job-" + SubmittedNodes.Count));
         }
         public async Task<BoundaryTerminalResult> AwaitTerminalAsync(string id, CancellationToken ct)
         { BodyEntered.TrySetResult(); return BoundaryTerminalResult.Observed(await BodyResult.Task.WaitAsync(ct)); }

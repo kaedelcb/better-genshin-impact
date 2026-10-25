@@ -758,7 +758,7 @@ internal sealed class InstanceRequestHandler
     }
 
     /// <summary>
-    /// [手动停止冷却 2026-09-14] F11/停止热键后 30s 内拒绝外部 task.start（v2/ext 两通道共用）。
+    /// [手动停止冷却 2026-09-14] F11/停止热键后 30s 内拒绝无严格停止围栏的外部 task.start（v2/ext 共用）。
     /// 用户 F12 的语义是"全部停止"，但批次驱动端可能在 cancelled 后立即重发把任务又拉起来
     /// （实机事故：成员模式 F12 停止后一条龙被反复重启，用户连按 6 次 F12）。
     /// 窗口取 30s：足够吸收 +0.1s/+2.6s 量级的立即重发循环，又不至于让"F12 后房间才开好"的
@@ -769,6 +769,14 @@ internal sealed class InstanceRequestHandler
     /// <summary>冷却窗口内返回无损拒绝信封；窗口外返回 null（调用方继续原流程）。拒绝零副作用：不 Cancel、不污染幂等登记、不占队列位。</summary>
     internal static InstanceIpcEnvelope? CheckManualStopCooldown(InstanceIpcEnvelope request, string channelTag)
     {
+        // 严格任务中心请求已绑定原意图的停止版本。停止后的新意图可立即重新启动，
+        // 旧意图仍由 Validate 和建根时的原子围栏拒绝；不得给旧请求补签当前版本。
+        // 无严格合同的兼容入口（包括 task.suspend）继续保留原来的冷却保护。
+        if (request.Operation == ExternalInterfaceOperations.TaskStart
+            && request.Data?["executionContractVersion"] is { Type: JTokenType.Integer } version
+            && ExecutionRequestContract.Validate(request) is null && version.Value<long>() == 1)
+            return null;
+
         var cancellationContext = BetterGenshinImpact.Core.Script.CancellationContext.Instance;
         if (!cancellationContext.IsInManualStopCooldown(ManualStopCooldownWindow, out var remainingSeconds))
         {

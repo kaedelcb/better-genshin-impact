@@ -21,6 +21,49 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         _runs = new RunStore(Path.Combine(_dir, "runs"));
     }
 
+    [Theory]
+    [InlineData("valid")]
+    [InlineData("code-only")]
+    [InlineData("wrong-epoch")]
+    [InlineData("wrong-payload")]
+    public async Task ManualStopCooldown_OnlyBoundPreAcceptanceProofBecomesDefiniteRejection(string evidence)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        port.BeforeSend = () =>
+        {
+            var sent = port.Sends.Last();
+            var payload = System.Text.Json.Nodes.JsonNode.Parse(sent.PayloadJson)!;
+            if (evidence == "wrong-payload") payload["nodeId"] = "someone-else";
+            var data = evidence == "code-only" ? null : System.Text.Json.JsonSerializer.Serialize(new
+            {
+                executionDisposition = "server_rejected_before_acceptance", accepted = false,
+                operation = sent.Operation,
+                bgiEpoch = new { processId = evidence == "wrong-epoch" ? 9999 : 4321, startTicksUtc = 638999999999999999L },
+                request = payload,
+            });
+            port.ScriptedResponses.Add(new() { Success = false, ErrorCode = "manual_stop_cooldown", Data = data });
+        };
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs);
+        var result = await boundary.SubmitAsync(new WorkflowSubmitRequest(run, occurrence, node, true), default);
+        var persisted = _runs.Load(run.RunId)!.CurrentSubmission!;
+        Assert.Single(port.Sends);
+        Assert.Null(persisted.JobId);
+        if (evidence == "valid")
+        {
+            Assert.Equal(BoundarySubmitKind.Rejected, result.Kind);
+            Assert.NotNull(persisted.ServerRejectionEvidence);
+            Assert.True(persisted.ExecutionExitConfirmed);
+            Assert.Equal("never_started", persisted.ExecutionExitDisposition);
+        }
+        else
+        {
+            Assert.True(result.Uncertain);
+            Assert.Null(persisted.ServerRejectionEvidence);
+            Assert.False(persisted.ExecutionExitConfirmed);
+        }
+    }
+
     public void Dispose()
     {
         try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
