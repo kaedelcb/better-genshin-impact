@@ -119,6 +119,7 @@ public sealed partial class RoomOperations
                 {
                     if (group.StartsWith("CTRL_"))
                     {
+                        ObserveHoeingDisconnected(group, ctx.ConnectionId);
                         _roomManager.RemoveFromControlRoom(group, ctx.ConnectionId);
                         ReleaseDisconnectedCompletionWaits(group);
                         // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；

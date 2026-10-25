@@ -182,6 +182,7 @@ public sealed partial class RoomOperations
     private async Task PublishBatchSnapshotAsync(string group, CoordinatedBatchState state,
         CoordinatedBatchSnapshot snapshot, string eventName)
     {
+        ObserveHoeingBatch(group, snapshot);
         foreach (var uid in snapshot.ParticipantUids)
         {
             var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.PlayerUid == uid && p.Online
@@ -232,6 +233,7 @@ public sealed partial class RoomOperations
             if (completionWaitsChanged) snapshot = state.Snapshot();
             notifyTerminal = previousPhase != snapshot.Phase && snapshot.Phase is ("completed" or "aborted");
         }
+        ObserveHoeingBatch(group, snapshot);
         if (completionWaitsChanged) await BroadcastControlRoomPlayersAsync(group, forceFull: true);
         if (notifyTerminal) await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
         return snapshot;

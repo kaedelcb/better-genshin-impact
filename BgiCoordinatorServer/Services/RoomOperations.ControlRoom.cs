@@ -392,6 +392,7 @@ public sealed partial class RoomOperations
             var group = $"CTRL_{status.RoomCode}";
             // 只更新状态，不做就绪检查（就绪检查由 ReportOnlineEvent 端点统一处理）
             _roomManager.UpdateControlStatus(group, ctx.ConnectionId, status);
+            ObserveHoeingMember(group, ctx.ConnectionId, status);
 
             // 广播给控制房间所有成员（状态上报：增量比对，无变化零发送——主优化点）
             await BroadcastControlRoomPlayersAsync(group, forceFull: false);

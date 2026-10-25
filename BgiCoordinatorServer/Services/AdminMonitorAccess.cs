@@ -84,11 +84,11 @@ public static class AdminMonitorRoutes
             return Results.File(Path.Combine(pageDirectory, "admin-monitor.html"), "text/html; charset=utf-8");
         }).RequireAuthorization();
 
-        app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager) =>
+        app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager, RoomHoeingHistory history) =>
         {
             NoStore(context);
             return Results.Json(RoomMonitorSnapshot.Create(manager, DateTime.UtcNow,
-                TimeSpan.FromSeconds(playerTimeoutSeconds)));
+                TimeSpan.FromSeconds(playerTimeoutSeconds), history));
         }).RequireAuthorization();
 
         app.MapGet("/api/admin/rooms/{code}/logs", (string code, HttpContext context, RoomLogStore logs) =>

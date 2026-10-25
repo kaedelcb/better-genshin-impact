@@ -28,6 +28,9 @@
     .pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#33434a;color:#d5e2e0;font-size:12px;font-weight:700}
     .pill.started,.pill.connected{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
     .group-title{margin:16px 2px 4px;color:#a9babe;font-size:14px;font-weight:700}
+    .today-summary{margin-top:12px;padding:9px 12px;background:#14242b;border-radius:8px;color:#bbd7d0;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+    .today-history{border-top:1px solid #30444c;padding:14px 20px}.today-history h3{font-size:14px;margin:0 0 5px}.history-note{font-size:12px;color:#9eb0b4;line-height:1.7}
+    .history-run{display:grid;grid-template-columns:1fr 1.2fr;gap:7px 20px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px;overflow-wrap:anywhere}.history-run:last-child{border-bottom:0}.history-members{grid-column:1/-1;color:#b6c6c7;font-size:12px}.history-warning{color:#f4c39b;margin:6px 0;font-size:12px}.history-result.completed{color:#9be7be}.history-result.unknown,.history-result.failed,.history-result.stopped,.history-result.completedWithErrors{color:#f4c39b}
     .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
     .member:last-child{border-bottom:0}.member-head{color:#91a7ac;font-size:12px;font-weight:700}.member strong{font-size:14px}.empty{padding:54px 20px;text-align:center;color:#a7b8bc;border:1px dashed #40555c;border-radius:13px}
     dialog{width:min(920px,calc(100vw - 28px));max-height:82vh;padding:22px;border:1px solid #49616a;border-radius:15px;background:#17252d;color:#edf3f1;box-shadow:0 25px 80px #0009}
@@ -54,7 +57,7 @@
       <div class="metric warn"><span>已开锄且有人在线</span><strong id="startedRooms">—</strong></div>
     </section>
     <div class="toolbar">
-      <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="connected">已连接</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
+      <div class="filters"><input id="search" type="search" placeholder="搜索房间码、昵称或 UID" aria-label="搜索房间"><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="connected">已连接</option><option value="today">今日有记录</option><option value="started">已开锄</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option></select></div>
       <div id="updated" class="updated" aria-live="polite">正在连接服务器…</div>
     </div>
     <div class="archive-toolbar" role="group" aria-label="历史房间日志">
@@ -80,6 +83,73 @@
     <div id="logStatus" class="muted" role="status"></div>
     <div id="logLines" class="log-lines"></div>
   </dialog>
+  <script data-hoeing-history>
+// Pure presentation helpers shared by the admin page and its focused checks.
+(() => {
+    const labels = {
+        preparing: '准备开锄', running: '锄地中', completed: '已完成',
+        completedWithErrors: '已结束，含任务异常', stopped: '已中止', failed: '异常结束', unknown: '结束未确认'
+    };
+    function runLabel(run) {
+        if (!run.startedAtUtc) {
+            if (run.status === 'completed') return '流程已完成，未收到开锄上报';
+            if (run.status === 'completedWithErrors') return '流程结束，含任务异常，未收到开锄上报';
+            if (run.status === 'running') return '流程执行中，等待开锄上报';
+            if (run.status === 'unknown') return '开锄未确认，流程结果未知';
+        }
+        return labels[run.status] || '结果未知';
+    }
+    function time(value, date) {
+        if (!value) return '未记录';
+        const instant = new Date(value);
+        if (!Number.isFinite(instant.getTime())) return '未记录';
+        const localDate = new Date(instant.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+        const clock = instant.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+        return localDate === date ? clock : localDate + ' ' + clock;
+    }
+    function latest(day) {
+        return (day?.runs || []).reduce((found, run) => !found || Date.parse(run.requestedAtUtc) >= Date.parse(found.requestedAtUtc) ? run : found, null);
+    }
+    function reasonText(reason) {
+        if (!reason) return '';
+        if (/[\u4e00-\u9fff]/.test(reason)) return reason;
+        if (reason.startsWith('completed_with_task_errors:')) return '部分成员的本地任务出现异常，详见服务器日志';
+        if (reason.startsWith('participant_failed:')) return '成员任务失败';
+        return {
+            manual_reset: '手动重置', user_stop_all: '用户停止全部任务', unexpected_stop: '任务意外停止',
+            registration_timeout: '成员注册超时', preparation_timeout: '开锄准备超时', takeover_timeout: '任务接管超时',
+            cleanup_timeout: '停止清理超时', partial_completion_no_replay: '成员完成进度不一致，未重复执行',
+            recovery_budget_exhausted: '恢复未成功', server_restarted: '服务器重启，结束结果未确认',
+            status_idle: '已无锄地上报，结束结果未确认', disconnected: '成员断线，结束结果未确认',
+            shared_recovery: '正在恢复任务'
+        }[reason] || '结束详情请查看服务器日志';
+    }
+    function headline(day) {
+        if (!day) return '今日记录不可用';
+        const run = latest(day);
+        if (!run) return day.warnings?.length ? '今日记录不完整' : '今日暂无记录';
+        const active = day.runs.find(item => item.status === 'running') || day.runs.find(item => item.status === 'preparing');
+        return runLabel(active || run);
+    }
+    function overview(day) {
+        if (!day) return '无法读取今日锄地记录';
+        const runs = day.runs || [], started = runs.filter(run => run.startedAtUtc);
+        if (!runs.length) return '仅统计启用记录后收到的上报；暂无记录不代表今天没锄。';
+        const completed = started.filter(run => run.status === 'completed').length;
+        const todayStarts = started.filter(run => new Date(Date.parse(run.startedAtUtc) + 8 * 3600000).toISOString().slice(0, 10) === day.date).length;
+        const text = [`今日开锄 ${todayStarts} 次`];
+        if (todayStarts < started.length) text.push(`跨日继续 ${started.length - todayStarts} 次`);
+        text.push(`已完成 ${completed} 次`);
+        const errors = started.filter(run => run.status === 'completedWithErrors').length;
+        if (errors) text.push(`含任务异常 ${errors} 次`);
+        const run = latest(day);
+        text.push(`最近${run.startedAtUtc ? '开锄' : '尝试'} ${time(run.startedAtUtc || run.requestedAtUtc, day.date)}`);
+        if (run.endedAtUtc) text.push(`结束 ${time(run.endedAtUtc, day.date)}`);
+        return text.join(' · ');
+    }
+    globalThis.AdminHoeingHistory = { runLabel, time, headline, overview, reasonText };
+})();
+  </script>
   <script>
     const $=id=>document.getElementById(id);
     const labels={started:'已开锄',waiting:'等待开锄',disconnected:'无人在线',finished:'本轮结束'};
@@ -90,6 +160,23 @@
     function heartbeat(time){if(!time)return '未上报';const age=Math.max(0,Math.floor((Date.now()-Date.parse(time))/1000));return age<60?`${age}秒前`:`${Math.floor(age/60)}分钟前`;}
     function route(room){const numbers=room.members.filter(member=>member.online&&member.routeNumber!==null).map(member=>member.routeNumber);if(!numbers.length||room.totalRoutes===null)return '未上报';const min=Math.min(...numbers),max=Math.max(...numbers);return `第 ${min}${min===max?'':'–'+max} / ${room.totalRoutes} 条`;}
     function cell(value,sub){const box=node('div','value',value);if(sub!==undefined)box.append(node('span','sub',sub));return box;}
+    function todayHistory(day){
+      const section=node('section','today-history');
+      section.append(node('h3','',`今日锄地记录${day?' · '+day.date:''}（北京时间）`));
+      section.append(node('div','history-note','按实际开锄上报计次；完成由全队流程结果确认。断线、空闲或单个成员完成不能证明全队完成。'));
+      if(!day){section.append(node('div','history-warning','今日记录读取失败'));return section;}
+      for(const warning of day.warnings||[])section.append(node('div','history-warning',warning));
+      if(!day.runs.length)section.append(node('div','history-note','今日暂无记录；启用前未保存的行为无法补回。'));
+      for(const run of [...day.runs].reverse()){
+        const row=node('div','history-run');
+        row.append(cell(`${run.startedAtUtc?'开锄':'尝试'} ${AdminHoeingHistory.time(run.startedAtUtc||run.requestedAtUtc,day.date)}`,
+          run.endedAtUtc?'结束 '+AdminHoeingHistory.time(run.endedAtUtc,day.date):'最近上报 '+AdminHoeingHistory.time(run.observedAtUtc,day.date)));
+        const result=cell(AdminHoeingHistory.runLabel(run),AdminHoeingHistory.reasonText(run.reason)||undefined);result.classList.add('history-result',run.status);row.append(result);
+        row.append(node('div','history-members','参与成员：'+(run.members.map(member=>member.name||member.uid).join('、')||'未记录')));
+        section.append(row);
+      }
+      return section;
+    }
     function memberSummary(members){
       const summary=node('div','member-summary');summary.append(node('span','member-summary-label','成员'));
       if(!members.length){summary.append(node('span','member-summary-label','暂无'));return summary;}
@@ -190,22 +277,22 @@
       $('startedRooms').textContent=snapshot.startedRoomCount;
       const open=new Set([...document.querySelectorAll('details.room[open]')].map(item=>item.dataset.code));
       const query=$('search').value.trim().toLowerCase(),filter=$('filter').value;
-      const controls=(snapshot.controlRooms||[]).filter(room=>(filter==='all'||filter==='connected')&&(!query||room.code.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
+      const controls=(snapshot.controlRooms||[]).filter(room=>(filter==='all'||filter==='connected'&&room.onlineCount>0||filter==='disconnected'&&room.onlineCount===0||filter==='today'&&room.todayHoeing?.runs?.length>0)&&(!query||room.code.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
       const matched=snapshot.rooms.filter(room=>(filter==='all'||room.status===filter)&&(!query||room.code.toLowerCase().includes(query)||room.hostName.toLowerCase().includes(query)||room.members.some(member=>member.name.toLowerCase().includes(query)||member.uid.toLowerCase().includes(query))));
       const list=$('rooms');list.replaceChildren();
-      if(!controls.length&&!matched.length){list.append(node('div','empty',snapshot.connectedControlRoomCount||snapshot.totalRoomCount?'没有符合条件的房间':'服务器当前没有已连接房间'));return;}
+      if(!controls.length&&!matched.length){list.append(node('div','empty',snapshot.controlRooms?.length||snapshot.totalRoomCount?'没有符合条件的房间':'服务器当前没有已连接房间'));return;}
       if(controls.length){
-        list.append(node('div','group-title','已连接的控制房间'));
+        list.append(node('div','group-title','控制房间 · 今日锄地记录'));
         for(const room of controls){
           const details=node('details','room');details.dataset.code='control:'+room.code;details.open=open.has(details.dataset.code);
           const summary=node('summary'),head=node('div','room-head');
           head.append(cell(room.code,'控制房间码'));
-          const state=node('div');state.append(node('span','pill connected','已连接'));head.append(state);
+          const state=node('div');state.append(node('span','pill '+(room.onlineCount?'connected':'disconnected'),room.onlineCount?'已连接':'无人在线'));head.append(state);
           head.append(cell(`${room.onlineCount} / ${room.memberCount}`,'在线 / 成员'));
-          head.append(cell(room.autoHoeingRunning?'有成员锄地中':'尚未开锄','助手上报'));
-          head.append(cell('—','游戏房间'));
+          head.append(cell(room.autoHoeingRunning?'有成员锄地中':room.onlineCount?'未上报锄地中':'暂无在线成员','助手当前上报'));
+          head.append(cell(AdminHoeingHistory.headline(room.todayHoeing),'今日锄地 · 北京时间'));
           head.append(cell(heartbeat(room.lastHeartbeatUtc),'最近状态'));
-          summary.append(head,memberSummary(room.members),logButton(room.code));details.append(summary);
+          summary.append(head,node('div','today-summary',AdminHoeingHistory.overview(room.todayHoeing)+' · 点击展开记录'),memberSummary(room.members),logButton(room.code));details.append(summary,todayHistory(room.todayHoeing));
           const members=node('div','members');
           const header=node('div','member member-head');['成员','连接','助手状态','当前线路','最近心跳'].forEach(text=>header.append(node('div','',text)));members.append(header);
           for(const member of room.members){

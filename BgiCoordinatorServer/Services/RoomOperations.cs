@@ -23,6 +23,7 @@ public sealed partial class RoomOperations
     private readonly GatewayBroadcaster _broadcaster;
     private readonly RoomPhaseObserver _phaseObserver;
     private readonly RoomLogContext? _roomLogContext;
+    private readonly RoomHoeingHistory? _hoeingHistory;
 
     /// <summary>客户端能力查询（route-anchor 门控用）。为 null 时按"不支持"处理：
     /// 宁可拒绝激活，也不允许"忘记接线导致静默半启用"。</summary>
@@ -34,7 +35,8 @@ public sealed partial class RoomOperations
         GatewayBroadcaster broadcaster,
         RoomPhaseObserver phaseObserver,
         IClientCapabilityLookup? capabilityLookup = null,
-        RoomLogContext? roomLogContext = null)
+        RoomLogContext? roomLogContext = null,
+        RoomHoeingHistory? hoeingHistory = null)
     {
         _roomManager = roomManager;
         _logger = logger;
@@ -42,6 +44,7 @@ public sealed partial class RoomOperations
         _phaseObserver = phaseObserver;
         _capabilityLookup = capabilityLookup;
         _roomLogContext = roomLogContext;
+        _hoeingHistory = hoeingHistory;
     }
 
     private void ObserveRoomLog(Action<RoomLogContext> observation)
@@ -49,6 +52,59 @@ public sealed partial class RoomOperations
         if (_roomLogContext is null) return;
         try { observation(_roomLogContext); }
         catch (Exception exception) { _logger.LogWarning(exception, "房间日志历史观察失败（不影响业务）"); }
+    }
+
+    private void ObserveHoeingBatch(string group, CoordinatedBatchSnapshot snapshot)
+    {
+        if (_hoeingHistory is null) return;
+        try
+        {
+            var players = _roomManager.GetControlRoomPlayers(group);
+            var members = snapshot.ParticipantUids.Select(uid => new RoomHoeingMember(uid,
+                players.FirstOrDefault(player => player.PlayerUid == uid)?.PlayerName ?? uid)).ToArray();
+            _hoeingHistory.ObserveBatch(group, snapshot, members, DateTime.UtcNow);
+        }
+        catch (Exception exception) { _logger.LogWarning(exception, "锄地记录观察失败（不影响业务）"); }
+    }
+
+    private void ObserveHoeingMember(string group, string connectionId, ControlStatus status)
+    {
+        if (_hoeingHistory is null) return;
+        try
+        {
+            // Use the registered executor identity, not status.PlayerUid/PlayerName or a remote observer.
+            var player = _roomManager.GetControlRoomPlayers(group)
+                .SingleOrDefault(member => member.ConnectionId == connectionId && member.Online);
+            if (player is not null)
+            {
+                string? verifiedBatch = null;
+                var accept = true;
+                lock (_batchGate)
+                {
+                    if (!string.IsNullOrWhiteSpace(status.HoeingBatchId) && _controlBatches.TryGetValue(group, out var batch))
+                    {
+                        accept = batch.BatchId == status.HoeingBatchId
+                            && batch.ParticipantUids.Contains(player.PlayerUid, StringComparer.Ordinal)
+                            && batch.MatchesExecutor(player.PlayerUid, player.ClientInstanceId);
+                        if (accept) verifiedBatch = batch.BatchId;
+                    }
+                }
+                if (accept) _hoeingHistory.ObserveMember(group, player.PlayerUid, player.PlayerName,
+                    player.ClientInstanceId, status, verifiedBatch, DateTime.UtcNow);
+            }
+        }
+        catch (Exception exception) { _logger.LogWarning(exception, "锄地状态记录观察失败（不影响业务）"); }
+    }
+
+    private void ObserveHoeingDisconnected(string group, string connectionId)
+    {
+        if (_hoeingHistory is null) return;
+        try
+        {
+            var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(member => member.ConnectionId == connectionId);
+            if (player is not null) _hoeingHistory.ObserveDisconnected(group, player.PlayerUid, player.ClientInstanceId, DateTime.UtcNow);
+        }
+        catch (Exception exception) { _logger.LogWarning(exception, "锄地断线记录观察失败（不影响业务）"); }
     }
 
     // ====== 连接 Group 跟踪（自 CoordinatorHub 搬迁，语义不变）======

@@ -14,13 +14,36 @@ public sealed record RoomMonitorSnapshot(
     int ConnectedControlMemberCount,
     List<RoomMonitorControlRoom> ControlRooms)
 {
-    public static RoomMonitorSnapshot Create(RoomManager manager, DateTime utcNow, TimeSpan onlineTimeout)
+    public static RoomMonitorSnapshot Create(RoomManager manager, DateTime utcNow, TimeSpan onlineTimeout,
+        RoomHoeingHistory? history = null)
     {
         // 助手先加入控制房间；游戏锄地房间通常到真正开锄时才创建。
         var controlRooms = manager.GetControlRoomMonitorRooms()
             .Where(room => room.OnlineCount > 0)
-            .OrderBy(room => room.Code, StringComparer.Ordinal)
             .ToList();
+        if (history is not null)
+        {
+            // 今日发生过锄地的房间离线或服务重启后仍可查询，不依赖当前成员对象存活。
+            foreach (var code in history.GetTodayRoomCodes(utcNow))
+                if (controlRooms.All(room => room.Code != code))
+                    controlRooms.Add(new RoomMonitorControlRoom(code, 0, 0, false, null, []));
+            controlRooms = controlRooms.Select(room =>
+            {
+                var day = history.ReadToday(room.Code, utcNow);
+                if (room.Members.Count == 0)
+                {
+                    var members = day.Runs.SelectMany(run => run.Members)
+                        .GroupBy(member => member.Uid, StringComparer.Ordinal)
+                        .Select(group => group.Last())
+                        .Select(member => new RoomMonitorControlMember(member.Name, member.Uid, false,
+                            false, null, null, null)).ToList();
+                    room = room with { MemberCount = members.Count, Members = members };
+                }
+                return room with { TodayHoeing = day };
+            }).ToList();
+        }
+        controlRooms = controlRooms.OrderByDescending(room => room.OnlineCount > 0)
+            .ThenBy(room => room.Code, StringComparer.Ordinal).ToList();
         var rooms = new List<RoomMonitorRoom>();
         foreach (var (room, code) in manager.GetAllRoomsWithCodes())
         {
@@ -65,7 +88,7 @@ public sealed record RoomMonitorSnapshot(
             rooms.Sum(room => room.OnlineCount),
             rooms.Count(room => room.Status == "disconnected"),
             rooms,
-            controlRooms.Count,
+            controlRooms.Count(room => room.OnlineCount > 0),
             controlRooms.Sum(room => room.OnlineCount),
             controlRooms);
     }
@@ -120,7 +143,10 @@ public sealed record RoomMonitorControlRoom(
     int OnlineCount,
     bool AutoHoeingRunning,
     DateTime? LastHeartbeatUtc,
-    List<RoomMonitorControlMember> Members);
+    List<RoomMonitorControlMember> Members)
+{
+    public RoomHoeingDay? TodayHoeing { get; init; }
+}
 
 public sealed record RoomMonitorControlMember(
     string Name,
