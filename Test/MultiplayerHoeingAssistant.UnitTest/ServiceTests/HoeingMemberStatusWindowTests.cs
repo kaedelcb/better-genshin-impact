@@ -287,11 +287,16 @@ public sealed class HoeingMemberStatusWindowTests
         var receive = (Action<ControlRoomPlayersUpdate>)typeof(SignalRClient)
             .GetField("OnPlayersUpdated", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(client)!;
         var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        ControlRoomPlayer Packet(bool online, bool? released) => System.Text.Json.JsonSerializer.Deserialize<ControlRoomPlayer>(
+        ControlRoomPlayer Packet(bool online, bool? released, string phase = "completionPending",
+            string message = "正在跟踪同一个绑定完成动作", string? batchId = "old-post", string uid = "100000009") =>
+            System.Text.Json.JsonSerializer.Deserialize<ControlRoomPlayer>(
             System.Text.Json.JsonSerializer.Serialize(new
             {
-                playerUid = "100000009", playerName = "Dream", online, hoeingBatchId = "old-post",
-                hoeingStartPhase = "completionPending", hoeingStartMessage = "正在跟踪同一个绑定完成动作",
+                playerUid = uid, playerName = uid switch
+                {
+                    "100000010" => "小鲨鱼", "100000011" => "茶包 s", "100000012" => "一时兴起", _ => "Dream"
+                }, online, hoeingBatchId = batchId,
+                hoeingStartPhase = phase, hoeingStartMessage = message,
                 hoeingCompletionWaitReleased = released,
             }), options)!;
 
@@ -322,14 +327,98 @@ public sealed class HoeingMemberStatusWindowTests
         Assert.Equal(MemberViewModel.PostHoeingRunningMessage, text.Text);
         Assert.True(button.IsVisible);
 
-        // 旧服务端没有提供解除事实时，只显示离线，不显示带有错误暗示的未确认短句。
+        // 旧服务端未提供解除事实时，明确离线和结束状态未知，不能暗示已解除下一轮等待。
         receive(new ControlRoomPlayersUpdate { Full = false, Revision = 4, Changed = [Packet(false, null)] });
         await LayoutAsync(window);
-        Assert.Equal("成员已离线", text.Text);
+        Assert.Equal(MemberViewModel.PostHoeingOfflineMessage, text.Text);
         Assert.False(button.IsVisible);
-        Assert.DoesNotContain("状态未确认", text.Text);
+        Assert.Contains("结束状态未确认", text.Text);
         Assert.DoesNotContain("不影响", text.Text);
         SaveWindow(line, Path.Combine(AssistantDataDirectory.Root, "legacy-offline-line.png"));
+
+        // 全量新增真实关机后的不同最后记录：取消/清理不能冒充目前仍执行；已确认完成保留。
+        receive(new ControlRoomPlayersUpdate
+        {
+            Full = true, Revision = 5,
+            Players =
+            [
+                Packet(false, null, "completed", "联机锄地已取消，清理已确认", "dream-shutdown"),
+                Packet(false, null, "completionPending", "绑定完成动作待接续：等待连接原 BGI", "shark-shutdown", "100000010"),
+                Packet(false, null, "completed", MemberViewModel.PostHoeingCompletedMessage, "teabag-finished", "100000011"),
+                Packet(false, null, "cancelled", "联机锄地已取消，正在确认清理", "member-shutdown", "100000012"),
+            ]
+        });
+        await LayoutAsync(window);
+        Assert.Equal(4, vm.Members.Count);
+        foreach (var offline in vm.Members)
+        {
+            var statusText = BoundText(window, offline, nameof(MemberViewModel.HoeingStartMessage));
+            var statusLine = Assert.IsType<DockPanel>(VisualTreeHelper.GetParent(statusText));
+            var hintButton = Assert.Single(VisualChildren<Button>(statusLine).Where(item => item.Name == "CompletionActionHintButton"));
+            Assert.False(hintButton.IsVisible);
+            Assert.Equal(offline.PlayerUid == "100000011" ? MemberViewModel.PostHoeingCompletedMessage
+                : MemberViewModel.PostHoeingOfflineMessage, statusText.Text);
+            if (offline.PlayerUid != "100000011")
+                Assert.Equal(((SolidColorBrush)window.FindResource("Dim")).Color,
+                    Assert.IsType<SolidColorBrush>(statusText.Foreground).Color);
+        }
+
+        member = vm.Members.Single(item => item.PlayerUid == "100000009");
+        text = BoundText(window, member, nameof(MemberViewModel.HoeingStartMessage));
+        var revision = 5L;
+        foreach (var phase in new[] { "completionPending", "reconciling", "cleanupPending", "cancelled", "unknown", "failed" })
+        {
+            var lastReport = "关机前最后记录：" + phase;
+            // 增量更新原对象时同样刷新卡片，不能依赖离线Online属性再次变化。
+            receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+                Changed = [Packet(false, null, phase, lastReport, "dream-shutdown")] });
+            await LayoutAsync(window);
+            Assert.Same(member, vm.Members.Single(item => item.PlayerUid == "100000009"));
+            Assert.Equal(phase, member.HoeingStartPhase);
+            Assert.Equal(MemberViewModel.PostHoeingOfflineMessage, text.Text);
+            Assert.True(member.IsPostHoeingTaskOffline);
+            Assert.Equal(((SolidColorBrush)window.FindResource("Dim")).Color,
+                Assert.IsType<SolidColorBrush>(text.Foreground).Color);
+            if (phase is "cleanupPending" or "unknown" or "failed")
+            {
+                receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+                    Changed = [Packet(true, null, phase, lastReport, "dream-shutdown")] });
+                await LayoutAsync(window);
+                Assert.Equal(lastReport, text.Text);
+                Assert.False(member.IsPostHoeingTaskOffline);
+                Assert.Equal(((SolidColorBrush)window.FindResource("Pyro")).Color,
+                    Assert.IsType<SolidColorBrush>(text.Foreground).Color);
+                receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+                    Changed = [Packet(false, null, phase, lastReport, "dream-shutdown")] });
+                await LayoutAsync(window);
+                Assert.Equal(MemberViewModel.PostHoeingOfflineMessage, text.Text);
+                Assert.Equal(((SolidColorBrush)window.FindResource("Dim")).Color,
+                    Assert.IsType<SolidColorBrush>(text.Foreground).Color);
+            }
+        }
+
+        // 重连后使用新上报的真实运行字段；后续收到全部完成，再来的同批关机取消包不覆盖完成事实。
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+            Changed = [Packet(true, false, "completionPending", MemberViewModel.PostHoeingRunningMessage, "dream-shutdown")] });
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingRunningMessage, text.Text);
+        Assert.True(member.IsPostHoeingTaskRunning);
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+            Changed = [Packet(true, null, "completed", MemberViewModel.PostHoeingCompletedMessage, "dream-shutdown")] });
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingCompletedMessage, text.Text);
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+            Changed = [Packet(false, null, "cancelled", "联机锄地已取消，正在确认清理", "dream-shutdown")] });
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingCompletedMessage, text.Text);
+        Assert.Equal("cancelled", member.HoeingStartPhase);
+
+        receive(new ControlRoomPlayersUpdate { Full = false, Revision = ++revision,
+            Changed = [Packet(false, null, "completionPending", MemberViewModel.PostHoeingRunningMessage, "next-batch")] });
+        await LayoutAsync(window);
+        Assert.Equal(MemberViewModel.PostHoeingOfflineMessage, text.Text);
+        Assert.True(member.IsPostHoeingTaskOffline);
+        SaveWindow(window, Path.Combine(AssistantDataDirectory.Root, "shutdown-offline-member-cards.png"));
     }
 
     private static MemberViewModel Member(string uid, string name, string phase, string message) => new()

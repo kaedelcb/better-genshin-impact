@@ -4929,10 +4929,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                         existing.TaskRunning = np.TaskRunning;
                         existing.TaskStatusAvailable = np.TaskStatusAvailable;
                         existing.TaskPaused = np.TaskPaused;
-                        existing.HoeingBatchId = np.HoeingBatchId;
-                        existing.HoeingStartPhase = np.HoeingStartPhase;
-                        existing.HoeingStartMessage = np.HoeingStartMessage;
-                        existing.HoeingCompletionWaitReleased = np.HoeingCompletionWaitReleased;
+                        existing.ApplyHoeingStatus(np.HoeingBatchId, np.HoeingStartPhase,
+                            np.HoeingStartMessage, np.HoeingCompletionWaitReleased);
                         existing.HoeingCompletionAction = np.HoeingCompletionAction;
                         existing.CurrentTaskName = np.CurrentTaskName;
                         existing.CurrentTaskGroupName = np.CurrentTaskGroupName;
@@ -4952,7 +4950,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                         return;
                     }
                     var (file, ring) = AvatarPool[Members.Count % AvatarPool.Length];
-                    Members.Add(new MemberViewModel
+                    var member = new MemberViewModel
                     {
                         PlayerUid = np.PlayerUid,
                         PlayerName = np.PlayerName,
@@ -4972,10 +4970,6 @@ public partial class MainViewModel : INotifyPropertyChanged
                         TaskRunning = np.TaskRunning,
                         TaskStatusAvailable = np.TaskStatusAvailable,
                         TaskPaused = np.TaskPaused,
-                        HoeingBatchId = np.HoeingBatchId,
-                        HoeingStartPhase = np.HoeingStartPhase,
-                        HoeingStartMessage = np.HoeingStartMessage,
-                        HoeingCompletionWaitReleased = np.HoeingCompletionWaitReleased,
                         HoeingCompletionAction = np.HoeingCompletionAction,
                         CurrentTaskName = np.CurrentTaskName,
                         CurrentTaskGroupName = np.CurrentTaskGroupName,
@@ -4998,7 +4992,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                         AvatarPath = $"pack://application:,,,/Assets/Images/{file}.png",
                         AvatarRing = ring,
                         IsSelected = true
-                    });
+                    };
+                    member.ApplyHoeingStatus(np.HoeingBatchId, np.HoeingStartPhase,
+                        np.HoeingStartMessage, np.HoeingCompletionWaitReleased);
+                    Members.Add(member);
                 }
 
                 if (update.Full)
@@ -8163,7 +8160,7 @@ public class MemberViewModel : INotifyPropertyChanged
     public string? HoeingBatchId { get => _hoeingBatchId; set { if (_hoeingBatchId != value) { _hoeingBatchId = value; OnPropertyChanged(); } } }
     public const string PostHoeingRunningMessage = "联机锄地已完成，后续任务执行中";
     public const string PostHoeingCompletedMessage = "联机锄地和后续任务全部完成。";
-    public const string PostHoeingOfflineMessage = "成员已离线";
+    public const string PostHoeingOfflineMessage = "成员已离线，任务结束状态未确认";
     public const string PostHoeingReleasedRunningMessage = "后续任务执行中，不影响下次联机锄地。";
     public const string PostHoeingOfflineReleasedMessage = "成员已离线，后续任务状态未确认，不影响下次联机锄地。";
     public const string PostHoeingHelp = "全员后续任务结束或停止后可再次联机锄地，个人任务不受影响。";
@@ -8200,7 +8197,7 @@ public class MemberViewModel : INotifyPropertyChanged
     public string? HoeingStartMessage
     {
         // 兼容尚未更新的远端助手，仅转换展示文字，不改变上报状态或执行结果。
-        get => IsPostHoeingTaskOffline
+        get => ConfirmedHoeingCompletionMessage is { } completed ? completed : IsPostHoeingTaskOffline
             ? IsPostHoeingWaitReleased ? PostHoeingOfflineReleasedMessage : PostHoeingOfflineMessage
             : IsPostHoeingWaitReleased && IsPostHoeingRunningReport ? PostHoeingReleasedRunningMessage
             : _hoeingStartMessage switch
@@ -8219,14 +8216,53 @@ public class MemberViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsPostHoeingWaitReleased));
         }
     }
-    // 离线只说明通道断开，保留原阶段/原文案，重连后继续由新上报决定结果。
-    private bool IsPostHoeingRunningReport => HoeingStartPhase == "completionPending"
+    private string? _confirmedHoeingBatchId;
+    private string? _confirmedHoeingCompletionMessage;
+    private static bool IsConfirmedHoeingCompletion(string? phase, string? message) => phase == "completed"
+        && message is PostHoeingCompletedMessage or "联机锄地已完整完成";
+    private string? ConfirmedHoeingCompletionMessage => IsConfirmedHoeingCompletion(_hoeingStartPhase, _hoeingStartMessage)
+        ? PostHoeingCompletedMessage
+        : !Online && !string.IsNullOrWhiteSpace(_hoeingBatchId) && _hoeingBatchId == _confirmedHoeingBatchId
+            ? _confirmedHoeingCompletionMessage : null;
+
+    // Merge one coherent display snapshot. Shutdown/cleanup reports cannot undo an already confirmed result.
+    internal void ApplyHoeingStatus(string? batchId, string? phase, string? message, bool? waitReleased)
+    {
+        var priorConfirmed = _confirmedHoeingCompletionMessage;
+        if (string.IsNullOrWhiteSpace(batchId) || batchId != _confirmedHoeingBatchId
+            || phase == "reset" || message == "联机状态已重置，可重新开始")
+        {
+            _confirmedHoeingBatchId = null;
+            _confirmedHoeingCompletionMessage = null;
+        }
+        if (!string.IsNullOrWhiteSpace(batchId) && IsConfirmedHoeingCompletion(phase, message))
+        {
+            _confirmedHoeingBatchId = batchId;
+            _confirmedHoeingCompletionMessage = PostHoeingCompletedMessage;
+        }
+        if (_hoeingBatchId == batchId && _hoeingStartPhase == phase && _hoeingStartMessage == message
+            && _hoeingCompletionWaitReleased == waitReleased && priorConfirmed == _confirmedHoeingCompletionMessage) return;
+        _hoeingBatchId = batchId;
+        _hoeingStartPhase = phase;
+        _hoeingStartMessage = message;
+        _hoeingCompletionWaitReleased = waitReleased;
+        OnPropertyChanged(nameof(HoeingBatchId));
+        OnPropertyChanged(nameof(HoeingStartPhase));
+        OnPropertyChanged(nameof(HoeingStartMessage));
+        OnPropertyChanged(nameof(HoeingCompletionWaitReleased));
+        OnPropertyChanged(nameof(IsPostHoeingTaskRunning));
+        OnPropertyChanged(nameof(IsPostHoeingTaskOffline));
+        OnPropertyChanged(nameof(IsPostHoeingWaitReleased));
+    }
+
+    // Offline is a connection fact. Keep the raw report for reconnects, but never present it as live work.
+    private bool IsPostHoeingRunningReport => ConfirmedHoeingCompletionMessage is null && HoeingStartPhase == "completionPending"
         && _hoeingStartMessage is "正在跟踪同一个绑定完成动作" or PostHoeingRunningMessage;
     public bool IsPostHoeingWaitReleased => (HoeingCompletionWaitReleased == true
         || HoeingCompletionWaitReleased is null && HoeingStartPhase == "offlineCompletion")
         && (IsPostHoeingRunningReport || HoeingStartPhase == "offlineCompletion");
-    public bool IsPostHoeingTaskOffline => !Online
-        && (HoeingStartPhase == "offlineCompletion" || IsPostHoeingRunningReport);
+    public bool IsPostHoeingTaskOffline => !Online && ConfirmedHoeingCompletionMessage is null
+        && (!string.IsNullOrWhiteSpace(_hoeingStartPhase) || !string.IsNullOrWhiteSpace(_hoeingStartMessage));
     public bool IsPostHoeingTaskRunning => Online && IsPostHoeingRunningReport && !IsPostHoeingWaitReleased;
     private CoordinatedCompletionAction? _hoeingCompletionAction;
     public CoordinatedCompletionAction? HoeingCompletionAction

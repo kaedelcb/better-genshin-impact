@@ -1148,13 +1148,13 @@
                                                                                 <Setter Property="TextWrapping" Value="NoWrap"/>
                                                                                 <Setter Property="Foreground" Value="{StaticResource Dim}"/>
                                                                             </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="failed"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="unknown"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="cleanupPending"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
                                                                             <DataTrigger Binding="{Binding IsPostHoeingTaskOffline}" Value="True">
                                                                                 <Setter Property="TextWrapping" Value="NoWrap"/>
                                                                                 <Setter Property="Foreground" Value="{StaticResource Dim}"/>
                                                                             </DataTrigger>
-                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="failed"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="unknown"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding HoeingStartPhase}" Value="cleanupPending"><Setter Property="Foreground" Value="{StaticResource Pyro}"/></DataTrigger>
                                                                         </Style.Triggers>
                                                                     </Style>
                                                                 </TextBlock.Style>
