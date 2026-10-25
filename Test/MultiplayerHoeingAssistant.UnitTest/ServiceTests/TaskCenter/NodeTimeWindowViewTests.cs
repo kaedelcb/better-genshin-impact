@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using System.Windows.Markup;
 using System.Text.Json;
 using System.Runtime.CompilerServices;
+using System.Globalization;
 using System.Xml.Linq;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -135,7 +136,12 @@ public sealed class NodeTimeWindowViewTests
             Assert.True(node.IsOutsideTimeWindow);
             var outsideText = node.TimeWindowStatusText;
             var outsideOpacity = RowOpacity(item);
-            Assert.True(outsideOpacity < 1, "时段外的行应有可见的降亮差异。");
+            var outsideBackground = RowBackground(item);
+            Assert.True(outsideOpacity <= 0.45, "时段外名称应明显降亮，同时保留时段标记的可读性。");
+            AssertNeutralOutsideBackground(outsideBackground);
+            var badge = OutsideBadge(item);
+            Assert.True(badge.IsVisible);
+            Assert.Contains(Descendants<TextBlock>(badge), text => text.Text == "时段外");
             Assert.True(TimeButton(view).IsEnabled);
             Click(TimeButton(view));
             var popup = (Popup)view.FindName("NodeTimeWindowPopup");
@@ -150,12 +156,17 @@ public sealed class NodeTimeWindowViewTests
             Assert.False(node.IsOutsideTimeWindow);
             Assert.NotEqual(outsideText, node.TimeWindowStatusText);
             Assert.Equal(1.0, RowOpacity(item));
+            Assert.Equal(Visibility.Collapsed, badge.Visibility);
+            Assert.True(ColorDistance(outsideBackground, RowBackground(item)) >= 30,
+                "进入时段后应恢复原有行背景，不能只改变一个近似色的小圆点。");
 
             panel.RefreshTimeWindows(clock.AddHours(1).AddSeconds(1));
             await Layout(window);
             Assert.True(node.IsOutsideTimeWindow);
             Assert.Equal(outsideOpacity, RowOpacity(item));
-            Assert.True(RowOpacity(item) < 1, "到达结束时刻后应再次降低任务行亮度。");
+            Assert.True(RowOpacity(item) <= 0.45, "到达结束时刻后应再次明显降低任务名称亮度。");
+            Assert.True(badge.IsVisible);
+            Assert.Equal(outsideBackground, RowBackground(item));
             Assert.False(editing.HasUnsavedChanges);
             await Task.Delay(450);
             await Layout(window);
@@ -215,7 +226,7 @@ public sealed class NodeTimeWindowViewTests
     });
 
     [Fact]
-    public Task SixTaskPlan_At1180And1380_KeepsTimeColumnAndControlsReadable() => OnSta(async () =>
+    public Task SixTaskPlan_At1120And1180And1380_KeepsHeaderActionsAndNamesReadable() => OnSta(async () =>
     {
         var host = CreateHost();
         var document = Document();
@@ -235,6 +246,9 @@ public sealed class NodeTimeWindowViewTests
         {
             NodeId = "n-preview-" + index, Kind = "resource.oneDragonConfig",
             Ref = new() { Config = name }, TimeWindow = windows[index],
+            Strategies = index == 3
+                ? [new() { Kind = "prerequisite.account", Params = new() { ["uid"] = JsonSerializer.SerializeToElement("123456789") } }]
+                : [],
             ExtensionData = index == 5
                 ? new() { ["planDisabled"] = JsonSerializer.SerializeToElement(true) } : null,
         }).ToList();
@@ -254,12 +268,13 @@ public sealed class NodeTimeWindowViewTests
             Assert.Contains(panel.ResourceNodes, node => !node.IsOutsideTimeWindow);
             Assert.Equal("已停用", panel.ResourceNodes[5].TimeWindowStatusText);
 
-            foreach (var width in new[] { 1180, 1380 })
+            foreach (var width in new[] { 1120, 1180, 1380 })
             {
                 view.Width = width;
                 await Layout(window);
                 Assert.InRange(view.ActualWidth, width - 0.5, width + 0.5);
-                Snapshot(window, $"07-compact-six-tasks-{width}");
+                Snapshot(window, $"08-header-switch-six-tasks-{width}");
+                AssertCompactHeaderAndActions(view);
                 var list = (ListBox)view.FindName("ResourceList");
                 foreach (var node in panel.ResourceNodes)
                 {
@@ -286,9 +301,30 @@ public sealed class NodeTimeWindowViewTests
                     Assert.DoesNotContain(Descendants<TextBlock>(timeButton), text =>
                         BindingOperations.GetBindingExpression(text, TextBlock.TextProperty)?.ParentBinding.Path?.Path
                             == nameof(NodeEditVm.TimeWindowStatusText));
-                    var nameText = Descendants<TextBlock>(cells[1]).Single(text => text.Text == node.DisplayName);
-                    Assert.True(nameText.ActualWidth >= 72,
-                        $"{width}px 下配置单名称的可读宽度不足：{nameText.ActualWidth:F1}px。");
+                    var nameText = Descendants<TextBlock>(cells[1]).Single(text => text.Name == "ResourceNameText");
+                    Assert.Equal(node.DisplayName, nameText.Text);
+                    Assert.True(nameText.ActualWidth >= FullTextWidth(nameText, node.DisplayName) - 0.5,
+                        $"{width}px 下配置单名称被截断：{node.DisplayName}；可用={nameText.ActualWidth:F1}px，全文={FullTextWidth(nameText, node.DisplayName):F1}px。");
+                    var settings = Descendants<Button>(item).Single(button => button.Name == "ResourceSettingsButton");
+                    Assert.True(settings.ActualWidth <= 24.5,
+                        $"设置按钮不应被继承的最小宽度撑大：{settings.ActualWidth:F1}px。");
+                    Assert.True(row.ColumnDefinitions[4].ActualWidth <= 96.5, "UID/账号列应让出多余占位。");
+                    var accountText = Descendants<TextBlock>(cells[4]).Single(text => text.Text == node.AccountDisplay);
+                    Assert.True(accountText.ActualWidth >= FullTextWidth(accountText, node.AccountDisplay) - 0.5,
+                        "当前账号值应完整显示。");
+                    var accountChrome = Assert.IsType<Border>(VisualTreeHelper.GetParent(accountText));
+                    var accountContentWidth = accountChrome.ActualWidth - accountChrome.Padding.Left - accountChrome.Padding.Right
+                        - accountChrome.BorderThickness.Left - accountChrome.BorderThickness.Right;
+                    Assert.True(accountContentWidth >= FullTextWidth(accountText, "123456789") - 0.5,
+                        "账号内容区应容纳同字体下的九位UID，即使当前展示值按原规则进行了掩码。");
+                    var badge = OutsideBadge(item);
+                    Assert.Equal(node.IsOutsideTimeWindow, badge.IsVisible);
+                    if (node.IsOutsideTimeWindow)
+                    {
+                        AssertNeutralOutsideBackground(RowBackground(item));
+                        Assert.True(RowOpacity(item) <= 0.45);
+                        Assert.True(timeButton.IsEnabled, "时段外仍应允许编辑时段。");
+                    }
                 }
 
                 var toggle = (ToggleButton)view.FindName("NodeTimeWindowToggle");
@@ -337,13 +373,71 @@ public sealed class NodeTimeWindowViewTests
             .Single(button => button.Name == "NodeTimeWindowButton");
 
     private static double RowOpacity(ListBoxItem item)
-        => Descendants<Grid>(item).Single(grid => grid.Tag is NodeEditVm).Opacity;
+    {
+        var name = Descendants<TextBlock>(item).Single(text => text.Name == "ResourceNameText");
+        double opacity = 1;
+        for (DependencyObject? current = name; current is not null && !ReferenceEquals(current, item);
+             current = VisualTreeHelper.GetParent(current))
+            if (current is UIElement element) opacity *= element.Opacity;
+        return opacity;
+    }
+
+    private static FrameworkElement OutsideBadge(ListBoxItem item)
+        => Descendants<FrameworkElement>(item).Single(element => element.Name == "OutsideTimeWindowBadge");
+
+    private static Color RowBackground(ListBoxItem item)
+    {
+        var chrome = Assert.IsType<Border>(item.Template.FindName("Row", item));
+        return Assert.IsType<SolidColorBrush>(chrome.Background).Color;
+    }
+
+    private static void AssertNeutralOutsideBackground(Color color)
+    {
+        var channels = new[] { (int)color.R, color.G, color.B };
+        Assert.True(color.A >= 224 && channels.Max() - channels.Min() <= 16,
+            $"时段外应使用清晰的中性灰背景，而非近似正常紫色或低透明叠层：{color}。");
+    }
+
+    private static int ColorDistance(Color left, Color right)
+        => Math.Abs(left.R - right.R) + Math.Abs(left.G - right.G) + Math.Abs(left.B - right.B);
+
+    private static double FullTextWidth(TextBlock text, string value)
+        => new FormattedText(value, CultureInfo.InvariantCulture, text.FlowDirection,
+            new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch),
+            text.FontSize, Brushes.White, VisualTreeHelper.GetDpi(text).PixelsPerDip).WidthIncludingTrailingWhitespace;
+
+    private static void AssertCompactHeaderAndActions(BasicTaskCenterView view)
+    {
+        var header = Assert.IsType<Grid>(view.FindName("ResourceTableHeader"));
+        var actions = Assert.IsType<ScrollViewer>(view.FindName("PlanActionsScrollViewer"));
+        var toggle = Assert.IsType<ToggleButton>(view.FindName("NodeTimeWindowToggle"));
+        Assert.Contains(toggle, Descendants<ToggleButton>(header));
+        Assert.DoesNotContain(toggle, Descendants<ToggleButton>(actions));
+        var toggleBounds = Bounds(toggle, header);
+        var timeColumnLeft = header.ColumnDefinitions.Take(3).Sum(column => column.ActualWidth);
+        Assert.True(toggleBounds.Left >= timeColumnLeft - 0.5
+            && toggleBounds.Right <= timeColumnLeft + header.ColumnDefinitions[3].ActualWidth + 0.5,
+            "时段总开关应在执行时段标题列内。");
+        Assert.True(header.ActualHeight <= 22.5, "表头应保持单行，不增加独立控制栏。");
+        Assert.True(actions.ScrollableWidth <= 0.5,
+            $"上方操作按钮不应横向溢出或需要滚动：{actions.ScrollableWidth:F1}px。");
+        Assert.NotEqual(Visibility.Visible, actions.ComputedHorizontalScrollBarVisibility);
+        string[] labels = ["+任务", "复制", "修改", "删除", "导入配置", "导出配置", "重置状态", "启动单任务", "⏵⏵ 连续一条龙"];
+        var buttons = Descendants<Button>(actions).Where(button => labels.Contains(button.Content as string)).ToArray();
+        Assert.Equal(labels, buttons.Select(button => button.Content as string));
+        foreach (var button in buttons)
+        {
+            var bounds = Bounds(button, actions);
+            Assert.True(button.IsVisible && bounds.Left >= -0.5 && bounds.Right <= actions.ViewportWidth + 0.5,
+                $"操作按钮应完整显示：{button.Content}；边界={bounds}；视口宽度={actions.ViewportWidth:F1}px。");
+        }
+    }
 
     private static Window TestWindow(FrameworkElement content, [CallerFilePath] string sourcePath = "")
     {
         var window = new Window
         {
-            Width = 1380, Height = 800,
+            Width = 1380, Height = 800, FontSize = 13,
             WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000,
             ShowInTaskbar = false, ShowActivated = false,
         };

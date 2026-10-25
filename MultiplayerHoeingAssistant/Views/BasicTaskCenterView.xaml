@@ -321,7 +321,7 @@
                                     </StackPanel>
                                 </Button>
                             </Grid>
-                            <ScrollViewer Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
+                            <ScrollViewer x:Name="PlanActionsScrollViewer" Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                                           Margin="0" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="+任务" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
@@ -348,21 +348,6 @@
                                             ToolTip="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动" />
                                     <Button Content="启动单任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的任务" />
-                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="5,0,10,0">
-                                        <StackPanel.ToolTip>
-                                            <ToolTip>
-                                                <StackPanel MaxWidth="300">
-                                                    <TextBlock Text="按时段执行 · 当前计划总开关" FontWeight="SemiBold" />
-                                                    <TextBlock Text="开启后，时段外任务跳过，已开始任务继续完成；关闭后保留设置，按原计划执行。" TextWrapping="Wrap" Margin="0,4,0,0" />
-                                                    <TextBlock Text="{Binding TimeWindowClockHint}" Margin="0,4,0,0" />
-                                                </StackPanel>
-                                            </ToolTip>
-                                        </StackPanel.ToolTip>
-                                        <TextBlock Text="按时段执行" Foreground="{DynamicResource Dim}" FontSize="10.5" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                        <ToggleButton x:Name="NodeTimeWindowToggle" Style="{StaticResource BasicScheduleToggle}"
-                                                      IsChecked="{Binding Editing.NodeTimeWindowEnabled, Mode=TwoWay}"
-                                                      IsEnabled="{Binding IsEditing}" AutomationProperties.Name="按时段执行总开关" />
-                                    </StackPanel>
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Padding="9,3" Margin="0" Click="StartContinuousClick"
                                             IsEnabled="{Binding IsEditing}" ToolTip="按当前计划顺序运行已启用的配置单；不可启动时点击后显示原因" />
                                 </StackPanel>
@@ -414,15 +399,28 @@
                             </Grid.RowDefinitions>
                             <!-- 列表右侧保留滚动条槽位；表头必须使用与行内容相同的可视宽度，
                                  否则“启用”表头会比行内勾选框向右偏移。 -->
-                            <Grid Grid.Row="0" Margin="0,0,20,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="112" /><ColumnDefinition Width="148" /><ColumnDefinition Width="132" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                            <Grid x:Name="ResourceTableHeader" Grid.Row="0" Margin="0,0,20,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="148" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
                                 <TextBlock Text="执行日期" Grid.Column="2" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
-                                <TextBlock Text="执行时段" Grid.Column="3" Foreground="{DynamicResource Dim}" FontSize="10"
-                                           HorizontalAlignment="Center" TextAlignment="Center" />
+                                <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel.ToolTip>
+                                        <ToolTip>
+                                            <StackPanel MaxWidth="300">
+                                                <TextBlock Text="按时段执行 · 当前计划总开关" FontWeight="SemiBold" />
+                                                <TextBlock Text="开启后，时段外任务跳过；关闭后保留设置，按原计划执行。" TextWrapping="Wrap" Margin="0,4,0,0" />
+                                                <TextBlock Text="{Binding TimeWindowClockHint}" Margin="0,4,0,0" />
+                                            </StackPanel>
+                                        </ToolTip>
+                                    </StackPanel.ToolTip>
+                                    <TextBlock Text="执行时段" Foreground="{DynamicResource Dim}" FontSize="10" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                    <ToggleButton x:Name="NodeTimeWindowToggle" Style="{StaticResource BasicScheduleToggle}"
+                                                  IsChecked="{Binding Editing.NodeTimeWindowEnabled, Mode=TwoWay}"
+                                                  IsEnabled="{Binding IsEditing}" AutomationProperties.Name="按时段执行总开关" />
+                                </StackPanel>
                                 <TextBlock Text="UID/账号" Grid.Column="4" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="启用" Grid.Column="5" Foreground="{DynamicResource Dim}" FontSize="10"
@@ -447,7 +445,29 @@
                                             <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" />
                                             <Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Background" Value="Transparent" />
                                             <Setter Property="BorderThickness" Value="0" /><Setter Property="AllowDrop" Value="True" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
-                                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger><Trigger Property="IsSelected" Value="True"><Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" /><Setter TargetName="Row" Property="BorderThickness" Value="1" /></Trigger><DataTrigger Binding="{Binding IsStartNode}" Value="True"><Setter TargetName="Row" Property="Background" Value="#514326" /><Setter TargetName="Row" Property="BorderBrush" Value="#E8C96D" /><Setter TargetName="Row" Property="BorderThickness" Value="4,1,1,1" /></DataTrigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
+                                            <Setter Property="Template"><Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True">
+                                                            <Setter TargetName="Row" Property="BorderBrush" Value="#555662" />
+                                                            <Setter TargetName="Row" Property="BorderThickness" Value="1" />
+                                                        </DataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger>
+                                                        <Trigger Property="IsSelected" Value="True">
+                                                            <Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" />
+                                                            <Setter TargetName="Row" Property="BorderThickness" Value="1" />
+                                                        </Trigger>
+                                                        <DataTrigger Binding="{Binding IsStartNode}" Value="True">
+                                                            <Setter TargetName="Row" Property="Background" Value="#514326" /><Setter TargetName="Row" Property="BorderBrush" Value="#E8C96D" />
+                                                            <Setter TargetName="Row" Property="BorderThickness" Value="4,1,1,1" />
+                                                        </DataTrigger>
+                                                        <!-- 灰底始终可辨，选中/起点的金色边框仍保留。 -->
+                                                        <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True"><Setter TargetName="Row" Property="Background" Value="#2D2E36" /></DataTrigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value></Setter>
                                             <Style.Triggers><DataTrigger Binding="{Binding IsStartNode}" Value="True"><Setter Property="Background" Value="#514326" /><Setter Property="BorderBrush" Value="#E8C96D" /><Setter Property="BorderThickness" Value="4,1,1,1" /></DataTrigger></Style.Triggers>
                                         </Style>
                                     </ListBox.ItemContainerStyle>
@@ -458,17 +478,17 @@
                                                         <Style TargetType="Grid">
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True">
-                                                                    <Setter Property="Opacity" Value="0.52" />
+                                                                    <Setter Property="Opacity" Value="0.75" />
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Grid.Style>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="112" /><ColumnDefinition Width="148" /><ColumnDefinition Width="132" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
-                                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="148" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
                                                     </StackPanel>
-                                                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                    <Grid Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                                         <Grid Grid.Column="0" VerticalAlignment="Center" ClipToBounds="True">
                                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -476,14 +496,14 @@
                                                                     Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
                                                                 <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
                                                             </Border>
-                                                            <TextBlock Grid.Column="1" Text="{Binding DisplayName}" ToolTip="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14"
+                                                            <TextBlock x:Name="ResourceNameText" Grid.Column="1" Text="{Binding DisplayName}" ToolTip="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14"
                                                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                                         </Grid>
-                                                        <Button Grid.Column="1" Content="⚙" Style="{StaticResource BasicCellButton}" Width="27" Height="27"
-                                                                Padding="0" Margin="5,0,5,0" Tag="{Binding}" Click="OpenResourceTasksClick"
+                                                        <Button x:Name="ResourceSettingsButton" Grid.Column="1" Content="⚙" Style="{StaticResource BasicCellButton}" MinWidth="0" Width="24" Height="24"
+                                                                Padding="0" Margin="3,0,6,0" Tag="{Binding}" Click="OpenResourceTasksClick"
                                                                 ToolTip="设置此配置单内部任务的启用、顺序和执行起点" />
                                                     </Grid>
-                                                    <Button Grid.Column="2" Style="{DynamicResource BasicCellButton}"
+                                                    <Button Grid.Column="2" Style="{StaticResource TimeWindowMutedCellButton}"
                                                             Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑执行日期">
@@ -502,8 +522,22 @@
                                                                 <TextBlock Text="点选允许执行的时间段；支持跨午夜，未设置时全天可执行。" Margin="0,4,0,0" />
                                                             </StackPanel>
                                                         </Button.ToolTip>
-                                                        <Border Background="#241D43" BorderBrush="#555A537B" BorderThickness="1" CornerRadius="7" Padding="5,2">
+                                                        <Border BorderThickness="1" CornerRadius="7" Padding="5,2">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="#241D43" /><Setter Property="BorderBrush" Value="#555A537B" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True">
+                                                                            <Setter Property="Background" Value="#3B3D45" /><Setter Property="BorderBrush" Value="#747580" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
                                                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                <Border x:Name="OutsideTimeWindowBadge" Background="#B0ADB7" CornerRadius="3" Padding="3,1" Margin="0,0,4,0"
+                                                                        Visibility="{Binding IsOutsideTimeWindow, Converter={StaticResource Visible}}">
+                                                                    <TextBlock Text="时段外" Foreground="#24252C" FontSize="8.5" FontWeight="SemiBold" />
+                                                                </Border>
                                                                 <Ellipse Width="5" Height="5" Margin="0,0,6,0" VerticalAlignment="Center">
                                                                     <Ellipse.Style>
                                                                         <Style TargetType="Ellipse">
@@ -511,28 +545,34 @@
                                                                             <Style.Triggers>
                                                                                 <DataTrigger Binding="{Binding TimeWindowStatusText}" Value="时段内"><Setter Property="Fill" Value="#9DC6A7" /></DataTrigger>
                                                                                 <DataTrigger Binding="{Binding TimeWindowStatusText}" Value="全天"><Setter Property="Fill" Value="#9DC6A7" /></DataTrigger>
-                                                                                <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True"><Setter Property="Fill" Value="#D6C6A6" /></DataTrigger>
+                                                                                <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                                                 <DataTrigger Binding="{Binding IncludedInPlan}" Value="False"><Setter Property="Fill" Value="#77718E" /></DataTrigger>
                                                                             </Style.Triggers>
                                                                         </Style>
                                                                     </Ellipse.Style>
                                                                 </Ellipse>
                                                                 <TextBlock Text="{Binding TimeWindowDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
-                                                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                                           FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock"><Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True"><Setter Property="Opacity" Value="0.75" /></DataTrigger>
+                                                                        </Style.Triggers></Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
                                                             </StackPanel>
                                                         </Border>
                                                     </Button>
-                                                    <Button Grid.Column="4" Style="{DynamicResource BasicCellButton}"
+                                                    <Button Grid.Column="4" Style="{StaticResource TimeWindowMutedCellButton}"
                                                             Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
-                                                            ToolTip="点击编辑账号">
+                                                            ToolTip="{Binding AccountDisplay}">
                                                          <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
                                                              <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
                                                                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
                                                                         TextAlignment="Center" VerticalAlignment="Center" />
                                                         </Border>
                                                     </Button>
-                                                     <Grid Grid.Column="5" HorizontalAlignment="Stretch">
+                                                     <Grid Grid.Column="5" HorizontalAlignment="Stretch" Style="{StaticResource TimeWindowMutedContent}">
                                                          <CheckBox IsChecked="{Binding IncludedInPlan, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                                    VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                      </Grid>
