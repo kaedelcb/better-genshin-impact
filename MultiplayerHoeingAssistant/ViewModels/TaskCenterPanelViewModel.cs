@@ -58,6 +58,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         _log = log ?? (_ => { });
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _autoSaveTimer.Tick += (_, _) => AutoSaveTick();
+        InitializeTimeWindowRefresh(autoRefresh && !passive);
         if (passive) return; // 远程页的占位对象不可扫描、保存或选择监控端本地计划。
         KickCatalogRefresh(); // 二轮（重要3）：生产目录刷新入口（异步，不占展示定时器；BGI 离线自动缓存降级留痕）
         Refresh();
@@ -78,12 +79,13 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         _remoteTimer.Tick += async (_, _) => await RefreshRemoteAsync();
         // 切换复用页面只更换 DataContext，不会再次 Loaded；首次连接也必须启动轮询。
         _remoteTimer.Start();
+        _timeWindowTimer?.Start();
         SetStatus("正在读取执行端任务中心…", false);
         _ = Dispatcher.CurrentDispatcher.InvokeAsync(() => RefreshRemoteAsync()).Task.Unwrap();
     }
 
     /// <summary>页面释放时停表（S1：定时器不承担调度/恢复）。</summary>
-    public void StopAutoRefresh() { _timer?.Stop(); _remoteTimer?.Stop(); }
+    public void StopAutoRefresh() { _timer?.Stop(); _remoteTimer?.Stop(); _timeWindowTimer?.Stop(); }
 
     /// <summary>页面重新 Loaded 时恢复刷新（幂等；与 StopAutoRefresh 配对）。</summary>
     public void StartAutoRefresh()
@@ -91,6 +93,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         if (_configTransferPaused) return;
         _timer?.Start();
         _remoteTimer?.Start();
+        RefreshTimeWindows();
+        _timeWindowTimer?.Start();
         if (_remoteTarget is not null) _ = RefreshRemoteAsync();
     }
 
@@ -660,6 +664,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             DetachEditingObservers(_editing);
             if (!SetProperty(ref _editing, value)) return;
             AttachEditingObservers(value);
+            RefreshTimeWindows();
             ClearPlanSyncConflict();
             if (value is not null) SelectedWorkflowId = value.Draft.WorkflowId;
             RefreshStartNodeVisuals();
@@ -704,6 +709,8 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
 
     private void EditingNodePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Clock ticks are presentation-only: they must not rebuild the workspace or queue saves.
+        if (e.PropertyName is nameof(NodeEditVm.IsOutsideTimeWindow) or nameof(NodeEditVm.TimeWindowStatusText)) return;
         NotifyWorkspace();
         if (e.PropertyName is nameof(NodeEditVm.DisplayName)
             or nameof(NodeEditVm.KindName)
@@ -722,7 +729,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             or nameof(NodeEditVm.ParticipationNote)
             or nameof(NodeEditVm.HasFailureOverride)
             or nameof(NodeEditVm.IsStartNode)
-            or nameof(NodeEditVm.IsEnabled))
+            or nameof(NodeEditVm.IsEnabled)
+            or nameof(NodeEditVm.HasTimeWindow)
+            or nameof(NodeEditVm.TimeWindowStart)
+            or nameof(NodeEditVm.TimeWindowEnd)
+            or nameof(NodeEditVm.TimeWindowDisplay))
             return;
         QueueAutoSave();
     }

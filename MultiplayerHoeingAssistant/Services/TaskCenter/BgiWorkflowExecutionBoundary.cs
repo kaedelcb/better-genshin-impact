@@ -59,13 +59,14 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             FrozenOriginalRequestEvidence? RequestEvidence = null);
 
         private PreparedSubmit(WorkflowRunRecord? run, WorkflowSubmission? submission, object? payload,
-            BoundarySubmitResult? rejection, ReconcileIdentity? reconcile)
+            BoundarySubmitResult? rejection, ReconcileIdentity? reconcile, Func<NodeGateDecision>? timeWindowGate = null)
         {
             Run = run;
             Submission = submission;
             Payload = payload;
             Rejection = rejection;
             Reconcile = reconcile;
+            TimeWindowGate = timeWindowGate;
             FrozenFingerprint = submission?.Fingerprint;
             FrozenPermit = submission?.SendPermit;
             _runId = run?.RunId;
@@ -79,6 +80,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         public string Operation => BgiExternalClient.ExternalOperations.TaskStart;
         public string? FrozenFingerprint { get; }
         public BoundarySubmitResult? Rejection { get; }
+        internal Func<NodeGateDecision>? TimeWindowGate { get; }
 
         /// <summary>冻结的对账身份（拒绝分支为 null）。</summary>
         public ReconcileIdentity? Reconcile { get; }
@@ -97,11 +99,11 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         }
 
         /// <summary>构造可发送的冻结载荷（**内部信任边界**：不校验提交/记录/指纹是否匹配——见类型注释）。</summary>
-        internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload)
+        internal static PreparedSubmit Ok(WorkflowRunRecord run, WorkflowSubmission submission, object payload, Func<NodeGateDecision>? timeWindowGate = null)
             => new(run, submission, payload, null,
                 new ReconcileIdentity(submission.Epoch ?? "", submission.Key ?? "", run.WireRunId ?? "",
                     submission.NodeId ?? "", submission.Occurrence, submission.LoopIteration, submission.Attempt,
-                    submission.OriginalRequestEvidence));
+                    submission.OriginalRequestEvidence), timeWindowGate);
 
         /// <summary>
         /// 一次性消费护栏（仅防**进程内重复调用**；持久化的发送授权责任仍在门面，绝不由本护栏替代）。
@@ -127,7 +129,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
 
         internal void MarkPortCallStarted() => Interlocked.Exchange(ref _portCallStarted, 1);
 
-        internal LocalNoSendProof? CreateNoSendProof(string? transportEvidence = null)
+        internal LocalNoSendProof? CreateNoSendProof(string? transportEvidence = null, bool timeWindowClosed = false)
         {
             if (Volatile.Read(ref _consumed) != 1
                 || (transportEvidence is null ? Volatile.Read(ref _portCallStarted) != 0
@@ -136,7 +138,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
                 || _expiresAtUtc is null || _stopAuthority is null || FrozenFingerprint is null || FrozenPermit is not { Version: 1, Consumed: false }) return null;
             var payloadFingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(Payload)))[..24].ToLowerInvariant();
             if (payloadFingerprint != FrozenFingerprint) return null;
-            return new LocalNoSendProof(transportEvidence is null ? LocalNoSendEvidence.PreparedStop : LocalNoSendEvidence.TransportNotSent, FrozenPermit.Nonce, _runId,
+            return new LocalNoSendProof(timeWindowClosed ? LocalNoSendEvidence.PreparedTimeWindow : transportEvidence is null ? LocalNoSendEvidence.PreparedStop : LocalNoSendEvidence.TransportNotSent, FrozenPermit.Nonce, _runId,
                 identity.WireRunId, identity.Epoch, identity.Key, identity.NodeId, identity.Occurrence,
                 identity.LoopIteration, identity.Attempt, FrozenFingerprint, _expiresAtUtc, _stopAuthority, transportEvidence);
         }
@@ -236,6 +238,16 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             || submission.LoopIteration != occurrence.LoopIteration
             || submission.Intent != SubmitIntentState.IntentRecorded && !renewal)
             return PreparedSubmit.No(BoundarySubmitResult.Rejected("提交意图缺失或身份不符（违反引擎纪律：先落盘意图再提交；未发送）"));
+
+        // 仲裁排队之后按入队时冻结的时段重新结算；尚未冻结发送事实时可直接过滤。
+        var window = node.TimeWindow is { } configuredWindow
+            ? new WorkflowTimeWindow { Start = configuredWindow.Start, End = configuredWindow.End } : null;
+        var clock = request.Clock ?? (() => DateTimeOffset.Now);
+        Func<NodeGateDecision>? timeWindowGate = request.EnforceTimeWindow
+            ? () => WorkflowTimeWindowPolicy.Evaluate(true, window, clock()) : null;
+        if (timeWindowGate?.Invoke() is { Action: not NodeGateAction.Proceed } gate)
+            return PreparedSubmit.No(gate.Action == NodeGateAction.Skip
+                ? BoundarySubmitResult.Filtered(gate.Reason!) : BoundarySubmitResult.Rejected(gate.Reason!));
 
         // 2) 资源映射 + 账号合同（本地校验失败 = 可证实未发送 → Rejected）
         if (TryMapResource(node, out var groupName, out var configName, out var taskId, out var expectedRevision) is { } mapError)
@@ -354,7 +366,7 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         submission.SendAttempted = true;
         submission.Intent = SubmitIntentState.Submitted;
 
-        return PreparedSubmit.Ok(run, submission, payload);
+        return PreparedSubmit.Ok(run, submission, payload, timeWindowGate);
     }
 
     /// <summary>
@@ -397,6 +409,16 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         }
         if (beforeSend is null || WorkflowStopAuthority.ForEpoch(beforeSend, submission.Epoch) != prepared.FrozenStopAuthority)
             return BoundarySubmitResult.UnknownWith("冻结后停止权威不可确认，未调用发送；原可能发送事实保留待对账");
+
+        // 等待发送租约之后、真正调用端口之前最后结算。冻结事实保持，通过原消费许可发布零调用证明。
+        if (prepared.TimeWindowGate?.Invoke() is { Action: not NodeGateAction.Proceed } timeWindowGate)
+        {
+            if (!_runs.TryPublishPreparedNoSend(prepared, out var filteredRecord, timeWindowClosed: true) || filteredRecord is null)
+                return BoundarySubmitResult.UnknownWith("时间段过滤的本地零调用证明不可确认，保留原冻结责任。");
+            RunStore.RebaseOnto(run, filteredRecord);
+            return timeWindowGate.Action == NodeGateAction.Skip
+                ? BoundarySubmitResult.Filtered(timeWindowGate.Reason!) : BoundarySubmitResult.Rejected(timeWindowGate.Reason!);
+        }
 
         // 4) 发送一次（绝不重发；不确定 → 对账）
         BgiExternalResponse response;

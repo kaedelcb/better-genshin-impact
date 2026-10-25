@@ -11,11 +11,13 @@ public sealed record LocalNoSendProof(
 
 internal static class LocalNoSendEvidence
 {
+    internal const string PreparedTimeWindow = "prepared_time_window_before_port_call_v1";
     internal const string PreparedStop = "prepared_stop_before_port_call_v1";
     internal const string TransportNotSent = "transport_proven_no_bytes_v1";
 
     internal static bool Matches(WorkflowRunRecord run, WorkflowSubmission submission, LocalNoSendProof proof)
         => (proof.Kind == PreparedStop && run.StopRequested && proof.TransportEvidence is null
+            || proof.Kind == PreparedTimeWindow && proof.TransportEvidence is null
             || proof.Kind == TransportNotSent && BgiNotSentException.IsKnownEvidenceCode(proof.TransportEvidence!))
            && Guid.TryParseExact(proof.ConsumptionId, "N", out _) && WorkflowStopAuthority.ForEpoch(run, proof.Epoch) == proof.StopAuthority
            && (submission.SendPermit is null || submission.SendPermit is { Version: 1, Consumed: true } permit && permit.Nonce == proof.ConsumptionId)

@@ -41,6 +41,10 @@ public sealed class WorkflowDocument
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";
 
+    /// <summary>开启后按各任务允许时间段过滤；旧计划缺省关闭。</summary>
+    [JsonPropertyName("nodeTimeWindowEnabled")]
+    public bool NodeTimeWindowEnabled { get; set; }
+
     /// <summary>资源节点链（顺序即执行顺序，C02/C05）。</summary>
     [JsonPropertyName("nodes")]
     public List<WorkflowNode> Nodes { get; set; } = [];
@@ -94,9 +98,27 @@ public sealed class WorkflowNode
     [JsonPropertyName("path")]
     public WorkflowPath? Path { get; set; }
 
+    /// <summary>本机每日允许开始的时间段；不设置或起止相同表示全天。</summary>
+    [JsonPropertyName("timeWindow")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowTimeWindow? TimeWindow { get; set; }
+
     /// <summary>策略修饰实例（锚点 4：策略即节点修饰；同一策略实现、独立实例）。</summary>
     [JsonPropertyName("strategies")]
     public List<WorkflowStrategy> Strategies { get; set; } = [];
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+}
+
+/// <summary>每日时间段，HH:mm；支持跨午夜，开始包含、结束不包含。</summary>
+public sealed class WorkflowTimeWindow
+{
+    [JsonPropertyName("start")]
+    public string Start { get; set; } = "00:00";
+
+    [JsonPropertyName("end")]
+    public string End { get; set; } = "00:00";
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }

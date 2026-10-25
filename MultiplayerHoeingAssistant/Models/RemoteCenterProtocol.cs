@@ -121,6 +121,8 @@ public sealed class RemoteStartupStatusSnapshot
 
 public sealed class RemoteTaskListSnapshot
 {
+    /// <summary>执行端当前本机时刻（含时区偏移）；旧端缺省为空，不以缓存目录时间代替。</summary>
+    public DateTimeOffset? ServerTime { get; set; }
     public List<WorkflowCatalogEntry> Flows { get; set; } = [];
     public List<WorkflowRunRecord> Active { get; set; } = [];
     public List<WorkflowRunRecord> History { get; set; } = [];

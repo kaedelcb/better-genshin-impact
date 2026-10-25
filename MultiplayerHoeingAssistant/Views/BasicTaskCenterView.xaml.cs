@@ -71,6 +71,7 @@ public partial class BasicTaskCenterView : UserControl
         ++_popupOpenGeneration;
         AddTaskPopup.IsOpen = false;
         NodeSettingsPopup.IsOpen = false;
+        NodeTimeWindowPopup.IsOpen = false;
         PlanSettingsPopup.IsOpen = false;
         ResourceTasksPopup.IsOpen = false;
     }

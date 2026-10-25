@@ -149,6 +149,10 @@ public sealed partial class WorkflowPlan
 
         blocking.AddRange(ValidatePaths());
         blocking.AddRange(WorkflowFailurePolicy.Validate(_doc));
+        if (_doc.NodeTimeWindowEnabled)
+            foreach (var node in _doc.Nodes)
+                if (!WorkflowTimeWindowPolicy.TryValidate(node.TimeWindow, out var error))
+                    blocking.Add($"任务 {node.Ref?.Config ?? node.NodeId} 的允许时间段无效：{error}");
         EntrySeed(out var entryReason);
         if (entryReason is not null) blocking.Add(entryReason);
         if (UnsupportedKinds.Count > 0)
@@ -267,6 +271,9 @@ public sealed partial class WorkflowPlan
         if (node.Kind == "resource.singleTask" && !singleNativeSupported)
             return new NodeGateDecision(NodeGateAction.Reject,
                 "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
+
+        var timeWindowGate = WorkflowTimeWindowPolicy.Evaluate(_doc, node, now);
+        if (timeWindowGate.Action != NodeGateAction.Proceed) return timeWindowGate;
 
         if (!ignorePlanParticipation && node.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true)
         {

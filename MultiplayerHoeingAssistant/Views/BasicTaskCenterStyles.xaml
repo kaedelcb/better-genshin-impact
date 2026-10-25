@@ -98,4 +98,28 @@
             </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
     </Style>
+    <Style x:Key="BasicScheduleToggle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="42" /><Setter Property="Height" Value="24" />
+        <Setter Property="Cursor" Value="Hand" /><Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="Track" Background="#49435F" BorderBrush="#77708C" BorderThickness="1" CornerRadius="12">
+                        <Ellipse x:Name="Thumb" Width="16" Height="16" Fill="#D2CFE0" HorizontalAlignment="Left" Margin="3,0" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Track" Property="Background" Value="#E8C96D" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="#E8C96D" />
+                            <Setter TargetName="Thumb" Property="Fill" Value="#29243F" />
+                            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Track" Property="BorderBrush" Value="#F4E3AB" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Track" Property="BorderBrush" Value="#FFFFFF" /></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Track" Property="Opacity" Value="0.45" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

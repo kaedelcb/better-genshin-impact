@@ -16,6 +16,7 @@ public sealed partial class NodeEditVm
             if (!SetProperty(ref _includedInPlan, value)) return;
             OnPropertyChanged(nameof(SettingsSummary));
             OnPropertyChanged(nameof(IsEnabled));
+            NotifyTimeWindowState();
         }
     }
     public string SettingsSummary

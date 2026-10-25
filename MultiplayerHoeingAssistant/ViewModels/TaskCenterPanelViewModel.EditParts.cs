@@ -85,6 +85,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         Renumber(); // 二轮（建议1）：初始序号 1..n（此前全部显示 0）
         RefreshCatalog(catalog);
         InitializeSchedule();
+        InitializeTimeWindows();
         _initialEditState = CaptureEditState();
     }
 
@@ -494,6 +495,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
             }
         }
 
+        copy.NodeTimeWindowEnabled = NodeTimeWindowEnabled;
         for (var i = 0; i < Nodes.Count && i < copy.Nodes.Count; i++)
             Nodes[i].ApplyToModel(copy.Nodes[i]);
         return copy;

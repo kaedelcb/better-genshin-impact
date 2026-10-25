@@ -48,8 +48,8 @@ public sealed partial class WorkflowEditVm
             for(var i=0;i<undo.Nodes.Length;i++)
             {
                 var node=undo.Nodes[i];var original=JsonSerializer.Deserialize<WorkflowNode>(undo.Models[i])!;
-                node.Model.Kind=original.Kind;node.Model.Ref=original.Ref;node.Model.Strategies=original.Strategies;node.Model.Path=original.Path;node.Model.ExtensionData=original.ExtensionData;
-                RestoreFields(node,undo.NodeFields[i]);Nodes.Add(node);Draft.Nodes.Add(node.Model);node.NotifyReferenceChanged();
+                node.Model.Kind=original.Kind;node.Model.Ref=original.Ref;node.Model.Strategies=original.Strategies;node.Model.Path=original.Path;node.Model.TimeWindow=original.TimeWindow;node.Model.ExtensionData=original.ExtensionData;
+                RestoreFields(node,undo.NodeFields[i]);Nodes.Add(node);Draft.Nodes.Add(node.Model);node.NotifyReferenceChanged();node.NotifyTimeWindowChanged();
             }
             RestoreFields(this,undo.FlowFields);Lanes.Clear();foreach(var lane in undo.Lanes)Lanes.Add(lane);
             StoreLanes();Renumber();SelectedNode=null;return true;

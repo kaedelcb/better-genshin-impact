@@ -1583,15 +1583,16 @@ public sealed partial class TaskCenterHost
     /// </summary>
     internal sealed record SuccessorContext(
         WorkflowNode Node, WorkflowNodeOccurrence Occurrence, bool Suppress, int Attempt, string ExpectedSubmissionKey,
-        string? VerifiedAccountUid = null, string? VerifiedAccountEpoch = null)
+        string? VerifiedAccountUid = null, string? VerifiedAccountEpoch = null,
+        bool EnforceTimeWindow = false, Func<DateTimeOffset>? Clock = null)
     {
         internal static SuccessorContext FreezeFrom(WorkflowNode frozenNode,
             WorkflowSubmitRequest request, WorkflowSubmission submission)
             => new(frozenNode, request.Occurrence, request.SuppressConfigCompletionAction,
-                submission.Attempt, submission.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch);
+                submission.Attempt, submission.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch, request.EnforceTimeWindow, request.Clock);
 
         internal WorkflowSubmitRequest ToSubmitRequest(WorkflowRunRecord run)
-            => new(run, Occurrence, Node, Suppress, VerifiedAccountUid, VerifiedAccountEpoch);
+            => new(run, Occurrence, Node, Suppress, VerifiedAccountUid, VerifiedAccountEpoch, EnforceTimeWindow, Clock);
     }
 
     /// <summary>把节点冻结成不可变副本（JSON 往返；失败＝抛错，由调用方保守拒绝，不降级为「用原引用」）。</summary>
@@ -1610,7 +1611,7 @@ public sealed partial class TaskCenterHost
     /// </summary>
     internal static string SuccessorPayloadFingerprint(
         WorkflowNode frozenNode, WorkflowNodeOccurrence occurrence, bool suppress, int attempt, string submissionKey,
-        string? verifiedAccountUid = null, string? verifiedAccountEpoch = null)
+        string? verifiedAccountUid = null, string? verifiedAccountEpoch = null, bool enforceTimeWindow = false)
     {
         var content = System.Text.Json.JsonSerializer.Serialize(new
         {
@@ -1620,6 +1621,7 @@ public sealed partial class TaskCenterHost
             attempt,
             submissionKey,
         });
+        if (enforceTimeWindow) content += "\ntime-window-enabled";
         if (verifiedAccountUid is not null || verifiedAccountEpoch is not null)
             content += "\nverified-account:" + System.Text.Json.JsonSerializer.Serialize(new
             {
@@ -1739,7 +1741,7 @@ public sealed partial class TaskCenterHost
         // ①冲突组内「同 candidateId 不同载荷＝整组拒绝」的判别（空串会让不同载荷被当成同载荷），
         // ②续用（ContinueUse）与占位时的「候选载荷一致」复核。覆盖冻结节点内容＋出现身份＋提交选项＋提交身份。
         var payloadFingerprint = SuccessorPayloadFingerprint(frozenNode, occ, request.SuppressConfigCompletionAction,
-            sub.Attempt, sub.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch);
+            sub.Attempt, sub.Key, request.VerifiedAccountUid, request.VerifiedAccountEpoch, request.EnforceTimeWindow);
 
         // [§17 P17／§12.3 交错①] **取得门面锁之前**的只发信号观察点（生产 null＝空操作）：
         // 强制版「首节点抢先」夹具在此固定交错（E1 尚未关闭时节点已到达本入口），并在此刻只读取证
@@ -1898,6 +1900,12 @@ public sealed partial class TaskCenterHost
         // 失败/未知路径同样必须对齐权威记录（会诊实证：不对齐会让 Runner 的旧修订写回撞冲突、结果记录丢失）。
         // 意图语义：该路径由 Runner 按自身语义定（Submitted/Rejected）；但若权威记录已是 Accepted+jobId，
         // 合并会**无条件保留该受理事实**（只允许增强不允许降级，见 MergeBackAuthoritativeSubmission）。
+        if (result.Kind == AdmissionResultKind.TerminalRejected && result.SubmissionIdentity is { } filteredIdentity
+            && _successorSendResults.TryGetValue(filteredIdentity, out var filtered) && filtered.Kind == BoundarySubmitKind.Filtered)
+        {
+            MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: true);
+            return filtered;
+        }
         MergeBackAuthoritativeSubmission(run, sub, baseline, copyOutcome: false);
         return MapAdmissionResultToBoundary(result);
     }
@@ -2813,6 +2821,8 @@ public sealed partial class TaskCenterHost
         }
         if (prepared.Rejection is { } rej)
         {
+            if (rej.Kind == BoundarySubmitKind.Filtered && d.SubmissionIdentity.Length > 0)
+                _successorSendResults[d.SubmissionIdentity] = rej;
             // 原始拒绝原因同时进入诊断日志和结构化结果。
             try
             {

@@ -11,7 +11,9 @@ public sealed record WorkflowSubmitRequest(
     WorkflowNode Node,
     bool SuppressConfigCompletionAction,
     string? VerifiedAccountUid = null,
-    string? VerifiedAccountEpoch = null);
+    string? VerifiedAccountEpoch = null,
+    bool EnforceTimeWindow = false,
+    Func<DateTimeOffset>? Clock = null);
 
 public enum BoundarySubmitKind
 {
@@ -20,6 +22,7 @@ public enum BoundarySubmitKind
     Unknown,
     Wait,
     Hold,
+    Filtered,
 }
 
 /// <summary>提交边界的互斥判别结果；Wait/Hold 不等于拒绝，也不授予发送许可。</summary>
@@ -43,6 +46,7 @@ public sealed record BoundarySubmitResult
     public bool Retryable { get; }
     public LocalWaitDecisionRecord? WaitDecision { get; }
 
+    public static BoundarySubmitResult Filtered(string reason) => new(BoundarySubmitKind.Filtered, null, reason, false, null);
     public static BoundarySubmitResult AcceptedWith(string jobId) => new(BoundarySubmitKind.Accepted, jobId, null, false, null);
     public static BoundarySubmitResult Rejected(string reason) => new(BoundarySubmitKind.Rejected, null, reason, false, null);
     /// <summary>
@@ -1289,8 +1293,14 @@ public sealed partial class WorkflowRunner
             }
         }
 
+        // 账号准备或读取资源修订可能跨过时段结束；主体尚未发送时再次按当前时间结算。
+        // 已提交的任务继续观察原终态，时段结束不会触发取消。
+        var timeWindowGate = WorkflowTimeWindowPolicy.Evaluate(plan.Document, node, _opt.Clock());
+        if (timeWindowGate.Action != NodeGateAction.Proceed)
+            return (timeWindowGate.Action == NodeGateAction.Skip ? "skippedFilter" : "rejected", timeWindowGate.Reason, null);
+
         var observer=node.Strategies.SingleOrDefault(s=>s.Kind=="observer.log");
-        if(observer is null)return await SubmitLeafAndAwaitAsync(run,node,occurrence,control,submission).ConfigureAwait(false);
+        if(observer is null)return await SubmitLeafAndAwaitAsync(run,plan,node,occurrence,control,submission).ConfigureAwait(false);
         if(_opt.ObservationSource is null)return ("unknown","伴随观察器实际日志来源未接通，未发送",null);
         var identity=run.RunId+":"+WorkflowObservation.Key(occurrence.NodeId,occurrence.Occurrence,occurrence.LoopIteration,attempt)+":"+Guid.NewGuid().ToString("N");
         // arm意图先落盘；重启不会将这个缺口解释为未命中。
@@ -1305,7 +1315,7 @@ public sealed partial class WorkflowRunner
         {
             (string Result,string? Reason,string? RawTerminal) result;
             WorkflowObservationFact fact;
-            try { result=await SubmitLeafAndAwaitAsync(run,node,occurrence,control,submission).ConfigureAwait(false); }
+            try { result=await SubmitLeafAndAwaitAsync(run,plan,node,occurrence,control,submission).ConfigureAwait(false); }
             finally
             {
                 // 所有终态、拒绝、跳过、停止和异常都先冻结事实，随后await using强制收场，外层才路由。
@@ -1342,15 +1352,19 @@ public sealed partial class WorkflowRunner
     }
 
     private async Task<(string Result,string? Reason,string? RawTerminal)> SubmitLeafAndAwaitAsync(
-        WorkflowRunRecord run,WorkflowNode node,WorkflowNodeOccurrence occurrence,RunControl control,WorkflowSubmission submission)
+        WorkflowRunRecord run,WorkflowPlan plan,WorkflowNode node,WorkflowNodeOccurrence occurrence,RunControl control,WorkflowSubmission submission)
     {
         var ct=control.RunCts.Token;var attempt=submission.Attempt;
+        // 观察器准备完成后再核对，避免 ArmAsync 等待跨过时段结束仍落盘发送意图。
+        var timeWindowGate = WorkflowTimeWindowPolicy.Evaluate(plan.Document, node, _opt.Clock());
+        if (timeWindowGate.Action != NodeGateAction.Proceed)
+            return (timeWindowGate.Action == NodeGateAction.Skip ? "skippedFilter" : "rejected", timeWindowGate.Reason, null);
         _runs.RecordIntentForBoundary(run, submission, _boundary.RequiresNodeAdmission); // 提交意图先行（B2/B3：崩溃后按意图对账，不重跑）
 
         // B6/E4' 定案：任务中心提交固定 suppress=true（与流程是否声明 terminal 无关；原生手动入口缺省 false 不变）
         var submit = await _boundary.SubmitAsync(
             new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true,
-                control.CurrentVerifiedUid, control.CurrentVerifiedUidEpoch), ct)
+                control.CurrentVerifiedUid, control.CurrentVerifiedUidEpoch, plan.Document.NodeTimeWindowEnabled, _opt.Clock), ct)
             .ConfigureAwait(false);
         // 生产边界冻结会用最新盘上记录rebase，旧submission引用不再属于run。
         // 重新绑定同一出现，才能把受理句柄和退出事实持久化到实际记录。
@@ -1361,6 +1375,16 @@ public sealed partial class WorkflowRunner
             || currentSubmission.Attempt != submission.Attempt)
             return ("unknown", "边界返回后提交身份已变，保留责任并禁止推进。", null);
         submission = currentSubmission;
+        if (submit.Kind == BoundarySubmitKind.Filtered)
+        {
+            // 只接受确定零发送的过滤结论；冻结后的发送事实必须有同身份本地零调用证明。
+            if (!string.IsNullOrEmpty(submission.JobId) || !string.IsNullOrEmpty(submission.AcceptedSendIdentity)
+                || submission.ObservedTerminal is not null
+                || submission.SendAttempted && !LocalNoSendEvidence.IsDischarged(run, submission))
+                return ("unknown", "时间段过滤与既有发送事实冲突，保留原责任待对账。", null);
+            submission.Intent = SubmitIntentState.Rejected;
+            return ("skippedFilter", submit.RejectReason, null);
+        }
         if (submit.Kind is BoundarySubmitKind.Wait or BoundarySubmitKind.Hold)
         {
             if (submission.Intent != SubmitIntentState.IntentRecorded

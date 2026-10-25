@@ -211,7 +211,8 @@ public sealed partial class RunStore
             throw new InvalidOperationException("提交意图要求确定性派生幂等键已存在。");
         if (string.IsNullOrWhiteSpace(submission.NodeId))
             throw new InvalidOperationException("提交意图要求绑定节点出现身份。");
-        if (rec.CurrentSubmission is { } prev && (prev.InFlight
+        // 有效同身份零调用证明已结清本地冻结责任，无须制造远端终态；其余未决发送仍禁止覆盖。
+        if (rec.CurrentSubmission is { } prev && !LocalNoSendEvidence.IsDischarged(rec, prev) && (prev.InFlight
             || (prev.SendAttempted || !string.IsNullOrEmpty(prev.JobId) || !string.IsNullOrEmpty(prev.AcceptedSendIdentity))
                && (!prev.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(prev.ObservedTerminal))))
             throw new InvalidOperationException(
@@ -328,12 +329,12 @@ public sealed partial class RunStore
                || (a.SendAttempted || !string.IsNullOrEmpty(a.JobId))
                   && (!a.ExecutionExitConfirmed || !BgiJobTerminalPolling.IsTerminal(a.ObservedTerminal)));
 
-    internal bool TryPublishPreparedNoSend(BgiWorkflowExecutionBoundary.PreparedSubmit prepared, out WorkflowRunRecord? latest, string? transportEvidence = null)
+    internal bool TryPublishPreparedNoSend(BgiWorkflowExecutionBoundary.PreparedSubmit prepared, out WorkflowRunRecord? latest, string? transportEvidence = null, bool timeWindowClosed = false)
     {
         lock (_gate)
         {
             latest = null;
-            var proof = prepared.CreateNoSendProof(transportEvidence);
+            var proof = prepared.CreateNoSendProof(transportEvidence, timeWindowClosed);
             if (proof is null) return false;
             var current = Load(proof.RunId);
             if (current?.CurrentSubmission is not { } sub || sub.SendPermit is not { Version: 1, Consumed: true } permit

@@ -265,6 +265,7 @@ public partial class MainViewModel
                 }
                 return RemoteCenterReply.Ok(new
                 {
+                    serverTime = DateTimeOffset.Now,
                     flows = host.ListFlows(), active = overview.Active, history = overview.History,
                     catalog = host.Catalog.Current,
                     storedResourceEntries = host.Catalog.Current.Entries.Count == 0

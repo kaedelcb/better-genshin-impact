@@ -75,6 +75,7 @@ public sealed partial class TaskCenterPanelViewModel
         try
         {
             var reply = await RemoteRequestAsync("task.list");
+            var receivedTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             if (reply.Status != "ok" || string.IsNullOrWhiteSpace(reply.PayloadJson))
             {
                 _remoteStale = true;
@@ -84,6 +85,7 @@ public sealed partial class TaskCenterPanelViewModel
             var data = JsonSerializer.Deserialize<RemoteTaskListSnapshot>(reply.PayloadJson, RemoteReadOptions)
                 ?? throw new InvalidDataException("执行端任务中心列表为空");
             _remoteSnapshot = data;
+            SynchronizeRemoteTimeWindowClock(data.ServerTime, receivedTimestamp);
             _remoteStale = false;
             _host.Catalog.SetRemoteSnapshot(data.Catalog);
             CatalogStatusText = data.Catalog.IsDegraded
