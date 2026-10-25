@@ -23,8 +23,8 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         Assert.Null(reopened.AutomaticStopAuthority);
         var automatic = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, true, reopened.AutomaticAuthorization);
         Assert.NotNull(automatic);
-        Assert.Equal(explicitSource.IntentId, automatic.IntentId);
-        Assert.Equal(explicitSource.IntentTimestamp, automatic.IntentTimestamp);
+        Assert.NotEqual(explicitSource.IntentId, automatic.IntentId);
+        Assert.True(automatic.IntentTimestamp >= explicitSource.IntentTimestamp);
         Assert.Null(await automatic.GetOrCheckAsync((_, _, _) => Task.FromResult<WorkflowStopAuthorityRecord?>(null), false, default));
         var original = automatic.IntentTimestamp;
         await Assert.ThrowsAsync<StartupSourceStoppedException>(() => automatic.GetOrCheckAsync((intent, _, _) =>
@@ -44,8 +44,7 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         await Assert.ThrowsAsync<TimeoutException>(() => failed.GetOrCheckAsync(
             (_, _, _) => throw new TimeoutException("通道未就绪"), true, default));
         Assert.True(failed.Revoked);
-        var retried = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, true,
-            Store.LoadChecked().Config.AutomaticAuthorization)!;
+        var retried = StartupSourceIntent.Automatic(Store.LoadChecked().Config.AutomaticAuthorization!, null);
         Assert.Equal(original.IntentId, retried.IntentId);
         Assert.Equal(original.IntentTimestamp, retried.IntentTimestamp);
         await Assert.ThrowsAsync<StartupSourceStoppedException>(() => retried.GetOrCheckAsync((intent, _, _) =>
@@ -70,8 +69,7 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
         var authorization = new StartupAutomaticAuthorization(previous.IntentId, previous.IntentTimestamp);
         Store.SaveConfirmed(new() { Enabled = true, AutomaticAuthorization = authorization, AutomaticStopAuthority = previous });
         var reopened = Store.LoadChecked().Config;
-        var source = MistletoeViewModel.ResolveAutomaticStartupSource(null, reopened.AutomaticStopAuthority, true,
-            reopened.AutomaticAuthorization)!;
+        var source = StartupSourceIntent.Automatic(reopened.AutomaticAuthorization!, reopened.AutomaticStopAuthority);
         var validated = false;
         var authority = await source.GetOrCheckAsync(async (intent, _, ct) =>
         {
@@ -108,12 +106,14 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
     }
 
     [Fact]
-    public void RevokedPermit_PersistsAndCannotBecomeAFreshSourceAfterRestart()
+    public void LegacyRevokedPermit_DoesNotDisableANewAutomaticStartup()
     {
         Store.SaveConfirmed(new() { Enabled = true, AutomaticAuthorization = new("permit", 123, Revoked: true) });
         var reopened = Store.LoadChecked().Config;
-        Assert.Throws<OperationCanceledException>(() => MistletoeViewModel.ResolveAutomaticStartupSource(
-            null, null, true, reopened.AutomaticAuthorization));
+        var source = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, true, reopened.AutomaticAuthorization)!;
+        Assert.False(source.Revoked);
+        Assert.NotEqual("permit", source.IntentId);
+        Assert.Null(source.Authority);
     }
 
     [Fact]
@@ -132,10 +132,10 @@ public sealed class StartupAutomaticAuthorizationTests : IDisposable
     }
 
     [Fact]
-    public void LegacyEnabledFlagAlone_DoesNotInventPermissionForAnOldCallback()
+    public void LegacyEnabledFlag_StartsANewOccurrenceWithoutReauthorizingOldCallbacks()
     {
         var config = JsonSerializer.Deserialize<StartupFlowConfig>("{\"enabled\":true}")!;
-        Assert.Null(MistletoeViewModel.ResolveAutomaticStartupSource(null, config.AutomaticStopAuthority, true,
+        Assert.NotNull(MistletoeViewModel.ResolveAutomaticStartupSource(null, config.AutomaticStopAuthority, true,
             config.AutomaticAuthorization));
     }
 

@@ -65,14 +65,14 @@ public class IpcClient : IDisposable
 
     public async Task ConnectAsync(int timeoutMs = 3000)
     {
-        _pipeClient = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+
         try
         {
-            await _pipeClient.ConnectAsync(timeoutMs);
+            _pipeClient = await BgiSessionPipe.ConnectAsync(_pipeName, PipeNameOverrideForTest is null, timeoutMs, CancellationToken.None);
         }
         catch (TimeoutException)
         {
-            _pipeClient.Dispose();
+            _pipeClient?.Dispose();
             _pipeClient = null;
             throw new TimeoutException($"连接命名管道超时（{timeoutMs}ms），BGI 可能未运行或无响应");
         }

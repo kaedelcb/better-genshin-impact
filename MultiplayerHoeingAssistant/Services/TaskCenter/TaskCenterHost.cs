@@ -479,10 +479,11 @@ public sealed partial class TaskCenterHost
         var client = _clientAccessor();
         if (client?.State != BgiExternalLinkState.Ready)
         {
-            if (!required) return null;
-            if (source.Authority is not null) throw new StartupSourceUnavailableException("已冻结来源目标离线，禁止启动新目标洗白原基线");
+            if (!required && source.Authority is null) return null;
+            if (source.Authority is { } offline && (!source.AllowProcessRecovery || !StartupProcessExited(offline)))
+                throw new StartupSourceUnavailableException("正在等待原 BGI 恢复连接");
             if (await EnsureExecutionEnvironmentAsync(ct).ConfigureAwait(false) is { } error)
-                throw new InvalidOperationException(error);
+                throw new StartupSourceUnavailableException(error);
             client = _clientAccessor();
         }
         var runner = CreateRunner(client);
@@ -491,11 +492,23 @@ public sealed partial class TaskCenterHost
             ct).ConfigureAwait(false);
         if (source.Authority is { } inherited)
         {
+            var epoch = WorkflowStopAuthority.Epoch(client?.ServerEpoch);
+            if (epoch is not null && epoch != inherited.Epoch && source.AllowProcessRecovery && StartupProcessExited(inherited))
+            {
+                var next = await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
+                if (next is null) throw new StartupSourceUnavailableException("新 BGI 尚未就绪");
+                source.AcceptProcessContinuation(next);
+                return next;
+            }
             await runner.ValidateInheritedStopAuthorityAsync(inherited, ct).ConfigureAwait(false);
             return inherited;
         }
         return await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
     }
+
+    private static bool StartupProcessExited(WorkflowStopAuthorityRecord authority)
+        => WorkflowStopAuthority.TryEpoch(authority.Epoch, out var epoch)
+            && ProbeOriginalBgiProcess(epoch.ProcessId, epoch.StartTicksUtc) == false;
 
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId, string? entryNodeId = null, string? expectedRevision = null,
         string? stopAfterNodeId = null)

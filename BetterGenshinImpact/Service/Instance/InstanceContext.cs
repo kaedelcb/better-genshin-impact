@@ -52,6 +52,7 @@ public sealed class InstanceContext
 
     /// <summary>每个 BGI 进程独立的只读状态管道名，避免同一用户多会话共享根管道。</summary>
     public string ReadOnlyStatusPipeName => InstancePipeNames.ForReadOnlyStatus(ProcessId);
+    public string SessionControlPipeName => RootPipeName + ".session-" + WindowsSessionId;
 
     public DateTimeOffset StartedAt { get; }
 

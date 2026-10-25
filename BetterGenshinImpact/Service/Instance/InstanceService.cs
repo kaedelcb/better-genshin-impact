@@ -36,6 +36,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
     private readonly object _rootConnectionLock = new();
 
     private Task? _acceptLoopTask;
+    private Task? _sessionAcceptLoopTask;
     private Task? _rootConnectionLoopTask;
     private InstanceConnection? _rootConnection;
     private bool _applicationReady;
@@ -111,6 +112,10 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
             Context.ProcessId,
             Context.WindowsSessionId,
             Context.RootPipeName);
+        if (!Context.IsWebView)
+            _sessionAcceptLoopTask = AcceptLoopAsync(
+                InstancePipeFactory.CreateServer(Context.SessionControlPipeName, firstPipeInstance: true),
+                _lifetimeCancellationTokenSource.Token, Context.SessionControlPipeName);
         _readOnlyStatusPipe.Start();
         return Task.CompletedTask;
     }
@@ -148,6 +153,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
         }
 
         await AwaitBackgroundTaskAsync(_acceptLoopTask).ConfigureAwait(false);
+        await AwaitBackgroundTaskAsync(_sessionAcceptLoopTask).ConfigureAwait(false);
         await AwaitBackgroundTaskAsync(_rootConnectionLoopTask).ConfigureAwait(false);
     }
 
@@ -343,7 +349,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
 
     private async Task AcceptLoopAsync(
         NamedPipeServerStream firstServer,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string? pipeName = null)
     {
         NamedPipeServerStream? server = firstServer;
         // 连续失败计数（切片0尾巴，§3.9）：单次 accept 失败按 1s/2s/5s/10s/20s 阶梯退避、封顶 30s；
@@ -356,7 +362,7 @@ public sealed class InstanceService : IHostedService, IAsyncDisposable
                 try
                 {
                     server ??= InstancePipeFactory.CreateServer(
-                        Context.RootPipeName,
+                        pipeName ?? Context.RootPipeName,
                         firstPipeInstance: false);
                     await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
 

@@ -13,7 +13,7 @@ public sealed partial class MistletoeViewModel
         var oldAuthorization = _config.AutomaticAuthorization;
         var oldAuthority = _config.AutomaticStopAuthority;
         var source = enabled
-            ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit()) : null;
+            ? (_mainVm.IsExecutorMode ? StartupSourceIntent.Startup() : StartupSourceIntent.Startup(localOnly: true)) : null;
         _config.Enabled = enabled;
         _config.AutomaticAuthorization = source is { LocalOnly: false }
             ? StartupAutomaticAuthorization.FromExplicit(source) : null;
@@ -38,41 +38,32 @@ public sealed partial class MistletoeViewModel
         OnPropertyChanged(nameof(FlowEnabled));
     }
 
-    private StartupSourceIntent? PrepareStartupSource(bool manual)
+    private StartupSourceIntent PrepareStartupSource(bool manual)
     {
-        StartupSourceIntent? source;
-        if (manual)
+        // Enabled 是长期设置；每次新启动使用新意图，绝不继承旧运行的停止标记。
+        var source = ResolveAutomaticStartupSource(null, _config.AutomaticStopAuthority,
+            _mainVm.IsExecutorMode, _config.AutomaticAuthorization);
+        if (_config.Enabled)
         {
-            source = _mainVm.IsExecutorMode ? StartupSourceIntent.Explicit() : StartupSourceIntent.LocalOnlyExplicit();
-            if (_config.Enabled)
+            var oldAuthorization = _config.AutomaticAuthorization;
+            var oldAuthority = _config.AutomaticStopAuthority;
+            _config.AutomaticAuthorization = source.LocalOnly ? null : StartupAutomaticAuthorization.FromExplicit(source);
+            _config.AutomaticStopAuthority = null;
+            try
             {
-                var oldAuthorization = _config.AutomaticAuthorization;
-                var oldAuthority = _config.AutomaticStopAuthority;
-                _config.AutomaticAuthorization = source.LocalOnly ? null : StartupAutomaticAuthorization.FromExplicit(source);
-                _config.AutomaticStopAuthority = null;
-                try { _store.SaveConfirmed(_config); _automaticSaveFailed = false; }
-                catch
-                {
-                    _config.AutomaticAuthorization = oldAuthorization;
-                    _config.AutomaticStopAuthority = oldAuthority;
-                    _automaticSaveFailed = true;
-                    throw;
-                }
+                _store.SaveConfirmed(_config);
+                _automaticSaveFailed = false;
+                if (oldAuthorization?.Revoked == true)
+                    _mainVm.AddLog("[槲寄生] 已自动修复旧版自动启动禁用标记，保留原流程和自动执行设置");
             }
-        }
-        else
-        {
-            if (_automaticSaveFailed) throw new InvalidOperationException("自动启动设置尚未保存成功");
-            // 已保存的明确开启授权可一次性升级。只有 enabled 的旧配置仍需用户明确确认一次。
-            if (_mainVm.IsExecutorMode && _config.AutomaticAuthorization is null
-                && _config.AutomaticStopAuthority is { } saved)
+            catch
             {
-                _config.AutomaticAuthorization = new(saved.IntentId, saved.IntentTimestamp);
-                try { _store.SaveConfirmed(_config); }
-                catch { _config.AutomaticAuthorization = null; _automaticSaveFailed = true; throw; }
+                _config.AutomaticAuthorization = oldAuthorization;
+                _config.AutomaticStopAuthority = oldAuthority;
+                _automaticSaveFailed = true;
+                source.Revoke();
+                throw;
             }
-            source = ResolveAutomaticStartupSource(_configuredAutoSource, _config.AutomaticStopAuthority,
-                _mainVm.IsExecutorMode, _config.AutomaticAuthorization);
         }
         UseConfiguredStartupSource(source);
         return source;
@@ -80,6 +71,12 @@ public sealed partial class MistletoeViewModel
 
     private void UseConfiguredStartupSource(StartupSourceIntent? source)
     {
+        if (!ReferenceEquals(_configuredAutoSource, source)) _configuredAutoSource?.Revoke();
+        if (source is null)
+        {
+            _runCts?.Cancel();
+            RevokeAllArmedTriggers();
+        }
         _configuredAutoSource = source;
         _currentExplicitSourceId = source is { LocalOnly: false } ? source.IntentId : null;
     }
@@ -91,21 +88,11 @@ public sealed partial class MistletoeViewModel
             _ = CaptureConfiguredSourceAsync(source);
     }
 
-    private void RevokeCurrentAutomaticAuthorization(StartupSourceIntent source)
+    private void RearmStoppedTimer(ArmedTimerViewModel timer)
     {
-        if (source.IntentId != _currentExplicitSourceId) return;
-        RevokeAutomaticStartupAuthorization();
-    }
-
-    private void RevokeAutomaticStartupAuthorization()
-    {
-        if (!_config.Enabled) return;
-        // 明确全停即使发生在尚未确认来源或监控模式，也必须留存拒绝标记。
-        var authorization = _config.AutomaticAuthorization
-            ?? new StartupAutomaticAuthorization(_config.AutomaticStopAuthority?.IntentId ?? Guid.NewGuid().ToString("N"),
-                _config.AutomaticStopAuthority?.IntentTimestamp ?? System.Diagnostics.Stopwatch.GetTimestamp());
-        _config.AutomaticAuthorization = authorization with { Revoked = true };
-        try { _store.SaveConfirmed(_config); }
-        catch { _automaticSaveFailed = true; throw; }
+        if (!_config.Enabled || _startupClosing || _configTransferPaused
+            || (!timer.Step.RepeatDaily && timer.NextFireAt <= DateTime.Now) || !timer.Step.Enabled) return;
+        // 重新挂载的是下一次到点计划。已到点/正在运行的旧次数不补跑。
+        ArmTimer(timer.Step, StartupSourceIntent.Startup(localOnly: !_mainVm.IsExecutorMode));
     }
 }

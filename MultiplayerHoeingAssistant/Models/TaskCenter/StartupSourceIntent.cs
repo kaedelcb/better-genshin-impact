@@ -14,7 +14,24 @@ public sealed class StartupSourceIntent
     public long IntentTimestamp { get; }
     public WorkflowStopAuthorityRecord? Authority => Volatile.Read(ref _authority);
     public bool Revoked => _revoked;
-    internal void Revoke() => _revoked = true;
+    private readonly CancellationTokenSource _lifetime = new();
+    internal CancellationToken LifetimeToken => _lifetime.Token;
+    internal bool StoppedByUser { get; private set; }
+    internal bool AllowProcessRecovery { get; private init; }
+    internal void Revoke() { _revoked = true; _lifetime.Cancel(); }
+    internal void StopCurrentRun() { StoppedByUser = true; Revoke(); }
+    internal static StartupSourceIntent Startup(bool localOnly = false)
+        => new(Guid.NewGuid().ToString("N"), System.Diagnostics.Stopwatch.GetTimestamp(), localOnly: localOnly)
+            { AllowProcessRecovery = true };
+
+    // 仅由宿主在原进程确定退出、耐久停止检查通过后调用，不改变任何已提交任务的身份。
+    internal void AcceptProcessContinuation(WorkflowStopAuthorityRecord next)
+    {
+        if (Revoked || !AllowProcessRecovery || _authority is null || next.Epoch == _authority.Epoch
+            || next.IntentId != IntentId || next.IntentTimestamp != IntentTimestamp)
+            throw new InvalidOperationException("启动来源不能接续此进程");
+        _authority = next;
+    }
     /// <summary>监控端本地动作来源：永不获取本机 BGI 停止权威，切到执行端后也不能升级旧回调。</summary>
     public bool LocalOnly { get; }
 
@@ -97,7 +114,7 @@ public sealed class StartupSourceIntent
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {
-            _revoked = true;
+            Revoke();
             throw;
         }
         finally { _gate.Release(); }

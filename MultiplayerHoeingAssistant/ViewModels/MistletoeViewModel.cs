@@ -324,14 +324,18 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         RunOnUi(() =>
         {
             _runCts?.Cancel();
-            _configuredAutoSource?.Revoke();
-            try { RevokeAllArmedTriggers(); }
-            finally { RevokeAutomaticStartupAuthorization(); }
+            var timers = ArmedTimersMutable.ToArray();
+            _configuredAutoSource?.StopCurrentRun();
+            foreach (var timer in timers) timer.SourceIntent?.StopCurrentRun();
+            RevokeAllArmedTriggers();
+            foreach (var timer in timers) RearmStoppedTimer(timer);
+            StatusText = "当前运行已停止；自动启动设置和下一次定时计划保留";
         });
     }
 
     internal void PrepareForApplicationExit()
     {
+        _startupClosing = true;
         _bgiStatusRefresh.Stop();
         TaskCenter.StopAutoRefresh();
         _configuredAutoSource?.Revoke();
@@ -670,6 +674,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     private bool _isRunning;
     private StartupSourceIntent? _configuredAutoSource;
+    private bool _startupClosing;
     private string? _currentExplicitSourceId;
     public bool IsRunning
     {
@@ -740,7 +745,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             StatusText = $"正在执行（{reason}触发）…";
             ResetRunStates();
             await _runner.RunAsync(_config.Steps.ToList(), ct,
-                reason == "手动" ? null : new StartupTriggerInfo("startup", "main", OccurrenceDate(DateTime.Now)) { SourceIntent = source }, source);
+                reason == "手动" ? null : new StartupTriggerInfo("startup", "main", source.IntentId) { SourceIntent = source }, source);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
             return HostActionResult.Effective(StatusText);
         }
@@ -748,7 +753,9 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         {
             var canceledByUser = ct.IsCancellationRequested;
             var detail = ex.InnerException?.Message ?? ex.Message;
-            StatusText = canceledByUser ? "已取消" : $"执行中止：{detail}";
+            StatusText = _configuredAutoSource?.StoppedByUser == true
+                ? "当前运行已停止；自动启动设置保留，下次启动正常执行"
+                : canceledByUser ? "已取消" : $"执行中止：{detail}";
             _mainVm.AddLog(canceledByUser
                 ? "[槲寄生] 启动流程已取消"
                 : $"[槲寄生] 启动流程执行中止：{detail}");
@@ -766,15 +773,11 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         }
     }
 
-    internal static StartupSourceIntent? ResolveAutomaticStartupSource(
+    internal static StartupSourceIntent ResolveAutomaticStartupSource(
         StartupSourceIntent? configured, WorkflowStopAuthorityRecord? saved, bool isExecutorMode,
         StartupAutomaticAuthorization? authorization = null)
-        => authorization?.Revoked == true
-            ? throw new OperationCanceledException("自动启动许可已停止；请明确重新开启或手动运行")
-            : !isExecutorMode
-                ? configured is { LocalOnly: true } local ? local : StartupSourceIntent.LocalOnlyExplicit()
-                : configured ?? (authorization is not null ? StartupSourceIntent.Automatic(authorization, saved)
-                    : saved is { } frozen ? StartupSourceIntent.Inherit(frozen) : null);
+        => configured is { Revoked: false } && configured.LocalOnly == !isExecutorMode ? configured
+            : StartupSourceIntent.Startup(localOnly: !isExecutorMode);
 
     /// <summary>MainViewModel.InitializeAsync 完成后由 MainWindow 回调：按配置决定是否自动执行启动流程。</summary>
     internal void OnAppInitialized()
@@ -1212,14 +1215,13 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     private async Task<WorkflowStopAuthorityRecord?> RefreshStartupSourceAsync(StartupSourceIntent source, bool required, CancellationToken ct)
     {
-        WorkflowStopAuthorityRecord? authority;
-        try { authority = await _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, ct); }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            // 只有权威确认停止才撤销持久许可；通信失败和未知仅中止本次来源。
-            if (!source.Revoked && ex is StartupSourceStoppedException) RevokeCurrentAutomaticAuthorization(source);
-            throw;
-        }
+        var authority = await StartupSourceRecovery.RefreshAsync(source,
+            token => _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(source, required, token), ct,
+            message => RunOnUi(() =>
+            {
+                StatusText = message;
+                _mainVm.AddLog("[槲寄生] " + message);
+            }));
         // 模式切换或明确全停后，旧的在途查询也不能回写来源基线。
         if (source.Revoked) throw new OperationCanceledException("来源已撤销，忽略在途授权结果", ct);
         if (_config.Enabled && authority is not null && source.IntentId == _currentExplicitSourceId
@@ -1273,21 +1275,20 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         {
             await DelayWithSourceAsync(timer.NextFireAt - DateTime.Now, timer.SourceIntent, timer.Cts.Token);
 
-            RunOnUi(() => ArmedTimersMutable.Remove(timer));
+            // 执行期间仍在集合中，关闭/取消/全停必须能取消它，不能丢失在途触发器。
             var step = timer.Step;
             _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」到点（{DateTime.Now:HH:mm}），开始执行「到点执行」链");
             OnNodeStateReported(step, NodeRunState.Running, null);
             await _runner.RunAsync(step.FireSteps.ToList(), timer.Cts.Token, new StartupTriggerInfo(StartupStepKinds.TimerTrigger, step.Id, OccurrenceDate(timer.NextFireAt)) { SourceIntent = timer.SourceIntent }); // 三轮 重要6：计划触发日（跨零点阻塞不漂）
             OnNodeStateReported(step, NodeRunState.Success, $"已于 {DateTime.Now:HH:mm} 触发");
+            RunOnUi(() => ArmedTimersMutable.Remove(timer));
 
             // 每天重复：本轮跑完后重新挂载到明天的同一时刻（取消语义不走到这里）
             if (step.RepeatDaily && TimeOnly.TryParse(step.TriggerTime, out var t))
             {
                 var fireAt = NextOccurrence(t);
-                timer.Reset(fireAt);
-                RunOnUi(() => ArmedTimersMutable.Add(timer));
-                _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已按「每天重复」重新挂载：{fireAt:MM-dd HH:mm}");
-                _ = RunTimerAsync(timer);
+                _mainVm.AddLog($"[槲寄生] 定时触发器「{timer.Title}」已按「每天重复」重新挂载：{fireAt:MM-dd HH:mm}");
+                RearmStoppedTimer(timer);
             }
         }
         catch (OperationCanceledException ex)
@@ -1300,6 +1301,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 ? $"[槲寄生] 定时触发器「{timer.Title}」已取消"
                 : $"[槲寄生] 定时触发器「{timer.Title}」来源校验未通过，已撤下：{reason}");
             CancelTimer(timer);
+            if (!canceledByUser && timer.SourceIntent?.StoppedByUser == true)
+                RearmStoppedTimer(timer);
         }
         catch (Exception ex)
         {

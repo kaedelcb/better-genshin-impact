@@ -1063,15 +1063,14 @@ public sealed partial class BgiExternalClient : IDisposable
     private async Task<bool> TryEstablishOnceAsync(CancellationToken cancellationToken)
     {
         DisposePipe();
-        var pipe = new NamedPipeClientStream(
-            ".", _pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        NamedPipeClientStream? pipe = null;
         try
         {
-            await pipe.ConnectAsync(2000, cancellationToken).ConfigureAwait(false);
+            pipe = await BgiSessionPipe.ConnectAsync(_pipeName, PipeNameOverrideForTest is null, 2000, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            pipe.Dispose();
+            pipe?.Dispose();
             State = BgiExternalLinkState.Down;
             return false;
         }

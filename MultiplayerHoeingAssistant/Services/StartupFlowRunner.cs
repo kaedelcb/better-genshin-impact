@@ -119,6 +119,8 @@ public sealed class StartupFlowRunner
         if (source is null && trigger is null) source = StartupSourceIntent.Explicit();
         if (_sourceAuthorityProvider is not null && source is null)
             throw new OperationCanceledException("自动启动/回调缺少原来源授权；请手动运行或重新挂载，不能刷新当前版本", ct);
+        using var lifetime = source is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct, source.LifetimeToken);
+        ct = lifetime?.Token ?? ct;
         var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source };
         _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
@@ -636,7 +638,7 @@ public sealed class StartupFlowRunner
 
         // 双重身份（§2）：ExecutionId=本次执行；IntentKey=计划出现（触发器=种类:实例:日程日；手动=每次新意图）
         await VerifySourceAsync(ctx, required: true, ct);
-        var request = new StartupHandoffRequest
+        StartupHandoffRequest CreateRequest() => new StartupHandoffRequest
         {
             StopAuthority = ctx.SourceIntent?.Authority,
             ExecutionId = ctx.ExecutionId,
@@ -651,10 +653,22 @@ public sealed class StartupFlowRunner
             Mode = step.TaskCenterHandoffMode,
             IntentNote = display,
         };
+        var request = CreateRequest();
         StartupHandoffResult result;
         try
         {
-            result = await _enterTaskCenter(request, ct);
+            var waiting = false;
+            while (true)
+            {
+                result = await _enterTaskCenter(request, ct);
+                if (ctx.SourceIntent?.AllowProcessRecovery != true || result.Outcome != HandoffOutcome.Rejected
+                    || result.ReasonCode is not (HandoffReasonCodes.NotReady or HandoffReasonCodes.StatusUncertain)) break;
+                if (!waiting) _log($"[槲寄生] 等待任务中心恢复：{result.Reason}（保留同一执行身份）");
+                waiting = true;
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                await VerifySourceAsync(ctx, required: true, ct);
+                request = CreateRequest();
+            }
         }
         catch (OperationCanceledException)
         {

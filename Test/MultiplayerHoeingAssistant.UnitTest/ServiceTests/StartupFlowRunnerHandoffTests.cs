@@ -743,9 +743,9 @@ public class StartupFlowRunnerHandoffTests
     }
 
     [Fact]
-    public void AutomaticStartup_RequiresOriginalSourceAndPreservesFrozenAuthority()
+    public void AutomaticStartup_CreatesFreshOccurrenceWithoutReauthorizingOldCallbacks()
     {
-        Assert.Null(MistletoeViewModel.ResolveAutomaticStartupSource(null, null, isExecutorMode: true));
+        Assert.NotNull(MistletoeViewModel.ResolveAutomaticStartupSource(null, null, isExecutorMode: true));
         var monitor = MistletoeViewModel.ResolveAutomaticStartupSource(null, null, isExecutorMode: false);
         Assert.NotNull(monitor);
         Assert.True(monitor.LocalOnly);
@@ -759,10 +759,10 @@ public class StartupFlowRunnerHandoffTests
         Assert.True(monitorWithSavedBgiAuthority.LocalOnly);
         Assert.Null(monitorWithSavedBgiAuthority.Authority);
         var inherited = MistletoeViewModel.ResolveAutomaticStartupSource(null, saved, isExecutorMode: true);
-        Assert.Equal(saved, inherited.Authority);
+        Assert.Null(inherited.Authority);
         Assert.False(inherited.LocalOnly);
-        Assert.Equal(saved.IntentId, inherited.IntentId);
-        Assert.Equal(saved.IntentTimestamp, inherited.IntentTimestamp);
+        Assert.NotEqual(saved.IntentId, inherited.IntentId);
+        Assert.True(inherited.IntentTimestamp > saved.IntentTimestamp);
     }
 
     [Theory]
