@@ -316,6 +316,20 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         => _remoteTarget is null ? _host.ReadResourceTaskLayoutAsync(node.Model)
             : ReadRemoteResourceLayoutAsync(node);
 
+    /// <summary>仅手动重读失败后调用：在执行端启动/连接 BGI，确认就绪后由弹窗继续读取。</summary>
+    internal async Task ConnectBgiForResourceTasksAsync()
+    {
+        if (_remoteTarget is not null)
+        {
+            if (_remoteAbandoned) throw new InvalidOperationException("已离开执行端，请重新打开任务中心");
+            var reply = await RemoteOperationAsync("task.catalog.connect");
+            if (reply.Status != "ok") throw new InvalidOperationException(reply.Message);
+            return;
+        }
+        var result = await _host.ConnectResourceCatalogAsync();
+        if (!result.Ok) throw new InvalidOperationException(result.Message);
+    }
+
     internal Task<string> ApplyResourceTaskLayoutAsync(NodeEditVm node,
         WorkflowResourceEditor.ResourceTaskLayout current,
         IReadOnlyList<WorkflowResourceEditor.ResourceTask> tasks, string? startTaskId)

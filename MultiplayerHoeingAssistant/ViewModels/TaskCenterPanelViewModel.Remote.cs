@@ -343,10 +343,16 @@ public sealed partial class TaskCenterPanelViewModel
             {
                 if (reply.OperationId != requestId)
                     return RemoteCenterReply.Unknown(requestId, "执行端受理身份不匹配，本次结果未确认");
-                for (var i = 0; i < 20; i++)
+                // 连接可能包含 BGI 冷启动（执行端确保预算 150 秒）；保留同一操作身份等待终态。
+                var waitBudget = operation == "task.catalog.connect"
+                    ? TimeSpan.FromSeconds(180) : TimeSpan.FromSeconds(10);
+                var waiting = System.Diagnostics.Stopwatch.StartNew();
+                while (waiting.Elapsed < waitBudget)
                 {
                     await Task.Delay(500);
                     reply = await RemoteRequestAsync("operation.get", requestId);
+                    if (reply.OperationId != requestId)
+                        return RemoteCenterReply.Unknown(requestId, "执行端操作回执身份不匹配，本次结果未确认");
                     if (reply.Status != "accepted") break;
                 }
                 if (reply.Status == "accepted")

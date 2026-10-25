@@ -615,7 +615,8 @@
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                             <Button x:Name="ResourceTaskSyncButton" Content="同步计划引用" Style="{StaticResource BasicButton}"
                                     Padding="8,4" Margin="0,0,7,0" IsEnabled="False" Click="SyncResourceTaskReferenceClick" />
-                            <Button Content="重新读取 BGI" Style="{StaticResource BasicButton}"
+                            <Button x:Name="ResourceTasksRefreshButton" Content="重新读取 BGI" Style="{StaticResource BasicButton}"
+                                    ToolTip="BGI 未运行时会在执行端启动并连接，再读取内部任务"
                                     Padding="8,4" Click="RefreshResourceTasksClick" />
                         </StackPanel>
                         <TextBlock x:Name="ResourceTasksFeedback" Foreground="{DynamicResource Dim}" FontSize="11"

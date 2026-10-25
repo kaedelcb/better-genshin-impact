@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using System.Collections.Concurrent;
 using System.Text.Json;
@@ -134,6 +135,14 @@ public sealed class ProductionTaskCenterEntryTests
                 var loseResourceReply = false;
                 RemoteCenterReply? resourceOperationReceipt = null;
                 var layoutRequested = false;
+                var layoutReadCalls = 0;
+                var bgiConnected = false;
+                var catalogConnectCalls = 0;
+                var catalogConnectionPolls = 0;
+                var releaseCatalogConnection = false;
+                var readsAtCatalogConnect = 0;
+                string? catalogConnectionId = null;
+                long catalogConnectionStarted = 0;
                 TaskCompletionSource<bool>? delayedFlowRead = null;
                 var flowReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 RemoteTriggerInfo[] remoteTriggers = [new("remote-timer-1", "timer",
@@ -195,6 +204,7 @@ public sealed class ProductionTaskCenterEntryTests
                         }),
                         "task.flow.get" => RemoteCenterReply.Ok(remoteDocument, remoteRevision),
                         "task.flow.save" => SaveRemote(request, command.CommandId),
+                        "task.catalog.connect" => ConnectResourceCatalog(command),
                         "task.resource.layout.get" => ReadResourceLayout(request),
                         "task.resource.layout.save" => SaveResourceLayout(request, command.CommandId),
                         "task.run.start" => BeginRemoteRun(command),
@@ -279,8 +289,22 @@ public sealed class ProductionTaskCenterEntryTests
                         Assert.Equal(remoteDocument.WorkflowId, args.RootElement.GetProperty("workflowId").GetString());
                         Assert.Equal("n-remote", args.RootElement.GetProperty("nodeId").GetString());
                         layoutRequested = true;
+                        layoutReadCalls++;
+                        if (!bgiConnected) return RemoteCenterReply.Rejected("执行端BGI未连接");
                         return RemoteCenterReply.Ok(new WorkflowResourceEditor.ResourceTaskLayout(
                             resourceRevision, resourceStart, resourceTasks.ToArray()), resourceRevision);
+                    }
+
+                    RemoteCenterReply ConnectResourceCatalog(RemoteCommand command)
+                    {
+                        catalogConnectCalls++;
+                        if (catalogConnectCalls == 1) return RemoteCenterReply.Rejected("测试：BGI 路径不可用");
+                        if (bgiConnected) return RemoteCenterReply.Ok(message: "BGI 资源目录已连接");
+                        catalogConnectionId = command.CommandId;
+                        catalogConnectionStarted = Stopwatch.GetTimestamp();
+                        readsAtCatalogConnect = layoutReadCalls;
+                        return new RemoteCenterReply { Status = "accepted",
+                            OperationId = catalogConnectionId, Message = "执行端正在启动并连接 BGI" };
                     }
 
                     RemoteCenterReply SaveResourceLayout(RemoteCenterRequest request, string requestId)
@@ -339,6 +363,20 @@ public sealed class ProductionTaskCenterEntryTests
                     RemoteCenterReply ReadRemoteOperation(RemoteCenterRequest request)
                     {
                         var id = JsonSerializer.Deserialize<string>(request.PayloadJson!);
+                        if (id == catalogConnectionId)
+                        {
+                            if (!bgiConnected)
+                            {
+                                Assert.Equal(readsAtCatalogConnect, layoutReadCalls);
+                                catalogConnectionPolls++;
+                                if (catalogConnectionPolls > 2 && releaseCatalogConnection
+                                    && Stopwatch.GetElapsedTime(catalogConnectionStarted) >= TimeSpan.FromSeconds(12))
+                                    bgiConnected = true;
+                            }
+                            return new RemoteCenterReply { Status = bgiConnected ? "ok" : "accepted",
+                                OperationId = catalogConnectionId, Message = bgiConnected
+                                    ? "BGI 资源目录已连接" : "执行端正在启动并连接 BGI" };
+                        }
                         if (id == resourceOperationReceipt?.OperationId)
                             return loseResourceReply ? RemoteCenterReply.Unknown(id!, "配置保存回执尚未核对") : resourceOperationReceipt;
                         return id == runOperationId
@@ -613,7 +651,41 @@ public sealed class ProductionTaskCenterEntryTests
                 var tasks = Assert.IsType<ListBox>(basic.FindName("ResourceTaskList"));
                 var feedback = Assert.IsType<TextBlock>(basic.FindName("ResourceTasksFeedback"));
                 var sync = Assert.IsType<Button>(basic.FindName("ResourceTaskSyncButton"));
-                PumpUntil(window, () => layoutRequested && popup.IsOpen && tasks.Items.Count == 3 && tasks.IsHitTestVisible);
+                PumpUntil(window, () => layoutRequested && popup.IsOpen && feedback.Text.Contains("执行端BGI未连接"));
+                Assert.Empty(tasks.Items);
+                Assert.False(tasks.IsHitTestVisible);
+                Assert.False(sync.IsEnabled);
+                Assert.Equal(0, catalogConnectCalls); // 打开弹窗和背景读取不会启动执行端 BGI。
+                var reload = FindVisualChild<Button>(popup.Child, b => Equals(b.Content, "重新读取 BGI"))!;
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => feedback.Text.Contains("测试：BGI 路径不可用") && reload.IsEnabled);
+                Assert.Equal(1, catalogConnectCalls);
+                Assert.False(bgiConnected);
+                Assert.Empty(tasks.Items);
+                Assert.False(tasks.IsHitTestVisible);
+                Assert.False(sync.IsEnabled);
+                Assert.DoesNotContain("已读取", feedback.Text);
+                Assert.Null(mainVm.PendingCenterOperation(target));
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => catalogConnectCalls == 2 && catalogConnectionPolls >= 2);
+                Assert.False(bgiConnected);
+                Assert.False(reload.IsEnabled);
+                Assert.Same(reload, basic.FindName("ResourceTasksRefreshButton"));
+                Assert.Empty(tasks.Items);
+                Assert.False(tasks.IsHitTestVisible);
+                Assert.False(sync.IsEnabled);
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Equal(2, catalogConnectCalls); // 等待启动期间重复点击不会再发起连接。
+                Assert.Equal(readsAtCatalogConnect, layoutReadCalls);
+                releaseCatalogConnection = true;
+                // 冷启动超过旧的十秒轮询预算，仍须等待同一操作终态再读取。
+                PumpUntil(window, () => bgiConnected && tasks.Items.Count == 3 && tasks.IsHitTestVisible,
+                    TimeSpan.FromSeconds(18));
+                Assert.True(reload.IsEnabled);
+                Assert.Equal(2, catalogConnectCalls);
+                reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                PumpUntil(window, () => reload.IsEnabled && tasks.IsHitTestVisible);
+                Assert.Equal(2, catalogConnectCalls); // 已连接时只读取任务，不再请求启动或连接。
                 Assert.Equal("执行端整龙 · 内部任务", ((TextBlock)basic.FindName("ResourceTasksTitle")).Text);
                 Assert.Equal(new[] { "回神像切换指定队伍", "锄地一条龙", "回神像切换指定队伍" },
                     tasks.Items.Cast<object>().Select(row => row.GetType().GetProperty("Name")!.GetValue(row)?.ToString()));
@@ -680,7 +752,6 @@ public sealed class ProductionTaskCenterEntryTests
                 ToggleTask(1, true);
                 PumpUntil(window, () => feedback.Text.Contains("配置已变化"));
                 Assert.Equal(3, resourceSaveCount);
-                var reload = FindVisualChild<Button>(popup.Child, b => Equals(b.Content, "重新读取 BGI"))!;
                 reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => tasks.IsHitTestVisible && sync.IsEnabled);
                 sync.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -692,6 +763,7 @@ public sealed class ProductionTaskCenterEntryTests
                 Assert.True(remote.TaskCenter.HasPendingRemoteOperation);
                 reload.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 PumpUntil(window, () => tasks.IsHitTestVisible);
+                Assert.Equal(2, catalogConnectCalls); // 保存结果未确认时仍可读取，不另发连接操作。
                 ToggleTask(2, false);
                 PumpUntil(window, () => feedback.Text.Contains("结果未确认"));
                 Assert.Equal(4, resourceSaveCount);
@@ -833,14 +905,14 @@ public sealed class ProductionTaskCenterEntryTests
         encoder.Save(stream);
     }
 
-    private static void PumpUntil(Window window, Func<bool> condition)
+    private static void PumpUntil(Window window, Func<bool> condition, TimeSpan? timeout = null)
     {
         var frame = new DispatcherFrame();
         var timer = new DispatcherTimer(DispatcherPriority.Background, window.Dispatcher)
         {
             Interval = TimeSpan.FromMilliseconds(10),
         };
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(8);
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(8));
         timer.Tick += (_, _) =>
         {
             if (condition() || DateTime.UtcNow >= deadline)

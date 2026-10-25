@@ -147,7 +147,7 @@ public partial class BasicTaskCenterView
     }
 
     private async void RefreshResourceTasksClick(object sender, RoutedEventArgs e)
-        => await ReloadResourceTasksAsync();
+        => await ReloadResourceTasksAsync(connectIfUnavailable: true);
 
     private async void SyncResourceTaskReferenceClick(object sender, RoutedEventArgs e)
     {
@@ -187,17 +187,32 @@ public partial class BasicTaskCenterView
         }
     }
 
-    private async Task ReloadResourceTasksAsync()
+    private async Task ReloadResourceTasksAsync(bool connectIfUnavailable = false)
     {
         if (_resourceTasksBusy || !TryRebindResourceTaskNode(out var host, out var node)) return;
         _resourceTasksBusy = true;
+        ResourceTasksRefreshButton.IsEnabled = false;
         ResourceTaskList.IsHitTestVisible = false;
         ResourceTaskSyncButton.IsEnabled = false;
         ResourceTasksFeedback.Foreground = Brushes.LightGray;
         ResourceTasksFeedback.Text = "正在读取 BGI 配置…";
         try
         {
-            var layout = await host.ReadResourceTaskLayoutAsync(node);
+            WorkflowResourceEditor.ResourceTaskLayout layout;
+            try { layout = await host.ReadResourceTaskLayoutAsync(node); }
+            catch (Exception ex) when (connectIfUnavailable && ex is not OperationCanceledException)
+            {
+                // 已连接时直接读回（包括保存回执未知时的核对）；只有显式重读失败才启动/重连。
+                if (!ResourceTasksPopup.IsOpen || !TryRebindResourceTaskNode(out var currentHost, out node)
+                    || !ReferenceEquals(host, currentHost)) return;
+                ResourceTasksFeedback.Text = host.IsRemoteCenter
+                    ? "正在启动或连接执行端 BGI，连接后将读取内部任务…"
+                    : "正在启动或连接 BGI，连接后将读取内部任务…";
+                await host.ConnectBgiForResourceTasksAsync();
+                if (!ResourceTasksPopup.IsOpen || !TryRebindResourceTaskNode(out currentHost, out node)
+                    || !ReferenceEquals(host, currentHost)) return;
+                layout = await host.ReadResourceTaskLayoutAsync(node);
+            }
             if (!ResourceTasksPopup.IsOpen || !TryRebindResourceTaskNode(out _, out _)) return;
             _resourceTaskLayout = layout;
             ReconcileResourceTaskRows(layout);
@@ -216,7 +231,11 @@ public partial class BasicTaskCenterView
             ResourceTasksFeedback.Text = _resourceTaskRows.Count == 0
                 ? ex.Message : ex.Message + "；列表保留上次显示，请重新读取。";
         }
-        finally { _resourceTasksBusy = false; }
+        finally
+        {
+            _resourceTasksBusy = false;
+            ResourceTasksRefreshButton.IsEnabled = true;
+        }
     }
 
     private void ReconcileResourceTaskRows(WorkflowResourceEditor.ResourceTaskLayout layout)
