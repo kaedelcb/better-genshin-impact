@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
 using System.Runtime.CompilerServices;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoDomain;
 using BetterGenshinImpact.GameTask.AutoDomain.Model;
+using BetterGenshinImpact.GameTask.AutoDomain.TrainingGuide;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoLeyLineOutcrop;
 using BetterGenshinImpact.GameTask.AutoStygianOnslaught;
@@ -26,6 +28,36 @@ public class ResinBudgetNormalizationTests
     {
         // 绕过调用 TaskContext 的构造器，仅设置预算构建读取的自动属性
         return (AutoDomainParam)RuntimeHelpers.GetUninitializedObject(typeof(AutoDomainParam));
+    }
+
+    [Fact]
+    public void TrainingGuide_LegacyDomainChoiceAndResinFieldsSurviveConfigRoundTrip()
+    {
+        const string oldConfig = """{"DomainName":"根据提升指南选择秘境","SpecifyResinUse":true,"OriginalResin40UseCount":2,"ResinOrder":["原粹树脂"],"ResinCount":2}""";
+        var config = JsonSerializer.Deserialize<AutoDomainConfig>(oldConfig)!;
+
+        Assert.Equal(AutoDomainTask.TrainingGuideOption, config.DomainName);
+        Assert.True(config.TrainingGuideCalculateRunsEnabled);
+        Assert.True(config.TrainingGuideRewardRecognitionEnabled);
+        Assert.True(config.SpecifyResinUse);
+        Assert.Equal(2, config.OriginalResin40UseCount);
+
+        using var saved = JsonDocument.Parse(JsonSerializer.Serialize(config));
+        Assert.Equal("原粹树脂", saved.RootElement.GetProperty("ResinOrder")[0].GetString());
+        Assert.Equal(2, saved.RootElement.GetProperty("ResinCount").GetInt32());
+    }
+
+    [Fact]
+    public void TrainingGuide_MaterialDropsMeetTargetWithoutSpendingRemainingBudget()
+    {
+        var material = TrainingGuideMaterialCatalog.Find("「乐园」的教导")!;
+        var plan = new TrainingGuideFamilyPlan([new TrainingGuideMaterialReading(material, 0, 10, true)]);
+        var initialBudget = plan.RemainingInitialResin(0);
+
+        Assert.True(initialBudget is > 20);
+        Assert.True(plan.ApplyRewards(new Dictionary<string, int> { [material.Name] = 10, ["摩拉"] = 100 }, 20));
+        Assert.Equal(0, plan.RemainingResin(0));
+        Assert.Equal(initialBudget - 20, plan.RemainingInitialResin(0));
     }
 
     [Fact]
