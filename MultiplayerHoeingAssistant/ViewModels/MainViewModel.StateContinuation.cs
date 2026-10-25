@@ -222,7 +222,6 @@ public partial class MainViewModel
         var gapResume = false;
         var stoppedPlan = runId is null;
         var associatedResume = runId is null;
-        string? lastWaiting = null;
 
         string? CompletionRequestKey()
         {
@@ -259,10 +258,9 @@ public partial class MainViewModel
 
         void Waiting(string message)
         {
-            if (lastWaiting == message) return;
-            lastWaiting = message;
-            AddLog("[绑定完成动作] " + message);
-            UpdateHoeingBatchStatus(batch, "completionPending", message);
+            // Retain local observations during an outage; the control loop publishes after contact resumes.
+            if (batch.RecordCompletionPendingMessage(message))
+                AddLog("[绑定完成动作] " + message);
         }
 
         async Task<bool> Reconcile(CancellationToken token)

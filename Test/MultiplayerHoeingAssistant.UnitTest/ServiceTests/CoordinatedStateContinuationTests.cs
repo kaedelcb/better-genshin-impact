@@ -25,6 +25,7 @@ public sealed class CoordinatedStateContinuationTests
         internal readonly List<string> SubmittedKeys = [];
         internal readonly List<(string Phase, string Message)> VisibleStatuses = [];
         internal Func<int, string>? PreparationFailureMessage;
+        internal Func<BgiEpoch, CancellationToken, Task>? FinalizeOverride;
         internal volatile bool HoldPrepare, LoseAuthority, LoseReads, AllowFinish, LoseAcknowledgements;
         internal bool OrdinaryRegistryEmpty, OrdinaryRegistryUnavailable, LoseFirstReply, DropFirstRequest;
         internal bool ManualStopBeforeSend, ManualStopFenceReply;
@@ -37,12 +38,13 @@ public sealed class CoordinatedStateContinuationTests
         private bool _cancelled;
         private long _revision;
 
-        internal Run(bool serverContinuation = false)
+        internal Run(bool serverContinuation = false, bool priorityRecovery = false)
         {
             string[] members = ["self", "peer1", "peer2", "peer3"];
             Batch = new(new CoordinatedBatchSnapshot("state-continuation", 43, 0, 0, 0, "registering", "")
             {
                 Protocol = "hoeing.start.v2", ParticipantUids = members, StateContinuation = serverContinuation,
+                PriorityRecovery = priorityRecovery,
                 Bindings = members.ToDictionary(uid => uid,
                     _ => (IReadOnlyList<CoordinatedHoeingBinding>)[new("联机锄地", "group")])
             }, "self", new TaskConflictPolicySettings());
@@ -130,7 +132,11 @@ public sealed class CoordinatedStateContinuationTests
                 return Task.CompletedTask;
             },
             ReleaseTicket = (_, _, _) => { Interlocked.Increment(ref Releases); return Task.FromResult(true); },
-            FinalizeLocal = (_, _) => { Interlocked.Increment(ref Finalizations); return Task.CompletedTask; },
+            FinalizeLocal = (epoch, ct) =>
+            {
+                Interlocked.Increment(ref Finalizations);
+                return FinalizeOverride?.Invoke(epoch, ct) ?? Task.CompletedTask;
+            },
             OriginalProcessAlive = _ => true,
             RequireFinishEvidence = true,
             Status = (phase, message) =>
@@ -247,6 +253,103 @@ public sealed class CoordinatedStateContinuationTests
         Assert.False(r.Batch.ControlExecutionEnded); Assert.Null(r.Batch.RemainingRunningControlBudget);
         r.LoseAuthority = false; r.LoseReads = false; r.AllowFinish = true;
         Assert.True(await task); Assert.Equal(1, r.Submissions); Assert.Equal(1, r.Executions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompletedBatchReconnectRestoresRunningSuccessorWithoutReplayingItOrHidingTheOutage(bool priorityRecovery)
+    {
+        var r = new Run(priorityRecovery: priorityRecovery) { AllowFinish = true };
+        var successorJob = Guid.NewGuid().ToString("N");
+        var starts = 0; var prepares = 0; var queries = 0; var cancels = 0; var acknowledgements = 0;
+        var finishSuccessor = 0; var holdQuery = 0;
+        var queryHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseQuery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        r.Batch.ConfigurePolicyCancellation(_ => { Interlocked.Increment(ref cancels); return Task.FromResult(true); });
+        r.FinalizeOverride = (epoch, ct) => MainViewModel.RunCompletionContinuationAsync(r.Batch, new()
+        {
+            RequireAuthority = () => ct.ThrowIfCancellationRequested(), RetainedResult = true,
+            Prepare = _ => { Interlocked.Increment(ref prepares); return Task.FromResult(true); },
+            Start = _ =>
+            {
+                Interlocked.Increment(ref starts);
+                r.Batch.PolicyStartAttempted = true;
+                return Task.FromResult(new CommandResult
+                {
+                    Status = "success", JobId = successorJob, TargetProcessId = epoch.ProcessId,
+                    TargetStartTicksUtc = epoch.StartTicksUtc.ToString(),
+                });
+            },
+            Query = async token =>
+            {
+                Interlocked.Increment(ref queries);
+                if (Volatile.Read(ref holdQuery) != 0)
+                {
+                    queryHeld.TrySetResult();
+                    await releaseQuery.Task.WaitAsync(token);
+                }
+                var finished = Volatile.Read(ref finishSuccessor) != 0;
+                return new BgiTaskQueueStatus
+                {
+                    TaskHandle = successorJob, IdempotencyKey = r.Batch.PolicyRequestKey, Epoch = epoch,
+                    Status = finished ? "completed" : "running", ExecutionExitConfirmed = finished,
+                };
+            },
+            Reconcile = _ => Task.FromResult(true),
+            Acknowledge = (terminal, _) =>
+            {
+                Assert.Equal(successorJob, terminal.TaskHandle);
+                Assert.Equal(r.Batch.PolicyRequestKey, terminal.IdempotencyKey);
+                Interlocked.Increment(ref acknowledgements);
+                return Task.FromResult(true);
+            },
+            Waiting = message => r.Batch.RecordCompletionPendingMessage(message),
+            Delay = token => Task.Delay(2, token),
+        }, ct);
+
+        var pending = r.Start();
+        try
+        {
+            await Until(() => r.Batch.CompletionPendingMessage == MemberViewModel.PostHoeingRunningMessage);
+            var originalKey = r.Batch.PolicyRequestKey;
+            r.LoseAuthority = true;
+            await Until(() => r.Batch.Phase == "reconciling"
+                && r.Batch.Message == "控制通道暂不可用，保留原任务并继续连接");
+
+            var queriesAtLoss = Volatile.Read(ref queries);
+            await Until(() => Volatile.Read(ref queries) >= queriesAtLoss + 3);
+            Assert.Equal("reconciling", r.Batch.Phase);
+            Assert.Equal("控制通道暂不可用，保留原任务并继续连接", r.Batch.Message);
+            Assert.False(pending.IsCompleted);
+
+            Volatile.Write(ref holdQuery, 1);
+            await queryHeld.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var queriesAtRecovery = Volatile.Read(ref queries);
+            r.LoseAuthority = false;
+            await Until(() => r.Batch.Phase == "completionPending"
+                && r.Batch.Message == MemberViewModel.PostHoeingRunningMessage);
+            Assert.Equal(queriesAtRecovery, Volatile.Read(ref queries)); // The server reply restores the saved observation.
+            Assert.Equal(originalKey, r.Batch.PolicyRequestKey);
+            Assert.Equal(successorJob, r.Batch.PolicyExecution!.JobId);
+            Assert.True(r.Batch.LocalCompletionReady);
+            Assert.False(r.Batch.LocalExecutionReleased);
+            Assert.False(r.Batch.IsCancellationRequested);
+            Assert.Equal(1, Volatile.Read(ref starts));
+            Assert.Equal(0, Volatile.Read(ref cancels));
+
+            Volatile.Write(ref finishSuccessor, 1);
+            releaseQuery.TrySetResult();
+            Assert.True(await pending);
+            Assert.Equal(1, prepares); Assert.Equal(1, starts); Assert.Equal(1, acknowledgements);
+            Assert.Equal(1, r.Submissions); Assert.Equal(1, r.Executions); Assert.Equal(1, r.Finalizations);
+            Assert.Equal(0, r.Cancels); Assert.Equal(0, r.Releases); Assert.Equal(0, cancels);
+        }
+        finally
+        {
+            releaseQuery.TrySetResult();
+            if (!pending.IsCompleted) { r.Batch.Cancel(); await pending; }
+        }
     }
 
     [Theory]

@@ -424,7 +424,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 if (team.Phase == "aborted" && batch.PreserveLocalSuccess(team.Reason))
                 {
                     batch.TeamFailureReason = team.Reason;
-                    if (!await ObserveLocalFinalizationAsync())
+                    if (!await ObserveLocalFinalizationAsync(publishStatus: true))
                     {
                         await Task.Delay(io.PollInterval, ct);
                         continue;
@@ -453,7 +453,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                         || team.Index != batch.Bindings.Count || !batch.TakenOver)
                         throw new InvalidOperationException("服务端完成与本端任务终态不一致");
                     batch.CoordinatedSucceeded = true;
-                    if (!await ObserveLocalFinalizationAsync())
+                    if (!await ObserveLocalFinalizationAsync(publishStatus: true))
                     {
                         await Task.Delay(io.PollInterval, ct);
                         continue;
@@ -541,7 +541,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     {
                         ObservationUnavailable("原任务观察暂不可用：" + ex.Message);
                     }
-                    if (batch.LocalCompletionReady && !batch.PriorityRecoveryEnabled) await ObserveLocalFinalizationAsync();
+                    if (batch.LocalCompletionReady && !batch.PriorityRecoveryEnabled)
+                        await ObserveLocalFinalizationAsync(publishStatus: true);
                 }
                 else throw new InvalidOperationException("未知联机批次阶段: " + team.Phase);
                 await Task.Delay(io.PollInterval, ct);
@@ -575,7 +576,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         }
     }
 
-    private async Task<bool> ObserveLocalFinalizationAsync()
+    private async Task<bool> ObserveLocalFinalizationAsync(bool publishStatus = false)
     {
         if (!batch.LocalCompletionReady || io.FinalizeLocal is null) return true;
         if (batch.PriorityRecoveryEnabled && !batch.CoordinatedSucceeded) return false;
@@ -586,7 +587,14 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             batch.Cts.Token.ThrowIfCancellationRequested();
             batch.MarkLocalExecutionReleased(); // The callback may finish after team contact was lost.
         });
-        if (!finalize.IsCompleted) return false;
+        if (!finalize.IsCompleted)
+        {
+            // A local query alone must not clear an unavailable control-channel warning.
+            if (publishStatus)
+                io.Status("completionPending", batch.CompletionPendingMessage
+                    ?? "联机锄地已完成，正在确认绑定完成动作状态");
+            return false;
+        }
         await finalize;
         batch.Cts.Token.ThrowIfCancellationRequested();
         batch.MarkLocalExecutionReleased();

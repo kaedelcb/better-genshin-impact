@@ -673,6 +673,10 @@ public sealed class OnlineHoeingBatch
     public string Outcome { get; set; } = "unknown";
     public string? FailureReason { get; set; }
     internal string? CompletionActionWarning { get; set; }
+    private string? _completionPendingMessage;
+    internal string? CompletionPendingMessage => Volatile.Read(ref _completionPendingMessage);
+    internal bool RecordCompletionPendingMessage(string message) =>
+        Interlocked.Exchange(ref _completionPendingMessage, message) != message;
     public string? TakeoverTicket { get; set; }
     public bool CleanupConfirmed { get; set; }
     public bool LocalCleanupConfirmed { get; set; }
