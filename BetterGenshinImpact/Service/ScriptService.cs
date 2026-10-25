@@ -189,11 +189,11 @@ public partial class ScriptService : IScriptService
         // }
 
         // 没启动时候，启动截图器
-        await StartGameTask();
-        if (CancellationContext.Instance.IsCancellationRequested)
+        var startupResult = await StartGameTask();
+        if (startupResult != TaskRunResult.Ran)
         {
-            _logger.LogInformation("配置组 {Name} 在启动阶段被取消", groupName);
-            return TaskRunResult.Cancelled;
+            scope.Observe(startupResult);
+            return startupResult;
         }
         
         
@@ -798,93 +798,4 @@ public partial class ScriptService : IScriptService
     private static partial Regex DispatcherAddTimerRegex();
 
 
-    public static async Task StartGameTask(bool waitForMainUi = true)
-    {
-        // 没启动时候，启动截图器
-        // 静态方法无法构造注入（调用方包括直接 new 出来的 TaskRunner），这里从容器取服务
-        var gameRuntimeService = App.GetService<GameRuntimeService>()!;
-        if (!gameRuntimeService.IsRunning)
-        {
-            await gameRuntimeService.StartAsync();
-
-            if (waitForMainUi)
-            {
-                await Task.Run(async () =>
-                {
-                    await Task.Delay(200);
-                    var first = true;
-                    var sw = Stopwatch.StartNew();
-                    var loseFocusCount = 0;
-                    double lastAttemptSeconds = 0;
-                    while (true)
-                    {
-                        if (CancellationContext.Instance.IsCancellationRequested)
-                        {
-                            TaskControl.Logger.LogInformation("检测到停止指令，退出启动等待");
-                            return;
-                        }
-
-                        if (!gameRuntimeService.IsRunning || !TaskContext.Instance().IsInitialized)
-                        {
-                            await Task.Delay(500);
-                            continue;
-                        }
-
-                        using var content = TaskControl.CaptureToRectArea();
-                        if (Bv.IsInMainUi(content) || Bv.IsInAnyClosableUi(content) || Bv.IsInDomain(content))
-                        {
-                            return;
-                        }
-
-                        if (first)
-                        {
-                            first = false;
-                            TaskControl.Logger.LogInformation("当前不在游戏主界面，等待进入主界面后执行任务...");
-                            TaskControl.Logger.LogInformation("如果你已经在游戏内的其他界面，请自行退出当前界面（ESC），或是30秒后将程序将自动尝试进入主界面，使当前任务能够继续运行！");
-                        }
-
-                        await Task.Delay(500);
-                        if (sw.Elapsed.TotalSeconds >= 30)
-                        {
-                            var totalSeconds = sw.Elapsed.TotalSeconds;
-                            if (totalSeconds - lastAttemptSeconds >= 30)
-                            {
-                                lastAttemptSeconds = totalSeconds;
-                                var retryCount = (int)((totalSeconds - 30) / 30) + 1;
-                                TaskControl.Logger.LogInformation($"尝试进入主界面（第{retryCount}次），下次尝试约30秒后...");
-
-                                var returnTask = new ReturnMainUiTask();
-                                try
-                                {
-                                    returnTask.Start(CancellationToken.None).Wait(5000);
-                                }
-                                catch (Exception ex)
-                                {
-                                    TaskControl.Logger.LogWarning($"返回主界面失败: {ex.Message}");
-                                }
-                            }
-
-                            //防止自启动游戏后因为一些原因失焦，导致一直卡住
-                            if (!SystemControl.IsGenshinImpactActiveByProcess())
-                            {
-                                loseFocusCount++;
-                                if (loseFocusCount>50 && loseFocusCount<100)
-                                {
-                                    SystemControl.MinimizeAndActivateWindow(TaskContext.Instance().GameHandle);
-                                }
-                                SystemControl.ActivateWindow();
-                            }
-
-                            //自启动游戏，如果鼠标在游戏外面，将无法自动开门，这里尝试移动到游戏界面
-                            if (sw.Elapsed.TotalSeconds < 200)
-                            {
-                                GlobalMethod.MoveMouseTo(300, 300);
-                            }
-
-                        }
-                    }
-                });
-            }
-        }
-    }
 }

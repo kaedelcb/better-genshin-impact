@@ -844,12 +844,7 @@ public partial class OneDragonFlowViewModel : ViewModel
         int enabledTaskCountall = taskListCopy.Count(t => t.IsEnabled);
         _logger.LogInformation($"启用任务总数量: {enabledTaskCountall}");
 
-        await ScriptService.StartGameTask();
-        if (CancellationContext.Instance.IsCancellationRequested)
-        {
-            _logger.LogInformation("一条龙在启动阶段被取消");
-            return;
-        }
+        RequireDragonStep(await ScriptService.StartGameTask());
 
         SaveConfig();
 

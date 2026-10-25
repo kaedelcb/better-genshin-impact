@@ -283,11 +283,11 @@ public class TaskRunner
         // 没启动的时候先启动
         bool waitForMainUi = soloTask.Name != "自动七圣召唤" && !soloTask.Name.Contains("自动音游") &&
                              !soloTask.Name.Contains("幽境危战");
-        await ScriptService.StartGameTask(waitForMainUi);
-        if (CancellationContext.Instance.IsCancellationRequested)
+        var startupResult = await ScriptService.StartGameTask(waitForMainUi);
+        if (startupResult != TaskRunResult.Ran)
         {
-            _logger.LogInformation("独立任务在启动阶段被取消: {Name}", soloTask.Name);
-            ExecutionScope.Current!.Observe(TaskRunResult.Cancelled);
+            _logger.LogInformation("独立任务未通过启动准备: {Name}，结果: {Result}", soloTask.Name, startupResult);
+            ExecutionScope.Current!.Observe(startupResult);
             CancellationContext.Instance.Clear();
             return;
         }
