@@ -2720,6 +2720,12 @@ public sealed class StartupStepViewModel : ViewModelBase
         set { Model.Arguments = value; Changed(); }
     }
 
+    public string WindowsUserName
+    {
+        get => Model.WindowsUserName;
+        set { Model.WindowsUserName = value; Changed(); }
+    }
+
     public string WaitSecondsText
     {
         get => Model.WaitSeconds.ToString();
@@ -2973,7 +2979,9 @@ public sealed class StartupStepViewModel : ViewModelBase
             + (model.KillBeforeStart ? "，先关闭再启动" : ""),
         StartupStepKinds.StopBgi => "强制结束本会话 BGI 进程",
         StartupStepKinds.StartGame or StartupStepKinds.StartProgram =>
-            string.IsNullOrWhiteSpace(model.Path) ? "（未填写程序路径）" : model.Path,
+            (string.IsNullOrWhiteSpace(model.Path) ? "（未填写程序路径）" : model.Path)
+            + (model.Kind == StartupStepKinds.StartProgram && !string.IsNullOrWhiteSpace(model.WindowsUserName)
+                ? $"（Windows 用户：{model.WindowsUserName.Trim()}）" : ""),
         StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(model.Arguments) ? "（未填写命令）" : model.Arguments,
         StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(model.ProcessName) ? "（未填写进程名）" : $"结束进程 {model.ProcessName}",
         StartupStepKinds.Wait => $"等待 {model.WaitSeconds} 秒",

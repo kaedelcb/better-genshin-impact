@@ -173,6 +173,10 @@ public class StartupStep
     [JsonPropertyName("arguments")]
     public string Arguments { get; set; } = "";
 
+    /// <summary>第三方程序的目标 Windows 账号；留空沿用当前账号，填写时只使用该账号已登录的交互会话。</summary>
+    [JsonPropertyName("windowsUserName")]
+    public string WindowsUserName { get; set; } = "";
+
     /// <summary>等待秒数（wait 用）。</summary>
     [JsonPropertyName("waitSeconds")]
     public int WaitSeconds { get; set; } = 10;

@@ -724,6 +724,26 @@
                                     </StackPanel>
                                 </WrapPanel>
 
+                                <!-- startProgram：填写账号后自动进入该账号既有的 Windows 桌面。 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startProgram">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="Windows 用户名" Style="{StaticResource FieldLabel}" Width="100"/>
+                                    <TextBox Text="{Binding WindowsUserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                             Style="{StaticResource GoldInput}" Width="260"
+                                             ToolTip="留空使用当前用户；填写登录账号名（如 YS 或 计算机名\YS），自动在该用户已登录的桌面启动，无需手动建立计划任务。跨用户启动需要助手具有管理员权限。"/>
+                                    <TextBlock Text="留空：当前用户；填写：该用户已登录的桌面（跨用户需管理员权限）"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center"
+                                               Margin="8,0,0,0" TextWrapping="Wrap" MaxWidth="380"/>
+                                </WrapPanel>
+
                                 <!-- manualConfirm：提示内容 + 超时 -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
@@ -1061,6 +1081,7 @@
                                         <ComboBoxItem Content="挂载触发器" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
                                     <CheckBox Content="移交成功后继续后续启动步骤" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              Style="{DynamicResource GuildCheckBox}"
                                               IsChecked="{Binding ContinueAfterTaskCenterHandoff, Mode=TwoWay}"
                                               ToolTip="受理后继续启动第三方程序、挂载电子狗等步骤，不等待计划执行完毕。拒绝、结果待确认或停止时不会继续；旧配置默认关闭。BGI 启停及任务执行仍由任务中心负责。"/>
                                 </WrapPanel>

@@ -39,6 +39,14 @@ public partial class App : Application
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // 跨用户启动短进程只处理一次性启动请求，不触碰该用户的助手单例、配置或自动启动流程。
+        if (WindowsUserProgramLauncher.IsHelperInvocation(e.Args))
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(await WindowsUserProgramLauncher.RunHelperAsync(e.Args));
+            return;
+        }
+
         // 配置提权进程只处理当前账户的登录任务，不进入单例、配置或业务初始化。
         if (WindowsAutoStartupRegistration.TryHandleConfigurationArguments(e.Args, out var configurationExitCode))
         {

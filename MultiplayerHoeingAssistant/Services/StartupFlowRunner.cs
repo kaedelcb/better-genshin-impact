@@ -37,6 +37,7 @@ public sealed class StartupFlowRunner
     private readonly Func<ControlStatus?> _statusProvider;
     private readonly Func<StartupStep, CancellationToken, Task<ControlStatus?>> _targetStatusProvider;
     private readonly Action<string> _log;
+    private readonly Func<string, string, string, CancellationToken, Task<string>> _userProgramLauncher;
 
     /// <summary>
     /// 节点运行态回报（可选，由宿主 VM 设置）：每个节点 执行前→Running、执行后→终态，
@@ -60,7 +61,8 @@ public sealed class StartupFlowRunner
         Func<StartupSourceIntent, bool, CancellationToken, Task<WorkflowStopAuthorityRecord?>>? sourceAuthorityProvider = null,
         Action<StartupStep, StartupSourceIntent>? armTimerWithSource = null,
         Action<StartupStep, StartupSourceIntent>? armWatchdogWithSource = null,
-        Action<StartupStep, StartupSourceIntent>? armLogWithSource = null)
+        Action<StartupStep, StartupSourceIntent>? armLogWithSource = null,
+        Func<string, string, string, CancellationToken, Task<string>>? userProgramLauncher = null)
     {
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -75,6 +77,7 @@ public sealed class StartupFlowRunner
         _armTimerWithSource = armTimerWithSource;
         _armWatchdogWithSource = armWatchdogWithSource;
         _armLogWithSource = armLogWithSource;
+        _userProgramLauncher = userProgramLauncher ?? WindowsUserProgramLauncher.StartAsync;
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
@@ -568,6 +571,12 @@ public sealed class StartupFlowRunner
                 case StartupStepKinds.StartGame:
                 case StartupStepKinds.StartProgram:
                 {
+                    if (step.Kind == StartupStepKinds.StartProgram && !string.IsNullOrWhiteSpace(step.WindowsUserName))
+                    {
+                        var result = await _userProgramLauncher(step.Path, step.Arguments, step.WindowsUserName.Trim(), ct);
+                        _log($"[槲寄生] {indent}{result}");
+                        return true;
+                    }
                     return StartProcess(step, display, indent);
                 }
                 case StartupStepKinds.KillProgram:
@@ -619,6 +628,7 @@ public sealed class StartupFlowRunner
         }
         catch (Exception ex)
         {
+            ctx.FailureNote = ex.Message;
             _log($"[槲寄生] {indent}节点「{display}」执行异常：{ex.Message}");
             return false;
         }
