@@ -96,6 +96,7 @@ public sealed class StartupFlowRunner
         public StartupTriggerInfo? Trigger { get; init; }
         public StartupSourceIntent? SourceIntent { get; init; }
         public bool PassiveTriggerMounted { get; set; }
+        public bool TaskCenterAccepted { get; set; }
         public List<string> BgiTaskCommitFacts { get; } = [];
         public string? FailureNote { get; set; }
         /// <summary>执行身份短码（日志/回报用，并发执行可区分，R4.9 §7）。</summary>
@@ -229,7 +230,7 @@ public sealed class StartupFlowRunner
                 _log($"[槲寄生] {indent}节点「{display}」执行未成功{(note is null ? "" : $"：{note}")}，继续后续节点");
                 Report(step, NodeRunState.Failed, note);
             }
-            else
+            else if (step.Kind != StartupStepKinds.EnterTaskCenter)
             {
                 Report(step, NodeRunState.Success);
             }
@@ -425,6 +426,12 @@ public sealed class StartupFlowRunner
                 ctx.FailureNote = "监控端来源不能执行本机 BGI 动作";
                 return false;
             }
+            if (ctx.TaskCenterAccepted && step.Kind is
+                (StartupStepKinds.StartBgi or StartupStepKinds.StopBgi or StartupStepKinds.StartGroup or StartupStepKinds.StartOneClick))
+            {
+                ctx.FailureNote = "已移交任务中心，BGI 启停及任务执行由原计划负责；本节点未执行";
+                return false;
+            }
             switch (step.Kind)
             {
                 case StartupStepKinds.StartBgi:
@@ -461,6 +468,15 @@ public sealed class StartupFlowRunner
                     // R4.9 §5/§7：真实移交。校验顺序与宿主一致（三轮 重要5：显式未知 mode 先于空目标检查，
                     // 不允许空目标短路掩盖未知语义）；链继续路径（ConfigMissing）由 RunChainAsync 经 FailureNote 单处回报（三轮 重要3）
                     var handoff = await ExecuteHandoffAsync(step, display, indent, ct, ctx);
+                    if (step.ContinueAfterTaskCenterHandoff
+                        && handoff.Outcome is HandoffOutcome.Accepted or HandoffOutcome.AlreadyAccepted
+                        && handoff.ReasonCode is not (HandoffReasonCodes.Unknown or HandoffReasonCodes.NotReady))
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        ctx.TaskCenterAccepted = true;
+                        _log($"[槲寄生] 任务中心已受理，继续后续启动步骤（执行 {ctx.ShortId}）");
+                        return true;
+                    }
                     // Accepted/AlreadyAccepted 或 Rejected+TerminateChain：终态已在 ExecuteHandoffAsync 单处回报，
                     // 抛控制流逐层终止本启动链（含分支回溯）——后续节点（含 StopBgi）一律不执行
                     if (handoff.Outcome != HandoffOutcome.Rejected || handoff.TerminateChain)
@@ -626,6 +642,12 @@ public sealed class StartupFlowRunner
             _log($"[槲寄生] {indent}「{display}」未配置目标任务中心流程，跳过移交（旧配置兼容，继续后续节点，执行 {ctx.ShortId}）");
             return StartupHandoffResult.Rejected(HandoffReasonCodes.ConfigMissing, "未配置目标任务中心流程");
         }
+        if (ctx.TaskCenterAccepted)
+        {
+            var duplicate = StartupHandoffResult.Rejected(HandoffReasonCodes.MixedUsage, "本启动链已移交任务中心，未再次移交");
+            Report(step, NodeRunState.Failed, duplicate.Reason);
+            return duplicate;
+        }
         // 混用检测（§6.1 主证据）：本执行已直接提交 BGI 任务 + start/resume → 拒绝；armTrigger 挂载等待不占槽位，不受限
         if (step.TaskCenterHandoffMode != StartupHandoffModes.ArmTrigger && ctx.BgiTaskCommitFacts.Count > 0)
         {
@@ -723,6 +745,9 @@ public sealed class StartupFlowRunner
     /// <summary>执行会直接提交 BGI 任务的命令并登记提交事实（R4.9 §6.1 混用检测主证据：成功或结果不确定均计，明确失败不计）。</summary>
     private async Task<CommandResult> ExecuteBgiTaskCommitAsync(RunContext ctx, string display, string cmd, Dictionary<string, object>? p)
     {
+        if (ctx.TaskCenterAccepted)
+            return new CommandResult { Status = "failed", ErrorCode = "mixed_usage",
+                Message = "已移交任务中心，后续启动步骤不能直接提交另一 BGI 任务" };
         try
         {
             var r = await _bgiExecutor(cmd, p);

@@ -1038,7 +1038,7 @@
                                               DisplayMemberPath="Display" SelectedValuePath="WorkflowId"
                                               SelectedValue="{Binding TaskCenterFlowId, Mode=TwoWay}"
                                               ToolTip="移交的目标任务中心流程（候选来自任务中心可用流程，仅选择体验，执行时由任务中心权威校验；目标缺失/隔离保留原身份显示「不可用」，不自动改选）"/>
-                                    <TextBlock Text="（受理成功/已受理即终止本启动链，后续节点不再执行；通常放在主流程末尾）"
+                                    <TextBlock Text="（默认受理后结束启动流程；需要执行后面的程序或电子狗时，勾选下方继续选项）"
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                 </WrapPanel>
                                 <!-- enterTaskCenter 第二行：移交语义（R4.9 §5 两行布局，三轮 S2） -->
@@ -1060,6 +1060,9 @@
                                         <ComboBoxItem Content="恢复既有运行" Style="{StaticResource GoldComboItem}"/>
                                         <ComboBoxItem Content="挂载触发器" Style="{StaticResource GoldComboItem}"/>
                                     </ComboBox>
+                                    <CheckBox Content="移交成功后继续后续启动步骤" Margin="12,0,0,0" VerticalAlignment="Center"
+                                              IsChecked="{Binding ContinueAfterTaskCenterHandoff, Mode=TwoWay}"
+                                              ToolTip="受理后继续启动第三方程序、挂载电子狗等步骤，不等待计划执行完毕。拒绝、结果待确认或停止时不会继续；旧配置默认关闭。BGI 启停及任务执行仍由任务中心负责。"/>
                                 </WrapPanel>
                                 <WrapPanel>
                                     <WrapPanel.Style>

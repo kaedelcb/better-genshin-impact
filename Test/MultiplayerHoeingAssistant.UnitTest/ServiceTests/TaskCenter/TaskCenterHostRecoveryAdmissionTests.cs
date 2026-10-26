@@ -384,6 +384,52 @@ public class TaskCenterHostRecoveryAdmissionTests : IDisposable
     // TTL=2s+Delay 2300ms（越过到期点仅 300ms 余量）：恰好压线的续期也会被「原生到期点已越过」判定捕获——有心跳续期才能存续。
 
     [Fact]
+    public async Task LegacyCompatibilityLog_CallbackDoesNotHoldSchedulerGate()
+    {
+        var user = Path.Combine(_dir, "isolated-user");
+        Directory.CreateDirectory(Path.Combine(user, "OneDragon"));
+        File.WriteAllText(Path.Combine(user, "OneDragon", "broken.json"), "{");
+        object? gate = null; var logged = 0;
+        var host = new TaskCenterHost(Path.Combine(_dir, "log-flows"), Path.Combine(_dir, "log-runs"),
+            Path.Combine(_dir, "log-catalog.json"), () => null, message =>
+            {
+                Assert.NotNull(gate); Assert.False(Monitor.IsEntered(gate!)); logged++;
+            }, null, () => (true, null));
+        gate = typeof(TaskCenterHost).GetField("_gate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host);
+        try { host.EnsureLegacyCompatibility(user); Assert.True(logged > 0); }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Heartbeat_DoesNotWaitForBusinessGate_EvenWithPendingWake(bool pending)
+    {
+        var flow = SeedFlow("心跳不受界面阻塞");
+        var host = MakeWiredHost(new FakeBoundary(), new TaskCenterAdmissionSeams { OwnershipTtlSeconds = 2 });
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        Task? holder = null;
+        try
+        {
+            Assert.True((await host.StartWorkflowAsync(flow)).Ok);
+            await WaitUntilAsync(() => !host.IsDriving(flow));
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var gate = typeof(TaskCenterHost).GetField("_gate", flags)!.GetValue(host)!;
+            if (pending) typeof(TaskCenterHost).GetField("_priorityWaiterWakePending", flags)!.SetValue(host, 1);
+            holder = Task.Run(() => { lock (gate) { entered.Set(); release.Wait(TimeSpan.FromSeconds(10)); } });
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(3)));
+            await Task.Delay(3000); // 越过完整 TTL；旧实现此时心跳已卡在业务锁。
+            host.Runs.VerifyBoundOwner();
+        }
+        finally
+        {
+            release.Set(); if (holder is not null) await holder;
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Fact]
     public async Task HeartbeatKeepsOwnership_BeyondTtl_SubsequentAdmissionWorks()
     {
         var flowA = SeedFlow("心跳流程A");

@@ -1335,7 +1335,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         StateText = run.State switch
         {
             WorkflowRunState.Planned => driving ? "正在准备" : "已计划",
-            WorkflowRunState.Running => "运行中",
+            WorkflowRunState.Running => driving ? "运行中" : "执行已中断 · 等待核对",
             WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
             WorkflowRunState.LocalWaitParking => run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
                 ? "等待空闲 · 按优先级接续" : "等待确认 · 可恢复或停止",
@@ -1350,7 +1350,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         {
             WorkflowRunState.Unknown => "上次任务结果未知，当前计划已禁止重复启动；请保留未确认历史并删除旧计划后新建计划。",
             WorkflowRunState.Planned when driving => "任务正在准备；需要取消时点击「停止」。",
-            WorkflowRunState.Running => "任务正在执行；需要结束时点击「停止」。",
+            WorkflowRunState.Running => driving ? "任务正在执行；需要结束时点击「停止」。"
+                : "计划推进已中断，当前节点仅为最后记录；请核对恢复或停止结果，未确认前不会重跑。",
             WorkflowRunState.Paused => "任务已暂停；准备继续时点击「恢复」。",
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
             WorkflowRunState.LocalWaitParking => "任务正在等待可用执行位置；可继续等待，或点击「停止」结束本次计划。",
@@ -1362,7 +1363,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         StateColor = run.State switch
         {
             WorkflowRunState.Unknown => "#E4B86A",
-            WorkflowRunState.Running => "#75B59F",
+            WorkflowRunState.Running => driving ? "#75B59F" : "#E4B86A",
             WorkflowRunState.Paused or WorkflowRunState.Interrupted or WorkflowRunState.OnlineHoeingParking => "#D2B66F",
             WorkflowRunState.Completing => "#AAB6C5",
             _ => "#75B59F",

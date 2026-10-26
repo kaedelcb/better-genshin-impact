@@ -10,6 +10,7 @@ public sealed partial class TaskCenterHost
     public LegacyCompatibilityResult EnsureLegacyCompatibility(string? userRoot)
     {
         if (string.IsNullOrWhiteSpace(userRoot)) return new(0, 0, []);
+        LegacyCompatibilityResult result;
         lock (_gate)
         {
             if (_shutdown) return new(0, 0, ["任务中心正在关闭，未读取旧计划"]);
@@ -23,20 +24,21 @@ public sealed partial class TaskCenterHost
                 var stamp = userRoot + "\n" + string.Join("\n", paths.Select(p => p + ":" + WorkflowStore.HashFileBytes(p)));
                 if (_lastLegacyCompatibilityStamp == stamp) return new(0, 0, []);
                 var indexRoot = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_runsDirPath))!, "legacy-compatibility");
-                var result = LegacyAutoCompatibilityService.Synchronize(userRoot, indexRoot, _workflows,
+                result = LegacyAutoCompatibilityService.Synchronize(userRoot, indexRoot, _workflows,
                     id => !_drives.ContainsKey(id) && !_reservedWorkflows.Contains(id) && !ListActiveRuns().Any(r => r.WorkflowId == id));
                 _lastLegacyCompatibilityStamp = stamp;
-                if (result.Added + result.Refreshed > 0)
-                    _log?.Invoke($"[任务中心] 已接续 {result.Added} 个旧计划，更新 {result.Refreshed} 个未修改计划；原配置保留，未启动任务。");
-                foreach (var notice in result.Notices) _log?.Invoke("[旧配置] " + notice);
-                return result;
+
             }
             catch (Exception ex)
             {
                 var message = "旧计划暂时无法接续：" + ex.Message;
-                _log?.Invoke("[任务中心] " + message);
-                return new(0, 0, [message]);
+                result = new(0, 0, [message]);
             }
         }
+        // UI 日志回调可能同步等待 Dispatcher，不能占用调度锁。
+        if (result.Added + result.Refreshed > 0)
+            _log?.Invoke($"[任务中心] 已接续 {result.Added} 个旧计划，更新 {result.Refreshed} 个未修改计划；原配置保留，未启动任务。");
+        foreach (var notice in result.Notices) _log?.Invoke("[旧配置] " + notice);
+        return result;
     }
 }

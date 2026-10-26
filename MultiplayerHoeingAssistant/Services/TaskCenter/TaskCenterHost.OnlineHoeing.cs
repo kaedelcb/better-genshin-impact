@@ -17,6 +17,7 @@ public sealed partial class TaskCenterHost
 {
     private string? _onlineHoeingRunId;
     private int _onlineHoeingGeneration;
+    private (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot)? _pendingPriorityPreparation;
     private readonly Func<BgiEpoch?>? _onlineEpochProvider;
     private readonly Func<int, long, bool?>? _onlineHandoffProcessAlive;
     private sealed record OnlineResumeSignal(string? JobId, string? FailureReason);
@@ -234,12 +235,13 @@ public sealed partial class TaskCenterHost
                 prepared = prepared with { Reason = readError + (prepared.Reason is null ? "" : "；" + prepared.Reason) };
             if (prepared.Ready) return prepared;
             _log?.Invoke("[联机优先] 原计划恢复信息待补，不阻止 BGI 让位：" + prepared.Reason);
-            return new OnlineHoeingPreparation(true, null, prepared.Reason);
+            return new OnlineHoeingPreparation(true, prepared.ManagedRunId, prepared.Reason);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _log?.Invoke("[联机优先] 原计划记录暂不可用，不阻止 BGI 让位：" + ex.Message);
-            return new OnlineHoeingPreparation(true, null, ex.Message);
+            // 已确认的计划身份不能因登记失败退化成“没有原计划”。
+            return new OnlineHoeingPreparation(true, OnlineHoeingManagedRun(generation), ex.Message);
         }
     }
 
@@ -303,8 +305,17 @@ public sealed partial class TaskCenterHost
                 "任务间隙仍有未确认的节点提交或终态，不能按空闲接管");
         if (target.Cursor is not { } cursor)
             return new OnlineHoeingPreparation(false, null, "计划运行缺当前节点游标");
+        if (target.StopRequested)
+            return new OnlineHoeingPreparation(false, target.RunId, "原计划已请求停止，不登记恢复");
         if (priorityRecovery)
         {
+            lock (_gate)
+            {
+                _onlineHoeingRunId = target.RunId;
+                _onlineHoeingGeneration = generation;
+                _pendingPriorityPreparation = (generation, target.RunId, snapshot);
+                if (stateContinuation) _stateContinuationRuns[target.RunId] = generation;
+            }
             lock (_gate)
                 if (_drives.TryGetValue(target.WorkflowId, out var originalDriver)
                     && !originalDriver.Cts.IsCancellationRequested && !originalDriver.Task.IsCompleted)
@@ -313,7 +324,7 @@ public sealed partial class TaskCenterHost
         var expectedJob = target.CurrentSubmission?.JobId;
         if (!_runs.UpdateMergingIf(target.RunId, latest =>
             {
-                if (latest.IsTerminal || latest.OnlineHoeingHandoff is not null
+                if (latest.IsTerminal || latest.StopRequested || latest.OnlineHoeingHandoff is not null
                     || latest.Cursor is not { } currentCursor
                     || currentCursor.NodeId != cursor.NodeId
                     || currentCursor.Occurrence != cursor.Occurrence
@@ -336,9 +347,14 @@ public sealed partial class TaskCenterHost
                 };
                 return true;
             }, out _))
-            return new OnlineHoeingPreparation(false, null, "计划游标在接管登记期间发生变化");
+            return new OnlineHoeingPreparation(false, target.RunId, "计划游标在接管登记期间发生变化");
         if (stateContinuation) _stateContinuationRuns[target.RunId] = generation;
-        lock (_gate) { _onlineHoeingRunId = target.RunId; _onlineHoeingGeneration = generation; }
+        lock (_gate)
+        {
+            _onlineHoeingRunId = target.RunId;
+            _onlineHoeingGeneration = generation;
+            _pendingPriorityPreparation = null;
+        }
         _onlineResumeSignals.TryAdd(target.RunId,
             new TaskCompletionSource<OnlineResumeSignal>(TaskCreationOptions.RunContinuationsAsynchronously));
         NotifyStateChanged();
@@ -377,7 +393,26 @@ public sealed partial class TaskCenterHost
         string? runId;
         lock (_gate) { runId = _onlineHoeingGeneration == generation ? _onlineHoeingRunId : null; }
         if (runId is null) return true;
+        if (!RetryPriorityPreparation(generation, runId)) return false;
         return ConfirmOnlineHoeingSuspendForRun(runId, generation, ticket, rawData);
+    }
+
+    private bool RetryPriorityPreparation(int generation, string runId)
+    {
+        (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot)? pending;
+        lock (_gate) pending = _pendingPriorityPreparation;
+        if (pending is not { } original || original.Generation != generation || original.RunId != runId) return true;
+        if (Volatile.Read(ref _manualResetActive) != 0) return false;
+        var saved = _runs.Load(runId);
+        if (saved is null || saved.StopRequested || saved.IsTerminal || IsExecutionResetReleased(saved)) return false;
+        if (saved.OnlineHoeingHandoff is { } linked)
+            return linked.Generation == generation;
+        var prepared = PrepareOnlineHoeing(generation, original.Snapshot, stateContinuation: true, priorityRecovery: true);
+        if (prepared.Ready && prepared.ManagedRunId == runId) return true;
+        // 让位回执与原 Runner 可同时补登记；另一方已写入同代关联也属于成功。
+        var reconciled = _runs.Load(runId);
+        return reconciled is { StopRequested: false, OnlineHoeingHandoff: { } existing }
+            && existing.Generation == generation;
     }
 
     private bool ConfirmOnlineHoeingSuspendForRun(string runId, int generation, string? ticket, string? rawData)
@@ -586,7 +621,9 @@ public sealed partial class TaskCenterHost
     // Called by the existing owner heartbeat. It never opens a gate closed by a newer batch.
     internal void RetryPriorityWaiterWake()
     {
-        lock (_gate)
+        // 心跳只安排补查，不等待业务锁；下一次心跳继续尝试，待办不会被消费。
+        if (Volatile.Read(ref _priorityWaiterWakePending) == 0 || !Monitor.TryEnter(_gate)) return;
+        try
         {
             if (_shutdown || Volatile.Read(ref _priorityWaiterWakePending) == 0 || _onlineSendGate.IsClosed
                 || Volatile.Read(ref _manualResetActive) != 0 || _priorityWaiterWakeTask is { IsCompleted: false }) return;
@@ -597,6 +634,7 @@ public sealed partial class TaskCenterHost
                 catch (Exception ex) { _log?.Invoke("[联机优先] 旧等待计划仍待自动补查：" + ex.Message); }
             });
         }
+        finally { Monitor.Exit(_gate); }
     }
 
     private async Task WakeOnlineHoeingWaitersAsync(string? skipAutoRunId)
@@ -1437,6 +1475,13 @@ public sealed partial class TaskCenterHost
                 if (latest.StopRequested || Volatile.Read(ref _manualResetActive) != 0)
                     return BoundaryTerminalResult.UncertainWith("原计划已被明确停止或重置");
                 var handoff = latest.OnlineHoeingHandoff;
+                if (handoff is null && _stateContinuationRuns.TryGetValue(run.RunId, out var pendingGeneration))
+                {
+                    if (!RetryPriorityPreparation(pendingGeneration, run.RunId))
+                        return BoundaryTerminalResult.UncertainWith("原计划接管登记尚未确认，保留原责任");
+                    latest = _runs.Load(run.RunId)!;
+                    handoff = latest.OnlineHoeingHandoff;
+                }
                 if (handoff is null || !handoff.StateContinuation
                     || !SameJob(handoff.OriginalJobId, original.JobId) || handoff.OriginalSubmissionKey != original.Key
                     || handoff.NodeId != original.NodeId || handoff.Occurrence != original.Occurrence

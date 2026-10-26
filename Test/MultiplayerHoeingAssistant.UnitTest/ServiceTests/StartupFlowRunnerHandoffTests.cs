@@ -312,6 +312,60 @@ public class StartupFlowRunnerHandoffTests
         Assert.False(EverRan(wait)); // 未知 mode 终止链，不静默回落
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OptInHandoff_ContinuesNestedAuxiliaryStepsWithoutLosingReceipt(bool replay)
+    {
+        var handoff = Handoff();
+        handoff.ContinueAfterTaskCenterHandoff = true;
+        var watchdog = new StartupStep { Kind = StartupStepKinds.Watchdog };
+        var inner = Wait0(); var outer = Wait0();
+        _handoffResult = replay ? StartupHandoffResult.AlreadyAccepted("original-run", "已受理")
+            : StartupHandoffResult.Accepted("original-run", "已受理");
+        var branch = new StartupStep { NodeType = "condition", Kind = StartupStepKinds.ManualConfirm,
+            TrueSteps = [handoff, inner, watchdog] };
+        await MakeRunner().RunAsync([branch, outer], CancellationToken.None);
+        Assert.True(EverRan(inner)); Assert.True(EverRan(outer)); Assert.True(EverRan(watchdog));
+        Assert.Single(_handoffRequests);
+        Assert.Contains("original-run", LastReport(handoff)!.Value.Note);
+        Assert.Single(_reports.Where(r => r.StepId == handoff.Id && r.State == NodeRunState.Success));
+    }
+
+    [Theory]
+    [InlineData("Unknown")]
+    [InlineData("NotReady")]
+    [InlineData("rejected")]
+    public async Task OptInHandoff_UnconfirmedOrRejectedStillStops(string reason)
+    {
+        var handoff = Handoff(); handoff.ContinueAfterTaskCenterHandoff = true;
+        _handoffResult = reason == "rejected" ? StartupHandoffResult.Rejected(HandoffReasonCodes.BgiBusy, "busy")
+            : StartupHandoffResult.AlreadyAccepted("original-run", "待确认") with { ReasonCode = reason };
+        var next = Wait0();
+        await MakeRunner().RunAsync([handoff, next], CancellationToken.None);
+        Assert.False(EverRan(next));
+    }
+
+    [Fact]
+    public async Task OptInHandoff_DoesNotSubmitAnotherTaskOrHandoff()
+    {
+        var handoff = Handoff(); handoff.ContinueAfterTaskCenterHandoff = true;
+        var direct = new StartupStep { Kind = StartupStepKinds.StartGroup, TaskName = "不得重发" };
+        await MakeRunner().RunAsync([handoff, direct,
+            new StartupStep { Kind = StartupStepKinds.StartBgi, KillBeforeStart = true, Arguments = "startOneDragon test" },
+            new StartupStep { Kind = StartupStepKinds.StopBgi }, Handoff()], CancellationToken.None);
+        Assert.Empty(_bgiCommands); Assert.Single(_handoffRequests);
+        Assert.Equal(NodeRunState.Failed, LastReport(direct)!.Value.State);
+    }
+
+    [Fact]
+    public void HandoffContinuation_OldConfigDefaultsOff_ExplicitChoiceSurvivesSerialization()
+    {
+        Assert.False(JsonSerializer.Deserialize<StartupStep>("{}")!.ContinueAfterTaskCenterHandoff);
+        var step = Handoff(); step.ContinueAfterTaskCenterHandoff = true;
+        Assert.True(JsonSerializer.Deserialize<StartupStep>(JsonSerializer.Serialize(step))!.ContinueAfterTaskCenterHandoff);
+    }
+
     [Fact]
     public async Task Accepted_TerminatesChain_WithNestedBranchBacktrack()
     {

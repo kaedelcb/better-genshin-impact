@@ -192,8 +192,112 @@ public sealed class StateContinuationPlanResumeTests : IDisposable
     }
     private sealed class Terminal : IWorkflowTerminalExecutor
     {
+        internal int Calls;
         public Task<TerminalExecutionResult> ExecuteAsync(WorkflowTerminalAction action, WorkflowRunRecord run,
-            CancellationToken ct) => Task.FromResult(TerminalExecutionResult.Executed("unused"));
+            CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested(); Calls++;
+            return Task.FromResult(TerminalExecutionResult.Executed("unused"));
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RunningCard_UsesDriverFact_WithoutRewritingExecutionRecord(bool driving)
+    {
+        var record = new WorkflowRunRecord { RunId = "original", WorkflowId = "flow", State = WorkflowRunState.Running };
+        var vm = MultiplayerHoeingAssistant.ViewModels.ActiveRunVm.BuildRemote(record, null, driving);
+        Assert.Equal(driving ? "运行中" : "执行已中断 · 等待核对", vm.StateText);
+        Assert.True(vm.BlocksNewStart);
+        Assert.Equal(WorkflowRunState.Running, record.State);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ManagedRecoverySnapshot_CannotBeTreatedAsNative(bool managed)
+    {
+        var raw = System.Text.Json.JsonSerializer.Serialize(new { recoverySnapshot = new
+            { ManagedByWorkflow = managed, NodeId = managed ? "B" : null, TaskType = "group", GroupName = "采集" } });
+        Assert.Equal(managed, CommandExecutor.HasManagedResumeSnapshot(raw));
+        Assert.Equal(!managed, CommandExecutor.TryReadNativeResumeSnapshot(raw, out _));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedPreparation_PreservesPlan_ResumesAcrossWindow_OrHonorsStop(bool stop)
+    {
+        var host = Host(out var workflows, out var document);
+        document.NodeTimeWindowEnabled = true;
+        foreach (var node in document.Nodes) node.TimeWindow = new() { Start = "07:00", End = "09:00" };
+        document.Terminal = [new() { Kind = "terminal.completionAction", Params = new()
+            { ["action"] = System.Text.Json.JsonSerializer.SerializeToElement("closeGameAndSoftware") } }];
+        workflows.Save(document, workflows.LoadSnapshot(document.WorkflowId!).Revision);
+        var now = new DateTimeOffset(2026, 10, 26, 8, 43, 0, TimeSpan.FromHours(8));
+        var port = new Port { Missing = 0 };
+        var boundary = new BgiWorkflowExecutionBoundary(port, host.Runs);
+        var body = new Body(host.Runs, true) { HostTakeover = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        var terminal = new Terminal();
+        var runner = new WorkflowRunner(workflows, host.Runs, body, new Prerequisite(), terminal,
+            new WorkflowRunnerOptions { Clock = () => now, OnlineHoeingContinuation = (run, sub, result, ct)
+                => host.AwaitOnlineHoeingContinuationAsync(boundary, run, sub, result, ct) });
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var driving = runner.StartAsync(document.WorkflowId!, ct: budget.Token);
+        try
+        {
+            await Until(() => host.Runs.List().Any(r => r.CurrentSubmission?.JobId is not null));
+            var original = host.Runs.List().Single();
+            await host.CloseOnlineHoeingSendAsync(priority: true);
+            host.Runs.PublishFaultForTest = r => r.OnlineHoeingHandoff is not null ? new IOException("registration temporarily unavailable") : null;
+            var prepared = host.PreparePriorityOnlineHoeing(7, new(true, true, 42, 99,
+                new(Guid.NewGuid(), 42, 99, Guid.Parse(original.WireRunId), Guid.Parse(original.CurrentSubmission!.JobId!))));
+            Assert.True(prepared.Ready);
+            Assert.Equal(original.RunId, prepared.ManagedRunId);
+            Assert.Equal(original.RunId, host.OnlineHoeingManagedRun(7));
+            Assert.Null(host.Runs.Load(original.RunId)!.OnlineHoeingHandoff);
+            Assert.Equal(new[] { "B" }, body.Submitted);
+            host.Runs.PublishFaultForTest = null;
+            if (stop)
+            {
+                runner.RequestAction(original.RunId, WorkflowRunAction.Stop);
+                var stopped = await driving.WaitAsync(budget.Token);
+                Assert.Equal(WorkflowRunState.Cancelled, stopped.State);
+                Assert.Equal(0, terminal.Calls); Assert.Equal(0, port.Sends);
+                return;
+            }
+            var receipt = System.Text.Json.JsonSerializer.Serialize(new
+            { status = "suspended", workflowRunId = original.WireRunId, nodeId = "B", originalJobId = original.CurrentSubmission.JobId,
+                occurrence = 0, iteration = 0, attempt = 1, planCheckpointPhase = "inside", planNextTaskIndex = 16 });
+            body.HostTakeover.SetResult();
+            // 原 Runner 同时观察让位；重复回执必须落在同一关联，不创建第二次恢复。
+            Assert.All(await Task.WhenAll(
+                Task.Run(() => host.ConfirmOnlineHoeingSuspend(7, "original-ticket", receipt)),
+                Task.Run(() => host.ConfirmOnlineHoeingSuspend(7, "original-ticket", receipt))), value => Assert.True(value));
+            await Until(() => host.Runs.Load(original.RunId)!.OnlineHoeingHandoff?.Phase == "parked");
+            now = now.AddHours(5); // 恢复发生在时段外，已起步的 B 应续跑；未起步的 C 应跳过。
+            var resume = await host.PreparePlanResumeAsync(original.RunId, "original-ticket", budget.Token);
+            Assert.NotNull(resume);
+            var job = Guid.NewGuid().ToString("D");
+            port.Job = Finished(original, (string)resume!["idempotencyKey"]!, job);
+            Assert.True(host.AcceptPlanResumeJob(original.RunId, "original-ticket", job));
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            var finished = await driving.WaitAsync(budget.Token);
+            Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+            Assert.Equal(new[] { "B" }, body.Submitted);
+            Assert.Contains(finished.NodeOutcomes, o => o.NodeId == "B" && o.Result == "succeeded");
+            Assert.Contains(finished.NodeOutcomes, o => o.NodeId == "C" && o.Result == "skippedFilter");
+            Assert.Equal(1, terminal.Calls); Assert.Single(finished.CompletionHistory);
+            Assert.Equal(0, port.Sends);
+        }
+        finally
+        {
+            host.Runs.PublishFaultForTest = null;
+            budget.Cancel(); body.HostTakeover.TrySetResult();
+            try { await driving; } catch (OperationCanceledException) { }
+            await host.ShutdownAsync();
+        }
     }
 
     [Fact]

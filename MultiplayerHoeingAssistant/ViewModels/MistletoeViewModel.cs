@@ -2818,6 +2818,17 @@ public sealed class StartupStepViewModel : ViewModelBase
         }
     }
 
+    public bool ContinueAfterTaskCenterHandoff
+    {
+        get => Model.ContinueAfterTaskCenterHandoff;
+        set
+        {
+            if (Model.ContinueAfterTaskCenterHandoff == value) return;
+            Model.ContinueAfterTaskCenterHandoff = value;
+            Changed();
+        }
+    }
+
     /// <summary>状态来源下拉框：本会话、按实际 BGI 启动顺序、按 Windows 用户名。</summary>
     public int StatusSourceIndex
     {

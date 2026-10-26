@@ -30,20 +30,22 @@ public partial class MainViewModel
         {
             // R4.10 终审（重要3）：并发首访经锁保证单例；退出收敛已开始则拒绝重建
             //（退出期调用方拿已关闭宿主会立即响亮拒绝，而重建会产生未经收敛的新实例）。
+            TaskCenterHost host;
             lock (_taskCenterHostGate)
             {
                 if (_taskCenterHost is null && _disposing)
                     throw new InvalidOperationException("任务中心宿主已随助手退出收敛，不再创建");
                 EnsureSamePackageBgiPath();
-                var host = _taskCenterHost ??= new TaskCenterHost(
+                host = _taskCenterHost ??= new TaskCenterHost(
                     WorkflowStore.DefaultFlowsDir(), RunStore.DefaultRunsDir(), ResourceCatalogService.DefaultCacheFile(),
                     GetBoundTaskCenterClient, () => IsExecutorMode, GetTaskCenterArbitrationStatus, AddLog, // 执行准入消费 ext 事件快照，不等待 10s 房间状态上报
                     EnsureTaskCenterExecutionReadyAsync); // 2026-09-20：执行入口环境确保（BGI 未运行自动拉起+有界等待通道就绪）
                 // R5.8 §21.4：注入**真实 BGI User 配置根来源**（迁移演练隔离校验用）；未配置/无法解析 ⇒ null ⇒ 演练**保守拒绝**。
                 host.UserConfigRootProvider ??= ResolveBgiUserConfigRoot;
-                if (IsExecutorMode) host.EnsureLegacyCompatibility(TryResolveBgiUserConfigRoot(Config?.BgiPath));
-                return host;
             }
+            // 兼容读取及日志通知不得持有宿主创建锁，联机进度保存也会读取此宿主。
+            if (IsExecutorMode) host.EnsureLegacyCompatibility(TryResolveBgiUserConfigRoot(Config?.BgiPath));
+            return host;
         }
     }
 

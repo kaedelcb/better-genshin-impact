@@ -250,6 +250,10 @@ public class StartupStep
     /// 显式未知值运行时响亮拒绝（Rejected UnsupportedMode，不静默回落 start）。</summary>
     [JsonPropertyName("taskCenterHandoffMode")]
     public string TaskCenterHandoffMode { get; set; } = "start";
+
+    /// <summary>明确受理后继续辅助启动步骤；旧配置默认终止，保留既有行为。</summary>
+    [JsonPropertyName("continueAfterTaskCenterHandoff")]
+    public bool ContinueAfterTaskCenterHandoff { get; set; }
 }
 
 /// <summary>

@@ -386,6 +386,12 @@ public partial class MainViewModel
                         if (runId is null && batch.ManagedRunId is not null) return false;
                     }
                 }
+                if (policy.Policy == TaskConflictPolicy.Resume && runId is null
+                    && CommandExecutor.HasManagedResumeSnapshot(batch.SuspendedRawData))
+                {
+                    Waiting("恢复任务属于原计划，等待原计划关联恢复；尚未完成计划收尾");
+                    return false;
+                }
                 return await EnsureCompletionExecutorAsync(batch, executor, () => _externalClient,
                     EnsureTaskCenterExecutionReadyAsync, CompletionRequestKey, nativeResume, RequireAuthority, token,
                     policy.Policy == TaskConflictPolicy.Resume && !nativeResume && host is not null
@@ -456,6 +462,9 @@ public partial class MainViewModel
             RequireAuthority();
             if (!batch.PolicyTicketReleased && executor.TakeoverTicketSnapshot != ticket)
                 throw new ControlContextRevokedException("原接管票据已撤销，禁止启动绑定完成动作", token);
+            if (policy.Policy == TaskConflictPolicy.Resume && runId is null && !nativeResume
+                && CommandExecutor.HasManagedResumeSnapshot(batch.SuspendedRawData))
+                throw new IOException("恢复任务属于原计划，但计划关联尚未确认；保留票据，不按独立任务恢复或完成");
             if (policy.Policy == TaskConflictPolicy.Resume && runId is not null)
             {
                 if (batch.SuspendedRawData is { } raw)

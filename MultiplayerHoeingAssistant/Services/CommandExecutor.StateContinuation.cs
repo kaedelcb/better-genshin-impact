@@ -25,6 +25,21 @@ public partial class CommandExecutor
         catch (JsonException) { return false; }
     }
 
+    internal static bool HasManagedResumeSnapshot(string? raw)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(raw ?? "{}");
+            if (!document.RootElement.TryGetProperty("recoverySnapshot", out var snapshot)
+                || snapshot.ValueKind != JsonValueKind.Object) return false;
+            return snapshot.EnumerateObject().Any(p =>
+                string.Equals(p.Name, "ManagedByWorkflow", StringComparison.OrdinalIgnoreCase) && p.Value.ValueKind == JsonValueKind.True
+                || string.Equals(p.Name, "NodeId", StringComparison.OrdinalIgnoreCase)
+                    && p.Value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(p.Value.GetString()));
+        }
+        catch (JsonException) { return false; }
+    }
+
     internal static bool TryReadNativeResumeSnapshot(string? raw, out JsonElement snapshot)
     {
         snapshot = default;
