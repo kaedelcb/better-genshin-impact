@@ -720,9 +720,64 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
                                         <TextBlock Text="启动参数" Style="{StaticResource FieldLabel}"/>
                                         <TextBox Text="{Binding Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                 Style="{StaticResource GoldInput}" Width="260" ToolTip="可留空"/>
+                                                 Style="{StaticResource GoldInput}" Width="260"
+                                                 ToolTip="可留空。参数由目标程序解析，展开下方“参数说明与常用示例”查看填写方法。"/>
                                     </StackPanel>
                                 </WrapPanel>
+
+                                <Expander Header="参数说明与常用示例" Margin="72,6,0,0" FontSize="11"
+                                          Foreground="{DynamicResource Dim}" HorizontalContentAlignment="Stretch">
+                                    <Expander.Style>
+                                        <Style TargetType="Expander">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startGame">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Kind}" Value="startProgram">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Expander.Style>
+                                    <Border Background="{DynamicResource Card}" CornerRadius="6" Padding="12,9" Margin="0,5,0,0">
+                                        <StackPanel>
+                                            <TextBlock Text="参数由目标软件决定，不同软件的参数不能混用。留空按软件默认方式启动。"
+                                                       TextWrapping="Wrap" Foreground="{DynamicResource White}"/>
+                                            <TextBlock Text="这里只填参数，程序路径放在上方；多个参数用空格分隔，含空格的参数值用英文双引号包住。"
+                                                       TextWrapping="Wrap" Margin="0,5,0,8"/>
+                                            <TextBlock TextWrapping="Wrap">
+                                                <Run Text="GameViewer / UU远程：" Foreground="{DynamicResource Gold}"/>
+                                                <Run Text="--auto-run" FontFamily="Consolas" Foreground="{DynamicResource White}"/>
+                                                <LineBreak/>
+                                                <Run Text="使用软件的自启动模式；是否隐藏主窗口，以该软件实际表现为准。"/>
+                                            </TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,7,0,0">
+                                                <Run Text="本助手：" Foreground="{DynamicResource Gold}"/>
+                                                <Run Text="--minimized" FontFamily="Consolas" Foreground="{DynamicResource White}"/>
+                                                <Run Text="　启动后隐藏主窗口到系统托盘。"/>
+                                            </TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,7,0,0">
+                                                <Run Text="OBS Studio：" Foreground="{DynamicResource Gold}"/>
+                                                <Run Text="--minimize-to-tray" FontFamily="Consolas" Foreground="{DynamicResource White}"/>
+                                                <Run Text="　启动后最小化到系统托盘。"/>
+                                                <LineBreak/>
+                                                <Run Text="多个参数示例："/>
+                                                <Run Text="--minimize-to-tray --profile &quot;直播配置&quot;" FontFamily="Consolas" Foreground="{DynamicResource White}"/>
+                                                <Run Text="（配置名需已存在）。"/>
+                                            </TextBlock>
+                                            <TextBlock TextWrapping="Wrap" Margin="0,7,0,0">
+                                                <Run Text="powershell.exe：" Foreground="{DynamicResource Gold}"/>
+                                                <LineBreak/>
+                                                <Run Text="-NoProfile -WindowStyle Hidden -File &quot;D:\My Scripts\example.ps1&quot;" FontFamily="Consolas" Foreground="{DynamicResource White}"/>
+                                                <LineBreak/>
+                                                <Run Text="隐藏 PowerShell 窗口并运行指定脚本；脚本路径需替换为实际路径，脚本启动的其他程序窗口由各程序决定。"/>
+                                            </TextBlock>
+                                            <TextBlock Text="自启动、最小化与隐藏窗口是不同模式，请使用目标软件支持的参数。"
+                                                       TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
 
                                 <!-- startProgram：填写账号后自动进入该账号既有的 Windows 桌面。 -->
                                 <WrapPanel>
