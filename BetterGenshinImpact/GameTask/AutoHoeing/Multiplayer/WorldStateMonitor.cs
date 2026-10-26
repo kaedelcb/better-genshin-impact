@@ -42,6 +42,53 @@ public class WorldStateMonitor : IAsyncDisposable
     private volatile bool _isTeleportSuppressed;
     private DateTime _teleportSuppressionStart;
     private const int TeleportSuppressionTimeoutSeconds = 40;
+    // 仅串行化视觉自愈与受保护传送的入场；不锁住心跳、关房通知或停止。
+    private readonly SemaphoreSlim _visualActionGate = new(1, 1);
+    private long _teleportObservationVersion;
+    internal long VisualObservationVersion => Interlocked.Read(ref _teleportObservationVersion);
+
+    /// <summary>在打开地图前建立保护，等待已在途的视觉自愈退出；异常/取消也成对释放。</summary>
+    public async Task RunWithTeleportSuppressionAsync(Func<CancellationToken, Task> operation, CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
+        await _visualActionGate.WaitAsync(linked.Token);
+        try
+        {
+            linked.Token.ThrowIfCancellationRequested();
+            BeginTeleportSuppression();
+            ResetVisualObservations();
+        }
+        finally { _visualActionGate.Release(); }
+
+        try { await operation(linked.Token); }
+        finally
+        {
+            ResetVisualObservations();
+            EndTeleportSuppression();
+        }
+    }
+
+    private void ResetVisualObservations()
+    {
+        _connectedButNotInGame = 0;
+        _isInRecoveryWindow = false;
+        _visualMismatchInProgress = false;
+        _peerBelowStreak = 0;
+        // 不清理心跳失败状态、房间身份及停止令牌。
+    }
+
+    internal async Task<bool> TryRunVisualActionAsync(long observationVersion, Func<Task> action)
+    {
+        if (!await _visualActionGate.WaitAsync(0, _cts.Token)) return false;
+        try
+        {
+            // 截图期间可能刚好完成一轮传送，旧画面不能在保护解除后继续累计/退出。
+            if (_isTeleportSuppressed || observationVersion != VisualObservationVersion) return false;
+            await action();
+            return true;
+        }
+        finally { _visualActionGate.Release(); }
+    }
 
     // === 恢复窗口（需求 3）===
     private bool _isInRecoveryWindow;
@@ -172,6 +219,7 @@ public class WorldStateMonitor : IAsyncDisposable
     {
         _teleportSuppressionStart = DateTime.UtcNow;
         _isTeleportSuppressed = true;
+        Interlocked.Increment(ref _teleportObservationVersion);
         _logger.LogDebug("[WorldStateMonitor] 进入传送抑制期");
     }
 
@@ -179,6 +227,7 @@ public class WorldStateMonitor : IAsyncDisposable
     public void EndTeleportSuppression()
     {
         _isTeleportSuppressed = false;
+        Interlocked.Increment(ref _teleportObservationVersion);
         _logger.LogDebug("[WorldStateMonitor] 传送抑制期结束");
     }
 
@@ -339,6 +388,7 @@ public class WorldStateMonitor : IAsyncDisposable
 
     private async Task CheckOnceAsync()
     {
+        var visualObservationVersion = VisualObservationVersion;
         // 暂停态优先级最高：用户按快捷键暂停（如调整角色装备）期间，IsInMultiGame=false 是预期行为，
         // 不应被计入"被踢出联机世界"的 ConnectedNotInGame 阈值。同时清零相关计数与恢复窗口，
         // 避免恢复后立即被旧累计触发协调停止。
@@ -453,7 +503,8 @@ public class WorldStateMonitor : IAsyncDisposable
                             _logger.LogError(
                                 "[WorldStateMonitor] 视觉真实人数 {VC} 持续低于协调器花名册 {CC} 满 {Win}s，判定成员退世界/掉线失明，触发协同中止重开",
                                 visualCount, coordCount, mismatchElapsed);
-                            await ConfirmExitAsync("检测到成员退出世界（视觉人数持续低于协调器），协同中止重开");
+                            await TryRunVisualActionAsync(visualObservationVersion,
+                                () => ConfirmExitAsync("检测到成员退出世界（视觉人数持续低于协调器），协同中止重开"));
                             return;
                         }
                     }
@@ -538,6 +589,9 @@ public class WorldStateMonitor : IAsyncDisposable
             return;
         }
 
+        // 丢弃跨越传送边界取得的旧画面，下一拍重新识别。
+        if (visualObservationVersion != VisualObservationVersion) return;
+
         // 2. IsInMultiGame == true → 一切正常
         if (isInMultiGame)
         {
@@ -602,34 +656,38 @@ public class WorldStateMonitor : IAsyncDisposable
                 return;
             }
 
-            // IsInMultiGame=false + SignalR 正常 → 可能是瞬态干扰，也可能是被踢出
-            _connectedButNotInGame++;
-            _isInRecoveryWindow = false; // 不进入恢复窗口（OQ-4：保持不变）
+            await TryRunVisualActionAsync(visualObservationVersion, async () =>
+            {
+                // IsInMultiGame=false + SignalR 正常 → 可能是瞬态干扰，也可能是被踢出
+                _connectedButNotInGame++;
+                _isInRecoveryWindow = false; // 不进入恢复窗口（OQ-4：保持不变）
 
-            // 回主页自愈：计数命中 {3,5,7} 时先尝试回到主界面（决策器纯函数，design §Components 1）。
-            // 第 3/5 次给一次自愈机会；第 7 次为退出前最后一次自愈。
-            if (ReturnMainUiRecoveryDecisions.ShouldAttemptReturnMainUi(_connectedButNotInGame))
-            {
-                _logger.LogWarning("[WorldStateMonitor] IsInMultiGame=false 但 SignalR 正常（{Count}/{Threshold}），尝试回主页自愈",
-                    _connectedButNotInGame, ConnectedNotInGameThreshold);
-                // 取消异常向上传播（让 MonitorLoopAsync 结束）；其他异常仅 LogWarning 后继续。
-                await TryReturnMainUiForRecoveryAsync();
-            }
+                // 回主页自愈：计数命中 {3,5,7} 时先尝试回到主界面（决策器纯函数，design §Components 1）。
+                // 第 3/5 次给一次自愈机会；第 7 次为退出前最后一次自愈。
+                if (ReturnMainUiRecoveryDecisions.ShouldAttemptReturnMainUi(_connectedButNotInGame))
+                {
+                    _logger.LogWarning("[WorldStateMonitor] IsInMultiGame=false 但 SignalR 正常（{Count}/{Threshold}），尝试回主页自愈",
+                        _connectedButNotInGame, ConnectedNotInGameThreshold);
+                    // 取消异常向上传播（让 MonitorLoopAsync 结束）；其他异常仅 LogWarning 后继续。
+                    await TryReturnMainUiForRecoveryAsync();
+                    if (_isTeleportSuppressed || visualObservationVersion != VisualObservationVersion) return;
+                }
 
-            if (ReturnMainUiRecoveryDecisions.ShouldConfirmExit(_connectedButNotInGame))
-            {
-                // 连续达到阈值 → 判定为被踢出（需求 1.3 / 1.5）。
-                // count==7 时此处紧跟在上面的回主页之后执行：先回主页后退出。
-                _logger.LogError("[WorldStateMonitor] 连续 {Count} 次 IsInMultiGame=false 且 SignalR 正常，判定为被踢出",
-                    _connectedButNotInGame);
-                await ConfirmExitAsync("被踢出联机世界（SignalR正常但截图连续失败）");
-            }
-            else if (!ReturnMainUiRecoveryDecisions.ShouldAttemptReturnMainUi(_connectedButNotInGame))
-            {
-                // count ∈ {1,2,4,6}：既不回主页也不退出，仅记录瞬态干扰（需求 1.4）
-                _logger.LogDebug("[WorldStateMonitor] IsInMultiGame=false 但 SignalR 正常（{Count}/{Threshold}），判定为瞬态干扰",
-                    _connectedButNotInGame, ConnectedNotInGameThreshold);
-            }
+                if (ReturnMainUiRecoveryDecisions.ShouldConfirmExit(_connectedButNotInGame))
+                {
+                    // 连续达到阈值 → 判定为被踢出（需求 1.3 / 1.5）。
+                    // count==7 时此处紧跟在上面的回主页之后执行：先回主页后退出。
+                    _logger.LogError("[WorldStateMonitor] 连续 {Count} 次 IsInMultiGame=false 且 SignalR 正常，判定为被踢出",
+                        _connectedButNotInGame);
+                    await ConfirmExitAsync("被踢出联机世界（SignalR正常但截图连续失败）");
+                }
+                else if (!ReturnMainUiRecoveryDecisions.ShouldAttemptReturnMainUi(_connectedButNotInGame))
+                {
+                    // count ∈ {1,2,4,6}：既不回主页也不退出，仅记录瞬态干扰（需求 1.4）
+                    _logger.LogDebug("[WorldStateMonitor] IsInMultiGame=false 但 SignalR 正常（{Count}/{Threshold}），判定为瞬态干扰",
+                        _connectedButNotInGame, ConnectedNotInGameThreshold);
+                }
+            });
             return;
         }
 
@@ -652,7 +710,7 @@ public class WorldStateMonitor : IAsyncDisposable
         if (absoluteElapsed >= RecoveryWindowAbsoluteMaxSeconds)
         {
             _logger.LogError("[WorldStateMonitor] 恢复窗口绝对超时（{Elapsed:F0}s），确认退出", absoluteElapsed);
-            await ConfirmExitAsync("恢复窗口绝对超时（截图失败+SignalR断开持续超过120秒）");
+            await TryRunVisualActionAsync(visualObservationVersion, () => ConfirmExitAsync("恢复窗口绝对超时（截图失败+SignalR断开持续超过120秒）"));
             return;
         }
 
@@ -676,7 +734,7 @@ public class WorldStateMonitor : IAsyncDisposable
         if (elapsed >= RecoveryWindowSeconds)
         {
             _logger.LogError("[WorldStateMonitor] 恢复窗口超时（{Elapsed:F0}s），确认退出", elapsed);
-            await ConfirmExitAsync("恢复窗口超时（截图失败+SignalR断开持续30秒）");
+            await TryRunVisualActionAsync(visualObservationVersion, () => ConfirmExitAsync("恢复窗口超时（截图失败+SignalR断开持续30秒）"));
         }
     }
 
