@@ -71,7 +71,11 @@ public sealed partial class MistletoeViewModel
 
     private void UseConfiguredStartupSource(StartupSourceIntent? source)
     {
-        if (!ReferenceEquals(_configuredAutoSource, source)) _configuredAutoSource?.Revoke();
+        if (!ReferenceEquals(_configuredAutoSource, source) && _configuredAutoSource is { } previous)
+        {
+            previous.Revoke();
+            RevokeAllArmedTriggers();
+        }
         if (source is null)
         {
             _runCts?.Cancel();
@@ -93,6 +97,6 @@ public sealed partial class MistletoeViewModel
         if (!_config.Enabled || _startupClosing || _configTransferPaused
             || (!timer.Step.RepeatDaily && timer.NextFireAt <= DateTime.Now) || !timer.Step.Enabled) return;
         // 重新挂载的是下一次到点计划。已到点/正在运行的旧次数不补跑。
-        ArmTimer(timer.Step, StartupSourceIntent.Startup(localOnly: !_mainVm.IsExecutorMode));
+        ArmTimer(timer.Step, StartupSourceIntent.NextScheduledOccurrence(timer.SourceIntent, localOnly: !_mainVm.IsExecutorMode));
     }
 }

@@ -474,11 +474,15 @@ public sealed partial class TaskCenterHost
             if (_localExecutionCapability is { } capability && !capability())
                 throw new StartupModeUnavailableException("当前为监控端（无本地执行能力），任务中心执行入口由能力守卫统一拒绝");
         }
-        if (source.Authority is { } original && _runs.IsStartupSourceRevoked(original))
-            throw new StartupSourceStoppedException("原来源已经耐久停止，自动回调不得以新 runId 恢复旧意图。");
+        if (source.AuxiliaryOnly && required)
+            throw new InvalidOperationException("辅助启动来源仅允许观察，不得提交 BGI 任务");
+        if (!source.AuxiliaryOnly && source.Authority is { } original && _runs.IsStartupSourceRevoked(original))
+            throw new StartupPlanStoppedException("原计划已停止，旧计划回调已取消");
         var client = _clientAccessor();
         if (client?.State != BgiExternalLinkState.Ready)
         {
+            if (source.AuxiliaryOnly)
+                throw new StartupSourceUnavailableException("辅助监控等待 BGI 连接恢复，不主动启动 BGI");
             if (!required && source.Authority is null) return null;
             if (source.Authority is { } offline && (!source.AllowProcessRecovery || !StartupProcessExited(offline)))
                 throw new StartupSourceUnavailableException("正在等待原 BGI 恢复连接");

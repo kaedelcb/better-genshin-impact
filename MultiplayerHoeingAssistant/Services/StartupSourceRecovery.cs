@@ -23,6 +23,12 @@ internal static class StartupSourceRecovery
                 if (waiting) report?.Invoke("连接已恢复，继续当前启动步骤");
                 return result;
             }
+            catch (StartupPlanStoppedException)
+            {
+                source.StopWithPlan();
+                report?.Invoke("当前计划已停止，旧计划回调已取消");
+                throw;
+            }
             catch (StartupSourceStoppedException)
             {
                 source.StopCurrentRun();

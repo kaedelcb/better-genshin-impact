@@ -1477,7 +1477,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         }
         catch (OperationCanceledException ex)
         {
-            var canceledByUser = dog.Cts.IsCancellationRequested;
+            var canceledByUser = dog.Cts.IsCancellationRequested
+                || dog.SourceIntent?.StoppedByUser == true || dog.SourceIntent?.StoppedWithPlan == true;
             var reason = ex.InnerException?.Message ?? ex.Message;
             OnNodeStateReported(dog.Step, canceledByUser ? NodeRunState.Skipped : NodeRunState.Failed,
                 canceledByUser ? "已取消" : reason);
@@ -1603,7 +1604,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         }
         catch (OperationCanceledException ex)
         {
-            var canceledByUser = trig.Cts.IsCancellationRequested;
+            var canceledByUser = trig.Cts.IsCancellationRequested
+                || trig.SourceIntent?.StoppedByUser == true || trig.SourceIntent?.StoppedWithPlan == true;
             var reason = ex.InnerException?.Message ?? ex.Message;
             OnNodeStateReported(trig.Step, canceledByUser ? NodeRunState.Skipped : NodeRunState.Failed,
                 canceledByUser ? "已取消" : reason);
@@ -2046,11 +2048,20 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         }
     }
 
+    private void SyncRemoteStartupPending()
+    {
+        if (_remoteTarget is null) return;
+        // 共享回执也可能已被任务中心确认，内存标记不能永久滞留。
+        _remoteStartupPending = _mainVm.PendingCenterOperation(_remoteTarget)?.Operation == "startup.run";
+        OnPropertyChanged(nameof(IsNotRunning));
+    }
+
     private async Task RunRemoteStartupAsync()
     {
         if (_remoteTarget is null) return;
         try
         {
+            await OnRemoteUiAsync(SyncRemoteStartupPending);
             if (_saveDebounce.IsEnabled) SaveNow();
             if (_remoteStartupStale || _remoteStartupPending || HasStartupSyncIssue
                 || _mainVm.PendingCenterOperation(_remoteTarget) is not null)
@@ -2074,13 +2085,13 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             });
             var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
                 "startup.run", requestId: requestId);
-            if (reply.Status is "ok" or "rejected" && string.IsNullOrEmpty(reply.OperationId))
+            if (reply.Status is "ok" or "rejected"
+                && (string.IsNullOrEmpty(reply.OperationId) || reply.OperationId == requestId))
             {
                 _mainVm.ClearCenterOperation(_remoteTarget, requestId);
                 await OnRemoteUiAsync(() =>
                 {
-                    _remoteStartupPending = false;
-                    OnPropertyChanged(nameof(IsNotRunning));
+                    SyncRemoteStartupPending();
                 });
             }
             if (reply.Status == "accepted" && reply.OperationId != requestId)
@@ -2199,6 +2210,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             await OnRemoteUiAsync(() =>
             {
                 _remoteStartupStale = false;
+                SyncRemoteStartupPending();
                 IsRunning = snapshot.IsRunning;
                 StatusText = snapshot.StatusText;
                 RefreshRemoteTriggerRows(snapshot.Triggers);
@@ -2224,7 +2236,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                     _mainVm.ClearCenterOperation(_remoteTarget, pending.Id);
                     await OnRemoteUiAsync(() =>
                     {
-                        _remoteStartupPending = false;
+                        SyncRemoteStartupPending();
                         StatusText = state.Message;
                         OnPropertyChanged(nameof(IsNotRunning));
                     });

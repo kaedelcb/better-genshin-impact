@@ -10,16 +10,53 @@ public sealed class StartupSourceIntent
     private readonly SemaphoreSlim _gate = new(1, 1);
     private WorkflowStopAuthorityRecord? _authority;
     private volatile bool _revoked;
+    private volatile bool _stoppedWithPlan;
+    private readonly StartupSourceIntent? _parent;
+    private bool _stoppedByUser;
     public string IntentId { get; }
     public long IntentTimestamp { get; }
     public WorkflowStopAuthorityRecord? Authority => Volatile.Read(ref _authority);
-    public bool Revoked => _revoked;
+    public bool Revoked => _revoked || _lifetime.IsCancellationRequested;
     private readonly CancellationTokenSource _lifetime = new();
     internal CancellationToken LifetimeToken => _lifetime.Token;
-    internal bool StoppedByUser { get; private set; }
+    internal bool StoppedByUser => _stoppedByUser || _parent?.StoppedByUser == true;
+    internal bool StoppedWithPlan => _stoppedWithPlan;
+    internal bool AuxiliaryOnly { get; private init; }
     internal bool AllowProcessRecovery { get; private init; }
     internal void Revoke() { _revoked = true; _lifetime.Cancel(); }
-    internal void StopCurrentRun() { StoppedByUser = true; Revoke(); }
+    internal void StopCurrentRun() { _stoppedByUser = true; Revoke(); }
+    // 单计划停止只使原计划回调失效；显式退出/重跑/全停仍通过 Revoke 取消整个生命周期。
+    internal void StopWithPlan() { _stoppedWithPlan = true; _revoked = true; }
+
+    private StartupSourceIntent(StartupSourceIntent parent)
+        : this(parent.IntentId, parent.IntentTimestamp, parent.Authority, parent.LocalOnly)
+    {
+        _parent = parent;
+        AuxiliaryOnly = true;
+        AllowProcessRecovery = parent.AllowProcessRecovery;
+        _lifetime.Dispose();
+        _lifetime = CancellationTokenSource.CreateLinkedTokenSource(parent.LifetimeToken);
+    }
+
+    internal StartupSourceIntent ForAuxiliarySteps()
+    {
+        LifetimeToken.ThrowIfCancellationRequested();
+        return AuxiliaryOnly ? this : new StartupSourceIntent(this);
+    }
+
+    internal static StartupSourceIntent NextScheduledOccurrence(StartupSourceIntent? previous, bool localOnly)
+    {
+        var next = Startup(localOnly);
+        return previous?.AuxiliaryOnly == true ? next.ForAuxiliarySteps() : next;
+    }
+
+    private void ThrowIfRevoked(CancellationToken ct)
+    {
+        if (!Revoked) return;
+        if (_stoppedWithPlan && !_lifetime.IsCancellationRequested)
+            throw new StartupPlanStoppedException("原计划已停止，旧计划回调已取消");
+        throw new OperationCanceledException("来源挂载已撤销，旧回调不得重新授权", ct);
+    }
     internal static StartupSourceIntent Startup(bool localOnly = false)
         => new(Guid.NewGuid().ToString("N"), System.Diagnostics.Stopwatch.GetTimestamp(), localOnly: localOnly)
             { AllowProcessRecovery = true };
@@ -91,14 +128,16 @@ public sealed class StartupSourceIntent
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_revoked) throw new OperationCanceledException("来源挂载已撤销，旧回调不得重新授权", ct);
+            ThrowIfRevoked(ct);
+            if (AuxiliaryOnly && required)
+                throw new InvalidOperationException("辅助启动来源不能申请 BGI 任务执行权限");
             if (LocalOnly)
             {
                 if (required) throw new InvalidOperationException("监控端来源不能执行本机 BGI 任务");
                 return null;
             }
             var current = await refresh(this, required, ct).ConfigureAwait(false);
-            if (_revoked) throw new OperationCanceledException("来源已撤销，不能接收在途授权", ct);
+            ThrowIfRevoked(ct);
             if (current is null)
             {
                 if (required || _authority is not null)
@@ -111,6 +150,7 @@ public sealed class StartupSourceIntent
             _authority ??= current;
             return _authority;
         }
+        catch (StartupPlanStoppedException) { StopWithPlan(); throw; }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception)
         {
@@ -125,7 +165,10 @@ public sealed class StartupSourceIntent
 internal sealed class StartupModeUnavailableException(string message) : InvalidOperationException(message);
 
 /// <summary>权威已确认旧意图被手动或耐久停止；只有此类结果可撤销持久自动启动许可。</summary>
-internal sealed class StartupSourceStoppedException(string message) : InvalidOperationException(message);
+internal class StartupSourceStoppedException(string message) : InvalidOperationException(message);
 
 /// <summary>停止权威暂时不可确认；终止本次来源，保留用户的自动启动设置供新启动复核。</summary>
 internal sealed class StartupSourceUnavailableException(string message) : InvalidOperationException(message);
+
+/// <summary>单个计划被停止；不撤销同次启动的辅助监控生命周期。</summary>
+internal sealed class StartupPlanStoppedException(string message) : StartupSourceStoppedException(message);

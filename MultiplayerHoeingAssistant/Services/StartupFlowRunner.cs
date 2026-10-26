@@ -97,7 +97,7 @@ public sealed class StartupFlowRunner
     {
         public required string ExecutionId { get; init; }
         public StartupTriggerInfo? Trigger { get; init; }
-        public StartupSourceIntent? SourceIntent { get; init; }
+        public StartupSourceIntent? SourceIntent { get; set; }
         public bool PassiveTriggerMounted { get; set; }
         public bool TaskCenterAccepted { get; set; }
         public List<string> BgiTaskCommitFacts { get; } = [];
@@ -125,7 +125,7 @@ public sealed class StartupFlowRunner
             throw new OperationCanceledException("自动启动/回调缺少原来源授权；请手动运行或重新挂载，不能刷新当前版本", ct);
         using var lifetime = source is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct, source.LifetimeToken);
         ct = lifetime?.Token ?? ct;
-        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source };
+        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source, TaskCenterAccepted = source?.AuxiliaryOnly == true };
         _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
         {
@@ -165,7 +165,7 @@ public sealed class StartupFlowRunner
             if (_sourceAuthorityProvider is not null
                 && (frozenSource || (ctx.PassiveTriggerMounted && !IsBackgroundTrigger(step.Kind)
                     && NeedsSourceBeforeAction(step))))
-                await VerifySourceAsync(ctx, required: frozenSource, ct);
+                await VerifySourceAsync(ctx, required: frozenSource && ctx.SourceIntent?.AuxiliaryOnly != true, ct);
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
 
@@ -477,6 +477,7 @@ public sealed class StartupFlowRunner
                     {
                         ct.ThrowIfCancellationRequested();
                         ctx.TaskCenterAccepted = true;
+                        ctx.SourceIntent = ctx.SourceIntent?.ForAuxiliarySteps();
                         _log($"[槲寄生] 任务中心已受理，继续后续启动步骤（执行 {ctx.ShortId}）");
                         return true;
                     }
