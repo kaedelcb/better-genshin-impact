@@ -760,7 +760,7 @@
                                                        Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
-                                    <Border BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="12"
+                                    <Border x:Name="StarBadge" BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="12"
                                             Padding="10,3" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal">
                                             <Path Data="M 8,0 L 10.4,5.1 L 16,5.8 L 12,9.7 L 13,15.3 L 8,12.6 L 3,15.3 L 4,9.7 L 0,5.8 L 5.6,5.1 Z"

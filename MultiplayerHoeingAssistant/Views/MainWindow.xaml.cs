@@ -22,8 +22,20 @@ public partial class MainWindow : Window
 
     private void HeaderStarHostSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // 窄窗口保留可点击的 Star，避免缩小文字或挤压标题、设置与跨会话警告。
-        StarMessage.Visibility = e.NewSize.Width >= 340 ? Visibility.Visible : Visibility.Collapsed;
+        // 以实际字体和按钮的自然宽度判断，不使用固定阈值；340 DIP 会误隐藏本可放下的文案。
+        var unbounded = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        var requiredWidth = ProjectStarButton.Padding.Left + ProjectStarButton.Padding.Right;
+        // StarMessage 折叠时自身 DesiredSize 为零，直接测量其仍为 Visible 的子元素，
+        // 确保窗口放宽或切换到宽页面后仍能恢复完整文案。
+        foreach (UIElement child in StarMessage.Children)
+        {
+            child.Measure(unbounded);
+            requiredWidth += child.DesiredSize.Width;
+        }
+        StarBadge.Measure(unbounded);
+        requiredWidth += StarBadge.DesiredSize.Width;
+        StarMessage.Visibility = e.NewSize.Width >= Math.Ceiling(requiredWidth)
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OpenProjectGitHubClick(object sender, RoutedEventArgs e)
