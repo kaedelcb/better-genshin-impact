@@ -570,7 +570,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <!-- 三列按实际内容分配：星光寄语居中于标题与设置之间的剩余空间。 -->
+                    <!-- 三列按实际内容分配：星光寄语紧随标题区，右侧设置保持靠右。 -->
                     <Grid x:Name="HeaderGrid">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -721,10 +721,10 @@
                                 <TextBlock Text="⚠ 跨会话" FontSize="10" FontWeight="Medium" Foreground="#E8A86F" VerticalAlignment="Center"/>
                             </Border>
                         </StackPanel>
-                        <!-- 中间空白：文案与 Star 胶囊作为一个完整点击区域一起居中。 -->
+                        <!-- 文案与 Star 胶囊整体靠左，与标题区保留 24 DIP 的间距。 -->
                         <Grid x:Name="HeaderStarHost" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
-                              Margin="12,0" ClipToBounds="True" SizeChanged="HeaderStarHostSizeChanged">
-                            <Button x:Name="ProjectStarButton" HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Margin="24,0,12,0" ClipToBounds="True" SizeChanged="HeaderStarHostSizeChanged">
+                            <Button x:Name="ProjectStarButton" HorizontalAlignment="Left" VerticalAlignment="Center"
                                     Cursor="Hand" Background="Transparent" Foreground="{StaticResource GoldText}"
                                     Padding="3,5" Click="OpenProjectGitHubClick"
                                     AutomationProperties.Name="在 GitHub 为茶包点亮 Star"
