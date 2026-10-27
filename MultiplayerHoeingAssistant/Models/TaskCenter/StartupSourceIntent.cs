@@ -23,6 +23,25 @@ public sealed class StartupSourceIntent
     internal bool StoppedWithPlan => _stoppedWithPlan;
     internal bool AuxiliaryOnly { get; private init; }
     internal bool AllowProcessRecovery { get; private init; }
+    internal string? HandoffRunId { get; private init; }
+    private StartupStep? _completedExitWatchdog;
+    // 只给本会话空闲电子狗的外部收尾链；不把离线许可扩散到同源定时器、日志触发器或嵌套任务。
+    internal bool AllowsCompletedBgiExit => AuxiliaryOnly && !string.IsNullOrWhiteSpace(HandoffRunId)
+        && _completedExitWatchdog is { } step && IsExternalIdleWatchdog(step);
+
+    private static bool IsExternalIdleWatchdog(StartupStep step)
+        => step is { Kind: StartupStepKinds.Watchdog,
+            WatchKind: StartupStepKinds.BgiTaskRunning, ExpectRunning: false,
+            StatusSource: StartupStatusSource.CurrentSession }
+        && step.FireSteps.All(s => !s.Enabled || s.NodeType != "condition" && s.Kind is
+            (StartupStepKinds.StartProgram or StartupStepKinds.KillProgram or StartupStepKinds.Wait or StartupStepKinds.EndFlow));
+
+    internal StartupSourceIntent ForWatchdog(StartupStep step)
+    {
+        LifetimeToken.ThrowIfCancellationRequested();
+        return AuxiliaryOnly && !string.IsNullOrWhiteSpace(HandoffRunId) && IsExternalIdleWatchdog(step)
+            ? new StartupSourceIntent(this) { _completedExitWatchdog = step } : this;
+    }
     internal void Revoke() { _revoked = true; _lifetime.Cancel(); }
     internal void StopCurrentRun() { _stoppedByUser = true; Revoke(); }
     // 单计划停止只使原计划回调失效；显式退出/重跑/全停仍通过 Revoke 取消整个生命周期。
@@ -34,14 +53,15 @@ public sealed class StartupSourceIntent
         _parent = parent;
         AuxiliaryOnly = true;
         AllowProcessRecovery = parent.AllowProcessRecovery;
+        HandoffRunId = parent.HandoffRunId;
         _lifetime.Dispose();
         _lifetime = CancellationTokenSource.CreateLinkedTokenSource(parent.LifetimeToken);
     }
 
-    internal StartupSourceIntent ForAuxiliarySteps()
+    internal StartupSourceIntent ForAuxiliarySteps(string? handoffRunId = null)
     {
         LifetimeToken.ThrowIfCancellationRequested();
-        return AuxiliaryOnly ? this : new StartupSourceIntent(this);
+        return AuxiliaryOnly ? this : new StartupSourceIntent(this) { HandoffRunId = handoffRunId };
     }
 
     internal static StartupSourceIntent NextScheduledOccurrence(StartupSourceIntent? previous, bool localOnly)

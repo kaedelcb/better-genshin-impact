@@ -482,7 +482,11 @@ public sealed partial class TaskCenterHost
         if (client?.State != BgiExternalLinkState.Ready)
         {
             if (source.AuxiliaryOnly)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (CanObserveCompletedBgiExit(source)) return source.Authority;
                 throw new StartupSourceUnavailableException("辅助监控等待 BGI 连接恢复，不主动启动 BGI");
+            }
             if (!required && source.Authority is null) return null;
             if (source.Authority is { } offline && (!source.AllowProcessRecovery || !StartupProcessExited(offline)))
                 throw new StartupSourceUnavailableException("正在等待原 BGI 恢复连接");
@@ -509,6 +513,31 @@ public sealed partial class TaskCenterHost
         }
         return await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
     }
+
+    // 正常收尾的耐久事实替代已退出进程的在线查询，仅供空闲电子狗及其外部动作。
+    // 不推断崩溃/断线成功，不创建新授权，不拉起 BGI；每次复核和执行前重新检查。
+    internal bool CanObserveCompletedBgiExit(StartupSourceIntent source)
+    {
+        if (!source.AllowsCompletedBgiExit || source.Revoked || source.Authority is not { } authority
+            || !StartupProcessExited(authority)) return false;
+        if (!BgiProcessMonitor.TryGetCurrentSessionBgiProcessesStrict(out var processes, out _)) return false;
+        try
+        {
+            if (processes.Length != 0) return false; // 原进程退出后出现新实例，必须走原有连接/停止校验。
+            var run = _runs.Load(source.HandoffRunId!);
+            return run?.RunId == source.HandoffRunId && HasCompletedBgiExit(run, authority) && !source.Revoked;
+        }
+        finally { foreach (var process in processes) process.Dispose(); }
+    }
+
+    internal static bool HasCompletedBgiExit(WorkflowRunRecord? run, WorkflowStopAuthorityRecord authority)
+        => run is { State: WorkflowRunState.Succeeded, StopRequested: false, PendingCompletion: null }
+            && WorkflowStopAuthority.Current(run) == authority
+            && run.CompletionHistory.Any(c => c.Kind == "terminal.completionAction"
+                && c.Action is "closeSoftware" or "closeGameAndSoftware"
+                && c.Epoch == authority.Epoch && c.State == "executed" && c.BodyCompletedBeforeTerminal
+                && c.ObservedTerminal == "succeeded" && c.ExecutionExitConfirmed == true
+                && c.EffectState == "succeeded");
 
     private static bool StartupProcessExited(WorkflowStopAuthorityRecord authority)
         => WorkflowStopAuthority.TryEpoch(authority.Epoch, out var epoch)

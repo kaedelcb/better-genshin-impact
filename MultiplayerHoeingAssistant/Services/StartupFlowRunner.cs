@@ -477,7 +477,7 @@ public sealed class StartupFlowRunner
                     {
                         ct.ThrowIfCancellationRequested();
                         ctx.TaskCenterAccepted = true;
-                        ctx.SourceIntent = ctx.SourceIntent?.ForAuxiliarySteps();
+                        ctx.SourceIntent = ctx.SourceIntent?.ForAuxiliarySteps(handoff.RunId);
                         _log($"[槲寄生] 任务中心已受理，继续后续启动步骤（执行 {ctx.ShortId}）");
                         return true;
                     }

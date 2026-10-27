@@ -1340,7 +1340,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     private void ArmWatchdog(StartupStep step, StartupSourceIntent? source)
     {
         var interval = Math.Max(1, step.WatchIntervalSeconds);
-        var dog = new ArmedWatchdogViewModel(step, interval, this, source);
+        var dog = new ArmedWatchdogViewModel(step, interval, this, source?.ForWatchdog(step));
         RunOnUi(() => ArmedWatchdogsMutable.Add(dog));
         var action = dog.StatusOnly
             ? "仅显示状态，不执行触发动作（新增动作需撤下重挂）"
@@ -1398,7 +1398,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             {
                 await DelayWithSourceAsync(TimeSpan.FromSeconds(dog.IntervalSeconds), dog.SourceIntent, dog.Cts.Token);
 
-                var (reading, desc) = await ReadWatchdogAsync(step, dog.Cts.Token);
+                var (reading, desc) = await ReadWatchdogAsync(step, dog.Cts.Token, dog.SourceIntent);
                 if (reading == null)
                 {
                     dog.NoteLastCheck($"{desc}，本轮不计");
@@ -1417,7 +1417,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 for (var i = 1; i <= confirmTimes; i++)
                 {
                     await DelayWithSourceAsync(TimeSpan.FromSeconds(confirmSeconds), dog.SourceIntent, dog.Cts.Token);
-                    var (recheck, recheckDesc) = await ReadWatchdogAsync(step, dog.Cts.Token);
+                    var (recheck, recheckDesc) = await ReadWatchdogAsync(step, dog.Cts.Token, dog.SourceIntent);
                     flipDesc = recheckDesc;
                     if (recheck == null)
                     {
@@ -1498,13 +1498,29 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     /// <summary>读取一轮被盯条件：reading=null 表示「未知」（依赖 BGI 快照的条件在快照缺失时）。
     /// 未知≠不成立——这是断连-重连不被误判成边沿的关键。</summary>
-    private async Task<(bool? reading, string desc)> ReadWatchdogAsync(StartupStep step, CancellationToken ct)
+    private async Task<(bool? reading, string desc)> ReadWatchdogAsync(StartupStep step, CancellationToken ct,
+        StartupSourceIntent? source = null)
     {
+        ct.ThrowIfCancellationRequested();
+        if (source?.AllowsCompletedBgiExit == true)
+            return ReadAuxiliaryIdleWatchdog(source, _mainVm.LatestLocalStatus,
+                _mainVm.TaskCenterHost.CanObserveCompletedBgiExit(source));
         var cond = BuildWatchCondition(step);
         if (step.StatusSource == StartupStatusSource.CurrentSession && _mainVm.LatestLocalStatus == null
             && cond.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
             return (null, "BGI 状态快照缺失（未连接/未上报）");
         return await _runner.ReadConditionAsync(cond, ct);
+    }
+
+    internal static (bool? reading, string desc) ReadAuxiliaryIdleWatchdog(StartupSourceIntent source,
+        ControlStatus? status, bool completedBgiExit)
+    {
+        if (source.Revoked) return (null, "电子狗来源已停止");
+        if (completedBgiExit) return (true, "BGI 已按原计划完成并退出，当前无 BGI 进程，期望 空闲");
+        if (status is null || !status.HasFreshTaskStatus(DateTimeOffset.UtcNow)
+            || status.TaskStatusBgiEpoch != source.Authority?.Epoch)
+            return (null, "BGI 任务状态未知或已过期，等待有效快照");
+        return (!status.TaskRunning, status.TaskRunning ? "BGI 有任务在执行，期望 空闲" : "BGI 空闲，期望 空闲");
     }
 
     /// <summary>取消一个盯梢中的电子狗（页面「取消」按钮）。</summary>
