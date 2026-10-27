@@ -16,8 +16,8 @@ function fixture(options = {}) {
         clearTimeout: id => timers.delete(id), renderMembers() {} });
     vm.runInContext(source.slice(0, end) + `
         log = () => {};
-        globalThis.api = { resetMemberState, consumeStateResetResult, interruptStateResetWaits,
-            setConnection: value => { connection = value; }, setPlayers: value => { players = value; } };
+        globalThis.api = { resetMemberState, consumeStateResetResult, consumeStateResetAck, interruptStateResetWaits,
+            setConnection: value => { connection = value; roomReady = true; }, setPlayers: value => { players = value; } };
     `, ctx);
     const api = ctx.api;
     api.setPlayers([{ playerUid: 'a', playerName: '成员甲', online: true },
@@ -106,4 +106,11 @@ test('offline selected member or no online members does not invalidate the share
     await assert.rejects(f.resetMemberState('off', false, () => {}), /在线成员/);
     f.setPlayers([]); await assert.rejects(f.run(true), /在线成员/);
     assert.equal(f.calls.length, 0);
+});
+
+test('actual assistant ack command completes reset without the newer result event', async () => {
+    const f = fixture(); const done = f.run(); await tick();
+    const resetId = f.calls[1].payload.resetId;
+    f.consumeStateResetAck({cmd:'ack',commandId:resetId,senderUid:'a',params:{status:'success',message:'已恢复'}});
+    assert.match(await done, /重置成功/); assert.equal(f.timers.size, 0);
 });

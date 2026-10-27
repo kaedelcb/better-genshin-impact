@@ -1,4 +1,4 @@
-// ========== 联机锄地 Web 控制端（苹果风） ==========
+// ========== 耕地机 Web 控制端：现有 v3 网关与任务入口 ==========
 // v3 网关协议（《通信方案》§4.2/§4.4）：信封走同源 /gateway 的 Dispatch/Query 两入口，
 // 服务端回调统一为 evt；session.hello 握手先行（重连后 connectionId 变更，必须重新 hello 再入房）。
 const PROTOCOL_VERSION = 3;
@@ -10,17 +10,25 @@ let roomCode = '';
 let password = '';
 let playerName = '';
 let players = [];
+let roomReady = false;
+let joiningRoom = false;
+let joinRejection = '';
+const webSessionUid = 'web_' + newRequestId();
 let lastProgress = {};  // 记录每成员的锄地进度，用于 WEB 端日志去重
 
 const LS_CRED = 'web_hie_cred';
 const LS_BIND = 'web_hie_binding';
 
 // ---------- 工具 ----------
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
 function log(msg) {
     const area = document.getElementById('logArea');
     const div = document.createElement('div');
     div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
     area.insertBefore(div, area.firstChild);
+    while (area.childElementCount > 200) area.lastElementChild.remove();
 }
 function showError(msg) {
     document.getElementById('loginError').textContent = msg;
@@ -51,7 +59,7 @@ function makeCmd(cmd, params) {
         cmd,
         roomCode,               // 服务端 SendRemoteCommand 依赖它定位控制房间，缺了会整条命令被拒
         sender: playerName,
-        senderUid: 'web_' + playerName,
+        senderUid: webSessionUid,
         target: ['*'],
         commandId: 'web_' + newRequestId(),
         timestamp: new Date().toISOString(),
@@ -100,16 +108,18 @@ async function sayHello() {
 }
 // control.joinRoom（旧 JoinControlRoom；payload 键名按服务器路由实读：旧参数 teamUids 的键名是 allowedUids，值恒 []）
 async function joinControlRoom() {
+    joinRejection = '';
     const resp = await connection.invoke('Dispatch', makeEnvelope('command', 'control.joinRoom', {
         roomCode,
         password,
-        playerUid: 'web_' + playerName,
+        playerUid: webSessionUid,
         playerName,
         allowedUids: [],
         isRemote: false,
         clientInstanceId: ''
     }));
     checkGatewayError(resp);
+    if (joinRejection) throw new Error(joinRejection);
 }
 // control.sendCommand（旧 SendRemoteCommand；cmd 本体由 makeCmd 生成，逐字不动）
 function sendRemoteCommand(cmd) {
@@ -160,6 +170,11 @@ function consumeStateResetResult(result) {
     pending.results.set(result.targetUid, result);
     if ([...pending.results.values()].every(Boolean)) pending.finish();
 }
+function consumeStateResetAck(cmd) {
+    if (cmd?.cmd !== 'ack') return;
+    consumeStateResetResult({ cmd: 'reset_state', commandId: cmd.commandId,
+        targetUid: cmd.senderUid, status: cmd.params?.status, message: cmd.params?.message });
+}
 function sendAndWaitStateReset(cmd, onProgress) {
     return new Promise(resolve => {
         const results = new Map(cmd.target.map(uid => [uid, null]));
@@ -184,10 +199,11 @@ function interruptStateResetWaits() {
     for (const pending of pendingStateResets.values())
         pending.finish('连接已断开，重置结果未确认；不会自动重发');
 }
-async function resetMemberState(uid, resetAll, onProgress) {
+async function resetMemberState(uid, resetAll, onProgress, explicitTargets = null) {
+    if (!roomReady) throw new Error('控制房间连接未就绪');
     if (resetStateBusy) throw new Error('已有重置正在处理中，请等待结果');
-    const targets = resolveConfigTargets(resetAll ? ['*'] : [uid], players);
-    if (!targets.length || (!resetAll && !players.some(p => p.playerUid === uid && p.online)))
+    const targets = resolveConfigTargets(explicitTargets || (resetAll ? ['*'] : [uid]), players);
+    if (!targets.length || targets.some(target => !players.some(p => p.playerUid === target && p.online)))
         throw new Error('没有可重置的在线成员');
     resetStateBusy = true;
     renderMembers();
@@ -285,6 +301,7 @@ function showResetStateModal(uid, memberName) {
 })();
 // ---------- 加入房间（无服务器地址输入，同源 /gateway） ----------
 function joinRoom() {
+    if (joiningRoom || roomReady) return;
     roomCode = document.getElementById('roomCode').value.trim();
     password = document.getElementById('password').value.trim();
     playerName = document.getElementById('nickname').value.trim() || '网页端';
@@ -294,6 +311,9 @@ function joinRoom() {
         return;
     }
 
+    joiningRoom = true;
+    document.getElementById('joinButton').disabled = true;
+    showError('');
     // 记住登录
     const remember = document.getElementById('rememberMe').checked;
     if (remember) {
@@ -315,6 +335,7 @@ function joinRoom() {
             case 'control.remoteCommandResult':
                 consumeConfigApplied(payload);
                 consumeStateResetResult(payload);
+                consumeMemberResult(payload);
                 break;
             // 成员列表更新（payload 即全量/增量两态本体）
             case 'control.playersUpdated':
@@ -323,7 +344,12 @@ function joinRoom() {
             // 收到其他成员投递的命令（WEB 不做执行，仅记录；ack 已由 PC 端助手处理）
             case 'control.remoteCommand': {
                 const cmd = payload && payload.command;
-                if (cmd) log(`收到命令: ${cmd.cmd} 来自 ${cmd.sender || '?'}`);
+                if (cmd) {
+                    consumeMemberReply(cmd);
+                    consumeStateResetAck(cmd);
+                    if (!['ack', 'task_policy.data', 'task_policy.push_result'].includes(cmd.cmd))
+                        log(`收到命令: ${cmd.cmd} 来自 ${cmd.sender || '?'}`);
+                }
                 break;
             }
             // payload 即 ack 本体 { commandId, deliveredTo, message }
@@ -332,8 +358,12 @@ function joinRoom() {
                 log(`送达 ${ack.deliveredTo} 个目标${ack.message ? "：" + ack.message : ""}`);
                 break;
             }
+            case 'control.batch.state':
+                onControlBatchState(payload);
+                break;
             case 'control.joinRejected': {
                 const reason = (payload && payload.reason) || '加入被拒绝';
+                joinRejection = reason;
                 showError(reason);
                 log('加入失败: ' + reason);
                 break;
@@ -343,33 +373,41 @@ function joinRoom() {
 
     connection.onreconnecting(() => {
         interruptStateResetWaits();
+        interruptMemberWaits();
         setConn(false);
         log('连接断开，重连中...');
     });
     connection.onreconnected(() => {
-        setConn(true);
-        // v3：重连后 connectionId 变更，服务端视为未握手，必须先重新 hello 再入房
-        sayHello().then(joinControlRoom).catch(err => log('重连后重新入房失败: ' + err.message));
-        log('已重连');
+        sayHello().then(joinControlRoom).then(() => {
+            setConn(true);
+            log('已重新加入房间，未自动重发任何命令');
+        }).catch(err => { setConn(false); log('重连后重新入房失败: ' + err.message); });
     });
-    connection.onclose(() => { setConn(false); interruptStateResetWaits(); });
+    connection.onclose(() => { setConn(false); interruptStateResetWaits(); interruptMemberWaits(); });
 
     connection.start()
         .then(() => sayHello())
         .then(() => joinControlRoom())
         .then(() => {
+            setConn(true);
             document.getElementById('loginPanel').style.display = 'none';
             document.getElementById('controlPanel').style.display = 'block';
             document.getElementById('roomInfo').textContent = `房间 ${roomCode}`;
             log(`已加入控制房间：${roomCode}（${playerName}）`);
+            renderMembers();
         })
         .catch(err => {
             showError('连接失败: ' + err.message);
             log('连接失败: ' + err.message);
-        });
+            setConn(false);
+            connection.stop().catch(() => {});
+        }).finally(() => { joiningRoom = false; document.getElementById('joinButton').disabled = false; });
 }
 
 function setConn(online) {
+    roomReady = online;
+    document.getElementById('connectionText').textContent = online ? '连接正常' : '连接未就绪';
+    if (typeof renderControlRoom === 'function') renderControlRoom();
     const dot = document.getElementById('connDot');
     dot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
 }
@@ -411,79 +449,7 @@ function onPlayersUpdated(update) {
 
 // ---------- 渲染成员列表 ----------
 function renderMembers() {
-    const list = document.getElementById('memberList');
-    if (!players || players.length === 0) {
-        list.innerHTML = '<div class="section-empty">暂无在线成员</div>';
-        return;
-    }
-    list.innerHTML = '';
-    players.forEach(p => {
-        const card = document.createElement('div');
-        card.className = 'member-card';
-
-        // 在线圆点：online 绿，离线灰
-        const online = !!p.online;
-        const dotCls = online ? 'dot-online' : 'dot-offline';
-        const activeHoeing = !!p.hoeingBatchId && ['registering', 'preparing', 'takeover',
-            'running', 'stopping', 'cleaning', 'cleanupPending', 'aborted'].includes(p.hoeingStartPhase);
-        // 状态文本：助手离线 / BGI 未运行 / 正在执行任务 / 未运行任务
-        let statusHtml = '';
-        if (!online) {
-            statusHtml = '<span class="bgi-status" style="color:#FF3B30;">助手已离线</span>';
-        } else if (activeHoeing) {
-            statusHtml = '<span class="bgi-status hoeing-start-status" style="color:#FF9500;"></span>';
-        } else if (!p.bgiStatus || p.bgiStatus === 'stopped') {
-            statusHtml = '<span class="bgi-status" style="color:#6E6E73;">BGI 未运行</span>';
-        } else {
-            const taskRunning = !!p.taskRunning;
-            const taskName = p.currentTaskName || '';
-            if (taskRunning) {
-                statusHtml = `<span class="bgi-status" style="color:#34C759;">${taskName || '正在执行任务'}</span>`;
-            } else {
-                statusHtml = '<span class="bgi-status" style="color:#6E6E73;">未运行任务</span>';
-            }
-        }
-
-        // 配置组 / 一条龙标签（含 data-uid 和 data-name 用于点击下发）
-        // 数量多时按真实行高折叠：配置组最多 3 行、一条龙最多 2 行，超出收进"更多"按钮 → 弹窗查看（applyTagFold 测量截断）
-        const uid = p.playerUid || '';
-        const name = p.playerName || '?';
-        const groups = (p.configGroups || []).map(g =>
-            `<span class="tag" data-uid="${uid}" data-name="${name}" data-type="group" data-value="${g}">${g}</span>`).join('');
-        const oneclicks = (p.oneClickConfigs || []).map(o =>
-            `<span class="tag purple" data-uid="${uid}" data-name="${name}" data-type="oneclick" data-value="${o}">${o}</span>`).join('');
-
-        card.innerHTML = `
-            <div class="row1">
-                <span class="dot ${dotCls}"></span>
-                <span class="name">${name}</span>
-                ${uid ? `<span class="bgi-status">(${uid})</span>` : ''}
-                ${statusHtml}
-            </div>
-            ${p.hoeingBatchId && p.hoeingStartPhase && !activeHoeing ? '<div class="bgi-status hoeing-last-status"></div>' : ''}
-            ${groups ? `<div class="tags tag-fold" data-maxlines="3" data-uid="${uid}" data-name="${name}" data-type="group">${groups}</div>` : ''}
-            ${oneclicks ? `<div class="tags tag-fold" data-maxlines="2" data-uid="${uid}" data-name="${name}" data-type="oneclick">${oneclicks}</div>` : ''}
-            <div class="actions">
-                <button class="action-btn danger" data-action="stop" data-uid="${uid}" data-name="${name}" data-hoeing-batch-id="${activeHoeing ? p.hoeingBatchId : ''}">停止</button>
-                <button class="action-btn primary" data-action="start-group" data-uid="${uid}" data-name="${name}">配置组</button>
-                <button class="action-btn primary" data-action="start-oneclick" data-uid="${uid}" data-name="${name}">一条龙</button>
-                <button class="action-btn primary" data-action="hotkey" data-uid="${uid}" data-name="${name}">快捷键</button>
-                <button class="action-btn primary" data-action="close-game" data-uid="${uid}" data-name="${name}">关闭游戏</button>
-                <button class="action-btn secondary" data-action="reset-state" data-uid="${uid}" data-name="${name}" ${!online || resetStateBusy ? 'disabled' : ''}>${resetStateBusy ? '重置处理中' : '重置状态'}</button>
-            </div>
-        `;
-        const hoeingStatus = card.querySelector('.hoeing-start-status') || card.querySelector('.hoeing-last-status');
-        if (hoeingStatus) {
-            const phaseNames = { registering: '登记成员', preparing: '全队准备中', takeover: '接管原任务',
-                running: '联机批次执行中', stopping: '全队停止中', cleaning: '联机批次清理中',
-                cleanupPending: '联机批次清理待确认', aborted: '联机批次已中止，等待清理',
-                completed: '联机已完成', failed: '联机失败', cancelled: '联机已取消', unknown: '联机结果待确认' };
-            hoeingStatus.textContent = (activeHoeing ? '' : '上次联机：')
-                + (p.hoeingStartMessage || phaseNames[p.hoeingStartPhase] || '联机状态待确认');
-        }
-        list.appendChild(card);
-        applyTagFold(card);  // 真实行高折叠：配置组 3 行、一条龙 2 行，超出加"更多"按钮
-    });
+    if (typeof renderControlRoom === 'function') renderControlRoom();
 }
 
 // ---------- 按真实行高折叠标签（配置组/一条龙） ----------
@@ -526,38 +492,6 @@ function applyTagFold(card) {
 }
 // ---------- 成员卡片点击事件委托（按钮+标签，全局只绑一次） ----------
 document.getElementById('memberList').addEventListener('click', e => {
-    // 操作按钮：停止 / 启动配置组 / 启动一条龙
-    const btn = e.target.closest('.action-btn');
-    if (btn) {
-        const uid = btn.dataset.uid;
-        const memberName = btn.dataset.name;
-        const action = btn.dataset.action;
-        if (!uid || btn.disabled) return;
-
-        if (action === 'stop') {
-            const cmd = makeCmd('stop', { hoeingBatchId: btn.dataset.hoeingBatchId || '' });
-            cmd.target = [uid];
-            sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
-            log(`已对 ${memberName} 下发停止`);
-        } else if (action === 'start-group') {
-            showMemberConfigSelect(uid, memberName, 'group');
-        } else if (action === 'start-oneclick') {
-            showMemberConfigSelect(uid, memberName, 'oneclick');
-        } else if (action === 'hotkey') {
-            showHotkeySelect(uid, memberName);
-        } else if (action === 'reset-state') {
-            showResetStateModal(uid, memberName);
-        } else if (action === 'close-game') {
-            if (confirm(`确定要关闭 ${memberName} 的游戏吗？`)) {
-                const cmd = makeCmd('close_game');
-                cmd.target = [uid];
-                sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
-                log(`已对 ${memberName} 下发关闭游戏`);
-            }
-        }
-        return;
-    }
-
     // "更多"按钮 → 弹窗查看全部配置组/一条龙
     const moreBtn = e.target.closest('.tag-more');
     if (moreBtn) {
@@ -589,7 +523,7 @@ function showTagMoreModal(uid, memberName, type) {
     const items = isOneClick ? (member.oneClickConfigs || []) : (member.configGroups || []);
     const label = isOneClick ? '一条龙' : '配置组';
     if (items.length === 0) {
-        log(`${memberName} 没有可用${label}`);
+        log(`${escapeHtml(memberName)} 没有可用${label}`);
         return;
     }
 
@@ -598,10 +532,10 @@ function showTagMoreModal(uid, memberName, type) {
     overlay.innerHTML = `
         <div class="modal">
             <h3>${label}列表</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">「${memberName}」共 ${items.length} 个${label}，点击即可下发</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">「${escapeHtml(memberName)}」共 ${items.length} 个${label}，点击即可下发</p>
             <div class="tags modal-tags">
                 ${items.map(g =>
-                    `<span class="tag${isOneClick ? ' purple' : ''}" data-uid="${uid}" data-name="${memberName}" data-type="${type}" data-value="${g}">${g}</span>`
+                    `<span class="tag${isOneClick ? ' purple' : ''}" data-uid="${escapeHtml(uid)}" data-name="${escapeHtml(memberName)}" data-type="${type}" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`
                 ).join('')}
             </div>
             <div class="btn-row">
@@ -631,11 +565,7 @@ document.getElementById('quickRow').addEventListener('click', e => {
     const btn = e.target.closest('.quick-btn');
     if (!btn) return;
     const key = btn.dataset.key;
-    if (key === '一键锄地') {
-        showQuickHoeingConfirmModal();
-        return;
-    }
-    showQuickCommandConfirm(key);
+    showCoordinatedConfirm(key);
 });
 
 function parseQuickCommandBinding(binding) {
@@ -647,6 +577,8 @@ function parseQuickCommandBinding(binding) {
 }
 
 function showQuickCommandConfirm(key) {
+    const selectedTargets = getSelectedMembers().map(p => p.playerUid);
+    if (!selectedTargets.length) { log('请先选择在线成员'); return; }
     const parsed = parseQuickCommandBinding(loadBindings()[key]);
     showConfirmModal(key, parsed?.name || '', parsed?.isOneClick || false, result => {
         if (result === 'confirm' && parsed) {
@@ -660,14 +592,14 @@ function showQuickCommandConfirm(key) {
                 if (Array.isArray(dictWs[parsed.name])) tasksWithStatus = dictWs[parsed.name];
                 if (tasks && tasksWithStatus) break;
             }
-            showTaskListSelect('*', '全部在线成员', parsed.name, parsed.isOneClick, tasks, ['*'], tasksWithStatus);
+            showTaskListSelect('*', '已选成员', parsed.name, parsed.isOneClick, tasks, selectedTargets, tasksWithStatus);
         } else if (result === 'modify') {
             showBindModal(key, newBind => {
                 if (!newBind) return;
                 const bindings = loadBindings();
                 bindings[key] = newBind;
                 saveBindings(bindings);
-                log(`${key} 已绑定: ${newBind}`);
+                log(`${escapeHtml(key)} 已绑定: ${newBind}`);
                 showQuickCommandConfirm(key);
             });
         }
@@ -694,7 +626,7 @@ function hoeingCompletionDescription(action) {
 
 // 一键锄地与PC共用服务端批次；全部成员准备完成后才允许接管和执行。
 function showQuickHoeingConfirmModal() {
-    const targets = players.filter(p => p.online === true && p.playerUid);
+    const targets = getSelectedMembers();
     if (targets.length === 0) {
         log('没有在线成员可下发一键锄地');
         return;
@@ -782,9 +714,11 @@ async function beginCoordinatedQuickCommand(targets, useCompletionActions, quick
         const batch = response?.payload;
         if (!batch?.batchId || batch.protocol !== 'hoeing.start.v2')
             throw new Error('服务器未返回有效批次身份，受理结果待确认');
-        log(batch.phase === 'aborted'
+        const message = batch.phase === 'aborted'
             ? `${label}已中止：${batch.reason || '准备失败'}（批次 ${batch.batchId}）`
-            : `${label}已受理：${targetUids.length} 名成员，正在全队准备（批次 ${batch.batchId}）；受理不代表已经起跑`);
+            : `${label}已受理：${targetUids.length} 名成员，正在全队准备；受理不代表已经起跑`;
+        log(message);
+        return { status: batch.phase === 'aborted' ? 'failed' : 'accepted', batch, message };
     } catch (err) {
         if (err.gatewayRejected) {
             const detail = err.message.includes('previous_batch_active')
@@ -792,7 +726,9 @@ async function beginCoordinatedQuickCommand(targets, useCompletionActions, quick
                 : err.message.includes('hoeing_start_capability_required')
                     ? '有参与成员尚未支持统一联机开始，请升级配套助手'
                     : err.message;
-            log(label + '未受理：' + detail);
+            const message = label + '未受理：' + detail;
+            log(message);
+            return { status: 'failed', message };
         } else {
             let recovered = null;
             try {
@@ -800,9 +736,11 @@ async function beginCoordinatedQuickCommand(targets, useCompletionActions, quick
                 checkGatewayError(current);
                 if (current?.payload?.requestId === requestId) recovered = current.payload;
             } catch { /* 传输未知保留待确认，不另造请求重发。 */ }
-            log(recovered
-                ? `已按原请求确认${label}批次 ${recovered.batchId}，状态：${recovered.phase}`
-                : label + '受理结果待确认，未重复发送：' + err.message);
+            const message = recovered
+                ? `已按原请求确认${label}批次 ${recovered.batchId}，状态：${batchPhaseName(recovered.phase)}`
+                : label + '受理结果待确认，未重复发送：' + err.message;
+            log(message);
+            return { status: recovered ? 'accepted' : 'unknown', batch: recovered, message };
         }
     }
 }
@@ -822,11 +760,11 @@ function showBindModal(key, callback) {
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
         <div class="modal">
-            <h3>绑定「${key}」</h3>
+            <h3>绑定「${escapeHtml(key)}」</h3>
             <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择要执行的配置组或一条龙（来自成员列表）</p>
             ${all.length === 0 ? '<p style="color:#FF3B30;font-size:13px;">暂无可用配置，请在成员列表同步后再试</p>' : ''}
             <div class="list-items" id="bindList">
-                ${all.map((item, i) => `<div class="list-item" data-index="${i}" data-value="${item.value}">${item.label}</div>`).join('')}
+                ${all.map((item, i) => `<div class="list-item" data-index="${i}" data-value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</div>`).join('')}
             </div>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="bindCancel">取消</button>
@@ -862,7 +800,7 @@ function showBindModal(key, callback) {
 // ---------- 弹窗：确认（含修改按钮） ----------
 function showConfirmModal(key, value, isOneClick, callback) {
     const quickCommandKey = '一键' + key;
-    const members = players.filter(p => p.online === true && p.playerUid).map(p => ({
+    const members = getSelectedMembers().map(p => ({
         ...p, quickCommands: { ...p.quickCommands },
         hoeingCompletionAction: p.hoeingCompletionAction ? { ...p.hoeingCompletionAction } : null
     }));
@@ -883,7 +821,7 @@ function showConfirmModal(key, value, isOneClick, callback) {
                 <button class="btn btn-primary" id="confOk">确认</button>
             </div>
         </div>`;
-    overlay.querySelector('h3').textContent = `确认下发「${key}」`;
+    overlay.querySelector('h3').textContent = `确认下发「${escapeHtml(key)}」`;
     const summary = overlay.querySelector('#quickSummary');
     const completionOption = overlay.querySelector('#quickCompletionActions');
     const hint = overlay.querySelector('#quickCompletionHint');
@@ -905,8 +843,8 @@ function showConfirmModal(key, value, isOneClick, callback) {
     function updateChoice() {
         const useActions = !completionOption.disabled && completionOption.checked;
         summary.textContent = useActions
-            ? `从头执行以下 ${targets.length} 个成员各自为「${key}」绑定的任务。`
-            : value ? `对全部在线成员执行网页任务：${isOneClick ? '一条龙' : '配置组'}「${value}」。`
+            ? `从头执行以下 ${targets.length} 个成员各自为「${escapeHtml(key)}」绑定的任务。`
+            : value ? `对已选成员执行网页任务：${isOneClick ? '一条龙' : '配置组'}「${escapeHtml(value)}」。`
                 : '尚未设置网页任务，请选择“修改网页任务”；也可勾选使用成员已有快捷绑定。';
         list.hidden = !useActions;
         hint.textContent = completionOption.disabled
@@ -947,14 +885,14 @@ function showMemberConfirmModal(uid, memberName, value, isOneClick) {
 // ---------- 弹窗：选择成员的配置组/一条龙并下发（含"从此处开始执行"任务列表） ----------
 function showMemberConfigSelect(uid, memberName, type) {
     const member = players.find(p => p.playerUid === uid);
-    if (!member) { log(`找不到成员 ${memberName} 的配置信息`); return; }
+    if (!member) { log(`找不到成员 ${escapeHtml(memberName)} 的配置信息`); return; }
 
     const isOneClick = type === 'oneclick';
     const items = isOneClick ? (member.oneClickConfigs || []) : (member.configGroups || []);
     const label = isOneClick ? '一条龙' : '配置组';
 
     if (items.length === 0) {
-        log(`${memberName} 没有可用${label}`);
+        log(`${escapeHtml(memberName)} 没有可用${label}`);
         return;
     }
 
@@ -963,9 +901,9 @@ function showMemberConfigSelect(uid, memberName, type) {
     overlay.innerHTML = `
         <div class="modal">
             <h3>选择${label}</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择对「${memberName}」下发的${label}</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择对「${escapeHtml(memberName)}」下发的${label}</p>
             <div class="list-items">
-                ${items.map((item, i) => `<div class="list-item" data-index="${i}" data-value="${item}">${item}</div>`).join('')}
+                ${items.map((item, i) => `<div class="list-item" data-index="${i}" data-value="${escapeHtml(item)}">${escapeHtml(item)}</div>`).join('')}
             </div>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="mcfgCancel">取消</button>
@@ -1003,7 +941,7 @@ function showHotkeySelect(uid, memberName) {
     const member = players.find(p => p.playerUid === uid);
     const hotkeys = member ? member.hotkeys || [] : [];
     if (!hotkeys || hotkeys.length === 0) {
-        log(`${memberName} 没有可用的快捷键`);
+        log(`${escapeHtml(memberName)} 没有可用的快捷键`);
         return;
     }
 
@@ -1012,13 +950,13 @@ function showHotkeySelect(uid, memberName) {
     overlay.innerHTML = `
         <div class="modal">
             <h3>选择快捷键</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择要对「${memberName}」执行的快捷键</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择要对「${escapeHtml(memberName)}」执行的快捷键</p>
             <div class="list-items">
                 ${hotkeys.map((hk, i) => {
                     const funcName = hk.functionName || '';
                     const hotkeyText = hk.hotkeyText || '';
                     return `<div class="list-item" data-index="${i}" data-config-name="${hk.configName || ''}">
-                        ${funcName} <span style="font-size:11px;color:#6E6E73;">(${hotkeyText})</span>
+                        ${escapeHtml(funcName)} <span style="font-size:11px;color:#6E6E73;">(${escapeHtml(hotkeyText)})</span>
                     </div>`;
                 }).join('')}
             </div>
@@ -1043,12 +981,12 @@ function showHotkeySelect(uid, memberName) {
         selected = items[0].dataset.configName;
     }
 
-    overlay.querySelector('#hkOk').addEventListener('click', () => {
+    overlay.querySelector('#hkOk').addEventListener('click', async () => {
+        overlay.querySelector('#hkOk').disabled = true;
         if (selected) {
             const cmd = makeCmd('hotkey_execute', { hotkeyConfigName: selected });
             cmd.target = [uid];
-            sendRemoteCommand(cmd).catch(err => log('发送失败: ' + err.message));
-            log(`已对 ${memberName} 下发快捷键: ${selected}`);
+            try { await sendTrackedCommand(cmd); } catch (err) { log('快捷键未完成: ' + err.message); }
         }
         overlay.remove();
     });
@@ -1092,7 +1030,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
     overlay.innerHTML = `
         <div class="modal">
             <h3>从此处开始执行</h3>
-            <p style="font-size:13px;color:#1D1D1F;margin-bottom:4px;font-weight:600;">「${configName}」${tasks ? '共 ' + tasks.length + ' 个任务' : ''}</p>
+            <p style="font-size:13px;color:#1D1D1F;margin-bottom:4px;font-weight:600;">「${escapeHtml(configName)}」${tasks ? '共 ' + tasks.length + ' 个任务' : ''}</p>
             <p style="font-size:12px;color:#6E6E73;margin-bottom:10px;">选择从哪个任务开始（勾选切换启用状态）</p>
             <div class="list-items" style="max-height:300px;overflow-y:auto;">
                 ${options.map((opt, i) => {
@@ -1103,9 +1041,9 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                         </div>`;
                     }
                     const checked = opt.enabled ? 'checked' : '';
-                    return `<div class="list-item task-row" data-index="${opt.index}" style="display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" class="task-checkbox" ${checked} data-index="${opt.index}">
-                        <span>${opt.text}</span>
+                    return `<div class="list-item task-row" data-index="${escapeHtml(opt.index)}" style="display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" class="task-checkbox" ${checked} data-index="${escapeHtml(opt.index)}">
+                        <span>${escapeHtml(opt.text)}</span>
                     </div>`;
                 }).join('')}
             </div>
@@ -1149,30 +1087,18 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         cancelBtn.disabled = true;
         // 先发启用状态变更
         const changes = {};
-        // 用 Set 去重（同一索引可能多次 change）
-        const seen = new Set();
-        for (const ch of statusChanges) {
-            if (!seen.has(ch.index)) {
-                seen.add(ch.index);
-                changes[ch.index] = ch.enabled;
-            }
-        }
-        // 也检查所有当前 checkbox 状态，与原始态对比
-        // 注意 data-index 是真实任务键（可能 ≠ 位置序号），原始态按 options 里记录的 enabled 取
         overlay.querySelectorAll('.task-checkbox').forEach(cb => {
-            const idx = isOneClick ? cb.dataset.index : parseInt(cb.dataset.index);
-            if (!seen.has(idx)) {
-                const opt = options.find(o => o.isTask && o.index === idx);
-                if (opt && cb.checked !== opt.enabled) {
-                    seen.add(idx);
-                    changes[idx] = cb.checked;
-                }
-            }
+            const idx = isOneClick ? cb.dataset.index : Number(cb.dataset.index);
+            const original = options.find(o => o.isTask && o.index === idx);
+            if (original && cb.checked !== original.enabled) changes[idx] = cb.checked;
         });
 
         // Serialize dependent writes per target, and require execution-side applied receipts.
         // Gateway forwarding acknowledgements never authorize a dependent start.
         try {
+            requireOnlineTargets(targets);
+            if (isOneClick && (Object.hasOwn(changes, '') || selectedIndex === ''))
+                throw new Error('该一条龙尚未上报任务标识，不能修改启用状态或从指定任务开始');
             const appliedByUid = new Map();
             for (const uid of targets) {
                 for (const [taskIdx, en] of Object.entries(changes)) {
@@ -1203,9 +1129,10 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                     bgiEpoch: applied ? { processId: applied.targetProcessId, startTicksUtc: applied.targetStartTicksUtc } : undefined
                 });
                 cmd.target = [uid];
-                await sendRemoteCommand(cmd);
+                const result = await sendTrackedCommand(cmd);
+                if (result.status !== 'success') throw new Error(result.message || '启动结果未确认');
             }
-            log('配置应用已确认，任务启动命令已下发');
+            log('所选任务已获得执行端启动确认');
         } catch (error) {
             log('保存/启动未完成：' + error.message);
             okBtn.disabled = false;
@@ -1226,11 +1153,11 @@ function openSettings() {
         <div class="modal">
             <h3>设置</h3>
             <label class="field-label">房间码</label>
-            <input type="text" id="setRoomCode" value="${creds.roomCode || ''}" placeholder="6 位房间码">
+            <input type="text" id="setRoomCode" value="${escapeHtml(creds.roomCode || '')}" placeholder="6 位房间码">
             <label class="field-label">密码</label>
-            <input type="password" id="setPassword" value="${creds.password || ''}" placeholder="密码">
+            <input type="password" id="setPassword" value="${escapeHtml(creds.password || '')}" placeholder="密码">
             <label class="field-label">昵称</label>
-            <input type="text" id="setNickname" value="${creds.nickname || ''}" placeholder="昵称">
+            <input type="text" id="setNickname" value="${escapeHtml(creds.nickname || '')}" placeholder="昵称">
             <div class="btn-row" style="margin-top:20px;">
                 <button class="btn btn-secondary" id="setCancel">取消</button>
                 <button class="btn btn-primary" id="setSave">保存</button>
