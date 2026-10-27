@@ -28,23 +28,26 @@ def main():
         result = subprocess.run(
             [str(compiler), "/nologo", "/target:winexe", "/platform:x64", "/optimize+",
              "/codepage:65001", "/r:System.Windows.Forms.dll", "/r:System.Drawing.dll",
-             "/r:System.Web.Extensions.dll", "/win32manifest:" + str(source / "app.manifest"),
-             "/out:" + str(exe), str(source / "KeyboardProbe.cs")],
+             "/r:System.Web.Extensions.dll", "/r:System.IO.Compression.dll", "/r:System.IO.Compression.FileSystem.dll",
+             "/win32manifest:" + str(source / "app.manifest"),
+             "/out:" + str(exe)] + [str(p) for p in sorted(source.glob("*.cs"))],
             capture_output=True, timeout=60,
         )
         guard.write(output / "build.log", result.stdout + result.stderr)
         print("compiler exit:", result.returncode, flush=True)
         if result.returncode:
             raise RuntimeError("Compilation failed; see build.log")
-        guard.write(output / "使用说明.md", (source / "README.md").read_bytes())
-        result = subprocess.run([str(exe), "--self-test", str(output / "self-test.json")], timeout=30)
+        guard.write(output / "详细说明.md", (source / "README.md").read_bytes())
+        guard.write(output / "使用说明.txt", b"\xef\xbb\xbf" + (source / "QuickStart.txt").read_bytes())
+        result = subprocess.run([str(exe), "--self-test", str(output / "self-test.json")], timeout=60)
         print("self-test exit:", result.returncode, flush=True)
         if result.returncode:
             raise RuntimeError("Isolated self-test failed; see self-test.json")
-        with zipfile.ZipFile(output / "BGI-按键诊断工具.zip", "x", zipfile.ZIP_DEFLATED) as archive:
+        with zipfile.ZipFile(output / "BGI-按键诊断工具-v2.0.zip", "x", zipfile.ZIP_DEFLATED) as archive:
             archive.write(exe, exe.name)
-            archive.write(output / "使用说明.md", "使用说明.md")
-        print("package:", output / "BGI-按键诊断工具.zip", flush=True)
+            archive.write(output / "使用说明.txt", "使用说明.txt")
+            archive.write(output / "详细说明.md", "详细说明.md")
+        print("package:", output / "BGI-按键诊断工具-v2.0.zip", flush=True)
 
 
 if __name__ == "__main__":

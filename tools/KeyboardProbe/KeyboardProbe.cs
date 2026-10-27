@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Web.Script.Serialization;
@@ -91,6 +92,7 @@ namespace BetterGI.KeyboardProbe
     internal sealed class KeySurface : Panel
     {
         internal Action<int, bool> Received;
+        internal bool HandsOff;
         internal KeySurface()
         {
             TabStop = true;
@@ -110,7 +112,7 @@ namespace BetterGI.KeyboardProbe
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            string text = Focused ? "测试区已获得焦点\n请分别按下并松开 M、W、空格、Esc、F8，各 3 次。" : "点击此处，让测试区获得焦点";
+            string text = HandsOff ? "松手观察中：请不要再按键盘。\n观察计数是否仍增加即可。" : Focused ? "测试区已获得焦点\n请分别按下并松开 M、F、W、空格、Esc、F8，各 3 次。" : "点击此处，让测试区获得焦点（测试键：M / F / W / 空格 / Esc / F8）";
             TextRenderer.DrawText(e.Graphics, text, Font, ClientRectangle, Color.FromArgb(25, 52, 73), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
         }
     }
@@ -118,7 +120,9 @@ namespace BetterGI.KeyboardProbe
     internal sealed class ProbeForm : Form
     {
         private readonly ComboBox stage = new ComboBox();
-        private readonly Button start = new Button(), stop = new Button(), folder = new Button();
+        private readonly Button start = new Button(), stop = new Button(), folder = new Button(), hands = new Button(), export = new Button();
+        private readonly CheckBox observeInjected = new CheckBox();
+        private readonly Label phase = new Label();
         private readonly Label status = new Label();
         private readonly TextBox display = new TextBox();
         private readonly KeySurface surface = new KeySurface();
@@ -128,48 +132,66 @@ namespace BetterGI.KeyboardProbe
         private Dictionary<string, Counter> window = new Dictionary<string, Counter>();
         private readonly List<object> samples = new List<object>();
         private readonly List<string> errors = new List<string>();
+        private readonly List<string> savedCaptures = new List<string>();
+        private ModifierObservation modifiers;
+        private InjectionObservation injection;
+        private Dictionary<string, Counter> handsRaw, handsWindow;
+        private long handsStarted = -1;
+        private bool injectionRequested;
+        private int activeStageIndex;
+        private long captureEndMs = 30000, handsAfterMs = 20000;
+        private Action captureFinished;
+        private string lastExport;
         private object environment;
         private DateTime started;
         private string activeStage, savedPath;
         private bool capturing, registered, testing;
         private int lastSample = -1, rawPackets, rawZeroDevice, rawUnknown;
+        private int handsRawPackets, handsRawOther;
         private long lastTick, maxTickGap;
         private readonly string outputDirectory;
-        private static readonly int[] ModifierKeysToRead = { 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0x5B, 0x5C };
-        private static readonly string[] ModifierNames = { "LShift", "RShift", "LCtrl", "RCtrl", "LAlt", "RAlt", "LWin", "RWin" };
 
         internal ProbeForm() : this(null) { }
         private ProbeForm(string output)
         {
             outputDirectory = output ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BetterGI-KeyboardProbe", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Process.GetCurrentProcess().Id);
-            Text = "BGI 按键故障诊断 · 只观察";
+            Text = "BGI 按键故障诊断 v2.0 · 独立工具";
             Font = new Font("Microsoft YaHei UI", 10);
-            ClientSize = new Size(780, 560);
-            MinimumSize = new Size(730, 550);
+            ClientSize = new Size(920, 690);
+            MinimumSize = new Size(920, 690);
             StartPosition = FormStartPosition.CenterScreen;
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), RowCount = 6, ColumnCount = 1 };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 75));
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), RowCount = 8, ColumnCount = 1 };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 65));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "故障出现时先保留现场，选择阶段后点击开始。先在下方测试区按键，再回到游戏按 M / W / 空格。\n30 秒后自动保存。仅记录测试键计数和系统状态，不记录输入文字、不安装键盘钩子、不发送按键。", AutoSize = false }, 0, 0);
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 78));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "先采故障现场，再自行停止任务、退出 BGI 分别做对照。每轮前 20 秒测试，后 10 秒松手观察。\n默认只观察原始输入和修饰键，不发送按键、不记录文字。先完成一轮默认采集，再按需启用模拟输入观察。", AutoSize = false }, 0, 0);
             var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
             stage.DropDownStyle = ComboBoxStyle.DropDownList; stage.Width = 190;
-            stage.Items.AddRange(new object[] { "故障现场（BGI 仍运行）", "停止任务后", "退出 BGI 后对照", "正常状态基线" }); stage.SelectedIndex = 0;
+            stage.Items.AddRange(new object[] { "1. 故障现场（BGI 运行）", "2. 自行停止任务后", "3. 自行退出 BGI 后", "正常状态基线" }); stage.SelectedIndex = 0;
             start.Text = "开始 30 秒"; start.Width = 125; start.Click += delegate { StartCapture(); };
             stop.Text = "结束并保存"; stop.Width = 125; stop.Enabled = false; stop.Click += delegate { StopCapture(); };
-            folder.Text = "打开结果目录"; folder.Width = 135; folder.Enabled = false;
+            folder.Text = "打开目录"; folder.Width = 100; folder.Enabled = false;
             folder.Click += delegate { try { Process.Start("explorer.exe", "\"" + outputDirectory + "\""); } catch (Exception ex) { MessageBox.Show(ex.Message); } };
-            actions.Controls.AddRange(new Control[] { stage, start, stop, folder }); layout.Controls.Add(actions, 0, 1);
-            surface.Dock = DockStyle.Fill; surface.Received = OnWindowKey; layout.Controls.Add(surface, 0, 2);
+            hands.Text = "松手观察 10 秒"; hands.Width = 145; hands.Enabled = false; hands.Click += delegate { BeginHandsOff(true); };
+            export.Text = "导出对照包"; export.Width = 125; export.Enabled = false; export.Click += delegate { ExportComparison(); };
+            actions.Controls.AddRange(new Control[] { stage, start, stop, hands, export, folder }); layout.Controls.Add(actions, 0, 1);
+            observeInjected.Dock = DockStyle.Fill; observeInjected.Text = "可选：观察模拟输入标记（安装只读钩子，可能改变时序；不能判断发送者就是 BGI）";
+            layout.Controls.Add(observeInjected, 0, 2);
+            phase.Dock = DockStyle.Fill; phase.BackColor = Color.FromArgb(255, 245, 220); phase.Padding = new Padding(8);
+            phase.Text = "准备就绪。默认模式先保存原始现场；所有阶段切换只改变标签，不会停止任务或退出 BGI。";
+            layout.Controls.Add(phase, 0, 3);
+            surface.Dock = DockStyle.Fill; surface.Received = OnWindowKey; layout.Controls.Add(surface, 0, 4);
             display.Dock = DockStyle.Fill; display.Multiline = true; display.ReadOnly = true; display.ScrollBars = ScrollBars.Vertical;
-            display.Font = new Font("Consolas", 11); layout.Controls.Add(display, 0, 3);
-            status.Dock = DockStyle.Fill; status.Text = "尚未采集。原始事件与窗口事件只作为定位线索，不能单独判定哪个程序拦截。"; layout.Controls.Add(status, 0, 4);
-            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "对照时使用同一实体键盘。Esc / F8 只在测试区测试，避免触发游戏或 BGI 的快捷键。" }, 0, 5);
+            display.Font = new Font("Consolas", 10); layout.Controls.Add(display, 0, 5);
+            status.Dock = DockStyle.Fill; status.Text = "尚未采集。左右 Ctrl / Alt / Shift / Win 每约 50ms 观察一次，记录变化和可见持续时间。"; layout.Controls.Add(status, 0, 6);
+            layout.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "Esc / F8 只在蓝色测试区测试。松手阶段不要碰键盘；可以观察游戏。\n报告不能读取 BGI 内部定时器或发键重试状态；未观察到事件不等于没有异常输入。" }, 0, 7);
             Controls.Add(layout);
-            timer.Interval = 100; timer.Tick += Tick;
+            timer.Interval = 50; timer.Tick += Tick;
             FormClosing += delegate { if (capturing) StopCapture(); };
             FormClosed += delegate { timer.Dispose(); };
         }
@@ -178,7 +200,7 @@ namespace BetterGI.KeyboardProbe
 
         internal static string Bucket(int key)
         {
-            switch (key) { case 0x4D: return "M"; case 0x57: return "W"; case 0x20: return "Space"; case 0x1B: return "Esc"; case 0x77: return "F8"; default: return null; }
+            switch (key) { case 0x4D: return "M"; case 0x46: return "F"; case 0x57: return "W"; case 0x20: return "Space"; case 0x1B: return "Esc"; case 0x77: return "F8"; default: return null; }
         }
         private static void Count(Dictionary<string, Counter> target, int key, bool down)
         {
@@ -202,35 +224,83 @@ namespace BetterGI.KeyboardProbe
         private void StartCapture()
         {
             if (capturing) return;
+            if (!testing) { captureEndMs = 30000; handsAfterMs = 20000; }
             raw.Clear(); window.Clear(); samples.Clear(); errors.Clear();
             rawPackets = rawZeroDevice = rawUnknown = 0; lastSample = -1; lastTick = maxTickGap = 0;
-            activeStage = stage.Text; environment = EnvironmentSnapshot();
+            savedPath = null; handsStarted = -1; modifiers = new ModifierObservation();
+            handsRawPackets = handsRawOther = 0; surface.HandsOff = false; surface.Invalidate();
+            handsRaw = new Dictionary<string, Counter>(); handsWindow = new Dictionary<string, Counter>();
+            injectionRequested = observeInjected.Checked; injection = null;
+            activeStage = stage.Text; activeStageIndex = stage.SelectedIndex; environment = EnvironmentSnapshot();
             started = DateTime.UtcNow; clock.Restart(); capturing = true;
             registered = Register(false);
-            start.Enabled = stage.Enabled = false; stop.Enabled = true;
+            if (injectionRequested)
+            {
+                injection = new InjectionObservation();
+                if (!injection.Start()) errors.Add("optional-hook-start:" + injection.Error);
+            }
+            start.Enabled = stage.Enabled = observeInjected.Enabled = export.Enabled = false; stop.Enabled = hands.Enabled = true;
             if (!testing) surface.Focus();
-            Sample(); timer.Start();
+            PollModifiers(); Sample(); UpdatePhase(); timer.Start();
         }
-        private void OnWindowKey(int key, bool down) { if (capturing) Count(window, key, down); }
+        private void OnWindowKey(int key, bool down)
+        {
+            if (!capturing) return;
+            Count(window, key, down);
+            if (handsStarted >= 0) Count(handsWindow, key, down);
+        }
+        private void PollModifiers()
+        {
+            var states = new bool[8];
+            for (int i = 0; i < 8; i++) states[i] = (Native.GetAsyncKeyState(ModifierObservation.Keys[i]) & 0x8000) != 0;
+            modifiers.Observe(states, clock.ElapsedMilliseconds);
+        }
+        private void BeginHandsOff(bool manual)
+        {
+            if (!capturing || handsStarted >= 0) return;
+            handsStarted = clock.ElapsedMilliseconds;
+            surface.HandsOff = true; surface.Invalidate();
+            if (manual) captureEndMs = handsStarted + 10000;
+            if (injection != null) injection.Counts.HandsOff = true;
+            hands.Enabled = false; Sample(); UpdatePhase();
+        }
+        private void UpdatePhase()
+        {
+            long now = clock.ElapsedMilliseconds;
+            phase.Text = handsStarted >= 0
+                ? "松手观察：请放开所有按键，不要再按键盘。剩余 " + Math.Max(0, (captureEndMs - now + 999) / 1000) + " 秒。\n当前修饰键：" + modifiers.Display()
+                : "按键测试：在蓝色区域分别按下并松开 M / F / W / 空格 / Esc / F8。\n" + Math.Max(0, (handsAfterMs - now + 999) / 1000) + " 秒后进入松手观察，也可点击“松手观察 10 秒”。当前修饰键：" + modifiers.Display();
+        }
         private void Tick(object sender, EventArgs e)
         {
             long now = clock.ElapsedMilliseconds;
             maxTickGap = Math.Max(maxTickGap, now - lastTick); lastTick = now;
+            PollModifiers();
+            if (handsStarted < 0 && now >= handsAfterMs) BeginHandsOff(false);
             if ((int)(now / 1000) != lastSample) Sample();
             display.Text = Summary();
-            status.Text = "采集中，剩余 " + Math.Max(0, 30 - now / 1000) + " 秒。Raw Input 注册：" + (registered ? "成功" : "失败，见结果错误字段") + "。";
-            if (now >= 30000) StopCapture();
+            UpdatePhase();
+            status.Text = "阶段：" + activeStage + "。原始输入注册：" + (registered ? "成功" : "失败，见错误字段") + "。\n模拟输入观察：" + (injection == null ? "未开启" : injection.Installed && !injection.Stopped ? "已安装（无事件不能证明没有模拟输入）" : "不可用，见错误字段") + "。已保存 " + savedCaptures.Count + " 轮。";
+            if (now >= captureEndMs) StopCapture();
         }
         private string Summary()
         {
-            var text = new StringBuilder("测试键      原始 Down/Up      测试区 Down/Up\r\n");
-            foreach (string key in new[] { "M", "W", "Space", "Esc", "F8" })
+            var text = new StringBuilder("测试键   原始 Down/Up   测试区 Down/Up   模拟标记 Down/Up\r\n");
+            var injected = injection == null ? null : injection.Counts.Snapshot(0, 1);
+            foreach (string key in new[] { "M", "F", "W", "Space", "Esc", "F8" })
             {
                 Counter a, b; if (!raw.TryGetValue(key, out a)) a = new Counter(); if (!window.TryGetValue(key, out b)) b = new Counter();
-                text.AppendFormat("{0,-10}  {1,4}/{2,-4}           {3,4}/{4,-4}\r\n", key, a.Down, a.Up, b.Down, b.Up);
+                string value = injected == null ? "未开启" : injected[key].Down + "/" + injected[key].Up;
+                text.AppendFormat("{0,-7} {1,4}/{2,-4}       {3,4}/{4,-4}        {5}\r\n", key, a.Down, a.Up, b.Down, b.Up, value);
             }
             text.Append("\r\n在游戏中按键时，测试区计数不增加是正常的。\r\n原始事件不代表游戏已经处理按键；合成输入可能没有原始事件。");
+            if (handsStarted >= 0)
+                text.Append("\r\n松手后：原始事件 " + handsRawPackets + " 条；模拟标记按下 " + (injection == null ? "未开启" : TotalDown(injection.Counts.Snapshot(1, 1)).ToString()) + " 次（含非测试键汇总）。");
             return text.ToString();
+        }
+        private static long TotalDown(Dictionary<string, Counter> values)
+        {
+            long total = 0; foreach (var value in values.Values) total += value.Down; return total;
         }
         private void Sample()
         {
@@ -238,17 +308,18 @@ namespace BetterGI.KeyboardProbe
             uint pid; IntPtr foreground = Native.GetForegroundWindow(); uint tid = Native.GetWindowThreadProcessId(foreground, out pid);
             string name = "unknown";
             try { using (var process = Process.GetProcessById((int)pid)) name = process.ProcessName; } catch { }
-            var modifiers = new Dictionary<string, bool>();
-            for (int i = 0; i < ModifierKeysToRead.Length; i++) modifiers[ModifierNames[i]] = (Native.GetAsyncKeyState(ModifierKeysToRead[i]) & 0x8000) != 0;
-            if (samples.Count < 64) samples.Add(new { elapsedMs = clock.ElapsedMilliseconds, foregroundHwnd = foreground.ToInt64(), foregroundPid = pid, foregroundTid = tid, foregroundProcess = name, foregroundEnabled = Native.IsWindowEnabled(foreground), foregroundLayout = Native.GetKeyboardLayout(tid).ToInt64(), testSurfaceFocused = surface.Focused, modifierAsyncState = modifiers, raw = Copy(raw), testWindow = Copy(window) });
+            if (samples.Count < 64) samples.Add(new { elapsedMs = clock.ElapsedMilliseconds, handsOff = handsStarted >= 0, foregroundHwnd = foreground.ToInt64(), foregroundPid = pid, foregroundTid = tid, foregroundProcess = name, foregroundEnabled = Native.IsWindowEnabled(foreground), foregroundLayout = Native.GetKeyboardLayout(tid).ToInt64(), testSurfaceFocused = surface.Focused, modifierAsyncState = modifiers.States(), raw = Copy(raw), testWindow = Copy(window), injected = injection == null ? null : injection.Counts.Snapshot(0, 1) });
         }
         private void StopCapture()
         {
             if (!capturing) return;
-            timer.Stop(); Sample(); capturing = false; clock.Stop();
+            timer.Stop(); PollModifiers(); Sample(); capturing = false; clock.Stop();
+            modifiers.Finish(clock.ElapsedMilliseconds);
+            if (injection != null) injection.Stop();
             if (registered) { Register(true); registered = false; }
-            start.Enabled = stage.Enabled = true; stop.Enabled = false;
-            var report = new { schema = "bgi-keyboard-probe-v1", stage = activeStage, syntheticSelfTest = testing, startedUtc = started.ToString("O"), durationMs = clock.ElapsedMilliseconds, environment = environment, rawPacketCount = rawPackets, rawZeroDeviceCount = rawZeroDevice, rawOtherKeyCount = rawUnknown, maxUiTimerGapMs = maxTickGap, raw = raw, testWindow = window, samples = samples, errors = errors, limits = "No keyboard hook, no SendInput, no typed text/window titles/command lines. RawInput is not proof of game delivery; GetAsyncKeyState is sampled on the probe thread, not inside BGI. Missing raw input is not proof of hardware failure. No per-process hook attribution." };
+            start.Enabled = stage.Enabled = observeInjected.Enabled = true; stop.Enabled = hands.Enabled = false;
+            export.Enabled = savedCaptures.Count > 0;
+            var report = new { schema = "bgi-keyboard-probe-v2", toolVersion = "2.0", stage = activeStage, syntheticSelfTest = testing, startedUtc = started.ToString("O"), durationMs = clock.ElapsedMilliseconds, environment = environment, rawPacketCount = rawPackets, rawZeroDeviceCount = rawZeroDevice, rawOtherKeyCount = rawUnknown, maxUiTimerGapMs = maxTickGap, raw = raw, testWindow = window, handsOff = new { startedMs = handsStarted, observedDurationMs = handsStarted < 0 ? 0 : clock.ElapsedMilliseconds - handsStarted, rawPacketCount = handsRawPackets, rawOtherKeyCount = handsRawOther, raw = handsRaw, testWindow = handsWindow, instructionsOnlyNotProofHandsWereOff = true }, modifiers = modifiers.Report(), injectionRequested = injectionRequested, injection = injection == null ? null : injection.Report(), samples = samples, errors = errors, limits = "No SendInput or typed text/window titles/command lines. Optional passive hook observes injected flags, not sender identity, and can alter timing. RawInput is not proof of game delivery. GetAsyncKeyState is sampled on probe thread, not BGI. Missing events are not proof of absence." };
             display.Text = Summary();
             try
             {
@@ -256,13 +327,32 @@ namespace BetterGI.KeyboardProbe
                 savedPath = Path.Combine(outputDirectory, "capture-" + started.ToString("yyyyMMdd-HHmmss-fff") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".json");
                 using (var stream = new FileStream(savedPath, FileMode.CreateNew, FileAccess.Write))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false))) writer.Write(new JavaScriptSerializer().Serialize(report));
-                folder.Enabled = true; status.Text = "已保存：" + savedPath;
+                savedCaptures.Add(savedPath); folder.Enabled = export.Enabled = true; status.Text = "已保存第 " + savedCaptures.Count + " 轮：" + savedPath;
+                if (activeStageIndex < 2) stage.SelectedIndex = activeStageIndex + 1;
+                phase.Text = activeStageIndex == 0 ? "故障现场已保存。下一步请自行停止当前任务，再点击开始采集第二阶段。" : activeStageIndex == 1 ? "停止后记录已保存。下一步请自行退出 BGI，再点击开始采集第三阶段。" : "本轮已保存。可以导出对照包；如需模拟输入观察，请勾选后手动选择相同阶段再采一轮。";
             }
             catch (Exception ex)
             {
                 status.Text = "保存失败：" + ex.Message;
                 if (!testing) MessageBox.Show(status.Text, "请保留此窗口");
             }
+            if (captureFinished != null) captureFinished();
+        }
+        private void ExportComparison()
+        {
+            if (capturing || savedCaptures.Count == 0) return;
+            try
+            {
+                lastExport = Path.Combine(outputDirectory, "对照包-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N").Substring(0, 6) + ".zip");
+                using (var archive = ZipFile.Open(lastExport, ZipArchiveMode.Create))
+                {
+                    foreach (var file in savedCaptures) archive.CreateEntryFromFile(file, Path.GetFileName(file));
+                    using (var writer = new StreamWriter(archive.CreateEntry("说明.txt").Open(), new UTF8Encoding(false)))
+                        writer.Write("BGI KeyboardProbe v2.0 对照采集，共 " + savedCaptures.Count + " 轮。各 JSON 含阶段标签和 UTC 时间。阶段由用户选择，不证明 BGI 已停止/退出。模拟标记不能归因到 BGI；请附同期 BGI 日志。工具不记录输入文字，但进程路径可能包含用户名。");
+                }
+                status.Text = "对照包已导出：" + lastExport;
+            }
+            catch (Exception ex) { status.Text = "导出失败：" + ex.Message; if (!testing) MessageBox.Show(status.Text); }
         }
         protected override void WndProc(ref Message m)
         {
@@ -301,6 +391,11 @@ namespace BetterGI.KeyboardProbe
             rawPackets++; if (header.Device == IntPtr.Zero) rawZeroDevice++;
             if (Bucket(keyboard.VKey) == null) rawUnknown++;
             Count(raw, keyboard.VKey, (keyboard.Flags & 1) == 0);
+            if (handsStarted >= 0)
+            {
+                handsRawPackets++; if (Bucket(keyboard.VKey) == null) handsRawOther++;
+                Count(handsRaw, keyboard.VKey, (keyboard.Flags & 1) == 0);
+            }
         }
         private static object EnvironmentSnapshot()
         {
@@ -320,54 +415,136 @@ namespace BetterGI.KeyboardProbe
                     catch { }
                 }
             }
-            using (var self = Process.GetCurrentProcess()) return new { toolVersion = "1.0", os = Environment.OSVersion.VersionString, is64Bit = Environment.Is64BitProcess, pid = self.Id, session = self.SessionId, integrityRid = Native.Integrity(self.Id), timezone = TimeZoneInfo.Local.Id, processes = processes };
+            using (var self = Process.GetCurrentProcess()) return new { toolVersion = "2.0", os = Environment.OSVersion.VersionString, is64Bit = Environment.Is64BitProcess, pid = self.Id, session = self.SessionId, integrityRid = Native.Integrity(self.Id), timezone = TimeZoneInfo.Local.Id, processes = processes };
         }
 
-        // 只向自己的隐藏测试窗口投递消息，不注入系统按键、不操控 BGI/游戏。
+        private static void Require(bool value, string message)
+        {
+            if (!value) throw new InvalidOperationException(message);
+        }
+        private void SyntheticRaw(int key, bool up)
+        {
+            int headerSize = Marshal.SizeOf(typeof(Native.RawHeader));
+            int size = headerSize + Marshal.SizeOf(typeof(Native.RawKeyboard));
+            IntPtr data = Marshal.AllocHGlobal(size);
+            try
+            {
+                Marshal.StructureToPtr(new Native.RawHeader { Type = 1, Size = (uint)size, Device = new IntPtr(1) }, data, false);
+                Marshal.StructureToPtr(new Native.RawKeyboard { VKey = (ushort)key, Flags = (ushort)(up ? 1 : 0) }, IntPtr.Add(data, headerSize), false);
+                ReadRaw(data, (uint)size);
+                ReadRaw(data, 1); // 截短包不能增加计数。
+            }
+            finally { Marshal.FreeHGlobal(data); }
+        }
+        private void SavePreview(string file)
+        {
+            using (var bitmap = new Bitmap(Width, Height))
+            {
+                DrawToBitmap(bitmap, new Rectangle(Point.Empty, Size));
+                bitmap.Save(file);
+            }
+        }
+
+        // Native messages target only this test window. Injected flags below are synthetic data,
+        // never SendInput. Real hook install/uninstall is tested separately from flag classification.
         internal static int SelfTest(string resultPath)
         {
+            var serializer = new JavaScriptSerializer();
+            var modifierTest = new ModifierObservation();
+            var state = new bool[8]; state[4] = true;
+            modifierTest.Observe(state, 0);
+            state[3] = true; modifierTest.Observe(state, 50);
+            state[4] = false; modifierTest.Observe(state, 100);
+            state[3] = false; modifierTest.Observe(state, 200);
+            state[0] = true; modifierTest.Observe(state, 250);
+            modifierTest.Finish(300); modifierTest.Finish(500);
+            var modReport = serializer.DeserializeObject(serializer.Serialize(modifierTest.Report())) as Dictionary<string, object>;
+            var intervals = (object[])modReport["heldIntervals"];
+            Require(intervals.Length == 3, "modifier intervals/idempotent finish");
+            var alt = (Dictionary<string, object>)intervals[0]; var ctrl = (Dictionary<string, object>)intervals[1]; var shift = (Dictionary<string, object>)intervals[2];
+            Require((string)alt["key"] == "LAlt" && Convert.ToInt64(alt["observedDurationMs"]) == 100 && (bool)alt["alreadyDownAtCaptureStart"], "initial held left Alt");
+            Require((string)ctrl["key"] == "RCtrl" && Convert.ToInt64(ctrl["observedDurationMs"]) == 150, "separate right Ctrl duration");
+            Require((bool)shift["stillDownAtCaptureEnd"] && Convert.ToInt64(shift["observedDurationMs"]) == 50, "open modifier interval");
+            var countTest = new HookCounts();
+            countTest.Observe(0x4D, false, 0); countTest.HandsOff = true;
+            countTest.Observe(0x46, false, 0x12); countTest.Observe(0x46, true, 0x12); countTest.Observe(0x41, false, 0x10);
+            countTest.Enabled = false; countTest.Observe(0x46, false, 0x10);
+            Require(countTest.Snapshot(0, 0)["M"].Down == 1 && countTest.Snapshot(1, 1)["F"].Down == 1 && countTest.Snapshot(1, 1)["F"].Up == 1 && countTest.Snapshot(0, 2)["F"].Down == 1 && countTest.Snapshot(0, 1)["Other"].Down == 1 && !countTest.Snapshot(0, 1).ContainsKey("A"), "injected flags/privacy/frozen counts");
             string directory = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(resultPath)), "self-test-captures-" + Guid.NewGuid().ToString("N"));
             using (var form = new ProbeForm(directory))
             {
                 form.testing = true; form.ShowInTaskbar = false; form.Opacity = 0;
-                form.Shown += delegate
+                int round = 0; bool handsInjected = false, earlyHandsChecked = false; string failure = null;
+                var checkpoints = new List<object>();
+                var exercise = new Timer { Interval = 100 };
+                Action launch = delegate
                 {
+                    form.captureEndMs = round == 2 ? 30000 : 1200;
+                    form.handsAfterMs = round == 2 ? 20000 : 600;
+                    form.observeInjected.Checked = round == 1 || round == 3;
                     form.StartCapture();
-                    if (!form.registered) { form.StopCapture(); form.Close(); return; }
-                    int headerSize = Marshal.SizeOf(typeof(Native.RawHeader));
-                    int size = headerSize + Marshal.SizeOf(typeof(Native.RawKeyboard));
-                    IntPtr data = Marshal.AllocHGlobal(size);
+                    Require(form.registered, "Raw Input registration");
+                    if (round == 1 || round == 3) Require(form.injection != null && form.injection.Installed, "optional passive hook registration");
+                    form.SyntheticRaw(0x46, false); form.SyntheticRaw(0x46, true); form.SyntheticRaw(0x41, false);
+                    Native.PostMessage(form.surface.Handle, 0x100, new IntPtr(0x46), new IntPtr(1));
+                    Native.PostMessage(form.surface.Handle, 0x101, new IntPtr(0x46), new IntPtr(unchecked((int)0xC0000001)));
+                };
+                form.captureFinished = delegate
+                {
                     try
                     {
-                        Marshal.StructureToPtr(new Native.RawHeader { Type = 1, Size = (uint)size, Device = new IntPtr(1) }, data, false);
-                        Marshal.StructureToPtr(new Native.RawKeyboard { VKey = 0x4D, MakeCode = 50 }, IntPtr.Add(data, headerSize), false);
-                        form.ReadRaw(data, (uint)size);
-                        Marshal.StructureToPtr(new Native.RawKeyboard { VKey = 0x4D, Flags = 1 }, IntPtr.Add(data, headerSize), false);
-                        form.ReadRaw(data, (uint)size);
-                        form.ReadRaw(data, 1); // 截短包不可计数。
-                        Marshal.StructureToPtr(new Native.RawKeyboard { VKey = 0x41 }, IntPtr.Add(data, headerSize), false);
-                        form.ReadRaw(data, (uint)size); // 非测试键只能汇总。
-                    }
-                    finally { Marshal.FreeHGlobal(data); }
-                    Native.PostMessage(form.surface.Handle, 0x100, new IntPtr(0x4D), new IntPtr(1));
-                    Native.PostMessage(form.surface.Handle, 0x101, new IntPtr(0x4D), new IntPtr(unchecked((int)0xC0000001)));
-                    var finish = new Timer { Interval = 500 };
-                    finish.Tick += delegate
-                    {
-                        finish.Stop(); finish.Dispose(); form.StopCapture();
-                        using (var bitmap = new Bitmap(form.Width, form.Height))
+                        Require(!form.registered && !form.capturing && form.errors.Count == 0, "capture cleanup");
+                        Require(form.savedPath != null && File.Exists(form.savedPath), "report saved");
+                        Require(form.raw["F"].Down >= 1 && form.raw["F"].Up >= 1 && form.window["F"].Down >= 1 && form.window["F"].Up >= 1 && form.rawUnknown >= 1 && !form.raw.ContainsKey("A"), "F/native-window/privacy counters");
+                        Require(form.modifiers.PollCount >= 5, "high frequency modifier polling");
+                        if (round == 1)
                         {
-                            form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
-                            bitmap.Save(Path.ChangeExtension(resultPath, ".png"));
+                            Require(handsInjected && form.injection.Stopped && form.injection.UnhookError == 0 && form.injection.Error == 0, "hook cleanup / hands-off phase");
+                            Require(form.injection.Counts.Snapshot(1, 1)["F"].Down >= 1, "hands-off injected count");
                         }
-                        form.Close();
-                    };
-                    finish.Start();
+                        if (round == 2) Require(form.clock.ElapsedMilliseconds >= 30000 && form.handsStarted >= 20000 && form.clock.ElapsedMilliseconds - form.handsStarted >= 9000 && form.modifiers.PollCount > 100, "real 30 second timer / hands-off transition");
+                        checkpoints.Add(new { stage = form.activeStage, durationMs = form.clock.ElapsedMilliseconds, pollCount = form.modifiers.PollCount, optionalHook = form.injectionRequested });
+                        form.SavePreview(Path.Combine(Path.GetDirectoryName(resultPath), "preview-stage-" + round + ".png"));
+                        round++;
+                        if (round == 3)
+                        {
+                            form.captureFinished = null; launch();
+                            return; // Exercise timer closes an active optional capture.
+                        }
+                        launch();
+                    }
+                    catch (Exception ex) { failure = ex.ToString(); form.captureFinished = null; form.Close(); }
                 };
+                exercise.Tick += delegate
+                {
+                    try
+                    {
+                        if (round == 1 && form.handsStarted >= 0 && !handsInjected)
+                        {
+                            handsInjected = true;
+                            form.injection.Counts.Observe(0x46, false, 0x12); form.injection.Counts.Observe(0x46, true, 0x12);
+                            form.SyntheticRaw(0x46, false); form.SyntheticRaw(0x46, true);
+                            form.display.Text = form.Summary(); form.UpdatePhase();
+                            form.SavePreview(Path.Combine(Path.GetDirectoryName(resultPath), "preview-hands-off.png"));
+                        }
+                        if (round == 3 && form.clock.ElapsedMilliseconds >= 250)
+                        {
+                            form.BeginHandsOff(true);
+                            Require(form.captureEndMs - form.handsStarted == 10000, "manual hands-off countdown");
+                            earlyHandsChecked = true; form.Close();
+                        }
+                    }
+                    catch (Exception ex) { failure = ex.ToString(); form.captureFinished = null; form.Close(); }
+                };
+                form.Shown += delegate { try { launch(); exercise.Start(); } catch (Exception ex) { failure = ex.ToString(); form.captureFinished = null; form.Close(); } };
                 Application.Run(form);
-                Counter r, w;
-                bool ok = form.raw.TryGetValue("M", out r) && r.Down == 1 && r.Up == 1 && form.window.TryGetValue("M", out w) && w.Down == 1 && w.Up == 1 && form.rawUnknown == 1 && !form.raw.ContainsKey("A") && form.errors.Count == 0 && form.savedPath != null && File.Exists(form.savedPath) && !form.registered;
-                File.WriteAllText(resultPath, new JavaScriptSerializer().Serialize(new { passed = ok, capture = form.savedPath, checks = "Raw packet parsing/down-up/truncated packet/privacy whitelist; native messages to own test window; raw registration/unregistration; JSON export. Synthetic only, no physical keyboard or game reproduction." }), new UTF8Encoding(false));
+                exercise.Stop(); exercise.Dispose();
+                form.ExportComparison();
+                bool zipOk = false;
+                if (form.lastExport != null && File.Exists(form.lastExport))
+                    using (var zip = ZipFile.OpenRead(form.lastExport)) zipOk = zip.Entries.Count == 5;
+                bool ok = failure == null && round == 3 && earlyHandsChecked && form.savedCaptures.Count == 4 && zipOk && !form.registered && form.injection.Stopped && form.injection.UnhookError == 0;
+                File.WriteAllText(resultPath, serializer.Serialize(new { passed = ok, failure = failure, captures = form.savedCaptures, comparisonZip = form.lastExport, checkpoints = checkpoints, checks = "Modifier transition/duration/initial-held/open-ended intervals; injected/lower-integrity/unflagged classification; F/raw packet/own native window/privacy counters; optional hook registration/unregistration; real 30-second auto-stop; hands-off and manual countdown; stage advancement; active-close cleanup; multi-capture ZIP. Synthetic event data only, no system SendInput or physical/game reproduction." }), new UTF8Encoding(false));
                 return ok ? 0 : 1;
             }
         }
