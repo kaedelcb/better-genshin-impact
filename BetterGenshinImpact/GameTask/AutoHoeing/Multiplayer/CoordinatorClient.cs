@@ -66,6 +66,7 @@ public class CoordinatorClient : IAsyncDisposable
             if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机任务的房间准入已撤销");
             var session = new RoomSession(++_roomEpoch, code, name, uid, batchId);
             _roomSession = session;
+            _worldStateMonitor?.NotifyHeartbeatSuccess(); // 新房间不继承旧房间的心跳失败。
             _currentRoomCode = code;
             _playerName = name;
             _playerUid = uid;
@@ -133,6 +134,7 @@ public class CoordinatorClient : IAsyncDisposable
             session = _roomSession;
             if (session == null || session.Ended || expectedEpoch.HasValue && session.Epoch != expectedEpoch) return;
             session.Ended = true;
+            _worldStateMonitor?.NotifyHeartbeatSuccess();
             _isInRoom = false;
             _isReconnecting = false;
             session.Ready.TrySetResult(false);
@@ -1082,32 +1084,62 @@ public class CoordinatorClient : IAsyncDisposable
         }
     }
 
+    // 延迟执行的心跳退出也必须归属同一有效房间；确认后封住新房间准入，避免检查与取消之间换房。
+    internal bool TryConfirmHeartbeatExit(long expectedEpoch)
+    {
+        lock (_roomLock)
+        {
+            if (_roomSession is not { } session || session.Epoch != expectedEpoch || !IsCurrent(session))
+                return false;
+            _taskStopped = true;
+            return true;
+        }
+    }
+
     public async Task SendHeartbeatAsync()
     {
-        if (_gateway == null) return;
-        if (!IsConnected) return;
+        RoomSession session;
+        BgiGatewayClient gateway;
+        lock (_roomLock)
+        {
+            if (_gateway == null || _roomSession == null || !IsCurrent(_roomSession)
+                || !IsConnected || !_isInRoom || _isReconnecting) return;
+            session = _roomSession;
+            gateway = _gateway;
+        }
         try
         {
-            using var budget = CreateRpcBudget(CancellationToken.None);
+            // 绑定发送时的房间，不能在换房后重新读取新房间令牌。
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCts.Token, session.End.Token);
+            budget.CancelAfter(_testAuxiliaryBudget ?? TimeSpan.FromSeconds(10));
             if (_currentRouteIndex >= 0)
             {
-                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, new
+                await gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, new
                 {
                     routeIndex = _currentRouteIndex,
                     routeStartTime = _routeStartTime,
                     routeEstimatedSeconds = _routeEstimatedSeconds,
-                }, null, budget.Token);
+                }, session.RoomCode, budget.Token);
             }
             else
             {
-                await _gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, null, null, budget.Token);
+                await gateway.InvokeCommandAsync(GatewayProtocol.Names.SessionHeartbeat, null, session.RoomCode, budget.Token);
             }
-            _worldStateMonitor?.NotifyHeartbeatSuccess();
+            lock (_roomLock)
+            {
+                if (IsCurrent(session)) _worldStateMonitor?.NotifyHeartbeatSuccess();
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "SendHeartbeatAsync 失败");
-            _worldStateMonitor?.NotifyHeartbeatFailure();
+            lock (_roomLock)
+            {
+                // 主动关房/换房/停止及旧请求迟到是生命周期结束，不是网络故障。
+                // 有效房间的 RPC 超时（同样可能抛取消异常）仍按真实失败累计。
+                if (!IsCurrent(session)) return;
+                _logger.LogWarning(ex, "SendHeartbeatAsync 失败");
+                _worldStateMonitor?.NotifyHeartbeatFailure(session.Epoch);
+            }
         }
     }
 

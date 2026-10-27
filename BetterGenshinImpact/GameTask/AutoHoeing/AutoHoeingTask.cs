@@ -472,6 +472,20 @@ public class AutoHoeingTask : ISoloTask
         _groupName = groupName;
     }
 
+    internal async Task HandleWorldExitConfirmedAsync(bool isHost, string reason)
+    {
+        // 换世界期间子协调器可以为空；取消还可能同步触发清理，须在取消前捕获。
+        var coordinator = _multiplayerCoordinator;
+        _stopReason = reason;
+        MarkCoordinatedRestartRequired();
+        if (!isHost) _sessionTerminated = true;
+        try { _linkedStopCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
+        catch { }
+        if (coordinator != null)
+            await coordinator.TriggerCoordinatedStop(isHost, reason);
+    }
+
     public async Task Start(CancellationToken ct)
     {
         using var attempt = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BeginNative();
@@ -1304,17 +1318,7 @@ public class AutoHoeingTask : ISoloTask
             // connected-but-not-in-game 被踢出终止判定，供单人世界调试线路。hoeing-multiplayer-solo-debug-mode。
             _worldStateMonitor = new WorldStateMonitor(client, _config.PlayerUid, _ct, _config.SoloDebugMode, _config.HoeingGuardMode);
             client.WorldStateMonitor = _worldStateMonitor;
-            _worldStateMonitor.OnExitConfirmed += async (isHost, reason) =>
-            {
-                _stopReason = reason;
-                MarkCoordinatedRestartRequired(); // 协同中止 → 守护强制重开（hoeing-multiplayer-coordinated-abort-restart）
-                if (!isHost) _sessionTerminated = true;
-                // 直接 cancel linkedStopCts，确保 _ct 被取消（不依赖 TriggerCoordinatedStop 的 _stopCts）
-                try { _linkedStopCts?.Cancel(); }
-                catch (ObjectDisposedException) { }
-                catch { }
-                await _multiplayerCoordinator!.TriggerCoordinatedStop(isHost, reason);
-            };
+            _worldStateMonitor.OnExitConfirmed += HandleWorldExitConfirmedAsync;
             _worldStateMonitor.OnDroppedFromRoom += async () =>
             {
                 _stopReason = "掉出房间且重试失败";

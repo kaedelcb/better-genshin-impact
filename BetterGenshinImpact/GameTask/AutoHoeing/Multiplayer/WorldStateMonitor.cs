@@ -315,7 +315,7 @@ public class WorldStateMonitor : IAsyncDisposable
     /// 时才触发退出。首次失败（count 从 0→1）记录起始时刻，成功一次即清零并重置计时。
     /// 这样重连结束瞬间批量抛出的多个失败因 elapsed≈0 不会误触发，只有真实持续的网络故障才退出。
     /// </summary>
-    public void NotifyHeartbeatFailure()
+    public void NotifyHeartbeatFailure(long? roomEpoch = null)
     {
         if (_consecutiveHeartbeatFailures == 0)
         {
@@ -333,7 +333,12 @@ public class WorldStateMonitor : IAsyncDisposable
             // 异步触发退出，不阻塞心跳回调
             _ = Task.Run(async () =>
             {
-                try { await ConfirmExitAsync("心跳连续失败超过阈值"); }
+                try
+                {
+                    if (_cts.IsCancellationRequested) return;
+                    if (roomEpoch.HasValue && !_client.TryConfirmHeartbeatExit(roomEpoch.Value)) return;
+                    await ConfirmExitAsync("心跳连续失败超过阈值");
+                }
                 catch (Exception ex) { _logger.LogWarning(ex, "[WorldStateMonitor] 心跳失败触发退出异常"); }
             });
         }
