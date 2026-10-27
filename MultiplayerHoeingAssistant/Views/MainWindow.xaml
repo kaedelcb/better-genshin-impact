@@ -774,7 +774,7 @@
                         </Grid>
                         <!-- Row 0 Col 2：设置 + 退出 -->
                         <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
+                            <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" Padding="14,4" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
                             <Button x:Name="HeaderExitButton" Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                     ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>
                         </StackPanel>
@@ -837,10 +837,16 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Border x:Name="RoomCodeCopyBorder" Height="20" Padding="2,0" VerticalAlignment="Center"
-                                    Background="{StaticResource Card}" BorderBrush="{StaticResource GoldDeep}" BorderThickness="1" CornerRadius="4"
+                            <Border x:Name="RoomCodeCopyBorder" Height="20" Width="{Binding ActualWidth, ElementName=HeaderSettingsButton}" VerticalAlignment="Center"
+                                    Background="Transparent" CornerRadius="4"
                                     Cursor="Hand" ToolTip="点击复制房间号" MouseLeftButtonUp="CopyRoomCodeClick">
-                                <TextBlock x:Name="RoomCodeCopyText" Text="{Binding RoomCode, StringFormat='房间 {0}'}" FontSize="10" Foreground="{StaticResource GoldText}" VerticalAlignment="Center"/>
+                                <Grid>
+                                    <Rectangle RadiusX="4" RadiusY="4" Fill="#0DE8C96D" Stroke="#66D4AF37"
+                                               StrokeThickness="0.8" StrokeDashArray="3,3" StrokeDashCap="Round"
+                                               IsHitTestVisible="False"/>
+                                    <TextBlock x:Name="RoomCodeCopyText" Text="{Binding RoomCode, StringFormat='房间 {0}'}" FontSize="10"
+                                               Foreground="{StaticResource GoldText}" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="3,0"/>
+                                </Grid>
                             </Border>
                             <Popup x:Name="RoomCodeCopyHint" Placement="Bottom" PlacementTarget="{Binding ElementName=RoomCodeCopyBorder}" VerticalOffset="4"
                                    AllowsTransparency="True" StaysOpen="True" IsHitTestVisible="False">
