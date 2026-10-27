@@ -83,13 +83,13 @@ function renderControlRoom() {
     list.innerHTML = players.map(p => {
         const state = memberState(p), selected = selectedMemberUids.has(p.playerUid);
         const presence = !roomReady ? '连接待确认' : p.online ? '助手在线' : '助手离线';
+        const presenceText = !roomReady ? '待确认' : p.online ? '在线' : '离线';
         const presenceClass = !roomReady ? 'presence-unknown' : p.online ? 'presence-online' : 'presence-offline';
         const taskAvailable = roomReady && p.online;
         const task = p.taskRunning ? p.currentTaskName || '正在执行任务' : p.bgiStatus === 'stopped' ? '可远程启动 BGI' : '等待下一项任务';
         return `<article class="member-card ${selected ? 'selected' : ''} ${p.online ? '' : 'offline'}" data-member-uid="${webEscapeHtml(p.playerUid)}">
             <div class="member-head">${avatarFor(p)}<div class="member-identity"><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">${webEscapeHtml(p.playerName || p.playerUid)}</button><small>${webEscapeHtml(p.playerUid)}</small></div><button class="member-select" data-ui="select" data-uid="${webEscapeHtml(p.playerUid)}" aria-label="选择${webEscapeHtml(p.playerName || p.playerUid)}" aria-pressed="${selected}" ${!p.online && !selected ? 'disabled' : ''}><span>${selected ? '✓' : ''}</span></button></div>
-            <div class="member-version-row"><span class="version-label">BGI</span><span class="member-version">${webEscapeHtml(p.bgiVersion || '版本未上报')}</span></div>
-            <div class="presence-row"><span class="presence ${presenceClass}"><span class="presence-dot" aria-hidden="true"></span>${presence}</span></div>
+            <div class="member-version-row"><span class="version-label">BGI</span><span class="member-version">${webEscapeHtml(p.bgiVersion || '版本未上报')}</span><span class="presence ${presenceClass}" title="${presence}" aria-label="${presence}"><span class="presence-dot" aria-hidden="true"></span><span class="presence-visible" aria-hidden="true">${presenceText}</span><span class="sr-only">${presence}</span></span></div>
             <div class="member-body"><div class="status-row"><span>当前任务</span><span class="${taskAvailable ? state.tone : 'muted'}">${webEscapeHtml(taskAvailable ? state.label : '状态待确认')}</span></div><div class="task-name">${webEscapeHtml(taskAvailable ? task : '当前状态待确认')}</div><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentTaskGroupName || '' : roomReady ? '助手离线后无法获取实时任务' : '网页连接中断，无法确认实时任务')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentRouteDisplay || p.currentScriptRouteName || '' : p.bgiVersion ? '上次版本仅供参考' : '')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.hoeingStartMessage || p.scriptTaskProgress || p.friendshipProgress || '' : '')}</p></div>
             <div class="member-foot"><span>${webEscapeHtml(hoeingCompletionDescription(p.hoeingCompletionAction))}</span><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">管理 ›</button></div><div class="member-result" data-result-uid="${webEscapeHtml(p.playerUid)}" hidden></div></article>`;
     }).join('') || '<div class="section-empty">暂无成员连接。请使用 PC 助手加入相同控制房间。</div>';
@@ -121,7 +121,7 @@ function scheduleMemberCardAlignment() {
     memberAlignmentFrame = requestAnimationFrame(() => {
         memberAlignmentFrame = 0;
         const cards = [...document.querySelectorAll('#memberList .member-card')];
-        const selectors = ['.member-head', '.member-version-row', '.presence-row', '.member-body', '.member-foot'];
+        const selectors = ['.member-head', '.member-version-row', '.member-body', '.member-foot'];
         const rows = new Map();
         for (const card of cards) {
             for (const selector of selectors) card.querySelector(selector).style.minHeight = '';

@@ -14,8 +14,14 @@ async function cardMetrics(page) {
             return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
         };
         const version = card.querySelector('.member-version');
+        const versionBounds = version.getBoundingClientRect();
+        const versionRange = document.createRange(); versionRange.selectNodeContents(version);
+        const labelBounds = card.querySelector('.version-label').getBoundingClientRect();
         return { card: bounds(':scope'), header: bounds('.member-head'), version: bounds('.member-version-row'),
-            badge: bounds('.presence'), task: bounds('.status-row'), foot: bounds('.member-foot'),
+            badge: bounds('.presence'), checkbox: bounds('.member-select span'), button: bounds('.member-select'), task: bounds('.status-row'), foot: bounds('.member-foot'),
+            firstLineCenter: versionBounds.top + parseFloat(getComputedStyle(version).lineHeight) / 2,
+            labelCenter: (labelBounds.top + labelBounds.bottom) / 2, versionLines: versionRange.getClientRects().length,
+            badgeClipped: card.querySelector('.presence').scrollWidth > card.querySelector('.presence').clientWidth,
             clipped: version.scrollWidth > version.clientWidth || version.scrollHeight > version.clientHeight,
             avatarFilter: getComputedStyle(card.querySelector('.avatar')).filter,
             avatarImage: card.querySelector('.avatar').complete && card.querySelector('.avatar').naturalWidth > 0 };
@@ -30,7 +36,7 @@ async function exercise(forceFallback) {
                 CSS.supports = (...args) => args[0] === 'grid-template-rows' && args[1] === 'subgrid' ? false : original(...args);
             });
             await p.reload();
-            await p.addStyleTag({ content: '.member-card{grid-template-rows:auto auto auto auto auto 1fr!important;grid-row:auto!important;margin-bottom:0!important}.member-list{row-gap:16px!important}' });
+            await p.addStyleTag({ content: '.member-card{grid-template-rows:auto auto auto auto 1fr!important;grid-row:auto!important;margin-bottom:0!important}.member-list{row-gap:16px!important}' });
         } else assert.equal(await p.evaluate(() => CSS.supports('grid-template-rows', 'subgrid')), true);
         await p.evaluate(() => {
             testMembers[0].playerUid = '100000001';
@@ -52,8 +58,12 @@ async function exercise(forceFallback) {
         await p.evaluate(() => { testMembers[1].bgiVersion = '0.66.3-alpha.1'; emit('control.playersUpdated', { full: true, players: testMembers }); });
         await frames(p);
         assert.equal(await p.locator('[data-member-uid="100000001"] .member-version').textContent(), realistic);
-        assert.equal(await p.locator('[data-member-uid="100000003"] .presence').textContent(), '助手离线');
-        assert.equal(await p.locator('[data-member-uid="100000001"] .presence').textContent(), '助手在线');
+        assert.equal(await p.locator('[data-member-uid="100000003"] .presence-visible').textContent(), '离线');
+        assert.equal(await p.locator('[data-member-uid="100000001"] .presence-visible').textContent(), '在线');
+        assert.equal(await p.locator('[data-member-uid="100000003"] .presence').getAttribute('aria-label'), '助手离线');
+        assert.match(await p.locator('[data-member-uid="100000003"] .presence').ariaSnapshot(), /助手离线/);
+        assert.match(await p.locator('[data-member-uid="100000001"] .presence').ariaSnapshot(), /助手在线/);
+        assert.equal(await p.locator('[data-member-uid="100000001"] .presence').getAttribute('title'), '助手在线');
         const contrast = await p.evaluate(() => {
             const rgb = s => s.match(/\d+/g).slice(0, 3).map(Number);
             const luminance = c => c.map(v => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; })
@@ -83,7 +93,16 @@ async function exercise(forceFallback) {
             assert.equal(rows.values().next().value.length, columns, 'columns at ' + width);
             for (const row of rows.values()) {
                 for (const key of ['header', 'version', 'badge', 'task', 'foot']) aligned(row.map(m => m[key].top), `${width} ${key}`);
-                row.forEach(m => { assert(m.header.bottom <= m.version.top + 1); assert(m.version.bottom <= m.badge.top + 1); assert(m.badge.bottom <= m.task.top + 1); });
+                row.forEach(m => {
+                    assert(m.header.bottom <= m.version.top + 1);
+                    assert(m.version.bottom <= m.task.top + 1);
+                    assert(Math.abs(m.badge.right - m.checkbox.right) < 0.6, 'visible right edges must match');
+                    assert(Math.abs((m.badge.top + m.badge.bottom) / 2 - m.firstLineCenter) < 0.6, 'badge centered on first version line');
+                    assert(Math.abs(m.labelCenter - m.firstLineCenter) < 0.6, 'BGI label centered on first version line');
+                    assert(m.button.right - m.button.left >= 44 && m.button.bottom - m.button.top >= 44, 'touch target');
+                    assert(!m.badgeClipped, 'status text must fit');
+                });
+                if (width >= 1200) assert.equal(row[0].versionLines, 1, 'standard long version should fit on one line');
             }
             if (output && !forceFallback && width === 1600) {
                 await p.screenshot({ path: path.join(output, 'desktop.png') });
@@ -100,12 +119,24 @@ async function exercise(forceFallback) {
         let metrics = await cardMetrics(p);
         for (const key of ['header', 'version', 'badge', 'task', 'foot']) aligned(metrics.map(m => m[key].top), 'long text ' + key);
         assert(metrics.every(m => !m.clipped));
+        metrics.forEach(m => { assert(Math.abs(m.badge.right - m.checkbox.right) < 0.6); assert(Math.abs((m.badge.top + m.badge.bottom) / 2 - m.firstLineCenter) < 0.6); });
         assert.equal(await p.locator('[data-member-uid="100000002"] .member-version').textContent(), '0.66.3+lcb.23.0-NexusBGI-fix2-preview-build-20261028-extra-long-label-example');
         if (output && !forceFallback) await p.locator('.member-list').screenshot({ path: path.join(output, 'long-cards.png') });
+        // Check a genuinely wrapped version and colored offline avatar on phone width.
+        await p.setViewportSize({ width: 390, height: 1080 });
+        await p.evaluate(() => { testMembers[2].bgiVersion = '0.66.3+lcb.23.0-NexusBGI-fix2-preview-build-20261028-extra-long-label-example'; emit('control.playersUpdated', { full: true, players: testMembers }); });
+        await frames(p);
+        let offline = (await cardMetrics(p))[2];
+        assert(offline.versionLines > 1 && !offline.clipped && !offline.badgeClipped);
+        assert.equal(offline.avatarFilter, 'none');
+        assert(Math.abs(offline.badge.right - offline.checkbox.right) < 0.6);
+        assert(Math.abs((offline.badge.top + offline.badge.bottom) / 2 - offline.firstLineCenter) < 0.6);
+        if (output && !forceFallback) await p.locator('[data-member-uid="100000003"]').screenshot({ path: path.join(output, 'mobile-offline-long.png') });
+        await p.setViewportSize({ width: 1200, height: 1080 }); await frames(p);
         // One result row must not move another member's footer in either layout implementation.
         await p.evaluate(() => { memberCommandResults.set('100000001', { cmd: 'start_bgi', status: 'success', message: '执行端已确认', time: '12:00' }); renderMemberResults(); });
         await frames(p); metrics = await cardMetrics(p); aligned(metrics.map(m => m.foot.top), 'footer with one result');
-        await p.locator('[data-ui="select"][data-uid="100000001"]').click();
+        await p.locator('[data-ui="select"][data-uid="100000001"]').click({ position: { x: 4, y: 22 } });
         assert.equal(await p.locator('[data-ui="select"][data-uid="100000001"]').getAttribute('aria-pressed'), 'false');
         await p.locator('[data-ui="detail"][data-uid="100000001"]').first().click();
         assert.equal(await p.locator('#detailView').isVisible(), true);
@@ -117,8 +148,12 @@ async function exercise(forceFallback) {
         for (const key of ['header', 'version', 'badge', 'task', 'foot']) aligned(metrics.map(m => m[key].top), 'return from details ' + key);
         // A lost web connection cannot present cached member connectivity as live.
         await p.evaluate(() => transport.reconnecting());
-        assert.equal(await p.locator('[data-member-uid="100000001"] .presence').textContent(), '连接待确认');
-        assert.equal(await p.locator('[data-member-uid="100000003"] .presence').textContent(), '连接待确认');
+        assert.equal(await p.locator('[data-member-uid="100000001"] .presence-visible').textContent(), '待确认');
+        assert.equal(await p.locator('[data-member-uid="100000003"] .presence-visible').textContent(), '待确认');
+        assert.equal(await p.locator('[data-member-uid="100000001"] .presence').getAttribute('aria-label'), '连接待确认');
+        assert.match(await p.locator('[data-member-uid="100000001"] .presence').ariaSnapshot(), /连接待确认/);
+        const pendingClipped = await p.locator('[data-member-uid="100000001"] .presence').evaluate(el => el.scrollWidth > el.clientWidth);
+        assert.equal(pendingClipped, false);
         assert.equal(await p.locator('[data-member-uid="100000001"] .task-name').textContent(), '当前状态待确认');
         assert.deepEqual(f.errors, []);
         console.log('PASS member cards:', forceFallback ? 'fallback' : 'subgrid', 'long/short version, four/two/one columns, alignment, results, selection, connection state');
