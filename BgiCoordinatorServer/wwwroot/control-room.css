@@ -90,7 +90,7 @@ input:focus { border-color: #007AFF; }
     font-size: 11px; font-weight: 500;
 }
 .member-card .tag.purple { background: #F3E8FF; color: #AB47BC; }
-.member-card .actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.member-card .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; margin-top: 8px; }
 .member-card .action-btn {
     flex: 1; min-width: 60px; padding: 6px 8px; border: none; border-radius: 8px;
     font-size: 11px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
@@ -101,6 +101,10 @@ input:focus { border-color: #007AFF; }
 .member-card .action-btn.danger { background: #FF3B30; color: #FFFFFF; }
 .member-card .action-btn.purple { background: #AB47BC; color: #FFFFFF; }
 .member-card .action-btn.secondary { background: #8E8E93; color: #FFFFFF; }
+.member-card .action-btn:disabled, .modal .btn:disabled { opacity: 0.5; cursor: default; }
+.modal .btn[hidden] { display: none; }
+.reset-state-description { font-size: 13px; line-height: 1.6; margin-bottom: 12px; }
+.reset-state-result { font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 12px; }
 
 /* ========== 命令日志 ========== */
 .log {

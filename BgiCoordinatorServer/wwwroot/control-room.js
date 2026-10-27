@@ -148,6 +148,129 @@ function sendAndWaitConfigApplied(cmd, uid) {
     });
 }
 
+// ---------- 重置状态：服务端批次失效后，逐成员等待实际执行回执 ----------
+let resetStateBusy = false;
+const pendingStateResets = new Map();
+function consumeStateResetResult(result) {
+    if (!result || result.cmd !== 'reset_state') return;
+    const pending = pendingStateResets.get(result.commandId);
+    if (!pending || !pending.results.has(result.targetUid)
+        || pending.results.get(result.targetUid) !== null) return;
+    if (!['success', 'failed', 'cancelled', 'unknown'].includes(result.status)) return;
+    pending.results.set(result.targetUid, result);
+    if ([...pending.results.values()].every(Boolean)) pending.finish();
+}
+function sendAndWaitStateReset(cmd, onProgress) {
+    return new Promise(resolve => {
+        const results = new Map(cmd.target.map(uid => [uid, null]));
+        const finish = (reason = '') => {
+            if (!pendingStateResets.delete(cmd.commandId)) return;
+            clearTimeout(timer);
+            resolve([...results].map(([uid, result]) => ({
+                uid, status: result?.status || 'unknown',
+                message: result?.message || reason || '等待执行回执超时，重置结果未确认'
+            })));
+        };
+        const timer = setTimeout(finish, 90000);
+        pendingStateResets.set(cmd.commandId, { results, finish });
+        // 先登记等待者，防止快回执早于 Dispatch 响应到达。
+        sendRemoteCommand(cmd).then(() => {
+            if (pendingStateResets.has(cmd.commandId))
+                onProgress('重置命令已发送，等待执行端确认（最多 90 秒）…');
+        }).catch(err => finish('命令发送或回执未确认：' + err.message));
+    });
+}
+function interruptStateResetWaits() {
+    for (const pending of pendingStateResets.values())
+        pending.finish('连接已断开，重置结果未确认；不会自动重发');
+}
+async function resetMemberState(uid, resetAll, onProgress) {
+    if (resetStateBusy) throw new Error('已有重置正在处理中，请等待结果');
+    const targets = resolveConfigTargets(resetAll ? ['*'] : [uid], players);
+    if (!targets.length || (!resetAll && !players.some(p => p.playerUid === uid && p.online)))
+        throw new Error('没有可重置的在线成员');
+    resetStateBusy = true;
+    renderMembers();
+    try {
+        const resetId = 'reset_' + newRequestId();
+        onProgress('正在确认并撤销当前联机批次…');
+        const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
+        checkGatewayError(current);
+        const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.reset', {
+            resetId, targetUids: targets,
+            expectedGeneration: current?.payload?.generation ?? null,
+            expectedBatchId: current?.payload?.batchId ?? null
+        }));
+        checkGatewayError(response);
+        const reset = response?.payload;
+        if (!reset || reset.resetId !== resetId)
+            throw new Error('服务端重置结果未确认，未下发执行端重置');
+        if (reset.reason === 'stale_reset')
+            throw new Error('当前批次已改变，本次重置未执行，请重新确认');
+        const cmd = makeCmd('reset_state', { resetId });
+        cmd.commandId = resetId;
+        cmd.target = targets;
+        if (reset.generation > 0) cmd.params.generation = reset.generation;
+        if (reset.batchId) cmd.params.batchId = reset.batchId;
+        onProgress('服务端已撤销旧批次，正在发送执行端重置…');
+        const results = await sendAndWaitStateReset(cmd, onProgress);
+        const lines = results.map(r => {
+            const name = players.find(p => p.playerUid === r.uid)?.playerName || r.uid;
+            return r.status === 'success' ? `${name}：重置成功`
+                : `${name}：${r.status === 'unknown' ? '未确认' : '重置未完成'}（${r.message || r.status}）`;
+        });
+        const summary = results.every(r => r.status === 'success')
+            ? '所选成员均已确认重置成功。' : '部分成员重置未完成或未确认。';
+        const message = summary + '\n' + lines.join('\n');
+        log('[重置状态] ' + message);
+        return message;
+    } finally {
+        resetStateBusy = false;
+        renderMembers();
+    }
+}
+function showResetStateModal(uid, memberName) {
+    if (resetStateBusy) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetStateTitle">
+            <h3 id="resetStateTitle">确认重置状态</h3>
+            <p class="reset-state-description"></p>
+            <p class="reset-state-description">这也会中止当前房间的共享联机批次，影响参与该轮联机的其他成员。</p>
+            <label class="check-row"><input type="checkbox" class="reset-state-all">同时重置所有在线成员</label>
+            <p class="reset-state-result" role="status" aria-live="polite"></p>
+            <div class="btn-row">
+                <button class="btn btn-secondary reset-state-cancel">取消</button>
+                <button class="btn btn-primary reset-state-confirm">确认重置</button>
+            </div>
+        </div>`;
+    overlay.querySelector('.reset-state-description').textContent =
+        `将停止 ${memberName} 正在运行的单机和联机任务，清空任务中心运行状态，恢复到可以重新组织联机的初始状态。`;
+    const all = overlay.querySelector('.reset-state-all');
+    const status = overlay.querySelector('.reset-state-result');
+    const confirmButton = overlay.querySelector('.reset-state-confirm');
+    const cancelButton = overlay.querySelector('.reset-state-cancel');
+    cancelButton.onclick = () => overlay.remove();
+    confirmButton.onclick = async () => {
+        confirmButton.disabled = true;
+        all.disabled = true;
+        cancelButton.disabled = true;
+        try {
+            status.textContent = await resetMemberState(uid, all.checked, message => { status.textContent = message; });
+        } catch (err) {
+            status.textContent = '重置未完成或未确认：' + err.message;
+            log('[重置状态] ' + status.textContent);
+        } finally {
+            confirmButton.hidden = true;
+            cancelButton.disabled = false;
+            cancelButton.textContent = '关闭';
+        }
+    };
+    document.body.appendChild(overlay);
+    cancelButton.focus();
+}
+
 // ---------- 记住登录：页面加载时回填 ----------
 (function restoreForm() {
     const c = loadCreds();
@@ -191,6 +314,7 @@ function joinRoom() {
         switch (env.name) {
             case 'control.remoteCommandResult':
                 consumeConfigApplied(payload);
+                consumeStateResetResult(payload);
                 break;
             // 成员列表更新（payload 即全量/增量两态本体）
             case 'control.playersUpdated':
@@ -218,6 +342,7 @@ function joinRoom() {
     });
 
     connection.onreconnecting(() => {
+        interruptStateResetWaits();
         setConn(false);
         log('连接断开，重连中...');
     });
@@ -227,7 +352,7 @@ function joinRoom() {
         sayHello().then(joinControlRoom).catch(err => log('重连后重新入房失败: ' + err.message));
         log('已重连');
     });
-    connection.onclose(() => setConn(false));
+    connection.onclose(() => { setConn(false); interruptStateResetWaits(); });
 
     connection.start()
         .then(() => sayHello())
@@ -344,6 +469,7 @@ function renderMembers() {
                 <button class="action-btn primary" data-action="start-oneclick" data-uid="${uid}" data-name="${name}">一条龙</button>
                 <button class="action-btn primary" data-action="hotkey" data-uid="${uid}" data-name="${name}">快捷键</button>
                 <button class="action-btn primary" data-action="close-game" data-uid="${uid}" data-name="${name}">关闭游戏</button>
+                <button class="action-btn secondary" data-action="reset-state" data-uid="${uid}" data-name="${name}" ${!online || resetStateBusy ? 'disabled' : ''}>${resetStateBusy ? '重置处理中' : '重置状态'}</button>
             </div>
         `;
         const hoeingStatus = card.querySelector('.hoeing-start-status') || card.querySelector('.hoeing-last-status');
@@ -406,7 +532,7 @@ document.getElementById('memberList').addEventListener('click', e => {
         const uid = btn.dataset.uid;
         const memberName = btn.dataset.name;
         const action = btn.dataset.action;
-        if (!uid) return;
+        if (!uid || btn.disabled) return;
 
         if (action === 'stop') {
             const cmd = makeCmd('stop', { hoeingBatchId: btn.dataset.hoeingBatchId || '' });
@@ -419,6 +545,8 @@ document.getElementById('memberList').addEventListener('click', e => {
             showMemberConfigSelect(uid, memberName, 'oneclick');
         } else if (action === 'hotkey') {
             showHotkeySelect(uid, memberName);
+        } else if (action === 'reset-state') {
+            showResetStateModal(uid, memberName);
         } else if (action === 'close-game') {
             if (confirm(`确定要关闭 ${memberName} 的游戏吗？`)) {
                 const cmd = makeCmd('close_game');
