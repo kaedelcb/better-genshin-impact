@@ -81,7 +81,7 @@ const { fixture } = require('./web-gengdi-fixture.cjs');
         for (const width of [360, 390, 1280]) {
             await p.setViewportSize({ width, height: 900 });
             assert.equal(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-            if (width === 1280) assert.equal(await p.locator('#memberList').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 3);
+            if (width === 1280) assert.equal(await p.locator('#memberList').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 4);
         }
         assert.deepEqual(f.errors, []);
         console.log('PASS real DOM: rejected login, selected scope, settings/ack, binding types, policy failure, unsaved edits, typed starts, history, batch confirmation/race, responsive 360/390/1280. Inert gateway.');

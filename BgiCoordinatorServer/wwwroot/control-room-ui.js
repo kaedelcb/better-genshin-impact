@@ -46,6 +46,7 @@ function showHome() {
     document.getElementById('homeTab').classList.add('active');
     document.getElementById('detailTab').classList.remove('active');
     renderSelectionBar();
+    scheduleMemberCardAlignment();
 }
 function openMemberDetail(uid) {
     if (!currentMember(uid)) return;
@@ -81,13 +82,19 @@ function renderControlRoom() {
     const list = document.getElementById('memberList');
     list.innerHTML = players.map(p => {
         const state = memberState(p), selected = selectedMemberUids.has(p.playerUid);
+        const presence = !roomReady ? '连接待确认' : p.online ? '助手在线' : '助手离线';
+        const presenceClass = !roomReady ? 'presence-unknown' : p.online ? 'presence-online' : 'presence-offline';
+        const taskAvailable = roomReady && p.online;
         const task = p.taskRunning ? p.currentTaskName || '正在执行任务' : p.bgiStatus === 'stopped' ? '可远程启动 BGI' : '等待下一项任务';
         return `<article class="member-card ${selected ? 'selected' : ''} ${p.online ? '' : 'offline'}" data-member-uid="${webEscapeHtml(p.playerUid)}">
-            <div class="member-head">${avatarFor(p)}<div class="member-identity"><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">${webEscapeHtml(p.playerName || p.playerUid)}</button><small>${webEscapeHtml(p.playerUid)}</small><small class="member-version">BGI ${webEscapeHtml(p.bgiVersion || '版本未上报')}</small></div><button class="member-select" data-ui="select" data-uid="${webEscapeHtml(p.playerUid)}" aria-label="选择${webEscapeHtml(p.playerName || p.playerUid)}" aria-pressed="${selected}" ${!p.online && !selected ? 'disabled' : ''}><span>${selected ? '✓' : ''}</span></button></div>
-            <div class="member-body"><div class="status-row"><span>当前任务</span><span class="${state.tone}">${webEscapeHtml(state.label)}</span></div><div class="task-name">${webEscapeHtml(p.online ? task : '连接恢复后更新任务状态')}</div><p class="task-route">${webEscapeHtml(p.currentTaskGroupName || '')}</p><p class="task-route">${webEscapeHtml(p.currentRouteDisplay || p.currentScriptRouteName || '')}</p><p class="task-route">${webEscapeHtml(p.hoeingStartMessage || p.scriptTaskProgress || p.friendshipProgress || '')}</p></div>
+            <div class="member-head">${avatarFor(p)}<div class="member-identity"><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">${webEscapeHtml(p.playerName || p.playerUid)}</button><small>${webEscapeHtml(p.playerUid)}</small></div><button class="member-select" data-ui="select" data-uid="${webEscapeHtml(p.playerUid)}" aria-label="选择${webEscapeHtml(p.playerName || p.playerUid)}" aria-pressed="${selected}" ${!p.online && !selected ? 'disabled' : ''}><span>${selected ? '✓' : ''}</span></button></div>
+            <div class="member-version-row"><span class="version-label">BGI</span><span class="member-version">${webEscapeHtml(p.bgiVersion || '版本未上报')}</span></div>
+            <div class="presence-row"><span class="presence ${presenceClass}"><span class="presence-dot" aria-hidden="true"></span>${presence}</span></div>
+            <div class="member-body"><div class="status-row"><span>当前任务</span><span class="${taskAvailable ? state.tone : 'muted'}">${webEscapeHtml(taskAvailable ? state.label : '状态待确认')}</span></div><div class="task-name">${webEscapeHtml(taskAvailable ? task : '当前状态待确认')}</div><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentTaskGroupName || '' : roomReady ? '助手离线后无法获取实时任务' : '网页连接中断，无法确认实时任务')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentRouteDisplay || p.currentScriptRouteName || '' : p.bgiVersion ? '上次版本仅供参考' : '')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.hoeingStartMessage || p.scriptTaskProgress || p.friendshipProgress || '' : '')}</p></div>
             <div class="member-foot"><span>${webEscapeHtml(hoeingCompletionDescription(p.hoeingCompletionAction))}</span><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">管理 ›</button></div><div class="member-result" data-result-uid="${webEscapeHtml(p.playerUid)}" hidden></div></article>`;
     }).join('') || '<div class="section-empty">暂无成员连接。请使用 PC 助手加入相同控制房间。</div>';
     renderMemberResults(); renderSelectionBar();
+    scheduleMemberCardAlignment();
     if (!document.getElementById('detailView').hidden) {
         renderDetailHeader();
         // Status broadcasts must not destroy edits in progress.
@@ -103,7 +110,41 @@ function renderMemberResults() {
             el.textContent = `${result.time} ${commandTitles[result.cmd] || result.cmd}：${result.status === 'success' ? '已确认' : result.status === 'pending' ? '处理中' : result.status === 'unknown' ? '未确认' : '未完成'} · ${result.message}`;
         }
     });
+    scheduleMemberCardAlignment();
 }
+
+// 不支持 subgrid 的浏览器按每个实际卡片行同步高度，保留完整长版本及状态对齐。
+let memberAlignmentFrame = 0;
+function scheduleMemberCardAlignment() {
+    if (window.CSS?.supports?.('grid-template-rows', 'subgrid')) return;
+    if (memberAlignmentFrame) cancelAnimationFrame(memberAlignmentFrame);
+    memberAlignmentFrame = requestAnimationFrame(() => {
+        memberAlignmentFrame = 0;
+        const cards = [...document.querySelectorAll('#memberList .member-card')];
+        const selectors = ['.member-head', '.member-version-row', '.presence-row', '.member-body', '.member-foot'];
+        const rows = new Map();
+        for (const card of cards) {
+            for (const selector of selectors) card.querySelector(selector).style.minHeight = '';
+        }
+        for (const card of cards) {
+            const rect = card.getBoundingClientRect();
+            if (!rect.width) continue;
+            const top = Math.round(rect.top);
+            if (!rows.has(top)) rows.set(top, []);
+            rows.get(top).push(card);
+        }
+        for (const row of rows.values()) {
+            for (const selector of selectors) {
+                const elements = row.map(card => card.querySelector(selector));
+                const height = Math.max(...elements.map(el => el.getBoundingClientRect().height));
+                elements.forEach(el => { el.style.minHeight = height + 'px'; });
+            }
+        }
+    });
+}
+window.addEventListener('resize', scheduleMemberCardAlignment);
+if (document.fonts?.ready) document.fonts.ready.then(scheduleMemberCardAlignment);
+
 function renderSelectionBar() {
     const bar = document.getElementById('selectionBar');
     bar.hidden = document.getElementById('controlPanel').style.display === 'none' || document.getElementById('homeView').hidden;
