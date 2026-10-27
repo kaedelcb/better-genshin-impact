@@ -140,7 +140,7 @@ public sealed class CustomHtmlMaskService
         }
 
         EnsureDefaultHtmlFile();
-        var windowId = HtmlMaskWindow.Show(new Uri(HtmlPath).AbsoluteUri, AutoWindowId, DirectoryPath);
+        var windowId = HtmlMaskWindow.ShowPersistent(new Uri(HtmlPath).AbsoluteUri, AutoWindowId, DirectoryPath);
         HtmlMaskWindow.SetClickThrough(windowId, config.CustomHtmlMaskClickThrough);
     }
 

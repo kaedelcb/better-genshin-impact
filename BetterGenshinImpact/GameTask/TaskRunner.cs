@@ -380,7 +380,7 @@ public class TaskRunner
         var runtime = TaskContext.Instance().Runtime;
         runtime?.MaskWindowMapState.Reset();
         runtime?.MaskWindowDrawingBoard.ClearAll();
-        HtmlMaskWindow.CloseAll();
+        HtmlMaskWindow.CloseTaskWindows();
     }
 
 }

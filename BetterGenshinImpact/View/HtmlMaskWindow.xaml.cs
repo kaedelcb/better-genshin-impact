@@ -30,6 +30,7 @@ public partial class HtmlMaskWindow : Window
     private const string HtmlMaskProfileName = "HtmlMask";
 
     private readonly string _id;
+    private readonly bool _keepAcrossTasks;
     private readonly string _workDir;
     private readonly string _webView2DataPath;
     private readonly string? _virtualHostName;
@@ -52,9 +53,10 @@ public partial class HtmlMaskWindow : Window
     /// </summary>
     public bool IsClickThrough => _isClickThrough;
 
-    private HtmlMaskWindow(string url, string? id, string workDir)
+    private HtmlMaskWindow(string url, string? id, string workDir, bool keepAcrossTasks)
     {
         _id = id ?? Guid.NewGuid().ToString("N");
+        _keepAcrossTasks = keepAcrossTasks;
         _workDir = Path.GetFullPath(workDir);
         _webView2DataPath = Path.Combine(AppContext.BaseDirectory, "WebView2Data");
 
@@ -116,6 +118,15 @@ public partial class HtmlMaskWindow : Window
     /// 显示HTML遮罩窗口
     /// </summary>
     public static string Show(string url, string? id, string workDir)
+        => ShowCore(url, id, workDir, keepAcrossTasks: false);
+
+    /// <summary>
+    /// 打开设置中启用的常驻遮罩，不参与任务结束清理。
+    /// </summary>
+    internal static string ShowPersistent(string url, string id, string workDir)
+        => ShowCore(url, id, workDir, keepAcrossTasks: true);
+
+    private static string ShowCore(string url, string? id, string workDir, bool keepAcrossTasks)
     {
         return Application.Current.Dispatcher.Invoke(() =>
         {
@@ -130,7 +141,7 @@ public partial class HtmlMaskWindow : Window
                 throw new InvalidOperationException($"最多同时打开 {MaxWindows} 个HTML遮罩窗口");
             }
 
-            var window = new HtmlMaskWindow(url, id, workDir);
+            var window = new HtmlMaskWindow(url, id, workDir, keepAcrossTasks);
             string wid = window.MaskId;
             _windows[wid] = window;
             window.Closed += (_, _) =>
@@ -177,6 +188,21 @@ public partial class HtmlMaskWindow : Window
         foreach (var kvp in _windows)
         {
             kvp.Value.Dispatcher.Invoke(() => kvp.Value.Close());
+        }
+    }
+
+    /// <summary>
+    /// 任务结束时关闭临时窗口，保留常驻遮罩及其页面状态。
+    /// 停止截图器仍使用 CloseAll 释放全部窗口。
+    /// </summary>
+    public static void CloseTaskWindows()
+    {
+        foreach (var window in _windows.Values)
+        {
+            if (!window._keepAcrossTasks)
+            {
+                window.Dispatcher.Invoke(() => window.Close());
+            }
         }
     }
 
