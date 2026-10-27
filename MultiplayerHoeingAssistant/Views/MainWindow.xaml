@@ -570,17 +570,18 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <!-- 左侧 Grid（两行 + 两列，副标题与导航按钮同行） -->
-                    <Grid>
+                    <!-- 三列按实际内容分配：星光寄语居中于标题与设置之间的剩余空间。 -->
+                    <Grid x:Name="HeaderGrid">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <!-- Row 0 Col 0：主标题 + 连接状态 + 房间号 + 刷新按钮（同行） -->
+                        <!-- Row 0 Col 0：主标题与模式切换 -->
                         <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="冒险家协会 · 提瓦特生物灭绝计划" FontSize="17"  FontWeight="Medium" Foreground="{StaticResource GoldText}" VerticalAlignment="Center"/>
                             <!-- 连接状态与角色徽章（点击切换执行/监控模式） -->
@@ -720,8 +721,59 @@
                                 <TextBlock Text="⚠ 跨会话" FontSize="10" FontWeight="Medium" Foreground="#E8A86F" VerticalAlignment="Center"/>
                             </Border>
                         </StackPanel>
-                        <!-- Row 0 Col 1：设置 + 退出 -->
-                        <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- 中间空白：文案与 Star 胶囊作为一个完整点击区域一起居中。 -->
+                        <Grid x:Name="HeaderStarHost" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                              Margin="12,0" ClipToBounds="True" SizeChanged="HeaderStarHostSizeChanged">
+                            <Button x:Name="ProjectStarButton" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Cursor="Hand" Background="Transparent" Foreground="{StaticResource GoldText}"
+                                    Padding="3,5" Click="OpenProjectGitHubClick"
+                                    AutomationProperties.Name="在 GitHub 为茶包点亮 Star"
+                                    ToolTip="给茶包一颗星，让热爱继续发光&#x0a;点击打开 https://github.com/kaedelcb/better-genshin-impact">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="StarHitArea" Background="{TemplateBinding Background}"
+                                                Padding="{TemplateBinding Padding}" CornerRadius="8" Opacity="0.88">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="StarHitArea" Property="Opacity" Value="1"/>
+                                                <Setter TargetName="StarHitArea" Property="Background" Value="#0CE8C96D"/>
+                                            </Trigger>
+                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                <Setter TargetName="StarHitArea" Property="Opacity" Value="1"/>
+                                                <Setter TargetName="StarHitArea" Property="Background" Value="#16E8C96D"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="StarHitArea" Property="Opacity" Value="0.7"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <StackPanel x:Name="StarMessage" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="✦" FontSize="15" Foreground="{StaticResource Gold}" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                        <StackPanel VerticalAlignment="Center" Margin="0,0,14,0">
+                                            <TextBlock Text="给茶包一颗星，让热爱继续发光" FontSize="12" FontWeight="Medium"
+                                                       Foreground="{StaticResource GoldText}" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="如果它帮到了你，欢迎在 GitHub 点亮 Star" FontSize="10"
+                                                       Foreground="{StaticResource Dim}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <Border BorderBrush="{StaticResource Gold}" BorderThickness="1" CornerRadius="12"
+                                            Padding="10,3" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="M 8,0 L 10.4,5.1 L 16,5.8 L 12,9.7 L 13,15.3 L 8,12.6 L 3,15.3 L 4,9.7 L 0,5.8 L 5.6,5.1 Z"
+                                                  Stroke="{StaticResource Gold}" StrokeThickness="1.2" StrokeLineJoin="Round"
+                                                  Width="12" Height="12" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Star" FontSize="11" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <!-- Row 0 Col 2：设置 + 退出 -->
+                        <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
                             <Button x:Name="HeaderExitButton" Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                     ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>
@@ -778,8 +830,8 @@
                                 </Button.Style>
                             </Button>
                         </StackPanel>
-                        <!-- Row 1 Col 1：房间号 + 刷新按钮（在设置+退出正下方） -->
-                        <Grid x:Name="RoomCodeActions" Grid.Row="1" Grid.Column="1" Width="{Binding ActualWidth, ElementName=HeaderActions}"
+                        <!-- Row 1 Col 2：房间号 + 刷新按钮（在设置+退出正下方） -->
+                        <Grid x:Name="RoomCodeActions" Grid.Row="1" Grid.Column="2" Width="{Binding ActualWidth, ElementName=HeaderActions}"
                               VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,3,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>

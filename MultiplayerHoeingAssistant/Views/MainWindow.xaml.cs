@@ -20,6 +20,30 @@ public partial class MainWindow : Window
 
     private bool _copyingRoomCode;
 
+    private void HeaderStarHostSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // 窄窗口保留可点击的 Star，避免缩小文字或挤压标题、设置与跨会话警告。
+        StarMessage.Visibility = e.NewSize.Width >= 340 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void OpenProjectGitHubClick(object sender, RoutedEventArgs e)
+    {
+        const string projectUrl = "https://github.com/kaedelcb/better-genshin-impact";
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(projectUrl)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.AddLog($"打开 GitHub 失败：{ex.Message}");
+            MessageBox.Show(this, $"无法打开默认浏览器，请手动访问：\n{projectUrl}",
+                "打开 GitHub", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+    }
+
     private void CompletionActionHintClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button { IsVisible: true, Tag: Popup popup })
