@@ -1160,7 +1160,7 @@ public class TpTaskFastDrag
                 // 详见 .kiro/specs/world-state-monitor-teleport-suppression-premature-expiry-fix/design.md 改动 5。
                 PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
             }
-            catch (Exception e) when (e is NormalEndException || e is TaskCanceledException)
+            catch (Exception e) when (e is NormalEndException || e is OperationCanceledException)
             {
                 throw;
             }
@@ -1394,8 +1394,7 @@ public class TpTaskFastDrag
             // 用 IsPointInBigMapWindow 处理，故此门控不损失任何合法早停；提瓦特/层岩等均在拖动后
             // （iteration>=1）才触发早停，行为不受影响。
             // 详见 .kiro/specs/teleport-drag-early-stop-when-clickable/。
-            if (enableEarlyStop
-                && iteration > 0
+            if (CanEarlyStopAfterDrag(enableEarlyStop, iteration, dragNoMoveCount)
                 && TeleportClickSafeZone.ShouldEarlyStopClick(
                     true, x, y, mapCenterPoint.X, mapCenterPoint.Y,
                     _tpConfig.MapScaleFactor, currentZoomLevel, TeleportClickSafeZone.DefaultEarlyStopMargin, country))
@@ -1426,7 +1425,7 @@ public class TpTaskFastDrag
             // 收工距离用 EarlyStopDistance()：调用方传入矩形实测尺时与外层"可点击"判定同尺，
             // 消除"模型尺判够近、矩形尺判在屏幕外"的矛盾窄带（渊下宫蛇心之地实测：目标在顶边外 3px，
             // 真实距离 543px，模型尺只量出 376px < 400 收工线 → 连续 5 轮零拖动误报传送失败）。
-            if (enableEarlyStop && iteration > 0 && EarlyStopDistance() < (retryTimes == 0 ? 400 : 300))
+            if (CanEarlyStopAfterDrag(enableEarlyStop, iteration, dragNoMoveCount) && EarlyStopDistance() < (retryTimes == 0 ? 400 : 300))
             {
                 TaskControl.Logger.LogDebug("移动 {I} 次鼠标后，已经接近目标点，不再移动地图。", iteration + 1);
                 break;
@@ -2245,59 +2244,39 @@ public class TpTaskFastDrag
             }
         }, TimeSpan.FromMilliseconds(60), 20);
 
-        // 识别结束：若曾为识别临时拉过 5.5，复原到 4.4（传送点可点击档），避免污染调用方
+        // 仅识别自救后恢复可点击缩放；正常首次识别成功不会进入此分支。
         if (zoomChangedForRecover && savedZoomLevel > 0)
         {
-            try
+            using var raNow = CaptureToRectArea();
+            double zoomNow = GetBigMapZoomLevel(raNow);
+            double targetZoom = GetDisplayTpPointZoomLevel(mapName);
+            if (Math.Abs(zoomNow - targetZoom) > _tpConfig.PrecisionThreshold)
             {
-                using var raNow = CaptureToRectArea();
-                double zoomNow = GetBigMapZoomLevel(raNow);
-                // 复原到传送点可点击档（普通地图 4.4 / 霜月 3.0），不是 savedZoomLevel（1.9 下 GetBigMapRect 不稳定才触发拉 5.5）
-                double targetZoom = GetDisplayTpPointZoomLevel(mapName);
-                if (Math.Abs(zoomNow - targetZoom) > _tpConfig.PrecisionThreshold)
-                {
-                    // 先把本次按 5.5 识别到的 rect 记录下来（用于复原后与【重识别 rect】对比 + 重识别失败时的兜底）
-                    var rectOn55 = rect;
-
-                    AdjustMapZoomLevel(zoomNow, targetZoom).GetAwaiter().GetResult();
-                    TaskControl.Logger.LogInformation("识别完成：缩放复原到 {Z:0.0}（传送点可点击档）", targetZoom);
-
-                    // 🔴 关键修复：复原到目标缩放后，以当前真实缩放【重新识别一次 rect】，取代原来
-                    //   "按 targetZoom/5.5 比例缩放修正 rect" 的几何猜算。
-                    //   比例修正在跨缩放(5.5→4.4)时存在屏幕中心/边界锚点误差，会传导成点击坐标偏移
-                    //   （点偏 → ClickTpPoint 误报"传送点未激活或不存在"）。
-                    //   复原后画面已稳定在目标缩放，重新识别一次是确定性的，误差最小。
-                    //   仅自救分支多此一次识别（~100-200ms），正常传送路径（zoomChangedForRecover=false）
-                    //   不走这里、零开销、零速度影响。
-                    //   重识别失败 → 用回 5.5 时的 rect 作为兜底（退化到比例修正的旧行为，不抛）。
-                    try
+                var rectOn55 = rect;
+                // 缩放改变后旧矩形失效，调整或重识别失败都不能拿它继续点击。
+                rect = default;
+                AdjustMapZoomLevel(zoomNow, targetZoom).GetAwaiter().GetResult();
+                TaskControl.Logger.LogInformation("识别完成：缩放复原到 {Z:0.0}（传送点可点击档）", targetZoom);
+                rect = RecognizeRestoredMapRect(
+                    () =>
                     {
                         using var raRedo = CaptureToRectArea();
                         using var mapScaleButtonRedo = raRedo.Find(TpTaskFastDragAssets.Get(raRedo).MapScaleButtonRo);
-                        if (mapScaleButtonRedo.IsExist())
-                        {
-                            rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(raRedo.CacheGreyMat);
-                            TaskControl.Logger.LogInformation(
-                                "[自救后重识别 rect] 5.5识别={Rect55} 复原{From:0.0}→{To:0.0} 重识别={Rect}", 
-                                rectOn55, zoomNow, targetZoom, rect);
-                        }
-                        else
-                        {
-                            rect = rectOn55; // 不在大地图界面，保留 5.5 的 rect 兜底
-                            TaskControl.Logger.LogWarning("[自救后重识别 rect] 复原后不在大地图界面，保留 5.5 识别 rect：{Rect}", rectOn55);
-                        }
-                    }
-                    catch (Exception exRe)
+                        var currentRect = mapScaleButtonRedo.IsExist()
+                            ? MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(raRedo.CacheGreyMat)
+                            : default;
+                        TaskControl.Logger.LogInformation(
+                            "[自救后重识别 rect] 5.5识别={Rect55} 复原{From:0.0}→{To:0.0} 重识别={Rect}",
+                            rectOn55, zoomNow, targetZoom, currentRect);
+                        return currentRect;
+                    },
+                    () =>
                     {
-                        rect = rectOn55; // 重识别失败，用 5.5 的 rect 兜底（等同旧比例修正，安全性不降）
-                        TaskControl.Logger.LogWarning("[自救后重识别 rect] 重识别失败，保留 5.5 识别 rect：{Msg}", exRe.Message);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                // 复原缩放失败不影响已识别到的 rect：记录告警，交由调用方后续按当前缩放继续
-                TaskControl.Logger.LogWarning("识别后复原缩放失败：{Msg}", ex.Message);
+                        TaskControl.Logger.LogDebug("自救后定位未成功，等待地图稳定后重新识别");
+                        // 只在重识别失败后等待新画面，首次成功不增加等待或截图。
+                        Delay(ApplyExtraDelay(120), ct).GetAwaiter().GetResult();
+                        WaitMapStableOrTimeoutAsync(ApplyExtraDelay(300)).GetAwaiter().GetResult();
+                    }, ct);
             }
         }
 
@@ -2315,6 +2294,41 @@ public class TpTaskFastDrag
         }
 
         return MapManager.GetMap(mapName, _mapMatchingMethod).ConvertImageCoordinatesToGenshinMapCoordinates(rect)!.Value;
+    }
+
+    // continue 也会增加 iteration；有未解决的拖动失败时，两种早停都必须让位给重拖。
+    internal static bool CanEarlyStopAfterDrag(bool enabled, int iteration, int dragNoMoveCount)
+        => enabled && iteration > 0 && dragNoMoveCount == 0;
+
+    /// <summary>恢复缩放后最多识别三次；只在失败后等待，不接受旧缩放的矩形。</summary>
+    internal static Rect RecognizeRestoredMapRect(Func<Rect> recognize, Action waitBeforeRetry, CancellationToken ct)
+    {
+        Exception? lastError = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (attempt > 0)
+            {
+                waitBeforeRetry();
+                ct.ThrowIfCancellationRequested();
+            }
+
+            try
+            {
+                var candidate = recognize();
+                ct.ThrowIfCancellationRequested();
+                if (candidate.Width > 0 && candidate.Height > 0)
+                {
+                    return candidate;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException)
+            {
+                lastError = ex;
+            }
+        }
+
+        throw new InvalidOperationException("缩放复原后多次识别大地图位置失败", lastError);
     }
 
     /// <summary>

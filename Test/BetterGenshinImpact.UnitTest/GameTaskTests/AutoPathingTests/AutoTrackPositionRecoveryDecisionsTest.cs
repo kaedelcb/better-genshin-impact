@@ -52,7 +52,7 @@ public class AutoTrackPositionRecoveryDecisionsTest
     [Property(MaxTest = 1000)]
     public Property Decide_TimesGte4_AlwaysThrowRetry(int times, double zoom)
     {
-        var t = times + 4; // 强制 ≥4
+        var t = System.Math.Max(4, times); // 负数输入和 int 上界都保持 times≥4，避免加法溢出
         var action = AutoTrackPositionRecoveryDecisions.Decide(t, zoom);
         return (action == CenterRecoveryAction.ThrowRetry).ToProperty();
     }
