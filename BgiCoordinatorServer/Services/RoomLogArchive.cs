@@ -21,6 +21,7 @@ public sealed partial class RoomLogArchive(string directory)
         var eventId = Guid.NewGuid().ToString("N");
         lock (_gate)
         {
+            LoadHistory();
             foreach (var code in codes)
             {
                 var path = GetPath(code, date);
@@ -37,6 +38,13 @@ public sealed partial class RoomLogArchive(string directory)
                         writer.WriteLine();
                     }
                     var session = entry.GameSessionId ?? GetCurrentSession(code, entry.TimestampUtc);
+                    if (session is not null && _links.TryGetValue(session, out var link) && link.GameCode == code
+                        && date > GetDate(link.LastObservedUtc ?? link.LinkedUtc))
+                    {
+                        // 跨北京时间零点时补一次目录索引，卡片无需扫描正文确认哪天仍有此会话。
+                        var observed = link with { LastObservedUtc = entry.TimestampUtc };
+                        if (AppendJournal("room-links.jsonl", observed)) _links[session] = observed;
+                    }
                     var sessionToken = session is null ? "-" : Convert.ToBase64String(Encoding.UTF8.GetBytes(session));
                     writer.WriteLine($"[{localTime:yyyy-MM-dd HH:mm:ss.fff zzz}] [{entry.Level}] {entry.Category} [room-log:v2;event={eventId};session={sessionToken}]");
                     writer.WriteLine(entry.Message);
@@ -69,20 +77,20 @@ public sealed partial class RoomLogArchive(string directory)
         }
     }
 
-    public IReadOnlyList<DateOnly> GetAvailableDates(string roomCode, DateOnly today)
+    public IReadOnlyList<DateOnly> GetAvailableDates(string roomCode, DateOnly today, bool includeLegacy = true)
     {
         var code = RoomLogStore.NormalizeCode(roomCode) ?? throw new ArgumentException("房间码无效", nameof(roomCode));
         RoomLogHistorySnapshot snapshot;
         lock (_gate) snapshot = CaptureHistory();
-        snapshot = RoomLogLegacyHistory.AddLinks(snapshot, CancellationToken.None);
+        if (includeLegacy) snapshot = RoomLogLegacyHistory.AddLinks(snapshot, CancellationToken.None);
         var sources = snapshot.Links.Where(link => link.ControlCode == code).Select(link => link.GameCode)
             .Append(code).ToHashSet(StringComparer.Ordinal);
-        return snapshot.Files.Where(file => sources.Contains(file.Code)).Select(file => file.Date)
-            .Append(today).Distinct().OrderDescending().ToArray();
+        var dates = snapshot.Files.Where(file => sources.Contains(file.Code)).Select(file => file.Date);
+        return (includeLegacy ? dates.Append(today) : dates).Distinct().OrderDescending().ToArray();
     }
 
     public async Task<RoomLogRangeDownload?> OpenRangeAsync(string roomCode, RoomLogRange range,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, RoomLogSelection? selection = null)
     {
         var code = RoomLogStore.NormalizeCode(roomCode) ?? throw new ArgumentException("房间码无效", nameof(roomCode));
         RoomLogHistorySnapshot snapshot;
@@ -91,7 +99,7 @@ public sealed partial class RoomLogArchive(string directory)
             Directory.CreateDirectory(_directory);
             snapshot = CaptureHistory();
         }
-        return await RoomLogHistoryExport.CreateAsync(_directory, code, range, snapshot, cancellationToken);
+        return await RoomLogHistoryExport.CreateAsync(_directory, code, range, snapshot, cancellationToken, selection);
     }
 
     private string GetPath(string code, DateOnly date) =>
@@ -144,14 +152,17 @@ public sealed class RoomLogRangeDownload : IAsyncDisposable
     private readonly string _code;
     private readonly RoomLogRange _range;
     private readonly FileStream _body;
+    private readonly string? _scope;
 
-    internal RoomLogRangeDownload(string code, RoomLogRange range, FileStream body, RoomLogDownloadMetadata metadata)
+    internal RoomLogRangeDownload(string code, RoomLogRange range, FileStream body, RoomLogDownloadMetadata metadata, string? scope = null)
     {
         _code = code;
         _range = range;
         _body = body;
         Metadata = metadata;
-        FileName = $"room-{code}-{range.StartInclusive:yyyy-MM-dd-HHmm}-{range.EndMinute:yyyy-MM-dd-HHmm}.txt";
+        _scope = scope;
+        var suffix = scope is null ? "" : "-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(scope)))[..12];
+        FileName = $"room-{code}-{range.StartInclusive:yyyy-MM-dd-HHmm}-{range.EndMinute:yyyy-MM-dd-HHmm}{suffix}.txt";
     }
 
     public string FileName { get; }
@@ -161,6 +172,7 @@ public sealed class RoomLogRangeDownload : IAsyncDisposable
     {
         await using var writer = new StreamWriter(destination, new UTF8Encoding(true), 64 * 1024, leaveOpen: true);
         await writer.WriteLineAsync($"房间 {_code} · 服务器日志（北京时间 UTC+08:00）".AsMemory(), cancellationToken);
+        if (_scope is not null) await writer.WriteLineAsync($"下载范围：{_scope}".AsMemory(), cancellationToken);
         await writer.WriteLineAsync($"下载时间段：{_range.StartInclusive:yyyy-MM-dd HH:mm} 至 {_range.EndMinute:yyyy-MM-dd HH:mm}（包含结束分钟）".AsMemory(), cancellationToken);
         await writer.WriteLineAsync($"记录数：{Metadata.Count}；来源房间：{string.Join("、", Metadata.Sources)}；按时间从早到晚排列。".AsMemory(), cancellationToken);
         if (Metadata.FirstTimestampUtc is { } first && Metadata.LastTimestampUtc is { } last)

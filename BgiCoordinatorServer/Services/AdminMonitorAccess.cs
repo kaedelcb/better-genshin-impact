@@ -91,6 +91,19 @@ public static class AdminMonitorRoutes
                 TimeSpan.FromSeconds(playerTimeoutSeconds), history));
         }).RequireAuthorization();
 
+        app.MapGet("/api/admin/logs/cards", (string? date, HttpContext context,
+            RoomLogArchive archive, RoomHoeingHistory history) =>
+        {
+            NoStore(context);
+            var day = RoomLogArchive.GetDate(DateTime.UtcNow);
+            if (date is not null && !DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out day))
+                return Results.Problem("请选择有效日期（北京时间）。", statusCode: 400);
+            try { return Results.Json(archive.GetCards(day, DateTime.UtcNow, history)); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            { return Results.Problem("房间历史索引读取失败，可输入房间号直接下载。", statusCode: 503); }
+        }).RequireAuthorization();
+
         app.MapGet("/api/admin/rooms/{code}/logs", (string code, HttpContext context, RoomLogStore logs) =>
         {
             NoStore(context);
@@ -104,7 +117,7 @@ public static class AdminMonitorRoutes
             NoStore(context);
             try
             {
-                var rooms = archive.GetAvailableRooms(RoomLogArchive.GetDate(DateTime.UtcNow));
+                var rooms = archive.GetAvailableRooms(RoomLogArchive.GetDate(DateTime.UtcNow), includeLegacy: false);
                 return Results.Json(new { rooms = rooms.Select(room => new
                 {
                     room.Code,
@@ -126,7 +139,7 @@ public static class AdminMonitorRoutes
             if (normalizedCode is null) return Results.Problem("房间码无效。", statusCode: 400);
             try
             {
-                var dates = archive.GetAvailableDates(normalizedCode, RoomLogArchive.GetDate(DateTime.UtcNow));
+                var dates = archive.GetAvailableDates(normalizedCode, RoomLogArchive.GetDate(DateTime.UtcNow), includeLegacy: false);
                 return Results.Json(new { dates = dates.Select(date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)) });
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -136,7 +149,7 @@ public static class AdminMonitorRoutes
         }).RequireAuthorization();
 
         app.MapGet("/api/admin/rooms/{code}/logs/download", async (string code, string? start, string? end,
-            HttpContext context, RoomLogArchive archive) =>
+            string? batch, string? session, bool? direct, HttpContext context, RoomLogArchive archive) =>
         {
             NoStore(context);
             var normalizedCode = RoomLogStore.NormalizeCode(code);
@@ -145,7 +158,15 @@ public static class AdminMonitorRoutes
                 return Results.Problem(error, statusCode: 400);
             try
             {
-                var download = await archive.OpenRangeAsync(normalizedCode, range!, context.RequestAborted);
+                if (batch?.Length > 128 || session?.Length > 256
+                    || batch is not null && session is not null
+                    || direct == true && (batch is not null || session is not null)
+                    || batch is not null && string.IsNullOrWhiteSpace(batch)
+                    || session is not null && string.IsNullOrWhiteSpace(session))
+                    return Results.Problem("日志范围标识无效，请重新从卡片选择。", statusCode: 400);
+                var selection = batch is not null || session is not null || direct == true
+                    ? new RoomLogSelection(batch, session, direct == true) : null;
+                var download = await archive.OpenRangeAsync(normalizedCode, range!, context.RequestAborted, selection);
                 if (download is null)
                     return Results.Problem("所选时间段暂无已保存的房间日志；旧版未保存的日志无法补回。", statusCode: 404);
                 var metadata = download.Metadata;

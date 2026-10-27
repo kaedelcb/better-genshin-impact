@@ -26,7 +26,7 @@ public sealed class RoomLogContext
     private readonly Dictionary<string, string[]> _controlRosters = new(StringComparer.Ordinal);
     private readonly HashSet<string> _ambiguousCodes = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (string ControlCode, string[] Uids)> _batches = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> _linkedSessions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string ControlCode, string? BatchId)> _linkedSessions = new(StringComparer.Ordinal);
 
     public RoomLogContext(RoomManager manager, RoomLogArchive archive, ILogger<RoomLogContext> logger)
     {
@@ -104,14 +104,15 @@ public sealed class RoomLogContext
         if (roster is null || !roster.Contains(session.HostUid, StringComparer.Ordinal)) return;
         string? controlCode = null;
         string source;
+        string? verifiedBatchId = null;
         lock (_gate)
         {
-            if (_linkedSessions.ContainsKey(session.SessionId)) return;
             source = "完整成员名单与已认证控制房间配置一致";
             if (session.BatchId is not null && _batches.TryGetValue(session.BatchId, out var batch)
                 && batch.Uids.SequenceEqual(roster) && !_ambiguousCodes.Contains(batch.ControlCode))
             {
                 controlCode = batch.ControlCode;
+                verifiedBatchId = session.BatchId;
                 source = "服务端控制批次身份与完整参与名单一致";
             }
             else
@@ -122,10 +123,13 @@ public sealed class RoomLogContext
                     controlCode = derivedCode;
             }
             if (controlCode is null) return;
-            _linkedSessions[session.SessionId] = controlCode;
+            if (_linkedSessions.TryGetValue(session.SessionId, out var linked)
+                && linked.ControlCode == controlCode && (linked.BatchId is not null || verifiedBatchId is null)) return;
+            _linkedSessions[session.SessionId] = (controlCode, verifiedBatchId);
         }
         // 持久化与日志均在 RoomManager/本服务锁外执行，不改变联机业务的锁顺序。
-        _archive.RecordRoomLink(controlCode, session.Code, session.SessionId, session.CreatedAtUtc, DateTime.UtcNow);
+        _archive.RecordRoomLink(controlCode, session.Code, session.SessionId, session.CreatedAtUtc, DateTime.UtcNow,
+            verifiedBatchId, session.HostUid, session.HostName);
         using var scope = _logger.BeginScope(new RoomLogScopeSnapshot([session.Code], session.SessionId));
         _logger.LogInformation("房间 {RoomCode} 会话 {SessionId} 已关联控制房间 {ControlCode}，创建于 {CreatedAt:O}；依据：{Source}",
             session.Code, session.SessionId, controlCode, session.CreatedAtUtc, source);
@@ -163,13 +167,14 @@ public sealed class RoomLogContext
 /// <summary>RoomManager 锁内复制、锁外发布的纯观察快照。</summary>
 internal sealed record RoomLogGameSession(string Code, string SessionId, DateTime CreatedAtUtc,
     string? BatchId, int ExpectedPlayerCount, string HostUid,
-    IReadOnlyList<string> ExpectedParticipantUids, IReadOnlyList<string> ParticipantUids)
+    IReadOnlyList<string> ExpectedParticipantUids, IReadOnlyList<string> ParticipantUids, string HostName = "")
 {
     public static RoomLogGameSession Capture(Room room)
     {
         lock (room)
             return new(room.Code, room.SessionId, room.CreatedAt, room.HoeingBatchId, room.ExpectedPlayerCount,
                 room.Players.FirstOrDefault(player => player.ConnectionId == room.HostConnectionId)?.PlayerUid ?? "",
-                room.ExpectedParticipantUids.ToArray(), room.Players.Select(player => player.PlayerUid).ToArray());
+                room.ExpectedParticipantUids.ToArray(), room.Players.Select(player => player.PlayerUid).ToArray(),
+                room.Players.FirstOrDefault(player => player.ConnectionId == room.HostConnectionId)?.PlayerName ?? "");
     }
 }

@@ -29,6 +29,7 @@
     .pill.started,.pill.connected{background:#1f4b3e;color:#9be7be}.pill.disconnected{background:#513c2b;color:#f4c39b}.pill.finished{background:#3c4054;color:#c7caef}
     .group-title{margin:16px 2px 4px;color:#a9babe;font-size:14px;font-weight:700}
     .today-summary{margin-top:12px;padding:9px 12px;background:#14242b;border-radius:8px;color:#bbd7d0;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+    .daily-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:22px 0 12px}.daily-toolbar h2{font-size:20px;margin:0}.daily-toolbar input{min-width:150px;width:auto}.daily-cards{display:grid;gap:12px;margin-bottom:28px}.daily-card{padding:16px 20px}.daily-heading,.world-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.daily-heading h3{margin:0;font-size:17px}.batch{margin-top:12px;border:1px solid #3a5059;border-radius:9px}.batch summary{padding:12px}.batch-body{padding:0 12px 12px}.batch-code{font-family:monospace;overflow-wrap:anywhere}.world-row{padding:12px 0;border-top:1px solid #30444c}.world-info{flex:1;min-width:170px}.world-actions{display:flex;gap:8px;flex-wrap:wrap}.daily-status{color:#a9babe;font-size:13px;line-height:1.7}
     .today-history{border-top:1px solid #30444c;padding:14px 20px}.today-history h3{font-size:14px;margin:0 0 5px}.history-note{font-size:12px;color:#9eb0b4;line-height:1.7}
     .history-run{display:grid;grid-template-columns:1fr 1.2fr;gap:7px 20px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px;overflow-wrap:anywhere}.history-run:last-child{border-bottom:0}.history-members{grid-column:1/-1;color:#b6c6c7;font-size:12px}.history-warning{color:#f4c39b;margin:6px 0;font-size:12px}.history-result.completed{color:#9be7be}.history-result.unknown,.history-result.failed,.history-result.stopped,.history-result.completedWithErrors{color:#f4c39b}
     .members{border-top:1px solid #30444c;padding:4px 20px 14px}.member{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.1fr;gap:10px;padding:12px 0;border-bottom:1px solid #2a3c44;font-size:13px}
@@ -66,16 +67,24 @@
       <button id="archiveOpen" class="button" type="button">查询历史日志</button>
       <span id="archiveStatus" class="archive-note" role="status">房间已结束或服务器重启后，仍可从这里下载已保存的日志。</span>
     </div>
+    <section aria-label="每日房间记录">
+      <div class="daily-toolbar"><h2>每日房间记录</h2><label for="historyDate">北京时间</label><input id="historyDate" type="date"><select id="historyDates" aria-label="已有记录日期"><option value="">选择已有记录日期</option></select><button id="historyToday" class="button" type="button">今天</button></div>
+      <div class="history-note">助手房间 → 锄地大房间（一次完整批次）→ 世界小房间。按房间号或成员搜索；离线、结束后仍保留。点击日志按钮会带入所选日期。</div>
+      <div id="historyStatus" class="daily-status" role="status"></div><div id="dailyCards" class="daily-cards"></div>
+    </section>
+    <h2 style="font-size:20px">当前在线与今日状态</h2>
     <div id="notice" class="notice" role="status"></div>
     <section id="rooms" class="rooms" aria-label="房间列表"></section>
   </main>
   <dialog id="logDialog" aria-labelledby="logTitle">
     <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logDownload" class="button" type="button">下载所选日志</button><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
-    <div class="log-hint">下载按所选时间读取持久保存的服务器日志，包含已确认关联的历史锄地房间，不受预览的 200 条限制。下方仅是本次启动后的实时预览。旧版漏存或关联不明的内容会提示缺口，不包含成员本机日志。</div>
+    <div class="log-hint">下载按所选时间读取持久保存的服务器日志，可按房间号、完整批次或世界会话下载，不受预览的 200 条限制。下方仅是本次启动后的实时预览。旧版漏存或关联不明的内容会提示缺口，不包含成员本机日志。</div>
+    <div id="logScope" class="range-status"></div>
+    <label id="logMergeLabel" class="history-note"><input id="logMerge" type="checkbox" style="min-width:0;width:auto"> 同时合并已确认关联的历史世界日志（旧版关联恢复可能较慢）</label>
     <div class="log-range" role="group" aria-label="日志下载时间范围（北京时间）">
       <div class="range-row"><span>开始</span><input id="logStartDate" type="date" class="range-date" aria-label="开始日期"><select id="logStartHour" class="range-time" aria-label="开始小时"></select><span style="width:auto">时</span><select id="logStartMinute" class="range-time" aria-label="开始分钟"></select><span style="width:auto">分</span></div>
       <div class="range-row"><span>结束</span><input id="logEndDate" type="date" class="range-date" aria-label="结束日期"><select id="logEndHour" class="range-time" aria-label="结束小时"></select><span style="width:auto">时</span><select id="logEndMinute" class="range-time" aria-label="结束分钟"></select><span style="width:auto">分</span></div>
-      <div class="range-presets"><button id="logToday" class="button" type="button">今天全天</button><button id="logLastHour" class="button" type="button">最近一小时</button><span class="range-note">北京时间 · 日期可点击日历选择 · 包含结束分钟整分钟</span></div>
+      <div class="range-presets"><select id="logSavedDate" aria-label="已保存日志日期"><option value="">选择已保存日期</option></select><button id="logToday" class="button" type="button">今天全天</button><button id="logLastHour" class="button" type="button">最近一小时</button><span class="range-note">北京时间 · 日期可点击日历选择 · 包含结束分钟整分钟</span></div>
       <div id="logAvailableDates" class="range-note" role="status"></div>
       <div id="logRangeStatus" class="range-status" role="status"></div>
     </div>
@@ -154,7 +163,7 @@
     const $=id=>document.getElementById(id);
     const labels={started:'已开锄',waiting:'等待开锄',disconnected:'无人在线',finished:'本轮结束'};
     const memberStates={Waiting:'等待',Ready:'就绪',Pathing:'路径中',WaitingAtSync:'同步等待',Fighting:'战斗中'};
-    let snapshot=null;
+    let snapshot=null,dailySnapshot=null,historyRequest=0;
     function node(tag,className,value){const item=document.createElement(tag);if(className)item.className=className;if(value!==undefined)item.textContent=String(value);return item;}
     function duration(start){if(!start)return '未记录';const seconds=Math.max(0,Math.floor((Date.now()-Date.parse(start))/1000));const hours=Math.floor(seconds/3600);const minutes=Math.floor(seconds%3600/60);return hours?`${hours}小时${minutes}分`:`${minutes}分`;}
     function heartbeat(time){if(!time)return '未上报';const age=Math.max(0,Math.floor((Date.now()-Date.parse(time))/1000));return age<60?`${age}秒前`:`${Math.floor(age/60)}分钟前`;}
@@ -177,6 +186,71 @@
       }
       return section;
     }
+    function historyLogButton(text,code,date,selection={},label=''){
+      const button=node('button','button log-button',text);button.type='button';
+      button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code,date,selection,label);});return button;
+    }
+    function worldRow(world,date){
+      const row=node('div','world-row'),info=node('div','world-info');
+      info.append(cell(`世界小房间 ${world.code}`,`房主：${world.hostName||world.hostUid||'旧记录未保存'}${world.hostName&&world.hostUid?' · UID '+world.hostUid:''}`));
+      info.append(node('div','history-note',`建房 ${AdminHoeingHistory.time(world.createdAtUtc,date)} · ${world.endedAtUtc?'结束 '+AdminHoeingHistory.time(world.endedAtUtc,date):'结束时间未记录'}`));
+      if(!world.hasSavedLogs)info.append(node('div','history-warning','当天未发现此房间日志文件'));
+      row.append(info,historyLogButton('下载小房间日志',world.code,date,{session:world.sessionId},'仅此世界房间会话'));return row;
+    }
+    function renderDaily(){
+      if(!dailySnapshot)return;
+      const query=$('search').value.trim().toLowerCase(),list=$('dailyCards');
+      const opened=new Set([...list.querySelectorAll('details[open]')].map(item=>item.dataset.key));
+      const wasRendered=list.dataset.date===dailySnapshot.date;list.dataset.date=dailySnapshot.date;list.replaceChildren();
+      const matches=value=>String(value||'').toLowerCase().includes(query);
+      for(const warning of dailySnapshot.warnings||[])list.append(node('div','history-warning',warning));
+      let count=0;
+      for(const room of dailySnapshot.rooms){
+        if(query&&!matches(room.code)&&!room.worlds.some(w=>[w.code,w.batchId,w.hostUid,w.hostName].some(matches))&&!room.hoeing.runs.some(r=>matches(r.id)||r.members.some(m=>matches(m.uid)||matches(m.name))))continue;
+        count++;
+        const card=node('article','room daily-card'),heading=node('div','daily-heading');
+        heading.append(node('h3','',`助手房间 ${room.code}`),historyLogButton('下载助手自身日志',room.code,dailySnapshot.date,{direct:true},'仅助手房间自身日志，不包含世界小房间'));
+        card.append(heading);
+        for(const warning of [...room.warnings,...room.hoeing.warnings])card.append(node('div','history-warning',warning));
+        const batches=new Map(room.hoeing.runs.map(run=>[run.id,{run,worlds:[]}]))
+        for(const world of room.worlds){const key=world.batchId||'';if(!batches.has(key))batches.set(key,{run:null,worlds:[]});batches.get(key).worlds.push(world);}
+        let ordinal=0;
+        for(const [id,batch] of batches){
+          const details=node('details','batch');details.dataset.key=room.code+':'+id;details.open=wasRendered?opened.has(details.dataset.key):true;
+          const summary=node('summary'),run=batch.run;
+          summary.append(node('strong','',id?`锄地大房间 · 批次 ${++ordinal}`:'批次归属未记录的世界房间'));
+          if(id)summary.append(node('div','history-note batch-code','批次 ID：'+id));
+          if(run)summary.append(node('div','history-note',`${AdminHoeingHistory.runLabel(run)} · ${run.startedAtUtc?'开锄':'受理'} ${AdminHoeingHistory.time(run.startedAtUtc||run.requestedAtUtc,dailySnapshot.date)}`));
+          summary.append(node('div','history-note',`${batch.worlds.length} 个世界小房间 · 点击收起/展开`));
+          const body=node('div','batch-body');
+          if(run)body.append(node('div','history-note','参与成员：'+(run.members.map(m=>m.name||m.uid).join('、')||'未记录')));
+          if(id&&batch.worlds.length)body.append(historyLogButton('下载本批次世界日志',room.code,dailySnapshot.date,{batch:id},'仅此完整批次的世界日志（所选日期范围）'));
+          if(!batch.worlds.length)body.append(node('div','history-warning','此批次暂无已确认关联的小房间记录；旧版没有保存的批次归属不能补猜。'));
+          for(const world of batch.worlds)body.append(worldRow(world,dailySnapshot.date));
+          details.append(summary,body);card.append(details);
+        }
+        if(!batches.size)card.append(node('div','history-note','当日仅有助手日志，未保存锄地批次和世界房间关联。'));
+        list.append(card);
+      }
+      const unlinked=dailySnapshot.unlinkedRooms.filter(code=>!query||matches(code));
+      if(unlinked.length){
+        count++;const card=node('article','room daily-card');card.append(node('h3','','其他已保存房间日志'),node('div','history-note','旧记录没有确认助手／批次归属，按房间号直接下载。'));
+        for(const code of unlinked){const row=node('div','world-row');row.append(cell(code,'归属未确认'),historyLogButton('下载房间日志',code,dailySnapshot.date,{direct:true},'仅此房间号当天保存的日志'));card.append(row);}list.append(card);
+      }
+      if(!count)list.append(node('div','empty',query?'此日期没有匹配的房间或成员':'此日期暂无保存的房间记录，可切换已有记录日期或输入房间号查询。'));
+    }
+    async function loadDaily(){
+      const date=$('historyDate').value,request=++historyRequest;if(!date)return;
+      $('historyStatus').textContent='正在读取每日房间记录…';
+      try{
+        const response=await fetch('/api/admin/logs/cards?'+new URLSearchParams({date}),{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
+        if(response.status===401){location.replace('/admin/login');return;}
+        if(!response.ok)throw new Error();const data=await response.json();if(request!==historyRequest)return;
+        dailySnapshot=data;renderDaily();$('historyDates').replaceChildren(new Option('选择已有记录日期',''));
+        for(const day of data.dates)$('historyDates').add(new Option(day,day));$('historyDates').value=date;
+        $('historyStatus').textContent=`${date} · ${data.rooms.length} 个助手房间 · ${data.unlinkedRooms.length} 个归属未确认房间`;
+      }catch{if(request===historyRequest)$('historyStatus').textContent='每日记录读取失败或超时，下面内容可能过期；请刷新，或输入房间号直接下载。';}
+    }
     function memberSummary(members){
       const summary=node('div','member-summary');summary.append(node('span','member-summary-label','成员'));
       if(!members.length){summary.append(node('span','member-summary-label','暂无'));return summary;}
@@ -187,7 +261,7 @@
       }
       return summary;
     }
-    let activeLogCode=null,logRequest=0,logDateRequest=0,logDownloading=false;
+    let activeLogCode=null,activeLogSelection={},logView=0,downloadController=null,logRequest=0,logDateRequest=0,logDownloading=false;
     const rangeControls=['logStartDate','logStartHour','logStartMinute','logEndDate','logEndHour','logEndMinute'];
     function beijingMinute(time=Date.now()){return new Date(time+8*60*60*1000).toISOString().slice(0,16);}
     function setLogRange(start,end){
@@ -206,40 +280,43 @@
     function todayLogRange(){const today=beijingMinute().slice(0,10);setLogRange(today+'T00:00',today+'T23:59');}
     async function loadLogDates(code){
       const request=++logDateRequest;
-      $('logAvailableDates').textContent='正在读取已保存日期…';
+      $('logAvailableDates').textContent='正在读取已保存日期…';$('logSavedDate').replaceChildren(new Option('选择已保存日期',''));
       try{
-        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/dates`,{credentials:'same-origin',cache:'no-store'});
+        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/dates`,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
         if(response.status===401){location.replace('/admin/login');return;}
         if(!response.ok)throw new Error();
         const data=await response.json();if(request!==logDateRequest||activeLogCode!==code)return;
-        const dates=data.dates||[];
-        $('logAvailableDates').textContent=dates.length?`已保存日期：${dates.at(-1)} 至 ${dates[0]}；可用日历选择任意时间范围`:'暂无已保存日期，可直接选择时间查询';
+        const dates=data.dates||[];for(const date of dates)$('logSavedDate').add(new Option(date,date));
+        $('logAvailableDates').textContent=dates.length?`已保存 ${dates.length} 天：${dates.at(-1)} 至 ${dates[0]}，可从下拉框选择（房间级日期，具体批次以下载结果为准）`:'索引中暂无已保存日期；可选其他日期查询，旧版未保存的日志无法补回';
       }catch{if(request===logDateRequest&&activeLogCode===code)$('logAvailableDates').textContent='已保存日期读取失败，仍可选择时间直接下载';}
     }
     async function loadArchiveRooms(){
       const selected=$('archiveRoom').value;
       try{
-        const response=await fetch('/api/admin/logs/rooms',{credentials:'same-origin',cache:'no-store'});
+        const response=await fetch('/api/admin/logs/rooms',{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(15000)});
         if(response.status===401){location.replace('/admin/login');return;}
         if(!response.ok)throw new Error();
         const data=await response.json();$('archiveRoom').replaceChildren(new Option('选择已保存日志的历史房间',''));
         for(const room of data.rooms){const dates=room.dates||[];$('archiveRoom').add(new Option(`${room.code}${room.kind==='control'?' · 控制房间':''}${dates.length?' · '+dates.at(-1)+' 至 '+dates[0]:''}`,room.code));}
-        $('archiveRoom').value=selected;$('archiveStatus').textContent='房间已结束或服务器重启后，仍可查询已保存日志；控制房间下载会合并已确认关联的历史锄地房间。';
+        $('archiveRoom').value=selected;$('archiveStatus').textContent='房间已结束或服务器重启后仍可查询；默认按房间号直接下载，也可在弹窗中勾选合并已关联的世界日志。';
       }catch{$('archiveRoom').replaceChildren(new Option('历史房间读取失败，可输入房间码',''));$('archiveStatus').textContent='历史列表读取失败，可输入房间码直接查询。';}
     }
     function logButton(code){const action=node('div','room-action'),button=node('button','button log-button','服务器日志');button.type='button';button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();openLogs(code);});action.append(button);return action;}
-    function openLogs(code){activeLogCode=code;$('logDownloadStatus').textContent='';$('logTitle').textContent=`房间 ${code} · 服务器日志`;todayLogRange();$('logDialog').showModal();loadLogs();loadLogDates(code);}
+    function openLogs(code,date=$('historyDate').value||beijingMinute().slice(0,10),selection={direct:true},label='仅此房间号自身保存的日志'){
+      logView++;activeLogCode=code;activeLogSelection=selection;$('logMergeLabel').hidden=!!(selection.batch||selection.session);$('logMerge').checked=!selection.direct&&!selection.batch&&!selection.session;$('logDownloadStatus').textContent='';$('logTitle').textContent=`房间 ${code} · 服务器日志`;$('logScope').textContent=label;
+      setLogRange(date+'T00:00',date+'T23:59');$('logDialog').showModal();loadLogs();loadLogDates(code);
+    }
     async function downloadLogs(){
-      const code=activeLogCode,view=logDateRequest;if(!code||logDownloading||!updateLogRange())return;
-      const {start,end}=selectedLogRange(),button=$('logDownload');logDownloading=true;button.disabled=true;button.textContent='正在下载…';
+      const code=activeLogCode,view=logView;if(!code||logDownloading||!updateLogRange())return;
+      const {start,end}=selectedLogRange(),button=$('logDownload');logDownloading=true;$('logMerge').disabled=true;button.disabled=true;button.textContent='正在下载…';
       $('logDownloadStatus').textContent='正在准备所选时段的日志…';
       try{
-        const query=new URLSearchParams({start,end});
-        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/download?${query}`,{credentials:'same-origin',cache:'no-store'});
+        const query=new URLSearchParams({start,end,...activeLogSelection});downloadController=new AbortController();
+        const response=await fetch(`/api/admin/rooms/${encodeURIComponent(code)}/logs/download?${query}`,{credentials:'same-origin',cache:'no-store',signal:downloadController.signal});
         if(response.status===401){location.replace('/admin/login');return;}
         if(!response.ok){const problem=await response.json().catch(()=>({}));throw new Error(problem.detail||'下载失败，请稍后重试');}
         const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');
-        if(activeLogCode!==code||view!==logDateRequest){URL.revokeObjectURL(url);return;}
+        if(activeLogCode!==code||view!==logView){URL.revokeObjectURL(url);return;}
         const disposition=response.headers.get('Content-Disposition')||'';
         link.href=url;link.download=(disposition.match(/filename="?([^";]+)"?/i)||[])[1]||`room-${code}-${start.replace(/[:T]/g,'-')}.txt`;
         document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
@@ -248,11 +325,12 @@
         const format=time=>new Date(time).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
         let warnings=[];try{warnings=JSON.parse(decodeURIComponent(response.headers.get('X-Room-Log-Warnings')||'%5B%5D'));}catch{warnings=['下载摘要读取失败，请查看TXT文件内的保存说明'];}
         $('logDownloadStatus').textContent=`已发起下载${count!==null?'，共 '+count+' 条':''}${sources?'，来源房间 '+sources+(sourceCount>20?' 等 '+sourceCount+' 个（完整列表见TXT）':''):''}${first&&last?'；实际记录 '+format(first)+' 至 '+format(last)+'（北京时间）':''}${warnings.length?'。保存说明：'+warnings.join('；'):''}`;
-      }catch(error){if(activeLogCode===code&&view===logDateRequest)$('logDownloadStatus').textContent=error.message||'下载失败，请稍后重试';}
-      finally{logDownloading=false;button.textContent='下载所选日志';updateLogRange();}
+      }catch(error){if(activeLogCode===code&&view===logView)$('logDownloadStatus').textContent=error.message||'下载失败，请稍后重试';}
+      finally{logDownloading=false;$('logMerge').disabled=false;button.textContent='下载所选日志';updateLogRange();}
     }
     async function loadLogs(){
       if(!activeLogCode||!$('logDialog').open)return;
+      if(activeLogSelection.batch||activeLogSelection.session){$('logLines').replaceChildren();$('logStatus').textContent='已按批次／世界会话限定下载范围，点击“下载所选日志”获取历史内容。';return;}
       const request=++logRequest,code=activeLogCode;
       $('logStatus').textContent='正在读取…';$('logLines').replaceChildren();
       try{
@@ -341,17 +419,23 @@
         $('updated').textContent='连接失败';
       }
     }
-    $('search').addEventListener('input',render);$('filter').addEventListener('change',render);$('refresh').addEventListener('click',load);
+    $('search').addEventListener('input',()=>{render();renderDaily();});$('filter').addEventListener('change',render);$('refresh').addEventListener('click',()=>{load();loadDaily();loadArchiveRooms();});
     $('archiveRoom').addEventListener('change',()=>{$('archiveCode').value='';});
     $('archiveOpen').addEventListener('click',()=>{const code=($('archiveCode').value.trim()||$('archiveRoom').value).toUpperCase();if(!/^[A-Z0-9]{6}$/.test(code)){$('archiveStatus').textContent='请选择历史房间，或输入六位房间码。';return;}openLogs(code);});
     $('logout').addEventListener('click',async()=>{await fetch('/api/admin/logout',{method:'POST',credentials:'same-origin'});location.replace('/admin/login');});
-    $('logDownload').addEventListener('click',downloadLogs);$('logRefresh').addEventListener('click',loadLogs);$('logClose').addEventListener('click',()=>$('logDialog').close());
+    $('logMerge').addEventListener('change',()=>{if(logDownloading)return;activeLogSelection=$('logMerge').checked?{}:{direct:true};$('logScope').textContent=$('logMerge').checked?'合并此房间及已确认关联的历史世界日志':'仅此房间号自身保存的日志';});
+    $('logDownload').addEventListener('click',downloadLogs);$('logRefresh').addEventListener('click',()=>{loadLogs();if(activeLogCode)loadLogDates(activeLogCode);});$('logClose').addEventListener('click',()=>$('logDialog').close());
     for(const id of ['logStartHour','logEndHour','logStartMinute','logEndMinute']){const max=id.endsWith('Hour')?24:60;for(let index=0;index<max;index++){const value=String(index).padStart(2,'0');$(id).add(new Option(value,value));}}
     for(const id of rangeControls)$(id).addEventListener('change',()=>{$('logDownloadStatus').textContent='';updateLogRange();});
+    $('logSavedDate').addEventListener('change',()=>{const date=$('logSavedDate').value;if(date){$('logDownloadStatus').textContent='';setLogRange(date+'T00:00',date+'T23:59');}});
     $('logToday').addEventListener('click',()=>{$('logDownloadStatus').textContent='';todayLogRange();});
     $('logLastHour').addEventListener('click',()=>{$('logDownloadStatus').textContent='';setLogRange(beijingMinute(Date.now()-3600000),beijingMinute());});
-    $('logDialog').addEventListener('close',()=>{activeLogCode=null;logRequest++;logDateRequest++;});
-    load();loadArchiveRooms();setInterval(load,10000);
+    $('logDialog').addEventListener('close',()=>{activeLogCode=null;logView++;downloadController?.abort();logRequest++;logDateRequest++;});
+    $('historyDate').value=beijingMinute().slice(0,10);
+    $('historyDate').addEventListener('change',loadDaily);
+    $('historyDates').addEventListener('change',()=>{if($('historyDates').value){$('historyDate').value=$('historyDates').value;loadDaily();}});
+    $('historyToday').addEventListener('click',()=>{$('historyDate').value=beijingMinute().slice(0,10);loadDaily();});
+    load();loadArchiveRooms();loadDaily();setInterval(()=>{load();loadDaily();},10000);
   </script>
 </body>
 </html>

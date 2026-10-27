@@ -7,11 +7,20 @@ namespace BgiCoordinatorServer.Services;
 internal static class RoomLogHistoryExport
 {
     public static async Task<RoomLogRangeDownload?> CreateAsync(string directory, string code, RoomLogRange range,
-        RoomLogHistorySnapshot snapshot, CancellationToken cancellationToken)
+        RoomLogHistorySnapshot snapshot, CancellationToken cancellationToken, RoomLogSelection? selection = null)
     {
-        snapshot = RoomLogLegacyHistory.AddLinks(snapshot, cancellationToken);
-        var links = snapshot.Links.Where(link => link.ControlCode == code).ToArray();
-        var sources = links.Select(link => link.GameCode).Append(code).ToHashSet(StringComparer.Ordinal);
+        cancellationToken.ThrowIfCancellationRequested();
+        // 卡片有确证的批次/会话身份，直接读对应文件；只有旧版合并才需要恢复历史关联。
+        if (selection is null) snapshot = RoomLogLegacyHistory.AddLinks(snapshot, cancellationToken);
+        var links = snapshot.Links.Where(link =>
+            (selection?.SessionId is not null ? link.GameCode == code : link.ControlCode == code)
+            && (selection?.BatchId is null || link.BatchId == selection.BatchId)
+            && (selection?.SessionId is null || link.SessionId == selection.SessionId)).ToArray();
+        if (selection is { Direct: false } && links.Length == 0) return null;
+        var sources = selection is { Direct: true }
+            ? new HashSet<string>([code], StringComparer.Ordinal)
+            : links.Select(link => link.GameCode).Concat(selection is null ? new[] { code } : [])
+                .ToHashSet(StringComparer.Ordinal);
         var files = snapshot.Files.Where(file => sources.Contains(file.Code) &&
             file.Date >= range.FirstDate && file.Date <= range.LastDate).OrderBy(file => file.Date).ToArray();
         if (files.Any(file => file.Incomplete))
@@ -34,7 +43,11 @@ internal static class RoomLogHistoryExport
                 {
                     var local = record.TimestampUtc.AddHours(8);
                     if (local < range.StartInclusive || local >= range.EndExclusive) continue;
-                    if (file.Code != code && !Belongs(record, links)) continue;
+                    if (selection is { Direct: false })
+                    {
+                        if (!Belongs(record, links)) continue;
+                    }
+                    else if (file.Code != code && !Belongs(record, links)) continue;
                     chunk.Add(record);
                     chunkBytes += (record.Header.Length + record.Message.Length) * 2L;
                     if (chunk.Count >= 1024 || chunkBytes >= 4 * 1024 * 1024)
@@ -95,7 +108,10 @@ internal static class RoomLogHistoryExport
             body.Position = 0;
             var download = new RoomLogRangeDownload(code, range, body,
                 new RoomLogDownloadMetadata(count, first, last, actualSources.Order(StringComparer.Ordinal).ToArray(),
-                    warnings.Order(StringComparer.Ordinal).ToArray()));
+                    warnings.Order(StringComparer.Ordinal).ToArray()),
+                selection?.BatchId is { } batchId ? "锄地批次 " + batchId + " 的世界日志"
+                    : selection?.SessionId is { } sessionId ? "世界房间会话 " + sessionId
+                    : selection?.Direct == true ? "仅此房间号自身日志" : null);
             body = null;
             temporaryFiles.Remove(bodyPath);
             return download;

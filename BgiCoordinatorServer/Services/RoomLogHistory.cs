@@ -11,7 +11,8 @@ public sealed record RoomLogDownloadMetadata(long Count, DateTime? FirstTimestam
 public sealed record RoomLogAvailableRoom(string Code, string Kind, DateOnly[] Dates, string[] Warnings);
 
 internal sealed record RoomLogLink(string ControlCode, string GameCode, string SessionId,
-    DateTime StartedUtc, DateTime LinkedUtc, DateTime? EndedUtc = null, string Source = "persisted");
+    DateTime StartedUtc, DateTime LinkedUtc, DateTime? EndedUtc = null, string Source = "persisted",
+    string? BatchId = null, string? HostUid = null, string? HostName = null, DateTime? LastObservedUtc = null);
 internal sealed record RoomLogHistoryWarning(string Code, string Message);
 internal sealed record RoomLogHistoryFile(string Path, string Code, DateOnly Date, long Length, bool Incomplete);
 internal sealed record RoomLogHistorySnapshot(RoomLogHistoryFile[] Files, RoomLogLink[] Links,
@@ -26,13 +27,14 @@ public sealed partial class RoomLogArchive
     private bool _historyDamaged;
 
     public void RecordRoomLink(string controlRoomCode, string gameRoomCode, string gameSessionId,
-        DateTime sessionStartUtc, DateTime linkedAtUtc)
+        DateTime sessionStartUtc, DateTime linkedAtUtc, string? batchId = null, string? hostUid = null, string? hostName = null)
     {
         var control = RoomLogStore.NormalizeCode(controlRoomCode) ?? throw new ArgumentException("控制房间码无效");
         var game = RoomLogStore.NormalizeCode(gameRoomCode) ?? throw new ArgumentException("锄地房间码无效");
         if (string.IsNullOrWhiteSpace(gameSessionId)) throw new ArgumentException("房间会话标识不能为空");
         if (control == game) throw new ArgumentException("控制房间和锄地房间不能相同");
-        var link = new RoomLogLink(control, game, gameSessionId, Utc(sessionStartUtc), Utc(linkedAtUtc));
+        var link = new RoomLogLink(control, game, gameSessionId, Utc(sessionStartUtc), Utc(linkedAtUtc),
+            BatchId: batchId, HostUid: hostUid, HostName: hostName);
         lock (_gate)
         {
             LoadHistory();
@@ -43,13 +45,19 @@ public sealed partial class RoomLogArchive
                     RecordHistoryWarning(control, $"会话 {gameSessionId} 的历史关联冲突，未采用冲突关联。");
                     return;
                 }
-                _currentLinks[game] = old;
-                return;
+                // 先由完整名单关联，稍后才登记可信批次时，补存归属，不能丢掉已有结束边界。
+                link = old with { BatchId = old.BatchId ?? batchId, HostUid = old.HostUid ?? hostUid,
+                    HostName = old.HostName ?? hostName };
+                if (link == old)
+                {
+                    if (old.EndedUtc is null) _currentLinks[game] = old;
+                    return;
+                }
             }
             if (AppendJournal("room-links.jsonl", link))
             {
                 _links[gameSessionId] = link;
-                _currentLinks[game] = link;
+                if (link.EndedUtc is null) _currentLinks[game] = link;
             }
         }
     }
@@ -166,11 +174,11 @@ public sealed partial class RoomLogArchive
         return new RoomLogHistorySnapshot(files.ToArray(), _links.Values.ToArray(), warnings.ToArray());
     }
 
-    public IReadOnlyList<RoomLogAvailableRoom> GetAvailableRooms(DateOnly today)
+    public IReadOnlyList<RoomLogAvailableRoom> GetAvailableRooms(DateOnly today, bool includeLegacy = true)
     {
         RoomLogHistorySnapshot snapshot;
         lock (_gate) snapshot = CaptureHistory();
-        snapshot = RoomLogLegacyHistory.AddLinks(snapshot, CancellationToken.None);
+        if (includeLegacy) snapshot = RoomLogLegacyHistory.AddLinks(snapshot, CancellationToken.None);
         var codes = snapshot.Files.Select(file => file.Code)
             .Concat(snapshot.Links.SelectMany(link => new[] { link.ControlCode, link.GameCode })).Distinct(StringComparer.Ordinal);
         return codes.Order(StringComparer.Ordinal).Select(code =>
@@ -179,7 +187,8 @@ public sealed partial class RoomLogArchive
             var sources = links.Select(link => link.GameCode).Append(code).ToHashSet(StringComparer.Ordinal);
             var kind = links.Length != 0 ? "control" : snapshot.Links.Any(link => link.GameCode == code) ? "game" : "unknown";
             return new RoomLogAvailableRoom(code, kind,
-                snapshot.Files.Where(file => sources.Contains(file.Code)).Select(file => file.Date).Append(today).Distinct().OrderDescending().ToArray(),
+                snapshot.Files.Where(file => sources.Contains(file.Code)).Select(file => file.Date)
+                    .Concat(includeLegacy ? new[] { today } : []).Distinct().OrderDescending().ToArray(),
                 snapshot.Warnings.Where(warning => warning.Code == code || warning.Code == "*").Select(warning => warning.Message).Distinct().ToArray());
         }).ToArray();
     }

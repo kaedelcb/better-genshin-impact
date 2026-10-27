@@ -6,7 +6,7 @@
 
 native_review 的 prepare/capture/checkpoint/resume、execution_evidence.capture、review_process.capture_snapshot/dispatch/finish_external、workflow.audit 共用 storage_limits.Session。一次操作的预约覆盖复制、子进程输出、日志合并、最终元数据和收据发布。普通读取/rg不产生项目复制。
 
-`operation_bytes` 是单次上限，不是默认预约量。普通 `Session(root, purpose)` 默认预约 4 MiB，根策略低于此值时按根上限预约；根据已知新增规模显式传 `reserve_bytes`。未用额度不产生同等大小的文件，实际写入仍不能超过本次预约。当前根策略为单次上限 1.5 GiB、累计保留上限 21 GiB、磁盘余量底线 8 GiB，最多 4096 次账本操作；生效值以主工作区 `_workflow/storage-policy.json` 为准。
+`operation_bytes` 是单次上限，不是默认预约量。普通 `Session(root, purpose)` 默认预约 4 MiB，根策略低于此值时按根上限预约；根据已知新增规模显式传 `reserve_bytes`。未用额度不产生同等大小的文件，实际写入仍不能超过本次预约。当前根策略为单次上限 1.5 GiB、累计保留上限 22 GiB（2026-10-27 用户授权上调）、磁盘余量底线 8 GiB，最多 4096 次账本操作；生效值以主工作区 `_workflow/storage-policy.json` 为准。
 
 自 2026-10-09 起，预约是**初始估计**：受控写入或子进程退出后的实际计量超过初始值时，Session 会在仍未超过单次上限、累计保留量和磁盘余量底线的条件下，自动把本次预约扩展到已证明的实际值，并同步更新预约标记和账本。超过任何权威上限仍立即失败；不会把上限变成无限空间，也不会把失败写成成功。这样替换大型 DLL、测试输出或同目录旧证据时，不再因调用方低估几十 MiB 而产生假性预算失败。
 

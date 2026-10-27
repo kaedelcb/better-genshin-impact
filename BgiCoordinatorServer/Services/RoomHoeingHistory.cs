@@ -35,17 +35,19 @@ public sealed class RoomHoeingHistory(string root)
     private sealed record SavedRoom(string Code, IReadOnlyList<SavedRun> Runs);
     private sealed record Signal(string Code, string RunId, bool Running, DateTime SeenUtc);
 
-    public RoomHoeingDay ReadToday(string roomCode, DateTime utcNow)
+    public RoomHoeingDay ReadToday(string roomCode, DateTime utcNow) =>
+        ReadDay(roomCode, RoomLogArchive.GetDate(Utc(utcNow)), utcNow);
+
+    public RoomHoeingDay ReadDay(string roomCode, DateOnly date, DateTime utcNow)
     {
         var code = RoomLogStore.NormalizeCode(roomCode);
         var now = Utc(utcNow);
-        var date = RoomLogArchive.GetDate(now);
         lock (_gate)
         {
             if (code is null) return new(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), "none", [], []);
             var room = Load(code);
             ExpireSignals(code, room, now);
-            var runs = TodayRuns(room, date).OrderBy(run => run.RequestedAtUtc).ThenBy(run => run.Id, StringComparer.Ordinal).ToArray();
+            var runs = TodayRuns(room, date, date == RoomLogArchive.GetDate(now)).OrderBy(run => run.RequestedAtUtc).ThenBy(run => run.Id, StringComparer.Ordinal).ToArray();
             var status = runs.Any(run => run.Status == "running") ? "running"
                 : runs.Any(run => run.Status == "preparing") ? "preparing" : runs.LastOrDefault()?.Status ?? "none";
             return new(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), status, runs,
@@ -53,7 +55,10 @@ public sealed class RoomHoeingHistory(string root)
         }
     }
 
-    public IReadOnlyList<string> GetTodayRoomCodes(DateTime utcNow)
+    public IReadOnlyList<string> GetTodayRoomCodes(DateTime utcNow) =>
+        GetRoomCodes(RoomLogArchive.GetDate(Utc(utcNow)), utcNow);
+
+    public IReadOnlyList<string> GetRoomCodes(DateOnly date, DateTime utcNow)
     {
         lock (_gate)
         {
@@ -70,10 +75,18 @@ public sealed class RoomHoeingHistory(string root)
             { _warnings.Add("锄地记录目录读取失败，今日记录可能缺失。"); }
             var now = Utc(utcNow);
             foreach (var (code, room) in _rooms) ExpireSignals(code, room, now);
-            var date = RoomLogArchive.GetDate(now);
-            return _rooms.Where(pair => TodayRuns(pair.Value, date).Any() || pair.Value.Warnings.Count > 0)
+            return _rooms.Where(pair => TodayRuns(pair.Value, date, date == RoomLogArchive.GetDate(now)).Any() || pair.Value.Warnings.Count > 0)
                 .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray();
         }
+    }
+
+    public IReadOnlyList<DateOnly> GetRecordedDates()
+    {
+        lock (_gate)
+            return _rooms.Values.SelectMany(room => room.Runs.Values).SelectMany(saved => new[]
+                { saved.Run.RequestedAtUtc, saved.Run.StartedAtUtc ?? saved.Run.RequestedAtUtc,
+                    saved.Run.ObservedAtUtc, saved.Run.EndedAtUtc ?? saved.Run.ObservedAtUtc })
+                .Select(RoomLogArchive.GetDate).Distinct().OrderDescending().ToArray();
     }
 
     // The caller supplies a server-owned snapshot, never the phase or member list from a status report.
@@ -212,12 +225,14 @@ public sealed class RoomHoeingHistory(string root)
         Save(code, room);
     }
 
-    private static IEnumerable<RoomHoeingRun> TodayRuns(RoomState room, DateOnly date) => room.Runs.Values.Select(item => item.Run)
+    private static IEnumerable<RoomHoeingRun> TodayRuns(RoomState room, DateOnly date, bool includeActive) => room.Runs.Values.Select(item => item.Run)
         .Where(run => RoomLogArchive.GetDate(run.RequestedAtUtc) == date
             || run.StartedAtUtc is { } started && RoomLogArchive.GetDate(started) == date
             || run.EndedAtUtc is { } ended && RoomLogArchive.GetDate(ended) == date
             || RoomLogArchive.GetDate(run.ObservedAtUtc) == date
-            || run.Status is "running" or "preparing");
+            || RoomLogArchive.GetDate(run.RequestedAtUtc) < date
+                && RoomLogArchive.GetDate(run.EndedAtUtc ?? run.ObservedAtUtc) > date
+            || includeActive && run.Status is "running" or "preparing");
 
     private RoomState Load(string code)
     {
