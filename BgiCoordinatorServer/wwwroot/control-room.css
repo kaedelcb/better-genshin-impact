@@ -252,3 +252,34 @@ small,.small{font-size:12px}
   .quick-btn{flex:1 0 calc(33% - 8px);min-height:40px}
 }
 @media(max-width:380px){.topbar .brand small{display:none}.top-star span{display:none}.top-star{padding:0 10px}}
+
+/* 成员详情·状态：单列堆叠，标签栏与面板同宽；联机安排为紧凑条，整页一屏可见。 */
+#detailView{max-width:900px}
+#detailView .detail-tabs{max-width:none}
+.status-stack{display:grid;gap:14px}
+.status-stack .panel{margin:0;padding:18px 22px}
+.status-stack .panel>h2{font-size:17px;margin:2px 0 6px}
+.status-stack .kv{padding:8px 0}
+.status-stack .action-grid{grid-template-columns:repeat(5,minmax(0,1fr));margin:14px 0 0}
+.status-stack .action-grid .btn,.status-stack #detailReset{min-height:42px;padding:8px 10px}
+.plan-panel .panel-header{margin-bottom:8px}
+.plan-panel .text-button{min-height:32px;padding:2px 4px;font-size:14px}
+.plan-items{display:flex;flex-wrap:wrap;gap:8px}
+.plan-items .binding-row{gap:8px;padding:6px 12px 6px 8px;border:1px solid var(--line);border-radius:9px;background:#191a2e}
+.plan-items .binding-row .order{width:20px;text-align:center}
+.plan-items .binding-row .binding-name{display:flex;align-items:baseline;gap:8px}
+.plan-items .binding-row small{display:inline}
+.plan-items .note{margin:0}
+.plan-after{margin:10px 0 0}
+/* 已选成员圆章：数字与文字在圆内留出边距 */
+.hero-metric{width:88px;height:88px;gap:2px;padding:0 8px}
+.hero-metric b{font-size:24px;line-height:1.1}
+.hero-metric span{font-size:12px;line-height:1.3;white-space:nowrap}
+@media(max-width:700px){
+  .hero-metric{width:64px;height:64px;padding:0 4px}
+  .hero-metric b{font-size:19px}
+  .hero-metric span{font-size:10px}
+  .status-stack .panel{padding:16px}
+  .status-stack .action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .status-stack .action-grid #detailReset{grid-column:1/-1}
+}
