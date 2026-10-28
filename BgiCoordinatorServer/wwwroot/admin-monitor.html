@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141527">
-<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-polish"><link rel="stylesheet" href="/project-star.css?v=20261029-polish">
+<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-v2"><link rel="stylesheet" href="/project-star.css?v=20261029-polish">
 </head><body>
 <!-- B 房间工作台：同屏只查看一个房间；实时与历史独立选择。紫金色沿用助手网页。 -->
 <div class="app">
@@ -22,20 +22,24 @@
 <section class="detail-panel" aria-label="所选房间详情"><div id="detail" class="detail-scroll" tabindex="-1"><div class="empty">正在读取房间信息…</div></div></section>
 </div></main></div>
   <dialog id="logDialog" aria-labelledby="logTitle">
-    <div class="log-head"><h2 id="logTitle">服务器日志</h2><div class="log-actions"><button id="logDownload" class="button" type="button">下载所选日志</button><button id="logRefresh" class="button" type="button">刷新</button><button id="logClose" class="button" type="button">关闭</button></div></div>
-    <div class="log-hint">下载按所选时间读取持久保存的服务器日志，可按房间号、完整批次或世界会话下载，不受预览的 200 条限制。下方仅是本次启动后的实时预览。旧版漏存或关联不明的内容会提示缺口，不包含成员本机日志。</div>
-    <div id="logScope" class="range-status"></div>
-    <label id="logMergeLabel" class="history-note"><input id="logMerge" type="checkbox" style="min-width:0;width:auto"> 同时合并已确认关联的历史世界日志（旧版关联恢复可能较慢）</label>
-    <div class="log-range" role="group" aria-label="日志下载时间范围（北京时间）">
-      <div class="range-row"><span>开始</span><input id="logStartDate" type="date" class="range-date" aria-label="开始日期"><select id="logStartHour" class="range-time" aria-label="开始小时"></select><span style="width:auto">时</span><select id="logStartMinute" class="range-time" aria-label="开始分钟"></select><span style="width:auto">分</span></div>
-      <div class="range-row"><span>结束</span><input id="logEndDate" type="date" class="range-date" aria-label="结束日期"><select id="logEndHour" class="range-time" aria-label="结束小时"></select><span style="width:auto">时</span><select id="logEndMinute" class="range-time" aria-label="结束分钟"></select><span style="width:auto">分</span></div>
-      <div class="range-presets"><select id="logSavedDate" aria-label="已保存日志日期"><option value="">选择已保存日期</option></select><button id="logToday" class="button" type="button">今天全天</button><button id="logLastHour" class="button" type="button">最近一小时</button><span class="range-note">北京时间 · 日期可点击日历选择 · 包含结束分钟整分钟</span></div>
+    <header class="log-head"><div class="log-head-title"><h2 id="logTitle">服务器日志</h2><p id="logScope" class="log-scope"></p></div><button id="logClose" class="log-close" type="button" aria-label="关闭">×</button></header>
+    <section class="log-card" aria-label="下载服务器日志">
+      <div class="log-card-head"><h3>下载服务器日志</h3><span class="log-tz">北京时间</span></div>
+      <div class="log-range" role="group" aria-label="日志下载时间范围（北京时间）">
+        <div class="range-row"><span class="range-label">开始</span><div class="range-inputs"><input id="logStartDate" type="date" class="range-date" aria-label="开始日期"><select id="logStartHour" class="range-time" aria-label="开始小时"></select><b aria-hidden="true">:</b><select id="logStartMinute" class="range-time" aria-label="开始分钟"></select></div></div>
+        <div class="range-row"><span class="range-label">结束</span><div class="range-inputs"><input id="logEndDate" type="date" class="range-date" aria-label="结束日期"><select id="logEndHour" class="range-time" aria-label="结束小时"></select><b aria-hidden="true">:</b><select id="logEndMinute" class="range-time" aria-label="结束分钟"></select></div></div>
+      </div>
+      <div class="range-presets"><button id="logToday" class="button compact" type="button">今天全天</button><button id="logLastHour" class="button compact" type="button">最近一小时</button><select id="logSavedDate" aria-label="已保存日志日期"><option value="">选择已保存日期</option></select></div>
       <div id="logAvailableDates" class="range-note" role="status"></div>
-      <div id="logRangeStatus" class="range-status" role="status"></div>
-    </div>
-    <div id="logDownloadStatus" class="range-status" role="status"></div>
-    <div id="logStatus" class="muted" role="status"></div>
-    <div id="logLines" class="log-lines"></div>
+      <label id="logMergeLabel" class="log-merge-label"><input id="logMerge" type="checkbox"><span>同时合并已确认关联的历史世界日志<small>旧版关联恢复可能较慢</small></span></label>
+      <div class="log-card-foot"><div class="log-foot-status"><div id="logRangeStatus" class="range-status" role="status"></div><div id="logDownloadStatus" class="range-status" role="status"></div></div><button id="logDownload" class="button primary" type="button">下载所选日志</button></div>
+      <p class="log-hint">包含结束那一分钟；不受预览 200 条限制。旧版漏存或关联不明的内容会在文件中注明，不含成员本机日志。</p>
+    </section>
+    <section class="log-card" aria-label="实时预览">
+      <div class="log-card-head"><h3>本次启动后的实时预览</h3><button id="logRefresh" class="button compact" type="button">刷新</button></div>
+      <div id="logStatus" class="range-note" role="status"></div>
+      <div id="logLines" class="log-lines"></div>
+    </section>
   </dialog>
   <script data-hoeing-history>
 // Pure presentation helpers shared by the admin page and its focused checks.
@@ -104,7 +108,7 @@
     globalThis.AdminHoeingHistory = { runLabel, time, headline, overview, reasonText };
 })();
   </script>
-<script src="/admin-monitor-ui.js?v=20261029-polish"></script>
+<script src="/admin-monitor-ui.js?v=20261029-v2"></script>
 <script src="/admin-monitor-logs.js?v=20261029-b"></script>
 <script src="/admin-monitor-events.js?v=20261029-overview"></script>
 </body></html>

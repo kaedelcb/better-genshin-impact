@@ -318,3 +318,147 @@ body{font-size:14px}
 .detail-top .scope-label{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;margin-bottom:6px}
 .detail-top h2{line-height:1.2}
 .detail-actions .button{min-height:40px;padding:7px 14px}
+
+/* ===== v2 商业级精修：统一卡片、字段、按钮与层级；与嘟嘟可共用视觉语言。 ===== */
+:root{--card:#1d1e34;--inset:#151626;--soft:#26273f;--radius:14px}
+.workspace{gap:14px;padding:20px 26px 22px}
+.top{padding-bottom:2px}
+.top h1{font-size:21px;font-weight:600;letter-spacing:.02em}
+.top>div>p{font-size:13px}
+.top-actions{gap:8px}
+.top-actions .button{min-height:38px;padding:6px 16px;font-size:14px}
+.updated{padding:0 6px;color:var(--muted)}
+
+/* 侧栏：品牌、导航、底部只读标签与 Star 分区更清晰 */
+.sidebar{gap:26px;padding:22px 14px 18px}
+.brand{font-size:19px;letter-spacing:.06em}
+.brand-mark{font-size:28px}
+.brand small{margin-top:1px}
+.navigation{gap:4px}
+.navigation button{min-height:40px;padding:8px 12px;border-radius:9px;font-size:14px}
+.navigation button[aria-pressed=true]{background:#2f2c45;border-color:transparent;box-shadow:inset 3px 0 var(--gold)}
+.sidebar-foot{display:grid;gap:12px}
+.admin-star{margin:0}
+
+/* 概况数字：四格等宽，数字右对齐，标签统一 */
+.metrics{border-radius:12px;background:var(--card)}
+.metric{padding:12px 18px}
+.metric span{font-size:13px;color:var(--muted)}
+.metric strong{font-size:22px;font-weight:600}
+
+/* 视图标题行 */
+.view-heading{min-height:40px}
+.view-heading h2{font-size:17px}
+.date-controls{gap:8px}
+.date-controls label{font-size:13px}
+
+/* 实时总览卡片：头部状态、成员、统计、底部操作四段式 */
+.overview-title h2{font-size:17px}
+.overview-rooms{gap:14px}
+.overview-card{gap:10px;padding:16px 18px 0;border-radius:var(--radius);background:var(--card)}
+.overview-card h3{font-size:18px}
+.overview-card .history-note{font-size:13px}
+.overview-card-foot{margin:2px -18px 0;padding:10px 18px;border-top:1px solid var(--line);background:#191a2e;border-radius:0 0 var(--radius) var(--radius);font-size:12px}
+.overview-card.running{border-color:#3f7666;background:linear-gradient(180deg,#1f3530 0,var(--card) 88px)}
+
+/* 工作台：目录与详情统一为卡片 */
+.workbench{gap:16px}
+.directory,.detail-panel{border-radius:var(--radius);background:var(--card)}
+.directory-head{padding:16px 14px 10px}
+.directory-head h3{font-size:15px;margin-bottom:10px}
+.directory-head input,.directory-filters select{min-height:40px;padding:7px 11px}
+.room-list{padding:0 8px 10px}
+.room-option{margin-bottom:4px;padding:11px 12px;border-radius:10px}
+.room-option[aria-pressed=true],.room-option.selected{background:#2f2c45;border-color:#6f6247;box-shadow:inset 3px 0 var(--gold)}
+.room-option-top strong{font-size:15px}
+.room-option .sub{font-size:12px;margin-top:3px}
+.detail-scroll{padding:22px 24px}
+
+/* 详情头：小标签 + 大房间号 + 状态同排；操作在右 */
+.detail-top{align-items:flex-start;gap:16px;margin-bottom:6px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.detail-eyebrow{color:var(--muted);font-size:12px;letter-spacing:.04em}
+.detail-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:2px}
+.detail-top h2{font-size:26px;line-height:1.2}
+.detail-actions .button{min-height:38px;padding:6px 14px}
+.summary-line{gap:6px 18px;margin:12px 0 10px;font-size:13px}
+.summary-line span{position:relative}
+.summary-line span+span::before{content:"";position:absolute;left:-10px;top:50%;width:3px;height:3px;border-radius:50%;background:#6c6884}
+.section-head{margin:24px 0 10px;padding-top:2px}
+.section-head h3{font-size:15px}
+.table-wrap{border-radius:10px;background:var(--inset)}
+.member-table th{background:#1a1b2e;font-size:12px;letter-spacing:.02em}
+.member-table td{font-size:14px}
+
+/* 批次折叠卡 */
+.batch{margin-top:8px;border-radius:11px;background:var(--inset)}
+.batch>summary{min-height:56px;padding:12px 46px 12px 16px}
+.batch>summary:hover{background:#1c1d31}
+.batch-title{font-size:14px}
+.batch-body{padding:4px 16px 14px}
+.world-row{padding:11px 0}
+
+/* 按房间号查日志：做成独立工具卡 */
+.direct-query{margin:0 0 20px;padding:16px 18px;border-radius:12px;background:var(--inset)}
+.direct-query h3{font-size:15px;margin-bottom:2px}
+.query-row{gap:8px;margin-top:10px}
+.query-row input,.query-row select,.query-row button{min-height:40px}
+.archive-note{font-size:12px}
+
+/* 日志下载窗口：标题栏 + 下载卡 + 预览卡 */
+dialog#logDialog{width:min(820px,calc(100vw - 28px));padding:0;border-color:#4d4863;border-radius:16px;background:#1a1b30}
+.log-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:18px 22px 14px;border-bottom:1px solid var(--line)}
+.log-head-title{min-width:0}
+.log-head h2{font-size:18px;line-height:1.35}
+.log-scope{margin-top:2px;color:var(--gold);font-size:13px;overflow-wrap:anywhere}
+.log-close{width:40px;min-height:40px;padding:0;border-color:transparent;background:transparent;color:var(--muted);font-size:24px;line-height:1}
+.log-close:hover{color:var(--text);background:var(--raised)}
+.log-card{margin:16px 22px;padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.log-card+.log-card{margin-top:0}
+.log-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.log-card-head h3{font-size:15px}
+.log-tz{padding:1px 10px;border:1px solid #4d4b65;border-radius:99px;color:var(--muted);font-size:12px}
+#logDialog .log-range{margin:0;padding:0;border:0;background:transparent;display:grid;gap:8px}
+#logDialog .range-row{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:10px;margin:0}
+.range-label{color:var(--muted);font-size:13px}
+.range-inputs{display:flex;align-items:center;gap:6px;min-width:0}
+.range-inputs b{color:var(--muted);font-weight:400}
+#logDialog .range-date{width:170px;min-width:0;min-height:40px}
+#logDialog .range-time{width:72px;min-width:0;min-height:40px}
+#logDialog .range-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 0 54px}
+#logDialog .range-presets select{min-width:170px;min-height:38px}
+.button.compact{min-height:38px;padding:6px 13px;font-size:13px}
+#logDialog .range-note{margin:8px 0 0 54px;font-size:12px}
+#logDialog .log-merge-label{display:flex;align-items:flex-start;gap:10px;margin:14px 0 0;padding:10px 12px;border-radius:9px;background:var(--inset);color:var(--text);font-size:13px;cursor:pointer}
+#logDialog .log-merge-label small{display:block;color:var(--muted);font-size:12px}
+#logDialog .log-merge-label input{margin-top:1px}
+.log-card-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.log-foot-status{min-width:0;flex:1}
+#logDialog .range-status{min-height:0;margin:0;font-size:13px}
+#logDialog .range-status:empty{display:none}
+#logDownload{min-height:42px;padding:8px 20px;flex-shrink:0}
+.log-hint{margin:10px 0 0;color:var(--muted);font-size:12px;line-height:1.7}
+#logDialog .log-lines{max-height:30dvh;margin-top:6px;border-top:0;border-radius:10px;background:var(--inset);padding:0 14px}
+#logDialog .log-lines:empty{display:none}
+#logDialog .log-line{padding:10px 0;font-size:13px}
+
+@media(max-width:760px){
+  .workspace{padding:14px 14px 28px}
+  .detail-scroll{padding:16px}
+  .detail-top h2{font-size:22px}
+  .overview-card{padding:14px 15px 0}
+  .overview-card-foot{margin:2px -15px 0;padding:10px 15px}
+  .direct-query{padding:14px}
+  dialog#logDialog{width:calc(100vw - 16px);max-height:94dvh}
+  .log-head{padding:14px 16px 12px}
+  .log-card{margin:12px;padding:14px}
+  #logDialog .range-row{grid-template-columns:minmax(0,1fr);gap:4px}
+  .range-inputs{flex-wrap:wrap}
+  #logDialog .range-date{flex:1 1 100%;width:auto}
+  #logDialog .range-time{flex:1}
+  #logDialog .range-presets,#logDialog .range-note{margin-left:0}
+  #logDialog .range-presets>*{flex:1 1 auto}
+  .log-card-foot{flex-direction:column;align-items:stretch}
+  #logDownload{width:100%}
+}
+#logDialog #logStatus{margin-left:0}
+@media(max-width:760px){.sidebar-foot{display:none}.date-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;align-items:center}.date-controls label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.date-controls .button{min-height:40px;padding:6px 14px}.date-controls input[type=date],.date-controls select{min-width:0}.metric span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}

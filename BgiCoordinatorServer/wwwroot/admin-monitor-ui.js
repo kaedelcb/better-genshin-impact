@@ -168,12 +168,12 @@ function option(entry) {
   return button;
 }
 function directQuery() {
-  const box = node('div', 'direct-query'); box.append(node('h3', '', '按房间号直接查日志'));
+  const box = node('div', 'direct-query'); box.append(node('h3', '', '按房间号查日志'));
   const row = node('div', 'query-row'), input = node('input'), choose = node('select');
   input.id = 'archiveCode'; input.type = 'text'; input.maxLength = 6; input.placeholder = '输入六位房间号'; input.setAttribute('aria-label', '历史房间码');
   choose.id = 'archiveRoom'; choose.setAttribute('aria-label', '已保存日志的历史房间'); choose.add(new Option('选择已保存房间', ''));
   for (const room of archiveRooms) choose.add(new Option(room.code, room.code));
-  const status = node('span', 'archive-note', '使用上方所选日期，可在下载窗口调整时间范围。'); status.id = 'archiveStatus';
+  const status = node('span', 'archive-note', '使用上方所选日期，下载窗口内可再调整时间。'); status.id = 'archiveStatus';
   row.append(input, choose, action('查询日志', () => {
     if (!$('historyDate').value) { status.textContent = '请先选择有效的历史日期。'; return; }
     const code = (input.value.trim() || choose.value).toUpperCase();
@@ -261,11 +261,13 @@ function revealSelection() {
 }
 function renderLive(panel, entry) {
   const room = entry.room, game = entry.type === 'game', top = node('div', 'detail-top'), title = node('div'), buttons = node('div', 'detail-actions');
-  title.append(node('div', 'scope-label', game ? '当前游戏世界房间' : '当前助手房间'), node('h2', 'mono', room.code));
+  const state = pill(game ? (labels[room.status] || '未知') : room.autoHoeingRunning ? '有成员锄地中' :
+    room.onlineCount ? '已连接' : '无人在线', game ? room.status : room.onlineCount ? 'connected' : 'disconnected'), titleRow = node('div', 'detail-title');
+  titleRow.append(node('h2', 'mono', room.code), state);
+  title.append(node('div', 'detail-eyebrow', game ? '当前游戏世界房间' : '当前助手房间'), titleRow);
   buttons.append(logButton(game ? '下载世界房间日志' : '下载助手自身日志', room.code, beijingMinute().slice(0, 10)));
   if (!game) buttons.append(action('历史与日志', () => showHistoryFor(room.code), 'button compact'));
-  top.append(title, buttons); panel.append(top, pill(game ? (labels[room.status] || '未知') : room.autoHoeingRunning ? '有成员锄地中' :
-    room.onlineCount ? '已连接' : '无人在线', game ? room.status : room.onlineCount ? 'connected' : 'disconnected'));
+  top.append(title, buttons); panel.append(top);
   panel.append(summaryLine(game ? [`在线 ${room.onlineCount} / ${room.memberCount}`, room.worldRound ? `世界轮次 ${room.worldRound}` : '世界轮次未记录',
     `线路 ${route(room)}`, room.startedAtUtc ? '开锄 ' + duration(room.startedAtUtc) : '尚未开锄'] :
     [`在线 ${room.onlineCount} / ${room.memberCount}`, `最近状态 ${heartbeat(room.lastHeartbeatUtc)}`, AdminHoeingHistory.headline(room.todayHoeing)]),
@@ -281,7 +283,7 @@ function renderLive(panel, entry) {
 }
 function renderHistory(panel, room) {
   const top = node('div', 'detail-top'), title = node('div');
-  title.append(node('div', 'scope-label', dailySnapshot.date + ' · 助手房间历史'), node('h2', 'mono', room.code));
+  title.append(node('div', 'detail-eyebrow', dailySnapshot.date + ' · 助手房间历史'), node('h2', 'mono', room.code));
   top.append(title, logButton('下载助手自身日志', room.code, dailySnapshot.date));
   panel.append(top, summaryLine([`${room.hoeing.runs.length} 次批次记录`, `${room.worlds.length} 个已关联世界房间`]),
     node('p', 'history-note', '这里只表示所选日期的已保存记录，不代表房间当前在线。'));
