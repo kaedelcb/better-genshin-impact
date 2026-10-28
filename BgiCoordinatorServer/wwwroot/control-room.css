@@ -254,7 +254,7 @@ small,.small{font-size:12px}
 @media(max-width:380px){.topbar .brand small{display:none}.top-star span{display:none}.top-star{padding:0 10px}}
 
 /* 成员详情·状态：单列堆叠，标签栏与面板同宽；联机安排为紧凑条，整页一屏可见。 */
-#detailView{max-width:900px}
+#detailView{max-width:1040px;margin-inline:auto}
 #detailView .detail-tabs{max-width:none}
 .status-stack{display:grid;gap:14px}
 .status-stack .panel{margin:0;padding:18px 22px}
