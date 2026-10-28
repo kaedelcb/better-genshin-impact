@@ -57,6 +57,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     private MojangPickLoop? _mojangPickLoop;
     private int _mojangListVersion = -1;
     private long _lastMojangScrollLogMs = long.MinValue;
+    private long _lastMojangMissingKeyLogMs = long.MinValue;
 
     /// <summary>
     /// 脚本传入的外部配置，只在本次启用期间有效
@@ -88,6 +89,7 @@ public partial class AutoPickTrigger : ITaskTrigger
         _prevClickFrameIndex = -1;
         _mojangListVersion = -1;
         _lastMojangScrollLogMs = long.MinValue;
+        _lastMojangMissingKeyLogMs = long.MinValue;
         _mojangPickLoop?.Reset();
     }
 
@@ -271,8 +273,12 @@ public partial class AutoPickTrigger : ITaskTrigger
                     // 调试日志独立于模板拾取的日志级别设置，每两秒最多一条。
                     if (!_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)) return;
                     var now = Environment.TickCount64;
-                    if (_lastMojangScrollLogMs != long.MinValue && now - _lastMojangScrollLogMs < 2000) return;
-                    _lastMojangScrollLogMs = now;
+                    // 无 F 恢复独立限频，避免被此前的普通滚动日志吞掉。
+                    var missingKey = foundRectArea.IsEmpty();
+                    var lastLog = missingKey ? _lastMojangMissingKeyLogMs : _lastMojangScrollLogMs;
+                    if (lastLog != long.MinValue && now - lastLog < 2000) return;
+                    if (missingKey) _lastMojangMissingKeyLogMs = now;
+                    else _lastMojangScrollLogMs = now;
                     _logger.LogDebug(
                         "本体模板滚轮输入：帧={Frame} 结果={Outcome} 原始delta={Delta} 格数={Clicks} 后端={Backend} F位置=({X},{Y}) 任务中={InTask} 拒绝原因={Reason}",
                         content.FrameIndex, outcome, delta, clicks, backend.Kind, foundRectArea.X, foundRectArea.Y, inTask, blockReason ?? "无");

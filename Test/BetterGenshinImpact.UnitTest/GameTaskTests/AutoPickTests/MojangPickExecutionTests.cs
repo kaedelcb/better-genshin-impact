@@ -244,6 +244,65 @@ public sealed class MojangPickExecutionTests
         Assert.Equal(1, checks);
     }
 
+    [Fact]
+    public void MissingPickKeyRecovery_MatchesOriginalPositiveTwoClicksAnd50Milliseconds()
+    {
+        var clock = new MillisecondTimeProvider();
+        var keyboard = new Mock<IKeyboardInput>(MockBehavior.Strict);
+        var mouse = new Mock<IMouseInput>(MockBehavior.Strict);
+        mouse.Setup(x => x.VerticalScroll(2)).Returns(mouse.Object);
+        var channel = CreateChannel(keyboard, mouse);
+        var reports = new List<(int Delta, int? Clicks, MojangScrollOutcome Outcome)>();
+        var execution = new MojangPickExecution(() => true, () => channel.Object,
+            sleep: slice => clock.ElapsedMilliseconds += slice,
+            onScroll: (delta, clicks, outcome) => reports.Add((delta, clicks, outcome)), timeProvider: clock);
+
+        Assert.True(MojangPickLoop.RecoverMissingPickKey(true, execution));
+        Assert.Equal(50, clock.ElapsedMilliseconds);
+        Assert.Equal(new[] { (240, (int?)2, MojangScrollOutcome.Submitted) }, reports);
+        mouse.Verify(x => x.VerticalScroll(2), Times.Once);
+        mouse.VerifyNoOtherCalls();
+        keyboard.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void MissingPickKeyRecovery_WithoutScrollHintDoesNothing()
+    {
+        var execution = new MojangPickExecution(
+            () => throw new InvalidOperationException("无滚轮图标时不应请求输入"),
+            () => throw new InvalidOperationException("不应获取输入通道"),
+            sleep: _ => throw new InvalidOperationException("不应等待"));
+
+        Assert.False(MojangPickLoop.RecoverMissingPickKey(false, execution));
+    }
+
+    [Fact]
+    public void MissingPickKeyRecovery_DeniedInputDoesNotScrollOrWait()
+    {
+        var execution = new MojangPickExecution(() => false,
+            () => throw new InvalidOperationException("被拒绝时不应获取输入通道"),
+            sleep: _ => throw new InvalidOperationException("被拒绝时不应等待"));
+
+        Assert.False(MojangPickLoop.RecoverMissingPickKey(true, execution));
+    }
+
+    [Fact]
+    public void MissingPickKeyRecovery_StopAfterScrollDoesNotEnterRecoveryWait()
+    {
+        var allowed = true;
+        var keyboard = new Mock<IKeyboardInput>(MockBehavior.Strict);
+        var mouse = new Mock<IMouseInput>(MockBehavior.Strict);
+        mouse.Setup(x => x.VerticalScroll(2)).Callback(() => allowed = false).Returns(mouse.Object);
+        var channel = CreateChannel(keyboard, mouse);
+        var execution = new MojangPickExecution(() => allowed, () => channel.Object,
+            sleep: _ => throw new InvalidOperationException("停止后不应进入等待"));
+
+        Assert.False(MojangPickLoop.RecoverMissingPickKey(true, execution));
+        mouse.Verify(x => x.VerticalScroll(2), Times.Once);
+        mouse.VerifyNoOtherCalls();
+        keyboard.VerifyNoOtherCalls();
+    }
+
     private sealed class MillisecondTimeProvider : TimeProvider
     {
         public long ElapsedMilliseconds { get; set; }

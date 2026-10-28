@@ -52,6 +52,7 @@ public sealed class MojangPickLoop
     private readonly ILogger _logger = App.GetLogger<MojangPickLoop>();
     private MojangPickExecution? _execution;
     private long _lastScrollDecisionLogMs = long.MinValue;
+    private long _lastMissingKeyDecisionLogMs = long.MinValue;
 
     /// <summary>二次确认失败标记：存在时下一轮转入滚轮分支并消费。</summary>
     private bool _skipConfirm;
@@ -180,12 +181,13 @@ public sealed class MojangPickLoop
                 RemoveTestDraw();
             }
 
-            // 无 F 图标：存在滚轮图标则向下滚动一次，否则不操作
-            if (HasScrollIcon(content.CaptureRectArea))
+            var hasScrollIcon = HasScrollIcon(content.CaptureRectArea);
+            if (hasScrollIcon)
             {
-                LogScrollDecision(content, foundRectArea, scale, "无 F 图标但有滚轮图标", 1);
-                ScrollTimes(1);
+                LogScrollDecision(content, foundRectArea, scale, "无 F 图标，恢复原版向上补选", 1,
+                    up: true, distance: 240, afterInterval: 50, interval: 0);
             }
+            RecoverMissingPickKey(hasScrollIcon, execution);
 
             return;
         }
@@ -401,17 +403,28 @@ public sealed class MojangPickLoop
         ScrollTimes(Math.Max(1, scanCount - 1)); // 都不是：至少滚一次
     }
 
-    private void LogScrollDecision(CaptureContent content, Region fRegion, double scale, string reason, int times, bool up = false)
+    /// <summary>
+    /// 原版 OnCapture 在进入模板循环前已处理无 F：向上两格后等待 50 ms。
+    /// 模板入口前移后此分支才变得可达，不能套用有 F 时的向下滚动配置。
+    /// </summary>
+    internal static bool RecoverMissingPickKey(bool hasScrollIcon, MojangPickExecution execution)
+        => hasScrollIcon && execution.ScrollDelta(240) && execution.Wait(50);
+
+    private void LogScrollDecision(CaptureContent content, Region fRegion, double scale, string reason, int times,
+        bool up = false, int? distance = null, int? afterInterval = null, int? interval = null)
     {
         if (!_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)) return;
         var now = Environment.TickCount64;
-        if (_lastScrollDecisionLogMs != long.MinValue && now - _lastScrollDecisionLogMs < 2000) return;
-        _lastScrollDecisionLogMs = now;
+        var missingKey = fRegion.IsEmpty();
+        var lastLog = missingKey ? _lastMissingKeyDecisionLogMs : _lastScrollDecisionLogMs;
+        if (lastLog != long.MinValue && now - lastLog < 2000) return;
+        if (missingKey) _lastMissingKeyDecisionLogMs = now;
+        else _lastScrollDecisionLogMs = now;
         var config = TaskContext.Instance().Config.AutoPickConfig;
         _logger.LogDebug(
             "本体模板滚轮决策：帧={Frame} 原因={Reason} 方向={Direction} 计划次数={Times} 实际次数={ActualTimes} 距离={Distance} 滚动间隔={Interval} 滚后间隔={AfterInterval} F位置=({X},{Y}) 截图=({Width},{Height}) 缩放={Scale} 配置组={Group}",
             content.FrameIndex, reason, up ? "向上" : "向下", times, config.ScrollInterval > 0 ? times : 1,
-            config.ScrollDistance, config.ScrollInterval, config.ScrollAfterInterval,
+            distance ?? config.ScrollDistance, interval ?? config.ScrollInterval, afterInterval ?? config.ScrollAfterInterval,
             fRegion.X, fRegion.Y, content.CaptureRectArea.Width, content.CaptureRectArea.Height, scale, _filter.CurrentGroupName ?? "无");
     }
 
@@ -611,6 +624,7 @@ public sealed class MojangPickLoop
         _unknownStreak = 0;
         _execution = null;
         _lastScrollDecisionLogMs = long.MinValue;
+        _lastMissingKeyDecisionLogMs = long.MinValue;
         _filter.SetCurrentGroup(null, null);
         RemoveTestDraw();
         if (MojangMatch.IsLoaded) MojangMatch.Instance.ClearUnknownRois();
