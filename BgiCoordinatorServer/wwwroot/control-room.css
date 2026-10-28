@@ -283,3 +283,18 @@ small,.small{font-size:12px}
   .status-stack .action-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .status-stack .action-grid #detailReset{grid-column:1/-1}
 }
+
+/* 当前运行的信息改为一行横排：标签在上、数值在下，空间不够时自动换行。 */
+.kv-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:12px 0 0;border:1px solid var(--line);border-radius:10px;background:#191a2e;overflow:hidden}
+.kv-strip:empty{display:none}
+.kv-strip .kv{display:grid;gap:2px;align-content:start;justify-content:stretch;padding:10px 14px;border:0;border-right:1px solid var(--line)}
+.kv-strip .kv:last-child{border-right:0}
+.kv-strip .kv>span{font-size:12px}
+.kv-strip .kv b{text-align:left;font-size:15px;font-weight:500}
+@media(max-width:700px){
+  .kv-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kv-strip .kv{border-right:0;border-bottom:1px solid var(--line)}
+  .kv-strip .kv:nth-child(odd){border-right:1px solid var(--line)}
+  .kv-strip .kv:last-child:nth-child(odd){grid-column:1/-1;border-right:0}
+  .kv-strip .kv:nth-last-child(-n+2):nth-child(odd):not(:last-child),.kv-strip .kv:last-child{border-bottom:0}
+}
