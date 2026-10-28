@@ -56,6 +56,7 @@ public partial class AutoPickTrigger : ITaskTrigger
     private RecognitionObject _pickRo = null!;
     private MojangPickLoop? _mojangPickLoop;
     private int _mojangListVersion = -1;
+    private long _lastMojangScrollLogMs = long.MinValue;
 
     /// <summary>
     /// 脚本传入的外部配置，只在本次启用期间有效
@@ -86,6 +87,7 @@ public partial class AutoPickTrigger : ITaskTrigger
         _lastText = string.Empty;
         _prevClickFrameIndex = -1;
         _mojangListVersion = -1;
+        _lastMojangScrollLogMs = long.MinValue;
         _mojangPickLoop?.Reset();
     }
 
@@ -245,14 +247,36 @@ public partial class AutoPickTrigger : ITaskTrigger
             var inTask = dispatcher.IsInTask;
             var options = _externalConfig;
             var token = inTask ? Core.Script.CancellationContext.Instance.Cts.Token : CancellationToken.None;
-            var execution = new MojangPickExecution(
-                () => !token.IsCancellationRequested && ReferenceEquals(TaskContext.Instance().Runtime, runtime)
-                    && ReferenceEquals(InputHub.Backend, backend) && runtime.Capture.IsCapturing
-                    && runtime.Window.IsAlive && (!runtime.Window.RequiresForeground || runtime.Window.IsForeground)
-                    && !RunnerContext.Instance.IsSuspend && RunnerContext.Instance.AutoPickTriggerStopCount == 0
-                    && pickConfig.MojangMatchEnabled && !pickConfig.TestModeEnabled
-                    && dispatcher.IsTriggerRequested(this, options, inTask),
-                () => InputHub.Foreground);
+            string? blockReason = null;
+            bool IsInputAllowed()
+            {
+                // 顺序与原许可表达式一致；只记录首次拒绝原因，不放宽任何输入条件。
+                blockReason = token.IsCancellationRequested ? "任务令牌已取消"
+                    : !ReferenceEquals(TaskContext.Instance().Runtime, runtime) ? "运行会话已更换"
+                    : !ReferenceEquals(InputHub.Backend, backend) ? "输入后端已更换"
+                    : !runtime.Capture.IsCapturing ? "截图器已停止"
+                    : !runtime.Window.IsAlive ? "游戏窗口已退出"
+                    : runtime.Window.RequiresForeground && !runtime.Window.IsForeground ? "游戏窗口失焦"
+                    : RunnerContext.Instance.IsSuspend ? "任务已暂停"
+                    : RunnerContext.Instance.AutoPickTriggerStopCount != 0 ? "自动拾取暂停计数非零"
+                    : !pickConfig.MojangMatchEnabled ? "本体模板拾取已关闭"
+                    : pickConfig.TestModeEnabled ? "测试模式禁止输入"
+                    : !dispatcher.IsTriggerRequested(this, options, inTask) ? "触发器会话或启用租约已失效"
+                    : null;
+                return blockReason is null;
+            }
+            var execution = new MojangPickExecution(IsInputAllowed, () => InputHub.Foreground,
+                onScroll: (delta, clicks, outcome) =>
+                {
+                    // 调试日志独立于模板拾取的日志级别设置，每两秒最多一条。
+                    if (!_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)) return;
+                    var now = Environment.TickCount64;
+                    if (_lastMojangScrollLogMs != long.MinValue && now - _lastMojangScrollLogMs < 2000) return;
+                    _lastMojangScrollLogMs = now;
+                    _logger.LogDebug(
+                        "本体模板滚轮输入：帧={Frame} 结果={Outcome} 原始delta={Delta} 格数={Clicks} 后端={Backend} F位置=({X},{Y}) 任务中={InTask} 拒绝原因={Reason}",
+                        content.FrameIndex, outcome, delta, clicks, backend.Kind, foundRectArea.X, foundRectArea.Y, inTask, blockReason ?? "无");
+                });
             try
             {
                 _mojangPickLoop ??= new MojangPickLoop();

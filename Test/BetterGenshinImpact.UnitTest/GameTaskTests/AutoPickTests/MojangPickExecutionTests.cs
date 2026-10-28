@@ -2,6 +2,7 @@ using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.AutoPick;
 using Moq;
 using Vanara.PInvoke;
+using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoPickTests;
 
@@ -127,6 +128,64 @@ public sealed class MojangPickExecutionTests
         firstKeyboard.VerifyNoOtherCalls();
         secondKeyboard.Verify(x => x.KeyPress(User32.VK.VK_E), Times.Once);
         secondKeyboard.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ScrollDiagnostics_DistinguishDenialZeroAndSubmission()
+    {
+        var allowed = false;
+        var reports = new List<(int Delta, int? Clicks, MojangScrollOutcome Outcome)>();
+        var mouse = new Mock<IMouseInput>(MockBehavior.Strict);
+        mouse.Setup(x => x.VerticalScroll(-3)).Returns(mouse.Object);
+        var channel = CreateChannel(new Mock<IKeyboardInput>(MockBehavior.Strict), mouse);
+        var execution = new MojangPickExecution(() => allowed, () => channel.Object,
+            onScroll: (delta, clicks, outcome) => reports.Add((delta, clicks, outcome)));
+
+        Assert.False(execution.ScrollDelta(-360));
+        allowed = true;
+        Assert.True(execution.ScrollDelta(0));
+        Assert.True(execution.ScrollDelta(-360));
+
+        Assert.Equal(new[]
+        {
+            (-360, (int?)null, MojangScrollOutcome.BlockedBeforeChannel),
+            (0, (int?)0, MojangScrollOutcome.ZeroDelta),
+            (-360, (int?)-3, MojangScrollOutcome.Submitted)
+        }, reports);
+        mouse.Verify(x => x.VerticalScroll(-3), Times.Once);
+        mouse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ScrollDiagnostics_ChannelResolutionDenialDoesNotReportSubmission()
+    {
+        var allowed = true;
+        var reports = new List<MojangScrollOutcome>();
+        var mouse = new Mock<IMouseInput>(MockBehavior.Strict);
+        var channel = CreateChannel(new Mock<IKeyboardInput>(MockBehavior.Strict), mouse);
+        var execution = new MojangPickExecution(() => allowed, () =>
+        {
+            allowed = false;
+            return channel.Object;
+        }, onScroll: (_, _, outcome) => reports.Add(outcome));
+
+        Assert.False(execution.ScrollDelta(360));
+        Assert.Equal(new[] { MojangScrollOutcome.BlockedBeforeSend }, reports);
+        mouse.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public void ScrollDiagnostics_BackendFailureDoesNotReportSubmission()
+    {
+        var reports = new List<MojangScrollOutcome>();
+        var mouse = new Mock<IMouseInput>(MockBehavior.Strict);
+        mouse.Setup(x => x.VerticalScroll(3)).Throws(new InvalidOperationException("backend failed"));
+        var channel = CreateChannel(new Mock<IKeyboardInput>(MockBehavior.Strict), mouse);
+        var execution = new MojangPickExecution(() => true, () => channel.Object,
+            onScroll: (_, _, outcome) => reports.Add(outcome));
+
+        Assert.Throws<InvalidOperationException>(() => execution.ScrollDelta(360));
+        Assert.Empty(reports);
     }
 
     private static Mock<IInputChannel> CreateChannel(Mock<IKeyboardInput> keyboard, Mock<IMouseInput> mouse)

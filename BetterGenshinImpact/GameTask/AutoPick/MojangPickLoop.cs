@@ -51,6 +51,7 @@ public sealed class MojangPickLoop
 
     private readonly ILogger _logger = App.GetLogger<MojangPickLoop>();
     private MojangPickExecution? _execution;
+    private long _lastScrollDecisionLogMs = long.MinValue;
 
     /// <summary>二次确认失败标记：存在时下一轮转入滚轮分支并消费。</summary>
     private bool _skipConfirm;
@@ -182,6 +183,7 @@ public sealed class MojangPickLoop
             // 无 F 图标：存在滚轮图标则向下滚动一次，否则不操作
             if (HasScrollIcon(content.CaptureRectArea))
             {
+                LogScrollDecision(content, foundRectArea, scale, "无 F 图标但有滚轮图标", 1);
                 ScrollTimes(1);
             }
 
@@ -341,6 +343,7 @@ public sealed class MojangPickLoop
         if (!HasScrollIcon(content.CaptureRectArea))
         {
             // 无滚轮图标：向下滚动一次
+            LogScrollDecision(content, foundRectArea, scale, "有 F 但未检测到滚轮图标", 1);
             ScrollTimes(1);
             return;
         }
@@ -349,6 +352,7 @@ public sealed class MojangPickLoop
         if (foundRectArea.Y + (int)(ItemStepY * scale) > (int)(ListBottomMinusItem * scale))
         {
             // 已在底部（k=1 就超出范围）：滚一次，游戏机制会回到顶部
+            LogScrollDecision(content, foundRectArea, scale, "F 已到扫描区域底部", 1);
             ScrollTimes(1);
             return;
         }
@@ -379,6 +383,7 @@ public sealed class MojangPickLoop
 
         if (hitIndex > 0)
         {
+            LogScrollDecision(content, foundRectArea, scale, "下方存在可拾取物品", hitIndex);
             ScrollTimes(hitIndex); // 第 i 个是需要交互的物品：滚 i 次
             return;
         }
@@ -387,11 +392,27 @@ public sealed class MojangPickLoop
         var upCount = ScanUpward(content, foundRectArea, scale);
         if (upCount > 0)
         {
+            LogScrollDecision(content, foundRectArea, scale, "上方存在可拾取物品", upCount, up: true);
             ScrollTimesUp(upCount);
             return;
         }
 
+        LogScrollDecision(content, foundRectArea, scale, "上下扫描未找到可拾取物品", Math.Max(1, scanCount - 1));
         ScrollTimes(Math.Max(1, scanCount - 1)); // 都不是：至少滚一次
+    }
+
+    private void LogScrollDecision(CaptureContent content, Region fRegion, double scale, string reason, int times, bool up = false)
+    {
+        if (!_logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)) return;
+        var now = Environment.TickCount64;
+        if (_lastScrollDecisionLogMs != long.MinValue && now - _lastScrollDecisionLogMs < 2000) return;
+        _lastScrollDecisionLogMs = now;
+        var config = TaskContext.Instance().Config.AutoPickConfig;
+        _logger.LogDebug(
+            "本体模板滚轮决策：帧={Frame} 原因={Reason} 方向={Direction} 计划次数={Times} 实际次数={ActualTimes} 距离={Distance} 滚动间隔={Interval} 滚后间隔={AfterInterval} F位置=({X},{Y}) 截图=({Width},{Height}) 缩放={Scale} 配置组={Group}",
+            content.FrameIndex, reason, up ? "向上" : "向下", times, config.ScrollInterval > 0 ? times : 1,
+            config.ScrollDistance, config.ScrollInterval, config.ScrollAfterInterval,
+            fRegion.X, fRegion.Y, content.CaptureRectArea.Width, content.CaptureRectArea.Height, scale, _filter.CurrentGroupName ?? "无");
     }
 
     /// <summary>
@@ -591,6 +612,7 @@ public sealed class MojangPickLoop
         _skipConfirm = false;
         _unknownStreak = 0;
         _execution = null;
+        _lastScrollDecisionLogMs = long.MinValue;
         _filter.SetCurrentGroup(null, null);
         RemoveTestDraw();
         if (MojangMatch.IsLoaded) MojangMatch.Instance.ClearUnknownRois();
