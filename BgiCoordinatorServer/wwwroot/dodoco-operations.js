@@ -12,10 +12,18 @@ function watchStopAlerts(message) {
 }
 function dodocoRenderWatch() {
     if (watchState.target !== dodoco.target) { watchStopAlerts(); Object.assign(watchState,{ target:dodoco.target, rules:[], settings:null, dates:[], records:[], date:'', offset:0, total:0, cursors:[null], page:0, nextCursor:null, keyword:'', level:'', ruleId:'', editing:null, frames:[], record:null }); }
-    d('dodocoContent').innerHTML = `<section class="dd-card dd-watch-bar"><header class="dd-card-head"><div><h2>异常监控</h2><p class="dodoco-hint">${watchIsLocal()?'本机直连：操作作用于本机助手':'需成员在 PC 助手中允许远程访问；规则、设置和记录都作用于所选成员'}</p></div><div class="dd-actions"><button id="watchAlertToggle" class="dd-btn">${watchAlerts.timer?'停止网页告警监视':'开启网页告警监视'}</button><button id="watchRefresh" class="dd-btn dd-btn-primary">读取规则与设置</button></div></header><p id="watchAlertStatus" class="dd-alert-line" role="status" aria-live="polite">${watchAlerts.timer?'网页告警监视中。':'网页告警监视未开启；开启后每 15 秒检查最近 100 条记录，仅在本页显示新告警。'}</p></section><div id="watchBody"><p class="dd-empty dd-card">点击“读取规则与设置”后，在这里管理监控规则、异常记录和诊断包</p></div>`;
+    d('dodocoContent').innerHTML = `<section class="dd-card dd-watch-bar"><header class="dd-card-head"><div><h2>异常监控</h2><p class="dodoco-hint">${watchIsLocal()?'本机直连：操作作用于本机助手':'需成员在 PC 助手中允许远程访问；规则、设置和记录都作用于所选成员'}</p></div><div class="dd-actions"><button id="watchAlertToggle" class="dd-btn">${watchAlerts.timer?'停止网页告警监视':'开启网页告警监视'}</button><button id="watchRefresh" class="dd-btn dd-btn-primary">读取规则与设置</button></div></header><div class="dd-alert-opts"><label class="dd-check"><input id="watchAlertSound" type="checkbox" ${watchAlerts.sound!==false?'checked':''}>提示音</label><label class="dd-check"><input id="watchAlertNotify" type="checkbox" ${watchAlerts.notify?'checked':''}>浏览器通知</label></div><p id="watchAlertStatus" class="dd-alert-line" role="status" aria-live="polite">${watchAlerts.timer?'网页告警监视中。':'网页告警监视未开启；开启后每 15 秒检查最近 100 条记录，仅在本页显示新告警。'}</p></section><div id="watchBody"><p class="dd-empty dd-card">点击“读取规则与设置”后，在这里管理监控规则、异常记录和诊断包</p></div>`;
     d('watchRefresh').onclick=watchLoad;
+    d('watchAlertSound').onchange=e=>{watchAlerts.sound=e.target.checked;};
+    d('watchAlertNotify').onchange=async e=>{watchAlerts.notify=e.target.checked;if(!e.target.checked)return;if(!('Notification' in window)){e.target.checked=watchAlerts.notify=false;watchStatus('此浏览器不支持系统通知。');return;}if(Notification.permission==='default')await Notification.requestPermission();if(Notification.permission!=='granted'){e.target.checked=watchAlerts.notify=false;watchStatus('浏览器未允许通知；可在地址栏的网站权限中开启。');}};
     d('watchAlertToggle').onclick=()=>watchAlerts.timer?watchStopAlerts('网页告警监视已停止。'):watchStartAlerts();
     if (watchState.settings) watchDraw();
+}
+function watchBeep(){try{const ctx=new (window.AudioContext||window.webkitAudioContext)(),o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=880;g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.2,ctx.currentTime+.02);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.45);o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+.5);setTimeout(()=>ctx.close(),800);}catch{}}
+function watchNotify(record,count,settings){
+    if(settings?.muteAll)return;
+    if(d('watchAlertSound')?.checked)watchBeep();
+    if(d('watchAlertNotify')?.checked&&'Notification' in window&&Notification.permission==='granted'){try{new Notification(`嘟嘟可 · ${record.ruleName}${count>1?`（共 ${count} 条）`:''}`,{body:`${record.time} ${record.message}`.slice(0,180),tag:'dodoco-watch'});}catch{}}
 }
 function watchStartAlerts() {
     if(!dodocoReady())return;watchStopAlerts();watchAlerts.target=dodoco.target;const token=++watchAlerts.token;
@@ -37,7 +45,7 @@ function watchStartAlerts() {
                 const fresh=result.records.filter(r=>alerts.has(r.ruleId)&&!watchAlerts.seen.has(key(r)));
                 for(const record of result.records)watchAlerts.seen.add(key(record));
                 if(watchAlerts.seen.size>1000)watchAlerts.seen=new Set(result.records.map(key));
-                if(watchAlerts.initialized&&fresh.length){const latest=fresh[0];d('watchAlertStatus').textContent=`新告警 ${fresh.length} 条：${latest.time} · ${latest.ruleName} · ${latest.message}`;}
+                if(watchAlerts.initialized&&fresh.length){const latest=fresh[0],text=`新告警 ${fresh.length} 条：${latest.time} · ${latest.ruleName} · ${latest.message}`;d('watchAlertStatus').textContent=text;d('watchAlertStatus').classList.add('is-alert');watchNotify(latest,fresh.length,state.settings);}
                 else if(!watchAlerts.initialized)d('watchAlertStatus').textContent='网页告警监视中；仅提示建立基线后的新告警。';
             } else if(!watchAlerts.initialized)d('watchAlertStatus').textContent='网页告警监视中，成员当前没有异常记录。';
             watchAlerts.initialized=true;
@@ -64,26 +72,29 @@ function watchDraw() {
     const selected=(value,current)=>value===current?' selected':'';
     root.innerHTML=`<div class="dd-watch-grid"><div class="dd-col">
     <section class="dd-card"><header class="dd-card-head"><div><h3>异常记录</h3><p class="dodoco-hint">搜索覆盖所选日期；清理只删除该成员当天的异常记录，日志和事发快照保留</p></div></header>
-    <div class="dd-filters"><label class="dd-field"><span>日期</span><select id="watchDate"><option value="">选择日期</option>${watchState.dates.map(x=>`<option value="${de(x)}"${selected(x,watchState.date)}>${de(x)}</option>`).join('')}</select></label><label class="dd-field dd-grow"><span>关键词</span><input id="watchFilter" type="search" maxlength="256" placeholder="搜索所选日期" value="${de(watchState.keyword)}"></label><label class="dd-field"><span>规则</span><select id="watchRecordRule"><option value="">全部规则</option>${watchState.rules.map(x=>`<option value="${de(x.id)}"${selected(x.id,watchState.ruleId)}>${de(x.name)}</option>`).join('')}</select></label><label class="dd-field"><span>级别</span><select id="watchRecordLevel"><option value="">全部级别</option>${['DBG','INF','WRN','ERR'].map(x=>`<option${selected(x,watchState.level)}>${x}</option>`).join('')}</select></label><button id="watchLoadRecords" class="dd-btn dd-btn-primary dd-align-end">搜索记录</button></div>
-    <div class="dd-result-bar"><span id="watchPage" class="dodoco-status"></span><div class="dd-actions"><span class="dd-pager"><button id="watchPrev" class="dd-btn dd-btn-icon" aria-label="上一页" title="上一页">‹</button><button id="watchNext" class="dd-btn dd-btn-icon" aria-label="下一页" title="下一页">›</button></span><button id="watchClearRecords" class="dd-btn dd-btn-danger">清理所选日期记录</button></div></div>
+    <div class="dd-filters"><label class="dd-field"><span>日期</span><select id="watchDate"><option value="">选择日期</option>${watchState.dates.length>1?`<option value="*"${selected('*',watchState.date)}>全部日期（${watchState.dates.length} 天）</option>`:''}${watchState.dates.map(x=>`<option value="${de(x)}"${selected(x,watchState.date)}>${de(x)}</option>`).join('')}</select></label><label class="dd-field dd-grow"><span>关键词</span><input id="watchFilter" type="search" maxlength="256" placeholder="搜索所选日期" value="${de(watchState.keyword)}"></label><label class="dd-field"><span>规则</span><select id="watchRecordRule"><option value="">全部规则</option>${watchState.rules.map(x=>`<option value="${de(x.id)}"${selected(x.id,watchState.ruleId)}>${de(x.name)}</option>`).join('')}</select></label><label class="dd-field"><span>级别</span><select id="watchRecordLevel"><option value="">全部级别</option>${['DBG','INF','WRN','ERR'].map(x=>`<option${selected(x,watchState.level)}>${x}</option>`).join('')}</select></label><button id="watchLoadRecords" class="dd-btn dd-btn-primary dd-align-end">搜索记录</button></div>
+    <div class="dd-result-bar"><span id="watchPage" class="dodoco-status"></span><div class="dd-actions"><span class="dd-pager"><button id="watchPrev" class="dd-btn dd-btn-icon" aria-label="上一页" title="上一页">‹</button><button id="watchNext" class="dd-btn dd-btn-icon" aria-label="下一页" title="下一页">›</button></span><button id="watchClearRecords" class="dd-btn dd-btn-danger">${watchState.date==='*'?'清理全部日期记录':'清理所选日期记录'}</button></div></div>
     <div id="watchRecords" class="dd-record-list"></div><div id="watchFrames"></div></section>
-    <section class="dd-card"><header class="dd-card-head"><div><h3>导出诊断包</h3><p class="dodoco-hint">按成员电脑的本地时间填写；${watchIsLocal()?'本机直连无需远程共享':'需开启远程访问及日志文件共享'}；最多 7 天，包最大 8 MB</p></div></header><div class="dd-filters"><label class="dd-field dd-grow"><span>开始</span><input id="diagnosticStart" type="datetime-local"></label><label class="dd-field dd-grow"><span>结束</span><input id="diagnosticEnd" type="datetime-local"></label><button id="diagnosticDownload" class="dd-btn dd-btn-primary dd-align-end">生成并下载诊断包</button></div></section>
+    <section class="dd-card"><header class="dd-card-head"><div><h3>导出诊断包</h3><p class="dodoco-hint">按成员电脑的本地时间填写；${watchIsLocal()?'本机直连无需远程共享':'需开启远程访问及日志文件共享'}；最多 7 天，包最大 8 MB</p></div></header><div class="dd-filters"><label class="dd-field dd-grow"><span>开始</span><input id="diagnosticStart" type="datetime-local"></label><label class="dd-field dd-grow"><span>结束</span><input id="diagnosticEnd" type="datetime-local"></label><span class="dd-actions dd-align-end"><button id="diagnosticNow" class="dd-btn" title="10 分钟前到现在">现在</button><button id="diagnosticDay" class="dd-btn" title="今天 00:00 到现在">全天</button></span><button id="diagnosticDownload" class="dd-btn dd-btn-primary dd-align-end">生成并下载诊断包</button></div></section>
     </div><div class="dd-col">
-    <section class="dd-card"><header class="dd-card-head"><div><h3>监控规则</h3><p class="dodoco-hint">共 ${watchState.rules.length} 条</p></div><button id="watchNewRule" class="dd-btn">新建规则</button></header><div class="dodoco-rule-list">${watchState.rules.length ? watchState.rules.map((x,i)=>`<div class="dd-rule${x.enabled?'':' is-off'}"><div class="dd-rule-main"><strong>${de(x.name||'未命名规则')}</strong><div class="dd-tags"><span class="dd-pill${x.enabled?' ok':''}">${x.enabled?'启用':'停用'}</span><span class="dd-pill">${de(x.minLevel)} 及以上</span>${x.alert?'<span class="dd-pill warn">告警</span>':''}${x.snapshot?'<span class="dd-pill">快照</span>':''}</div><small>${de(x.isRegex?'正则':'关键词')}：${de(x.pattern||'仅级别匹配')}</small></div><div class="dd-rule-actions"><button class="dd-btn dd-btn-sm" data-edit="${i}">编辑</button><button class="dd-btn dd-btn-sm dd-btn-danger" data-delete="${i}">删除</button></div></div>`).join(''):'<p class="dd-empty">成员尚无监控规则</p>'}</div>
-    <details id="watchRuleForm" class="dd-form" ${watchState.editing?'open':''}><summary>${watchState.editing?'编辑规则':'添加规则'}</summary><div class="dd-form-grid"><label class="dd-field"><span>名称</span><input id="watchName" maxlength="256" value="${de(r.name)}"></label><label class="dd-field"><span>最低级别</span><select id="watchLevel">${['DBG','INF','WRN','ERR'].map(x=>`<option${selected(x,r.minLevel)}>${x}</option>`).join('')}</select></label><label class="dd-field dd-span"><span>关键词或正则</span><input id="watchPattern" maxlength="2048" value="${de(r.pattern)}" placeholder="留空仅按级别匹配"></label><label class="dd-field dd-span"><span>备注</span><input id="watchNote" maxlength="1024" value="${de(r.note)}"></label></div><div class="dodoco-checks"><label class="dd-check"><input type="checkbox" id="watchEnabled" ${r.enabled?'checked':''}>启用</label><label class="dd-check"><input type="checkbox" id="watchRegex" ${r.isRegex?'checked':''}>正则表达式</label><label class="dd-check"><input type="checkbox" id="watchAlert" ${r.alert?'checked':''}>命中告警</label><label class="dd-check"><input type="checkbox" id="watchSnapshot" ${r.snapshot?'checked':''}>保存快照</label></div><div class="dd-form-foot"><button id="watchSaveRule" class="dd-btn dd-btn-primary">保存规则</button></div></details></section>
+    <section class="dd-card"><header class="dd-card-head"><div><h3>监控规则</h3><p class="dodoco-hint">共 ${watchState.rules.length} 条</p></div><button id="watchNewRule" class="dd-btn">新建规则</button></header><div class="dodoco-rule-list">${watchState.rules.length ? watchState.rules.map((x,i)=>`<div class="dd-rule${x.enabled?'':' is-off'}"><div class="dd-rule-main"><strong>${de(x.name||'未命名规则')}</strong><div class="dd-tags"><span class="dd-pill${x.enabled?' ok':''}">${x.enabled?'启用':'停用'}</span><span class="dd-pill">${de(x.minLevel)} 及以上</span>${x.alert?'<span class="dd-pill warn">告警</span>':''}${x.snapshot?'<span class="dd-pill">快照</span>':''}</div><small>${de(x.isRegex?'正则':'关键词')}：${de(x.pattern||'仅级别匹配')}</small></div><div class="dd-rule-actions"><div class="dd-rule-toggles"><label title="启用"><input type="checkbox" data-toggle="enabled" data-rule="${i}" ${x.enabled?'checked':''}>启用</label><label title="命中告警"><input type="checkbox" data-toggle="alert" data-rule="${i}" ${x.alert?'checked':''}>告警</label><label title="保存快照"><input type="checkbox" data-toggle="snapshot" data-rule="${i}" ${x.snapshot?'checked':''}>快照</label></div><button class="dd-btn dd-btn-sm" data-edit="${i}">编辑</button><button class="dd-btn dd-btn-sm dd-btn-danger" data-delete="${i}">删除</button></div></div>`).join(''):'<p class="dd-empty">成员尚无监控规则</p>'}</div>
+    <details id="watchRuleForm" class="dd-form" ${watchState.editing?'open':''}><summary>${watchState.editing?'编辑规则':'添加规则'}</summary><div class="dd-form-grid"><label class="dd-field"><span>名称</span><input id="watchName" maxlength="256" value="${de(r.name)}" placeholder="留空则用匹配内容命名"></label><label class="dd-field"><span>最低级别</span><select id="watchLevel">${['DBG','INF','WRN','ERR'].map(x=>`<option${selected(x,r.minLevel)}>${x}</option>`).join('')}</select></label><label class="dd-field dd-span"><span>关键词或正则</span><input id="watchPattern" maxlength="2048" value="${de(r.pattern)}" placeholder="例如：战斗超时 或 超时|失败（勾选正则）"></label><p class="dodoco-hint dd-span">留空时只按最低级别匹配；勾选“正则表达式”后可用 | 匹配多个关键词。</p><label class="dd-field dd-span"><span>备注</span><input id="watchNote" maxlength="1024" value="${de(r.note)}"></label></div><div class="dodoco-checks"><label class="dd-check"><input type="checkbox" id="watchEnabled" ${r.enabled?'checked':''}>启用</label><label class="dd-check"><input type="checkbox" id="watchRegex" ${r.isRegex?'checked':''}>正则表达式</label><label class="dd-check"><input type="checkbox" id="watchAlert" ${r.alert?'checked':''}>命中告警</label><label class="dd-check"><input type="checkbox" id="watchSnapshot" ${r.snapshot?'checked':''}>保存快照</label></div><div class="dd-form-foot"><button id="watchSaveRule" class="dd-btn dd-btn-primary">保存规则</button></div></details></section>
     <section class="dd-card"><header class="dd-card-head"><div><h3>告警与事发快照</h3></div></header><div class="dodoco-checks"><label class="dd-check"><input id="watchMute" type="checkbox" ${s.muteAll?'checked':''}>全部静音</label><label class="dd-check"><input id="watchIncident" type="checkbox" ${s.incidentSnapshotEnabled?'checked':''}>开启事发录像</label></div><div class="dd-form-grid dd-num-grid"><label class="dd-field"><span>卡死阈值 · 分钟</span><input id="watchStall" type="number" min="1" max="1440" value="${de(s.stallThresholdMinutes)}"></label><label class="dd-field"><span>缓冲时长 · 秒</span><input id="watchBuffer" type="number" min="5" max="60" value="${de(s.incidentBufferSeconds)}"></label><label class="dd-field"><span>截帧间隔 · 秒</span><input id="watchInterval" type="number" min="0.5" max="5" step="0.5" value="${de(s.incidentCaptureIntervalSeconds)}"></label><label class="dd-field"><span>事发前 · 秒</span><input id="watchPre" type="number" min="1" max="20" value="${de(s.incidentPreSeconds)}"></label><label class="dd-field"><span>事发后 · 秒</span><input id="watchPost" type="number" min="1" max="20" value="${de(s.incidentPostSeconds)}"></label><label class="dd-field"><span>保留次数 · 0 不清理</span><input id="watchRetention" type="number" min="0" max="10000" value="${de(s.incidentRetentionCount)}"></label></div><div class="dd-form-foot"><button id="watchSaveSettings" class="dd-btn dd-btn-primary">保存设置</button></div></section>
     </div></div>`;
     root.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{watchState.editing={...watchState.rules[Number(b.dataset.edit)]};watchDraw();});
     root.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>watchDeleteRule(watchState.rules[Number(b.dataset.delete)]));
+    root.querySelectorAll('[data-toggle]').forEach(c=>c.onchange=()=>watchToggleRule(watchState.rules[Number(c.dataset.rule)],c.dataset.toggle,c.checked,c));
     d('watchSaveRule').onclick=watchSaveRule; d('watchNewRule').onclick=()=>{watchState.editing=null;watchDraw();d('watchRuleForm').open=true;};
     d('watchSaveSettings').onclick=watchSaveSettings;
-    d('watchDate').onchange=e=>{watchState.searchEpoch++;watchState.date=e.target.value;watchState.offset=0;watchState.cursors=[null];watchState.page=0;watchState.nextCursor=null;watchState.records=[];watchState.frames=[];watchDrawRecords();};
-    d('watchLoadRecords').onclick=()=>{watchState.keyword=d('watchFilter').value.trim();watchState.level=d('watchRecordLevel').value;watchState.ruleId=d('watchRecordRule').value;watchState.cursors=[null];watchRecords(0);}; d('watchClearRecords').onclick=watchClear;
-    d('watchPrev').onclick=()=>watchRecords(Math.max(0,watchState.page-1)); d('watchNext').onclick=()=>{if(watchState.nextCursor){watchState.cursors[watchState.page+1]=watchState.nextCursor;watchRecords(watchState.page+1);}};
+    d('watchDate').onchange=e=>{const b=d('watchClearRecords');if(b)b.textContent=e.target.value==='*'?'清理全部日期记录':'清理所选日期记录';watchState.searchEpoch++;watchState.date=e.target.value;watchState.offset=0;watchState.cursors=[null];watchState.page=0;watchState.nextCursor=null;watchState.records=[];watchState.frames=[];watchDrawRecords();};
+    d('watchLoadRecords').onclick=()=>{watchState.allCache=null;watchState.keyword=d('watchFilter').value.trim();watchState.level=d('watchRecordLevel').value;watchState.ruleId=d('watchRecordRule').value;watchState.cursors=[null];watchRecords(0);}; d('watchClearRecords').onclick=watchClear;
+    d('watchPrev').onclick=()=>watchRecords(Math.max(0,watchState.page-1)); d('watchNext').onclick=()=>{if(watchState.nextCursor){if(!watchState.nextCursor.all)watchState.cursors[watchState.page+1]=watchState.nextCursor;watchRecords(watchState.page+1);}};
     d('watchFilter').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();d('watchLoadRecords').click();}};watchDrawRecords();
     const localTime=t=>new Date(t-new Date(t).getTimezoneOffset()*60000).toISOString().slice(0,16);
     d('diagnosticStart').value=localTime(Date.now()-600000);d('diagnosticEnd').value=localTime(Date.now());
     d('diagnosticDownload').onclick=watchDiagnostic;
+    d('diagnosticNow').onclick=()=>{d('diagnosticStart').value=localTime(Date.now()-600000);d('diagnosticEnd').value=localTime(Date.now());};
+    d('diagnosticDay').onclick=()=>{const start=new Date();start.setHours(0,0,0,0);d('diagnosticStart').value=localTime(start.getTime());d('diagnosticEnd').value=localTime(Date.now());};
 }
 async function watchDiagnostic() {
     const start=d('diagnosticStart').value,end=d('diagnosticEnd').value,target=dodoco.target,generation=dodoco.generation;
@@ -112,8 +123,14 @@ async function watchDiagnostic() {
 }
 async function watchSaveRule() {
     const old=watchState.editing, rule={id:old?.id||newRequestId(),name:d('watchName').value.trim(),pattern:d('watchPattern').value,note:d('watchNote').value,minLevel:d('watchLevel').value,enabled:d('watchEnabled').checked,isRegex:d('watchRegex').checked,alert:d('watchAlert').checked,snapshot:d('watchSnapshot').checked};
-    if(!rule.name){watchStatus('请输入规则名称。');return;}
+    if(!rule.name)rule.name=rule.pattern.trim();
+    if(!rule.name){watchStatus('请填写规则名称或匹配内容。');return;}
     try { await dodocoRequest('watch.rule.upsert',{rule}); if(!watchCurrent())return; watchState.editing=null; await watchLoad(); watchStatus('成员已保存规则。'); } catch(e){watchStatus('规则未确认保存：'+e.message);}
+}
+async function watchToggleRule(rule,key,value,input) {
+    if(!rule)return;input.disabled=true;
+    try { await dodocoRequest('watch.rule.upsert',{rule:{...rule,[key]:value}}); if(!watchCurrent())return; await watchLoad(); watchStatus(`已${value?'开启':'关闭'}规则“${rule.name}”的${{enabled:'启用',alert:'告警',snapshot:'快照'}[key]}。`); }
+    catch(e){ input.checked=!value; input.disabled=false; watchStatus('规则未确认修改：'+e.message); }
 }
 async function watchDeleteRule(rule) {
     if(!confirm(`删除所选成员的规则“${rule.name}”？此操作不会删除历史记录。`))return;
@@ -125,25 +142,64 @@ async function watchSaveSettings() {
 }
 async function watchRecords(page) {
     if(!watchState.date){watchStatus('请选择有记录的日期。');return;}
+    if(watchState.date==='*')return watchRecordsAll(page);
     const date=watchState.date, target=dodoco.target, epoch=++watchState.searchEpoch;watchStatus('正在读取异常记录…');
     const cursor=watchState.cursors[page];
     try { const result=await dodocoRequest('watch.records',{date,limit:50,keyword:watchState.keyword,level:watchState.level,ruleId:watchState.ruleId,...(cursor||{})}); if(!watchCurrent()||date!==watchState.date||target!==dodoco.target||epoch!==watchState.searchEpoch)return;
         if(!Array.isArray(result?.records)||!Number.isInteger(result.total))throw new Error('记录数据格式无效');
-        Object.assign(watchState,{records:result.records,total:result.total,offset:page*50,page,nextCursor:result.nextCursor||null,frames:[],record:null});watchDrawRecords();watchStatus('已读取成员异常记录。');
+        Object.assign(watchState,{records:result.records.map(r=>({...r,day:date})),total:result.total,offset:page*50,page,nextCursor:result.nextCursor||null,frames:[],record:null});watchDrawRecords();watchStatus('已读取成员异常记录。');
+    } catch(e){if(epoch===watchState.searchEpoch)watchStatus('记录读取失败：'+e.message);}
+}
+/** 全部日期：按日期从新到旧逐日读取（每日最多 100 条），合并后在网页分页；与 PC 端“全部日期”一致按天分组显示。 */
+async function watchRecordsAll(page) {
+    const target=dodoco.target, epoch=++watchState.searchEpoch, all=[];let total=0;
+    try {
+        if(page===0||!watchState.allCache){
+            for(const [i,date] of watchState.dates.entries()){
+                watchStatus(`正在读取全部日期的异常记录…（${i+1}/${watchState.dates.length}）`);
+                const result=await dodocoRequest('watch.records',{date,limit:100,keyword:watchState.keyword,level:watchState.level,ruleId:watchState.ruleId});
+                if(!watchCurrent()||target!==dodoco.target||epoch!==watchState.searchEpoch)return;
+                if(!Array.isArray(result?.records)||!Number.isInteger(result.total))throw new Error('记录数据格式无效');
+                all.push(...result.records.map(r=>({...r,day:date})));total+=result.total;
+            }
+            watchState.allCache={records:all,total};
+        }
+        const cache=watchState.allCache;
+        Object.assign(watchState,{records:cache.records.slice(page*50,page*50+50),total:cache.total,offset:page*50,page,nextCursor:(page+1)*50<cache.records.length?{all:true}:null,frames:[],record:null});
+        watchDrawRecords();
+        watchStatus(cache.records.length<cache.total?`已读取全部日期；每天最多取最近 100 条，共显示 ${cache.records.length} / ${cache.total} 条，可选单日查看完整记录。`:'已读取全部日期的异常记录。');
     } catch(e){if(epoch===watchState.searchEpoch)watchStatus('记录读取失败：'+e.message);}
 }
 function watchDrawRecords() {
     const root=d('watchRecords');if(!root)return;
     const rows=watchState.records.map((x,i)=>({x,i}));
-    root.innerHTML=rows.length?rows.map(({x,i})=>`<article class="dd-record lv-${de(String(x.level||'').toLowerCase())}"><header><time>${de(x.time)}</time><span class="dd-pill">${de(x.level)}</span><strong>${de(x.ruleName)}</strong></header>${[x.instance,x.taskGroup,x.routeName].filter(Boolean).length?`<small>${de([x.instance,x.taskGroup,x.routeName].filter(Boolean).join(' · '))}</small>`:''}<p class="dodoco-record-text">${de(x.message)}</p><div class="dd-record-foot"><details><summary>上下文</summary><pre class="dodoco-record-text">${de([...(x.contextBefore||[]),x.matchedLine||x.message,...(x.contextAfter||[])].join('\n'))}</pre></details><button class="dd-btn dd-btn-sm" data-incident="${i}">查看事发快照</button></div></article>`).join(''):'<p class="dd-empty">当前页没有匹配记录</p>';
+    let lastDay='';
+    root.innerHTML=rows.length?rows.map(({x,i})=>{const dayHead=watchState.date==='*'&&x.day!==lastDay?`<h4 class="dd-day-head">${de(x.day)}</h4>`:'';lastDay=x.day;const canJump=x.sourceFile&&!String(x.sourceFile).startsWith('远程:');return `${dayHead}<article class="dd-record lv-${de(String(x.level||'').toLowerCase())}"><header><time>${de(x.time)}</time><span class="dd-pill">${de(x.level)}</span><strong>${de(x.ruleName)}</strong>${Number(x.repeatCount)>1?`<span class="dd-pill warn" title="同一规则 60 秒内超出限流后合并计数">×${Number(x.repeatCount)}</span>`:''}</header>${[x.instance,x.taskGroup].filter(Boolean).length||x.routeName?`<small>${de([x.instance,x.taskGroup].filter(Boolean).join(' · '))}${x.routeName?`${x.instance||x.taskGroup?' · ':''}路线 ${de(x.routeName)} <button class="dd-link" data-copy-route="${i}" title="复制路线名">复制</button>`:''}</small>`:''}<p class="dodoco-record-text">${de(x.message)}</p><div class="dd-record-foot"><details><summary>上下文</summary><pre class="dodoco-record-text">${de([...(x.contextBefore||[]),x.matchedLine||x.message,...(x.contextAfter||[])].join('\n'))}</pre></details><div class="dd-actions">${canJump?`<button class="dd-btn dd-btn-sm" data-jump="${i}">在日志浏览中查看</button>`:''}<button class="dd-btn dd-btn-sm" data-incident="${i}">查看事发快照</button></div></div></article>`;}).join(''):'<p class="dd-empty">当前页没有匹配记录</p>';
+    root.querySelectorAll('[data-copy-route]').forEach(b=>b.onclick=async()=>{const r=watchState.records[Number(b.dataset.copyRoute)];try{await navigator.clipboard.writeText(r.routeName);watchStatus('已复制路线名：'+r.routeName);}catch{watchStatus('浏览器未允许写入剪贴板。');}});
+    root.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>watchJump(watchState.records[Number(b.dataset.jump)]));
     root.querySelectorAll('[data-incident]').forEach(b=>b.onclick=()=>watchIncident(watchState.records[Number(b.dataset.incident)]));
-    d('watchPage').textContent=watchState.date?(watchState.total?`${watchState.offset+1}–${Math.min(watchState.offset+watchState.records.length,watchState.total)} / ${watchState.total} 条`:'0 条'):'尚未选择日期';
+    d('watchPage').textContent=watchState.date==='*'?(watchState.records.length?`${watchState.offset+1}–${watchState.offset+watchState.records.length} 条 · 全部日期`:'0 条'):watchState.date?(watchState.total?`${watchState.offset+1}–${Math.min(watchState.offset+watchState.records.length,watchState.total)} / ${watchState.total} 条`:'0 条'):'尚未选择日期';
     d('watchPrev').disabled=watchState.page===0;d('watchNext').disabled=!watchState.nextCursor;
 }
 async function watchClear() {
     const date=watchState.date;if(!date){watchStatus('请选择日期。');return;}
-    if(!confirm(`删除所选成员 ${date} 的全部异常记录？日志和事发快照会保留。`))return;
-    try {const result=await dodocoRequest('watch.clear',{date});if(!watchCurrent())return;await watchLoad();watchStatus(result.deleted?'成员已清理该日期异常记录。':'该日期记录文件不存在，无内容被删除。');}catch(e){watchStatus('清理未确认：'+e.message);}
+    const days=date==='*'?[...watchState.dates]:[date];
+    if(!confirm(date==='*'?`删除所选成员全部 ${days.length} 天的异常记录？日志和事发快照会保留。`:`删除所选成员 ${date} 的全部异常记录？日志和事发快照会保留。`))return;
+    let deleted=0;
+    try {for(const day of days){const result=await dodocoRequest('watch.clear',{date:day});if(result?.deleted)deleted++;if(!watchCurrent())return;}
+        watchState.allCache=null;await watchLoad();watchStatus(deleted?`成员已清理 ${deleted} 天的异常记录。`:'记录文件不存在，无内容被删除。');}
+    catch(e){watchState.allCache=null;watchStatus(`清理未完成：已确认清理 ${deleted} 天，其余结果未确认：`+e.message);}
+}
+/** 跳到日志浏览：下载记录来源文件（本机直连读本机日志；远程向成员请求同名文件），再按命中行搜索定位。 */
+async function watchJump(record) {
+    const name=String(record.sourceFile).split(/[\\/]/).pop(), needle=(record.matchedLine||record.message||'').slice(0,120);
+    dodoco.tab='files';dodocoRender();dodocoStatus(`正在打开 ${name} 并定位记录…`);
+    try{
+        if(!dodoco.files.length)await dodocoLoadFiles();
+        const file=dodoco.files.find(f=>f.name===name);
+        if(!file){dodocoStatus(`成员日志列表中没有 ${name}（可能已轮转、未共享或不在可共享范围），无法定位。`);return;}
+        dodoco.pendingSearch=needle;await dodocoLoadFile(file);
+    }catch(e){dodocoStatus('定位未完成：'+e.message);}
 }
 async function watchIncident(record) {
     const date=watchState.date;try{watchStatus('正在读取事发快照列表…');const result=await dodocoRequest('watch.incidents',{date,time:record.time,ruleName:record.ruleName});if(!watchCurrent())return;
@@ -160,16 +216,165 @@ async function watchFrame(frame) {
         const button=d('watchFrameDownload');button.disabled=false;button.onclick=()=>{const a=document.createElement('a');a.href=src;a.download=result.name||'incident.jpg';a.click();};watchStatus('事发快照已取得。');
     }catch(e){watchStatus('快照未取得：'+e.message);}
 }
+function watchLocalToday(){const t=new Date();return new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+/** 锄地数据页“导出诊断包”：与 PC 一致取当前时刻前后 10 分钟，复用 watch.diagnostic.*。 */
+async function reportDiagnostic(){
+    const local=t=>new Date(t-new Date(t).getTimezoneOffset()*60000).toISOString().slice(0,16);
+    const button=d('reportDiag');if(button)button.disabled=true;
+    try{
+        dodocoStatus('正在等待成员生成诊断包（前后 10 分钟）…');
+        const info=await dodocoRequest('watch.diagnostic.start',{start:local(Date.now()-600000),end:local(Date.now()+600000)},30000);
+        if(!info||typeof info.id!=='string'||!Number.isInteger(info.size)||info.size<1||info.size>8*1024*1024)throw new Error('诊断包信息无效。');
+        const parts=[];let offset=0;
+        while(offset<info.size){
+            const c=await dodocoRequest('watch.diagnostic.chunk',{id:info.id,offset},30000);
+            if(!c||c.id!==info.id||c.offset!==offset||c.total!==info.size||typeof c.base64!=='string'||c.base64.length>262144)throw new Error('诊断包分块无效。');
+            const bytes=Uint8Array.from(atob(c.base64),ch=>ch.charCodeAt(0));
+            if(!bytes.length||offset+bytes.length>info.size)throw new Error('诊断包分块长度无效。');
+            parts.push(bytes);offset+=bytes.length;
+            if(!!c.done!==(offset===info.size))throw new Error('诊断包不完整。');
+            dodocoStatus(`正在接收诊断包：${offset} / ${info.size} 字节…`);
+        }
+        dodocoSave(new Blob(parts,{type:'application/zip'}),'dodoco-diagnostic.zip','application/zip');dodocoStatus('诊断包已接收，浏览器已发起下载。');
+    }catch(e){dodocoStatus('诊断包未完成：'+e.message);}
+    finally{const b=d('reportDiag');if(b)b.disabled=false;}
+}
 function dodocoRenderReport(host) {
     if(reportState.target!==dodoco.target)Object.assign(reportState,{target:dodoco.target,dates:[],date:'',result:null});
-    const section=document.createElement('section');section.className='dd-card';section.innerHTML=`<header class="dd-card-head"><div><h2>每日运行报告与任务总览</h2><p class="dodoco-hint">${watchIsLocal()?'由本机 BGI 日志生成':'由所选成员本地 BGI 日志生成，需允许网页访问并开启日志文件共享'}</p></div><div class="dd-actions"><button id="reportDates" class="dd-btn">读取可用日期</button><label class="dd-field dd-inline"><span>日期</span><select id="reportDate"><option value="">选择日期</option>${reportState.dates.map(x=>`<option value="${de(x)}" ${x===reportState.date?'selected':''}>${de(x)}</option>`).join('')}</select></label><button id="reportLoad" class="dd-btn dd-btn-primary">读取报告</button></div></header><div id="reportBody"></div>`;host.appendChild(section);
-    d('reportDates').onclick=async()=>{try{dodocoStatus('正在读取报告日期…');const x=await dodocoRequest('report.dates');if(!dodoco.active||dodoco.tab!=='members')return;if(!Array.isArray(x?.dates))throw new Error('日期格式无效');reportState.dates=x.dates;reportState.date=x.dates[0]||'';reportState.result=null;dodocoDrawMembers();dodocoStatus(x.dates.length?'已读取可用日期。':'成员没有可用日报日期。');}catch(e){dodocoStatus('读取日期失败：'+e.message);}};
+    const section=document.createElement('section');section.className='dd-card';section.innerHTML=`<header class="dd-card-head"><div><h2>每日运行报告与任务总览</h2><p class="dodoco-hint">${watchIsLocal()?'由本机 BGI 日志生成':'由所选成员本地 BGI 日志生成，需允许网页访问并开启日志文件共享'}</p></div><div class="dd-actions"><button id="reportDates" class="dd-btn">读取可用日期</button><label class="dd-field dd-inline"><span>日期</span><select id="reportDate"><option value="">选择日期</option>${reportState.dates.map(x=>`<option value="${de(x)}" ${x===reportState.date?'selected':''}>${de(x)}</option>`).join('')}</select></label><button id="reportLoad" class="dd-btn dd-btn-primary">读取报告</button><button id="reportCopy" class="dd-btn" ${reportState.result?'':'disabled'}>复制报告</button><button id="reportDiag" class="dd-btn" title="导出当前时刻前后 10 分钟的诊断包">导出诊断包</button></div></header><div id="reportBody"></div>`;host.appendChild(section);
+    d('reportDates').onclick=async()=>{try{dodocoStatus('正在读取报告日期…');const x=await dodocoRequest('report.dates');if(!dodoco.active||dodoco.tab!=='members')return;if(!Array.isArray(x?.dates))throw new Error('日期格式无效');reportState.dates=[...x.dates].sort().reverse();const today=watchLocalToday();reportState.date=reportState.dates.includes(today)?today:reportState.dates[0]||'';reportState.result=null;dodocoDrawMembers();dodocoStatus(x.dates.length?'已读取可用日期。':'成员没有可用日报日期。');}catch(e){dodocoStatus('读取日期失败：'+e.message);}};
     d('reportDate').onchange=e=>{reportState.date=e.target.value;reportState.result=null;reportDraw();};
-    d('reportLoad').onclick=async()=>{if(!reportState.date){dodocoStatus('请选择报告日期。');return;}const date=reportState.date;try{dodocoStatus('正在等待成员生成日报…');const x=await dodocoRequest('report.day',{date},30000);if(!dodoco.active||dodoco.tab!=='members'||reportState.date!==date)return;reportState.result=x;reportDraw();dodocoStatus('已读取成员日报。');}catch(e){dodocoStatus('日报未取得：'+e.message);}};
+    d('reportCopy').onclick=async()=>{try{await navigator.clipboard.writeText(reportText());dodocoStatus('已复制日报到剪贴板。');}catch{dodocoStatus('浏览器未允许写入剪贴板。');}};
+    d('reportDiag').onclick=reportDiagnostic;
+    d('reportLoad').onclick=async()=>{if(!reportState.date){dodocoStatus('请选择报告日期。');return;}const date=reportState.date;try{dodocoStatus('正在等待成员生成日报…');const x=await dodocoRequest('report.day',{date},30000);if(!dodoco.active||dodoco.tab!=='members'||reportState.date!==date)return;reportState.result=x;reportState.base=null;const prev=reportState.dates.filter(v=>v<date).sort().reverse()[0];if(prev){try{const b=await dodocoRequest('report.day',{date:prev},30000);if(reportState.date===date&&reportState.result===x)reportState.base=b;}catch{}}if(!dodoco.active||dodoco.tab!=='members'||reportState.date!==date)return;reportDraw();dodocoStatus(reportState.base?`已读取成员日报，括号为与 ${reportState.base.date} 对比的时长差。`:'已读取成员日报。');const c=d('reportCopy');if(c)c.disabled=false;}catch(e){dodocoStatus('日报未取得：'+e.message);}};
     reportDraw();
 }
+// 时长：服务端为 "hh:mm:ss" 或 "d.hh:mm:ss"；按 PC 日报样式显示 1h32m18s / 9m0s / 37s。
+function reportSeconds(v){const m=/^(?:(\d+)\.)?(\d+):(\d+):(\d+)/.exec(String(v||''));return m?((+m[1]||0)*86400+(+m[2])*3600+(+m[3])*60+(+m[4])):null;}
+function reportHms(v){const t=typeof v==='number'?v:reportSeconds(v);if(t===null)return String(v||'未提供');const s=Math.round(Math.abs(t)),h=Math.floor(s/3600),mi=Math.floor(s%3600/60),se=s%60;return h?`${h}h${mi}m${se}s`:mi?`${mi}m${se}s`:`${se}s`;}
+function reportDiff(g){const base=reportState.base;if(!base)return '';const prev=(base.report?.groups||[]).find(x=>x.name===g.name);if(!prev)return '(新)';const a=reportSeconds(g.totalDuration),b=reportSeconds(prev.totalDuration);if(a===null||b===null)return '';const d=a-b;return d<0?`(-${reportHms(-d)})`:`(${reportHms(d)})`;}
+function reportUnitName(u){return u.name?`${u.kind} · ${u.name}`:u.kind;}
+function reportText(){
+    const x=reportState.result;if(!x)return '';const groups=x.report?.groups||[],out=[`配置组运行日报 (${x.date})`];
+    if(reportState.base)out.push(`括号 = 与 ${reportState.base.date} 对比的时间差`);
+    groups.forEach((g,i)=>{out.push(`${i}.【${g.name}--${reportHms(g.totalDuration)}${g.hasUnclosedRun?'（含未正常结束的一次）':''}】${reportDiff(g)}`);if(g.runCount>1)out.push(`　当天执行 ${g.runCount} 次，已合并`);for(const r of g.rounds||[])out.push('　'+r);});
+    out.push(`【合计--${reportHms(x.report?.totalDuration)}】`,'',`全天总运行 ${reportHms(x.overview?.totalDuration)}`);
+    const walk=(u,depth,i)=>{out.push(depth?`${'　'.repeat(depth)}├ ${reportUnitName(u)}--${reportHms(u.duration)}${u.unclosed?'（未正常结束）':''}`:`${i}.【${reportUnitName(u)}--${reportHms(u.duration)}${u.unclosed?'（未正常结束）':''}】`);for(const c of u.children||[])walk(c,depth+1);};
+    (x.overview?.topUnits||[]).forEach((u,i)=>walk(u,0,i));return out.join('\n');
+}
 function reportDraw(){const root=d('reportBody'),x=reportState.result;if(!root)return;if(!x){root.innerHTML='<p class="dd-empty">选择日期后读取报告</p>';return;}
-    const groups=x.report?.groups||[],units=x.overview?.topUnits||[];
-    const unit=(u,depth=0)=>`<div class="dd-unit" style="--depth:${Math.min(depth,5)}"><strong>${de(u.kind)} · ${de(u.name)}</strong><small>${de(u.start)} 开始 · ${de(u.duration)}${u.unclosed?' · 未闭合':''}</small></div>${(u.children||[]).map(v=>unit(v,depth+1)).join('')}`;
-    root.innerHTML=`<div class="dd-report"><section><div class="dd-report-head"><h3>${de(x.date)} · 配置组报告</h3><span class="dd-stat">累计 <b>${de(x.report?.totalDuration||'未提供')}</b></span></div>${groups.length?groups.map(g=>`<div class="dd-unit"><strong>${de(g.name)}</strong><small>${de(g.totalDuration)} · ${de(g.runCount)} 次${g.hasUnclosedRun?' · 未闭合':''}</small><details><summary>联机轮次 (${(g.rounds||[]).length})</summary><pre class="dodoco-record-text">${de((g.rounds||[]).join('\n')||'无轮次记录')}</pre></details></div>`).join(''):'<p class="dd-empty">该日期没有配置组记录</p>'}</section><section><div class="dd-report-head"><h3>全天任务总览</h3><span class="dd-stat">累计 <b>${de(x.overview?.totalDuration||'未提供')}</b></span></div>${units.length?units.map(u=>unit(u)).join(''):'<p class="dd-empty">该日期没有任务总览记录</p>'}</section></div>`;
+    const groups=x.report?.groups||[],units=x.overview?.topUnits||[];reportState.open=reportState.open||new Set();
+    const unit=(u,key,depth=0)=>{const kids=u.children||[],open=reportState.open.has(key);return `<div class="dd-unit" style="--depth:${Math.min(depth,5)}">${kids.length?`<button class="dd-unit-toggle" data-unit="${de(key)}" aria-expanded="${open}" aria-label="${open?'收起':'展开'}子任务">${open?'▼':'▶'}</button>`:'<span class="dd-unit-dot"></span>'}<div><strong>${de(reportUnitName(u))}</strong><small>${de(u.start)} 开始 · ${reportHms(u.duration)}${u.unclosed?' · 未正常结束':''}${kids.length&&!open?` · ${kids.length} 项子任务`:''}</small></div></div>${open?kids.map((v,j)=>unit(v,key+'/'+j,depth+1)).join(''):''}`;};
+    const allKeys=[];const collect=(u,key)=>{if((u.children||[]).length){allKeys.push(key);(u.children||[]).forEach((v,j)=>collect(v,key+'/'+j));}};units.forEach((u,i)=>collect(u,String(i)));
+    const allOpen=allKeys.length>0&&allKeys.every(k=>reportState.open.has(k));
+    root.innerHTML=`<div class="dd-report"><section><div class="dd-report-head"><h3>${de(x.date)} · 配置组报告</h3><span class="dd-stat">合计 <b>${reportHms(x.report?.totalDuration)}</b></span></div><p class="dodoco-hint">${reportState.base?`括号 = 与 ${de(reportState.base.date)} 对比的时间差`:'无更早日志可对比'}</p>${groups.length?groups.map(g=>`<div class="dd-unit"><span class="dd-unit-dot"></span><div><strong>${de(g.name)}</strong> <span class="dd-diff">${de(reportDiff(g))}</span><small>${reportHms(g.totalDuration)}${g.runCount>1?` · 当天执行 ${de(g.runCount)} 次，已合并`:''}${g.hasUnclosedRun?' · 含未正常结束的一次':''}</small><details><summary>联机轮次 (${(g.rounds||[]).length})</summary><pre class="dodoco-record-text">${de((g.rounds||[]).join('\n')||'无轮次记录')}</pre></details></div></div>`).join(''):'<p class="dd-empty">该日无配置组运行记录；若一直为空，请确认成员已在设置中配置 BGI 路径</p>'}</section><section><div class="dd-report-head"><h3>全天任务总览</h3><span class="dd-stat">全天总运行 <b>${reportHms(x.overview?.totalDuration)}</b></span>${allKeys.length?`<button id="reportExpandAll" class="dd-link">${allOpen?'一键收起全部':'一键展开全部'}</button>`:''}</div>${units.length?units.map((u,i)=>unit(u,String(i))).join(''):'<p class="dd-empty">该日期没有任务总览记录</p>'}</section></div>`;
+    root.querySelectorAll('[data-unit]').forEach(b=>b.onclick=()=>{const k=b.dataset.unit;if(reportState.open.has(k))reportState.open.delete(k);else reportState.open.add(k);reportDraw();});
+    const all=d('reportExpandAll');if(all)all.onclick=()=>{if(allOpen)reportState.open.clear();else allKeys.forEach(k=>reportState.open.add(k));reportDraw();};
+}
+
+// ===== 补齐：全房间当天日志（PC「远程日志」窗口的批量下载）=====
+// 沿用 log.requestFiles / log.requestDownload，依次向在线成员收集当天 BGI 与助手日志，打成一个 ZIP（不压缩），
+// 附“下载结果.txt”；离线、空列表、失败如实写入结果。只在服务器中转可用，本机直连无房间。
+const roomLogs = { running:false, cancel:false, generation:0 };
+const roomLogBgi = /^better-genshin-impact(\d{8})?(_\d{3})*\.log$/i;
+const roomLogAssistant = /^assistant_runtime\.\d{4}-\d{2}-\d{2}(?:\.(?:s\d+|\d+))*\.log$/i;
+function roomLogLocalDate(value){const t=new Date(value);if(!Number.isFinite(t.getTime()))return '';return new Date(t.getTime()-t.getTimezoneOffset()*60000).toISOString().slice(0,10);}
+function roomLogSafe(text,max){return String(text||'').replace(/[\\/:*?"<>|\u0000-\u001f]/g,'_').slice(0,max)||'未命名';}
+const roomLogCrcTable=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function roomLogCrc(bytes){let c=0xFFFFFFFF;for(let i=0;i<bytes.length;i++)c=roomLogCrcTable[(c^bytes[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+/** 不压缩的 ZIP；文件名带 UTF-8 标志，资源管理器可直接打开中文名。 */
+function roomLogZip(entries){
+    const enc=new TextEncoder(),parts=[],central=[];let offset=0;
+    for(const e of entries){
+        const name=enc.encode(e.name),data=e.data,crc=roomLogCrc(data),h=new DataView(new ArrayBuffer(30));
+        h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,name.length,true);
+        parts.push(new Uint8Array(h.buffer),name,data);
+        const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,data.length,true);c.setUint32(24,data.length,true);c.setUint16(28,name.length,true);c.setUint32(42,offset,true);
+        central.push(new Uint8Array(c.buffer),name);offset+=30+name.length+data.length;
+    }
+    const size=central.reduce((n,x)=>n+x.length,0),end=new DataView(new ArrayBuffer(22));
+    end.setUint32(0,0x06054b50,true);end.setUint16(8,entries.length,true);end.setUint16(10,entries.length,true);end.setUint32(12,size,true);end.setUint32(16,offset,true);
+    return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:'application/zip'});
+}
+async function roomLogGunzip(chunks){
+    if(typeof DecompressionStream==='undefined')throw new Error('浏览器不支持 gzip 解压');
+    const parts=chunks.map(s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0)));
+    const buffer=await new Response(new Blob(parts).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    if(buffer.byteLength>200*1024*1024)throw new Error('文件超过 200 MB 上限');
+    return new Uint8Array(buffer);
+}
+async function roomLogFiles(uid){
+    const id=newRequestId(),wait=dodocoWait('files',uid,id);
+    try{await dodocoDispatch('log.requestFiles',{targetUid:uid,requestId:id});return await wait;}
+    catch(e){const p=dodoco.pending.get(id);if(p)dodocoFinish(p,e.message);wait.catch(()=>{});throw e;}
+}
+async function roomLogDownload(uid,fileName){
+    const id=newRequestId(),wait=dodocoWait('download',uid,id,30000);dodoco.pending.get(id).fileName=fileName;
+    try{await dodocoDispatch('log.requestDownload',{targetUid:uid,requestId:id,fileName});return await roomLogGunzip(await wait);}
+    catch(e){const p=dodoco.pending.get(id);if(p)dodocoFinish(p,e.message);wait.catch(()=>{});throw e;}
+}
+function roomLogSetStatus(text,progress){
+    roomLogs.lastStatus=text;if(progress!==undefined)roomLogs.lastProgress=progress;
+    const box=d('roomLogStatus');if(box){box.hidden=false;box.textContent=text;}
+    const bar=d('roomLogProgress');if(bar&&roomLogs.lastProgress!==undefined){bar.hidden=false;bar.value=roomLogs.lastProgress;}
+}
+function roomLogSyncButtons(){const start=d('roomLogStart'),stop=d('roomLogCancel');if(start)start.disabled=roomLogs.running||!roomReady;if(stop)stop.hidden=!roomLogs.running;}
+async function roomLogRun(){
+    if(roomLogs.running)return;
+    if(!roomReady){roomLogSetStatus('房间连接未就绪，无法收集全房间日志。');return;}
+    if(dodoco.pending.size){roomLogSetStatus('请等待当前列表请求或单文件下载结束，再收集全房间日志。');return;}
+    const members=[...new Map(players.filter(p=>p.playerUid&&!String(p.playerUid).startsWith('web_')).map(p=>[p.playerUid,p])).values()];
+    if(!members.length){roomLogSetStatus('当前房间没有可识别的成员，无法收集日志。');return;}
+    const date=roomLogLocalDate(Date.now()),generation=++roomLogs.generation,entries=[],results=[],room=roomCode||'本房间';
+    roomLogs.running=true;roomLogs.cancel=false;roomLogs.lastProgress=0;roomLogSyncButtons();
+    const stopped=()=>roomLogs.cancel||generation!==roomLogs.generation||!roomReady||roomCode!==room&&room!=='本房间';
+    const stopReason=()=>!roomReady?'房间连接已断开，下载中止':'已取消批量下载';
+    roomLogSetStatus(`正在收集 ${date} 的全房间日志，共 ${members.length} 位成员…`,0);
+    try{
+        for(let i=0;i<members.length;i++){
+            const m=members[i],name=m.playerName||m.playerUid,r={name,uid:m.playerUid,bgi:0,assistant:0,failed:0,messages:[]};results.push(r);
+            if(stopped()){r.messages.push(stopReason()+'，尚未开始该成员');continue;}
+            if(!m.online){r.messages.push('成员离线，已跳过；未取得当天 BGI 和助手日志');roomLogSetStatus(`${name}：离线，已跳过`,(i+1)/members.length);continue;}
+            roomLogSetStatus(`正在获取 ${name} 的日志列表…（${i+1}/${members.length}）`,i/members.length);
+            let files;
+            try{files=await roomLogFiles(m.playerUid);}catch(e){r.messages.push('获取列表失败：'+e.message);continue;}
+            if(!files.length){r.messages.push('收到空列表：对方可能未开启共享或没有可分享日志，无法区分');continue;}
+            const picked=[...new Map(files.filter(f=>roomLogLocalDate(f.lastWrite)===date&&(roomLogBgi.test(f.name)||roomLogAssistant.test(f.name))).map(f=>[String(f.name).toLowerCase(),f])).values()].sort((a,b)=>a.name.localeCompare(b.name));
+            if(!picked.length){r.messages.push(`列表中没有修改日期为 ${date} 的 BGI 或助手日志`);continue;}
+            const folder=`成员-${String(i+1).padStart(2,'0')}-${roomLogSafe(name,40)}-${roomLogSafe(m.playerUid,48)}/`;
+            for(let k=0;k<picked.length;k++){
+                const f=picked[k];
+                if(stopped()){r.messages.push(f.name+'：'+stopReason());break;}
+                roomLogSetStatus(`正在下载 ${name}：${f.name}（${k+1}/${picked.length}）`,(i+k/picked.length)/members.length);
+                try{const data=await roomLogDownload(m.playerUid,f.name);entries.push({name:folder+f.name,data});if(roomLogBgi.test(f.name))r.bgi++;else r.assistant++;}
+                catch(e){r.failed++;r.messages.push(f.name+'：下载失败，'+e.message);}
+                // 对端在最后一块确认后才释放单文件忙标记；间隔 200ms 与 PC 端一致。
+                if(k<picked.length-1)await new Promise(res=>setTimeout(res,200));
+            }
+            if(!r.bgi&&!r.assistant)r.messages.push('未取得当天 BGI 和助手日志');
+            else if(!r.bgi)r.messages.push('未取得当天 BGI 日志');
+            else if(!r.assistant)r.messages.push('未取得当天助手日志');
+            else if(!r.failed)r.messages.push('当天 BGI 和助手日志均已下载');
+        }
+    }finally{
+        const cancelled=stopped(),total=results.reduce((n,r)=>n+r.bgi+r.assistant,0),complete=results.filter(r=>r.bgi&&r.assistant&&!r.failed).length;
+        for(const m of members.slice(results.length))results.push({name:m.playerName||m.playerUid,uid:m.playerUid,bgi:0,assistant:0,failed:0,messages:[stopReason()+'，尚未开始该成员']});
+        const lines=[`房间：${room}`,`日志日期：${date}（按成员上报的文件修改日期筛选）`,`结束时间：${new Date().toLocaleString('zh-CN',{hour12:false})}`,`状态：${cancelled?stopReason():'收集结束，请核对各成员结果'}`,`成员快照：${members.length} 人；BGI ${results.reduce((n,r)=>n+r.bgi,0)} 个，助手 ${results.reduce((n,r)=>n+r.assistant,0)} 个，文件失败 ${results.reduce((n,r)=>n+r.failed,0)} 个`,'空列表可能代表未开启共享或没有可分享日志，协议无法区分；未取得日志不等于无日志。',''];
+        for(const r of results)lines.push(`${r.name}（UID：${r.uid}）`,`  BGI：${r.bgi} 个；助手：${r.assistant} 个；文件失败：${r.failed} 个；${r.bgi&&r.assistant&&!r.failed?'两类当天日志均已下载':'未完整取得两类当天日志'}`,'  '+r.messages.join('；'),'');
+        entries.push({name:'下载结果.txt',data:new TextEncoder().encode('\ufeff'+lines.join('\r\n'))});
+        const zipName=`房间-${roomLogSafe(room,40)}-${date}-全房间日志.zip`;
+        if(generation===roomLogs.generation)dodocoSave(roomLogZip(entries),zipName,'application/zip');
+        roomLogs.running=false;
+        roomLogSetStatus(`${cancelled?stopReason():'全房间日志收集结束'}：已下载 ${total} 个文件；BGI 和助手均收齐 ${complete}/${members.length} 人。已保存 ${zipName}（内含“下载结果.txt”）。\n`+results.map(r=>`${r.name}：${r.messages.join('；')}`).join('\n'),cancelled?undefined:1);
+        roomLogSyncButtons();
+    }
+}
+function roomLogMount(host){
+    if(!host||dodocoIsLocal())return;
+    const box=document.createElement('section');box.className='dd-room-logs';
+    box.innerHTML=`<div class="dd-room-logs-head"><div><h3>全房间当天日志</h3><p class="dodoco-hint">依次向在线成员收集今天的 BGI 和助手日志，打包为一个 ZIP；需对方开启“共享日志文件”</p></div><div class="dd-actions"><button id="roomLogCancel" class="dd-btn dd-btn-quiet" hidden>取消批量下载</button><button id="roomLogStart" class="dd-btn">下载全房间当天日志</button></div></div><progress id="roomLogProgress" max="1" value="0" hidden></progress><p id="roomLogStatus" class="dd-room-logs-status" role="status" hidden></p>`;
+    host.appendChild(box);
+    d('roomLogStart').onclick=roomLogRun;d('roomLogCancel').onclick=()=>{roomLogs.cancel=true;roomLogSetStatus('正在取消，当前文件结束后停止…');};
+    if(roomLogs.lastStatus)roomLogSetStatus(roomLogs.lastStatus);
+    roomLogSyncButtons();
 }

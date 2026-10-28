@@ -190,3 +190,45 @@
 }
 
 @media(min-width:701px){.dd-watch-grid .dd-filters>.dd-field{min-width:112px}.dd-watch-grid .dd-filters>.dd-grow{flex:1 1 140px}}
+
+/* 补齐功能的样式：级别多选、全房间日志、规则快捷开关、记录分组、日报折叠、画面缩略图与缩放。 */
+.dd-levels{display:flex;gap:4px;flex-wrap:wrap}
+.dd-level{display:inline-flex;align-items:center;gap:5px;min-height:40px;padding:0 10px;border:1px solid var(--line);border-radius:9px;background:var(--dd-inset);color:var(--muted);font-size:13px;cursor:pointer}
+.dd-level input{width:14px;height:14px;min-height:14px}
+.dd-level:has(input:checked){color:var(--text);border-color:#5d5a78;background:#2a2942}
+.dd-level.lv-err:has(input:checked){color:#ffada3}.dd-level.lv-wrn:has(input:checked){color:#f3d48a}.dd-level.lv-dbg:has(input:checked){color:#c4c0d6}
+.dd-file-date{min-width:0}
+.dd-room-logs{margin-top:4px;padding-top:12px;border-top:1px solid var(--line)}
+.dd-room-logs-head{display:grid;gap:8px}
+.dd-room-logs-head h3{font-size:14px;margin:0}
+.dd-room-logs-head .dd-actions .dd-btn{flex:1}
+.dd-room-logs progress{width:100%;height:6px;margin-top:10px;accent-color:var(--gold)}
+.dd-room-logs-status{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+.dd-link{min-height:0;padding:0 2px;border:0;background:none;color:var(--gold);font-size:12px;cursor:pointer}
+.dd-link:hover{text-decoration:underline;text-underline-offset:3px}
+.dd-rule-actions{align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.dd-rule-toggles{display:flex;gap:10px;margin-right:4px}
+.dd-rule-toggles label{display:inline-flex;align-items:center;gap:4px;color:var(--muted);font-size:12px;cursor:pointer}
+.dd-rule-toggles input{width:15px;height:15px;min-height:15px}
+.dd-day-head{margin:6px 0 0;color:var(--gold);font-size:13px;font-weight:600}
+.dd-alert-opts{display:flex;gap:16px;margin:0 0 6px}
+.dd-alert-line.is-alert{color:#ffd1c4;background:#3a2628}
+.dd-unit{display:flex;align-items:flex-start;gap:8px}
+.dd-unit>div{min-width:0;flex:1}
+.dd-unit-toggle{width:22px;min-height:22px;padding:0;border:0;background:none;color:var(--gold);font-size:11px;flex-shrink:0;cursor:pointer}
+.dd-unit-dot{width:22px;flex-shrink:0;position:relative}
+.dd-unit-dot::after{content:"";position:absolute;left:8px;top:9px;width:5px;height:5px;border-radius:50%;background:#5e5a78}
+.dd-diff{color:var(--gold);font-size:12px}
+.dd-report-head .dd-link{margin-left:auto}
+.dodoco-frame-card.is-off{opacity:.7}
+.dd-image-btn{display:block;width:100%;min-height:0;padding:0;border:0;background:none;cursor:zoom-in}
+.dd-thumbs{display:flex;gap:6px;overflow-x:auto;margin:0 0 10px;padding-bottom:4px}
+.dd-thumb{display:grid;gap:2px;flex:0 0 84px;min-height:0;padding:3px;border:1px solid var(--line);border-radius:8px;background:#11121f;cursor:pointer}
+.dd-thumb img{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:5px}
+.dd-thumb small{color:var(--muted);font-size:11px;text-align:center}
+.dd-thumb.active{border-color:var(--gold)}
+.dd-zoom-head{display:flex;align-items:center;gap:12px}
+.dd-zoom-title{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dd-zoom-stage{max-width:90vw;max-height:80vh;margin-top:10px;overflow:auto;border-radius:8px;background:#0e0f1a}
+.dd-zoom-stage img{display:block;max-width:90vw;max-height:80vh;margin:0;transform-origin:0 0;transition:transform .08s}
+@media(max-width:700px){.dd-rule-toggles{width:100%;justify-content:space-between}.dd-alert-opts{gap:12px}}
