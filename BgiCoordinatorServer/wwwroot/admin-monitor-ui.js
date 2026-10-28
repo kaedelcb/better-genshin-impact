@@ -194,24 +194,32 @@ async function loadArchive() {
     }
   } catch { const status = $('archiveStatus'); if (status) status.textContent = '历史目录读取失败，仍可输入房间号查询。'; }
 }
-function renderOverview() {
-  const box=$('overviewRooms'),items=entries(),focusKey=document.activeElement?.closest('.overview-card')?.dataset.key;
+// 卡片空间有限：只显示次数和最近一次时段，完整说明留在详情页。
+function cardHoeing(day){
+  const runs=day?.runs||[],started=runs.filter(run=>run.startedAtUtc);
+  if(!day)return '今日记录不可用';if(!runs.length)return '今日暂无锄地记录';
+  const done=started.filter(run=>run.status==='completed').length,last=runs.reduce((a,b)=>Date.parse(b.requestedAtUtc)>=Date.parse(a.requestedAtUtc)?b:a);
+  const clock=value=>AdminHoeingHistory.time(value,day.date).replace(/:\d\d$/,'');
+  const span=clock(last.startedAtUtc||last.requestedAtUtc)+(last.endedAtUtc?'–'+clock(last.endedAtUtc):' 起');
+  return `今日 ${started.length} 次 · 完成 ${done} · 最近 ${span}`;
+}
+function renderOverview() {  const box=$('overviewRooms'),items=entries(),focusKey=document.activeElement?.closest('.overview-card')?.dataset.key;
   items.sort((a,b)=>Number(b.type==='control'?b.room.autoHoeingRunning:b.room.status==='started')-Number(a.type==='control'?a.room.autoHoeingRunning:a.room.status==='started'));
-  box.replaceChildren();$('overviewCount').textContent=`${items.length} 个匹配房间`;
+  box.replaceChildren();$('overviewCount').textContent=`${items.length} 个`;
   if(!items.length){box.append(node('div','empty',snapshot?'没有符合条件的房间':'正在读取房间…'));return;}
   for(const entry of items){
     const r=entry.room,game=entry.type==='game',running=game?r.status==='started':r.autoHoeingRunning;
     const card=node('button','overview-card'+(running?' running':''));card.type='button';card.dataset.key=entry.key;
-    const top=node('div','overview-card-top');top.append(node('h3','mono',r.code),pill(game?(labels[r.status]||'未知'):running?'锄地中':r.onlineCount?'未上报锄地中':'无人在线',game?r.status:running?'running':r.onlineCount?'':'disconnected'));card.append(top);
+    const top=node('div','overview-card-top');top.append(node('h3','mono',r.code),pill(game?(labels[r.status]||'未知'):running?'锄地中':r.onlineCount?'在线 · 未锄地':'无人在线',game?r.status:running?'running':r.onlineCount?'':'disconnected'));card.append(top);
     card.append(node('div','history-note',`${game?'世界':'助手'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`),memberSummary(r.members));
-    card.append(node('div','history-note',game?(r.worldRound?`世界轮次 ${r.worldRound} · `:'')+`线路 ${route(r)}`:AdminHoeingHistory.overview(r.todayHoeing)));
-    const foot=node('div','overview-card-foot');foot.append(node('span','',`最近状态 ${heartbeat(r.lastHeartbeatUtc)}`),node('span','','查看房间详情'));card.append(foot);
+    card.append(node('div','history-note',game?(r.worldRound?`世界轮次 ${r.worldRound} · `:'')+`线路 ${route(r)}`:cardHoeing(r.todayHoeing)));
+    const foot=node('div','overview-card-foot');foot.append(node('span','',`心跳 ${heartbeat(r.lastHeartbeatUtc)}`),node('span','','查看详情'));card.append(foot);
     card.addEventListener('click',()=>{selected.live=entry.key;liveDetailOpen=true;render();});box.append(card);
   }
   if(focusKey)box.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
 }
 function render() {
-  const overview=view==='live'&&!liveDetailOpen;$('liveOverview').hidden=!overview;$('workbench').hidden=overview;$('backToOverview').hidden=view!=='live'||overview;
+  const overview=view==='live'&&!liveDetailOpen;$('liveOverview').hidden=!overview;$('workbench').hidden=overview;$('backToOverview').hidden=view!=='live'||overview;$('viewHeading').hidden=overview;
   if(view==='live'){$('viewTitle').textContent=overview?'实时房间':'房间详情';$('viewHint').textContent=overview?'查看全部房间和当前锄地状态':'选择左侧房间，在右侧查看状态与成员';}
   if(overview){renderOverview();return;}
   const list = $('rooms'), detail = $('detail'), listScroll = list.scrollTop, detailScroll = detail.scrollTop, items = entries();

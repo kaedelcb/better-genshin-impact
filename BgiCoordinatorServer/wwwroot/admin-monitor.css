@@ -242,3 +242,79 @@ dialog::backdrop{background:#0b0c1bcc}
   .range-presets select{width:100%}
   .log-lines{max-height:35dvh}
 }
+
+/* 2026-10-29 细节精修：压缩首屏高度、统一字号层级、标签短句化。 */
+body{font-size:14px}
+.workspace{gap:14px;padding:20px 28px 22px}
+.top h1{font-size:22px;letter-spacing:.02em}
+.top>div>p{margin-top:2px;color:var(--muted);font-size:13px}
+.top-actions .button{min-height:40px;padding:8px 16px}
+.updated{font-variant-numeric:tabular-nums}
+.metrics{grid-template-columns:repeat(4,minmax(0,1fr));border-radius:11px;background:linear-gradient(180deg,#232440,#1f2036)}
+.metric{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 18px}
+.metric span{font-size:13px;color:#c3bfd6}
+.metric strong{margin:0;font-size:22px;line-height:1.2;font-variant-numeric:tabular-nums}
+.overview-toolbar{position:sticky;top:-2px;z-index:2;margin:0 0 4px;padding:2px 0 12px;background:var(--bg)}
+.overview-title{display:flex;align-items:center;gap:10px}
+.overview-title h2{font-size:18px}
+.count-chip{padding:1px 10px;border:1px solid #4d4b65;border-radius:99px;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.overview-filters input,.overview-filters select,.overview-filters .button{min-height:40px;padding-top:7px;padding-bottom:7px}
+.overview-filters input{min-width:240px}
+.overview-rooms{margin-top:0;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr))}
+.overview-card{gap:8px;padding:16px 18px 14px;border-radius:12px;transition:border-color .16s,background .16s,transform .16s}
+.overview-card:hover{background:#25263f;transform:translateY(-1px)}
+.overview-card.running{background:linear-gradient(180deg,#203631 0%,var(--panel) 70%)}
+.overview-card h3{font-size:19px;font-weight:600;letter-spacing:.05em}
+.overview-card .history-note{margin:0;font-size:13px;color:#bdb8d0;line-height:1.6}
+.overview-card .member-summary{margin:2px 0}
+.overview-card .member-chip{font-size:13px;padding:3px 9px}
+.overview-card .pill{font-size:12px;padding:2px 10px}
+.overview-card-foot{font-size:12px;padding-top:10px}
+.overview-card:hover .overview-card-foot span:last-child{text-decoration:underline;text-underline-offset:3px}
+.sidebar{gap:28px}
+.navigation button{font-size:14px}
+.readonly-tag{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap}
+.readonly-tag i{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px #80d5be22}
+.view-heading h2{font-size:18px}
+.view-heading p{font-size:13px;margin-top:2px}
+.room-option-top strong{font-size:16px}
+.room-option .sub{font-size:13px}
+.detail-top h2{font-size:26px;letter-spacing:.04em}
+.summary-line{font-size:14px}
+.section-head h3{font-size:16px}
+.history-note,.history-members,.archive-note{font-size:13px}
+.member-chip{font-size:13px}
+.member-table th{font-size:13px}
+.directory-count{font-size:13px}
+@media(prefers-reduced-motion:reduce){.overview-card{transition:none}.overview-card:hover{transform:none}}
+@media(max-width:1100px){.metric{padding:10px 14px}.metric span{font-size:12px}}
+@media(max-width:900px) and (min-width:761px){.metric{flex-direction:column;align-items:flex-start;gap:2px}}
+@media(max-width:760px){
+  .workspace{padding:14px 14px 28px;gap:12px}
+  .top{gap:10px}
+  .top h1{font-size:20px}
+  .top>div>p{display:none}
+  .top-actions .button{flex:1;min-height:42px}
+  .top-actions .updated{flex-basis:100%;order:-1}
+  .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .metric{flex-direction:column;align-items:flex-start;gap:0;padding:8px 10px;border-bottom:0!important;border-right:1px solid var(--line)!important}
+  .metric:last-child{border-right:0!important}
+  .metric span{font-size:11px;line-height:1.35;color:var(--muted)}
+  .metric strong{font-size:19px;margin-top:2px}
+  .overview-toolbar{position:static;padding-bottom:8px}
+  .overview-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .overview-filters input{grid-column:1/-1}
+  .overview-filters .button{grid-column:1/-1}
+  .overview-card{padding:14px 15px 12px}
+}
+.view-heading>div:first-child{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap}
+.view-heading>div:first-child p{margin:0}
+#backToOverview{order:-1;min-height:34px;padding:4px 10px 4px 6px;margin-left:-6px}
+#backToOverview::before{content:"‹";margin-right:6px;font-size:18px;line-height:1}
+.date-controls input[type=date],.date-controls select,.date-controls .button{min-height:40px;padding-top:7px;padding-bottom:7px}
+@media(max-width:760px){.view-heading>div:first-child p{flex-basis:100%}}
+.directory-head .directory-count{padding:8px 2px 0}
+.directory-head h3{margin-bottom:10px}
+.detail-top .scope-label{display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;margin-bottom:6px}
+.detail-top h2{line-height:1.2}
+.detail-actions .button{min-height:40px;padding:7px 14px}

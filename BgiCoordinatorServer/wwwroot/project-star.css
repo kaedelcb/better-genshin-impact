@@ -39,7 +39,6 @@
   font-weight: 600;
 }
 .project-star-badge svg { width: 17px; height: 17px; flex-shrink: 0; }
-.login-card .project-star { margin: 22px 0 0; }
 .login-card .project-star-copy .project-star-sub-long { display: none; }
 .login-card .project-star-copy .project-star-sub-short { display: block; }
 .admin-star { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 18px 0 0; padding: 12px; }
@@ -63,3 +62,26 @@
   .top-actions .updated { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .project-star { transition: none; } }
+
+/* 登录页：Star 收为顶部细条，品牌与表单紧凑排布，桌面垂直居中。 */
+body:has(> #loginPanel:not([style*="none"])){min-height:100dvh;display:flex;flex-direction:column;background:radial-gradient(120% 60% at 50% -10%,#2a2747 0%,var(--bg,#141527) 62%)}
+.login-card{width:min(100% - 32px,420px);margin:auto;padding:28px 0 32px}
+.login-card .login-star{min-height:0;margin:0 0 28px;padding:9px 10px 9px 14px;gap:10px;border-radius:99px;background:#1f1e36cc}
+.login-card .login-star .project-star-spark{font-size:15px}
+.login-card .login-star .project-star-copy strong{font-size:13px;font-weight:500;color:#e9dcb5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.login-card .login-star .project-star-badge{min-width:0;min-height:30px;padding:3px 12px;font-size:13px}
+.login-card .login-star .project-star-badge svg{width:14px;height:14px}
+.login-brand{display:flex;align-items:center;gap:12px}
+.login-brand .brand-mark{font-size:34px}
+.login-card .login-brand h1{font-size:28px;line-height:1.15;letter-spacing:3px}
+.login-brand .eyebrow{margin-top:2px;letter-spacing:1px}
+.login-card .subtitle{margin:12px 0 6px}
+.login-card .field-label{margin:16px 0 6px}
+.login-card .remember-row{margin:10px 0 12px}
+.login-card .login-note{margin-top:14px;text-align:center}
+.login-card .error:empty{min-height:0;margin:0}
+@media (max-width:480px){
+  .login-card{margin:0 auto;padding:14px 0 24px}
+  .login-card .login-star{margin-bottom:22px}
+  .login-card .login-brand h1{font-size:26px}
+}

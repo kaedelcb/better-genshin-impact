@@ -3,26 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>开发者监控 · 登录</title>
+  <title>联机锄地 · 全服监控登录</title>
+  <meta name="theme-color" content="#141527">
   <style>
-    :root{font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif;color-scheme:dark;background:#101820;color:#edf3f1}
-    *{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:24px}
-    main{width:min(100%,420px);padding:36px;border:1px solid #30434a;border-radius:20px;background:#19252d;box-shadow:0 20px 70px #0005}
-    .eyebrow{color:#8fcdb8;font-size:13px;letter-spacing:.12em}h1{font-size:26px;margin:12px 0 8px}p{color:#a9b9bd;line-height:1.6;margin:0 0 28px}
-    label{display:block;font-size:14px;margin-bottom:8px}input{width:100%;padding:14px 15px;border:1px solid #4b6267;border-radius:10px;background:#0e171d;color:#fff;font:inherit;outline:none}
-    input:focus{border-color:#79d5af;box-shadow:0 0 0 3px #79d5af22}button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:10px;background:#76d3aa;color:#10251e;font:inherit;font-weight:700;cursor:pointer}
-    button:disabled{opacity:.6;cursor:wait}.error{min-height:22px;margin-top:14px;color:#ffb3a7;font-size:14px}
+    :root{font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;color-scheme:dark;--gold:#e8c96d;--muted:#b2aec7;--line:#3d3e54}
+    *{box-sizing:border-box}
+    body{min-height:100dvh;margin:0;display:grid;place-items:center;padding:24px 16px;background:radial-gradient(120% 60% at 50% -10%,#2a2747 0%,#141527 62%);color:#f4f2fa;-webkit-font-smoothing:antialiased}
+    main{width:min(100%,400px);padding:32px 30px 28px;border:1px solid var(--line);border-radius:16px;background:#1d1e34;box-shadow:0 24px 70px #07081866}
+    .brand{display:flex;align-items:center;gap:12px}
+    .mark{color:var(--gold);font-size:32px;line-height:1}
+    h1{font-size:22px;font-weight:600;margin:0;letter-spacing:.04em}
+    .eyebrow{color:var(--muted);font-size:12px;margin:2px 0 0}
+    p.lead{color:var(--muted);font-size:14px;line-height:1.6;margin:18px 0 22px}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:7px}
+    input{width:100%;min-height:46px;padding:11px 13px;border:1px solid #56556c;border-radius:9px;background:#151629;color:#fff;font:inherit;outline:none}
+    input:focus{border-color:var(--gold);box-shadow:0 0 0 3px #e8c96d22}
+    button{width:100%;min-height:46px;margin-top:16px;padding:11px;border:0;border-radius:9px;background:var(--gold);color:#29241a;font:inherit;font-weight:600;cursor:pointer}
+    button:hover{background:#f0d581}
+    button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+    button:disabled{opacity:.6;cursor:wait}
+    .error:empty{display:none}
+    .error{margin-top:12px;color:#efa48d;font-size:14px}
   </style>
 </head>
 <body>
   <main>
-    <div class="eyebrow">BGI COORDINATOR · ADMIN</div>
-    <h1>联机锄地监控</h1>
-    <p>输入开发者监控密码，查看服务器当前房间状态。</p>
+    <div class="brand"><span class="mark" aria-hidden="true">◇</span><div><h1>联机锄地 · 全服监控</h1><p class="eyebrow">Nexus BGI · 管理员</p></div></div>
+    <p class="lead">输入管理员密码，查看全部房间与日志。</p>
     <form id="loginForm">
       <label for="password">管理员密码</label>
       <input id="password" type="password" autocomplete="current-password" required autofocus>
-      <button id="submitButton" type="submit">进入监控页</button>
+      <button id="submitButton" type="submit">进入监控</button>
       <div id="error" class="error" role="alert"></div>
     </form>
   </main>
