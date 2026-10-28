@@ -874,7 +874,8 @@
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <Grid Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Grid.Row="0" Margin="0,0,0,8">
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -896,6 +897,11 @@
                                           ToolTip="静音后命中规则只记录，不红点/不响铃/不弹托盘"/>
                             </StackPanel>
                         </Grid>
+                        <CheckBox Content="允许房间成员远程访问异常与日报" IsChecked="{Binding ShareDodocoWeb, Mode=TwoWay}"
+                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
+                                  Style="{DynamicResource GuildCheckBox}" Margin="0,8,0,0"
+                                  ToolTip="开启后，同房成员可远程读取和修改本机规则与设置、清理异常记录，以及查看事发画面；日报还需要开启共享日志文件。"/>
+                        </StackPanel>
 
                         <ListBox Grid.Row="1" ItemsSource="{Binding Watch.Rules}" Background="Transparent"
                                  BorderThickness="0">

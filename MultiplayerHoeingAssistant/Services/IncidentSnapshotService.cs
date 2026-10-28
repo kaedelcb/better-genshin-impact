@@ -358,29 +358,42 @@ public sealed class IncidentSnapshotService : IDisposable
     /// 找不到（规则未开快照/触发时零帧/已被数量清理）返回 null。
     /// 新布局 incidents/yyyy-MM-dd/时刻_规则名（±5 秒匹配可能跨零点，前后各多看一天）；
     /// 旧布局（平铺在 incidents/ 根下）兼容查找。</summary>
-    public static string? FindIncidentDir(DateTime recordTime, string ruleName)
+    public static string? FindIncidentDir(DateTime recordTime, string ruleName, string? rootDir = null, bool strict = false)
     {
         try
         {
-            if (!Directory.Exists(IncidentRootDir)) return null;
+            var root = rootDir ?? IncidentRootDir;
+            if (strict)
+            {
+                try { File.GetAttributes(root); }
+                catch (DirectoryNotFoundException) { return null; }
+                catch (FileNotFoundException) { return null; }
+            }
+            else if (!Directory.Exists(root)) return null;
             var safe = SanitizeRuleName(ruleName);
             for (var d = -1; d <= 1; d++)
             {
-                var dateDir = Path.Combine(IncidentRootDir, recordTime.Date.AddDays(d).ToString("yyyy-MM-dd"));
-                var hit = FindIncidentInDir(dateDir, recordTime, safe);
+                var dateDir = Path.Combine(root, recordTime.Date.AddDays(d).ToString("yyyy-MM-dd"));
+                var hit = FindIncidentInDir(dateDir, recordTime, safe, strict);
                 if (hit != null) return hit;
             }
             // 旧平铺布局兼容
-            return FindIncidentInDir(IncidentRootDir, recordTime, safe);
+            return FindIncidentInDir(root, recordTime, safe, strict);
         }
-        catch { /* 目录枚举失败按未找到处理 */ }
+        catch when (!strict) { /* PC 原有容错语义 */ }
         return null;
     }
 
     /// <summary>在指定目录的直接子目录里找匹配的事件目录。</summary>
-    private static string? FindIncidentInDir(string dir, DateTime recordTime, string safeRuleName)
+    private static string? FindIncidentInDir(string dir, DateTime recordTime, string safeRuleName, bool strict)
     {
-        if (!Directory.Exists(dir)) return null;
+        if (strict)
+        {
+            try { File.GetAttributes(dir); }
+            catch (DirectoryNotFoundException) { return null; }
+            catch (FileNotFoundException) { return null; }
+        }
+        else if (!Directory.Exists(dir)) return null;
         foreach (var sub in Directory.EnumerateDirectories(dir))
         {
             var name = Path.GetFileName(sub);

@@ -33,6 +33,7 @@ public sealed class KeywordWatchService : IDisposable
     private readonly BgiLogTailService _tail;
     private readonly string _configPath;
     private readonly object _lock = new();
+    private readonly Func<string> _assistantLogDirProvider;
     /// <summary>全部静音判定（P4 起统一走 DodocoSettingsService；未注入时回落到本文件内的 muteAll 字段）。</summary>
     private readonly Func<bool>? _muteProvider;
     /// <summary>监控模式判定（true=监控端：异常库/录像零落盘，规则改走同机共享文件）；null=旧行为恒执行端。</summary>
@@ -141,18 +142,20 @@ public sealed class KeywordWatchService : IDisposable
     /// <summary>共享规则文件外部变更（同机对端保存触发；与当前规则序列化一致的回环已抵消）。
     /// 后台线程触发，UI 层自行 Dispatcher。</summary>
     public event Action? RulesExternallyChanged;
+    public event Action<string>? RecordsExternallyDeleted;
 
     public KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider = null,
         Func<bool>? observerModeProvider = null, LocalPeerSyncService? peerSync = null)
         : this(tail, muteProvider, observerModeProvider, peerSync, AssistantDataDirectory.Root) { }
 
     internal KeywordWatchService(BgiLogTailService tail, Func<bool>? muteProvider,
-        Func<bool>? observerModeProvider, LocalPeerSyncService? peerSync, string configDir)
+        Func<bool>? observerModeProvider, LocalPeerSyncService? peerSync, string configDir, Func<string>? assistantLogDirProvider = null)
     {
         _tail = tail;
         _muteProvider = muteProvider;
         _observerModeProvider = observerModeProvider;
         _peerSync = peerSync;
+        _assistantLogDirProvider = assistantLogDirProvider ?? (() => LogFileBrowser.AssistantLogDir);
         var dir = configDir;
         Directory.CreateDirectory(dir);
         _configPath = Path.Combine(dir, "dodoco_watch_rules.json");
@@ -239,6 +242,33 @@ public sealed class KeywordWatchService : IDisposable
             _regexCache.Clear();
             SaveLocked();
         }
+    }
+
+    /// <summary>网页规则单项变更，持锁落盘，避免并发操作覆盖其它规则。</summary>
+    public void MutateRuleForWeb(WatchRule? rule, string? deleteId)
+    {
+        lock (_lock)
+        {
+            if (_configTransferActive || IsObserver()) throw new InvalidOperationException("当前不能修改规则");
+            var rules = _config.Rules.Select(CloneRule).ToList();
+            var id = rule?.Id ?? deleteId ?? "";
+            var index = rules.FindIndex(r => r.Id == id);
+            if (rule == null)
+            {
+                if (index < 0) throw new InvalidOperationException("规则不存在");
+                rules.RemoveAt(index);
+            }
+            else if (index < 0) rules.Add(CloneRule(rule));
+            else rules[index] = CloneRule(rule);
+            if (rules.Count > 200) throw new InvalidOperationException("规则数量超限");
+            var copy = new WatchConfig { MuteAll = _config.MuteAll, BuiltinStallSeeded = _config.BuiltinStallSeeded, Rules = rules };
+            var json = JsonSerializer.Serialize(copy, IndentedOptions);
+            if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json)) throw new IOException("规则保存失败");
+            _config = copy;
+            _regexCache.Clear();
+            if (_peerSync != null) LocalPeerSyncService.WriteFileAtomic(LocalPeerSyncService.SharedRulesPath, json);
+        }
+        RulesExternallyChanged?.Invoke();
     }
 
     private static WatchRule CloneRule(WatchRule r) => new()
@@ -736,7 +766,7 @@ public sealed class KeywordWatchService : IDisposable
         if (IsObserver()) return;
         try
         {
-            var dir = LogFileBrowser.AssistantLogDir;
+            var dir = _assistantLogDirProvider();
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, $"dodoco_exceptions.{record.Time:yyyy-MM-dd}.jsonl");
             File.AppendAllText(path,
@@ -757,7 +787,7 @@ public sealed class KeywordWatchService : IDisposable
         var result = new List<string>();
         try
         {
-            var dir = LogFileBrowser.AssistantLogDir;
+            var dir = _assistantLogDirProvider();
             if (!Directory.Exists(dir)) return result;
             foreach (var file in Directory.EnumerateFiles(dir, "dodoco_exceptions.*.jsonl"))
             {
@@ -780,7 +810,7 @@ public sealed class KeywordWatchService : IDisposable
         var result = new List<ExceptionRecord>();
         try
         {
-            var path = Path.Combine(LogFileBrowser.AssistantLogDir, $"dodoco_exceptions.{date}.jsonl");
+            var path = Path.Combine(_assistantLogDirProvider(), $"dodoco_exceptions.{date}.jsonl");
             if (!File.Exists(path)) return result;
             foreach (var line in File.ReadLines(path))
             {
@@ -806,12 +836,29 @@ public sealed class KeywordWatchService : IDisposable
     /// <summary>删除异常库记录文件：date=null 删全部日期；否则只删指定日期（yyyy-MM-dd）。返回删除的文件数。
     /// 注意：删除当天文件后，尚在等后文上下文的在途记录（≤15 秒窗口）落盘时会重建当天文件，属可接受边角。
     /// 监控端仅同机执行端在场时可删（共享库）；无执行端时只读。</summary>
+    public bool DeleteDayForWeb(string date)
+    {
+        if (!DateOnly.TryParseExact(date, "yyyy-MM-dd", out _)) throw new ArgumentException("日期格式错误");
+        bool existed;
+        lock (_lock)
+        {
+            if (_configTransferActive || !CanManageExceptionStore) throw new InvalidOperationException("当前不能清理异常记录");
+            var path = Path.Combine(_assistantLogDirProvider(), $"dodoco_exceptions.{date}.jsonl");
+            try { File.GetAttributes(path); existed = true; }
+            catch (FileNotFoundException) { existed = false; }
+            catch (DirectoryNotFoundException) { existed = false; }
+            if (existed) File.Delete(path);
+        }
+        RecordsExternallyDeleted?.Invoke(date);
+        return existed;
+    }
+
     public int DeleteRecords(string? date)
     {
         if (!CanManageExceptionStore) return 0;
         try
         {
-            var dir = LogFileBrowser.AssistantLogDir;
+            var dir = _assistantLogDirProvider();
             if (!Directory.Exists(dir)) return 0;
             IEnumerable<string> files = date == null
                 ? Directory.EnumerateFiles(dir, "dodoco_exceptions.*.jsonl")

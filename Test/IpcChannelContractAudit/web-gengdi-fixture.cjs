@@ -44,7 +44,7 @@ window.signalR={HubConnectionBuilder:class{withUrl(){return this}withAutomaticRe
 async function fixture() {
     const server = http.createServer((req, res) => {
         const file = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).slice(1) || 'index.html';
-        if (!/^(index\.html|control-room(?:-commands|-ui)?\.(js|css)|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(file)) { res.writeHead(404); res.end(); return; }
+        if (!/^(index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js)|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(file)) { res.writeHead(404); res.end(); return; }
         res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : 'text/html');
         res.end(file === 'signalr.min.js' ? fs.readFileSync(path.join(root, file), 'utf8') + '\n;' + mock : fs.readFileSync(path.join(root, file)));
     });

@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import vm from 'node:vm';
+
+const messages=[],self={};
+const context=vm.createContext({self,Blob,setTimeout,clearTimeout,postMessage:m=>messages.push(m),console});
+vm.runInContext(await readFile(new URL('../../BgiCoordinatorServer/wwwroot/dodoco-log-worker.js',import.meta.url),'utf8'),context);
+await self.onmessage({data:{id:1,type:'load',file:new Blob(['[09:59:59] [INF] before\n[2026-10-29 10:00:00.000] [WRN] [Main:S1:P123:T456] match\ncontinuation\n[11:01:00] [ERR] after'])}});
+assert.equal(messages.at(-1).count,4);
+await self.onmessage({data:{id:2,type:'query',from:'10:00',to:'11:00',page:0}});
+assert.deepEqual(Array.from(messages.at(-1).rows),['[2026-10-29 10:00:00.000] [WRN] [Main:S1:P123:T456] match','continuation']);
+await self.onmessage({data:{id:3,type:'query',level:'ERR',query:'after',page:0}});
+assert.equal(messages.at(-1).count,1);
+await self.onmessage({data:{id:4,type:'query',instance:'S1:P123',page:0}});
+assert.deepEqual(Array.from(messages.at(-1).rows),['[2026-10-29 10:00:00.000] [WRN] [Main:S1:P123:T456] match','continuation']);
+await self.onmessage({data:{id:7,type:'query',query:'[',regex:true,page:0}});
+assert.equal(messages.at(-1).type,'error');assert.match(messages.at(-1).message,/正则表达式无效/);
+await self.onmessage({data:{id:8,type:'query',query:'\\D{3}tion$',regex:true,page:0}});
+assert.deepEqual(Array.from(messages.at(-1).rows),['continuation']);
+await self.onmessage({data:{id:5,type:'load',file:new Blob([Array.from({length:12000},(_,i)=>`[10:00:00] [INF] line ${i}`).join('\n')+'\n'+'x'.repeat(600000)])}});
+await self.onmessage({data:{id:6,type:'query',page:8}});
+assert.equal(messages.at(-1).count,12001);
+assert.equal(messages.at(-1).truncated,true,'oversized lines must not flood the rendered preview');
+assert.ok(messages.at(-1).rows[0].length<17000);
+console.log('large-log worker time, continuation and filtering checks passed');

@@ -28,6 +28,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         _service.RecordAdded += OnRecordAdded;
         _service.RecordMerged += OnRecordMerged;
         _service.RulesExternallyChanged += OnRulesExternallyChanged;
+        _service.RecordsExternallyDeleted += OnRecordsExternallyDeleted;
 
         // 异常记录按天分组显示（组头=日期，组内时间倒序与集合顺序一致）
         var view = System.Windows.Data.CollectionViewSource.GetDefaultView(FilteredRecords);
@@ -117,6 +118,21 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         RebuildRuleFilterItems();
     }
 
+    private void OnRecordsExternallyDeleted(string date)
+    {
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            _recordHistoryRevision++;
+            _allRecords.RemoveAll(r => r.Time.ToString("yyyy-MM-dd") == date);
+            _loadedDates.Remove(date);
+            _fileDates = _service.ListRecordDates();
+            RebuildDateFilterItems();
+            RebuildRuleFilterItems();
+            RebuildFiltered();
+            RecordStatus = $"网页已清理 {date} 的异常记录";
+        });
+    }
+
     private void OnRulesExternallyChanged()
     {
         Application.Current.Dispatcher.BeginInvoke(() => ReloadConfigTransferSettings());
@@ -126,6 +142,7 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
 
     /// <summary>全部记录（时间倒序）。</summary>
     private readonly List<ExceptionRecord> _allRecords = [];
+    private int _recordHistoryRevision;
     /// <summary>筛选后的可见记录。</summary>
     public ObservableCollection<ExceptionRecord> FilteredRecords { get; } = new();
 
@@ -318,11 +335,19 @@ public sealed class ExceptionWatchViewModel : ViewModelBase
         if (toLoad.Count == 0) return;
         foreach (var d in toLoad) _loadedDates.Add(d); // 先标记，防重复触发
         IsLoadingHistory = true;
+        var historyRevision = _recordHistoryRevision;
         Task.Run(() =>
         {
             var records = toLoad.SelectMany(d => _service.LoadRecordsOfDay(d)).ToList();
             Application.Current.Dispatcher.BeginInvoke(() =>
             {
+                if (historyRevision != _recordHistoryRevision)
+                {
+                    foreach (var date in toLoad) _loadedDates.Remove(date);
+                    IsLoadingHistory = false;
+                    EnsureDateLoaded(SelectedDateFilter);
+                    return;
+                }
                 MergeRecords(records);
                 IsLoadingHistory = false;
                 RebuildRuleFilterItems();

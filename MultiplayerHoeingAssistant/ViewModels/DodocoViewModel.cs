@@ -46,6 +46,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly MemberLogRelayService _logRelay;
     /// <summary>远程日志下载·被下载端（应答文件列表 / 分块上行）。</summary>
     private readonly MemberLogShareService _logShare;
+    private readonly DodocoWebRelayService _webRelay;
     private readonly DispatcherTimer _flushTimer;
     private readonly ConcurrentQueue<LogEntry> _pending = new();
 
@@ -67,6 +68,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
 
         // 统一设置先行（静音/卡死阈值/截图参数都从这里读，其它服务依赖它）
         _settingsService = new DodocoSettingsService();
+        _settingsService.SettingsChanged += OnSettingsChanged;
 
         // BGI 日志目录提供者：运行中配置变更也能在下次轮询生效
         _tailService = new BgiLogTailService(() =>
@@ -124,6 +126,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _logShare = new MemberLogShareService(_settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR,
             () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath));
 
+        _webRelay = new DodocoWebRelayService(_settingsService, _watchService,
+            new DailyReportService(() => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath)),
+            () => _mainVm.IsStandaloneMode || _mainVm.IsObserverMode ? null : _mainVm.SignalR,
+            diagnostic: _diagService);
         RebuildLogSources();
         _mainVm.Members.CollectionChanged += OnMembersChanged;
         // 成员 Online 是原地更新（不触发 CollectionChanged），靠这个事件驱动离线退订/上线重订
@@ -142,6 +148,17 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
 
         // 进程退出时释放后台线程/文件句柄（窗口关闭只是最小化到托盘，不能依赖 Closing）
         Application.Current.Exit += (_, _) => Dispose();
+    }
+
+    private void OnSettingsChanged()
+    {
+        Application.Current.Dispatcher.BeginInvoke(() =>
+        {
+            OnPropertyChanged(nameof(MuteAll));
+            OnPropertyChanged(nameof(IncidentSnapshotEnabled));
+            OnPropertyChanged(nameof(ShareDodocoWeb));
+            Stats.ReloadConfigTransferSettings();
+        });
     }
 
     internal KeywordWatchService.ConfigTransferState BeginConfigTransfer()
@@ -305,6 +322,17 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
 
     /// <summary>执行模式（IsObserverMode 的反向，供 IsEnabled 绑定；正向属性免引入反向转换器）。</summary>
     public bool IsExecutorMode => !_mainVm.IsObserverMode;
+
+    public bool ShareDodocoWeb
+    {
+        get => _settingsService.Current.ShareDodocoWeb;
+        set
+        {
+            if (!_settingsService.TryUpdate(s => s.ShareDodocoWeb = value))
+                MessageBox.Show("保存网页访问授权失败，请检查配置文件权限。", "嘟嘟可", MessageBoxButton.OK, MessageBoxImage.Warning);
+            OnPropertyChanged();
+        }
+    }
 
     private List<LogEntry> BufferFor(string key)
     {
@@ -844,6 +872,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         EnsureViewerHooked(); // 200ms 节拍顺带保持观看端 SignalR 懒绑定（重连补订阅依赖此事件）
         // 远程日志下载两端的 SignalR 懒绑定也挂在这个节拍上（零额外 Timer）
         _logShare.EnsureHooked();
+        _webRelay.EnsureHooked();
         // 截图按需取图两端（观看/被查看）的 SignalR 懒绑定同款（原 10s 上报 Timer 已随 pull 化删除）
         _screenshotRelay.EnsureHooked();
         Browser.EnsureSignalRHooked();
@@ -1075,6 +1104,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _flushTimer.Stop();
+        _settingsService.SettingsChanged -= OnSettingsChanged;
         // 页面销毁前退订（服务端断线清理是兜底，主动退订让对方尽早停发）
         if (_currentSubscription != null)
         {
@@ -1099,6 +1129,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         Stats.Dispose();
         _screenshotRelay.Dispose();
         _logShare.Dispose();
+        _webRelay.Dispose();
         _logRelay.Dispose();
         _incidentService.Dispose();
         _statsService.Dispose();

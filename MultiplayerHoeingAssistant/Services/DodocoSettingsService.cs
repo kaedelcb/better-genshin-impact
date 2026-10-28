@@ -28,6 +28,8 @@ public class DodocoSettings
     /// <summary>共享我的完整日志文件：开启后允许房间成员请求本机日志文件列表并下载（gzip 分块传输）。
     /// 默认开——注意完整日志可能包含本机路径等环境信息，在意的人可手动关。</summary>
     [JsonPropertyName("shareLogFiles")] public bool ShareLogFiles { get; set; } = true;
+    /// <summary>允许同房成员远程访问异常监控及日报；默认关闭。</summary>
+    [JsonPropertyName("shareDodocoWeb")] public bool ShareDodocoWeb { get; set; }
     /// <summary>事发录像总开关：开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲；
     /// 命中标了"存快照"的监控规则时保存事发前后帧 + 触发日志到 log/incidents/。默认关。</summary>
     [JsonPropertyName("incidentSnapshotEnabled")] public bool IncidentSnapshotEnabled { get; set; }
@@ -88,6 +90,7 @@ public sealed class DodocoSettingsService
                     ShareRealtimeLog = _settings.ShareRealtimeLog,
                     ShareLogInfoOnly = _settings.ShareLogInfoOnly,
                     ShareLogFiles = _settings.ShareLogFiles,
+                    ShareDodocoWeb = _settings.ShareDodocoWeb,
                     IncidentSnapshotEnabled = _settings.IncidentSnapshotEnabled,
                     IncidentBufferSeconds = _settings.IncidentBufferSeconds,
                     IncidentCaptureIntervalSeconds = _settings.IncidentCaptureIntervalSeconds,
@@ -108,6 +111,22 @@ public sealed class DodocoSettingsService
             SaveLocked();
         }
         SettingsChanged?.Invoke();
+    }
+
+    /// <summary>远程设置写入：先原子落盘，成功后才替换内存；失败不会宣称成功。</summary>
+    public bool TryUpdate(Action<DodocoSettings> mutate)
+    {
+        lock (_lock)
+        {
+            if (_configTransferActive) return false;
+            var copy = JsonSerializer.Deserialize<DodocoSettings>(JsonSerializer.Serialize(_settings))!;
+            mutate(copy);
+            var json = JsonSerializer.Serialize(copy, new JsonSerializerOptions { WriteIndented = true });
+            if (!LocalPeerSyncService.WriteFileAtomic(_path, json)) return false;
+            _settings = copy;
+        }
+        SettingsChanged?.Invoke();
+        return true;
     }
 
     /// <summary>导入事务中只重载内存，不回写默认值或旧配置。</summary>

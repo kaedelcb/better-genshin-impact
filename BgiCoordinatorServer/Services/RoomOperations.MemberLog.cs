@@ -38,11 +38,12 @@ public sealed partial class RoomOperations
         try
         {
             var group = $"CTRL_{roomCode}";
-            // 校验与 SendRemoteCommand 同款：PC 端在 _controlRooms 里；遥控端登记连接也放行（可只读观看）
-            if (!_roomManager.IsInControlRoom(group, ctx.ConnectionId)
-                && !_roomManager.IsRemoteConnection(group, ctx.ConnectionId))
+            // 正式成员或遥控端只能以入房登记的 UID 上报。
+            if (string.IsNullOrEmpty(uid) ||
+                (_roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
+                    ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)) != uid)
             {
-                _logger.LogWarning("连接不在控制房间 {RoomCode} 中，拒绝转发成员截图（uid={Uid}）", roomCode, uid);
+                _logger.LogWarning("连接身份与成员 UID 不符，拒绝转发成员截图（room={RoomCode}, uid={Uid}）", roomCode, uid);
                 return;
             }
 
@@ -111,7 +112,7 @@ public sealed partial class RoomOperations
             var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
             if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线
             // 登记 requestId → 请求方连接，应答按映射单播回来
-            RegisterLogTransferRequest(requestId, ctx.ConnectionId);
+            if (!RegisterLogTransferRequest(group, requestId, ctx.ConnectionId, targetConn, targetUid, "screenshot")) return;
             await _broadcaster.SendToConnectionAsync(targetConn, "MemberScreenshotRequested", new { requesterUid, requestId }, requesterUid, requestId);
         }
         catch (Exception ex)
@@ -146,11 +147,13 @@ public sealed partial class RoomOperations
             }
 
             // 认领并删除映射（一次性应答）；无映射 = 过期或伪造，丢弃
-            if (!LogTransferRequests.TryRemove(requestId, out var req)) return;
+            if (!TryGetTransferRequest(group, requestId, ctx.ConnectionId, uid, "screenshot", null, out var req)
+                || !RemoveTransferRequest(group, requestId, req)) return;
 
             var payload = new
             {
                 uid,
+                requestId,
                 jpegBase64,
                 width,
                 height,
@@ -178,11 +181,12 @@ public sealed partial class RoomOperations
         try
         {
             var group = $"CTRL_{roomCode}";
-            // 校验与 ReportMemberScreenshot 同款：PC 端在 _controlRooms 里；遥控端登记连接也放行
-            if (!_roomManager.IsInControlRoom(group, ctx.ConnectionId)
-                && !_roomManager.IsRemoteConnection(group, ctx.ConnectionId))
+            // 正式成员或遥控端只能以入房登记的 UID 上报。
+            if (string.IsNullOrEmpty(uid) ||
+                (_roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
+                    ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)) != uid)
             {
-                _logger.LogWarning("连接不在控制房间 {RoomCode} 中，拒绝转发成员日志（uid={Uid}）", roomCode, uid);
+                _logger.LogWarning("连接身份与成员 UID 不符，拒绝转发成员日志（room={RoomCode}, uid={Uid}）", roomCode, uid);
                 return;
             }
 
@@ -314,29 +318,52 @@ public sealed partial class RoomOperations
     /// <summary>忙标记块限流：同 uid 每秒最多 5 个（防洪泛：忙标记不计入数据块限流，独立宽松阈值）。</summary>
     private static readonly ConcurrentDictionary<string, (DateTime WindowStart, int Count)> LogBusyRateLimit = new();
 
-    /// <summary>
-    /// 按需传输请求映射：requestId → (请求方 connectionId, 创建时间 UTC)。
-    /// 日志族（RequestMemberLogFiles / RequestMemberLogDownload）与截图按需取图（RequestMemberScreenshot）共用：
-    /// 请求时建立；对应应答（列表 / done=true 块 / 截图帧）转发后删除；
-    /// 兜底：插入新映射时顺带清理 10 分钟前的过期项（如中途双方断线，无应答可触发删除）。
-    /// 转发方式：应答一律按映射<b>单播</b>请求方，不广播（块/图像数据量大，广播会让无关成员白收流量）。
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, (string RequesterConnectionId, DateTime CreatedAtUtc)>
+    /// <summary>将每次传输绑定到房间、请求方、目标连接、目标 UID 和用途，避免其他连接认领应答。</summary>
+    private sealed record TransferRequest(string RequesterConnectionId, string TargetConnectionId,
+        string TargetUid, string Kind, string? FileName, DateTime CreatedAtUtc);
+
+    private static readonly ConcurrentDictionary<(string Group, string RequestId), TransferRequest>
         LogTransferRequests = new();
     private static readonly TimeSpan LogTransferRequestTtl = TimeSpan.FromMinutes(10);
 
-    /// <summary>登记请求映射并顺带概率性清理过期项。</summary>
-    private static void RegisterLogTransferRequest(string requestId, string requesterConnectionId)
+    private static bool RegisterLogTransferRequest(string group, string requestId, string requesterConnectionId,
+        string targetConnectionId, string targetUid, string kind, string? fileName = null)
     {
         var now = DateTime.UtcNow;
-        LogTransferRequests[requestId] = (requesterConnectionId, now);
         if (LogTransferRequests.Count > 64)
         {
             foreach (var kv in LogTransferRequests)
                 if (now - kv.Value.CreatedAtUtc > LogTransferRequestTtl)
-                    LogTransferRequests.TryRemove(kv.Key, out _);
+                    ((ICollection<KeyValuePair<(string Group, string RequestId), TransferRequest>>)LogTransferRequests).Remove(kv);
         }
+        // 同一房间内不允许覆盖在途 requestId，也不让碰撞改变应答接收者。
+        return LogTransferRequests.TryAdd((group, requestId),
+            new(requesterConnectionId, targetConnectionId, targetUid, kind, fileName, now));
     }
+
+    private static bool TryGetTransferRequest(string group, string requestId, string connectionId,
+        string uid, string kind, string? fileName, out TransferRequest request)
+    {
+        if (LogTransferRequests.TryGetValue((group, requestId), out var found))
+        {
+            if (DateTime.UtcNow - found.CreatedAtUtc > LogTransferRequestTtl)
+            {
+                RemoveTransferRequest(group, requestId, found);
+            }
+            else if (found.TargetConnectionId == connectionId && found.TargetUid == uid
+                && found.Kind == kind && found.FileName == fileName)
+            {
+                request = found;
+                return true;
+            }
+        }
+        request = null!;
+        return false;
+    }
+
+    private static bool RemoveTransferRequest(string group, string requestId, TransferRequest request)
+        => ((ICollection<KeyValuePair<(string Group, string RequestId), TransferRequest>>)LogTransferRequests)
+            .Remove(new((group, requestId), request));
 
     /// <summary>同款非原子窗口计数限流（防滥用兜底而非精确配额）。返回 true=放行。</summary>
     private static bool PassRateLimit(ConcurrentDictionary<string, (DateTime WindowStart, int Count)> table,
@@ -377,7 +404,7 @@ public sealed partial class RoomOperations
             var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
             if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线
             // 登记 requestId → 请求方连接，应答按映射单播回来
-            RegisterLogTransferRequest(requestId, ctx.ConnectionId);
+            if (!RegisterLogTransferRequest(group, requestId, ctx.ConnectionId, targetConn, targetUid, "files")) return;
             var requesterUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId) ?? "";
             await _broadcaster.SendToConnectionAsync(targetConn, "MemberLogFilesRequested", new { requesterUid, requestId }, requesterUid, requestId);
         }
@@ -403,7 +430,8 @@ public sealed partial class RoomOperations
             }
             if (string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength) return;
             // 认领并删除映射（一次性应答）；无映射 = 过期或伪造，丢弃
-            if (!LogTransferRequests.TryRemove(requestId, out var req)) return;
+            if (!TryGetTransferRequest(group, requestId, ctx.ConnectionId, uid, "files", null, out var req)
+                || !RemoveTransferRequest(group, requestId, req)) return;
 
             files ??= [];
             var cleaned = files
@@ -448,7 +476,7 @@ public sealed partial class RoomOperations
             var targetConn = _roomManager.GetConnectionIdByUid(group, targetUid);
             if (string.IsNullOrEmpty(targetConn)) return; // 目标不在线
             // 登记 requestId → 请求方连接，分块按映射单播回来（done 块转发后删除映射）
-            RegisterLogTransferRequest(requestId, ctx.ConnectionId);
+            if (!RegisterLogTransferRequest(group, requestId, ctx.ConnectionId, targetConn, targetUid, "download", fileName)) return;
             var requesterUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId) ?? "";
             await _broadcaster.SendToConnectionAsync(targetConn, "MemberLogDownloadRequested", new { requesterUid, requestId, fileName }, requesterUid, requestId, fileName);
         }
@@ -478,7 +506,7 @@ public sealed partial class RoomOperations
             if (string.IsNullOrEmpty(fileName) || !LogFileNameRegex.IsMatch(fileName)) return;
 
             // 认领映射（下载期间保留，done 块转发后才删）；无映射 = 过期或伪造，丢弃
-            if (!LogTransferRequests.TryGetValue(requestId, out var req)) return;
+            if (!TryGetTransferRequest(group, requestId, ctx.ConnectionId, uid, "download", fileName, out var req)) return;
 
             var rateKey = $"{group}:{uid}";
             var isBusyMarker = done && totalChunks == 0;
@@ -513,7 +541,7 @@ public sealed partial class RoomOperations
             };
             await _broadcaster.SendToConnectionAsync(req.RequesterConnectionId, "MemberLogFileChunk", payload, payload);
             // 下载结束（含忙标记）：删除映射，请求生命周期闭环
-            if (done) LogTransferRequests.TryRemove(requestId, out _);
+            if (done) RemoveTransferRequest(group, requestId, req);
         }
         catch (Exception ex)
         {

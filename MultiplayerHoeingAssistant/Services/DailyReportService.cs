@@ -135,12 +135,21 @@ public sealed class DailyReportService
         return dates.OrderByDescending(d => d).ToList();
     }
 
+    public List<DateOnly> EnumerateDatesStrict()
+    {
+        var dir = _bgiLogDirProvider();
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) throw new DirectoryNotFoundException("BGI 日志目录不可用");
+        return Directory.EnumerateFiles(dir, "better-genshin-impact*.log").Select(f => DateFromFileName(Path.GetFileName(f)))
+            .Where(d => d.HasValue).Select(d => d!.Value).Distinct().OrderByDescending(d => d).ToList();
+    }
+
     /// <summary>构建指定日期的日报；当天无日志文件或无配置组记录时 Groups 为空。</summary>
-    public DailyReport BuildReport(DateOnly date)
+    public DailyReport BuildReport(DateOnly date, bool strict = false)
     {
         var report = new DailyReport { Date = date };
         var dir = _bgiLogDirProvider();
-        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return report;
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        { if (strict) throw new DirectoryNotFoundException("BGI 日志目录不可用"); return report; }
 
         var merged = new Dictionary<string, DailyReportGroup>(StringComparer.Ordinal);
         foreach (var file in FilesForDate(dir, date).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
@@ -151,6 +160,7 @@ public sealed class DailyReportService
             }
             catch (Exception)
             {
+                if (strict) throw;
                 // 单个文件读取失败（占用/损坏）不影响其它文件与其它天
             }
         }
@@ -277,11 +287,12 @@ public sealed class DailyReportService
     // ========== 全天任务总览（一条龙配置单 / 配置组 / 独立任务 三层嵌套树） ==========
 
     /// <summary>构建指定日期的全天任务总览；顶层单元时间段互斥，合计即当天 BGI 总运行时长。</summary>
-    public DayOverview BuildOverview(DateOnly date)
+    public DayOverview BuildOverview(DateOnly date, bool strict = false)
     {
         var overview = new DayOverview();
         var dir = _bgiLogDirProvider();
-        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return overview;
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+        { if (strict) throw new DirectoryNotFoundException("BGI 日志目录不可用"); return overview; }
 
         foreach (var file in FilesForDate(dir, date).OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
         {
@@ -291,6 +302,7 @@ public sealed class DailyReportService
             }
             catch (Exception)
             {
+                if (strict) throw;
                 // 单个文件读取失败（占用/损坏）不影响其它文件与其它天
             }
         }

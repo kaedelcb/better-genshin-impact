@@ -36,6 +36,7 @@ public class SignalRClient : IAsyncDisposable
     private volatile bool _roomReady;
     private volatile bool _retired;
     internal bool IsControlRoomReady => _roomReady && !_retired && IsConnected;
+    internal string CurrentRoomCode => _roomCode;
     internal bool IsRetired => _retired;
     internal bool JoinAttempted { get; private set; }
     internal string ControlContext { get; set; } = "";
@@ -116,6 +117,7 @@ public class SignalRClient : IAsyncDisposable
     public event Action<int>? OnMemberLogSubscribersChanged;
     /// <summary>有成员请求我的日志文件列表（远程日志下载·被下载端）。参数：requesterUid, requestId。</summary>
     public event Action<string, string>? OnMemberLogFilesRequested;
+    public event Action<string, string, System.Text.Json.Nodes.JsonObject, DateTimeOffset, string, string>? OnDodocoRequested;
     /// <summary>收到成员日志文件列表应答（远程日志下载·下载端，按 RequestId 认领）。</summary>
     public event Action<MemberLogFileList>? OnMemberLogFileList;
     /// <summary>有成员请求下载我的某个日志文件（被下载端）。参数：requesterUid, requestId, fileName。</summary>
@@ -383,6 +385,11 @@ public class SignalRClient : IAsyncDisposable
                 }
                 case GatewayProtocol.Events.LogSubscribersChanged:
                     OnMemberLogSubscribersChanged?.Invoke(env.GetInt("count"));
+                    break;
+                case "dodoco.requested":
+                    if (DateTimeOffset.TryParse(env.GetString("expiresAtUtc"), out var deadline))
+                        OnDodocoRequested?.Invoke(env.GetString("requestId"), env.GetString("operation"),
+                            env.Get<System.Text.Json.Nodes.JsonObject>("args") ?? new(), deadline, env.GetString("requesterConnectionId"), env.RoomCode ?? "");
                     break;
                 case GatewayProtocol.Events.LogFilesRequested:
                     OnMemberLogFilesRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"));
@@ -951,6 +958,12 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>应答日志文件列表（被下载端）。未连接静默跳过。</summary>
+    public async Task ReportDodocoAsync(string requestId, string status, string? errorCode, string message, object? data)
+    {
+        if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间未连接");
+        await _gateway.InvokeCommandAsync("dodoco.respond", new { roomCode = _roomCode, requestId, status, errorCode, message, data });
+    }
+
     public async Task ReportMemberLogFilesAsync(string requestId, List<MemberLogFileDescriptor> files)
     {
         if (_logFileUnsupported) return;
