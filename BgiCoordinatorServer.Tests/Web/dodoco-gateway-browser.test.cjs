@@ -122,17 +122,8 @@ async function freePort() {
     await page.locator('#dodocoFrames img').waitFor({state:'visible'});
     await page.waitForFunction(() => document.querySelector('#dodocoFrames img')?.naturalWidth === 16);
     assert.equal(await page.evaluate(()=>dodoco.frames.get('sim_member')[0].uid),uid);
-    // 异常监控页只作用于本机助手：服务器中转时不显示成员选择，也不向其他成员发 watch.* 请求。
-    const watchOpsBefore=await sim.evaluate(()=>window.sim.operations.filter(o=>o.startsWith('watch.')).length);
-    await page.locator('[data-tab="watch"]').click();
-    assert.equal(await page.locator('#dodocoMember').count(),0,'异常监控不应出现成员选择');
-    await page.locator('#dodocoContent').getByText(/只作用于本机助手/).waitFor();
-    await page.waitForTimeout(300);
-    assert.equal(await sim.evaluate(()=>window.sim.operations.filter(o=>o.startsWith('watch.')).length),watchOpsBefore,'异常监控不得远程请求其他成员');
-    // 以下沿用真实网关往返验证 watch 协议与诊断包（同一界面挂在本机直连上使用），测试中用钩子临时把目标设为模拟成员。
-    await page.evaluate(u=>{dodoco.tab='watch';dodoco.watchPrev=undefined;dodocoWatchTarget=()=>{};dodoco.target=u;dodocoRender();},uid);
-    await page.locator('#watchRefresh').click();
-    await page.locator('.dodoco-rule-list').getByText('模拟警告规则',{exact:false}).first().waitFor();
+    await page.locator('[data-tab="watch"]').click(); await page.locator('#watchRefresh').click();
+    await page.getByText('模拟警告规则',{exact:false}).first().waitFor();
     await page.getByText('模拟异常记录正文',{exact:true}).waitFor();
     // Only the alert interval is shortened in the test page; production keeps its 15-second cadence.
     await page.evaluate(() => { const original=window.setTimeout; window.setTimeout=(fn,ms,...args)=>original(fn,ms===15000?120:ms,...args); });
@@ -147,7 +138,7 @@ async function freePort() {
     const operationsAfterLeave=await sim.evaluate(()=>window.sim.operations.length);
     await page.waitForTimeout(350);
     assert.equal(await sim.evaluate(()=>window.sim.operations.length),operationsAfterLeave,'切页后不得继续轮询');
-    await page.evaluate(u=>{dodoco.tab='watch';dodoco.target=u;dodocoRender();},uid);
+    await page.locator('[data-tab="watch"]').click();
     await sim.evaluate(()=>window.sim.mode='denied');
     await page.locator('#watchAlertToggle').click();
     await page.locator('#watchAlertStatus').getByText(/告警监视未能继续.*共享未开启/).waitFor({timeout:5000});
@@ -195,7 +186,7 @@ async function freePort() {
     await page.locator('#watchName').fill('模拟新增规则');
     await page.locator('#watchPattern').fill('测试');
     await page.locator('#watchSaveRule').click();
-    await page.locator('.dodoco-rule-list').getByText('模拟新增规则',{exact:false}).first().waitFor();
+    await page.getByText('模拟新增规则',{exact:false}).first().waitFor();
     await sim.evaluate(()=>{window.sim.diagnosticMode='pause';window.sim.diagnosticEvents=[];});
     await page.locator('#diagnosticDownload').click();
     await sim.waitForFunction(()=>window.sim.diagnosticEvents.some(e=>e.operation==='watch.diagnostic.chunk'));

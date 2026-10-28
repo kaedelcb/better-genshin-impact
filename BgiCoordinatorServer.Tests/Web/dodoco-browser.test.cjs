@@ -37,15 +37,21 @@ const {fixture}=require('../../Test/IpcChannelContractAudit/web-gengdi-fixture.c
  await p.locator('#dodocoSearch').fill('');await p.locator('#dodocoLocal').setInputFiles({name:'sample.log',mimeType:'text/plain',buffer:Buffer.from('[10:00:00] [INF] 示例日志\n[10:01:00] [WRN] 带关键词的长日志')});
  await p.waitForFunction(()=>document.querySelector('#dodocoFileText')?.textContent.includes('带关键词'));
  await p.setViewportSize({width:375,height:1000});assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'file horizontal overflow');images['files-375.png']=(await p.screenshot({fullPage:true})).toString('base64');
- // 异常监控只作用于本机助手：服务器中转页面没有本机连接时，不显示成员选择、不向其他成员发请求。
- const watchCallsBefore=await p.evaluate(()=>gatewayCalls.filter(x=>x.name==='dodoco.request'&&String(x.payload.operation).startsWith('watch.')).length);
- await p.locator('[data-tab="watch"]').click();
- assert.equal(await p.locator('#dodocoMember').count(),0,'异常监控不应出现成员选择');
- assert.match(await p.locator('.dd-own-target').textContent(),/未连接本机助手/);
- assert.match(await p.locator('#dodocoContent').textContent(),/只作用于本机助手/);
- assert.equal(await p.evaluate(()=>gatewayCalls.filter(x=>x.name==='dodoco.request'&&String(x.payload.operation).startsWith('watch.')).length),watchCallsBefore,'异常监控不得向其他成员发请求');
- for(const width of [375,1440]){await p.setViewportSize({width,height:1000});await p.waitForTimeout(100);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'watch horizontal overflow');images[`watch-${width}.png`]=(await p.screenshot({fullPage:true})).toString('base64');}
- await p.locator('[data-tab="members"]').click();await p.locator('#dodocoMember').selectOption('a');
+ await p.locator('[data-tab="watch"]').click();await p.locator('#watchRefresh').click();
+ const watch=await p.evaluate(()=>gatewayCalls.filter(x=>x.name==='dodoco.request').at(-1).payload);
+ await p.evaluate(x=>emit('dodoco.result',{requestId:x.requestId,status:'ok',data:{rules:[{id:'1',name:'非常长的异常规则名称'.repeat(10),pattern:'关键词'.repeat(60),minLevel:'ERR',enabled:true}],settings:{muteAll:false,incidentSnapshotEnabled:true,incidentBufferSeconds:30,incidentCaptureIntervalSeconds:1,incidentPreSeconds:5,incidentPostSeconds:5,incidentRetentionCount:10,stallThresholdMinutes:3},dates:['2026-10-29']}}),watch);
+ await p.waitForSelector('#watchSaveSettings');
+ await p.waitForFunction(()=>gatewayCalls.some(x=>x.name==='dodoco.request' && x.payload.operation==='watch.records'));
+ const initialRecords=await p.evaluate(()=>gatewayCalls.filter(x=>x.name==='dodoco.request'&&x.payload.operation==='watch.records').at(-1).payload);
+ await p.evaluate(x=>emit('dodoco.result',{requestId:x.requestId,status:'ok',data:{records:[],total:0,offset:0,limit:50}}),initialRecords);
+ await p.locator('#watchFilter').fill('测试关键词');await p.locator('#watchRecordRule').selectOption('1');await p.locator('#watchRecordLevel').selectOption('ERR');await p.locator('#watchLoadRecords').click();
+ const filteredRecords=await p.evaluate(()=>gatewayCalls.filter(x=>x.name==='dodoco.request'&&x.payload.operation==='watch.records').at(-1).payload);
+ assert.equal(filteredRecords.args.keyword,'测试关键词');assert.equal(filteredRecords.args.ruleId,'1');assert.equal(filteredRecords.args.level,'ERR');
+ await p.evaluate(x=>emit('dodoco.result',{requestId:x.requestId,status:'ok',data:{records:[],total:0,offset:0,limit:50}}),filteredRecords);
+ for(const width of [375,1440]){await p.setViewportSize({width,height:1000});await p.waitForTimeout(100);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'watch horizontal overflow');if(width===375)assert.ok(await p.locator('#diagnosticStart').evaluate(x=>x.clientWidth)>220,'mobile diagnostic date and time need full width');images[`watch-${width}.png`]=(await p.screenshot({fullPage:true})).toString('base64');}
+ assert.equal(await p.locator('#diagnosticDownload').isVisible(),true);
+ assert.equal(await p.locator('#watchAlertToggle').isVisible(),true);
+ assert.match(await p.locator('#watchAlertStatus').textContent(),/15 秒/);
  await p.locator('[data-tab="members"]').click();
  assert.match(await p.locator('#dodocoContent').textContent(),/BGI：运行中/);
  assert.match(await p.locator('#dodocoContent').textContent(),/状态待确认/);

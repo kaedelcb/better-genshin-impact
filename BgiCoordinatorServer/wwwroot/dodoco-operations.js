@@ -12,11 +12,7 @@ function watchStopAlerts(message) {
 }
 function dodocoRenderWatch() {
     if (watchState.target !== dodoco.target) { watchStopAlerts(); Object.assign(watchState,{ target:dodoco.target, rules:[], settings:null, dates:[], records:[], date:'', offset:0, total:0, cursors:[null], page:0, nextCursor:null, keyword:'', level:'', ruleId:'', editing:null, frames:[], record:null }); }
-    if (!dodoco.target) {
-        d('dodocoContent').innerHTML = `<section class="dd-card dd-empty-card"><h2>异常监控只作用于本机助手</h2><p class="dodoco-hint">规则、设置和异常记录都保存在你自己的电脑上，不连接其他成员。请在这台电脑的助手里打开「设置 → 本机网页」，即可在网页中管理本机的异常监控。</p></section>`;
-        return;
-    }
-    d('dodocoContent').innerHTML = `<section class="dd-card dd-watch-bar"><header class="dd-card-head"><div><h2>异常监控</h2><p class="dodoco-hint">本机直连：规则、设置和记录都作用于这台电脑的助手</p></div><div class="dd-actions"><button id="watchAlertToggle" class="dd-btn">${watchAlerts.timer?'停止网页告警监视':'开启网页告警监视'}</button><button id="watchRefresh" class="dd-btn dd-btn-primary">读取规则与设置</button></div></header><div class="dd-alert-opts"><label class="dd-check"><input id="watchAlertSound" type="checkbox" ${watchAlerts.sound!==false?'checked':''}>提示音</label><label class="dd-check"><input id="watchAlertNotify" type="checkbox" ${watchAlerts.notify?'checked':''}>浏览器通知</label></div><p id="watchAlertStatus" class="dd-alert-line" role="status" aria-live="polite">${watchAlerts.timer?'网页告警监视中。':'网页告警监视未开启；开启后每 15 秒检查最近 100 条记录，仅在本页显示新告警。'}</p></section><div id="watchBody"><p class="dd-empty dd-card">点击“读取规则与设置”后，在这里管理监控规则、异常记录和诊断包</p></div>`;
+    d('dodocoContent').innerHTML = `<section class="dd-card dd-watch-bar"><header class="dd-card-head"><div><h2>异常监控</h2><p class="dodoco-hint">${watchIsLocal()?'本机直连：操作作用于本机助手':'需成员在 PC 助手中允许远程访问；规则、设置和记录都作用于所选成员'}</p></div><div class="dd-actions"><button id="watchAlertToggle" class="dd-btn">${watchAlerts.timer?'停止网页告警监视':'开启网页告警监视'}</button><button id="watchRefresh" class="dd-btn dd-btn-primary">读取规则与设置</button></div></header><div class="dd-alert-opts"><label class="dd-check"><input id="watchAlertSound" type="checkbox" ${watchAlerts.sound!==false?'checked':''}>提示音</label><label class="dd-check"><input id="watchAlertNotify" type="checkbox" ${watchAlerts.notify?'checked':''}>浏览器通知</label></div><p id="watchAlertStatus" class="dd-alert-line" role="status" aria-live="polite">${watchAlerts.timer?'网页告警监视中。':'网页告警监视未开启；开启后每 15 秒检查最近 100 条记录，仅在本页显示新告警。'}</p></section><div id="watchBody"><p class="dd-empty dd-card">点击“读取规则与设置”后，在这里管理监控规则、异常记录和诊断包</p></div>`;
     d('watchRefresh').onclick=watchLoad;
     d('watchAlertSound').onchange=e=>{watchAlerts.sound=e.target.checked;};
     d('watchAlertNotify').onchange=async e=>{watchAlerts.notify=e.target.checked;if(!e.target.checked)return;if(!('Notification' in window)){e.target.checked=watchAlerts.notify=false;watchStatus('此浏览器不支持系统通知。');return;}if(Notification.permission==='default')await Notification.requestPermission();if(Notification.permission!=='granted'){e.target.checked=watchAlerts.notify=false;watchStatus('浏览器未允许通知；可在地址栏的网站权限中开启。');}};
@@ -197,7 +193,7 @@ async function watchClear() {
 /** 跳到日志浏览：下载记录来源文件（本机直连读本机日志；远程向成员请求同名文件），再按命中行搜索定位。 */
 async function watchJump(record) {
     const name=String(record.sourceFile).split(/[\\/]/).pop(), needle=(record.matchedLine||record.message||'').slice(0,120);
-    dodoco.watchPrev=undefined;dodoco.tab='files';dodocoRender();dodocoStatus(`正在打开 ${name} 并定位记录…`);
+    dodoco.tab='files';dodocoRender();dodocoStatus(`正在打开 ${name} 并定位记录…`);
     try{
         if(!dodoco.files.length)await dodocoLoadFiles();
         const file=dodoco.files.find(f=>f.name===name);
