@@ -6,3 +6,37 @@
 @media(max-width:700px){.dodoco-heading{align-items:start;flex-direction:column}.dodoco-panel{padding:14px}.dodoco-columns{grid-template-columns:1fr}.dodoco-file-list{max-height:220px}.dodoco-controls label{min-width:120px}.dodoco-log{height:48vh}.product-nav button{flex:1}.dodoco-tabs{margin-inline:-4px;flex-wrap:wrap;overflow:visible;gap:2px}.dodoco-tabs button{flex:1 0 28%;text-align:center}}
 @media(max-width:700px){.dodoco-frame-card .dodoco-controls label,.dodoco-controls label:has(input[type=datetime-local]){flex:1 1 100%}}
 .dodoco-operation-section{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#1b1c30;min-width:0}.dodoco-checks{display:flex;flex-wrap:wrap;gap:8px 18px}.dodoco-checks label{display:flex;align-items:center;gap:8px;min-height:44px}.dodoco-record-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}#dodocoFrames{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.dodoco-frame-card{padding:14px;border:1px solid var(--line);border-radius:10px;min-width:0}
+
+/* 精修：子标签改为分段控件，手机一行可横滑，成员选择与标签同排。 */
+.dodoco-tabs{gap:4px;padding:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:11px;background:#1b1c31;scrollbar-width:none}
+.dodoco-tabs::-webkit-scrollbar{display:none}
+.dodoco-tabs button{min-height:38px;padding:4px 16px;border-radius:8px;font-size:14px}
+.dodoco-tabs button.active{border-bottom:0;background:#35324a;color:var(--gold)}
+.dodoco-panel{padding:16px 18px}
+.dodoco-target{margin:0 0 4px}
+.dodoco-target label{max-width:360px}
+.dodoco-panel h2{font-size:17px;margin:10px 0 2px}
+.dodoco-hint{font-size:13px;line-height:1.6}
+.dodoco-controls{gap:8px}
+.dodoco-controls label{font-size:13px}
+.dodoco-controls button,.dodoco-actions button{min-height:44px;padding:6px 14px;font-size:14px}
+.dodoco-controls button:hover,.dodoco-actions button:hover{border-color:#82734c}
+.dodoco-status{font-size:13px}
+.dodoco-log{font-size:13px}
+@media(max-width:700px){
+  .dodoco-tabs{flex-wrap:nowrap;overflow-x:auto;margin-inline:0;gap:4px}
+  .dodoco-tabs button{flex:0 0 auto;padding:4px 14px}
+  .dodoco-panel{padding:14px}
+  .dodoco-target label{max-width:none}
+}
+@media(max-width:700px){
+  .topbar .product-nav .nav-long{display:none}
+  .dodoco-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));overflow:visible}
+  .dodoco-tabs button{padding:4px 2px;font-size:13px}
+  .dodoco-controls>button{flex:1 1 auto}
+  .dodoco-actions>button{flex:1}
+}
+.dodoco-controls input[type=file]{min-height:44px;padding:5px 8px;border:1px dashed #56556c;border-radius:8px;background:#181a2d;color:var(--muted);font-size:13px}
+.dodoco-controls input[type=file]::file-selector-button{min-height:32px;margin-right:10px;padding:4px 12px;border:1px solid var(--line);border-radius:7px;background:var(--raised);color:var(--text);font:inherit;cursor:pointer}
+.dodoco-controls input[type=file]::file-selector-button:hover{border-color:#82734c}
+.dodoco-controls input[type=time],.dodoco-controls input[type=datetime-local]{min-height:44px}
