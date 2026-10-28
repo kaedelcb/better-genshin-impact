@@ -192,7 +192,7 @@ public sealed class MojangPickLoop
 
         if (testMode)
         {
-            DrawTest(foundRectArea, null);
+            DrawTest(TaskContext.Instance().Runtime?.MaskWindowDrawingBoard, content.CaptureRectArea, foundRectArea, null);
         }
 
         // 有 F 图标：内层识别右侧物品（占位：识别到即视为需要交互，后续再细化判定）
@@ -236,7 +236,7 @@ public sealed class MojangPickLoop
 
         if (testMode)
         {
-            DrawTest(foundRectArea, r.Region);
+            DrawTest(TaskContext.Instance().Runtime?.MaskWindowDrawingBoard, content.CaptureRectArea, foundRectArea, r.Region);
             LogDetail(r);
         }
         else if (LogLevel >= 2)
@@ -587,15 +587,13 @@ public sealed class MojangPickLoop
     /// <summary>
     /// 测试模式：在遮罩窗口绘制 F 键区域（青色）与识别的物品区域（绿色）。
     /// </summary>
-    private static void DrawTest(Region fRegion, OpenCvSharp.Rect? itemRect)
+    internal static void DrawTest(IMaskWindowDrawingBoard? board, Region captureRegion, Region fRegion, OpenCvSharp.Rect? itemRect)
     {
-        var board = TaskContext.Instance().Runtime?.MaskWindowDrawingBoard;
         if (board is null) return;
         board.Set("MojangTestF", fRegion.SelfToMaskWindowDrawingRect(System.Drawing.Pens.Cyan));
         if (itemRect is { } rect)
         {
-            using var item = new Region(rect.X, rect.Y, rect.Width, rect.Height, fRegion.Prev);
-            board.Set("MojangTestItem", item.SelfToMaskWindowDrawingRect(System.Drawing.Pens.Lime));
+            board.Set("MojangTestItem", captureRegion.ToMaskWindowDrawingRect(rect, System.Drawing.Pens.Lime));
         }
         else board.Clear("MojangTestItem");
     }
