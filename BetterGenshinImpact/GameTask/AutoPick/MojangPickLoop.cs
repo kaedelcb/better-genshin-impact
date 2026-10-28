@@ -51,6 +51,8 @@ public sealed class MojangPickLoop
 
     private readonly ILogger _logger = App.GetLogger<MojangPickLoop>();
     private MojangPickExecution? _execution;
+    private long _lastDiagnosticFrameMs = long.MinValue;
+    internal bool IsDiagnosticFrame { get; private set; }
     private long _lastScrollDecisionLogMs = long.MinValue;
     private long _lastMissingKeyDecisionLogMs = long.MinValue;
 
@@ -162,6 +164,18 @@ public sealed class MojangPickLoop
     {
         _execution = execution;
         SyncGroupFilter();
+        var diagnosticNow = Environment.TickCount64;
+        IsDiagnosticFrame = _logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)
+            && (_lastDiagnosticFrameMs == long.MinValue || diagnosticNow - _lastDiagnosticFrameMs >= 2000);
+        if (IsDiagnosticFrame)
+        {
+            _lastDiagnosticFrameMs = diagnosticNow;
+            var cfg = TaskContext.Instance().Config.AutoPickConfig;
+            _logger.LogDebug("本体模板拾取诊断 v2：帧={Frame} 有F={HasKey} F位置=({X},{Y}) 截图=({W},{H}) 缩放={Scale} 测试模式={Test} 二次确认={Confirm} 连点间隔={Repeat} 拾取后等待={Delay} 配置组={Group}",
+                content.FrameIndex, !foundRectArea.IsEmpty(), foundRectArea.X, foundRectArea.Y,
+                content.CaptureRectArea.Width, content.CaptureRectArea.Height, scale,
+                cfg.TestModeEnabled, cfg.ConfirmInterval, cfg.RepeatFInterval, cfg.InteractionDelay, _filter.CurrentGroupName ?? "无");
+        }
 
         var testMode = TaskContext.Instance().Config.AutoPickConfig.TestModeEnabled;
         if (!testMode)
@@ -199,6 +213,7 @@ public sealed class MojangPickLoop
 
         // 有 F 图标：内层识别右侧物品（占位：识别到即视为需要交互，后续再细化判定）
         var result = MojangMatch.Instance.Match(content.CaptureRectArea.SrcMat, foundRectArea, scale);
+        TraceCandidate(content, "当前", 0, result);
 
         if (result is null)
         {
@@ -366,6 +381,7 @@ public sealed class MojangPickLoop
             using var region = new Region(foundRectArea.X, foundRectArea.Y + (int)(ItemStepY * scale) * k, foundRectArea.Width, foundRectArea.Height);
             // 扫描行不缓存未知识别区域截图，避免覆盖 F 行缓存
             var m = MojangMatch.Instance.Match(content.CaptureRectArea.SrcMat, region, scale, cacheUnknownRoi: false);
+            TraceCandidate(content, "下方", k, m);
             if (m is not { } mr)
             {
                 continue;
@@ -410,6 +426,16 @@ public sealed class MojangPickLoop
     internal static bool RecoverMissingPickKey(bool hasScrollIcon, MojangPickExecution execution)
         => hasScrollIcon && execution.ScrollDelta(240) && execution.Wait(50);
 
+    private void TraceCandidate(CaptureContent content, string direction, int row, MojangMatchResult? result)
+    {
+        if (!IsDiagnosticFrame) return;
+        var cfg = TaskContext.Instance().Config.AutoPickConfig;
+        _logger.LogDebug("本体模板拾取候选：帧={Frame} 位置={Direction} 行距={Row} 名称={Name} 分数={Score} 是否交互={Allowed} 判定={Reason}",
+            content.FrameIndex, direction, row, result?.Name ?? "未匹配", result?.Score,
+            result is { } r && ShouldInteract(r.Name),
+            result is not { } match ? "没有匹配结果" : cfg.TestModeEnabled ? "测试模式禁止输入" : _filter.DescribeDecision(match.Name));
+    }
+
     private void LogScrollDecision(CaptureContent content, Region fRegion, double scale, string reason, int times,
         bool up = false, int? distance = null, int? afterInterval = null, int? interval = null)
     {
@@ -417,7 +443,7 @@ public sealed class MojangPickLoop
         var now = Environment.TickCount64;
         var missingKey = fRegion.IsEmpty();
         var lastLog = missingKey ? _lastMissingKeyDecisionLogMs : _lastScrollDecisionLogMs;
-        if (lastLog != long.MinValue && now - lastLog < 2000) return;
+        if (!IsDiagnosticFrame && lastLog != long.MinValue && now - lastLog < 2000) return;
         if (missingKey) _lastMissingKeyDecisionLogMs = now;
         else _lastScrollDecisionLogMs = now;
         var config = TaskContext.Instance().Config.AutoPickConfig;
@@ -446,6 +472,7 @@ public sealed class MojangPickLoop
             using var region = new Region(foundRectArea.X, y, foundRectArea.Width, foundRectArea.Height);
             // 扫描行不缓存未知识别区域截图，避免覆盖 F 行缓存
             var m = MojangMatch.Instance.Match(content.CaptureRectArea.SrcMat, region, scale, cacheUnknownRoi: false);
+            TraceCandidate(content, "上方", k, m);
             if (m is { } mr)
             {
                 if (TaskContext.Instance().Config.AutoPickConfig.TestModeEnabled || LogLevel >= 2)
@@ -623,6 +650,8 @@ public sealed class MojangPickLoop
         _skipConfirm = false;
         _unknownStreak = 0;
         _execution = null;
+        IsDiagnosticFrame = false;
+        _lastDiagnosticFrameMs = long.MinValue;
         _lastScrollDecisionLogMs = long.MinValue;
         _lastMissingKeyDecisionLogMs = long.MinValue;
         _filter.SetCurrentGroup(null, null);

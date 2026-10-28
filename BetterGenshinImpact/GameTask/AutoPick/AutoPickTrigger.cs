@@ -276,7 +276,7 @@ public partial class AutoPickTrigger : ITaskTrigger
                     // 无 F 恢复独立限频，避免被此前的普通滚动日志吞掉。
                     var missingKey = foundRectArea.IsEmpty();
                     var lastLog = missingKey ? _lastMojangMissingKeyLogMs : _lastMojangScrollLogMs;
-                    if (lastLog != long.MinValue && now - lastLog < 2000) return;
+                    if (!(_mojangPickLoop?.IsDiagnosticFrame ?? false) && lastLog != long.MinValue && now - lastLog < 2000) return;
                     if (missingKey) _lastMojangMissingKeyLogMs = now;
                     else _lastMojangScrollLogMs = now;
                     _logger.LogDebug(

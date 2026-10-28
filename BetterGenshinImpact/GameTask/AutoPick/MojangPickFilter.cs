@@ -35,6 +35,16 @@ public sealed class MojangPickFilter
         return !_globalBlackList.Contains(name) && !DefaultBlackList.Contains(name);
     }
 
+    internal string DescribeDecision(string name)
+    {
+        if (!_loaded) return "名单尚未加载";
+        if (_groupBlackList.Contains(name)) return "配置组黑名单";
+        if (_groupWhiteList.Contains(name)) return "配置组白名单放行";
+        if (_globalBlackList.Contains(name)) return "全局模板黑名单";
+        if (DefaultBlackList.Contains(name)) return "内置默认黑名单";
+        return "允许拾取";
+    }
+
     public void AddToBlackList(IEnumerable<string> names) { Update(names, []); Init(); }
     public static HashSet<string> Load() { lock (FileGate) return LoadCore(); }
 
