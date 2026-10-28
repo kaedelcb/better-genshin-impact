@@ -1,10 +1,15 @@
 'use strict';
 $('liveTab').addEventListener('click', () => setView('live'));
+$('backToOverview').addEventListener('click',()=>{liveDetailOpen=false;render();});
+$('openWorkbench').addEventListener('click',()=>{liveDetailOpen=true;render();});
+$('overviewSearch').addEventListener('input',()=>{$('search').value=$('overviewSearch').value;queries.live=$('search').value;selected.live=null;render();});
+$('overviewType').addEventListener('change',()=>{$('roomType').value=$('overviewType').value;selected.live=null;render();});
+$('overviewFilter').addEventListener('change',()=>{$('filter').value=$('overviewFilter').value;selected.live=null;render();});
 $('historyTab').addEventListener('click', () => setView('history'));
 $('findLogs').addEventListener('click', () => { setView('history'); $('archiveCode')?.focus(); });
-$('search').addEventListener('input', () => { queries[view] = $('search').value; selected[view] = null; unlinkedPage = 0; render(); });
-$('filter').addEventListener('change', () => { selected.live = null; render(); });
-$('roomType').addEventListener('change', () => { selected.live = null; render(); });
+$('search').addEventListener('input', () => { if(view==='live')$('overviewSearch').value=$('search').value; queries[view] = $('search').value; selected[view] = null; unlinkedPage = 0; render(); });
+$('filter').addEventListener('change', () => { selected.live = null; $('overviewFilter').value=$('filter').value; render(); });
+$('roomType').addEventListener('change', () => { selected.live = null; $('overviewType').value=$('roomType').value; render(); });
 $('refresh').addEventListener('click', () => { load(); if (view === 'history') { loadDaily(); loadArchive(); } });
 $('logout').addEventListener('click', async () => {
   try {

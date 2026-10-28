@@ -5,6 +5,7 @@ const memberStates = { Waiting: '等待', Ready: '就绪', Pathing: '路径中',
 let snapshot = null, dailySnapshot = null, view = 'live';
 const selected = { live: null, history: null }, queries = { live: '', history: '' }, openBatches = new Map();
 let historyRequest = 0, liveRequest = 0, historyLoading = false, archiveLoaded = false, archiveRooms = [], unlinkedPage = 0;
+let liveDetailOpen = false;
 let liveLoading = false, historyDateLoading = null, historyController = null;
 function node(tag, className, value) {
   const item = document.createElement(tag);
@@ -193,7 +194,26 @@ async function loadArchive() {
     }
   } catch { const status = $('archiveStatus'); if (status) status.textContent = '历史目录读取失败，仍可输入房间号查询。'; }
 }
+function renderOverview() {
+  const box=$('overviewRooms'),items=entries(),focusKey=document.activeElement?.closest('.overview-card')?.dataset.key;
+  items.sort((a,b)=>Number(b.type==='control'?b.room.autoHoeingRunning:b.room.status==='started')-Number(a.type==='control'?a.room.autoHoeingRunning:a.room.status==='started'));
+  box.replaceChildren();$('overviewCount').textContent=`${items.length} 个匹配房间`;
+  if(!items.length){box.append(node('div','empty',snapshot?'没有符合条件的房间':'正在读取房间…'));return;}
+  for(const entry of items){
+    const r=entry.room,game=entry.type==='game',running=game?r.status==='started':r.autoHoeingRunning;
+    const card=node('button','overview-card'+(running?' running':''));card.type='button';card.dataset.key=entry.key;
+    const top=node('div','overview-card-top');top.append(node('h3','mono',r.code),pill(game?(labels[r.status]||'未知'):running?'锄地中':r.onlineCount?'未上报锄地中':'无人在线',game?r.status:running?'running':r.onlineCount?'':'disconnected'));card.append(top);
+    card.append(node('div','history-note',`${game?'世界':'助手'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`),memberSummary(r.members));
+    card.append(node('div','history-note',game?(r.worldRound?`世界轮次 ${r.worldRound} · `:'')+`线路 ${route(r)}`:AdminHoeingHistory.overview(r.todayHoeing)));
+    const foot=node('div','overview-card-foot');foot.append(node('span','',`最近状态 ${heartbeat(r.lastHeartbeatUtc)}`),node('span','','查看房间详情'));card.append(foot);
+    card.addEventListener('click',()=>{selected.live=entry.key;liveDetailOpen=true;render();});box.append(card);
+  }
+  if(focusKey)box.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
+}
 function render() {
+  const overview=view==='live'&&!liveDetailOpen;$('liveOverview').hidden=!overview;$('workbench').hidden=overview;$('backToOverview').hidden=view!=='live'||overview;
+  if(view==='live'){$('viewTitle').textContent=overview?'实时房间':'房间详情';$('viewHint').textContent=overview?'查看全部房间和当前锄地状态':'选择左侧房间，在右侧查看状态与成员';}
+  if(overview){renderOverview();return;}
   const list = $('rooms'), detail = $('detail'), listScroll = list.scrollTop, detailScroll = detail.scrollTop, items = entries();
   // 刷新时房间消失不偷偷换成另一个房间；筛选或主动选择时才重置。
   if (selected[view] === null) selected[view] = items[0]?.key || null;
@@ -278,10 +298,11 @@ function renderUnlinked(panel) {
   }
 }
 function setView(next) {
+  if (next === 'live') liveDetailOpen = false;
   if (view !== next) { queries[view] = $('search').value; view = next; $('search').value = queries[view]; }
   $('liveTab').setAttribute('aria-pressed', String(view === 'live')); $('historyTab').setAttribute('aria-pressed', String(view === 'history'));
   $('historyControls').hidden = view !== 'history'; $('liveFilters').hidden = view !== 'live';
-  $('viewTitle').textContent = view === 'history' ? '历史与日志' : '房间工作台';
+  $('viewTitle').textContent = view === 'history' ? '历史与日志' : '实时房间';
   $('viewHint').textContent = view === 'history' ? '先选日期和助手房间，再查看批次与世界日志' : '选择左侧房间，在右侧查看状态与成员';
   $('directoryTitle').textContent = view === 'history' ? '已保存房间' : '当前房间';
   $('search').placeholder = view === 'history' ? '房间号、成员或批次 ID' : '搜索房间号、昵称或 UID'; render();

@@ -1,3 +1,10 @@
+/* 实时页同时展示所有房间，历史与日志仍使用工作台。 */
+.live-overview{flex:1;min-height:0;overflow:auto;padding:2px 3px 20px;scrollbar-gutter:stable}
+.overview-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.overview-filters{display:flex;gap:8px;flex-wrap:wrap}.overview-filters input{min-width:230px}.overview-rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:12px;align-content:start}
+.overview-card{min-width:0;display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px;text-align:left;color:var(--text)}
+.overview-card:hover{border-color:#9c8754}.overview-card.running{border-color:#518b7a}.overview-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.overview-card h3{font-size:17px}.overview-card .member-summary{margin:0}.overview-card .history-note{overflow-wrap:anywhere}.overview-card-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:9px;display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}.overview-card-foot span:last-child{color:var(--gold)}
+@media(max-width:760px){.live-overview{overflow:visible}.overview-filters{width:100%}.overview-filters input{width:100%;min-width:0}.overview-filters select{flex:1}.overview-rooms{grid-template-columns:1fr}}
 /* B 房间工作台：沿用助手的紫金色，目录与详情在桌面分别滚动。 */
 :root{
   color-scheme:dark;

@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141527">
-<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-b">
+<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-overview">
 </head><body>
 <!-- B 房间工作台：同屏只查看一个房间；实时与历史独立选择。紫金色沿用助手网页。 -->
 <div class="app">
@@ -10,10 +10,14 @@
 <div class="sidebar-foot"><p>管理员只读视图</p><p>按北京时间查询服务器保存的记录。</p></div></aside>
 <main class="workspace">
 <header class="top"><div><h1>联机锄地全服监控</h1><p>查看房间状态，定位锄地记录与日志</p></div><div class="top-actions"><span id="updated" class="updated" aria-live="polite">正在连接服务器…</span><button id="refresh" class="button" type="button">刷新</button><button id="findLogs" class="button primary" type="button">查找日志</button><button id="logout" class="button" type="button">退出</button></div></header>
-<section class="metrics" aria-label="全服概况"><div class="metric"><span>在线助手房间</span><strong id="controlRooms">—</strong></div><div class="metric"><span>在线助手成员</span><strong id="controlMembers">—</strong></div><div class="metric"><span>游戏世界房间</span><strong id="totalRooms">—</strong></div><div class="metric"><span>已开锄且有人在线</span><strong id="startedRooms">—</strong></div></section>
+<section class="metrics" aria-label="全服概况"><div class="metric"><span>在线助手房间</span><strong id="controlRooms">—</strong></div><div class="metric"><span>在线助手成员</span><strong id="controlMembers">—</strong></div><div class="metric"><span>游戏世界房间</span><strong id="totalRooms">—</strong></div><div class="metric"><span>已开锄世界（有人在线）</span><strong id="startedRooms">—</strong></div></section>
 <div id="notice" class="notice" role="status" hidden></div>
-<div class="view-heading"><div><h2 id="viewTitle">房间工作台</h2><p id="viewHint">选择左侧房间，在右侧查看状态与成员</p></div><div id="historyControls" class="date-controls" hidden><label for="historyDate" class="muted">北京时间</label><input id="historyDate" type="date"><select id="historyDates" aria-label="已有记录日期"><option value="">选择已有记录日期</option></select><button id="historyToday" class="button" type="button">今天</button></div></div>
-<div class="workbench">
+<div class="view-heading"><div><h2 id="viewTitle">实时房间</h2><p id="viewHint">查看全部房间和当前锄地状态</p><button id="backToOverview" class="text-button" type="button" hidden>返回房间总览</button></div><div id="historyControls" class="date-controls" hidden><label for="historyDate" class="muted">北京时间</label><input id="historyDate" type="date"><select id="historyDates" aria-label="已有记录日期"><option value="">选择已有记录日期</option></select><button id="historyToday" class="button" type="button">今天</button></div></div>
+<section id="liveOverview" class="live-overview" aria-label="实时房间总览">
+  <div class="overview-toolbar"><div><h3>实时房间总览</h3><p class="history-note">所有房间的状态和成员一目了然，点击房间查看详情。</p></div><div class="overview-filters"><input id="overviewSearch" type="search" placeholder="搜索房间号、昵称或 UID" aria-label="搜索实时房间"><select id="overviewType" aria-label="实时房间类型"><option value="all">全部房间</option><option value="control">助手房间</option><option value="game">世界房间</option></select><select id="overviewFilter" aria-label="筛选实时状态"><option value="all">全部状态</option><option value="connected">有人在线</option><option value="started">锄地中</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option><option value="today">今日有记录</option></select><button id="openWorkbench" class="button" type="button">工作台视图</button></div></div>
+  <div id="overviewCount" class="directory-count" role="status"></div><div id="overviewRooms" class="overview-rooms"></div>
+</section>
+<div id="workbench" class="workbench" hidden>
 <section class="directory" aria-label="房间目录"><div class="directory-head"><h3 id="directoryTitle">当前房间</h3><input id="search" type="search" placeholder="搜索房间号、昵称或 UID" aria-label="搜索房间"><div id="liveFilters" class="directory-filters"><select id="roomType" aria-label="房间类型"><option value="all">全部房间</option><option value="control">助手房间</option><option value="game">世界房间</option></select><select id="filter" aria-label="筛选房间状态"><option value="all">全部状态</option><option value="connected">有人在线</option><option value="started">锄地中</option><option value="waiting">等待开锄</option><option value="disconnected">无人在线</option><option value="finished">本轮结束</option><option value="today">今日有记录</option></select></div><div id="directoryCount" class="directory-count" role="status">正在读取房间…</div></div><div id="rooms" class="room-list" aria-label="房间列表"></div></section>
 <section class="detail-panel" aria-label="所选房间详情"><div id="detail" class="detail-scroll" tabindex="-1"><div class="empty">正在读取房间信息…</div></div></section>
 </div></main></div>
@@ -100,7 +104,7 @@
     globalThis.AdminHoeingHistory = { runLabel, time, headline, overview, reasonText };
 })();
   </script>
-<script src="/admin-monitor-ui.js?v=20261029-b"></script>
+<script src="/admin-monitor-ui.js?v=20261029-overview"></script>
 <script src="/admin-monitor-logs.js?v=20261029-b"></script>
-<script src="/admin-monitor-events.js?v=20261029-b"></script>
+<script src="/admin-monitor-events.js?v=20261029-overview"></script>
 </body></html>
