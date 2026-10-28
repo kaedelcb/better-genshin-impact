@@ -25,7 +25,7 @@ public class Simulation
             if (IsKeyDown(key)) // 强制转换 VK 枚举为 int
             {
                 TaskControl.Logger.LogDebug($"解除{key}的按下状态.");
-                SendInput.Keyboard.KeyUp(key);
+                SendInput.Keyboard.KeyUp(ExtendedKeys.IsExtended(key), key);
             }
         }
 		SendInput.Mouse.LeftButtonUp();
