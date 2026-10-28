@@ -115,6 +115,9 @@ async function freePort() {
     await page.waitForFunction(() => document.querySelector('#dodocoFileStatus').textContent.includes('匹配 0 行'));
     await page.locator('#dodocoFrom').fill('11:59');
     await page.getByText('大日志末尾关键词',{exact:false}).waitFor({timeout:10000});
+    await page.locator('#dodocoSearch').fill('');await page.locator('#dodocoFrom').fill('');
+    await page.locator('#dodocoLocal').setInputFiles({name:'browser-local.log',mimeType:'text/plain',buffer:Buffer.from('[12:00:00.000] [INF] [Main] 浏览器本地文件')});
+    await page.getByText('浏览器本地文件',{exact:false}).waitFor({timeout:10000});
     await page.locator('[data-tab="screen"]').click(); await page.locator('#dodocoCapture').click();
     await page.locator('#dodocoFrames img').waitFor({state:'visible'});
     await page.waitForFunction(() => document.querySelector('#dodocoFrames img')?.naturalWidth === 16);
@@ -125,7 +128,7 @@ async function freePort() {
     // Only the alert interval is shortened in the test page; production keeps its 15-second cadence.
     await page.evaluate(() => { const original=window.setTimeout; window.setTimeout=(fn,ms,...args)=>original(fn,ms===15000?120:ms,...args); });
     await page.locator('#watchAlertToggle').click();
-    await page.locator('#watchAlertStatus').getByText(/仅提示开启后的新告警/).waitFor();
+    await page.locator('#watchAlertStatus').getByText(/仅提示建立基线后的新告警/).waitFor();
     await page.waitForTimeout(350);
     assert.doesNotMatch(await page.locator('#watchAlertStatus').textContent(),/新告警 [0-9]+ 条/);
     await sim.evaluate(()=>window.sim.alertRecords.unshift({time:'2026-10-29T12:01:00',ruleId:'rule1',ruleName:'模拟警告规则',level:'WRN',message:'新告警正文'}));
@@ -142,7 +145,7 @@ async function freePort() {
     assert.equal(await page.evaluate(()=>watchAlerts.timer),null);
     await sim.evaluate(()=>window.sim.mode='enabled');
     await page.locator('#watchAlertToggle').click();
-    await page.locator('#watchAlertStatus').getByText(/仅提示开启后的新告警/).waitFor({timeout:5000});
+    await page.locator('#watchAlertStatus').getByText(/仅提示建立基线后的新告警/).waitFor({timeout:5000});
     await page.evaluate(()=>window.testSockets.at(-1).close());
     await page.waitForFunction(()=>watchAlerts.timer===null,null,{timeout:5000});
     await page.waitForFunction(()=>roomReady,null,{timeout:15000});

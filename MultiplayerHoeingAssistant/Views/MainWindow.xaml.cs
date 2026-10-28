@@ -13,6 +13,24 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
+    private LocalBrowserBridge? _localBrowserBridge;
+
+    private void OpenLocalBrowserClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            _localBrowserBridge ??= new LocalBrowserBridge(
+                Dodoco.LocalBrowserService.ExecuteAsync, Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
+            var url = _localBrowserBridge.CreatePairingUrl();
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ViewModel.AddLog("本机网页打开失败：" + ex.Message);
+            MessageBox.Show(this, "无法打开本机网页：" + ex.Message, "本机网页", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private readonly System.Windows.Threading.DispatcherTimer _roomCodeCopyHintTimer = new()
     {
         Interval = TimeSpan.FromSeconds(1.5),
@@ -235,6 +253,7 @@ public partial class MainWindow : Window
         TagLog($"[app start] {System.DateTime.Now:HH:mm:ss.fff}");
         ViewModel = viewModel;
         Dodoco = new DodocoViewModel(viewModel);
+        Application.Current.Exit += (_, _) => _localBrowserBridge?.Dispose();
         // 槲寄生复用嘟嘟可的 BGI 日志 tail（单线程单文件句柄，多消费者订阅），供启动中心「日志触发器」盯新日志
         Mistletoe = new MistletoeViewModel(viewModel, Dodoco.LogTail);
         ActiveMistletoe = Mistletoe;

@@ -91,4 +91,21 @@
     <Compile Include="..\Test\OneDragonMigration\Core\OneDragonMigrationEngine.cs" Link="Services\TaskCenter\Migration\OneDragonMigrationEngine.cs" />
   </ItemGroup>
   <Import Project="..\Build\WindowsLauncherIntegrity.targets" />
+  <!-- 本机网页资源随助手内嵌，离线启动不依赖协调服务目录。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\local-dodoco.html" LogicalName="LocalBrowser/local-dodoco.html" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\local-dodoco.js" LogicalName="LocalBrowser/local-dodoco.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\local-dodoco.css" LogicalName="LocalBrowser/local-dodoco.css" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\signalr.min.js" LogicalName="LocalBrowser/signalr.min.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room.js" LogicalName="LocalBrowser/control-room.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-commands.js" LogicalName="LocalBrowser/control-room-commands.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-ui.js" LogicalName="LocalBrowser/control-room-ui.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room.css" LogicalName="LocalBrowser/control-room.css" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\project-star.css" LogicalName="LocalBrowser/project-star.css" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.js" LogicalName="LocalBrowser/dodoco-web.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.css" LogicalName="LocalBrowser/dodoco-web.css" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-operations.js" LogicalName="LocalBrowser/dodoco-operations.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-log-worker.js" LogicalName="LocalBrowser/dodoco-log-worker.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\gengdi-avatars\*.png" LogicalName="LocalBrowser/gengdi-avatars/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

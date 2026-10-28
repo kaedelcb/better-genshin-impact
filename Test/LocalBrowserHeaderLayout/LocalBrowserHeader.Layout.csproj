@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <BaseIntermediateOutputPath>obj/local-browser-header/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/local-browser-header/</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj" />
+    <Compile Include="../MultiplayerHoeingAssistant.UnitTest/ServiceTests/LocalBrowserHeaderLayout.cs" />
+  </ItemGroup>
+</Project>

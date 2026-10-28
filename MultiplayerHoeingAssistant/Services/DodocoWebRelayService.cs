@@ -21,6 +21,7 @@ public sealed class DodocoWebRelayService : IDisposable
     private bool _disposed;
     private readonly DiagnosticPackageService? _diagnostic;
     private DiagnosticCache? _diagnosticCache;
+    private DiagnosticCache? _localDiagnosticCache;
     private readonly object _cacheLock = new();
     private sealed class DiagnosticCache
     {
@@ -63,6 +64,9 @@ public sealed class DodocoWebRelayService : IDisposable
             if (cache != null && (!_settings.Current.ShareDodocoWeb || !_settings.Current.ShareLogFiles ||
                 now - cache.LastAccess > TimeSpan.FromSeconds(30) || now - cache.Created > TimeSpan.FromMinutes(5)))
                 _diagnosticCache = null;
+            var local = _localDiagnosticCache;
+            if (local != null && (now - local.LastAccess > TimeSpan.FromSeconds(30) ||
+                now - local.Created > TimeSpan.FromMinutes(5))) _localDiagnosticCache = null;
         }
     }
 
@@ -138,7 +142,26 @@ public sealed class DodocoWebRelayService : IDisposable
         => !cfg.ShareDodocoWeb ? "sharing_disabled" : (operation.StartsWith("report.", StringComparison.Ordinal) || operation.StartsWith("watch.diagnostic.", StringComparison.Ordinal)) && !cfg.ShareLogFiles
             ? "log_sharing_disabled" : null;
 
-    internal object Execute(string operation, JsonObject args, string requesterConnectionId = "", long epoch = 0, CancellationToken cancellationToken = default, string roomCode = "")
+    /// <summary>本机已配对网页复用同一业务实现；本机授权独立于房间共享开关。</summary>
+    internal async Task<object> ExecuteLocalAsync(string operation, JsonObject args, string sessionId, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(DodocoWebRelayService));
+            cancellationToken.ThrowIfCancellationRequested();
+            return Execute(operation, args, sessionId, 0, cancellationToken, "local", localAccess: true);
+        }
+        finally { _gate.Release(); }
+    }
+
+    internal void ReleaseLocalSession(string sessionId)
+    {
+        lock (_cacheLock)
+            if (_localDiagnosticCache?.Owner == sessionId) _localDiagnosticCache = null;
+    }
+
+    internal object Execute(string operation, JsonObject args, string requesterConnectionId = "", long epoch = 0, CancellationToken cancellationToken = default, string roomCode = "", bool localAccess = false)
     {
         switch (operation)
         {
@@ -191,11 +214,11 @@ public sealed class DodocoWebRelayService : IDisposable
             case "watch.rule.upsert":
                 var rule = args["rule"]?.Deserialize<WatchRule>(GatewayJson.Options) ?? throw new ArgumentException("缺少规则");
                 ValidateRule(rule);
-                _watch.MutateRuleForWeb(rule, null);
+                _watch.MutateRuleForWeb(rule, null, allowLocalObserver: localAccess);
                 return new { rule };
             case "watch.rule.delete":
                 var id = Text(args, "id", 64);
-                _watch.MutateRuleForWeb(null, id);
+                _watch.MutateRuleForWeb(null, id, allowLocalObserver: localAccess);
                 return new { id };
             case "watch.settings":
                 var settings = args["settings"] as JsonObject ?? throw new ArgumentException("缺少设置");
@@ -219,7 +242,7 @@ public sealed class DodocoWebRelayService : IDisposable
                 if (_diagnostic == null || string.IsNullOrEmpty(requesterConnectionId)) throw new InvalidOperationException("诊断包服务不可用");
                 ExpireCaches();
                 lock (_cacheLock)
-                    if (_diagnosticCache != null) throw new InvalidOperationException("已有诊断包正在下载，请稍后重试");
+                    if ((localAccess ? _localDiagnosticCache : _diagnosticCache) != null) throw new InvalidOperationException("已有诊断包正在下载，请稍后重试");
                 var start = ParseTime(args, "start");
                 var end = ParseTime(args, "end");
                 if (end < start || end - start > TimeSpan.FromDays(7)) throw new ArgumentException("诊断时间范围必须在 7 天内");
@@ -230,20 +253,24 @@ public sealed class DodocoWebRelayService : IDisposable
                     var now = DateTimeOffset.UtcNow;
                     var created = new DiagnosticCache { Id = Guid.NewGuid().ToString("N"), Owner = requesterConnectionId,
                         Bytes = stream.ToArray(), Created = now, LastAccess = now, Epoch = epoch, RoomCode = roomCode };
-                    lock (_cacheLock) _diagnosticCache = created;
+                    lock (_cacheLock)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (localAccess) _localDiagnosticCache = created; else _diagnosticCache = created;
+                    }
                     return new { id = created.Id, size = created.Bytes.Length, summary };
                 }
             case "watch.diagnostic.chunk":
                 var requestedId = Text(args, "id", 64);
                 lock (_cacheLock)
                 {
-                    var cache = _diagnosticCache;
+                    var cache = localAccess ? _localDiagnosticCache : _diagnosticCache;
                     var nowTime = DateTimeOffset.UtcNow;
                     if (cache == null || cache.Id != requestedId || cache.Owner != requesterConnectionId || cache.RoomCode != roomCode)
                         throw new InvalidOperationException("诊断包不存在或不属于当前连接");
                     if (cache.Epoch != epoch || nowTime - cache.LastAccess > TimeSpan.FromSeconds(30) || nowTime - cache.Created > TimeSpan.FromMinutes(5))
                     {
-                        _diagnosticCache = null;
+                        if (localAccess) _localDiagnosticCache = null; else _diagnosticCache = null;
                         throw new InvalidOperationException("诊断包已过期或连接已变化");
                     }
                     var chunkOffset = Integer(args, "offset", 0, 0, cache.Bytes.Length);
@@ -398,7 +425,7 @@ public sealed class DodocoWebRelayService : IDisposable
     public void Dispose()
     {
         _disposed = true;
-        lock (_cacheLock) _diagnosticCache = null;
+        lock (_cacheLock) { _diagnosticCache = null; _localDiagnosticCache = null; }
         if (_hooked != null) { _hooked.OnDodocoRequested -= Requested; _hooked.OnConnectionStateChanged -= ConnectionChanged; }
         Interlocked.Increment(ref _connectionEpoch);
         _hooked = null;

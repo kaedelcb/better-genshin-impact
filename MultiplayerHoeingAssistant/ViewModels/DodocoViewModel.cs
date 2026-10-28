@@ -47,6 +47,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>远程日志下载·被下载端（应答文件列表 / 分块上行）。</summary>
     private readonly MemberLogShareService _logShare;
     private readonly DodocoWebRelayService _webRelay;
+    internal DodocoLocalService LocalBrowserService { get; }
     private readonly DispatcherTimer _flushTimer;
     private readonly ConcurrentQueue<LogEntry> _pending = new();
 
@@ -130,6 +131,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             new DailyReportService(() => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath)),
             () => _mainVm.IsStandaloneMode || _mainVm.IsObserverMode ? null : _mainVm.SignalR,
             diagnostic: _diagService);
+        LocalBrowserService = new DodocoLocalService(_tailService, _webRelay, _screenshotService, _settingsService,
+            () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath), BuildLocalBrowserIdentity);
         RebuildLogSources();
         _mainVm.Members.CollectionChanged += OnMembersChanged;
         // 成员 Online 是原地更新（不触发 CollectionChanged），靠这个事件驱动离线退订/上线重订
@@ -159,6 +162,46 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(ShareDodocoWeb));
             Stats.ReloadConfigTransferSettings();
         });
+    }
+
+    private object BuildLocalBrowserIdentity(string bridgeInstanceId)
+    {
+        if (!Application.Current.Dispatcher.CheckAccess())
+            return Application.Current.Dispatcher.Invoke(() => BuildLocalBrowserIdentity(bridgeInstanceId));
+        var cfg = _mainVm.Config;
+        var status = _mainVm.LatestLocalStatus;
+        var fresh = status?.HasFreshTaskStatus(DateTimeOffset.UtcNow) == true;
+        return new
+        {
+            uid = string.IsNullOrWhiteSpace(cfg?.PlayerUid) ? "local_" + bridgeInstanceId : cfg.PlayerUid,
+            name = string.IsNullOrWhiteSpace(cfg?.PlayerName) ? "本机助手" : cfg.PlayerName,
+            clientInstanceId = cfg?.ClientInstanceId ?? "",
+            machineId = HostMachineIdentity.Current,
+            roomCode = _mainVm.RoomCode,
+            serverUrl = SanitizeServerUrl(cfg?.ServerUrl),
+            isObserver = _mainVm.IsObserverMode,
+            status = status == null ? null : new
+            {
+                bgiStatus = fresh ? status.BgiStatus : "unknown",
+                taskStatusAvailable = fresh,
+                taskRunning = fresh ? (bool?)status.TaskRunning : null,
+                taskPaused = fresh ? (bool?)status.TaskPaused : null,
+                currentTaskName = fresh ? status.CurrentTaskName : null,
+                currentTaskGroupName = fresh ? status.CurrentTaskGroupName : null,
+                currentRouteDisplay = fresh ? status.CurrentRouteDisplay : null,
+                currentScriptRouteName = fresh ? status.CurrentScriptRouteName : null,
+                autoHoeingProgress = fresh ? status.AutoHoeingProgress : null,
+                scriptTaskProgress = fresh ? status.ScriptTaskProgress : null
+            }
+        };
+    }
+
+    private static string? SanitizeServerUrl(string? raw)
+    {
+        if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) return null;
+        var safe = new UriBuilder(uri) { UserName = "", Password = "", Query = "", Fragment = "" };
+        return safe.Uri.AbsoluteUri.TrimEnd('/');
     }
 
     internal KeywordWatchService.ConfigTransferState BeginConfigTransfer()
@@ -1104,6 +1147,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _flushTimer.Stop();
+        LocalBrowserService.Dispose();
         _settingsService.SettingsChanged -= OnSettingsChanged;
         // 页面销毁前退订（服务端断线清理是兜底，主动退订让对方尽早停发）
         if (_currentSubscription != null)

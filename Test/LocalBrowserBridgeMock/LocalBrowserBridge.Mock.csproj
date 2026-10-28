@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PlatformTarget>x64</PlatformTarget>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>MultiplayerHoeingAssistant.UnitTest</AssemblyName>
+    <BaseIntermediateOutputPath>obj/local-browser-mock/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/local-browser-mock/</BaseOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj" />
+    <Compile Include="../MultiplayerHoeingAssistant.UnitTest/ServiceTests/LocalBrowserBridgeMock.cs" />
+  </ItemGroup>
+</Project>

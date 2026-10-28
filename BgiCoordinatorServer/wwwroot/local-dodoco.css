@@ -1,0 +1,3 @@
+/* 本机入口复用舰桥样式；窄屏将远程连接操作单独成行。 */
+.local-server-url{width:100%;min-height:46px}
+@media(max-width:700px){.topbar{flex-wrap:wrap}.topbar .local-connect{flex:1 1 100%;text-align:center}}

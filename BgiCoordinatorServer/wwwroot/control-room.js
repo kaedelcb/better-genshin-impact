@@ -322,10 +322,16 @@ function joinRoom() {
         clearCreds();
     }
 
-    connection = new signalR.HubConnectionBuilder()
-        .withUrl('/gateway')   // 同源：WEB 由服务器自己运行；v3 网关入口
-        .withAutomaticReconnect([0, 2000, 10000, 30000])
-        .build();
+    let gatewayAddress = '/gateway';
+    if (window.bgiLocalBridge) {
+        try { gatewayAddress = window.bgiLocalBridge.gatewayUrl(); }
+        catch (err) { showError(err.message); joiningRoom = false; document.getElementById('joinButton').disabled = false; return; }
+    }
+    const gatewayBuilder = new signalR.HubConnectionBuilder();
+    connection = (window.bgiLocalBridge
+        ? gatewayBuilder.withUrl(gatewayAddress, { withCredentials: false })
+        : gatewayBuilder.withUrl(gatewayAddress))
+        .withAutomaticReconnect([0, 2000, 10000, 30000]).build();
 
     // evt 单订阅：服务端广播统一回调（§4.2），按 name 分发；未知 name 静默忽略
     connection.on('evt', env => {
@@ -412,6 +418,7 @@ function setConn(online) {
     if (typeof renderControlRoom === 'function') renderControlRoom();
     const dot = document.getElementById('connDot');
     dot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
+    if (window.bgiLocalBridge) window.bgiLocalBridge.networkChanged(online);
 }
 
 // ---------- 成员列表更新（全量/增量两形态，两态合并逻辑自旧 ControlRoomPlayersUpdated 原样保留） ----------

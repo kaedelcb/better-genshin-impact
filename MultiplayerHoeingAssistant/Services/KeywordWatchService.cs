@@ -245,12 +245,31 @@ public sealed class KeywordWatchService : IDisposable
     }
 
     /// <summary>网页规则单项变更，持锁落盘，避免并发操作覆盖其它规则。</summary>
-    public void MutateRuleForWeb(WatchRule? rule, string? deleteId)
+    public void MutateRuleForWeb(WatchRule? rule, string? deleteId, bool allowLocalObserver = false)
     {
         lock (_lock)
         {
-            if (_configTransferActive || IsObserver()) throw new InvalidOperationException("当前不能修改规则");
-            var rules = _config.Rules.Select(CloneRule).ToList();
+            var observer = IsObserver();
+            if (_configTransferActive || (observer && !allowLocalObserver)) throw new InvalidOperationException("当前不能修改规则");
+            var sharedObserver = observer && _peerSync?.IsLocalExecutorAlive() == true;
+            var targetPath = sharedObserver ? LocalPeerSyncService.SharedRulesPath : _configPath;
+            // 同机监控端与执行端共享文件：在共同的目录锁内重新读取当前规则，避免基于陈旧内存覆盖对端变更。
+            using var observerWrite = observer ? ConfigFileWriteGate.Acquire(targetPath) : null;
+            var source = _config;
+            if (observer)
+            {
+                try
+                {
+                    source = JsonSerializer.Deserialize<WatchConfig>(File.ReadAllText(targetPath),
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                        ?? throw new InvalidDataException("本机规则文件为空，未修改规则");
+                }
+                catch (FileNotFoundException) { /* 新建时保留当前规则 */ }
+                catch (DirectoryNotFoundException) { /* 新建时保留当前规则 */ }
+            }
+            if (observer && sharedObserver != (_peerSync?.IsLocalExecutorAlive() == true))
+                throw new InvalidOperationException("本机执行端状态已变化，请重新读取规则后重试");
+            var rules = source.Rules.Select(CloneRule).ToList();
             var id = rule?.Id ?? deleteId ?? "";
             var index = rules.FindIndex(r => r.Id == id);
             if (rule == null)
@@ -261,12 +280,12 @@ public sealed class KeywordWatchService : IDisposable
             else if (index < 0) rules.Add(CloneRule(rule));
             else rules[index] = CloneRule(rule);
             if (rules.Count > 200) throw new InvalidOperationException("规则数量超限");
-            var copy = new WatchConfig { MuteAll = _config.MuteAll, BuiltinStallSeeded = _config.BuiltinStallSeeded, Rules = rules };
+            var copy = new WatchConfig { MuteAll = source.MuteAll, BuiltinStallSeeded = source.BuiltinStallSeeded, Rules = rules };
             var json = JsonSerializer.Serialize(copy, IndentedOptions);
-            if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json)) throw new IOException("规则保存失败");
+            if (!LocalPeerSyncService.WriteFileAtomic(targetPath, json)) throw new IOException("规则保存失败");
             _config = copy;
             _regexCache.Clear();
-            if (_peerSync != null) LocalPeerSyncService.WriteFileAtomic(LocalPeerSyncService.SharedRulesPath, json);
+            if (_peerSync != null && !sharedObserver) LocalPeerSyncService.WriteFileAtomic(LocalPeerSyncService.SharedRulesPath, json);
         }
         RulesExternallyChanged?.Invoke();
     }
