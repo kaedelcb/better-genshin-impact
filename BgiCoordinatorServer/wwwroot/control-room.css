@@ -298,3 +298,27 @@ small,.small{font-size:12px}
   .kv-strip .kv:last-child:nth-child(odd){grid-column:1/-1;border-right:0}
   .kv-strip .kv:nth-last-child(-n+2):nth-child(odd):not(:last-child),.kv-strip .kv:last-child{border-bottom:0}
 }
+
+/* 成员详情头部（PC）：返回 + 头像身份在左，功能切换在右，同一行；内容区紧随其后。 */
+#detailHeader .detail-top{margin:10px 0 0}
+.detail-identity{min-width:0}
+.detail-identity h1{line-height:1.2}
+.detail-identity p{margin-top:3px;font-size:13px}
+@media(min-width:861px){
+  #detailView:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,520px);column-gap:24px;align-items:end;margin-top:4px}
+  #detailHeader{grid-column:1;min-width:0}
+  #detailHeader .back-button{min-height:28px;font-size:13px}
+  #detailHeader .detail-top{gap:14px;margin:4px 0 0}
+  #detailHeader .detail-top .avatar{width:56px;height:56px}
+  #detailHeader .detail-top h1{font-size:22px}
+  #detailView #detailTabs{grid-column:2;align-self:end;margin:0}
+  #detailView #detailTabs button{min-height:40px}
+  #detailContent{grid-column:1/-1;margin-top:18px}
+}
+.run-header{align-items:center;margin-bottom:0}
+.run-title{display:flex;align-items:baseline;gap:12px;min-width:0;flex-wrap:wrap}
+.run-label{color:var(--muted);font-size:13px;white-space:nowrap}
+.run-title h2{font-size:18px;margin:0;overflow-wrap:anywhere}
+.run-state{padding:2px 10px;border:1px solid currentColor;border-radius:99px;font-size:12px;white-space:nowrap}
+.status-stack .panel{padding:16px 20px}
+.status-stack{gap:12px}
