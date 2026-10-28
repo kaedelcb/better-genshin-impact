@@ -1,42 +1,192 @@
 .product-nav{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}.product-nav button{padding:8px 18px;border:1px solid var(--line);border-radius:9px;color:var(--muted)}.product-nav .active{color:#29241a;background:var(--gold);border-color:var(--gold);font-weight:600}
 .login-note{font-size:14px}
-.dodoco-heading{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:16px 0}.dodoco-heading p,.dodoco-hint{color:var(--muted)}.dodoco-tabs{display:flex;gap:8px;overflow-x:auto;border-bottom:1px solid var(--line);margin-bottom:18px}.dodoco-tabs button{white-space:nowrap;padding:8px 12px;color:var(--muted)}.dodoco-tabs button.active{color:var(--gold);border-bottom:2px solid var(--gold)}
-.dodoco-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}.dodoco-panel h2{margin-bottom:8px}.dodoco-controls{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:12px 0}.dodoco-controls label{display:grid;gap:5px;color:var(--muted);min-width:130px;flex:1}.dodoco-controls button,.dodoco-actions button{border:1px solid var(--line);border-radius:8px;background:var(--raised);padding:6px 12px}.dodoco-controls input,.dodoco-controls select{width:100%;min-height:44px}.dodoco-status{color:var(--muted);overflow-wrap:anywhere;min-height:24px}.dodoco-columns{display:grid;grid-template-columns:minmax(200px,290px) minmax(0,1fr);gap:14px}.dodoco-file-list{display:grid;gap:6px;max-height:440px;overflow:auto}.dodoco-file{border:1px solid var(--line);border-radius:8px;text-align:left;padding:8px 10px;overflow-wrap:anywhere}.dodoco-file small{display:block;color:var(--muted)}.dodoco-log{height:52vh;min-height:260px;overflow:auto;background:#151624;border:1px solid var(--line);border-radius:8px;padding:10px;font:14px/1.55 Consolas,'Microsoft YaHei',monospace;white-space:pre-wrap;overflow-wrap:anywhere}.dodoco-line{border-bottom:1px solid #282939;padding:2px 0}.dodoco-line.err{color:#ffada3}.dodoco-line.wrn{color:#f3d48a}.dodoco-line.dbg{color:#a7a4b9}.dodoco-actions{display:flex;gap:8px;flex-wrap:wrap}.dodoco-image{display:block;max-width:100%;max-height:65vh;object-fit:contain;margin:12px auto;background:#151624}.dodoco-image-dialog{max-width:96vw;max-height:95vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}.dodoco-image-dialog::backdrop{background:#000b}.dodoco-image-dialog img{max-width:90vw;max-height:80vh;object-fit:contain}.dodoco-member{border-bottom:1px solid var(--line);padding:10px 0;overflow-wrap:anywhere}.dodoco-member small{display:block;color:var(--muted)}
-.dodoco-controls label.check-row{display:flex;flex:0 0 auto;min-width:0;align-items:center;gap:8px}.dodoco-controls label.check-row input[type=checkbox]{width:20px;height:20px;min-height:20px}
-@media(max-width:700px){.dodoco-heading{align-items:start;flex-direction:column}.dodoco-panel{padding:14px}.dodoco-columns{grid-template-columns:1fr}.dodoco-file-list{max-height:220px}.dodoco-controls label{min-width:120px}.dodoco-log{height:48vh}.product-nav button{flex:1}.dodoco-tabs{margin-inline:-4px;flex-wrap:wrap;overflow:visible;gap:2px}.dodoco-tabs button{flex:1 0 28%;text-align:center}}
-@media(max-width:700px){.dodoco-frame-card .dodoco-controls label,.dodoco-controls label:has(input[type=datetime-local]){flex:1 1 100%}}
-.dodoco-operation-section{margin-top:18px;padding:16px;border:1px solid var(--line);border-radius:10px;background:#1b1c30;min-width:0}.dodoco-checks{display:flex;flex-wrap:wrap;gap:8px 18px}.dodoco-checks label{display:flex;align-items:center;gap:8px;min-height:44px}.dodoco-record-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}#dodocoFrames{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.dodoco-frame-card{padding:14px;border:1px solid var(--line);border-radius:10px;min-width:0}
 
-/* 精修：子标签改为分段控件，手机一行可横滑，成员选择与标签同排。 */
-.dodoco-tabs{gap:4px;padding:4px;margin:0 0 14px;border:1px solid var(--line);border-radius:11px;background:#1b1c31;scrollbar-width:none}
+/* 嘟嘟可：头部（功能分段 + 成员选择）→ 状态行 → 卡片工作区。所有卡片共用同一套间距、标签和按钮。 */
+#dodocoView{--dd-gap:16px;--dd-card:#1d1e34;--dd-inset:#151626;--dd-soft:#26273f}
+.dd-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:10px}
+.dodoco-tabs{display:flex;gap:4px;padding:4px;margin:0;border:1px solid var(--line);border-radius:11px;background:#1b1c31;overflow-x:auto;scrollbar-width:none}
 .dodoco-tabs::-webkit-scrollbar{display:none}
-.dodoco-tabs button{min-height:38px;padding:4px 16px;border-radius:8px;font-size:14px}
-.dodoco-tabs button.active{border-bottom:0;background:#35324a;color:var(--gold)}
-.dodoco-panel{padding:16px 18px}
-.dodoco-target{margin:0 0 4px}
-.dodoco-target label{max-width:360px}
-.dodoco-panel h2{font-size:17px;margin:10px 0 2px}
-.dodoco-hint{font-size:13px;line-height:1.6}
-.dodoco-controls{gap:8px}
-.dodoco-controls label{font-size:13px}
-.dodoco-controls button,.dodoco-actions button{min-height:44px;padding:6px 14px;font-size:14px}
-.dodoco-controls button:hover,.dodoco-actions button:hover{border-color:#82734c}
-.dodoco-status{font-size:13px}
-.dodoco-log{font-size:13px}
-@media(max-width:700px){
-  .dodoco-tabs{flex-wrap:nowrap;overflow-x:auto;margin-inline:0;gap:4px}
-  .dodoco-tabs button{flex:0 0 auto;padding:4px 14px}
-  .dodoco-panel{padding:14px}
-  .dodoco-target label{max-width:none}
+.dodoco-tabs button{min-height:38px;padding:4px 18px;border-radius:8px;color:var(--muted);font-size:14px;white-space:nowrap}
+.dodoco-tabs button:hover{color:var(--text)}
+.dodoco-tabs button.active{background:#35324a;color:var(--gold);font-weight:600}
+.dd-head-target{display:flex;align-items:center;gap:10px;min-width:0}
+.dd-head-target label{color:var(--muted);font-size:13px;white-space:nowrap}
+.dd-head-target select{width:240px;min-height:40px;padding:7px 12px}
+.dd-status{min-height:22px;margin:0 2px 12px;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+.dd-body{display:grid;gap:var(--dd-gap);min-width:0}
+
+.dd-card{min-width:0;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:var(--dd-card)}
+.dd-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px 20px;flex-wrap:wrap;margin-bottom:14px}
+.dd-card-head>div:first-child{min-width:0;flex:1 1 260px}
+.dd-card-head h2{font-size:17px;line-height:1.35;margin:0}
+.dd-card-head h3{font-size:15px;line-height:1.35;margin:0}
+.dodoco-hint{margin:3px 0 0;color:var(--muted);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.dd-empty{margin:0;padding:22px 12px;color:var(--muted);font-size:13px;text-align:center}
+.dd-card.dd-empty{padding:40px 20px}
+
+.dd-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dd-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:6px 14px;border:1px solid var(--line);border-radius:9px;background:var(--raised);color:var(--text);font-size:14px;white-space:nowrap}
+.dd-btn:hover:not(:disabled){border-color:#82734c;background:#302f49}
+.dd-btn:disabled{opacity:.45}
+.dd-btn-primary{background:var(--gold);border-color:var(--gold);color:#29241a;font-weight:600}
+.dd-btn-primary:hover:not(:disabled){background:#f0d581;border-color:#f0d581}
+.dd-btn-quiet{background:transparent;color:var(--muted)}
+.dd-btn-danger{background:transparent;border-color:#5e4141;color:#f0b3a3}
+.dd-btn-danger:hover:not(:disabled){background:#3a2a2c;border-color:#8a5a52}
+.dd-btn-sm{min-height:34px;padding:4px 11px;font-size:13px}
+.dd-btn-icon{width:40px;padding:0;font-size:20px;line-height:1}
+.dd-pager{display:inline-flex;gap:4px}
+
+.dd-filters{display:flex;align-items:flex-end;gap:10px 12px;flex-wrap:wrap;margin-bottom:12px}
+.dd-field{display:grid;gap:5px;min-width:130px;color:var(--muted);font-size:12px}
+.dd-field>span{line-height:1.3}
+.dd-field input,.dd-field select{width:100%;min-height:40px;padding:7px 11px;font-size:14px}
+.dd-grow{flex:1 1 220px}
+.dd-inline{display:flex;align-items:center;gap:8px;min-width:0}
+.dd-inline select{width:auto;min-width:96px}
+.dd-range>div{display:flex;align-items:center;gap:6px}
+.dd-range input{width:118px}
+.dd-range i{font-style:normal;color:var(--muted)}
+.dd-check{display:inline-flex;align-items:center;gap:8px;min-height:40px;color:var(--text);font-size:14px;white-space:nowrap;cursor:pointer}
+.dd-check input{width:18px;height:18px;min-height:18px}
+.dd-align-end{align-self:flex-end}
+
+.dodoco-log{height:58vh;min-height:320px;overflow:auto;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset);font:13px/1.6 Consolas,'Microsoft YaHei',monospace;white-space:pre-wrap;overflow-wrap:anywhere;color:#d8d5e6}
+.dodoco-log:empty::after{content:'暂无日志';display:block;padding:40px 0;text-align:center;color:var(--muted);font-family:inherit}
+.dodoco-line{padding:2px 0;border-bottom:1px solid #22233a}
+.dodoco-line.err{color:#ffada3}.dodoco-line.wrn{color:#f3d48a}.dodoco-line.dbg{color:#a7a4b9}
+.dd-result-bar{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin-bottom:10px}
+.dd-result-bar .dodoco-status{margin:0;flex:1 1 260px}
+.dodoco-status{color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+
+/* 日志浏览：左文件栏 + 右查看器 */
+.dd-split{display:grid;grid-template-columns:300px minmax(0,1fr);gap:var(--dd-gap);align-items:start}
+.dd-files{display:flex;flex-direction:column;gap:12px;position:sticky;top:12px}
+.dd-files .dd-card-head{margin:0;flex-direction:column;align-items:stretch}
+.dd-files .dd-card-head>div:first-child{flex:none}
+.dd-files .dd-btn{width:100%}
+.dodoco-file-list{display:grid;gap:4px;max-height:46vh;overflow:auto;margin:0 -6px;padding:0 6px}
+.dodoco-file{display:grid;gap:2px;padding:9px 11px;border:1px solid transparent;border-radius:9px;text-align:left;min-height:0}
+.dodoco-file:hover{background:var(--dd-soft);border-color:#3f3e58}
+.dodoco-file.active{background:#302d45;border-color:#7a6a49;box-shadow:inset 2px 0 var(--gold)}
+.dd-file-name{font-size:14px;color:var(--text);overflow-wrap:anywhere}
+.dodoco-file small{color:var(--muted);font-size:12px}
+.dd-drop{position:relative;display:grid;gap:3px;padding:14px;border:1px dashed #5a5772;border-radius:10px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.dd-drop:hover{border-color:var(--gold);background:#22213a}
+.dd-drop strong{font-size:14px;color:var(--gold);font-weight:600}
+.dd-drop small{color:var(--muted);font-size:12px}
+.dd-drop input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.dd-drop:focus-within{outline:2px solid var(--gold);outline-offset:3px}
+.dd-viewer .dodoco-log{height:62vh}
+
+/* 锄地数据 */
+.dd-member-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:12px}
+.dd-member-card{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--dd-inset)}
+.dd-member-card.is-off{opacity:.75}
+.dd-member-card header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.dd-member-card header strong{font-size:16px;overflow-wrap:anywhere}
+.dd-kv{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;padding:5px 0;border-top:1px solid #26273c;font-size:13px}
+.dd-kv span{color:var(--muted)}
+.dd-kv b{font-weight:500;color:var(--text);overflow-wrap:anywhere}
+.dd-sep{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+.dd-pill{display:inline-flex;align-items:center;padding:1px 9px;border-radius:99px;background:#34354d;color:#d1cde1;font-size:12px;line-height:1.7;white-space:nowrap}
+.dd-pill.ok{background:#27463f;color:#a0e1c8}
+.dd-pill.warn{background:#443b2e;color:#f0d39d}
+.dd-report{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px}
+.dd-report>section{padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--dd-inset);min-width:0}
+.dd-report-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.dd-report-head h3{font-size:15px}
+.dd-stat{color:var(--muted);font-size:13px}.dd-stat b{color:var(--gold);font-weight:600}
+.dd-unit{padding:8px 0 8px calc(var(--depth,0) * 14px);border-top:1px solid #26273c;overflow-wrap:anywhere}
+.dd-unit strong{font-size:14px;font-weight:500}
+.dd-unit small{display:block;color:var(--muted);font-size:12px}
+.dd-unit details summary,.dd-record details summary{color:var(--gold);font-size:13px;cursor:pointer;margin-top:4px}
+
+/* 异常监控：左 记录/诊断 · 右 规则/设置 */
+.dd-watch-bar{padding:16px 20px}
+.dd-watch-bar .dd-card-head{margin-bottom:8px}
+.dd-alert-line{margin:0;padding:8px 12px;border-radius:9px;background:var(--dd-inset);color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+#watchBody{min-width:0}
+.dd-watch-grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);gap:var(--dd-gap);align-items:start}
+.dd-col{display:grid;gap:var(--dd-gap);min-width:0}
+.dd-record-list{display:grid;gap:8px}
+.dd-record{padding:12px 14px;border:1px solid var(--line);border-left:3px solid #4b4865;border-radius:10px;background:var(--dd-inset);min-width:0}
+.dd-record.lv-err{border-left-color:#d77f6f}.dd-record.lv-wrn{border-left-color:#d9b46a}
+.dd-record header{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dd-record time{font-family:Consolas,monospace;color:var(--muted);font-size:13px}
+.dd-record strong{font-size:14px}
+.dd-record small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.dd-record p{margin:6px 0 0;font-size:13px}
+.dd-record-foot{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:6px}
+.dd-record pre{margin:6px 0 0;padding:8px 10px;border-radius:8px;background:#11121f;font-size:12px}
+.dodoco-record-text{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+.dd-incident{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.dd-incident h4{margin:0 0 8px;font-size:14px}
+.dodoco-rule-list{display:grid;gap:8px}
+.dd-rule{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset);min-width:0}
+.dd-rule.is-off{opacity:.7}
+.dd-rule-main{min-width:0;display:grid;gap:5px}
+.dd-rule-main strong{font-size:14px;overflow-wrap:anywhere}
+.dd-rule-main small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.dd-tags{display:flex;gap:5px;flex-wrap:wrap}
+.dd-rule-actions{display:flex;gap:6px;flex-shrink:0}
+.dd-form{margin-top:12px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset)}
+.dd-form>summary{padding:11px 14px;color:var(--gold);font-size:14px;cursor:pointer;list-style:none}
+.dd-form>summary::-webkit-details-marker{display:none}
+.dd-form>summary::before{content:'＋';margin-right:8px}
+.dd-form[open]>summary::before{content:'−'}
+.dd-form[open]>summary{border-bottom:1px solid var(--line)}
+.dd-form>.dd-form-grid,.dd-form>.dodoco-checks,.dd-form>.dd-form-foot{padding:0 14px}
+.dd-form>.dd-form-grid{padding-top:12px}
+.dd-form>.dd-form-foot{padding-bottom:14px}
+.dd-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+.dd-form-grid .dd-field{min-width:0}
+.dd-span{grid-column:1/-1}
+.dd-num-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));margin-top:8px}
+.dodoco-checks{display:flex;flex-wrap:wrap;gap:2px 20px;margin:8px 0}
+.dd-form-foot{display:flex;justify-content:flex-end;margin-top:12px}
+
+/* 桌面监控 */
+#dodocoFrames{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:14px}
+.dodoco-frame-card{min-width:0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--dd-inset)}
+.dodoco-frame-card header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dodoco-frame-card h3{font-size:15px;margin:0;overflow-wrap:anywhere}
+.dd-frame-tools{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.dodoco-image{display:block;width:100%;max-height:60vh;object-fit:contain;margin:10px 0;border-radius:8px;background:#0e0f1a}
+.dodoco-image-dialog{max-width:96vw;max-height:95vh;padding:14px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
+.dodoco-image-dialog::backdrop{background:#000b}
+.dodoco-image-dialog img{display:block;max-width:90vw;max-height:80vh;margin-top:10px;object-fit:contain}
+
+@media(max-width:1100px){
+  .dd-watch-grid{grid-template-columns:minmax(0,1fr)}
+  .dd-split{grid-template-columns:260px minmax(0,1fr)}
+}
+@media(max-width:860px){
+  .dd-split{grid-template-columns:minmax(0,1fr)}
+  .dd-files{position:static}
+  .dodoco-file-list{max-height:240px}
 }
 @media(max-width:700px){
-  .topbar .product-nav .nav-long{display:none}
+  .dd-head{flex-direction:column;align-items:stretch;gap:10px}
   .dodoco-tabs{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));overflow:visible}
   .dodoco-tabs button{padding:4px 2px;font-size:13px}
-  .dodoco-controls>button{flex:1 1 auto}
-  .dodoco-actions>button{flex:1}
+  .dd-head-target select{width:auto;flex:1}
+  .dd-card{padding:14px}
+  .dd-card-head .dd-actions{width:100%}
+  .dd-card-head .dd-actions>.dd-btn{flex:1 1 auto}
+  .dd-filters>.dd-field{flex:1 1 calc(50% - 6px);min-width:0}
+  .dd-filters>.dd-grow,.dd-filters>.dd-range{flex-basis:100%}
+  .dd-range input{flex:1;width:auto;min-width:0}
+  .dd-filters>.dd-btn{flex:1 1 100%}
+  .dd-result-bar .dd-actions{width:100%}
+  .dd-result-bar .dd-actions>.dd-btn{flex:1 1 auto}
+  .dodoco-log,.dd-viewer .dodoco-log{height:50vh;min-height:260px}
+  .dd-form-grid{grid-template-columns:minmax(0,1fr)}
+  .dd-num-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dd-rule{flex-direction:column}
+  .dd-rule-actions{width:100%}.dd-rule-actions .dd-btn{flex:1}
+  .dd-frame-tools .dd-field{flex-basis:100%}
+  .dd-frame-tools .dd-btn{flex:1}
 }
-.dodoco-controls input[type=file]{min-height:44px;padding:5px 8px;border:1px dashed #56556c;border-radius:8px;background:#181a2d;color:var(--muted);font-size:13px}
-.dodoco-controls input[type=file]::file-selector-button{min-height:32px;margin-right:10px;padding:4px 12px;border:1px solid var(--line);border-radius:7px;background:var(--raised);color:var(--text);font:inherit;cursor:pointer}
-.dodoco-controls input[type=file]::file-selector-button:hover{border-color:#82734c}
-.dodoco-controls input[type=time],.dodoco-controls input[type=datetime-local]{min-height:44px}
+
+@media(min-width:701px){.dd-watch-grid .dd-filters>.dd-field{min-width:112px}.dd-watch-grid .dd-filters>.dd-grow{flex:1 1 140px}}
