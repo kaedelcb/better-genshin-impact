@@ -112,11 +112,16 @@ internal static class BgiWorkflowObservationPersistence
         if (!Matches(run, record) || record.JobId != jobId || !identity.Matches(job)
             || !BgiWorkflowExecutionBoundary.OriginalRequestMatches(job, originalRequestEvidence))
             throw new RunRecordConflictException("观察期间主体原身份改变。");
-        var applied = runs.UpdateMergingIf(run.RunId, latest =>
+        var matched = false;
+        runs.UpdateMergingIf(run.RunId, latest =>
         {
             if (latest.CurrentSubmission is not { } live || !Matches(latest, live)) return false;
             CheckJob(live.JobId, jobId, jobId);
             var merged = Merge(live.ObservedTerminal, live.ExecutionExitConfirmed, null, null, job);
+            matched = true;
+            var changed = live.ObservedTerminal != merged.Raw || live.ExecutionExitConfirmed != merged.Exit
+                || merged.Exit && (live.ExecutionExitDisposition is null || live.EffectState != merged.Raw
+                    || live.WireRunId is null);
             live.ObservedTerminal = merged.Raw;
             live.ExecutionExitConfirmed = merged.Exit;
             if (merged.Exit)
@@ -125,9 +130,9 @@ internal static class BgiWorkflowObservationPersistence
                 live.EffectState = merged.Raw;
                 live.WireRunId ??= identity.WireRunId;
             }
-            return true;
+            return changed;
         }, out var saved);
-        if (!applied || saved?.CurrentSubmission is not { } submission)
+        if (!matched || saved?.CurrentSubmission is not { } submission)
             throw new RunRecordConflictException("主体原身份不在最新记录中，未发布观察事实。");
         Copy(submission, record); saved.CurrentSubmission = record;
         RunStore.RebaseOnto(run, saved);

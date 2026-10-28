@@ -17,6 +17,7 @@ public sealed partial class TaskCenterHost
     /// <summary>放弃选中计划的旧执行；计划和业务历史不动，只有退出/零发送事实及仲裁隔离均确认后才解除占用。</summary>
     public async Task<HostActionResult> ResetWorkflowExecutionStateAsync(string workflowId)
     {
+        using var controlCall = EnterControlCall();
         DriveEntry? drive;
         try
         {
@@ -61,7 +62,7 @@ public sealed partial class TaskCenterHost
             }
 
             if (_admissionWired)
-                await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+                await EnsureControlOwnershipAsync().ConfigureAwait(false);
             var records = ReadResetRecords(workflowId);
             var changed = 0;
             foreach (var original in records)
@@ -104,7 +105,7 @@ public sealed partial class TaskCenterHost
                     }
                     else
                     {
-                        var scope = TryGetAdmissionScopeForResume(run.RunId, workflowId) ?? run.AdmissionSourceScope;
+                        var scope = ResolveResetSourceScope(run);
                         if (scope is null || !scope.StartsWith("bgi:local:", StringComparison.Ordinal)
                             || !ExecutionResetEvidence.TryEpoch(scope[10..], out _, out _)
                             || !epochs.Contains(scope[10..])
@@ -226,6 +227,19 @@ public sealed partial class TaskCenterHost
             || handoff?.Pending is { } pending && pending.SuspendedRunIdentity == runId
             || handoff?.Submission is { } submission && operations.Any(op => op.SubmissionIdentity == submission.SubmissionIdentity
                 && op.LastSendSeq == submission.SendSeq);
+    }
+
+    private string? ResolveResetSourceScope(WorkflowRunRecord run)
+    {
+        var read = _admissionStore?.Read();
+        if (_admissionWired && (read is null || !IsCompleteAdmissionRead(read))) return null;
+        var sources = ResetAdmissionOperations(read?.File?.Handoff).ToList();
+        // Include quarantined originals only for proving an old local executor exited.
+        // Conflicting original parents must not be hidden by the legacy Scope fallback.
+        var parents = sources.Where(op => ArbitrationAdmissionService.IsFlowRegistrationParent(op, run.RunId)).ToList();
+        var parent = ResolveAdmissionParent(sources, run, run.RunId, run.WorkflowId);
+        if (parents.Count != 0) return parent?.Scope;
+        return parent?.Scope ?? run.AdmissionSourceScope;
     }
 
     private string? RetireResetAdmission(WorkflowRunRecord run)

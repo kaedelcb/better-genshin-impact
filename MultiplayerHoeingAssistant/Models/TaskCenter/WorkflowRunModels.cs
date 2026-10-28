@@ -151,6 +151,11 @@ public sealed class WorkflowNodeOutcome
     [JsonPropertyName("acceptedSendIdentity")]
     public string? AcceptedSendIdentity { get; set; }
 
+    /// <summary>未决观察绑定的原发送；仅供显式对账结清，不作为终态或重发许可。</summary>
+    [JsonPropertyName("uncertainSendIdentity")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UncertainSendIdentity { get; set; }
+
     [JsonPropertyName("reason")]
     public string? Reason { get; set; }
 

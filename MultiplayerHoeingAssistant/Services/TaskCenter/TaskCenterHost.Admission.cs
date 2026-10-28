@@ -31,6 +31,7 @@ internal sealed class TaskCenterAdmissionSeams
     public AdmissionBarriers? Barriers { get; set; }
     /// <summary>租约所有权 TTL 秒（生产 null=15s 默认；夹具注小值加速接管观察验证——接管期限取自被观察租约，须两端同值）。</summary>
     public int? OwnershipTtlSeconds { get; set; }
+    internal bool SuppressLeaseHeartbeatForTest { get; set; }
     /// <summary>夹具接缝：进入「§6.3 接管观察」阶段时回调（用于把并发首调者的目标交错固定下来，
     /// 证明后继观察者确实与先行接管者重叠，而不是靠调度运气）。</summary>
     public Action? OnTakeoverObservationEntered { get; set; }
@@ -893,6 +894,11 @@ public sealed partial class TaskCenterHost
     /// </summary>
     private void StartAdmissionLeaseHeartbeat(int ttlSeconds)
     {
+        if (_admissionSeams?.SuppressLeaseHeartbeatForTest == true) return;
+        var store = _admissionStore!;
+        var runs = _runs;
+        var leaseId = _admissionLeaseId!;
+        var ownerEpoch = _admissionOwnerEpoch!;
         var interval = TimeSpan.FromMilliseconds(Math.Max(200, ttlSeconds * 1000 / 3));
         var ct = _shutdownCts.Token;
         _ = Task.Run(async () =>
@@ -902,13 +908,14 @@ public sealed partial class TaskCenterHost
                 try
                 {
                     await Task.Delay(interval, ct).ConfigureAwait(false);
-                    var read = _admissionStore?.Read(); // 锁内读当前文件（修订在文件级）
+                    if (!ReferenceEquals(store, _admissionStore)) return;
+                    var read = store.Read(); // 锁内读当前文件（修订在文件级）
                     var lease = read?.File?.Lease;
                     if (lease is null || read!.File is null) continue;
                     // 会诊 建议-1 处置：只续「本进程获取时捕获」的租约身份——所有权已更替=停止心跳（绝不为他人续命）；
                     // 后续提交经锁内身份/TTL 校验自然响亮拒绝，重取走 §6.3 接管观察路径。
-                    if (!string.Equals(lease.LeaseId, _admissionLeaseId, StringComparison.Ordinal)
-                        || !string.Equals(lease.OwnerEpoch, _admissionOwnerEpoch, StringComparison.Ordinal))
+                    if (!string.Equals(lease.LeaseId, leaseId, StringComparison.Ordinal)
+                        || !string.Equals(lease.OwnerEpoch, ownerEpoch, StringComparison.Ordinal))
                     {
                         _log?.Invoke("[任务中心] 仲裁租约所有权已更替（本进程停止续期；后续提交将响亮拒绝或经接管重取）。");
                         return;
@@ -916,18 +923,21 @@ public sealed partial class TaskCenterHost
 
                     // 用最新修订变体：原「Read() 取修订 → TryRenew(捕获修订)」在同胞写入并发下会因修订漂移被误判
                     // lease_stale_generation；续期误判累积到 TTL 即失去租约（会诊重要项）。
-                    var renew = _admissionStore!.TryRenewLatest(_admissionLeaseId!, _admissionOwnerEpoch!);
+                    var renew = store.TryRenewLatest(leaseId, ownerEpoch);
                     if (!renew.Success)
-                        _log?.Invoke("[任务中心] 仲裁租约续期被拒（" + renew.Reason + "）——后续提交将响亮拒绝。");
+                    {
+                        TryLog("[任务中心] 仲裁租约续期被拒（" + renew.Reason + "）；停止、恢复或重置将核对并重新取得资格。");
+                        if (renew.Reason is "lease_expired_no_renew" or "lease_stale_generation") return;
+                    }
                     else
                     {
                         // Drain progress with one original write per lock hold. Renew between writes
                         // and yield so a long disk-recovery backlog cannot starve explicit stop.
                         RetryPriorityWaiterWake();
-                        while (!ct.IsCancellationRequested && _runs.FlushOneRetainedPriorityProgress())
+                        while (!ct.IsCancellationRequested && runs.FlushOneRetainedPriorityProgress())
                         {
                             await Task.Delay(1, ct).ConfigureAwait(false);
-                            if (!_admissionStore.TryRenewLatest(_admissionLeaseId!, _admissionOwnerEpoch!).Success) break;
+                            if (!store.TryRenewLatest(leaseId, ownerEpoch).Success) break;
                         }
                     }
                 }
@@ -2090,9 +2100,9 @@ public sealed partial class TaskCenterHost
     private string? TryGetAdmissionScopeForResume(string runId, string? workflowId)
         => string.IsNullOrEmpty(workflowId)
             ? null
-            : ResolveAdmissionParent(TryReadAdmissionSources(), _runs.Load(runId), runId, workflowId)?.Scope;
+            : ResolveAdmissionParent(TryReadAdmissionSources(includeRetired: true), _runs.Load(runId), runId, workflowId)?.Scope;
 
-    private IReadOnlyList<OperationRecord>? TryReadAdmissionSources()
+    private IReadOnlyList<OperationRecord>? TryReadAdmissionSources(bool includeRetired = false)
     {
         try
         {
@@ -2106,10 +2116,8 @@ public sealed partial class TaskCenterHost
                 var dir = _arbitrationDir ?? (root is null ? null : Path.Combine(root, "arbitration"));
                 handoff = dir is null ? null : new ArbitrationLeaseStore(dir).Read().File?.Handoff;
             }
-            return handoff is null
-                ? null
-                : (handoff.Operations ?? []).Concat((handoff.ArchivedOperations ?? [])
-                    .Where(a => a?.Operation is not null).Select(a => a.Operation)).ToList();
+            return handoff is null ? null
+                : (includeRetired ? TerminalAdmissionOperations(handoff) : AllAdmissionOperations(handoff)).ToList();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -2973,12 +2981,22 @@ public sealed partial class TaskCenterHost
         await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
         var handoff = _admissionStore?.Read().File?.Handoff;
         if (handoff is null) return false;
-        var matches = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation))
+        var matches = TerminalAdmissionOperations(handoff)
             .Where(o => o.RequestIdentity == identity.RequestIdentity).ToList();
         if (matches.Count != 1) return false;
         var op = matches[0];
         if (op.ConflictPending || op.SubmissionIdentity != identity.SubmissionIdentity || op.LastSendSeq != identity.SendSeq
             || op.RunBinding != run.RunId || op.TargetEpoch != identity.TargetEpoch) return false;
+        if (handoff.RetiredUnknownOperations.Any(retired => retired.Operation.RequestIdentity == identity.RequestIdentity))
+        {
+            // Quarantine preserves the original accepted send; it grants no new send permission.
+            var original = run.CurrentSubmission;
+            return original is { Intent: SubmitIntentState.Accepted, SendAttempted: true }
+                && original.JobId == jobId && original.AcceptedSendIdentity == identity.SubmissionIdentity
+                && original.SendPermit is { Consumed: true } permit && permit.OriginalSendIdentity == identity.SubmissionIdentity
+                && ResolveOriginalNodeSendIdentity(run, original, handoff) == identity
+                && handoff.Submission?.SubmissionIdentity != identity.SubmissionIdentity;
+        }
         if (op.RequestState is OperationRequestState.Accepted or OperationRequestState.TerminalCompleted)
             return op.TakeoverRef == identity.SubmissionIdentity && handoff.Submission?.SubmissionIdentity != identity.SubmissionIdentity;
         if (!handoff.Operations.Contains(op) || _admission is not { } facade) return false;
@@ -3002,7 +3020,7 @@ public sealed partial class TaskCenterHost
             || sub.SendPermit is not { Version: 1, Consumed: true, OriginalSendIdentity.Length: > 0 } permit
             || !Guid.TryParseExact(permit.Nonce, "N", out _)
             || sub.AcceptedSendIdentity is { Length: > 0 } accepted && accepted != permit.OriginalSendIdentity) return null;
-        var matches = handoff.Operations.Concat(handoff.ArchivedOperations.Select(a => a.Operation))
+        var matches = TerminalAdmissionOperations(handoff)
             .Where(o => o.OperationType == OperationType.NodeExecution && o.RunBinding == run.RunId
                 && o.Candidate is { } c && c.NodeId == sub.NodeId && c.Occurrence == sub.Occurrence
                 && c.LoopIteration == sub.LoopIteration && c.Attempt == sub.Attempt && o.WireSubmitKey == sub.Key).ToList();

@@ -52,7 +52,7 @@ public sealed partial class TaskCenterHost
     ];
 
     private readonly WorkflowStore _workflows;
-    private readonly RunStore _runs;
+    private RunStore _runs;
     private readonly ResourceCatalogService _catalog;
     private readonly Func<BgiExternalClient?> _clientAccessor;
     private readonly Action<string>? _log;
@@ -650,6 +650,7 @@ public sealed partial class TaskCenterHost
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
     public async Task<HostActionResult> ResumeRunAsync(string runId)
     {
+        using var controlCall = EnterControlCall();
         using var configurationOperation = TryBeginConfigurationOperation();
         if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
         // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
@@ -662,10 +663,14 @@ public sealed partial class TaskCenterHost
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
         if (run.NonExecutingDiagnostic)
             return HostActionResult.Unavailable("非执行终态诊断不可恢复");
+        if (run.StopRequested)
+            return HostActionResult.Unavailable("原运行已有停止意图，禁止恢复旧任务；请先停止结清或重置后重新开始。");
         if (IsExecutionResetReleased(run))
             return HostActionResult.Unavailable("此运行已重置执行状态；旧任务不会恢复，请重新开始计划。");
-        if (run.State == WorkflowRunState.Unknown)
-            return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按幂等键+job 查询对账，禁止自动恢复");
+        if (run.State == WorkflowRunState.Unknown
+            && run.CurrentSubmission is not { Intent: SubmitIntentState.Accepted, SendAttempted: true,
+                JobId.Length: > 0, OriginalRequestEvidence: not null, AcceptedSendIdentity.Length: > 0 })
+            return HostActionResult.Unavailable("运行结果不确定（Unknown），需先按原身份对账，禁止自动恢复");
         if (run.OnlineHoeingHandoff is not null)
             return HostActionResult.Unavailable("联机锄地接管责任尚未结清，只能由原票据接续或先核对状态");
         if (_admissionWired)
@@ -677,7 +682,15 @@ public sealed partial class TaskCenterHost
         }
         if (ResumeDefinitionBlockReason(run) is { } initialDefinitionError)
             return HostActionResult.Unavailable(initialDefinitionError);
+        if (_admissionWired)
+        {
+            try { await EnsureControlOwnershipAsync().ConfigureAwait(false); }
+            catch (Exception ex) { return HostActionResult.Unavailable("恢复写者资格未确认：" + ex.Message); }
+        }
         await EnsureRecoveredAsync().ConfigureAwait(false);
+        NormalizeOrphanRun(runId);
+        try { await ConfirmOrphanTerminalForResumeAsync(runId).ConfigureAwait(false); }
+        catch (Exception ex) { return HostActionResult.Unavailable("原作业终态核对未完成，保留原责任：" + ex.Message); }
         run = _runs.Load(runId);
         if (run is null) return HostActionResult.Unavailable("运行记录不存在：" + runId);
         if (run.State == WorkflowRunState.Unknown)
@@ -774,6 +787,7 @@ public sealed partial class TaskCenterHost
     /// <summary>面板异步动作入口：等待原身份对账/终局写回时让出调用线程，结果仍按原耐久事实判定。</summary>
     public async Task<HostActionResult> RequestRunActionAsync(string runId, WorkflowRunAction action)
     {
+        using var controlCall = EnterControlCall();
         if (string.IsNullOrWhiteSpace(runId))
             return HostActionResult.Unavailable("运行 runId 为空，未执行动作");
 
@@ -811,10 +825,17 @@ public sealed partial class TaskCenterHost
                 var read = store.Read();
                 if (HasOriginalAdmissionMapping(run) && !IsCompleteAdmissionRead(read))
                     return HostActionResult.Unavailable("原受理存储不完整，停止责任未确认，原文件保留；恢复存储后再次执行 Stop 重试");
-                await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+                if (action == WorkflowRunAction.Stop)
+                    await StopExpiredLocalDriveAsync(runId, run.WorkflowId).ConfigureAwait(false);
+                await EnsureControlOwnershipAsync().ConfigureAwait(false);
                 _runs.VerifyBoundOwner();
             }
-            catch (Exception ex) { return HostActionResult.Unavailable("运行写者资格不可确认，未执行动作：" + ex.Message); }
+            catch (Exception ex) { return HostActionResult.Unavailable("运行写者资格或停止结果未确认，原责任保留：" + ex.Message); }
+        }
+        if (action == WorkflowRunAction.Stop)
+        {
+            try { NormalizeOrphanRun(runId); run = _runs.Load(runId)!; }
+            catch (Exception ex) { return HostActionResult.Unavailable("中断运行核对失败，原记录保留：" + ex.Message); }
         }
         DriveEntry? stopEntry;
         lock (_gate) _drives.TryGetValue(run.WorkflowId, out stopEntry);
@@ -879,24 +900,26 @@ public sealed partial class TaskCenterHost
             }
         }
 
-        if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.Paused)
+        if (action == WorkflowRunAction.Stop && run.State is WorkflowRunState.Paused or WorkflowRunState.Interrupted)
         {
             // 暂停态无驱动（引擎 _controls 已移除）：无在飞作业（暂停节点边界生效），宿主直接终态化
-            if (run.CurrentSubmission is { InFlight: true })
+            if (RunStore.HasUnresolvedTerminalResponsibility(run))
                 return HostActionResult.Unavailable("存在在飞提交事实（结果不可考），请按幂等键对账后再处置");
             lock (_gate)
             {
                 var fresh = _runs.Load(runId);
-                if (fresh?.State != WorkflowRunState.Paused)
+                if (fresh?.State != run.State || _drives.ContainsKey(run.WorkflowId))
                     return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
                 fresh.State = WorkflowRunState.Cancelled;
                 fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ")
-                    + "暂停态显式停止（无在飞作业；不触发收尾）。";
+                    + (run.State == WorkflowRunState.Paused
+                        ? "暂停态显式停止（无在飞作业；不触发收尾）。"
+                        : "无驱动运行显式停止（执行责任已确认；不触发收尾）。");
                 _runs.Update(fresh);
             }
             NotifyStateChanged();
             return await ReconcileAdmissionTerminalForExplicitStopAsync(runId,
-                "已停止（暂停态终态化，未触发收尾）").ConfigureAwait(false);
+                "已停止（无驱动运行终态化，未触发收尾）").ConfigureAwait(false);
         }
 
         DriveEntry? entry;

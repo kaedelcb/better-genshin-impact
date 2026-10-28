@@ -251,6 +251,18 @@ internal static class TerminalReleaseEvidence
                 && o.RawTerminal == handoff.ResumeTerminal) == 1;
     }
 
+    internal static bool UncertainOutcomeWasSettled(WorkflowRunRecord run, WorkflowNodeOutcome outcome)
+        => outcome.Result is "unknown" or "cancelUnconfirmed"
+            && outcome.UncertainSendIdentity is { Length: > 0 }
+            && TerminalReleaseEvidence.Submissions(run).Any(sub => sub.AcceptedSendIdentity == outcome.UncertainSendIdentity
+                && sub.NodeId == outcome.NodeId && sub.Occurrence == outcome.Occurrence && sub.LoopIteration == outcome.LoopIteration
+                && TerminalReleaseEvidence.BodySettled(run, sub)
+                && run.NodeOutcomes.Any(confirmed => confirmed.SubmissionKey == sub.Key
+                    && confirmed.AcceptedSendIdentity == sub.AcceptedSendIdentity && confirmed.Attempt == sub.Attempt
+                    && confirmed.NodeId == sub.NodeId && confirmed.Occurrence == sub.Occurrence
+                    && confirmed.LoopIteration == sub.LoopIteration && confirmed.RawTerminal == sub.ObservedTerminal
+                    && BgiJobTerminalPolling.IsTerminal(confirmed.RawTerminal)));
+
     internal static bool RunSettled(WorkflowRunRecord r) => r.IsTerminal && !string.IsNullOrWhiteSpace(r.RunId)
         && !string.IsNullOrWhiteSpace(r.WireRunId) && (r.PendingCompletion is null || CompletionSettled(r, r.PendingCompletion))
         && r.OnlineHoeingHandoff is null && r.OnlineHoeingHistory.All(h => ValidOnlineHoeingHandoff(r, h))
@@ -261,7 +273,7 @@ internal static class TerminalReleaseEvidence
                     ?? r.RecoveryAssociations.FirstOrDefault(a => a.SubmissionKey == s.Key)?.SubmissionIdentity ?? "")))
         && r.PrerequisiteActions.All(a => PrerequisiteSettled(r, a))
         && r.CompletionHistory.All(c => CompletionSettled(r, c))
-        && r.NodeOutcomes.All(o => LocalBranchSettled(r, o) || o.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled"
+        && r.NodeOutcomes.All(o => LocalBranchSettled(r, o) || UncertainOutcomeWasSettled(r, o) || o.Result is "succeeded" or "failed" or "rejected" or "skippedUser" or "skippedFilter" or "cancelled"
             || r.State == WorkflowRunState.Cancelled && r.StopRequested && o.Result is "unknown" or "cancelUnconfirmed"
                 && Submissions(r).Any(s => s.NodeId == o.NodeId && s.Occurrence == o.Occurrence && s.LoopIteration == o.LoopIteration
                     && (o.Attempt is null || s.Attempt == o.Attempt) && (o.SubmissionKey is null || s.Key == o.SubmissionKey)

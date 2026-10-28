@@ -619,6 +619,19 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
             : BoundaryTerminalResult.UncertainWith(reason ?? "同身份退出未确认");
     }
 
+    internal async Task<bool> ConfirmOriginalSubmissionExitAsync(WorkflowRunRecord run, WorkflowSubmission sub, CancellationToken ct)
+    {
+        if (sub.OriginalRequestEvidence is null || string.IsNullOrEmpty(sub.JobId)) return false;
+        var identity = new BgiJobTerminalPolling.FrozenIdentity(sub.Epoch, sub.Key, run.WireRunId,
+            sub.NodeId, sub.LoopIteration, sub.Occurrence, sub.Attempt);
+        var job = await BgiJobTerminalPolling.FindOriginalJobAsync(_port, identity, ct).ConfigureAwait(false);
+        if (job is null || job.JobId != sub.JobId || !BgiJobTerminalPolling.IsTerminal(job.State)
+            || !job.ExecutionExitConfirmed || job.ExecutionExitDisposition is not ("execution_exited" or "never_started")
+            || !OriginalRequestMatches(job, sub.OriginalRequestEvidence)) return false;
+        BgiWorkflowObservationPersistence.Save(_runs, run, sub, identity, sub.Fingerprint, sub.JobId, job, sub.OriginalRequestEvidence);
+        return true;
+    }
+
     public Task<BoundarySubmitResult> ReconcileSubmissionAsync(WorkflowRunRecord run, WorkflowSubmission submission, CancellationToken ct)
         => ReconcileSubmissionAsync(run, submission, ct, null);
 

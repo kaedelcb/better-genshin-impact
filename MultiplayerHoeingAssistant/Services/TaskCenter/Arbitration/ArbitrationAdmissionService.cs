@@ -470,11 +470,34 @@ public sealed class ArbitrationAdmissionService
     {
         public void Dispose() => restore();
     }
+    private readonly object _lifetimeGate = new();
+    private int _activeResponsibilities;
+    private bool _retiredForRecovery;
+
+    internal bool TryRetireForRecovery()
+    {
+        lock (_lifetimeGate)
+        {
+            if (_activeResponsibilities != 0) return false;
+            _retiredForRecovery = true;
+            return true;
+        }
+    }
+
     private IDisposable BeginOwnerResponsibility()
     {
         var previous = _ownerResponsibility.Value;
+        lock (_lifetimeGate)
+        {
+            if (_retiredForRecovery) throw new InvalidOperationException("原仲裁实例已隔离，禁止继续旧执行。");
+            _activeResponsibilities++;
+        }
         _ownerResponsibility.Value = previous ?? new OwnerResponsibility(Volatile.Read(ref _ownership));
-        return new ResponsibilityScope(() => _ownerResponsibility.Value = previous);
+        return new ResponsibilityScope(() =>
+        {
+            _ownerResponsibility.Value = previous;
+            lock (_lifetimeGate) _activeResponsibilities--;
+        });
     }
     public LeaseOwnerCapability? Ownership => Volatile.Read(ref _ownership);
     private LeaseOwnerCapability? ResponsibleOwner => _ownerResponsibility.Value?.Ownership;

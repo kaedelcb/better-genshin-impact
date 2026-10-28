@@ -15,6 +15,16 @@ public sealed class RetiredOnlineResumeTerminalTests : IDisposable
     {
         private BgiJobInfo? _job;
         internal int Starts;
+        internal int Cancels;
+        internal void Finish(bool wrongPayload = false)
+        {
+            var json = JsonSerializer.SerializeToNode(_job)!;
+            json[nameof(BgiJobInfo.State)] = "succeeded";
+            json[nameof(BgiJobInfo.ExecutionExitConfirmed)] = true;
+            json[nameof(BgiJobInfo.ExecutionExitDisposition)] = "execution_exited";
+            if (wrongPayload) json[nameof(BgiJobInfo.RequestFingerprint)] = new string('F', 64);
+            _job = json.Deserialize<BgiJobInfo>()!;
+        }
         public bool IsReady => true;
         public bool HasCapability(string name) => true;
         public BgiEpoch ServerEpoch { get; } = new() { ProcessId = 123, StartTicksUtc = 456 };
@@ -45,11 +55,15 @@ public sealed class RetiredOnlineResumeTerminalTests : IDisposable
         public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
             => Task.FromResult<BgiJobListSnapshot?>(new() { Epoch = ServerEpoch, Jobs = _job is null ? [] : [_job] });
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct)
-            => throw new InvalidOperationException("terminal reconciliation must never restart or cancel another task");
+        {
+            Assert.Equal(_job!.JobId, jobId);
+            Cancels++;
+            return Task.CompletedTask;
+        }
     }
 
     private LeaseReadResult ReadLease() => new ArbitrationLeaseStore(Path.Combine(_root, "arbitration")).Read();
-    private async Task<(WorkflowRunRecord Run, Port Port, RetiredUnknownOperationRecord[] Retired)> PrepareRetiredResumeShape()
+    private async Task<(WorkflowRunRecord Run, Port Port, RetiredUnknownOperationRecord[] Retired)> PrepareRetiredResumeShape(bool preserveUncertain = false)
     {
         var port = new Port();
         _host = new TaskCenterHost(Path.Combine(_root, "flows"), Path.Combine(_root, "runs"), Path.Combine(_root, "catalog.json"),
@@ -72,6 +86,7 @@ public sealed class RetiredOnlineResumeTerminalTests : IDisposable
         Assert.Equal(2, retired.Length);
         Assert.Contains(retired, r => r.Operation.OperationType == OperationType.FlowRegistration);
         Assert.Contains(retired, r => r.Operation.OperationType == OperationType.NodeExecution);
+        if (preserveUncertain) return (original, port, retired);
 
         // Exact incident input after physical cleanup: preserve the real admitted original identities,
         // then model the stored original cancellation + retained-resume cancellation already observed.
@@ -109,6 +124,55 @@ public sealed class RetiredOnlineResumeTerminalTests : IDisposable
         Assert.True(TerminalReleaseEvidence.ValidOnlineHoeingHandoff(original, original.OnlineHoeingHistory[0]));
         Assert.True(TerminalReleaseEvidence.RunSettled(original));
         return (original, port, retired);
+    }
+
+    [Theory]
+    [InlineData("resume", false)]
+    [InlineData("stop", false)]
+    [InlineData("resume", true)]
+    public async Task CompletedOriginalAfterDriverExit_CanResumeOrStop_WithoutSendingAgain(string action, bool priorFailure)
+    {
+        var prepared = await PrepareRetiredResumeShape(preserveUncertain: true);
+        if (priorFailure)
+        {
+            prepared.Run.NodeOutcomes.Insert(0, new() { NodeId = "earlier", Result = "failed", RawTerminal = "failed", Reason = "原失败必须保留" });
+            _host!.Runs.Update(prepared.Run);
+        }
+        prepared.Port.Finish();
+        typeof(BgiExternalClient).GetProperty(nameof(BgiExternalClient.State))!.SetValue(_client, BgiExternalLinkState.Ready);
+        var result = action == "stop"
+            ? await _host!.RequestRunActionAsync(prepared.Run.RunId, WorkflowRunAction.Stop)
+            : await _host!.ResumeRunAsync(prepared.Run.RunId);
+        Assert.True(result.Ok, result.Message);
+        for (var i = 0; i < 300 && (_host.IsDriving(prepared.Run.WorkflowId)
+            || _host.Runs.Load(prepared.Run.RunId)?.TerminalRelease is null); i++) await Task.Delay(10);
+        var saved = _host.Runs.Load(prepared.Run.RunId)!;
+        Assert.Equal(action == "stop" ? WorkflowRunState.Cancelled : priorFailure ? WorkflowRunState.Failed : WorkflowRunState.Succeeded, saved.State);
+        Assert.True(saved.CurrentSubmission!.ExecutionExitConfirmed);
+        Assert.True(TerminalReleaseEvidence.ValidRunSeal(saved));
+        Assert.Equal(1, prepared.Port.Starts);
+        Assert.Single(_host.Runs.List());
+        if (action == "resume") Assert.Equal(0, prepared.Port.Cancels);
+        Assert.Contains(saved.NodeOutcomes, o => o.Result == "unknown"); // keep the original uncertainty in history
+        if (priorFailure) Assert.Contains(saved.NodeOutcomes, o => o.Reason == "原失败必须保留");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnconfirmedOrWrongOriginalPayload_CannotBecomeResumable(bool wrongPayload)
+    {
+        var prepared = await PrepareRetiredResumeShape(preserveUncertain: true);
+        if (wrongPayload) prepared.Port.Finish(wrongPayload: true);
+        typeof(BgiExternalClient).GetProperty(nameof(BgiExternalClient.State))!.SetValue(_client, BgiExternalLinkState.Ready);
+        var result = await _host!.ResumeRunAsync(prepared.Run.RunId);
+        Assert.False(result.Ok);
+        var saved = _host.Runs.Load(prepared.Run.RunId)!;
+        Assert.Equal(WorkflowRunState.Unknown, saved.State);
+        Assert.False(saved.CurrentSubmission!.ExecutionExitConfirmed);
+        Assert.Null(saved.TerminalRelease);
+        Assert.Equal(1, prepared.Port.Starts);
+        Assert.Equal(0, prepared.Port.Cancels);
     }
 
     [Theory]
@@ -159,6 +223,47 @@ public sealed class RetiredOnlineResumeTerminalTests : IDisposable
         Assert.Equal(HostActionStatus.Effective, (await _host.RequestRunActionAsync(run.RunId, WorkflowRunAction.Stop)).Status);
         Assert.Equal(revision, _host.Runs.Load(run.RunId)!.RecordRevision);
         Assert.Equal(1, prepared.Port.Starts);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetUsesRetiredOriginalSource_WithoutReactivatingIt(bool conflictingScope)
+    {
+        var prepared = await PrepareRetiredResumeShape();
+        var run = prepared.Run;
+        run.State = WorkflowRunState.Unknown;
+        run.StopRequested = false;
+        run.CurrentSubmission = run.SubmissionHistory.Single();
+        run.CurrentSubmission.ExecutionExitConfirmed = false;
+        run.CurrentSubmission.ObservedTerminal = null;
+        run.SubmissionHistory.Clear();
+        run.OnlineHoeingHistory.Clear();
+        run.Cursor = new() { NodeId = "B", Attempt = 1 };
+        File.WriteAllText(Path.Combine(_root, "runs", run.RunId + ".run.json"), JsonSerializer.Serialize(run));
+        Assert.Null(run.AdmissionSourceScope);
+        Assert.Null(run.AdmissionParentSource);
+        _host!.ExecutionResetConnectedEpochForTest = _ => Task.FromResult<string?>("124:789");
+        _host.ExecutionResetProcessObserverForTest = _ => new("process_absent");
+        if (conflictingScope)
+        {
+            var path = Path.Combine(_root, "arbitration", "arbitration-lease.json");
+            var lease = JsonSerializer.Deserialize<LogicalOwnerLeaseFile>(File.ReadAllText(path))!;
+            lease.Handoff!.RetiredUnknownOperations.Single(r => r.RunId == run.RunId
+                && r.Operation.OperationType == OperationType.FlowRegistration).Operation.Candidate.Scope = "bgi:local:999:789";
+            File.WriteAllText(path, JsonSerializer.Serialize(lease));
+        }
+        var later = _host.Runs.CreateRun(run.WorkflowId, run.WorkflowRevision);
+        later.State = WorkflowRunState.Running;
+        _host.Runs.Update(later);
+        var result = await _host.ResetWorkflowExecutionStateAsync(run.WorkflowId);
+        Assert.Equal(!conflictingScope, result.Ok);
+        Assert.Equal(1, prepared.Port.Starts);
+        Assert.Equal(!conflictingScope, TaskCenterHost.IsExecutionResetReleased(_host.Runs.Load(run.RunId)!));
+        Assert.Equal(!conflictingScope, TaskCenterHost.IsExecutionResetReleased(_host.Runs.Load(later.RunId)!));
+        Assert.DoesNotContain(ReadLease().File!.Handoff!.Operations, op => op.RunBinding == run.RunId);
+        Assert.Equal(WorkflowRunState.Unknown, _host.Runs.Load(run.RunId)!.State);
+        if (!conflictingScope) Assert.True((await _host.StartWorkflowAsync(run.WorkflowId)).Ok);
     }
 
     public void Dispose()

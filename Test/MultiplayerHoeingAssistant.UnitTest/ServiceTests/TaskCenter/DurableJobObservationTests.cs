@@ -6,6 +6,33 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 
 public sealed class DurableJobObservationTests
 {
+    [Fact]
+    public void UnchangedBodyObservationDoesNotWrite_ButTerminalAndExitStillPersist()
+    {
+        var f = new Fixture("body");
+        try
+        {
+            var identity = new BgiJobTerminalPolling.FrozenIdentity("42:99", "key", "wire", "node", 3, 2, 1);
+            void Save() => BgiWorkflowObservationPersistence.Save(f.Store, f.Run, f.Run.CurrentSubmission!,
+                identity, "fp", "job", f.Port.Job(), OriginalEvidence());
+            f.Port.Raw = "running";
+            var revision = f.Run.RecordRevision;
+            for (var i = 0; i < 20; i++) Save();
+            Assert.Equal(revision, f.Store.Load(f.Run.RunId)!.RecordRevision);
+            f.Port.Raw = "succeeded";
+            Save();
+            Assert.Equal(revision + 1, f.Run.RecordRevision);
+            Assert.False(f.Read().Exit);
+            f.Port.Exit = true;
+            Save();
+            Assert.Equal(revision + 2, f.Run.RecordRevision);
+            Assert.True(f.Read().Exit);
+            Save();
+            Assert.Equal(revision + 2, f.Run.RecordRevision);
+        }
+        finally { Directory.Delete(f.StoreDir, true); }
+    }
+
     // Simulated original admission input, shared by the local freeze and the server projection.
     private const string OriginalPayload = """{"taskId":"task-original","expectedConfigRevision":"config-original","idempotencyKey":"key","workflowRunId":"wire","nodeId":"node","occurrence":2,"iteration":3,"attempt":1}""";
     private static FrozenOriginalRequestEvidence OriginalEvidence() => new(1,

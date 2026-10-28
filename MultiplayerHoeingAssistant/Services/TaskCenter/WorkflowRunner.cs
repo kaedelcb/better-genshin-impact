@@ -1028,7 +1028,7 @@ public sealed partial class WorkflowRunner
                 && !HasCompletedOutcome(run, parked));
             var hadBadOutcome = run.NodeOutcomes.Any(o =>
                 (o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed" or "unknown")
-                && !RetryFailureWasSettled(run, o));
+                && !RetryFailureWasSettled(run, o) && !TerminalReleaseEvidence.UncertainOutcomeWasSettled(run, o));
             if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)
             {
                 run.State = WorkflowRunState.Failed;
@@ -3088,6 +3088,11 @@ public sealed partial class WorkflowRunner
                         && cur.LoopIteration == occurrence.LoopIteration
             ? cur
             : null;
+        // An uncertain observation is retained as history, but bind its original send so
+        // an explicit, exact terminal reconciliation can resolve it without erasing failures.
+        var bindObservation = rawTerminal is not null || result is "unknown" or "cancelUnconfirmed"
+            && producing is { Intent: SubmitIntentState.Accepted, AcceptedSendIdentity.Length: > 0 }
+            && producing.Attempt == run.Cursor?.Attempt;
         run.NodeOutcomes.Add(new WorkflowNodeOutcome
         {
             NodeId = occurrence.NodeId,
@@ -3103,6 +3108,7 @@ public sealed partial class WorkflowRunner
             // 完整发送身份（租约侧签发）：与 SubmissionKey/Attempt 同规则随结果落盘，
             // 使「节点操作独立终局」可证明该结果属于**这一笔发送**（提交键在同 attempt 多 sendSeq 间可复用）。
             AcceptedSendIdentity = rawTerminal is not null ? producing?.AcceptedSendIdentity : null,
+            UncertainSendIdentity = rawTerminal is null && bindObservation ? producing?.AcceptedSendIdentity : null,
         });
         if (run.OnlineHoeingHandoff is { Phase: "terminal" } online
             && online.NodeId == occurrence.NodeId

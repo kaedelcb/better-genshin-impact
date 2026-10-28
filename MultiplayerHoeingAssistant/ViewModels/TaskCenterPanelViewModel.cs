@@ -1396,15 +1396,19 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
 
         CanStop = run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused
             or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking
+            or WorkflowRunState.Interrupted or WorkflowRunState.Unknown
             || run.State == WorkflowRunState.Planned && driving;
         CanSkip = driving && run.State == WorkflowRunState.Running;
         CanPause = run.OnlineHoeingHandoff is null
             && driving && (run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;
         // 无驱动的旧 Running/Waiting 允许显式恢复；宿主屏障负责 Interrupted/Unknown，界面不改记录。
-        CanResume = run.OnlineHoeingHandoff is null
+        CanResume = run.OnlineHoeingHandoff is null && !run.StopRequested
             && (run.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking
-                || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting));
+                || (!driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting)
+                || !driving && run.State == WorkflowRunState.Unknown
+                    && run.CurrentSubmission is { Intent: SubmitIntentState.Accepted, SendAttempted: true,
+                        JobId.Length: > 0, OriginalRequestEvidence: not null, AcceptedSendIdentity.Length: > 0 });
         if (TaskCenterHost.IsExecutionResetReleased(run))
         {
             StateText = $"已重置执行状态（原状态：{run.State}）";
