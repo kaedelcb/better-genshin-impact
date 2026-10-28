@@ -368,9 +368,12 @@ public sealed class MojangPickLoop
         // 有滚轮图标：向下检测 k 个位置，找需要交互的物品
         if (foundRectArea.Y + (int)(ItemStepY * scale) > (int)(ListBottomMinusItem * scale))
         {
-            // 已在底部（k=1 就超出范围）：滚一次，游戏机制会回到顶部
-            LogScrollDecision(content, foundRectArea, scale, "F 已到扫描区域底部", 1);
-            ScrollTimes(1);
+            // 不能假定继续向下会自动回顶；先检查上方目标，再向上回扫。
+            var upperTarget = ScanUpward(content, foundRectArea, scale);
+            var steps = Math.Max(1, upperTarget);
+            LogScrollDecision(content, foundRectArea, scale,
+                upperTarget > 0 ? "底部上方存在可拾取物品" : "底部未找到可拾取物品，向上回扫", steps, up: true);
+            ScrollTimesUp(steps);
             return;
         }
 
