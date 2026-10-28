@@ -224,6 +224,6 @@ public static class AdminMonitorRoutes
         context.Response.Headers.XContentTypeOptions = "nosniff";
         context.Response.Headers.XFrameOptions = "DENY";
         context.Response.Headers.ContentSecurityPolicy =
-            "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'";
+            "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'";
     }
 }
