@@ -303,6 +303,55 @@ public sealed class MojangPickExecutionTests
         keyboard.VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public void ScrollSearch_RecordedBottomSequenceContinuesUpPastPenultimateItem()
+    {
+        var state = new MojangScrollSearchState();
+        Assert.True(state.SelectUp(631, 1, 0));
+        state.RecordSubmitted(true, 631, 0);
+        Assert.True(state.SelectUp(559, 1, 100));
+        state.RecordSubmitted(true, 559, 100);
+        Assert.True(state.SelectUp(487, 1, 200));
+        state.RecordSubmitted(true, 487, 200);
+        Assert.False(state.SelectUp(415, 1, 300));
+    }
+
+    [Fact]
+    public void ScrollSearch_ShortListReversesAfterRepeatedUnchangedSubmittedSteps()
+    {
+        var state = new MojangScrollSearchState();
+        state.RecordSubmitted(true, 487, 0);
+        state.RecordSubmitted(true, 487, 30);
+        state.RecordSubmitted(true, 487, 60);
+        Assert.False(state.SelectUp(487, 1, 90));
+        state.RecordSubmitted(false, 487, 90);
+        Assert.False(state.SelectUp(559, 1, 120));
+    }
+
+    [Fact]
+    public void ScrollSearch_PlanningWithoutSubmissionDoesNotChangeDirection()
+    {
+        var state = new MojangScrollSearchState();
+        Assert.True(state.SelectUp(631, 1, 0));
+        Assert.False(state.SelectUp(559, 1, 100));
+        state.RecordSubmitted(true, 631, 100);
+        state.ClearProgress();
+        Assert.True(state.SelectUp(559, 1, 200));
+        state.Reset();
+        Assert.False(state.SelectUp(559, 1, 300));
+    }
+
+    [Fact]
+    public void ScrollSearch_UnchangedFastFramesDoNotImmediatelyReverse()
+    {
+        var state = new MojangScrollSearchState();
+        state.RecordSubmitted(true, 487, 0);
+        state.RecordSubmitted(true, 487, 10);
+        state.RecordSubmitted(true, 487, 20);
+        Assert.True(state.SelectUp(487, 1, 20));
+        Assert.False(state.SelectUp(487, 1, 80));
+    }
+
     private sealed class MillisecondTimeProvider : TimeProvider
     {
         public long ElapsedMilliseconds { get; set; }

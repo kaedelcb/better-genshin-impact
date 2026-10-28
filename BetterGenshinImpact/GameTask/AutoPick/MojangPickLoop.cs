@@ -51,6 +51,9 @@ public sealed class MojangPickLoop
 
     private readonly ILogger _logger = App.GetLogger<MojangPickLoop>();
     private MojangPickExecution? _execution;
+    private readonly MojangScrollSearchState _scrollSearch = new();
+    private int? _currentPickY;
+    private long _lastSeenPickListMs;
     private long _lastDiagnosticFrameMs = long.MinValue;
     internal bool IsDiagnosticFrame { get; private set; }
     private long _lastScrollDecisionLogMs = long.MinValue;
@@ -94,6 +97,7 @@ public sealed class MojangPickLoop
 
         var previousGroupName = _filter.CurrentGroupName;
         _filter.SetCurrentGroup(groupName, groupConfig);
+        if (previousGroupName != groupName) _scrollSearch.Reset();
 
         // 配置组切换时（含进入配置组）输出一次生效的额外名单
         if (groupName is not null && previousGroupName != groupName)
@@ -163,6 +167,8 @@ public sealed class MojangPickLoop
     internal void Tick(CaptureContent content, Region foundRectArea, AutoPickAssets assets, double scale, MojangPickExecution execution)
     {
         _execution = execution;
+        _currentPickY = foundRectArea.IsEmpty() ? null : foundRectArea.Y;
+        if (_currentPickY.HasValue) _lastSeenPickListMs = Environment.TickCount64;
         SyncGroupFilter();
         var diagnosticNow = Environment.TickCount64;
         IsDiagnosticFrame = _logger.IsEnabled(Microsoft.Extensions.Logging.LogLevel.Debug)
@@ -196,12 +202,16 @@ public sealed class MojangPickLoop
             }
 
             var hasScrollIcon = HasScrollIcon(content.CaptureRectArea);
+            if (hasScrollIcon) _lastSeenPickListMs = Environment.TickCount64;
             if (hasScrollIcon)
             {
                 LogScrollDecision(content, foundRectArea, scale, "无 F 图标，恢复原版向上补选", 1,
                     up: true, distance: 240, afterInterval: 50, interval: 0);
             }
-            RecoverMissingPickKey(hasScrollIcon, execution);
+            if (RecoverMissingPickKey(hasScrollIcon, execution))
+                _scrollSearch.RecordSubmitted(true, null, Environment.TickCount64);
+            else if (!hasScrollIcon && Environment.TickCount64 - _lastSeenPickListMs >= 300)
+                _scrollSearch.Reset();
 
             return;
         }
@@ -359,9 +369,7 @@ public sealed class MojangPickLoop
     {
         if (!HasScrollIcon(content.CaptureRectArea))
         {
-            // 无滚轮图标：向下滚动一次
-            LogScrollDecision(content, foundRectArea, scale, "有 F 但未检测到滚轮图标", 1);
-            ScrollTimes(1);
+            ContinueScrollSearch(content, foundRectArea, scale, "有 F 但未检测到滚轮图标", 1);
             return;
         }
 
@@ -418,8 +426,7 @@ public sealed class MojangPickLoop
             return;
         }
 
-        LogScrollDecision(content, foundRectArea, scale, "上下扫描未找到可拾取物品", Math.Max(1, scanCount - 1));
-        ScrollTimes(Math.Max(1, scanCount - 1)); // 都不是：至少滚一次
+        ContinueScrollSearch(content, foundRectArea, scale, "上下扫描未找到可拾取物品", Math.Max(1, scanCount - 1));
     }
 
     /// <summary>
@@ -428,6 +435,14 @@ public sealed class MojangPickLoop
     /// </summary>
     internal static bool RecoverMissingPickKey(bool hasScrollIcon, MojangPickExecution execution)
         => hasScrollIcon && execution.ScrollDelta(240) && execution.Wait(50);
+
+    private void ContinueScrollSearch(CaptureContent content, Region foundRectArea, double scale, string reason, int times)
+    {
+        var up = _scrollSearch.SelectUp(foundRectArea.Y, scale, Environment.TickCount64);
+        LogScrollDecision(content, foundRectArea, scale, reason + "，延续回扫方向", times, up: up);
+        if (up) ScrollTimesUp(times);
+        else ScrollTimes(times);
+    }
 
     private void TraceCandidate(CaptureContent content, string direction, int row, MojangMatchResult? result)
     {
@@ -504,6 +519,8 @@ public sealed class MojangPickLoop
         for (var i = 0; i < actualTimes; i++)
         {
             if (_execution?.ScrollDelta(-config.ScrollDistance) != true) return;
+            if (i == 0 && Math.Abs((long)config.ScrollDistance) >= 60)
+                _scrollSearch.RecordSubmitted(config.ScrollDistance < 0, _currentPickY, Environment.TickCount64);
             if (i < actualTimes - 1)
             {
                 if (_execution?.Wait(config.ScrollInterval) != true) return;
@@ -524,6 +541,8 @@ public sealed class MojangPickLoop
         for (var i = 0; i < actualTimes; i++)
         {
             if (_execution?.ScrollDelta(config.ScrollDistance) != true) return;
+            if (i == 0 && Math.Abs((long)config.ScrollDistance) >= 60)
+                _scrollSearch.RecordSubmitted(config.ScrollDistance > 0, _currentPickY, Environment.TickCount64);
             if (i < actualTimes - 1)
             {
                 if (_execution?.Wait(config.ScrollInterval) != true) return;
@@ -539,6 +558,7 @@ public sealed class MojangPickLoop
     private bool Interact(string name, string itemName, AutoPickAssets assets)
     {
         if (_execution?.Press(assets.PickVk) != true) return false;
+        _scrollSearch.ClearProgress();
         _logger.LogInformation("交互或拾取：{Name}", name);
         // 记录拾取历史（背包名 + 交互名 + 时间戳），供 JS 侧 dispatcher.getPickRecords() 获取及满背包自动黑名单使用；
         // 背包名与交互名可能不一致（如 交互名"黄金蟹" 对应 背包名"螃蟹"），满背包提示显示的是背包名
@@ -653,6 +673,9 @@ public sealed class MojangPickLoop
         _skipConfirm = false;
         _unknownStreak = 0;
         _execution = null;
+        _scrollSearch.Reset();
+        _currentPickY = null;
+        _lastSeenPickListMs = 0;
         IsDiagnosticFrame = false;
         _lastDiagnosticFrameMs = long.MinValue;
         _lastScrollDecisionLogMs = long.MinValue;
@@ -770,4 +793,33 @@ public sealed class MojangPickLoop
             && color2.Item2 == 255 && color2.Item1 == 255 && color2.Item0 == 255
             && color3.Item2 == 255 && color3.Item1 == 255 && color3.Item0 == 255;
     }
+}
+
+/// <summary>在已提交输入之间保持搜索方向；物品名称不用于判断是否为同一项。</summary>
+internal sealed class MojangScrollSearchState
+{
+    private bool _up;
+    private int? _lastY;
+    private int _stationary;
+    private long _stationarySince;
+
+    internal bool SelectUp(int y, double scale, long now)
+    {
+        if (y + (int)(72 * scale) > (int)(661 * scale)) return true;
+        if (y - (int)(72 * scale) < (int)(347 * scale)) return false;
+        // 重复坐标只表示未观察到进展，不声称已识别真实边界。
+        if (_lastY == y && _stationary >= 2 && now - _stationarySince >= 60) return !_up;
+        return _up;
+    }
+
+    internal void RecordSubmitted(bool up, int? y, long now)
+    {
+        if (y.HasValue && y == _lastY && up == _up) _stationary++;
+        else { _stationary = 0; _stationarySince = now; }
+        _lastY = y;
+        _up = up;
+    }
+
+    internal void ClearProgress() { _lastY = null; _stationary = 0; }
+    internal void Reset() { _up = false; ClearProgress(); }
 }
