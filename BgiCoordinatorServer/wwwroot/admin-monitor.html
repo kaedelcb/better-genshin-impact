@@ -1,13 +1,13 @@
 <!doctype html>
 <html lang="zh-CN"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141527">
-<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-overview">
+<title>联机锄地 · 全服监控</title><link rel="stylesheet" href="/admin-monitor.css?v=20261029-overview"><link rel="stylesheet" href="/project-star.css?v=20261029-1">
 </head><body>
 <!-- B 房间工作台：同屏只查看一个房间；实时与历史独立选择。紫金色沿用助手网页。 -->
 <div class="app">
 <aside class="sidebar"><div class="brand"><span class="brand-mark" aria-hidden="true">◇</span><div><strong>耕地机</strong><small>Nexus BGI · 全服监控</small></div></div>
-<nav class="navigation" aria-label="监控导航"><button id="liveTab" type="button" aria-pressed="true">实时房间</button><button id="historyTab" type="button" aria-pressed="false">历史与日志</button></nav>
-<div class="sidebar-foot"><p>管理员只读视图</p><p>按北京时间查询服务器保存的记录。</p></div></aside>
+<nav class="navigation" aria-label="监控导航"><button id="liveTab" type="button" aria-pressed="true">实时房间</button><button id="historyTab" type="button" aria-pressed="false">历史与日志</button><a class="project-star-short" href="https://github.com/kaedelcb/better-genshin-impact" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 打开茶包项目，点亮 Star（新标签页）">☆ Star</a></nav>
+<div class="sidebar-foot"><p>管理员只读视图</p><p>按北京时间查询服务器保存的记录。</p><a class="project-star admin-star" href="https://github.com/kaedelcb/better-genshin-impact" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 打开茶包项目，点亮 Star（新标签页）"><span class="project-star-copy"><strong>给茶包一颗星</strong><small>让热爱继续发光</small></span><span class="project-star-badge" aria-hidden="true">☆ Star</span></a></div></aside>
 <main class="workspace">
 <header class="top"><div><h1>联机锄地全服监控</h1><p>查看房间状态，定位锄地记录与日志</p></div><div class="top-actions"><span id="updated" class="updated" aria-live="polite">正在连接服务器…</span><button id="refresh" class="button" type="button">刷新</button><button id="findLogs" class="button primary" type="button">查找日志</button><button id="logout" class="button" type="button">退出</button></div></header>
 <section class="metrics" aria-label="全服概况"><div class="metric"><span>在线助手房间</span><strong id="controlRooms">—</strong></div><div class="metric"><span>在线助手成员</span><strong id="controlMembers">—</strong></div><div class="metric"><span>游戏世界房间</span><strong id="totalRooms">—</strong></div><div class="metric"><span>已开锄世界（有人在线）</span><strong id="startedRooms">—</strong></div></section>

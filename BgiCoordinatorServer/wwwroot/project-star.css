@@ -1,0 +1,65 @@
+/* 同助手桌面端一致的轻量 Star 引导；整行是一个可访问的链接。 */
+.project-star {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid #514b61;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #23213e, #1c1d35);
+  color: #f2e3b6;
+  text-decoration: none;
+  transition: border-color .18s, background .18s;
+}
+.project-star:hover { border-color: #e8c96d; background: #292740; }
+.project-star:focus-visible { outline: 2px solid #e8c96d; outline-offset: 3px; }
+.project-star-spark { color: #e8c96d; font-size: 21px; line-height: 1; flex-shrink: 0; }
+.project-star-copy { flex: 1; min-width: 0; line-height: 1.5; }
+.project-star-copy strong { display: block; font-size: 14px; font-weight: 600; }
+.project-star-copy small { display: block; color: #b2aec7; font-size: 12px; margin-top: 3px; }
+.project-star-copy .project-star-sub-short { display: none; }
+.project-star-phrase { display: inline-block; white-space: nowrap; }
+.project-star-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 86px;
+  min-height: 42px;
+  padding: 6px 12px;
+  border: 1px solid #e8c96d;
+  border-radius: 99px;
+  color: #e8c96d;
+  font-size: 14px;
+  font-weight: 600;
+}
+.project-star-badge svg { width: 17px; height: 17px; flex-shrink: 0; }
+.login-card .project-star { margin: 22px 0 0; }
+.login-card .project-star-copy .project-star-sub-long { display: none; }
+.login-card .project-star-copy .project-star-sub-short { display: block; }
+.admin-star { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 18px 0 0; padding: 12px; }
+.admin-star .project-star-badge { justify-self: start; min-height: 36px; }
+.project-star-short { display: none; }
+@media (max-width: 760px) {
+  .sidebar .navigation { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .project-star-short { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 8px 12px; border: 1px solid #e8c96d; border-radius: 9px; color: #e8c96d; text-decoration: none; }
+  .project-star-short:focus-visible { outline: 2px solid #e8c96d; outline-offset: 3px; }
+}
+@media (max-width: 480px) {
+  .project-star { gap: 9px; padding: 11px 12px; }
+  .project-star-spark { font-size: 18px; }
+  .project-star-copy strong { font-size: 13px; }
+  .project-star-copy small { font-size: 12px; }
+  .project-star-copy .project-star-sub-long { display: none; }
+  .project-star-copy .project-star-sub-short { display: block; }
+  .project-star-badge { min-width: 70px; padding: 6px 9px; }
+}
+@media (max-width: 360px) {
+  .top-actions .updated { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .project-star { transition: none; } }
