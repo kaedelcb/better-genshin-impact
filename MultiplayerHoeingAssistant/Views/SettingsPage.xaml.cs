@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -16,5 +17,10 @@ public partial class SettingsPage : UserControl
         {
             if (e.NewValue is true) PetSettingsExpander.IsExpanded = false;
         };
+    }
+
+    private void OpenLocalWebClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is MainWindow window) window.OpenLocalBrowser();
     }
 }

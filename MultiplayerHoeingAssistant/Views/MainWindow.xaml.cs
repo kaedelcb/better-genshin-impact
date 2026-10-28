@@ -15,7 +15,8 @@ public partial class MainWindow : Window
     public MainViewModel ViewModel { get; }
     private LocalBrowserBridge? _localBrowserBridge;
 
-    private void OpenLocalBrowserClick(object sender, RoutedEventArgs e)
+    /// <summary>由设置页“本机网页”卡片调用；配对桥随主窗口生命周期复用。</summary>
+    internal void OpenLocalBrowser()
     {
         try
         {

@@ -619,6 +619,28 @@
             </Border>
 
             <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
+            <!-- ========== 卡片：本机网页（嘟嘟可本机直连入口，原在顶栏） ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="本机网页" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                        <TextBlock Text="在本机浏览器打开嘟嘟可，直接查看此助手的日志、画面与异常监控；远程成员仍可在网页中连接房间查看。"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                        <TextBlock Text="每次打开都会生成一次性配对链接，请勿分享给他人。"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                    </StackPanel>
+                    <Button x:Name="OpenLocalWebButton" Grid.Column="1" Content="打开本机网页" Style="{DynamicResource BtnGold}"
+                            VerticalAlignment="Center" Click="OpenLocalWebClick"/>
+                </Grid>
+            </Border>
+
+            <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
                 <Grid>
                     <Grid.ColumnDefinitions>

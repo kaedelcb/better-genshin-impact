@@ -775,8 +775,6 @@
                         <!-- Row 0 Col 2：设置 + 退出 -->
                         <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" Padding="14,4" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
-                            <Button x:Name="HeaderLocalWebButton" Content="本机网页" Style="{StaticResource BtnGold}" Padding="10,4" Margin="6,0,0,0"
-                                    Click="OpenLocalBrowserClick" ToolTip="在本机浏览器打开嘟嘟可；该网页可访问此助手的日志、画面和相关设置"/>
                             <Button x:Name="HeaderExitButton" Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                     ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>
                         </StackPanel>
