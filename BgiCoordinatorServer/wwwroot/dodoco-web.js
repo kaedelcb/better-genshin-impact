@@ -130,10 +130,21 @@ function dodocoEvent(env) {
         if (x.done) { if (p.chunks.length!==p.total) return dodocoFinish(p,'日志分块不完整。'); dodocoFinish(p,null,p.chunks); }
     }
 }
+// 异常监控只作用于本机助手：进入时固定为本机直连目标，离开时恢复原先选择的成员。
+function dodocoWatchTarget() {
+    if (dodoco.tab === 'watch') {
+        const own = dodocoMembersList().find(p => p.isLocalDirect), uid = own ? own.playerUid : '';
+        if (dodoco.target !== uid) { if (dodoco.watchPrev === undefined) dodoco.watchPrev = dodoco.target; dodoco.target = uid; window.bgiLocalBridge?.selectTarget(uid); }
+    } else if (dodoco.watchPrev !== undefined) {
+        dodoco.target = dodoco.watchPrev; dodoco.watchPrev = undefined; window.bgiLocalBridge?.selectTarget(dodoco.target);
+    }
+}
 function dodocoRender() {
-    dodocoRoot.innerHTML = `<div class="dd-head"><nav class="dodoco-tabs" aria-label="嘟嘟可功能"><button data-tab="live">实时日志</button><button data-tab="files">日志浏览</button><button data-tab="watch">异常监控</button><button data-tab="members">锄地数据</button><button data-tab="screen">桌面监控</button></nav><div class="dd-head-target"><label for="dodocoMember">成员</label><select id="dodocoMember">${dodocoMemberOptions()}</select></div></div><p id="dodocoStatus" class="dodoco-status dd-status" role="status">${dodoco.uncertain?'先前请求因断线结果未确认。':''}${dodocoIsLocal()?(window.bgiLocalBridge.available?'本机直连。':'本机连接未就绪。'):roomReady?'请选择在线成员。':'连接未就绪。'}</p><div id="dodocoContent" class="dd-body"></div>`;
+    dodocoWatchTarget();
+    const ownOnly = dodoco.tab === 'watch';
+    dodocoRoot.innerHTML = `<div class="dd-head"><nav class="dodoco-tabs" aria-label="嘟嘟可功能"><button data-tab="live">实时日志</button><button data-tab="files">日志浏览</button><button data-tab="watch">异常监控</button><button data-tab="members">锄地数据</button><button data-tab="screen">桌面监控</button></nav>${ownOnly?`<div class="dd-head-target"><span class="dd-own-target${dodoco.target?'':' is-off'}">${dodoco.target?'本机助手':'未连接本机助手'}</span></div>`:`<div class="dd-head-target"><label for="dodocoMember">成员</label><select id="dodocoMember">${dodocoMemberOptions()}</select></div>`}</div><p id="dodocoStatus" class="dodoco-status dd-status" role="status">${dodoco.uncertain?'先前请求因断线结果未确认。':''}${dodocoIsLocal()?(window.bgiLocalBridge.available?'本机直连。':'本机连接未就绪。'):ownOnly?'':roomReady?'请选择在线成员。':'连接未就绪。'}</p><div id="dodocoContent" class="dd-body"></div>`;
     dodocoRoot.querySelectorAll('[data-tab]').forEach(b => { b.classList.toggle('active',b.dataset.tab===dodoco.tab); b.onclick=()=>{ dodocoStopAuto(); dodoco.tab=b.dataset.tab; if(dodoco.target==='*' && dodoco.tab!=='screen')dodoco.target=''; dodocoRender(); dodocoSyncSubscription(); }; });
-    d('dodocoMember').onchange=e=>{ dodoco.target=e.target.value; window.bgiLocalBridge?.selectTarget(dodoco.target); dodocoCancelPending('成员已切换，原请求结果未确认。'); dodoco.files=[]; dodoco.fileDate=undefined; dodoco.lines=[]; dodoco.fileName=''; dodoco.raw=null; dodocoStopAuto(); clearTimeout(dodoco.workerTimer); dodoco.regexTimedOut=false; dodoco.workerLatest=++dodoco.workerId; if(dodoco.worker){dodoco.worker.terminate();dodoco.worker=null;} dodoco.fileBusy=false; dodocoRender(); dodocoSyncSubscription(); };
+    if (d('dodocoMember')) d('dodocoMember').onchange=e=>{ dodoco.target=e.target.value; window.bgiLocalBridge?.selectTarget(dodoco.target); dodocoCancelPending('成员已切换，原请求结果未确认。'); dodoco.files=[]; dodoco.fileDate=undefined; dodoco.lines=[]; dodoco.fileName=''; dodoco.raw=null; dodocoStopAuto(); clearTimeout(dodoco.workerTimer); dodoco.regexTimedOut=false; dodoco.workerLatest=++dodoco.workerId; if(dodoco.worker){dodoco.worker.terminate();dodoco.worker=null;} dodoco.fileBusy=false; dodocoRender(); dodocoSyncSubscription(); };
     if (dodoco.tab==='live') dodocoRenderLive();
     if (dodoco.tab==='files') dodocoRenderFiles();
     if (dodoco.tab==='watch' && typeof dodocoRenderWatch==='function') dodocoRenderWatch();
