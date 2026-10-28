@@ -16,21 +16,24 @@ internal enum MojangScrollOutcome
 
 /// <summary>模板拾取每次输入及等待都复核原运行会话，不持有跨会话输入通道。</summary>
 internal sealed class MojangPickExecution(Func<bool> isAllowed, Func<IInputChannel> input, Action<int>? sleep = null,
-    Action<int, int?, MojangScrollOutcome>? onScroll = null)
+    Action<int, int?, MojangScrollOutcome>? onScroll = null, TimeProvider? timeProvider = null)
 {
     private readonly Action<int> _sleep = sleep ?? Thread.Sleep;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     internal bool Wait(int milliseconds)
     {
-        var remaining = Math.Clamp(milliseconds, 0, 5000);
-        while (remaining > 0)
+        var duration = Math.Clamp(milliseconds, 0, 5000);
+        if (duration == 0) return isAllowed();
+        var startedAt = _timeProvider.GetTimestamp();
+        while (true)
         {
             if (!isAllowed()) return false;
-            var slice = Math.Min(remaining, 10);
-            _sleep(slice);
-            remaining -= slice;
+            // Windows 的 Sleep 可能超过请求值；按实际经过时间计时，避免分片超时逐段累加。
+            var remaining = duration - _timeProvider.GetElapsedTime(startedAt).TotalMilliseconds;
+            if (remaining <= 0) return true;
+            _sleep((int)Math.Min(Math.Ceiling(remaining), 10));
         }
-        return isAllowed();
     }
 
     internal bool Press(User32.VK key)

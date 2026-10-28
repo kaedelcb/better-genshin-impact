@@ -188,6 +188,69 @@ public sealed class MojangPickExecutionTests
         Assert.Empty(reports);
     }
 
+    [Theory]
+    [InlineData(16, 1)]
+    [InlineData(50, 4)]
+    [InlineData(64, 4)]
+    public void Wait_OversleepCountsTowardTheRequestedTotal(int duration, int expectedSleeps)
+    {
+        var clock = new MillisecondTimeProvider();
+        var slices = new List<int>();
+        var execution = new MojangPickExecution(() => true, () => throw new InvalidOperationException("等待不应获取输入通道"),
+            sleep: slice =>
+            {
+                Assert.InRange(slice, 1, 10);
+                slices.Add(slice);
+                clock.ElapsedMilliseconds += 16; // 模拟短 Sleep 被系统调度延长。
+            }, timeProvider: clock);
+
+        Assert.True(execution.Wait(duration));
+        Assert.Equal(expectedSleeps, slices.Count);
+        Assert.InRange(clock.ElapsedMilliseconds, (long)duration, (long)duration + 15);
+    }
+
+    [Fact]
+    public void Wait_PermissionCheckTimeAlsoCountsTowardTheRequestedTotal()
+    {
+        var clock = new MillisecondTimeProvider();
+        var slices = new List<int>();
+        var execution = new MojangPickExecution(() =>
+        {
+            clock.ElapsedMilliseconds += 20;
+            return true;
+        }, () => throw new InvalidOperationException("等待不应获取输入通道"),
+            sleep: slice =>
+            {
+                slices.Add(slice);
+                clock.ElapsedMilliseconds += slice;
+            }, timeProvider: clock);
+
+        Assert.True(execution.Wait(50));
+        Assert.Equal(50, clock.ElapsedMilliseconds);
+        Assert.Equal(new[] { 10 }, slices);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Wait_ZeroDurationOnlyChecksPermission(int duration)
+    {
+        var checks = 0;
+        var execution = new MojangPickExecution(() => { checks++; return true; },
+            () => throw new InvalidOperationException("等待不应获取输入通道"),
+            sleep: _ => throw new InvalidOperationException("零等待不应 Sleep"));
+
+        Assert.True(execution.Wait(duration));
+        Assert.Equal(1, checks);
+    }
+
+    private sealed class MillisecondTimeProvider : TimeProvider
+    {
+        public long ElapsedMilliseconds { get; set; }
+        public override long TimestampFrequency => 1000;
+        public override long GetTimestamp() => ElapsedMilliseconds;
+    }
+
     private static Mock<IInputChannel> CreateChannel(Mock<IKeyboardInput> keyboard, Mock<IMouseInput> mouse)
     {
         var channel = new Mock<IInputChannel>(MockBehavior.Strict);
