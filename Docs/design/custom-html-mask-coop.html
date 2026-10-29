@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UID 遮罩 · 联机助手风格</title>
+  <style>
+    /* 配色取自 联机助手·奥黛塔任务状态看板（PetStatusPanelWindow）：
+       底 #E0141C28 / 金边 #99D4AF37 / 标题字 #F2E3B6 / 标签金 #E8C96D / 正文 #EEEADD */
+    :root {
+      --panel-bg: #141C28; /* UID 遮罩块不透明，防止 UID 文字透出 */
+      --panel-bg-soft: #141C28E0;
+      --panel-border: #D4AF3799;
+      --title-gold: #F2E3B6;
+      --label-gold: #E8C96D;
+      --body-cream: #EEEADD;
+
+      /* 1920x1080 设计坐标，覆盖 BGI 内置 UID 遮罩的三块区域 */
+      --uid-1-left: 163; --uid-1-top: 105; --uid-1-w: 150; --uid-1-h: 25;   /* 联机输入 UID（小地图右上） */
+      --uid-2-left: 169; --uid-2-top: 200; --uid-2-w: 111; --uid-2-h: 18;   /* 派蒙菜单 UID（小地图下方） */
+      --uid-3-left: 1685; --uid-3-top: 1053; --uid-3-w: 178; --uid-3-h: 22; /* 右下角 UID */
+
+      /* 顶部公告文字面板 */
+      --banner-left: 406; --banner-top: 21; --banner-w: 900; --banner-h: 52;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: transparent;
+      font-family: "幼圆", "YouYuan", "HarmonyOS Sans SC", "MiSans", "Microsoft YaHei UI", sans-serif;
+      user-select: none;
+    }
+
+    /* 奥黛塔任务状态看板同款：深藏青底 + 金色细边 + 圆角 */
+    .chip {
+      position: absolute;
+      border-radius: 6px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 12px; /* 宽度随文字自适应时的左右留白 */
+    }
+
+    .chip .text {
+      /* 字号贴近块高但上下留出呼吸空间 */
+      font-size: calc(var(--h) * 1px - 7px);
+      line-height: 1;
+      color: var(--title-gold);
+      letter-spacing: 0.06em;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      white-space: nowrap;
+    }
+
+    /* 顶部公告：同看板风格的一行文字面板 */
+    .banner {
+      position: absolute;
+      left: calc(var(--banner-left) / 1920 * 100vw);
+      top: calc(var(--banner-top) / 1080 * 100vh);
+      width: calc(var(--banner-w) / 1920 * 100vw);
+      height: calc(var(--banner-h) / 1080 * 100vh);
+      border-radius: 10px;
+      background: var(--panel-bg-soft);
+      border: 1px solid var(--panel-border);
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 14px;
+    }
+
+    .banner .text {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--body-cream);
+      text-shadow: 0 1px 6px rgba(0, 0, 0, 0.65);
+      white-space: nowrap;
+    }
+
+    .banner .text b {
+      color: var(--label-gold);
+      font-weight: 600;
+    }
+
+    /* 底部联机公告：沿用顶部公告的配色、细边及字体。 */
+    .banner.bottom-notice {
+      left: calc(172 / 1920 * 100vw);
+      top: calc(1028 / 1080 * 100vh);
+      width: max-content;
+      max-width: calc(1506 / 1920 * 100vw);
+      justify-content: flex-start;
+      height: calc(30 / 1080 * 100vh);
+      border-radius: calc(6 / 1080 * 100vh);
+      padding: 0 calc(14 / 1920 * 100vw);
+      pointer-events: none;
+      background: var(--panel-bg);
+    }
+    .bottom-notice .text {
+      font-size: min(calc(20 / 1080 * 100vh), calc(24 / 1920 * 100vw));
+      letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+  <!-- 左上两块 -->
+  <div class="chip" style="
+    left: calc(var(--uid-1-left) / 1920 * 100vw);
+    top: calc(var(--uid-1-top) / 1080 * 100vh);
+    min-width: calc(var(--uid-1-w) / 1920 * 100vw);
+    height: calc(var(--uid-1-h) / 1080 * 100vh);
+    --h: var(--uid-1-h);"></div>
+
+  <div class="chip" style="
+    left: calc(var(--uid-2-left) / 1920 * 100vw);
+    top: calc(var(--uid-2-top) / 1080 * 100vh);
+    min-width: calc(var(--uid-2-w) / 1920 * 100vw);
+    height: calc(var(--uid-2-h) / 1080 * 100vh);
+    --h: var(--uid-2-h);"></div>
+
+  <!-- 右下角：茶包版BGI -->
+  <div class="chip" style="
+    left: calc(var(--uid-3-left) / 1920 * 100vw);
+    top: calc(var(--uid-3-top) / 1080 * 100vh);
+    min-width: calc(var(--uid-3-w) / 1920 * 100vw);
+    height: calc(var(--uid-3-h) / 1080 * 100vh);
+    --h: var(--uid-3-h);"><span class="text">茶 包 版 BGI</span></div>
+
+  <!-- 顶部公告 -->
+  <div class="banner">
+    <span class="text"><b>联机锄地（传奇+精英）</b>每天9点到14点，其他时间狗粮+日常任务+单机小怪</span>
+  </div>
+  <!-- 底部公告：聊天快捷键与跳跃提示之间 -->
+  <div class="banner bottom-notice" role="note" aria-label="联机锄地说明">
+    <span class="text"><b>无人值守，欢迎加入联机锄地</b>，小怪只刷摩拉不拾取，精英只拾取狗粮圣遗物</span>
+  </div>
+</body>
+</html>
