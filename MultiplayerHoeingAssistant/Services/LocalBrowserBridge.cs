@@ -110,7 +110,7 @@ internal sealed class LocalBrowserBridge : IDisposable
                     if (resource == null) { await WriteAsync(stream, 404, "text/plain; charset=utf-8", [], timeout.Token); return; }
                     await WriteAsync(stream, 200, resource.Value.ContentType, resource.Value.Bytes, timeout.Token); return;
                 }
-                if (request.Method != "POST" || !request.Headers.TryGetValue("origin", out var origin) || origin != Origin ||
+                if (request.Method != "POST" || !request.Headers.TryGetValue("origin", out var origin) || !SameOrigin(origin, request.Headers) ||
                     !request.Headers.TryGetValue("content-type", out var type) ||
                     !(type.Equals("application/json", StringComparison.OrdinalIgnoreCase) || type.StartsWith("application/json;", StringComparison.OrdinalIgnoreCase)))
                 { await WriteJsonAsync(stream, 403, new { status = "error", message = "来源或请求格式无效" }, timeout.Token); return; }
@@ -203,6 +203,11 @@ internal sealed class LocalBrowserBridge : IDisposable
 
     private static bool ValidToken(string value) => value.Length is > 0 and <= 128 &&
         value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-');
+
+    // 部分浏览器扩展会把 Origin 改写成不带端口的 http://127.0.0.1；此时只接受浏览器自身标注的同源请求。
+    // Sec-Fetch-Site 由浏览器设置，网页脚本无法伪造；其他端口或站点的页面仍被拒绝。
+    private bool SameOrigin(string origin, Dictionary<string, string> headers) => origin == Origin ||
+        (origin == "http://127.0.0.1" && headers.TryGetValue("sec-fetch-site", out var site) && site == "same-origin");
 
     private void Expire()
     {

@@ -133,7 +133,10 @@
         if(pairingToken) {
             try{sessionStorage.removeItem(storageKey);}catch{}
             const response=await fetch('/api/pair',{method:'POST',cache:'no-store',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:pairingToken})});
-            if(!response.ok)throw new Error('本机配对失败或已过期，请从助手重新打开。');
+            if(!response.ok){
+                let reason='';try{reason=(await response.json())?.message||'';}catch{}
+                throw new Error(`本机配对被拒绝（${response.status}${reason?'：'+reason:''}），请从助手重新打开。`);
+            }
             pair=await response.json();
         }
         if(typeof pair.sessionId!=='string'||!pair.sessionId||typeof pair.instanceId!=='string'||!pair.instanceId)throw new Error('本机配对响应无效。');

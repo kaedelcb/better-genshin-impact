@@ -60,6 +60,28 @@ public sealed class LocalBrowserBridgeTests
     }
 
     [Fact]
+    public async Task Pairing_AcceptsPortlessLoopbackOrigin_OnlyWhenBrowserMarksSameOrigin()
+    {
+        using var bridge = new LocalBrowserBridge((_, _) => Task.FromResult(new LocalBrowserResult("ok")));
+        using var client = Client(bridge);
+        var token = PairToken(bridge);
+        async Task<HttpResponseMessage> PortlessPair(string? site)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/pair")
+            { Content = new StringContent(JsonSerializer.Serialize(new { token }), Encoding.UTF8, "application/json") };
+            request.Headers.TryAddWithoutValidation("Origin", "http://127.0.0.1");
+            if (site != null) request.Headers.TryAddWithoutValidation("Sec-Fetch-Site", site);
+            return await client.SendAsync(request);
+        }
+        using var noSite = await PortlessPair(null);
+        Assert.Equal(HttpStatusCode.Forbidden, noSite.StatusCode);
+        using var crossSite = await PortlessPair("same-site");
+        Assert.Equal(HttpStatusCode.Forbidden, crossSite.StatusCode);
+        using var sameOrigin = await PortlessPair("same-origin");
+        Assert.Equal(HttpStatusCode.OK, sameOrigin.StatusCode);
+    }
+
+    [Fact]
     public async Task RequestId_DeduplicatesConcurrentMutations_AndRejectsChangedPayload()
     {
         var calls = 0;
