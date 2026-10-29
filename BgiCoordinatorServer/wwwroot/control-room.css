@@ -252,6 +252,23 @@ small,.small{font-size:12px}
   .quick-btn{flex:1 0 calc(33% - 8px);min-height:40px}
 }
 @media(max-width:380px){.topbar .brand small{display:none}.top-star span{display:none}.top-star{padding:0 10px}}
+/* 品牌名较长（提瓦特生物灭绝计划）：手机上品牌与 Star/设置占第一行，房间状态单独一行横排，导航在最后。 */
+.topbar .brand{min-width:0}
+.topbar .brand strong{white-space:nowrap}
+@media(max-width:700px){
+  .topbar{grid-template-columns:minmax(0,1fr) auto auto}
+  .topbar .brand{grid-column:1;grid-row:1}
+  .topbar .brand>div{min-width:0}
+  .topbar .brand strong{font-size:17px;letter-spacing:1px;overflow:hidden;text-overflow:ellipsis}
+  .topbar .top-star{grid-column:2;grid-row:1}
+  .topbar .icon-button{grid-column:3;grid-row:1}
+  .topbar .room{grid-column:1/-1;grid-row:2;justify-self:stretch;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left}
+  .topbar .room strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .room>span{flex-shrink:0;white-space:nowrap}
+  .topbar .product-nav{grid-row:3}
+  .login-card .login-brand h1{font-size:clamp(20px,6.6vw,26px);letter-spacing:1px;white-space:nowrap}
+}
+@media(max-width:340px){.topbar .brand strong{font-size:16px;letter-spacing:0}.topbar .brand-mark{font-size:20px}.login-card .login-brand h1{letter-spacing:0}}
 
 /* 成员详情·状态：单列堆叠，标签栏与面板同宽；联机安排为紧凑条，整页一屏可见。 */
 #detailView{max-width:1040px;margin-inline:auto}
