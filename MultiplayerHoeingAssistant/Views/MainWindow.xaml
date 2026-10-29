@@ -421,25 +421,36 @@
     <!-- ========== 根布局 ========== -->
     <Grid>
         <!-- ===== 背景装饰层（不响应交互） ===== -->
+        <!-- 三处大半径模糊各包一层位图缓存：画一次后直接复用，页面滚动重绘时不再每帧重算模糊；
+             屏幕像素与不缓存时一致（窗口改尺寸时 WPF 自动重建缓存） -->
         <Grid IsHitTestVisible="False">
             <!-- 星河光带（斜向柔光） -->
-            <Rectangle Fill="{StaticResource GalaxyBand}" Margin="-160,-260,-160,320">
-                <Rectangle.RenderTransform><RotateTransform Angle="-13" CenterX="0.5" CenterY="0.5"/></Rectangle.RenderTransform>
-                <Rectangle.Effect><BlurEffect Radius="38"/></Rectangle.Effect>
-            </Rectangle>
+            <Decorator Margin="-160,-260,-160,320">
+                <Decorator.CacheMode><BitmapCache SnapsToDevicePixels="True"/></Decorator.CacheMode>
+                <Rectangle Fill="{StaticResource GalaxyBand}">
+                    <Rectangle.RenderTransform><RotateTransform Angle="-13" CenterX="0.5" CenterY="0.5"/></Rectangle.RenderTransform>
+                    <Rectangle.Effect><BlurEffect Radius="38"/></Rectangle.Effect>
+                </Rectangle>
+            </Decorator>
             <!-- 菱形暗纹 -->
             <Rectangle Fill="{StaticResource DiamondPattern}"/>
             <!-- 星点 -->
             <Rectangle Fill="{StaticResource StarField}"/>
             <!-- 辉光 -->
-            <Ellipse Width="480" Height="300" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-140,0,0">
-                <Ellipse.Fill><RadialGradientBrush><GradientStop Color="#2EA078E8" Offset="0"/><GradientStop Color="#00A078E8" Offset="1"/></RadialGradientBrush></Ellipse.Fill>
-                <Ellipse.Effect><BlurEffect Radius="60"/></Ellipse.Effect>
-            </Ellipse>
-            <Ellipse Width="480" Height="380" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-120,-160">
-                <Ellipse.Fill><RadialGradientBrush><GradientStop Color="#1FE8C96D" Offset="0"/><GradientStop Color="#00E8C96D" Offset="1"/></RadialGradientBrush></Ellipse.Fill>
-                <Ellipse.Effect><BlurEffect Radius="60"/></Ellipse.Effect>
-            </Ellipse>
+            <Decorator HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,-140,0,0">
+                <Decorator.CacheMode><BitmapCache SnapsToDevicePixels="True"/></Decorator.CacheMode>
+                <Ellipse Width="480" Height="300">
+                    <Ellipse.Fill><RadialGradientBrush><GradientStop Color="#2EA078E8" Offset="0"/><GradientStop Color="#00A078E8" Offset="1"/></RadialGradientBrush></Ellipse.Fill>
+                    <Ellipse.Effect><BlurEffect Radius="60"/></Ellipse.Effect>
+                </Ellipse>
+            </Decorator>
+            <Decorator HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-120,-160">
+                <Decorator.CacheMode><BitmapCache SnapsToDevicePixels="True"/></Decorator.CacheMode>
+                <Ellipse Width="480" Height="380">
+                    <Ellipse.Fill><RadialGradientBrush><GradientStop Color="#1FE8C96D" Offset="0"/><GradientStop Color="#00E8C96D" Offset="1"/></RadialGradientBrush></Ellipse.Fill>
+                    <Ellipse.Effect><BlurEffect Radius="60"/></Ellipse.Effect>
+                </Ellipse>
+            </Decorator>
             <!-- 命之座星座（右上） -->
             <Canvas Width="180" Height="150" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,90,40,0" Opacity="0.5">
                 <Polyline Points="18,120 58,84 98,96 138,52 162,20" Stroke="#8CE8C96D" StrokeThickness="0.8"/>
@@ -489,7 +500,20 @@
             </Grid.ColumnDefinitions>
 
             <!-- ========== 左侧冒险家协会装饰栏 ========== -->
+            <!-- 列宽为 0 时（嘟嘟可/槲寄生）整栏折叠：看不见的诊断日志框不再随每条新日志在 0 宽度下重新排版 -->
             <Border Grid.Column="0" BorderThickness="0,0,1,0" BorderBrush="{StaticResource GoldLine}">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Mistletoe}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Dodoco}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
                         <GradientStop Color="#EB181638" Offset="0"/>

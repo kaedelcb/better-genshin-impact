@@ -34,6 +34,7 @@ public partial class BasicTaskCenterView : UserControl
         {
             ApplyScrollViewerStyles();
             Host?.StartAutoRefresh();
+            SyncLocalRefreshVisibility();
             EnsureNodeSelection();
         };
         DataContextChanged += (_, e) =>
@@ -49,9 +50,19 @@ public partial class BasicTaskCenterView : UserControl
                 newHost.SnapshotRefreshed += ObserveResourceTasks;
             }
             CloseTransientEditors();
+            SyncLocalRefreshVisibility();
         };
+        // 可见性在布局传播中变化；放到当前操作之后再读，连续切换只按最终状态处理。
+        IsVisibleChanged += (_, _) => Dispatcher.BeginInvoke(new Action(SyncLocalRefreshVisibility));
+        // 资源任务弹层不随页面折叠关闭，它打开期间仍要跟随另一端的修改。
+        ResourceTasksPopup.Opened += (_, _) => SyncLocalRefreshVisibility();
+        ResourceTasksPopup.Closed += (_, _) => SyncLocalRefreshVisibility();
         Unloaded += (_, _) => { Host?.StopAutoRefresh(); CloseTransientEditors(); };
     }
+
+    /// <summary>本机展示刷新只在有人看时走表：页面可见或资源任务弹层打开。</summary>
+    private void SyncLocalRefreshVisibility()
+        => Host?.SetLocalRefreshVisible(IsVisible || ResourceTasksPopup.IsOpen);
 
     private async void OnTaskCenterEditingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

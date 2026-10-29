@@ -268,7 +268,12 @@
         <!-- ============ 节点卡递归模板（主链与分支子链共用，条件节点内嵌自身实现递归） ============ -->
         <DataTemplate DataType="{x:Type vm:StartupStepViewModel}">
             <StackPanel Margin="0,0,0,2">
-                <!-- 节点卡 -->
+                <!-- 节点卡：外包一层位图缓存（连同卡片阴影）。滚动时直接贴缓存，不再每帧重算模糊阴影；
+                     卡片内容变化时 WPF 自动重建缓存，屏幕像素与不缓存时一致 -->
+                <Decorator>
+                <Decorator.CacheMode>
+                    <BitmapCache SnapsToDevicePixels="True"/>
+                </Decorator.CacheMode>
                 <Border MinWidth="300"
                         AllowDrop="True"
                         DragOver="NodeCard_DragOver" Drop="NodeCard_Drop"
@@ -1157,6 +1162,7 @@
                         </Border>
                     </StackPanel>
                 </Border>
+                </Decorator>
 
                 <!-- ===== 条件分支区：是 / 否 两条子链，AdaptiveBranchPanel 自适应排布：
                      宽度够时左右并排（是左否右），嵌套太深或窗口太窄放不下时自动改上下堆叠（是上否下），右列不再被裁 ===== -->

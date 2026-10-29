@@ -87,11 +87,35 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     /// <summary>页面释放时停表（S1：定时器不承担调度/恢复）。</summary>
     public void StopAutoRefresh() { _timer?.Stop(); _remoteTimer?.Stop(); _timeWindowTimer?.Stop(); }
 
+    // 任务中心页面常驻可视树（切到启动中心/主页只是折叠）。本机 2s 展示刷新每拍都整目录读取运行记录，
+    // 折叠时没有人看，只白占界面线程；所以只在页面可见时走表，重新可见时先立即刷新一次。
+    private bool _localRefreshVisible = true;
+
+    /// <summary>任务中心页面可见性变化时由视图调用（只管本机展示刷新；远程轮询不受影响）。</summary>
+    internal void SetLocalRefreshVisible(bool visible)
+    {
+        if (_timer is null || _localRefreshVisible == visible) return;
+        _localRefreshVisible = visible;
+        if (_configTransferPaused)
+        {
+            // 迁移期间不走表；结束时按当时的可见性恢复。
+            _configTransferRefreshWasEnabled = visible;
+            return;
+        }
+        if (!visible)
+        {
+            _timer.Stop();
+            return;
+        }
+        Refresh();
+        _timer.Start();
+    }
+
     /// <summary>页面重新 Loaded 时恢复刷新（幂等；与 StopAutoRefresh 配对）。</summary>
     public void StartAutoRefresh()
     {
         if (_configTransferPaused) return;
-        _timer?.Start();
+        if (_localRefreshVisible) _timer?.Start();
         _remoteTimer?.Start();
         RefreshTimeWindows();
         _timeWindowTimer?.Start();
