@@ -342,3 +342,5 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 /* 嘟嘟可：查看他人数据时的只读说明与授权入口 */
 .dd-owner-note{margin-bottom:var(--dd-gap,16px);border-color:#5d5039;background:#211f30}
 .dd-owner-note .dd-filters{margin:0}
+/* 运行备注是执行端的内部记录，同 PC 只显示两行，完整内容在悬停提示和运行记录里。 */
+.tc-run-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

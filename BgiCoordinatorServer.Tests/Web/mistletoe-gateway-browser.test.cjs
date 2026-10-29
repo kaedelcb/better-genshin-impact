@@ -483,6 +483,22 @@ async function layoutAudit(page, name) {
       await executor.waitForFunction(() => sim.flows.has('wf-mig'), null, { timeout: 8000 });
     });
 
+    await check('结果未知的旧运行：同 PC 不铺成卡片，计划区说明原因，重置后可再次启动', async () => {
+      await page.locator('[data-mt-tab="taskcenter"]').click(); await page.locator('#tcPlanList [data-plan="wf-sim"]').click();
+      await S(l => { for (let i = 0; i < 6; i++) sim.runs.push({ runId: 'run-unk-' + i, workflowId: 'wf-sim', workflowRevision: 'old', state: 8, driving: false, stopRequested: false, cursor: { nodeId: 'n-a', loopIteration: 0 }, nodeOutcomes: [], updatedAt: new Date(Date.now() - i * 60000).toISOString(), note: l }); }, '助手重启：提交存在未闭合发送事实（idem-xxx），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。'.repeat(3));
+      await page.locator('#tcResetHere').waitFor({ timeout: 10000 });
+      assert.equal(await page.locator('#tcRuns .tc-run').count(), 0, 'Unknown 运行不显示为运行卡片');
+      assert.match(await page.locator('#tcPlanHead .tc-reason').textContent(), /6 条旧运行结果无法确认/);
+      assert.equal(await page.locator('#tcStart').isDisabled(), true, 'Unknown 仍阻止再次启动');
+      await layoutAudit(page, 'Unknown 计划区 1440');
+      if (shots) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: path.join(shots, 'taskcenter-unknown-1440.png') }); report.shots.push('taskcenter-unknown-1440'); }
+      const resets = await S(() => sim.resetCount || 0);
+      yes(); await page.locator('#tcResetHere').click();
+      await executor.waitForFunction(n => sim.resetCount === n + 1, resets, { timeout: 10000 });
+      await page.locator('#tcResetHere').waitFor({ state: 'detached', timeout: 10000 });
+      await page.waitForFunction(() => !document.querySelector('#tcStart').disabled, null, { timeout: 10000 });
+    });
+
     await check('运行记录：历史显示、计划筛选、长文本换行', async () => {
       await S(l => { sim.history.unshift({ runId: 'run-hist', workflowId: 'wf-sim', state: 5, updatedAt: new Date().toISOString(), note: l, nodeOutcomes: [{ nodeId: 'n-a', loopIteration: 0, result: 'failed', reason: l }] }); }, '失败原因'.repeat(40));
       await page.locator('[data-mt-tab="history"]').click();

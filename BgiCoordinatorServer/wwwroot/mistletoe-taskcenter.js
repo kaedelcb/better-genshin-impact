@@ -88,7 +88,7 @@ async function tcLoad(silent) {
         if (mt.unconfirmed) await mtReconcile(true);
         const flows = tcFlows();
         if (tc.selected && !flows.some(f => f.id === tc.selected)) { tc.selected = ''; tc.doc = null; }
-        if (!tc.selected) { const f = flows.find(tcCanStart) || flows.find(tcCanEdit) || flows.find(f => !f.quarantined); if (f) await tcOpen(f.id, true); }
+        if (!tc.selected) { const f = flows.find(x => tcCanStart(x) && !tcBlocking(x.id)) || flows.find(tcCanStart) || flows.find(tcCanEdit) || flows.find(f => !f.quarantined); if (f) await tcOpen(f.id, true); }
         else {
             const f = tcFlow();
             if (f && tc.doc && f.revision !== tc.revision && !tc.saving) {
@@ -181,10 +181,12 @@ function tcRender(host) {
 }
 function tcRenderRuns() {
     const host = mtEl('tcRuns'); if (!host) return;
-    const views = tcActive().map(tcRunView);
+    // 同 PC CurrentPlanRuns：只展示当前选中计划的运行；结果未知（Unknown）和已重置的旧记录留在运行记录里，
+    // 不铺成首屏卡片。它们仍按 PC 规则阻止同计划再次启动，原因和「重置执行状态」显示在计划标题区。
+    const views = tcActive().filter(r => mtPick(r, 'workflowId') === tc.selected && tcState(r) !== 'Unknown' && !tcReleased(r)).map(tcRunView);
     if (!views.length) { host.innerHTML = ''; host.className = ''; return; }
     host.className = 'tc-runs';
-    host.innerHTML = views.map(v => `<article class="dd-card tc-run tone-${v.tone}"><div class="tc-run-main"><span class="dd-pill ${v.tone}">${mte(v.text)}</span><div class="tc-run-text"><strong>${mte(v.name)}</strong><small>${mte(v.current)}</small>${v.hint ? `<small>${mte(v.hint)}</small>` : ''}${v.run.note ? `<small class="mt-break">${mte(v.run.note)}</small>` : ''}</div></div>
+    host.innerHTML = views.map(v => `<article class="dd-card tc-run tone-${v.tone}"><div class="tc-run-main"><span class="dd-pill ${v.tone}">${mte(v.text)}</span><div class="tc-run-text"><strong>${mte(v.name)}</strong><small>${mte(v.current)}</small>${v.hint ? `<small>${mte(v.hint)}</small>` : ''}${v.run.note ? `<small class="mt-break tc-run-note" title="${mte(v.run.note)}">${mte(v.run.note)}</small>` : ''}</div></div>
       <div class="dd-actions">${v.canPause ? `<button class="dd-btn dd-btn-sm" data-run-act="Pause" data-run="${mte(v.run.runId)}" title="当前节点结束后暂停计划">暂停</button>` : ''}${v.canResume ? `<button class="dd-btn dd-btn-sm" data-run-resume="${mte(v.run.runId)}">恢复</button>` : ''}${v.canSkip ? `<button class="dd-btn dd-btn-sm" data-run-act="SkipCurrent" data-run="${mte(v.run.runId)}">跳过当前</button>` : ''}${v.canReload ? `<button class="dd-btn dd-btn-sm dd-btn-quiet" data-run-act="ReloadDefinition" data-run="${mte(v.run.runId)}" title="新修订在下一节点边界生效">重载计划</button>` : ''}${v.canStop ? `<button class="dd-btn dd-btn-sm dd-btn-danger" data-run-act="Stop" data-run="${mte(v.run.runId)}">停止</button>` : ''}</div></article>`).join('');
     host.querySelectorAll('[data-run-act]').forEach(b => b.onclick = () => tcRunAction(b.dataset.run, b.dataset.runAct, b));
     host.querySelectorAll('[data-run-resume]').forEach(b => b.onclick = () => tcResume(b.dataset.runResume, b));
@@ -194,7 +196,7 @@ function tcRenderPlans() {
     const flows = tcFlows();
     host.innerHTML = flows.length ? flows.map(f => { const run = tcBlocking(f.id); return `<button class="tc-plan${f.id === tc.selected ? ' active' : ''}" data-plan="${mte(f.id)}"><span class="tc-plan-name">${mte(f.name)}</span><small>${f.quarantined ? '已隔离 · 只能查看原因' : f.candidate ? '只读候选 · 可激活' : f.unsupported.length ? '含未支持类型 · 不可启动' : run ? mte(run.text) : '就绪'}</small></button>`; }).join('')
         : '<p class="dd-empty">还没有计划表。点「＋ 新建」开始安排配置单。</p>';
-    host.querySelectorAll('[data-plan]').forEach(b => b.onclick = async () => { if (b.dataset.plan === tc.selected) return; await tcOpen(b.dataset.plan); tcRenderPlans(); tcRenderPlanHead(); tcRenderNodes(); });
+    host.querySelectorAll('[data-plan]').forEach(b => b.onclick = async () => { if (b.dataset.plan === tc.selected) return; await tcOpen(b.dataset.plan); tcRenderRuns(); tcRenderPlans(); tcRenderPlanHead(); tcRenderNodes(); });
 }
 function tcPlanSummary(doc) {
     const trig = (doc.triggers || []).length === 1 ? doc.triggers[0] : null, t = trig?.time || trig?.at;
@@ -209,14 +211,17 @@ function tcRenderPlanHead() {
     const f = tcFlow(), doc = tc.doc;
     if (!f || !doc) { host.innerHTML = `<p class="dd-empty">${tcFlows().length ? (tc.loadingDoc ? '正在打开计划…' : '在左侧选择一张计划表') : '先新建一张计划表，再添加配置单。'}</p>`; return; }
     const nodes = tcResourceNodes(), enabled = nodes.filter(tcEnabled).length, block = tcBlocking(f.id), marker = tcStartMarker();
+    const unknown = tcActive().filter(r => mtPick(r, 'workflowId') === f.id && tcState(r) === 'Unknown' && !tcReleased(r));
+    const lastUnknown = unknown.map(r => String(mtPick(r, 'updatedAt') || '')).sort().at(-1) || '';
     const markerNode = marker ? doc.nodes.find(n => n.nodeId === marker) : null;
-    const reason = f.quarantined ? '隔离原因：' + (f.reason || '未知') : f.candidate ? '迁移候选：只读预览；激活后才可编辑和启动。' : f.unsupported.length ? '未支持类型：' + f.unsupported.join('、') : block ? `当前计划已有运行（${block.text}），处理后才能再次启动。` : !enabled ? '当前计划没有启用的配置单。' : '';
+    const reason = f.quarantined ? '隔离原因：' + (f.reason || '未知') : f.candidate ? '迁移候选：只读预览；激活后才可编辑和启动。' : f.unsupported.length ? '未支持类型：' + f.unsupported.join('、') : unknown.length ? `这张计划有 ${unknown.length} 条旧运行结果无法确认（最近一次 ${lastUnknown.replace('T', ' ').slice(5, 16)}），执行端禁止它再次启动，PC 端同样不能启动。点「重置执行状态」放弃这些旧执行，历史保留、不会自动启动；之后即可重新启动。` : block ? `当前计划已有运行（${block.text}），处理后才能再次启动。` : !enabled ? '当前计划没有启用的配置单。' : '';
     const save = tc.conflict ? `<span class="mt-save-state is-error">${mte(tc.conflict)}</span>` : `<span class="mt-save-state${tc.dirty || tc.saving ? ' is-dirty' : ''}">${tc.saving ? '正在保存到执行端…' : tc.dirty ? '有修改，稍后自动保存' : '已与执行端同步'}</span>`;
     host.innerHTML = `<div class="tc-head-row"><div class="tc-head-title"><h2 class="mt-break">${mte(doc.name || f.name)}</h2><p class="dodoco-hint">${nodes.length ? `${nodes.length} 个配置单 · ${enabled} 个已启用` : '空计划 · 先新增任务'} · ${mte(tcPlanSummary(doc))}${markerNode ? ` · 从「${mte(tcNodeName(markerNode))}」开始` : ''}</p></div>
         <div class="dd-actions"><button id="tcSettings" class="dd-btn dd-btn-sm"${tcCanEdit(f) ? '' : ' disabled'}>计划设置</button><button id="tcStart" class="dd-btn dd-btn-primary"${!tcCanStart(f) || block || !enabled || tc.starting || tc.conflict ? ' disabled' : ''}>⏵⏵ 连续一条龙</button></div></div>
-      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}<label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
+      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}${unknown.length && !f.quarantined ? '<button id="tcResetHere" class="dd-btn dd-btn-sm dd-btn-primary">重置执行状态</button>' : ''}<label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
     mtEl('tcSettings').onclick = tcPlanSettings; mtEl('tcStart').onclick = () => tcStart(null);
     if (mtEl('tcReloadPlan')) mtEl('tcReloadPlan').onclick = async () => { if (!confirm('读取最新计划会放弃本端未保存的草稿，是否继续？')) return; tc.dirty = false; tc.conflict = ''; await tcOpen(tc.selected, true); tcRenderPlanHead(); tcRenderNodes(); };
+    if (mtEl('tcResetHere')) mtEl('tcResetHere').onclick = () => tcManageAction('reset');
     if (mtEl('tcActivate')) mtEl('tcActivate').onclick = () => tcMigration('task.migration.activate', f.id, `激活候选「${f.name}」`);
     mtEl('tcWindowSwitch').onchange = e => { doc.nodeTimeWindowEnabled = e.target.checked; tcEdited(e.target.checked ? '已开启按时段执行：时段外任务跳过。' : '已关闭按时段执行：保留时段设置，按原计划执行。'); };
 }
@@ -575,7 +580,7 @@ async function tcInnerTasks(node, connect) {
 async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
     const f = tcFlow(); if (!f || tc.starting) return;
     if (!tcCanStart(f)) return mtToast(`计划「${f.name}」当前不可启动：${f.quarantined ? '已隔离' : f.candidate ? '只读候选' : '含未支持类型'}`, true);
-    const block = tcBlocking(f.id); if (block) return mtToast(`计划已有运行（${block.text}）；处理后才能再次启动，本次没有发送。`, true);
+    const block = tcBlocking(f.id); if (block) return mtToast(block.st === 'Unknown' ? '这张计划有结果无法确认的旧运行，执行端禁止再次启动；请先点「重置执行状态」，本次没有发送。' : `计划已有运行（${block.text}）；处理后才能再次启动，本次没有发送。`, true);
     tc.starting = true; tcRenderPlanHead();
     try {
         if (!(await tcFlush())) { mtToast('执行端计划尚未确认保存，已取消启动', true); return; }
