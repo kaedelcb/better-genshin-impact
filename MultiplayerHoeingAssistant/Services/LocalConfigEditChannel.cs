@@ -123,11 +123,11 @@ internal sealed class LocalConfigEditChannel : IDisposable
         // Center endpoints use their PID only as an address hint; SendAsync verifies the
         // connected pipe server's actual PID and the HMAC/target instance before use.
         Endpoint[] candidates;
-        if (channel == "center")
+        if (channel is "center" or "browser")
         {
             try
             {
-                var prefix = @"\\.\pipe\BetterGI.Assistant.center-p";
+                var prefix = @"\\.\pipe\BetterGI.Assistant." + channel + "-p";
                 candidates = Directory.GetFiles(@"\\.\pipe\")
                     .Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                     .Select(path => (Path: path, Suffix: path[prefix.Length..]))
@@ -192,7 +192,8 @@ internal sealed class LocalConfigEditChannel : IDisposable
         using var limit = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(12));
         if (endpoint.StartTicks == 0)
         {
-            const string prefix = "BetterGI.Assistant.center-p";
+            var prefix = endpoint.PipeName.StartsWith("BetterGI.Assistant.browser-p", StringComparison.Ordinal)
+                ? "BetterGI.Assistant.browser-p" : "BetterGI.Assistant.center-p";
             if (!endpoint.PipeName.StartsWith(prefix, StringComparison.Ordinal)
                 || !int.TryParse(endpoint.PipeName[prefix.Length..], out var pipePid)
                 || pipePid != endpoint.ProcessId)

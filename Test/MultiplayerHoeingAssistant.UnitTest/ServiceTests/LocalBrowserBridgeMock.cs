@@ -1,6 +1,26 @@
 using MultiplayerHoeingAssistant.Services;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Diagnostics;
+
+LocalBrowserHandoff.Identity HandoffIdentity(bool executor) => new("mock-owner", "模拟本机", "mock-room",
+    Environment.GetEnvironmentVariable("DODOCO_TEST_INSTANCE") ?? "mock-instance", "mock-only-secret", executor, Process.GetCurrentProcess().SessionId);
+if (args.Contains("--handoff-client"))
+{
+    var identity = HandoffIdentity(false);
+    var targets = await LocalBrowserHandoff.FindExecutorsAsync(identity);
+    if (args.Contains("--handoff-list")) { Console.WriteLine(targets.Count); return; }
+    if (args.FirstOrDefault(arg => arg.StartsWith("--instance=", StringComparison.Ordinal)) is { } selected)
+        targets = targets.Where(target => target.InstanceId == selected[11..]).ToArray();
+    if (targets.Count != 1)
+    {
+        Console.Error.WriteLine("HANDOFF_TARGET_COUNT=" + targets.Count);
+        Environment.ExitCode = 2;
+        return;
+    }
+    Console.WriteLine(await LocalBrowserHandoff.GetPairingUrlAsync(identity, targets[0]));
+    return;
+}
 
 // Test-only loopback host. All returned content is synthetic; no user configuration is loaded.
 using var image = new Bitmap(16, 12);
@@ -21,6 +41,7 @@ using var bridge = new LocalBrowserBridge((request, _) => Task.FromResult(reques
     "report.dates" => new LocalBrowserResult("ok", Data: new { dates = Array.Empty<string>() }),
     _ => new LocalBrowserResult("error", "模拟端不支持此操作")
 }));
-Console.WriteLine(bridge.CreatePairingUrl());
+using var handoff = new LocalBrowserHandoff(() => HandoffIdentity(true), _ => bridge.CreatePairingUrl(), Console.Error.WriteLine);
+Console.WriteLine(args.Contains("--handoff-executor") ? "READY" : bridge.CreatePairingUrl());
 Console.Out.Flush();
 Console.ReadLine();

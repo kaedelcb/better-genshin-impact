@@ -628,8 +628,11 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock Text="本机网页" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                        <TextBlock Text="在本机浏览器打开嘟嘟可，直接查看此助手的日志、画面与异常监控；远程成员仍可在网页中连接房间查看。"
+                        <TextBlock Text="在本机浏览器打开执行端的嘟嘟可与槲寄生；远程成员仍可在网页中连接房间查看。"
                                    FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                        <TextBlock x:Name="LocalWebExecutionHint" Text="监控端会打开同一电脑、同 UID 执行端的网页（支持不同 Windows 用户/会话）。请先运行执行端助手，并保持两端控制房间及密码一致；未找到执行端时会提示，多个执行端需选择。"
+                                   FontSize="11" Foreground="{DynamicResource GoldText}" Margin="0,6,0,0" TextWrapping="Wrap"
                                    MaxWidth="400" HorizontalAlignment="Left"/>
                         <TextBlock Text="每次打开都会生成一次性配对链接，请勿分享给他人。"
                                    FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"

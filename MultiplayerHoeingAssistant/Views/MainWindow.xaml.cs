@@ -14,15 +14,30 @@ public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
     private LocalBrowserBridge? _localBrowserBridge;
+    private LocalBrowserHandoff? _localBrowserHandoff;
+    private bool _openingLocalBrowser;
 
     /// <summary>由设置页“本机网页”卡片调用；配对桥随主窗口生命周期复用。</summary>
-    internal void OpenLocalBrowser()
+    internal async void OpenLocalBrowser()
     {
+        if (_openingLocalBrowser) return;
+        _openingLocalBrowser = true;
         try
         {
-            _localBrowserBridge ??= new LocalBrowserBridge(ExecuteLocalBrowserAsync,
-                Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
-            var url = _localBrowserBridge.CreatePairingUrl();
+            string url;
+            if (ViewModel.IsObserverMode)
+            {
+                var caller = ReadBrowserHandoffIdentity();
+                var targets = await LocalBrowserHandoff.FindExecutorsAsync(caller);
+                if (targets.Count == 0)
+                    throw new InvalidOperationException("未找到正在运行的同机执行端。请确认执行端助手已运行，并且两端的 UID、控制房间和房间密码一致。");
+                var target = targets.Count == 1 ? targets[0] : ChooseBrowserExecutor(targets);
+                if (target is null) return;
+                url = await LocalBrowserHandoff.GetPairingUrlAsync(caller, target);
+                if (ReadBrowserHandoffIdentity() != caller)
+                    throw new InvalidOperationException("监控端配置已变化，请重新打开本机网页。");
+            }
+            else url = CreateOwnBrowserPairingUrl(ReadBrowserHandoffIdentity());
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
         }
         catch (Exception ex)
@@ -30,6 +45,47 @@ public partial class MainWindow : Window
             ViewModel.AddLog("本机网页打开失败：" + ex.Message);
             MessageBox.Show(this, "无法打开本机网页：" + ex.Message, "本机网页", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+        finally { _openingLocalBrowser = false; }
+    }
+
+    private LocalBrowserHandoff.Identity ReadBrowserHandoffIdentity()
+    {
+        var config = ViewModel.Config;
+        return new(config?.PlayerUid ?? "", config?.PlayerName ?? "", ViewModel.RoomCode,
+            config?.ClientInstanceId ?? "", config?.ControlRoomPassword ?? "", ViewModel.IsExecutorMode,
+            System.Diagnostics.Process.GetCurrentProcess().SessionId);
+    }
+
+    private string CreateOwnBrowserPairingUrl(LocalBrowserHandoff.Identity expected)
+    {
+        if (ReadBrowserHandoffIdentity() != expected || !expected.IsExecutor)
+            throw new InvalidOperationException("执行端已切换模式或身份已变化，请重新打开。");
+        _localBrowserBridge ??= new LocalBrowserBridge(ExecuteLocalBrowserAsync,
+            Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
+        return _localBrowserBridge.CreatePairingUrl();
+    }
+
+    private LocalBrowserHandoff.Target? ChooseBrowserExecutor(IReadOnlyList<LocalBrowserHandoff.Target> targets)
+    {
+        var dialog = new Window
+        {
+            Owner = this, Title = "选择本机网页的执行端", Width = 620, Height = 310,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false, Background = Background, FontFamily = FontFamily, FontSize = FontSize
+        };
+        dialog.Resources.MergedDictionaries.Add(Resources);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        var hint = new TextBlock { Text = "本机有多个匹配执行端，请选择要打开的 Windows 会话：", Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap };
+        hint.SetResourceReference(TextBlock.ForegroundProperty, "GoldText");
+        var choices = new ListBox { ItemsSource = targets, DisplayMemberPath = "Label", Height = 130 };
+        choices.SetResourceReference(BackgroundProperty, "Card");
+        choices.SetResourceReference(ForegroundProperty, "White");
+        var open = new Button { Content = "打开所选执行端网页", Margin = new Thickness(0, 12, 0, 0), IsEnabled = false };
+        open.SetResourceReference(StyleProperty, "BtnGold");
+        choices.SelectionChanged += (_, _) => open.IsEnabled = choices.SelectedItem is not null;
+        open.Click += (_, _) => dialog.DialogResult = true;
+        panel.Children.Add(hint); panel.Children.Add(choices); panel.Children.Add(open); dialog.Content = panel;
+        return dialog.ShowDialog() == true ? choices.SelectedItem as LocalBrowserHandoff.Target : null;
     }
 
     /// <summary>本机网页的同一配对会话同时承载嘟嘟可与槲寄生；槲寄生请求转交执行端中心处理。</summary>
@@ -269,7 +325,14 @@ public partial class MainWindow : Window
         TagLog($"[app start] {System.DateTime.Now:HH:mm:ss.fff}");
         ViewModel = viewModel;
         Dodoco = new DodocoViewModel(viewModel);
-        Application.Current.Exit += (_, _) => _localBrowserBridge?.Dispose();
+        try
+        {
+            _localBrowserHandoff = new LocalBrowserHandoff(
+                () => Dispatcher.Invoke(ReadBrowserHandoffIdentity),
+                expected => Dispatcher.Invoke(() => CreateOwnBrowserPairingUrl(expected)), ViewModel.AddLog);
+        }
+        catch (Exception ex) { ViewModel.AddLog("本机网页跨会话入口不可用：" + ex.Message); }
+        Application.Current.Exit += (_, _) => { _localBrowserHandoff?.Dispose(); _localBrowserBridge?.Dispose(); };
         // 槲寄生复用嘟嘟可的 BGI 日志 tail（单线程单文件句柄，多消费者订阅），供启动中心「日志触发器」盯新日志
         Mistletoe = new MistletoeViewModel(viewModel, Dodoco.LogTail);
         ActiveMistletoe = Mistletoe;

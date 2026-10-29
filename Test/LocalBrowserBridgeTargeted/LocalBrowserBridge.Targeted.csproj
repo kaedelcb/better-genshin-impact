@@ -16,5 +16,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
     <ProjectReference Include="../../MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj" />
     <Compile Include="../MultiplayerHoeingAssistant.UnitTest/ServiceTests/LocalBrowserBridgeTests.cs" />
+    <Compile Include="../MultiplayerHoeingAssistant.UnitTest/ServiceTests/LocalBrowserHandoffTests.cs" />
   </ItemGroup>
 </Project>

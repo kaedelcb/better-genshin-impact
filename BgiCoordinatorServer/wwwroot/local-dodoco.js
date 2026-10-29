@@ -1,5 +1,10 @@
 // 本机入口：一次性令牌只用于同源配对；短期会话仅留在当前标签的 sessionStorage。
 (async function startLocalDodoco() {
+    // 浏览器复用现有标签页时，新的配对链接可能只触发片段导航，不会重新执行脚本。
+    // 重新加载保留新令牌，让下面的正常配对流程替换旧会话。
+    window.addEventListener('hashchange', () => {
+        if (new URLSearchParams(location.hash.slice(1)).get('token')) location.reload();
+    });
     const hash = new URLSearchParams(location.hash.slice(1));
     const pairingToken = hash.get('token');
     history.replaceState(null, '', location.pathname + location.search);
