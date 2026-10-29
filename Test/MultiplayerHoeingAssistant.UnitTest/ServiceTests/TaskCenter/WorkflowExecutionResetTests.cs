@@ -585,6 +585,109 @@ public sealed class WorkflowExecutionResetTests : IDisposable
         finally { await host.ShutdownAsync(); }
     }
 
+    /// <summary>
+    /// 真实形态：切换账号前置动作的结果未知、BGI 作业已退出，运行停在 Unknown，没有任务本体提交。
+    /// 原 BGI 进程确认退出后允许重置；原进程仍在、其他前置类型或原纪元缺失时照旧拒绝。
+    /// </summary>
+    private static WorkflowRunRecord AddUnknownAccountSwitchRun(TaskCenterHost host, string workflowId, string revision,
+        string kind = "prerequisite.account", string? epoch = OldLocalEpoch, bool foreignWire = false)
+    {
+        var run = host.Runs.CreateRun(workflowId, revision, note: "前置动作结果不确定，标 Unknown（不推进、不触发收尾、禁止自动重跑）。",
+            handoff: new HandoffIdentity
+            {
+                IntentKey = "fixture:account-switch:" + Guid.NewGuid().ToString("N"),
+                ExecutionId = Guid.NewGuid().ToString("N"), StepId = "account-switch", Mode = StartupHandoffModes.Start,
+            }, admissionSourceScope: OldLocalScope);
+        run.State = WorkflowRunState.Unknown;
+        run.PrerequisiteActions.Add(new()
+        {
+            WireRunId = foreignWire ? Guid.NewGuid().ToString("N") : run.WireRunId, ObservedTerminal = "result_unknown", ExecutionExitConfirmed = true,
+            ExecutionExitDisposition = "execution_exited", EffectState = "unknown", NodeId = "account-node",
+            Attempt = 1, Kind = kind, AccountKey = "fixture-account", Epoch = epoch,
+            IdempotencyKey = "idem-account-" + Guid.NewGuid().ToString("N")[..12], Fingerprint = "fixture-account-payload",
+            ExpiresAtUtc = "2030-01-01T00:00:00Z", SendAttempted = true, JobId = "old-account-job",
+            State = PrerequisiteActionState.Unknown, Reason = "原始终态或实际效果未知",
+        });
+        host.Runs.Update(run);
+        return run;
+    }
+
+    [Theory]
+    [InlineData("process_absent", null)]
+    [InlineData("process_id_reused", 638945000000000001L)]
+    public async Task UnknownAccountSwitch_OldProcessExited_ResetReleasesAndKeepsFacts(string disposition, long? observedTicks)
+    {
+        var (id, revision) = Seed();
+        var boundary = new RecordingBoundary();
+        var host = Host(boundary);
+        try
+        {
+            var old = AddUnknownAccountSwitchRun(host, id, revision);
+            var crashed = AddCrashedLocalRun(host, id, revision);
+            var prerequisite = JsonSerializer.Serialize(old.PrerequisiteActions);
+            var definition = FlowBytes(id);
+            var observed = new List<string>();
+            host.ExecutionResetConnectedEpochForTest = _ => Task.FromResult<string?>(NewLocalEpoch);
+            host.ExecutionResetProcessObserverForTest = epoch => { observed.Add(epoch); return new(disposition, observedTicks); };
+
+            var reset = await host.ResetWorkflowExecutionStateAsync(id);
+
+            Assert.Equal(HostActionStatus.Effective, reset.Status);
+            foreach (var runId in new[] { old.RunId, crashed.RunId })
+            {
+                var released = host.Runs.Load(runId)!;
+                Assert.Equal(WorkflowRunState.Unknown, released.State);
+                Assert.True(TaskCenterHost.IsExecutionResetReleased(released));
+                Assert.DoesNotContain(host.ListActiveRuns(), run => run.RunId == runId);
+            }
+            var kept = host.Runs.Load(old.RunId)!;
+            Assert.Equal(prerequisite, JsonSerializer.Serialize(kept.PrerequisiteActions));
+            Assert.Equal(PrerequisiteActionState.Unknown, Assert.Single(kept.PrerequisiteActions).State);
+            Assert.Equal(OldLocalEpoch, Assert.Single(kept.ExecutionResetRelease!.ProcessExits).OriginalEpoch);
+            Assert.Contains(OldLocalEpoch, observed);
+            Assert.Equal(definition, FlowBytes(id));
+            Assert.Empty(boundary.Submissions);
+
+            var start = await host.StartWorkflowAsync(id);
+            Assert.Equal(HostActionStatus.Registered, start.Status);
+            await WaitUntilAsync(() => !host.IsDriving(id));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Theory]
+    [InlineData("still_running")]
+    [InlineData("other_kind")]
+    [InlineData("missing_epoch")]
+    [InlineData("other_wire")]
+    public async Task UnknownAccountSwitch_WithoutExitProof_ResetStillRefused(string shape)
+    {
+        var (id, revision) = Seed();
+        var boundary = new RecordingBoundary();
+        var host = Host(boundary);
+        try
+        {
+            var old = AddUnknownAccountSwitchRun(host, id, revision,
+                kind: shape == "other_kind" ? "prerequisite.redeemCode" : "prerequisite.account",
+                epoch: shape == "missing_epoch" ? null : OldLocalEpoch, foreignWire: shape == "other_wire");
+            var original = RunBytes(old.RunId);
+            host.ExecutionResetConnectedEpochForTest = _ => Task.FromResult<string?>(NewLocalEpoch);
+            host.ExecutionResetProcessObserverForTest = _ => shape == "still_running"
+                ? new("same_process", 638945000000000000L) : new("process_absent");
+
+            var reset = await host.ResetWorkflowExecutionStateAsync(id);
+
+            Assert.Equal(HostActionStatus.Unavailable, reset.Status);
+            Assert.Equal(original, RunBytes(old.RunId));
+            Assert.False(TaskCenterHost.IsExecutionResetReleased(host.Runs.Load(old.RunId)!));
+            Assert.Contains(host.ListActiveRuns(), run => run.RunId == old.RunId);
+            Assert.Equal(HostActionStatus.Unavailable, (await host.StartWorkflowAsync(id)).Status);
+            Assert.False(host.DeleteFlow(id, revision).Ok);
+            Assert.Empty(boundary.Submissions);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

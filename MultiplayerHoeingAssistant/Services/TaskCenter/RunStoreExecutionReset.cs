@@ -53,21 +53,29 @@ internal static class ExecutionResetEvidence
                         && proof.ObservedStartTicksUtc != oldTicks));
     }
 
-    // Process exit is sufficient only for BGI task bodies; effects and handoff tickets
-    // continue to require their separate existing observation contracts.
+    // Process exit is sufficient only for BGI task bodies and the in-process account switch
+    // prerequisite; other prerequisites, effects and handoff tickets continue to require their
+    // separate existing observation contracts.
     internal static HashSet<string>? UnresolvedEpochs(WorkflowRunRecord run)
     {
         if (run.OnlineHoeingHandoff is not null
             || run.OnlineHoeingHistory.Any(h => !TerminalReleaseEvidence.ValidOnlineHoeingHandoff(run, h))
             || run.PendingCompletion is { } completion && !TerminalReleaseEvidence.CompletionSettled(run, completion)
-            || run.CompletionHistory.Any(c => !TerminalReleaseEvidence.CompletionSettled(run, c))
-            || run.PrerequisiteActions.Any(a => !TerminalReleaseEvidence.PrerequisiteSettled(run, a))) return null;
+            || run.CompletionHistory.Any(c => !TerminalReleaseEvidence.CompletionSettled(run, c))) return null;
+        // 账号切换（ext.prerequisite.account）在 BGI 进程内执行：原 BGI 进程退出后不再有在途动作，
+        // 新运行开始前会按 expectedUid 重新核对并切换账号，所以与任务本体一样可用原进程退出解除。
+        var prerequisites = run.PrerequisiteActions.Where(a => !TerminalReleaseEvidence.PrerequisiteSettled(run, a)).ToList();
+        if (prerequisites.Any(a => a.Kind != AccountPrerequisiteKind || !TryEpoch(a.Epoch, out _, out _)
+            || string.IsNullOrWhiteSpace(a.IdempotencyKey) || string.IsNullOrWhiteSpace(a.NodeId)
+            || a.WireRunId != run.WireRunId || !Guid.TryParseExact(run.WireRunId, "N", out _))) return null;
         var unsettled = TerminalReleaseEvidence.Submissions(run).Where(s => !TerminalReleaseEvidence.BodySettled(run, s)).ToList();
-        if (unsettled.Count == 0 || unsettled.Any(s => !TryEpoch(s.Epoch, out _, out _)
+        if (unsettled.Count == 0 && prerequisites.Count == 0 || unsettled.Any(s => !TryEpoch(s.Epoch, out _, out _)
             || string.IsNullOrWhiteSpace(s.Key) || string.IsNullOrWhiteSpace(s.NodeId)
             || s.WireRunId != run.WireRunId || !Guid.TryParseExact(run.WireRunId, "N", out _))) return null;
-        return unsettled.Select(s => s.Epoch!).ToHashSet(StringComparer.Ordinal);
+        return unsettled.Select(s => s.Epoch!).Concat(prerequisites.Select(a => a.Epoch!)).ToHashSet(StringComparer.Ordinal);
     }
+
+    private const string AccountPrerequisiteKind = "prerequisite.account";
 }
 
 public sealed partial class RunStore
