@@ -655,6 +655,52 @@ public sealed class WorkflowExecutionResetTests : IDisposable
         finally { await host.ShutdownAsync(); }
     }
 
+    /// <summary>BGI 未连接时，重置先走执行环境确保（按需启动 BGI，不发送任务），连上后再核对原进程退出。</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BgiOffline_ResetEnsuresBgiFirst_ThenChecksOldProcess(bool ensureSucceeds)
+    {
+        var (id, revision) = Seed();
+        var boundary = new RecordingBoundary();
+        var connected = false;
+        var ensureCalls = 0;
+        var host = new TaskCenterHost(Flows, Runs, Path.Combine(_root, "catalog.json"), () => null, null,
+            (_, workflows, runs) => new WorkflowRunner(workflows, runs, boundary, new NoopPrerequisite(), new NoopTerminal()),
+            () => connected ? (true, null) : (false, "BGI 离线"),
+            ensureExecutionReady: _ =>
+            {
+                ensureCalls++;
+                connected = ensureSucceeds;
+                return Task.FromResult<string?>(ensureSucceeds ? null : "测试中 BGI 启动失败");
+            });
+        try
+        {
+            var old = AddUnknownAccountSwitchRun(host, id, revision);
+            var original = RunBytes(old.RunId);
+            host.ExecutionResetConnectedEpochForTest = _ => Task.FromResult<string?>(connected ? NewLocalEpoch : null);
+            host.ExecutionResetProcessObserverForTest = _ => new("process_absent");
+
+            var reset = await host.ResetWorkflowExecutionStateAsync(id);
+
+            Assert.Equal(1, ensureCalls);
+            Assert.Empty(boundary.Submissions);
+            if (ensureSucceeds)
+            {
+                Assert.Equal(HostActionStatus.Effective, reset.Status);
+                Assert.True(TaskCenterHost.IsExecutionResetReleased(host.Runs.Load(old.RunId)!));
+            }
+            else
+            {
+                Assert.Equal(HostActionStatus.Unavailable, reset.Status);
+                Assert.Contains("测试中 BGI 启动失败", reset.Message);
+                Assert.Equal(original, RunBytes(old.RunId));
+                Assert.Contains(host.ListActiveRuns(), run => run.RunId == old.RunId);
+            }
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
     [Theory]
     [InlineData("still_running")]
     [InlineData("other_kind")]

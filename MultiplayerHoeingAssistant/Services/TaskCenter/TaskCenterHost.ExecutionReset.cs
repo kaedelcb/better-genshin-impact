@@ -89,6 +89,12 @@ public sealed partial class TaskCenterHost
                 if (RunStore.HasUnresolvedTerminalResponsibility(run))
                 {
                     verifiedCurrentEpoch = await ReadTrustedResetEpochAsync(_shutdownCts.Token).ConfigureAwait(false);
+                    // 核对旧执行是否已退出需要当前 BGI 实例作参照。BGI 未连接时与「连接 BGI」「启动计划」
+                    // 走同一个执行环境确保：按需拉起 BGI 并有界等待通道就绪，不发送任何任务；之后重新读取纪元。
+                    if (verifiedCurrentEpoch is null
+                        && await EnsureExecutionEnvironmentAsync(_shutdownCts.Token).ConfigureAwait(false) is { } envError)
+                        return HostActionResult.Unavailable("BGI 未连接，无法核对旧执行是否已退出：" + envError + "；旧执行责任保留，未完成重置。");
+                    verifiedCurrentEpoch ??= await ReadTrustedResetEpochAsync(_shutdownCts.Token).ConfigureAwait(false);
                     if (verifiedCurrentEpoch is null)
                         return HostActionResult.Unavailable("BGI 当前实例和执行纪元不可确认，旧执行责任保留；未完成重置。");
                     var epochs = ExecutionResetEvidence.UnresolvedEpochs(run);

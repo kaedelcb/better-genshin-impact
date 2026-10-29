@@ -486,7 +486,8 @@ async function layoutAudit(page, name) {
     await check('结果未知的旧运行：同 PC 不铺成卡片，计划区说明原因，重置后可再次启动', async () => {
       await page.locator('[data-mt-tab="taskcenter"]').click(); await page.locator('#tcPlanList [data-plan="wf-sim"]').click();
       await S(l => { for (let i = 0; i < 6; i++) sim.runs.push({ runId: 'run-unk-' + i, workflowId: 'wf-sim', workflowRevision: 'old', state: 8, driving: false, stopRequested: false, cursor: { nodeId: 'n-a', loopIteration: 0 }, nodeOutcomes: [], updatedAt: new Date(Date.now() - i * 60000).toISOString(), note: l }); }, '助手重启：提交存在未闭合发送事实（idem-xxx），标 Unknown，需按幂等键+job 查询对账，禁止自动重跑。'.repeat(3));
-      await page.locator('#tcResetHere').waitFor({ timeout: 10000 });
+      await page.locator('#tcPlanHead .tc-reason').getByText(/旧运行结果无法确认/).waitFor({ timeout: 10000 });
+      assert.match(await page.locator('#tcReset').getAttribute('class'), /dd-btn-primary/, '有未知旧运行时重置按钮高亮');
       assert.equal(await page.locator('#tcRuns .tc-run').count(), 0, 'Unknown 运行不显示为运行卡片');
       assert.match(await page.locator('#tcPlanHead .tc-reason').textContent(), /6 条旧运行结果无法确认/);
       assert.equal(await page.locator('#tcStart').isDisabled(), true, 'Unknown 仍阻止再次启动');
@@ -496,12 +497,13 @@ async function layoutAudit(page, name) {
       const resets = await S(() => { sim.bgiDisconnected = true; return sim.resetCount || 0; });
       const connects = await S(() => sim.requests.filter(r => r.op === 'task.catalog.connect').length);
       const answer = d => d.accept().catch(() => {}); page.on('dialog', answer);
-      await page.locator('#tcResetHere').click();
+      await page.locator('#tcReset').click();
       await executor.waitForFunction(n => sim.resetCount === n + 1, resets, { timeout: 20000 });
       page.off('dialog', answer);
       assert.equal(await S(n => sim.requests.filter(r => r.op === 'task.catalog.connect').length - n, connects), 1, '先连接 BGI 一次');
       assert.equal(await S(() => sim.requests.filter(r => r.op === 'task.flow.resetExecutionState').length), 3, '被拒一次、连接后重试一次（另一次是管理菜单里的重置）');
-      await page.locator('#tcResetHere').waitFor({ state: 'detached', timeout: 10000 });
+      await page.locator('#tcPlanHead .tc-reason').getByText(/旧运行结果无法确认/).waitFor({ state: 'detached', timeout: 10000 });
+      assert.equal(await page.locator('#tcReset').isVisible(), true, '重置后按钮仍常驻');
       await page.waitForFunction(() => !document.querySelector('#tcStart').disabled, null, { timeout: 10000 });
     });
 

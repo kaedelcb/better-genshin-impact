@@ -214,14 +214,14 @@ function tcRenderPlanHead() {
     const unknown = tcActive().filter(r => mtPick(r, 'workflowId') === f.id && tcState(r) === 'Unknown' && !tcReleased(r));
     const lastUnknown = unknown.map(r => String(mtPick(r, 'updatedAt') || '')).sort().at(-1) || '';
     const markerNode = marker ? doc.nodes.find(n => n.nodeId === marker) : null;
-    const reason = f.quarantined ? '隔离原因：' + (f.reason || '未知') : f.candidate ? '迁移候选：只读预览；激活后才可编辑和启动。' : f.unsupported.length ? '未支持类型：' + f.unsupported.join('、') : unknown.length ? `这张计划有 ${unknown.length} 条旧运行结果无法确认（最近一次 ${lastUnknown.replace('T', ' ').slice(5, 16)}），执行端禁止它再次启动，PC 端同样不能启动。点「重置执行状态」放弃这些旧执行，历史保留、不会自动启动；之后即可重新启动。` : block ? `当前计划已有运行（${block.text}），处理后才能再次启动。` : !enabled ? '当前计划没有启用的配置单。' : '';
+    const reason = f.quarantined ? '隔离原因：' + (f.reason || '未知') : f.candidate ? '迁移候选：只读预览；激活后才可编辑和启动。' : f.unsupported.length ? '未支持类型：' + f.unsupported.join('、') : unknown.length ? `这张计划有 ${unknown.length} 条旧运行结果无法确认（最近一次 ${lastUnknown.replace('T', ' ').slice(5, 16)}），执行端禁止它再次启动，PC 端同样不能启动。点「重置状态」放弃这些旧执行，历史保留、不会自动启动；之后即可重新启动。` : block ? `当前计划已有运行（${block.text}），处理后才能再次启动。` : !enabled ? '当前计划没有启用的配置单。' : '';
     const save = tc.conflict ? `<span class="mt-save-state is-error">${mte(tc.conflict)}</span>` : `<span class="mt-save-state${tc.dirty || tc.saving ? ' is-dirty' : ''}">${tc.saving ? '正在保存到执行端…' : tc.dirty ? '有修改，稍后自动保存' : '已与执行端同步'}</span>`;
     host.innerHTML = `<div class="tc-head-row"><div class="tc-head-title"><h2 class="mt-break">${mte(doc.name || f.name)}</h2><p class="dodoco-hint">${nodes.length ? `${nodes.length} 个配置单 · ${enabled} 个已启用` : '空计划 · 先新增任务'} · ${mte(tcPlanSummary(doc))}${markerNode ? ` · 从「${mte(tcNodeName(markerNode))}」开始` : ''}</p></div>
-        <div class="dd-actions"><button id="tcSettings" class="dd-btn dd-btn-sm"${tcCanEdit(f) ? '' : ' disabled'}>计划设置</button><button id="tcStart" class="dd-btn dd-btn-primary"${!tcCanStart(f) || block || !enabled || tc.starting || tc.conflict ? ' disabled' : ''}>⏵⏵ 连续一条龙</button></div></div>
-      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}${unknown.length && !f.quarantined ? '<button id="tcResetHere" class="dd-btn dd-btn-sm dd-btn-primary">重置执行状态</button>' : ''}<label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
+        <div class="dd-actions"><button id="tcReset" class="dd-btn dd-btn-sm${unknown.length ? ' dd-btn-primary' : ''}" title="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动。执行端 BGI 未运行时会先启动 BGI 再核对"${f.quarantined || tc.resetting ? ' disabled' : ''}>${tc.resetting ? '正在重置…' : '重置状态'}</button><button id="tcSettings" class="dd-btn dd-btn-sm"${tcCanEdit(f) ? '' : ' disabled'}>计划设置</button><button id="tcStart" class="dd-btn dd-btn-primary"${!tcCanStart(f) || block || !enabled || tc.starting || tc.conflict ? ' disabled' : ''}>⏵⏵ 连续一条龙</button></div></div>
+      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}<label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
     mtEl('tcSettings').onclick = tcPlanSettings; mtEl('tcStart').onclick = () => tcStart(null);
     if (mtEl('tcReloadPlan')) mtEl('tcReloadPlan').onclick = async () => { if (!confirm('读取最新计划会放弃本端未保存的草稿，是否继续？')) return; tc.dirty = false; tc.conflict = ''; await tcOpen(tc.selected, true); tcRenderPlanHead(); tcRenderNodes(); };
-    if (mtEl('tcResetHere')) mtEl('tcResetHere').onclick = () => tcManageAction('reset');
+    mtEl('tcReset').onclick = () => tcManageAction('reset');
     if (mtEl('tcActivate')) mtEl('tcActivate').onclick = () => tcMigration('task.migration.activate', f.id, `激活候选「${f.name}」`);
     mtEl('tcWindowSwitch').onchange = e => { doc.nodeTimeWindowEnabled = e.target.checked; tcEdited(e.target.checked ? '已开启按时段执行：时段外任务跳过。' : '已关闭按时段执行：保留时段设置，按原计划执行。'); };
 }
@@ -581,7 +581,7 @@ async function tcInnerTasks(node, connect) {
 async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
     const f = tcFlow(); if (!f || tc.starting) return;
     if (!tcCanStart(f)) return mtToast(`计划「${f.name}」当前不可启动：${f.quarantined ? '已隔离' : f.candidate ? '只读候选' : '含未支持类型'}`, true);
-    const block = tcBlocking(f.id); if (block) return mtToast(block.st === 'Unknown' ? '这张计划有结果无法确认的旧运行，执行端禁止再次启动；请先点「重置执行状态」，本次没有发送。' : `计划已有运行（${block.text}）；处理后才能再次启动，本次没有发送。`, true);
+    const block = tcBlocking(f.id); if (block) return mtToast(block.st === 'Unknown' ? '这张计划有结果无法确认的旧运行，执行端禁止再次启动；请先点「重置状态」，本次没有发送。' : `计划已有运行（${block.text}）；处理后才能再次启动，本次没有发送。`, true);
     tc.starting = true; tcRenderPlanHead();
     try {
         if (!(await tcFlush())) { mtToast('执行端计划尚未确认保存，已取消启动', true); return; }
@@ -660,12 +660,15 @@ async function tcManageAction(m) {
         else if (m === 'schedImport') { const file = await mtPickFile(); if (!file || !(await tcFlush())) return; const reply = await mtOperate('task.schedule.import', await mtReadFile(file), { label:'导入调度列表', onStage:mtStageBar, waitBudget:20000 }); mtToast(reply.message || reply.status, reply.status !== 'ok'); }
         else if (m === 'reset') {
             if (!confirm(`重置计划「${f.name}」的执行状态？\n\n计划内容和原失败历史会保留。将停止当前执行，并放弃已中断的旧执行；无法确认已停止的任务会保留原责任并报告失败。\n\n重置不会自动启动计划。完成后可手动从头启动，或删除计划。`)) return mtToast('已取消重置，计划与执行状态未更改。');
-            let reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态', onStage:mtStageBar, waitBudget:30000 });
+            tc.resetting = true; tcRenderPlanHead();
+            let reply;
+            try { reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态', onStage:mtStageBar, waitBudget:200000 }); }
+            finally { tc.resetting = false; }
             // 执行端要先连上 BGI 才能核对旧执行是否还在跑（PC 同一条规则）。这次是确定未执行的拒绝，
             // 经用户确认后先连接 BGI，再用新的请求重试一次；结果未知时不重试。
             if (reply.status === 'rejected' && /BGI 当前实例和执行纪元不可确认/.test(reply.message || '')
                 && confirm('重置需要先让执行端连上 BGI，核对旧执行是否还在运行。执行端 BGI 未运行时会被启动（不会开始任何任务）。现在连接 BGI 并重试重置？')) {
-                if (await tcConnectCatalog()) reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态（连接 BGI 后）', onStage:mtStageBar, waitBudget:30000 });
+                if (await tcConnectCatalog()) reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态（连接 BGI 后）', onStage:mtStageBar, waitBudget:200000 });
             }
             mtToast(reply.status === 'ok' ? (reply.message || '执行状态已重置') : '重置未完成：' + (reply.message || reply.status), reply.status !== 'ok');
         } else if (m === 'delete') await tcDelete(f);
