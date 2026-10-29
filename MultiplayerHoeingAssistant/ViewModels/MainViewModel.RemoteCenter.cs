@@ -33,9 +33,9 @@ public partial class MainViewModel
         catch (Exception ex) { AddLog("本地中心通道不可用：" + ex.Message); }
     }
 
-    private async Task<RemoteCommand?> HandleRemoteCenterRequestAsync(RemoteCommand command)
+    private async Task<RemoteCommand?> HandleRemoteCenterRequestAsync(RemoteCommand command, bool allowLocalObserver = false)
     {
-        if (_config is null || !IsExecutorMode || command.Cmd != RemoteCenterProtocol.RequestCommand
+        if (_config is null || (!IsExecutorMode && !allowLocalObserver) || command.Cmd != RemoteCenterProtocol.RequestCommand
             || command.RoomCode != RoomCode || command.Target is not { Count: 1 }
             || command.Target[0] != _config.PlayerUid || string.IsNullOrWhiteSpace(command.CommandId)
             || string.IsNullOrWhiteSpace(command.SenderUid)

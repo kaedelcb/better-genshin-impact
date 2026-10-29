@@ -131,6 +131,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             new DailyReportService(() => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath)),
             () => _mainVm.IsStandaloneMode || _mainVm.IsObserverMode ? null : _mainVm.SignalR,
             diagnostic: _diagService);
+        // 嘟嘟可修改类远程操作与槲寄生共用同一份本人授权。
+        _webRelay.OwnerVerifier = (browserId, secret) => _mainVm.WebOwners.Verify(browserId, secret);
         LocalBrowserService = new DodocoLocalService(_tailService, _webRelay, _screenshotService, _settingsService,
             () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath), BuildLocalBrowserIdentity);
         RebuildLogSources();

@@ -89,6 +89,7 @@ async function freePort() {
           if(x.operation==='watch.read') data={rules:window.sim.rules,dates:[date],settings:{muteAll:false,incidentSnapshotEnabled:false,stallThresholdMinutes:5,incidentBufferSeconds:15,incidentCaptureIntervalSeconds:1,incidentPreSeconds:3,incidentPostSeconds:3,incidentRetentionCount:10}};
           if(x.operation==='watch.records') data={records:window.sim.alertRecords,total:window.sim.alertRecords.length,offset:0,limit:50};
           if(x.operation==='watch.rule.upsert') { window.sim.rules.push(x.args.rule); data={rule:x.args.rule}; }
+          if(['watch.rule.upsert','watch.rule.delete','watch.settings','watch.clear'].includes(x.operation)) window.sim.ownerArgs=(window.sim.ownerArgs||[]).concat([x.args.owner||null]);
           if(x.operation==='report.dates') data={dates:[date]};
           if(x.operation==='report.day') data={date,report:{totalDuration:'01:00',groups:[{name:'模拟配置组',totalDuration:'01:00',runCount:1,rounds:['模拟联机轮次']}]},overview:{totalDuration:'01:00',topUnits:[{kind:'任务',name:'模拟任务总览',start:'12:00',duration:'01:00',children:[]}]}};
           await send('dodoco.respond',{requestId:x.requestId,status:window.sim.mode==='denied'?'denied':'ok',errorCode:'',message:window.sim.mode==='denied'?'共享未开启':'',data});
@@ -123,7 +124,7 @@ async function freePort() {
     await page.waitForFunction(() => document.querySelector('#dodocoFrames img')?.naturalWidth === 16);
     assert.equal(await page.evaluate(()=>dodoco.frames.get('sim_member')[0].uid),uid);
     await page.locator('[data-tab="watch"]').click(); await page.locator('#watchRefresh').click();
-    await page.getByText('模拟警告规则',{exact:false}).first().waitFor();
+    await page.locator('.dodoco-rule-list').getByText('模拟警告规则',{exact:false}).first().waitFor();
     await page.getByText('模拟异常记录正文',{exact:true}).waitFor();
     // Only the alert interval is shortened in the test page; production keeps its 15-second cadence.
     await page.evaluate(() => { const original=window.setTimeout; window.setTimeout=(fn,ms,...args)=>original(fn,ms===15000?120:ms,...args); });
@@ -182,11 +183,24 @@ async function freePort() {
     await page.locator('#diagnosticDownload').click();
     await page.locator('#dodocoStatus').getByText(/诊断包信息无效/).waitFor();
     await sim.evaluate(()=>window.sim.diagnosticMode='ok');
+    // 远程查看他人（未绑定本人凭据）：修改控件只读、规则表单隐藏，不发送修改请求。
+    await page.locator('#watchOwnerGo').waitFor();
+    assert.equal(await page.locator('#watchRuleForm').isHidden(),true,'未授权时不显示规则表单');
+    assert.equal(await page.locator('#watchSaveSettings').isDisabled(),true,'未授权时设置只读');
+    assert.equal(await page.locator('#watchNewRule').isDisabled(),true,'未授权时不能新建规则');
+    const blockedMutation=await page.evaluate(()=>watchMutate('watch.settings',{settings:{}}).then(()=>'',e=>e.message));
+    assert.match(blockedMutation,/只能修改自己的嘟嘟可/);
+    assert.equal(await sim.evaluate(()=>(window.sim.ownerArgs||[]).length),0,'未授权的修改不得发出');
+    // 本人凭据（槲寄生授权码换得、与嘟嘟可共用）：修改类请求附带 owner。
+    await page.evaluate(()=>localStorage.setItem('bgi.mistletoe.owner.v1',JSON.stringify({'sim-instance':{browserId:'wb-test',secret:'a'.repeat(64),uid:'sim_member'}})));
+    await page.locator('#watchRefresh').click();
+    await page.locator('#watchRuleForm summary').waitFor();
     await page.locator('#watchRuleForm summary').click();
     await page.locator('#watchName').fill('模拟新增规则');
     await page.locator('#watchPattern').fill('测试');
     await page.locator('#watchSaveRule').click();
-    await page.getByText('模拟新增规则',{exact:false}).first().waitFor();
+    await page.locator('.dodoco-rule-list').getByText('模拟新增规则',{exact:false}).first().waitFor();
+    assert.deepEqual(await sim.evaluate(()=>window.sim.ownerArgs.at(-1)),{browserId:'wb-test',secret:'a'.repeat(64)},'修改类请求必须附带本人凭据');
     await sim.evaluate(()=>{window.sim.diagnosticMode='pause';window.sim.diagnosticEvents=[];});
     await page.locator('#diagnosticDownload').click();
     await sim.waitForFunction(()=>window.sim.diagnosticEvents.some(e=>e.operation==='watch.diagnostic.chunk'));

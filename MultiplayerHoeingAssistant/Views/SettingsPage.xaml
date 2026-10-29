@@ -640,6 +640,50 @@
                 </Grid>
             </Border>
 
+            <!-- ========== 卡片：网页授权（远程网页操作本人槲寄生、修改本人嘟嘟可的凭据） ========== -->
+            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="网页授权" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                            <TextBlock Text="在手机或其他电脑的网页里操作本机槲寄生、修改本机嘟嘟可前，先在这里生成授权码，并在网页里输入一次。本机网页无需授权。"
+                                       FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                       MaxWidth="400" HorizontalAlignment="Left"/>
+                            <TextBlock Text="授权码 5 分钟内有效、只能用一次；不要发给其他成员。"
+                                       FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                       MaxWidth="400" HorizontalAlignment="Left"/>
+                        </StackPanel>
+                        <Button x:Name="CreateWebCodeButton" Grid.Column="1" Content="生成授权码" Style="{DynamicResource BtnGold}"
+                                VerticalAlignment="Center" Click="CreateWebCodeClick"/>
+                    </Grid>
+                    <TextBlock x:Name="WebCodeText" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"
+                               FontFamily="Consolas" Margin="0,10,0,0" Visibility="Collapsed"/>
+                    <TextBlock x:Name="WebCodeHint" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"
+                               TextWrapping="Wrap" Visibility="Collapsed"/>
+                    <TextBlock Text="已授权的浏览器" FontSize="12" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
+                    <ItemsControl x:Name="WebBrowserList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Line}" FontSize="12" Foreground="{DynamicResource White}"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <Button Grid.Column="1" Content="撤销" Style="{DynamicResource BtnGhost}" Padding="10,2"
+                                            Tag="{Binding Id}" Click="RevokeWebBrowserClick"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="WebBrowserEmpty" Text="还没有授权任何浏览器" FontSize="12" Foreground="{DynamicResource Dim}"/>
+                </StackPanel>
+            </Border>
             <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
                 <Grid>

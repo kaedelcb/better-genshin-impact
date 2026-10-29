@@ -20,8 +20,8 @@ public partial class MainWindow : Window
     {
         try
         {
-            _localBrowserBridge ??= new LocalBrowserBridge(
-                Dodoco.LocalBrowserService.ExecuteAsync, Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
+            _localBrowserBridge ??= new LocalBrowserBridge(ExecuteLocalBrowserAsync,
+                Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
             var url = _localBrowserBridge.CreatePairingUrl();
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
         }
@@ -32,6 +32,21 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>本机网页的同一配对会话同时承载嘟嘟可与槲寄生；槲寄生请求转交执行端中心处理。</summary>
+    private async Task<LocalBrowserResult> ExecuteLocalBrowserAsync(LocalBrowserRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Operation is not ("mistletoe.read" or "mistletoe.request"))
+            return await Dodoco.LocalBrowserService.ExecuteAsync(request, cancellationToken);
+        try
+        {
+            if (request.Args["request"] is not System.Text.Json.Nodes.JsonObject body)
+                return new LocalBrowserResult("error", "槲寄生请求为空");
+            var reply = await ViewModel.ExecuteMistletoeLocalAsync((System.Text.Json.Nodes.JsonObject)body.DeepClone(), request.RequestId);
+            return new LocalBrowserResult("ok", Data: reply);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { return new LocalBrowserResult("unknown", "本机槲寄生请求结果未确认：" + ex.Message); }
+    }
     private readonly System.Windows.Threading.DispatcherTimer _roomCodeCopyHintTimer = new()
     {
         Interval = TimeSpan.FromSeconds(1.5),

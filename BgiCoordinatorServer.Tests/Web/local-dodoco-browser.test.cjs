@@ -46,7 +46,7 @@ function body(req){return new Promise((resolve,reject)=>{let v='';req.on('data',
      res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({requestId:payload.requestId,instanceId:'bridge-id',status:'ok',data}));
    }
    const relative=u.pathname==='/'?'local-dodoco.html':u.pathname.slice(1);
-   if(!/^(local-dodoco\.(html|js|css)|project-star\.css|index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js)|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(relative)){res.writeHead(404);return res.end();}
+   if(!/^(local-dodoco\.(html|js|css)|project-star\.css|index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js)|mistletoe-(?:core|startup|startup-view|taskcenter|web)\.js|mistletoe-web\.css|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(relative)){res.writeHead(404);return res.end();}
    res.setHeader('Content-Type',relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':relative.endsWith('.png')?'image/png':'text/html');
    res.end(relative==='signalr.min.js'?fs.readFileSync(path.join(root,relative),'utf8')+'\n;'+runtime:fs.readFileSync(path.join(root,relative)));
  }catch(e){res.writeHead(500);res.end(String(e));}});

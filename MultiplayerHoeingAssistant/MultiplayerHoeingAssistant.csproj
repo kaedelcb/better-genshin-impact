@@ -106,6 +106,12 @@
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.css" LogicalName="LocalBrowser/dodoco-web.css" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-operations.js" LogicalName="LocalBrowser/dodoco-operations.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-log-worker.js" LogicalName="LocalBrowser/dodoco-log-worker.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-core.js" LogicalName="LocalBrowser/mistletoe-core.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-startup.js" LogicalName="LocalBrowser/mistletoe-startup.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-startup-view.js" LogicalName="LocalBrowser/mistletoe-startup-view.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-taskcenter.js" LogicalName="LocalBrowser/mistletoe-taskcenter.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-web.js" LogicalName="LocalBrowser/mistletoe-web.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-web.css" LogicalName="LocalBrowser/mistletoe-web.css" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\gengdi-avatars\*.png" LogicalName="LocalBrowser/gengdi-avatars/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

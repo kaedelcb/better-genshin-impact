@@ -103,10 +103,12 @@ public sealed class DodocoWebRelayService : IDisposable
                         return;
                     }
                     var cfg = _settings.Current;
-                    var denied = AuthorizationError(cfg, operation);
+                    var denied = AuthorizationError(cfg, operation) ?? OwnerError(operation, args);
                     if (denied != null)
                     {
-                        await client.ReportDodocoAsync(requestId, "denied", denied, "成员未开启所需共享权限", null);
+                        await client.ReportDodocoAsync(requestId, "denied", denied, denied == "owner_required"
+                            ? "只能修改自己的嘟嘟可：请在你自己的助手「设置 → 网页授权」生成授权码，绑定此浏览器后再修改"
+                            : "成员未开启所需共享权限", null);
                         return;
                     }
                     if (string.IsNullOrWhiteSpace(requesterConnectionId)) throw new ArgumentException("缺少请求连接身份");
@@ -141,6 +143,21 @@ public sealed class DodocoWebRelayService : IDisposable
     internal static string? AuthorizationError(DodocoSettings cfg, string operation)
         => !cfg.ShareDodocoWeb ? "sharing_disabled" : (operation.StartsWith("report.", StringComparison.Ordinal) || operation.StartsWith("watch.diagnostic.", StringComparison.Ordinal)) && !cfg.ShareLogFiles
             ? "log_sharing_disabled" : null;
+
+    /// <summary>远程修改本机规则、设置或删除记录必须由本人发起；共享开关只开放查看。</summary>
+    internal static bool IsOwnerOnly(string operation) => operation is "watch.rule.upsert" or "watch.rule.delete"
+        or "watch.settings" or "watch.clear";
+
+    /// <summary>本人凭据校验器（浏览器 ID、凭据原文）；未注入时修改类一律拒绝。</summary>
+    internal Func<string?, string?, bool>? OwnerVerifier { get; set; }
+
+    internal string? OwnerError(string operation, JsonObject args)
+    {
+        if (!IsOwnerOnly(operation)) return null;
+        var owner = args["owner"] as JsonObject;
+        var verified = OwnerVerifier?.Invoke(owner?["browserId"]?.GetValue<string>(), owner?["secret"]?.GetValue<string>()) == true;
+        return verified ? null : "owner_required";
+    }
 
     /// <summary>本机已配对网页复用同一业务实现；本机授权独立于房间共享开关。</summary>
     internal async Task<object> ExecuteLocalAsync(string operation, JsonObject args, string sessionId, CancellationToken cancellationToken)

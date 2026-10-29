@@ -118,6 +118,8 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>有成员请求我的日志文件列表（远程日志下载·被下载端）。参数：requesterUid, requestId。</summary>
     public event Action<string, string>? OnMemberLogFilesRequested;
     public event Action<string, string, System.Text.Json.Nodes.JsonObject, DateTimeOffset, string, string>? OnDodocoRequested;
+    /// <summary>网页经服务端转发的槲寄生请求：requestId, request, deadline, requesterConnectionId, roomCode。</summary>
+    public event Action<string, System.Text.Json.Nodes.JsonObject, DateTimeOffset, string, string>? OnMistletoeRequested;
     /// <summary>收到成员日志文件列表应答（远程日志下载·下载端，按 RequestId 认领）。</summary>
     public event Action<MemberLogFileList>? OnMemberLogFileList;
     /// <summary>有成员请求下载我的某个日志文件（被下载端）。参数：requesterUid, requestId, fileName。</summary>
@@ -390,6 +392,12 @@ public class SignalRClient : IAsyncDisposable
                     if (DateTimeOffset.TryParse(env.GetString("expiresAtUtc"), out var deadline))
                         OnDodocoRequested?.Invoke(env.GetString("requestId"), env.GetString("operation"),
                             env.Get<System.Text.Json.Nodes.JsonObject>("args") ?? new(), deadline, env.GetString("requesterConnectionId"), env.RoomCode ?? "");
+                    break;
+                case "mistletoe.requested":
+                    if (DateTimeOffset.TryParse(env.GetString("expiresAtUtc"), out var mistletoeDeadline)
+                        && env.Get<System.Text.Json.Nodes.JsonObject>("request") is { } mistletoeRequest)
+                        OnMistletoeRequested?.Invoke(env.GetString("requestId"), mistletoeRequest, mistletoeDeadline,
+                            env.GetString("requesterConnectionId"), env.RoomCode ?? "");
                     break;
                 case GatewayProtocol.Events.LogFilesRequested:
                     OnMemberLogFilesRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"));
@@ -962,6 +970,13 @@ public class SignalRClient : IAsyncDisposable
     {
         if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间未连接");
         await _gateway.InvokeCommandAsync("dodoco.respond", new { roomCode = _roomCode, requestId, status, errorCode, message, data });
+    }
+
+    /// <summary>回复网页的槲寄生请求；断线时抛出，由网页侧超时提示结果未确认。</summary>
+    public async Task ReportMistletoeAsync(string requestId, object reply)
+    {
+        if (_gateway?.IsConnected != true) throw new InvalidOperationException("控制房间未连接");
+        await _gateway.InvokeCommandAsync("mistletoe.respond", new { roomCode = _roomCode, requestId, reply });
     }
 
     public async Task ReportMemberLogFilesAsync(string requestId, List<MemberLogFileDescriptor> files)

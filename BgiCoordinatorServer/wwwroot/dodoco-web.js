@@ -6,15 +6,21 @@ const de = value => escapeHtml(value);
 const dodocoMaxLines = 12000, dodocoMaxBytes = 200 * 1024 * 1024, dodocoMaxLiveChars = 8 * 1024 * 1024;
 
 function showProduct(name) {
+    const mistletoe = name === 'mistletoe' && !!d('mistletoeView');
     dodoco.active = name === 'dodoco';
     if(!dodoco.active) dodocoStopAuto();
-    d('gengdiProduct').classList.toggle('active', !dodoco.active);
+    const gengdi = !dodoco.active && !mistletoe;
+    d('gengdiProduct').classList.toggle('active', gengdi);
     d('dodocoProduct').classList.toggle('active', dodoco.active);
-    d('gengdiNav').hidden = dodoco.active;
-    d('activity').hidden = dodoco.active;
+    d('mistletoeProduct')?.classList.toggle('active', mistletoe);
+    d('gengdiNav').hidden = !gengdi;
+    d('activity').hidden = !gengdi;
     dodocoRoot.hidden = !dodoco.active;
-    if (dodoco.active) { d('homeView').hidden = true; d('detailView').hidden = true; d('selectionBar').hidden = true; dodocoRender(); dodocoSyncSubscription(); }
-    else { dodocoSyncSubscription(); showHome(); }
+    if (d('mistletoeView')) d('mistletoeView').hidden = !mistletoe;
+    if (typeof mtShow === 'function') mtShow(mistletoe);
+    if (!gengdi) { d('homeView').hidden = true; d('detailView').hidden = true; d('selectionBar').hidden = true; }
+    if (dodoco.active) { dodocoRender(); dodocoSyncSubscription(); }
+    else { dodocoSyncSubscription(); if (gengdi) showHome(); }
 }
 function dodocoIsLocal(uid = dodoco.target) { return !!globalThis.window?.bgiLocalBridge?.usesLocal(uid); }
 function dodocoMembersList() { return globalThis.window?.bgiLocalBridge ? window.bgiLocalBridge.members(players) : players; }

@@ -4901,6 +4901,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         // 绑定日志回调（探针日志输出到助手界面）
         client.OnLog = msg => Application.Current.Dispatcher.Invoke(() => AddLog(msg));
+        WireMistletoeWeb(client);
 
         client.OnPlayersUpdated += update =>
         {

@@ -18,7 +18,7 @@
         if(typeof watchStopAlerts==='function')watchStopAlerts('本机连接中断，告警监视已停止。');
         if(byId('connectionText'))byId('connectionText').textContent=roomReady?'本机连接已断开 · 远程已连接':'本机连接已断开';
         if(byId('connDot'))byId('connDot').className='dot dot-offline';
-        if(window.bgiLocalBridge && typeof dodocoMembers==='function')dodocoMembers();
+        if(window.bgiLocalBridge && typeof dodocoMembers==='function')dodocoMembers();if(typeof mtMembersChanged==='function')mtMembersChanged();
         if(window.bgiLocalBridge && dodoco.active)dodocoStatus(message || '本机连接已断开，请从助手重新打开。');
     }
     const matches = p => !!(identity?.uid && identity?.clientInstanceId && identity?.machineId && p &&
@@ -36,8 +36,9 @@
         throw new Error('本机目标身份未确认；未改走服务器。');
     }
     async function call(operation, args = {}, timeout = 20000, routeUid = dodoco.target) {
-        if (!available || !session) throw new Error('本机连接未就绪，请从助手重新打开。');
-        if (operation !== 'local.identity') validateTarget(routeUid);
+        // localStatus 供槲寄生区分「确定未执行」与「结果未确认」；嘟嘟可只读 message。
+        if (!available || !session) throw Object.assign(new Error('本机连接未就绪，请从助手重新打开。'), { localStatus:'not_sent' });
+        if (operation !== 'local.identity' && !operation.startsWith('mistletoe.')) validateTarget(routeUid);
         const requestId = crypto.randomUUID().replaceAll('-', ''), controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeout);
         try {
@@ -45,7 +46,8 @@
                 headers:{'Content-Type':'application/json','X-BGI-Session':session}, body:JSON.stringify({requestId,operation,args}) });
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) markUnavailable('本机会话已失效，请从助手重新打开。');
-                throw new Error(`本机连接拒绝请求（${response.status}），结果未确认。`);
+                // 非 200 只会在进入执行前返回（会话、来源或格式无效）。
+                throw Object.assign(new Error(`本机连接拒绝请求（${response.status}），结果未确认。`), { localStatus:'error' });
             }
             const result = await response.json();
             if (!result || result.requestId !== requestId) throw new Error('本机回复身份不匹配，结果未确认。');
@@ -53,7 +55,7 @@
                 markUnavailable('本机助手实例已变化，请从助手重新打开。');
                 throw new Error('本机助手实例已变化，结果未确认，请重新打开。');
             }
-            if (result.status !== 'ok') throw new Error(result.message || '本机操作未完成或结果未知。');
+            if (result.status !== 'ok') throw Object.assign(new Error(result.message || '本机操作未完成或结果未知。'), { localStatus:result.status === 'error' ? 'error' : 'unknown' });
             return result.data;
         } catch (error) {
             if (error.name === 'AbortError') throw new Error('等待本机回复超时，结果未确认；未改走服务器。');
@@ -135,7 +137,7 @@
         if(!identity||typeof identity!=='object')throw new Error('本机助手身份不可用。');
         try{sessionStorage.setItem(storageKey,JSON.stringify({sessionId:session,instanceId:bridgeInstance}));}catch{}
         localKey='local_'+bridgeInstance;
-        window.bgiLocalBridge={get available(){return available;},execute:call,usesLocal:localTarget,selectTarget,members,gatewayUrl,startLog,stopLog,networkChanged};
+        window.bgiLocalBridge={get available(){return available;},execute:call,usesLocal:localTarget,selectTarget,members,gatewayUrl,startLog,stopLog,networkChanged,localIdentity:()=>identity};
         remoteButton=document.createElement('button');remoteButton.type='button';remoteButton.className='icon-button local-connect';remoteButton.textContent='连接远程房间';
         remoteButton.onclick=async()=>{if(roomReady){try{await connection.stop();setConn(false);}catch(e){dodocoStatus('远程断开未确认：'+e.message);}return;}showRemoteLogin();};
         document.querySelector('.topbar').appendChild(remoteButton);

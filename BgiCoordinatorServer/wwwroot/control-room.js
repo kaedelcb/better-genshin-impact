@@ -338,6 +338,7 @@ function joinRoom() {
         if (!env || typeof env !== 'object') return;
         const payload = env.payload;
         if (typeof dodocoEvent === 'function') dodocoEvent(env);
+        if (typeof mtEvent === 'function') mtEvent(env);
         switch (env.name) {
             case 'control.remoteCommandResult':
                 consumeConfigApplied(payload);
@@ -414,6 +415,7 @@ function joinRoom() {
 function setConn(online) {
     roomReady = online;
     if (typeof dodocoConnection === 'function') dodocoConnection(online);
+    if (typeof mtConnection === 'function') mtConnection(online);
     document.getElementById('connectionText').textContent = online ? '连接正常' : '连接未就绪';
     if (typeof renderControlRoom === 'function') renderControlRoom();
     const dot = document.getElementById('connDot');
@@ -447,6 +449,7 @@ function onPlayersUpdated(update) {
     }
     renderMembers();
     if (typeof dodocoMembers === 'function') dodocoMembers();
+    if (typeof mtMembersChanged === 'function') mtMembersChanged(update);
     // 记录锄地进度日志（去重）
     players.forEach(p => {
         const progress = p.autoHoeingProgress || '';

@@ -19,7 +19,7 @@ internal sealed record LocalBrowserResult(string Status, string Message = "", ob
 
 internal sealed class LocalBrowserBridge : IDisposable
 {
-    private const int MaxHeader = 16 * 1024, MaxBody = 256 * 1024, MaxResponse = 4 * 1024 * 1024;
+    private const int MaxHeader = 16 * 1024, MaxBody = 3 * 1024 * 1024, MaxResponse = 6 * 1024 * 1024;
     private const int MaxConnections = 24, MaxSessions = 16, MaxClaims = 512;
     private static readonly TimeSpan PairLifetime = TimeSpan.FromMinutes(2), SessionLifetime = TimeSpan.FromMinutes(30);
     private readonly TcpListener _listener;
@@ -199,7 +199,7 @@ internal sealed class LocalBrowserBridge : IDisposable
 
     private static bool IsReadOnly(string operation) => operation is "local.identity" or "log.poll" or "log.files" or "log.chunk"
         or "screenshot.capture" or "watch.read" or "watch.records" or "watch.incidents" or "watch.frame"
-        or "report.dates" or "report.day" or "watch.diagnostic.chunk";
+        or "report.dates" or "report.day" or "watch.diagnostic.chunk" or "mistletoe.read";
 
     private static bool ValidToken(string value) => value.Length is > 0 and <= 128 &&
         value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-');
