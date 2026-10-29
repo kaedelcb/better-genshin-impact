@@ -432,13 +432,14 @@ function tcAddDialog(state = { cat:null, q:'', picked:new Set() }) {
     };
 }
 async function tcConnectCatalog() {
-    if (tc.catalogBusy) return;
+    if (tc.catalogBusy) return false;
     tc.catalogBusy = true;
     // 连接可能包含执行端 BGI 冷启动（执行端确保预算约 150 秒），与 PC 一致保留同一操作身份等待终态。
     const reply = await mtOperate('task.catalog.connect', undefined, { label:'连接执行端 BGI', onStage:mtStageBar, waitBudget:180000, timeout:25000 });
     tc.catalogBusy = false;
     if (reply.status === 'ok') { await tcLoad(true); mtToast('已连接执行端 BGI 并刷新资源目录。'); }
     else mtToast('连接 BGI 未完成：' + (reply.message || ''), true);
+    return reply.status === 'ok';
 }
 
 // ---------- 计划设置 ----------
@@ -659,7 +660,14 @@ async function tcManageAction(m) {
         else if (m === 'schedImport') { const file = await mtPickFile(); if (!file || !(await tcFlush())) return; const reply = await mtOperate('task.schedule.import', await mtReadFile(file), { label:'导入调度列表', onStage:mtStageBar, waitBudget:20000 }); mtToast(reply.message || reply.status, reply.status !== 'ok'); }
         else if (m === 'reset') {
             if (!confirm(`重置计划「${f.name}」的执行状态？\n\n计划内容和原失败历史会保留。将停止当前执行，并放弃已中断的旧执行；无法确认已停止的任务会保留原责任并报告失败。\n\n重置不会自动启动计划。完成后可手动从头启动，或删除计划。`)) return mtToast('已取消重置，计划与执行状态未更改。');
-            const reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态', onStage:mtStageBar, waitBudget:30000 }); mtToast(reply.message || reply.status, reply.status !== 'ok');
+            let reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态', onStage:mtStageBar, waitBudget:30000 });
+            // 执行端要先连上 BGI 才能核对旧执行是否还在跑（PC 同一条规则）。这次是确定未执行的拒绝，
+            // 经用户确认后先连接 BGI，再用新的请求重试一次；结果未知时不重试。
+            if (reply.status === 'rejected' && /BGI 当前实例和执行纪元不可确认/.test(reply.message || '')
+                && confirm('重置需要先让执行端连上 BGI，核对旧执行是否还在运行。执行端 BGI 未运行时会被启动（不会开始任何任务）。现在连接 BGI 并重试重置？')) {
+                if (await tcConnectCatalog()) reply = await mtOperate('task.flow.resetExecutionState', f.id, { label:'重置执行状态（连接 BGI 后）', onStage:mtStageBar, waitBudget:30000 });
+            }
+            mtToast(reply.status === 'ok' ? (reply.message || '执行状态已重置') : '重置未完成：' + (reply.message || reply.status), reply.status !== 'ok');
         } else if (m === 'delete') await tcDelete(f);
         else if (m === 'migPrepare') mtBrowsePrograms(async dir => { const reply = await mtOperate('task.migration.prepare', dir, { label:'准备旧版迁移', onStage:mtStageBar, waitBudget:60000 }); mtToast(reply.message || reply.status, reply.status !== 'ok'); await tcLoad(true); tcRender(mtEl('mtContent')); }, '', '选择执行端上的旧 BGI User 目录', () => false, true);
         else if (m === 'connect') await tcConnectCatalog();

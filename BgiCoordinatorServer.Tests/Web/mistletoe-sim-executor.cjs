@@ -111,7 +111,7 @@ module.exports = function installSimExecutor() {
         return track(id, () => { if (payload.action === 'Pause') run.state = 3; return reply('ok', '已请求' + payload.action); });
       }
       case 'task.run.resume': { const run = sim.runs.find(r => r.runId === payload); return track(id, () => { if (run) run.state = 2; return run ? reply('ok', '已恢复运行') : reply('rejected', '运行不存在'); }); }
-      case 'task.catalog.connect': return track(id, () => { sim.catalog = { entries: [{ kind: 0, stableId: 'onedragon:每日', displayName: '每日', configRevision: 'cfg-r1' }, { kind: 1, stableId: 'group:锄地', displayName: '锄地', configRevision: 'cfg-g1' }, { kind: 2, stableId: 'single:每日:t1', displayName: '每日委托', ownerConfig: '每日', configRevision: 'cfg-r1', enabled: true, singleExecutionSupported: true }], isDegraded: false }; return reply('ok', '资源目录已刷新'); }, 200);
+      case 'task.catalog.connect': return track(id, () => { sim.bgiDisconnected = false; sim.catalog = { entries: [{ kind: 0, stableId: 'onedragon:每日', displayName: '每日', configRevision: 'cfg-r1' }, { kind: 1, stableId: 'group:锄地', displayName: '锄地', configRevision: 'cfg-g1' }, { kind: 2, stableId: 'single:每日:t1', displayName: '每日委托', ownerConfig: '每日', configRevision: 'cfg-r1', enabled: true, singleExecutionSupported: true }], isDegraded: false }; return reply('ok', '资源目录已刷新'); }, 200);
       case 'task.resource.layout.get': return reply('ok', '', { Tasks: sim.layout.tasks.map(t => ({ TaskId: t.taskId, Name: t.name, Enabled: t.enabled })), StartTaskId: sim.layout.startTaskId, Revision: sim.layout.revision }, sim.layout.revision);
       case 'task.resource.layout.save': sim.layout = { tasks: payload.tasks, startTaskId: payload.startTaskId, revision: rev() }; return immediate(id, reply('ok', 'BGI 配置已保存；请同步当前计划引用修订', null, sim.layout.revision));
       case 'task.resource.revision.get': return reply('ok', '', null, sim.layout.revision);
@@ -135,7 +135,7 @@ module.exports = function installSimExecutor() {
         sim.deleted = sim.deleted.filter(x => x !== d); sim.flows.set(d.WorkflowId, { doc: { schema: 'mistletoe.workflow', schemaVersion: 1, workflowId: d.WorkflowId, name: d.Name, nodes: [], triggers: [], terminal: [] }, revision: rev() });
         return immediate(id, reply('ok', '计划已恢复'));
       }
-      case 'task.flow.resetExecutionState': return track(id, () => { sim.resetCount = (sim.resetCount || 0) + 1; sim.runs = sim.runs.filter(r => r.workflowId !== payload); return reply('ok', '执行状态已重置；计划未自动启动'); });
+      case 'task.flow.resetExecutionState': return track(id, () => { if (sim.bgiDisconnected) return reply('rejected', 'BGI 当前实例和执行纪元不可确认，旧执行责任保留；未完成重置。'); sim.resetCount = (sim.resetCount || 0) + 1; sim.runs = sim.runs.filter(r => r.workflowId !== payload); return reply('ok', '执行状态已重置；计划未自动启动'); });
       case 'task.migration.prepare':
         if (typeof payload !== 'string' || !/^[A-Za-z]:\\/.test(payload)) return reply('rejected', '迁移来源必须是执行端上的绝对目录');
         return track(id, () => { sim.migrations.push(payload); sim.flows.set('wf-mig', { doc: { schema: 'mistletoe.workflow', schemaVersion: 1, workflowId: 'wf-mig', name: '旧版迁移候选', nodes: [], triggers: [], terminal: [] }, revision: rev(), candidate: true }); return reply('ok', '已生成迁移候选'); });

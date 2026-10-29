@@ -492,9 +492,15 @@ async function layoutAudit(page, name) {
       assert.equal(await page.locator('#tcStart').isDisabled(), true, 'Unknown 仍阻止再次启动');
       await layoutAudit(page, 'Unknown 计划区 1440');
       if (shots) { await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: path.join(shots, 'taskcenter-unknown-1440.png') }); report.shots.push('taskcenter-unknown-1440'); }
-      const resets = await S(() => sim.resetCount || 0);
-      yes(); await page.locator('#tcResetHere').click();
-      await executor.waitForFunction(n => sim.resetCount === n + 1, resets, { timeout: 10000 });
+      // 执行端没连上 BGI：第一次重置被拒且不改任何东西；确认后先连接 BGI 再重试一次。
+      const resets = await S(() => { sim.bgiDisconnected = true; return sim.resetCount || 0; });
+      const connects = await S(() => sim.requests.filter(r => r.op === 'task.catalog.connect').length);
+      const answer = d => d.accept().catch(() => {}); page.on('dialog', answer);
+      await page.locator('#tcResetHere').click();
+      await executor.waitForFunction(n => sim.resetCount === n + 1, resets, { timeout: 20000 });
+      page.off('dialog', answer);
+      assert.equal(await S(n => sim.requests.filter(r => r.op === 'task.catalog.connect').length - n, connects), 1, '先连接 BGI 一次');
+      assert.equal(await S(() => sim.requests.filter(r => r.op === 'task.flow.resetExecutionState').length), 3, '被拒一次、连接后重试一次（另一次是管理菜单里的重置）');
       await page.locator('#tcResetHere').waitFor({ state: 'detached', timeout: 10000 });
       await page.waitForFunction(() => !document.querySelector('#tcStart').disabled, null, { timeout: 10000 });
     });
