@@ -105,6 +105,7 @@
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.js" LogicalName="LocalBrowser/dodoco-web.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.css" LogicalName="LocalBrowser/dodoco-web.css" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-operations.js" LogicalName="LocalBrowser/dodoco-operations.js" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-remote-logs.js" LogicalName="LocalBrowser/dodoco-remote-logs.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-log-worker.js" LogicalName="LocalBrowser/dodoco-log-worker.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-core.js" LogicalName="LocalBrowser/mistletoe-core.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\mistletoe-startup.js" LogicalName="LocalBrowser/mistletoe-startup.js" />

@@ -46,7 +46,7 @@ function body(req){return new Promise((resolve,reject)=>{let v='';req.on('data',
      res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({requestId:payload.requestId,instanceId:'bridge-id',status:'ok',data}));
    }
    const relative=u.pathname==='/'?'local-dodoco.html':u.pathname.slice(1);
-   if(!/^(local-dodoco\.(html|js|css)|project-star\.css|index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js)|mistletoe-(?:core|startup|startup-view|taskcenter|web)\.js|mistletoe-web\.css|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(relative)){res.writeHead(404);return res.end();}
+   if(!/^(local-dodoco\.(html|js|css)|project-star\.css|index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js|remote-logs\.js)|mistletoe-(?:core|startup|startup-view|taskcenter|web)\.js|mistletoe-web\.css|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(relative)){res.writeHead(404);return res.end();}
    res.setHeader('Content-Type',relative.endsWith('.js')?'text/javascript':relative.endsWith('.css')?'text/css':relative.endsWith('.png')?'image/png':'text/html');
    res.end(relative==='signalr.min.js'?fs.readFileSync(path.join(root,relative),'utf8')+'\n;'+runtime:fs.readFileSync(path.join(root,relative)));
  }catch(e){res.writeHead(500);res.end(String(e));}});
@@ -71,6 +71,7 @@ function body(req){return new Promise((resolve,reject)=>{let v='';req.on('data',
    await page.waitForFunction(()=>roomReady===true);assert.equal(await page.evaluate(()=>remoteAddr),'http://127.0.0.1:5123/gateway');assert.equal(await page.evaluate(()=>remoteOptions.withCredentials),false);
    await page.locator('#dodocoMember').selectOption('other');await page.locator('[data-tab="files"]').click();await page.locator('#dodocoList').click();await page.getByText('remote.log').waitFor();
    assert.ok(await page.evaluate(()=>remoteCalls.some(x=>x.name==='log.requestFiles'&&x.payload.targetUid==='other')));
+   await page.getByRole('button',{name:'远程日志',exact:true}).click();await page.locator('#rlMember option[value="other"]').waitFor({state:'attached'});assert.match(await page.locator('#rlRoomLabel').textContent(),/本房间/);await page.locator('#rlMember').selectOption('other');const listBefore=await page.evaluate(()=>remoteCalls.filter(x=>x.name==='log.requestFiles').length);await page.locator('#rlFetch').click();await page.locator('#rlFiles').getByText('remote.log').waitFor();assert.equal(await page.evaluate(()=>remoteCalls.filter(x=>x.name==='log.requestFiles').length),listBefore+1,'本机页远程日志经远程房间转发');await page.locator('#rlClose').click();
    const options=await page.locator('#dodocoMember option').allTextContents();assert.ok(options.some(x=>x.includes('本机直连')));assert.ok(!options.some(x=>x.includes('本机匹配')),'精确匹配的本机执行端不重复显示为服务器目标');
    const own=await page.locator('#dodocoMember option').evaluateAll(os=>os.find(o=>o.textContent.includes('本机直连')).value);await page.locator('#dodocoMember').selectOption(own);
    await page.locator('#dodocoList').click();await page.getByText('local.log').waitFor();const remoteBefore=await page.evaluate(()=>remoteCalls.length);

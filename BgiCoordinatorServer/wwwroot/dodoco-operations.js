@@ -300,7 +300,7 @@ function reportDraw(){const root=d('reportBody'),x=reportState.result;if(!root)r
     const all=d('reportExpandAll');if(all)all.onclick=()=>{if(allOpen)reportState.open.clear();else allKeys.forEach(k=>reportState.open.add(k));reportDraw();};
 }
 
-// ===== 补齐：全房间当天日志（PC「远程日志」窗口的批量下载）=====
+// ===== 全房间当天日志共用工具（PC「远程日志」窗口的批量下载）=====
 // 沿用 log.requestFiles / log.requestDownload，依次向在线成员收集当天 BGI 与助手日志，打成一个 ZIP（不压缩），
 // 附“下载结果.txt”；离线、空列表、失败如实写入结果。只在服务器中转可用，本机直连无房间。
 const roomLogs = { running:false, cancel:false, generation:0 };
@@ -331,78 +331,4 @@ async function roomLogGunzip(chunks){
     if(buffer.byteLength>200*1024*1024)throw new Error('文件超过 200 MB 上限');
     return new Uint8Array(buffer);
 }
-async function roomLogFiles(uid){
-    const id=newRequestId(),wait=dodocoWait('files',uid,id);
-    try{await dodocoDispatch('log.requestFiles',{targetUid:uid,requestId:id});return await wait;}
-    catch(e){const p=dodoco.pending.get(id);if(p)dodocoFinish(p,e.message);wait.catch(()=>{});throw e;}
-}
-async function roomLogDownload(uid,fileName){
-    const id=newRequestId(),wait=dodocoWait('download',uid,id,30000);dodoco.pending.get(id).fileName=fileName;
-    try{await dodocoDispatch('log.requestDownload',{targetUid:uid,requestId:id,fileName});return await roomLogGunzip(await wait);}
-    catch(e){const p=dodoco.pending.get(id);if(p)dodocoFinish(p,e.message);wait.catch(()=>{});throw e;}
-}
-function roomLogSetStatus(text,progress){
-    roomLogs.lastStatus=text;if(progress!==undefined)roomLogs.lastProgress=progress;
-    const box=d('roomLogStatus');if(box){box.hidden=false;box.textContent=text;}
-    const bar=d('roomLogProgress');if(bar&&roomLogs.lastProgress!==undefined){bar.hidden=false;bar.value=roomLogs.lastProgress;}
-}
-function roomLogSyncButtons(){const start=d('roomLogStart'),stop=d('roomLogCancel');if(start)start.disabled=roomLogs.running||!roomReady;if(stop)stop.hidden=!roomLogs.running;}
-async function roomLogRun(){
-    if(roomLogs.running)return;
-    if(!roomReady){roomLogSetStatus('房间连接未就绪，无法收集全房间日志。');return;}
-    if(dodoco.pending.size){roomLogSetStatus('请等待当前列表请求或单文件下载结束，再收集全房间日志。');return;}
-    const members=[...new Map(players.filter(p=>p.playerUid&&!String(p.playerUid).startsWith('web_')).map(p=>[p.playerUid,p])).values()];
-    if(!members.length){roomLogSetStatus('当前房间没有可识别的成员，无法收集日志。');return;}
-    const date=roomLogLocalDate(Date.now()),generation=++roomLogs.generation,entries=[],results=[],room=roomCode||'本房间';
-    roomLogs.running=true;roomLogs.cancel=false;roomLogs.lastProgress=0;roomLogSyncButtons();
-    const stopped=()=>roomLogs.cancel||generation!==roomLogs.generation||!roomReady||roomCode!==room&&room!=='本房间';
-    const stopReason=()=>!roomReady?'房间连接已断开，下载中止':'已取消批量下载';
-    roomLogSetStatus(`正在收集 ${date} 的全房间日志，共 ${members.length} 位成员…`,0);
-    try{
-        for(let i=0;i<members.length;i++){
-            const m=members[i],name=m.playerName||m.playerUid,r={name,uid:m.playerUid,bgi:0,assistant:0,failed:0,messages:[]};results.push(r);
-            if(stopped()){r.messages.push(stopReason()+'，尚未开始该成员');continue;}
-            if(!m.online){r.messages.push('成员离线，已跳过；未取得当天 BGI 和助手日志');roomLogSetStatus(`${name}：离线，已跳过`,(i+1)/members.length);continue;}
-            roomLogSetStatus(`正在获取 ${name} 的日志列表…（${i+1}/${members.length}）`,i/members.length);
-            let files;
-            try{files=await roomLogFiles(m.playerUid);}catch(e){r.messages.push('获取列表失败：'+e.message);continue;}
-            if(!files.length){r.messages.push('收到空列表：对方可能未开启共享或没有可分享日志，无法区分');continue;}
-            const picked=[...new Map(files.filter(f=>roomLogLocalDate(f.lastWrite)===date&&(roomLogBgi.test(f.name)||roomLogAssistant.test(f.name))).map(f=>[String(f.name).toLowerCase(),f])).values()].sort((a,b)=>a.name.localeCompare(b.name));
-            if(!picked.length){r.messages.push(`列表中没有修改日期为 ${date} 的 BGI 或助手日志`);continue;}
-            const folder=`成员-${String(i+1).padStart(2,'0')}-${roomLogSafe(name,40)}-${roomLogSafe(m.playerUid,48)}/`;
-            for(let k=0;k<picked.length;k++){
-                const f=picked[k];
-                if(stopped()){r.messages.push(f.name+'：'+stopReason());break;}
-                roomLogSetStatus(`正在下载 ${name}：${f.name}（${k+1}/${picked.length}）`,(i+k/picked.length)/members.length);
-                try{const data=await roomLogDownload(m.playerUid,f.name);entries.push({name:folder+f.name,data});if(roomLogBgi.test(f.name))r.bgi++;else r.assistant++;}
-                catch(e){r.failed++;r.messages.push(f.name+'：下载失败，'+e.message);}
-                // 对端在最后一块确认后才释放单文件忙标记；间隔 200ms 与 PC 端一致。
-                if(k<picked.length-1)await new Promise(res=>setTimeout(res,200));
-            }
-            if(!r.bgi&&!r.assistant)r.messages.push('未取得当天 BGI 和助手日志');
-            else if(!r.bgi)r.messages.push('未取得当天 BGI 日志');
-            else if(!r.assistant)r.messages.push('未取得当天助手日志');
-            else if(!r.failed)r.messages.push('当天 BGI 和助手日志均已下载');
-        }
-    }finally{
-        const cancelled=stopped(),total=results.reduce((n,r)=>n+r.bgi+r.assistant,0),complete=results.filter(r=>r.bgi&&r.assistant&&!r.failed).length;
-        for(const m of members.slice(results.length))results.push({name:m.playerName||m.playerUid,uid:m.playerUid,bgi:0,assistant:0,failed:0,messages:[stopReason()+'，尚未开始该成员']});
-        const lines=[`房间：${room}`,`日志日期：${date}（按成员上报的文件修改日期筛选）`,`结束时间：${new Date().toLocaleString('zh-CN',{hour12:false})}`,`状态：${cancelled?stopReason():'收集结束，请核对各成员结果'}`,`成员快照：${members.length} 人；BGI ${results.reduce((n,r)=>n+r.bgi,0)} 个，助手 ${results.reduce((n,r)=>n+r.assistant,0)} 个，文件失败 ${results.reduce((n,r)=>n+r.failed,0)} 个`,'空列表可能代表未开启共享或没有可分享日志，协议无法区分；未取得日志不等于无日志。',''];
-        for(const r of results)lines.push(`${r.name}（UID：${r.uid}）`,`  BGI：${r.bgi} 个；助手：${r.assistant} 个；文件失败：${r.failed} 个；${r.bgi&&r.assistant&&!r.failed?'两类当天日志均已下载':'未完整取得两类当天日志'}`,'  '+r.messages.join('；'),'');
-        entries.push({name:'下载结果.txt',data:new TextEncoder().encode('\ufeff'+lines.join('\r\n'))});
-        const zipName=`房间-${roomLogSafe(room,40)}-${date}-全房间日志.zip`;
-        if(generation===roomLogs.generation)dodocoSave(roomLogZip(entries),zipName,'application/zip');
-        roomLogs.running=false;
-        roomLogSetStatus(`${cancelled?stopReason():'全房间日志收集结束'}：已下载 ${total} 个文件；BGI 和助手均收齐 ${complete}/${members.length} 人。已保存 ${zipName}（内含“下载结果.txt”）。\n`+results.map(r=>`${r.name}：${r.messages.join('；')}`).join('\n'),cancelled?undefined:1);
-        roomLogSyncButtons();
-    }
-}
-function roomLogMount(host){
-    if(!host||dodocoIsLocal())return;
-    const box=document.createElement('section');box.className='dd-room-logs';
-    box.innerHTML=`<div class="dd-room-logs-head"><div><h3>全房间当天日志</h3><p class="dodoco-hint">依次向在线成员收集今天的 BGI 和助手日志，打包为一个 ZIP；需对方开启“共享日志文件”</p></div><div class="dd-actions"><button id="roomLogCancel" class="dd-btn dd-btn-quiet" hidden>取消批量下载</button><button id="roomLogStart" class="dd-btn">下载全房间当天日志</button></div></div><progress id="roomLogProgress" max="1" value="0" hidden></progress><p id="roomLogStatus" class="dd-room-logs-status" role="status" hidden></p>`;
-    host.appendChild(box);
-    d('roomLogStart').onclick=roomLogRun;d('roomLogCancel').onclick=()=>{roomLogs.cancel=true;roomLogSetStatus('正在取消，当前文件结束后停止…');};
-    if(roomLogs.lastStatus)roomLogSetStatus(roomLogs.lastStatus);
-    roomLogSyncButtons();
-}
+// 单成员列表/下载、批量收集和面板挂载见 dodoco-remote-logs.js（远程日志面板，支持协助房间）。

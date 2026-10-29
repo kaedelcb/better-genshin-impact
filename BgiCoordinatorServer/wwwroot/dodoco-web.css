@@ -232,3 +232,37 @@
 .dd-zoom-stage{max-width:90vw;max-height:80vh;margin-top:10px;overflow:auto;border-radius:8px;background:#0e0f1a}
 .dd-zoom-stage img{display:block;max-width:90vw;max-height:80vh;margin:0;transform-origin:0 0;transition:transform .08s}
 @media(max-width:700px){.dd-rule-toggles{width:100%;justify-content:space-between}.dd-alert-opts{gap:12px}}
+/* 远程日志面板（对应 PC「远程成员日志」窗口）与协助房间表单。 */
+.dd-room-logs-head .dd-btn{width:100%}
+.dd-rl-dialog{width:min(620px,96vw);max-height:92vh;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:#1d1e34;color:var(--text);box-shadow:0 24px 60px #0009;overflow:auto}
+.dd-rl-dialog[open]{display:flex;flex-direction:column;gap:12px;animation:dd-rl-in .18s ease-out}
+.dd-rl-dialog::backdrop{background:#07081099;backdrop-filter:blur(2px)}
+@keyframes dd-rl-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.dd-rl-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dd-rl-title{display:grid;gap:3px;min-width:0}
+.dd-rl-title h2{margin:0;font-size:17px;color:var(--gold)}
+.dd-rl-room{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.dd-rl-head .dd-btn.active{border-color:var(--gold);color:var(--gold)}
+.dd-rl-assist{display:grid;gap:10px;padding:14px;border:1px solid #4a4361;border-radius:12px;background:#17182b}
+.dd-rl-assist h3{margin:0;font-size:15px;color:var(--gold)}
+.dd-rl-assist .dodoco-hint{margin:0}
+.dd-rl-history{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.dd-rl-cred{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.dd-rl-assist-status{margin:0;min-height:1em;color:var(--gold);font-size:12px;overflow-wrap:anywhere}
+.dd-rl-assist-actions{justify-content:flex-end}
+.dd-rl-batch{gap:8px}
+.dd-rl-bar{width:100%;height:5px;accent-color:var(--gold)}
+.dd-rl-filters{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.dd-rl-filters>.dd-grow{flex:1 1 180px}
+.dd-rl-filters select{min-width:120px}
+.dd-rl-files{min-height:180px;max-height:42vh;padding:6px;margin:0;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset);align-content:start}
+.dd-rl-messages{display:grid;gap:4px;max-height:110px;overflow:auto}
+.dd-rl-messages .dodoco-status,.dd-rl-messages .dd-room-logs-status{margin:0;font-size:12px}
+.dd-rl-foot{display:grid;gap:8px}
+@media(max-width:700px){
+  .dd-rl-dialog{padding:14px}
+  .dd-rl-cred{grid-template-columns:minmax(0,1fr)}
+  .dd-rl-filters>.dd-field{flex:1 1 calc(50% - 6px);min-width:0}
+  .dd-rl-filters>.dd-grow{flex-basis:100%}
+  .dd-rl-filters>.dd-btn,.dd-rl-foot .dd-btn,.dd-rl-batch .dd-btn{flex:1 1 auto}
+}
