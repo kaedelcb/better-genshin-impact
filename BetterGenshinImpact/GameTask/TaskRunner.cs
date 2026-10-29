@@ -353,6 +353,7 @@ public class TaskRunner
 
         // 激活原神窗口；遮罩的显示由下一帧上报给 IMaskWindowHost 后自动恢复
         SystemControl.ActivateWindow();
+        Thread.Sleep(500);
 
         // 游戏获焦后再释放，避免鼠标抬起事件落到 BGI 界面。
         // [输入状态安全] 任务启动前释放所有残留按键。
