@@ -618,74 +618,98 @@
                 </Expander>
             </Border>
 
-            <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
-            <!-- ========== 卡片：本机网页（嘟嘟可本机直连入口，原在顶栏） ========== -->
+            <!-- ========== 卡片：本机网页与网页授权（复用启动策略的折叠交互） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="本机网页" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                        <TextBlock Text="在本机浏览器打开执行端的嘟嘟可与槲寄生；远程成员仍可在网页中连接房间查看。"
-                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
-                                   MaxWidth="400" HorizontalAlignment="Left"/>
-                        <TextBlock x:Name="LocalWebExecutionHint" Text="监控端会打开同一电脑、同 UID 执行端的网页（支持不同 Windows 用户/会话）。请先运行执行端助手，并保持两端控制房间及密码一致；未找到执行端时会提示，多个执行端需选择。"
-                                   FontSize="11" Foreground="{DynamicResource GoldText}" Margin="0,6,0,0" TextWrapping="Wrap"
-                                   MaxWidth="400" HorizontalAlignment="Left"/>
-                        <TextBlock Text="每次打开都会生成一次性配对链接，请勿分享给他人。"
-                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
-                                   MaxWidth="400" HorizontalAlignment="Left"/>
-                    </StackPanel>
-                    <Button x:Name="OpenLocalWebButton" Grid.Column="1" Content="打开本机网页" Style="{DynamicResource BtnGold}"
-                            VerticalAlignment="Center" Click="OpenLocalWebClick"/>
-                </Grid>
-            </Border>
-
-            <!-- ========== 卡片：网页授权（远程网页操作本人槲寄生、修改本人嘟嘟可的凭据） ========== -->
-            <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <StackPanel VerticalAlignment="Center">
-                            <TextBlock Text="网页授权" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                            <TextBlock Text="在手机或其他电脑的网页里操作本机槲寄生、修改本机嘟嘟可前，先在这里生成授权码，并在网页里输入一次。本机网页无需授权。"
-                                       FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
-                                       MaxWidth="400" HorizontalAlignment="Left"/>
-                            <TextBlock Text="授权码 5 分钟内有效、只能用一次；不要发给其他成员。"
-                                       FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
-                                       MaxWidth="400" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                        <Button x:Name="CreateWebCodeButton" Grid.Column="1" Content="生成授权码" Style="{DynamicResource BtnGold}"
-                                VerticalAlignment="Center" Click="CreateWebCodeClick"/>
-                    </Grid>
-                    <TextBlock x:Name="WebCodeText" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"
-                               FontFamily="Consolas" Margin="0,10,0,0" Visibility="Collapsed"/>
-                    <TextBlock x:Name="WebCodeHint" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"
-                               TextWrapping="Wrap" Visibility="Collapsed"/>
-                    <TextBlock Text="已授权的浏览器" FontSize="12" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
-                    <ItemsControl x:Name="WebBrowserList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="0,2">
+                <Expander x:Name="WebSettingsExpander" IsExpanded="False" Margin="0,0,0,4" Style="{StaticResource CardExpander}">
+                    <Expander.Header>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="本机网页与网页授权" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="12,4,0,0">
+                                <TextBlock Text="设置项" FontSize="12" Foreground="{DynamicResource Dim}"/>
+                                <Path Style="{StaticResource CardChevron}"/>
+                            </StackPanel>
+                        </Grid>
+                    </Expander.Header>
+                    <StackPanel Margin="0,8,0,0">
+                        <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="本机网页" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                                    <TextBlock Text="在本机浏览器打开执行端的嘟嘟可与槲寄生；远程成员仍可在网页中连接房间查看。"
+                                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                               MaxWidth="400" HorizontalAlignment="Left"/>
+                                    <TextBlock x:Name="LocalWebExecutionHint" Text="监控端会打开同一电脑、同 UID 执行端的网页（支持不同 Windows 用户/会话）。请先运行执行端助手，并保持两端控制房间及密码一致；未找到执行端时会提示，多个执行端需选择。"
+                                               FontSize="11" Foreground="{DynamicResource GoldText}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                               MaxWidth="400" HorizontalAlignment="Left"/>
+                                    <TextBlock Text="每次打开都会生成一次性配对链接，请勿分享给他人。"
+                                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                               MaxWidth="400" HorizontalAlignment="Left"/>
+                                </StackPanel>
+                                <Button x:Name="OpenLocalWebButton" Grid.Column="1" Content="打开本机网页" Style="{DynamicResource BtnGold}"
+                                        VerticalAlignment="Center" Click="OpenLocalWebClick"/>
+                            </Grid>
+                        </Border>
+                        <Border Background="#1E262660" CornerRadius="8" Padding="12,10">
+                            <StackPanel>
+                                <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Line}" FontSize="12" Foreground="{DynamicResource White}"
-                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                    <Button Grid.Column="1" Content="撤销" Style="{DynamicResource BtnGhost}" Padding="10,2"
-                                            Tag="{Binding Id}" Click="RevokeWebBrowserClick"/>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="网页授权" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                                        <TextBlock Text="在手机或其他电脑的网页里操作本机槲寄生、修改本机嘟嘟可前，先在这里生成授权码，并在网页里输入一次。本机网页无需授权。"
+                                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"
+                                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                                        <TextBlock Text="请在 执行端 进行授权码生成" FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource GoldText}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                                        <TextBlock Text="授权码 5 分钟内有效、只能用一次；不要发给其他成员。"
+                                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                                   MaxWidth="400" HorizontalAlignment="Left"/>
+                                    </StackPanel>
+                                    <Button x:Name="CreateWebCodeButton" Grid.Column="1" Content="生成授权码" Style="{DynamicResource BtnGold}"
+                                            VerticalAlignment="Center" Click="CreateWebCodeClick"/>
                                 </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock x:Name="WebBrowserEmpty" Text="还没有授权任何浏览器" FontSize="12" Foreground="{DynamicResource Dim}"/>
-                </StackPanel>
+                                <StackPanel x:Name="WebCodePanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                                <TextBlock x:Name="WebCodeText" FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource GoldText}"
+                                           FontFamily="Consolas" VerticalAlignment="Center"/>
+                                <Button x:Name="CopyWebCodeButton" Content="复制" Style="{DynamicResource BtnGhost}"
+                                        Padding="10,2" Margin="12,0,0,0" VerticalAlignment="Center" Click="CopyWebCodeClick"/>
+                                </StackPanel>
+                                <TextBlock x:Name="WebCodeCopyStatus" FontSize="11" Foreground="{DynamicResource GoldText}"
+                                           Margin="0,2,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+                                <TextBlock x:Name="WebCodeHint" FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"
+                                           TextWrapping="Wrap" Visibility="Collapsed"/>
+                                <TextBlock Text="已授权的浏览器" FontSize="12" Foreground="{DynamicResource Dim}" Margin="0,12,0,4"/>
+                                <ItemsControl x:Name="WebBrowserList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Line}" FontSize="12" Foreground="{DynamicResource White}"
+                                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                <Button Grid.Column="1" Content="撤销" Style="{DynamicResource BtnGhost}" Padding="10,2"
+                                                        Tag="{Binding Id}" Click="RevokeWebBrowserClick"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock x:Name="WebBrowserEmpty" Text="还没有授权任何浏览器" FontSize="12" Foreground="{DynamicResource Dim}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Expander>
             </Border>
             <!-- ========== 卡片：配置迁移（一键导出/导入全部设置，跨机器搬家用） ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">

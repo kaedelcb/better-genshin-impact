@@ -38,11 +38,28 @@ public partial class SettingsPage : UserControl
         var (code, expires) = vm.WebOwners.CreateCode();
         _codeExpires = expires;
         WebCodeText.Text = code[..4] + " " + code[4..];
-        WebCodeText.Visibility = Visibility.Visible;
+        WebCodePanel.Visibility = Visibility.Visible;
+        WebCodeCopyStatus.Visibility = Visibility.Collapsed;
         WebCodeHint.Visibility = Visibility.Visible;
         CreateWebCodeButton.Content = "重新生成";
         _codeTimer.Start();
         RefreshWebCode();
+    }
+
+    private void CopyWebCodeClick(object sender, RoutedEventArgs e)
+    {
+        RefreshWebCode();
+        if (WebCodePanel.Visibility != Visibility.Visible) return;
+        try
+        {
+            Clipboard.SetText(WebCodeText.Text.Replace(" ", ""));
+            WebCodeCopyStatus.Text = "授权码已复制到剪贴板。";
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            WebCodeCopyStatus.Text = "复制失败：剪贴板不可用，请稍后重试。";
+        }
+        WebCodeCopyStatus.Visibility = Visibility.Visible;
     }
 
     private void RefreshWebCode()
@@ -52,7 +69,8 @@ public partial class SettingsPage : UserControl
         if (pending is null || left <= TimeSpan.Zero)
         {
             _codeTimer.Stop();
-            WebCodeText.Visibility = Visibility.Collapsed;
+            WebCodePanel.Visibility = Visibility.Collapsed;
+            WebCodeCopyStatus.Visibility = Visibility.Collapsed;
             WebCodeHint.Text = pending is null && left > TimeSpan.Zero ? "授权码已使用或已作废。" : "授权码已过期。";
             CreateWebCodeButton.Content = "生成授权码";
             RefreshWebBrowsers();
