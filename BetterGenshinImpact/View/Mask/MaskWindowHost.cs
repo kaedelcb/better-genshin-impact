@@ -194,6 +194,12 @@ public sealed class MaskWindowHost : IMaskWindowHost
     /// </summary>
     private bool? DecideVisibleLocked(GameWindowState state)
     {
+        // 最小化时必须隐藏，布局编辑也不能把遮罩留在桌面上。
+        if (state.IsMinimized)
+        {
+            return false;
+        }
+
         if (IsForcedVisibleLocked())
         {
             return true;
@@ -202,11 +208,6 @@ public sealed class MaskWindowHost : IMaskWindowHost
         if (!state.IsCapturing)
         {
             return false;
-        }
-
-        if (state.IsMinimized)
-        {
-            return null;
         }
 
         if (state.IsActive)

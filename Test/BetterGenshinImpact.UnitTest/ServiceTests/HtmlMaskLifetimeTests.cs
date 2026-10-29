@@ -3,15 +3,70 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Windows;
+using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Mask;
+using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Interface;
 using BetterGenshinImpact.View;
+using Moq;
 using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests;
 
 public class HtmlMaskLifetimeTests
 {
+    [Fact]
+    public void HostVisibilityHidesAndRestoresHtmlAcrossTaskCleanup()
+    {
+        RunSta(() =>
+        {
+            var windows = (ConcurrentDictionary<string, HtmlMaskWindow>)typeof(HtmlMaskWindow)
+                .GetField("_windows", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+            Assert.Empty(windows);
+            var config = (AllConfig)RuntimeHelpers.GetUninitializedObject(typeof(AllConfig));
+            config.MaskWindowConfig = new MaskWindowConfig();
+            var configService = new Mock<IConfigService>();
+            configService.Setup(x => x.Get()).Returns(config);
+            var host = new Mock<IMaskWindowHost>();
+            _ = new CustomHtmlMaskService(configService.Object, host.Object);
+            try
+            {
+                var persistent = CreateWindow(windows, "persistent", true);
+                for (var task = 0; task < 2; task++)
+                {
+                    var temporary = CreateWindow(windows, "script-" + task, false);
+                    host.Raise(x => x.StateChanged += null, host.Object, new MaskWindowState(true, default));
+                    Assert.True(persistent.IsVisible);
+                    Assert.True(temporary.IsVisible);
+
+                    // 主遮罩隐藏时，常驻和脚本 HTML 窗口都隐藏，不销毁常驻页面。
+                    host.Raise(x => x.StateChanged += null, host.Object, new MaskWindowState(false, default));
+                    Assert.False(persistent.IsVisible);
+                    Assert.False(temporary.IsVisible);
+                    HtmlMaskWindow.CloseTaskWindows();
+                    Assert.Single(windows);
+                    Assert.Same(persistent, windows["persistent"]);
+                    Assert.False(persistent.IsVisible);
+                }
+
+                host.Raise(x => x.StateChanged += null, host.Object, new MaskWindowState(true, default));
+                Assert.True(persistent.IsVisible);
+                HtmlMaskWindow.CloseTaskWindows();
+                Assert.True(persistent.IsVisible);
+                Assert.Same(persistent, windows["persistent"]);
+                HtmlMaskWindow.CloseAll();
+                Assert.Empty(windows);
+            }
+            finally
+            {
+                HtmlMaskWindow.CloseAll();
+            }
+        });
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
