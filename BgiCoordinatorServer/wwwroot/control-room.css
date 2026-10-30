@@ -67,21 +67,21 @@ small,.small{font-size:12px}
 .quick-btn:first-child{background:var(--gold);color:#29241a;font-weight:600}
 .member-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
 .member-card{min-width:0;border:1px solid var(--line);border-radius:15px;background:var(--panel);overflow:hidden;display:grid;grid-template-rows:auto auto auto auto 1fr}
-.member-card.selected{border-color:#746344}
+.member-card.assistant-online{border-color:#746344;background:linear-gradient(180deg,#4b422c 0%,#34312e 25%,var(--panel) 58%)}
 .member-head{display:flex;align-items:center;gap:12px;min-height:70px;padding:14px 16px 8px}
 .avatar{height:46px;width:46px;border-radius:12px;border:1px solid #626078;background:#34364f;object-fit:cover;object-position:center 20%;flex-shrink:0}
 .member-identity{min-width:0;flex:1}
 .member-identity button{font-weight:600;font-size:16px;display:block;padding:0;min-height:24px;max-width:100%;overflow-wrap:anywhere;text-align:left}
 .member-identity small{display:block;color:var(--muted)}
-.member-version-row{margin:0 16px;display:grid;grid-template-columns:24px minmax(0,1fr) 48px;column-gap:4px;align-items:start;padding:2px 0 7px;line-height:1.5}
+.member-version-row{margin:0 16px;display:grid;grid-template-columns:24px minmax(0,1fr) 60px;column-gap:4px;align-items:start;padding:2px 0 7px;line-height:1.5}
 .version-label{font-size:12px;line-height:20px;font-weight:600;letter-spacing:.02em;color:#d6c894}
 .member-version{font-size:12px;line-height:20px;color:#d4d0e4;overflow-wrap:anywhere;min-width:0}
-.presence{box-sizing:border-box;width:48px;height:20px;display:inline-flex;justify-content:center;align-items:center;gap:3px;margin:0;padding:2px 3px;border:1px solid;border-radius:5px;line-height:1;font-size:12px;white-space:nowrap}
+.presence{box-sizing:border-box;width:60px;height:20px;display:inline-flex;justify-content:center;align-items:center;gap:3px;margin:0;padding:2px 3px;border:1px solid;border-radius:5px;line-height:1;font-size:12px;white-space:nowrap}
 .presence-online{color:#a3e8d1;background:#174339;border-color:#356b5b}
-.presence-offline{color:#d4d0df;background:#343443;border-color:#777584}
+.presence-not-ready{color:#d4d0df;background:#343443;border-color:#777584}
+.presence-offline{color:#e5bc93;background:#e5bc9326;border-color:#ad927980}
 .presence-unknown{color:#f2dfae;background:#4a3c25;border-color:#8c7445}
 .presence-dot{width:7px;height:7px;border-radius:50%;display:inline-block;background:currentColor}
-.presence-offline .presence-dot{border:1.5px solid currentColor;background:transparent}
 .presence-unknown .presence-dot{display:none}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .member-select{width:44px;flex-shrink:0;display:grid;place-content:center;justify-content:end;padding:0}
@@ -90,6 +90,7 @@ small,.small{font-size:12px}
 .member-body{padding:12px 16px 16px;min-height:150px;border-top:1px solid #35364b}
 .status-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px;font-size:12px;color:var(--muted)}
 .task-name{font-size:15px;font-weight:500;overflow-wrap:anywhere}
+.task-name.task-active{color:var(--gold)}
 .task-route{margin-top:5px;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
 .member-foot{min-height:56px;padding:5px 12px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .member-foot span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
@@ -308,6 +309,9 @@ small,.small{font-size:12px}
 .kv-strip .kv:last-child{border-right:0}
 .kv-strip .kv>span{font-size:12px}
 .kv-strip .kv b{text-align:left;font-size:15px;font-weight:500}
+.run-progress{min-width:0;margin-top:12px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#191a2e}
+.run-progress>span{color:var(--muted);font-size:12px}
+.run-progress p{margin-top:2px;font-size:15px;overflow-wrap:anywhere;white-space:pre-wrap}
 @media(max-width:700px){
   .kv-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kv-strip .kv{border-right:0;border-bottom:1px solid var(--line)}
