@@ -21,4 +21,21 @@
     <PackageReference Include="Semver" Version="3.0.0" />
   </ItemGroup>
 
+
+  <!-- 独立发布和 Docker 最终镜像携带同一份公开许可资料。 -->
+  <ItemGroup>
+    <None Remove="LICENSE;README.md;THIRD-PARTY-NOTICES.md;licenses\**\*" />
+    <Content Include="LICENSE" Link="wwwroot\legal\LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="README.md" Link="wwwroot\legal\README.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="THIRD-PARTY-NOTICES.md" Link="wwwroot\legal\THIRD-PARTY-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="licenses\**\*" Link="wwwroot\legal\licenses\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Git 可用时记录实际构建提交；独立 Docker 构建可显式传入 SourceRevisionId。 -->
+  <Target Name="AddLegalSourceRevision" BeforeTargets="GetAssemblyAttributes" DependsOnTargets="InitializeSourceControlInformation">
+    <ItemGroup Condition="'$(SourceRevisionId)' != ''">
+      <AssemblyMetadata Include="SourceRevisionId" Value="$(SourceRevisionId)" />
+    </ItemGroup>
+  </Target>
+
 </Project>

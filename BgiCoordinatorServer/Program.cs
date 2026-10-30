@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using NexusBGI.Legal;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
@@ -120,6 +121,15 @@ app.Use(async (context, next) =>
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// dotnet run 的内容根可能仍在源码目录；许可文件由构建复制到输出目录。
+var legalRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "legal");
+if (Directory.Exists(legalRoot))
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(legalRoot),
+        RequestPath = "/legal"
+    });
+
 // ===== BGI 更新包目录（可选，联机助手"网络"来源更新）=====
 // 挂载 BGI_UPDATE_ROOT（默认 wwwroot/bgi-update，可用 docker 卷挂到容器内任意路径）后：
 //   GET /bgi-update/{文件名}.7z   → 安装包本体（静态托管）
@@ -169,5 +179,15 @@ app.MapAdminMonitor(playerTimeoutSeconds);
 
 // 健康检查移到 /health，避免与 UseDefaultFiles()（根路径服务 index.html）冲突
 app.MapGet("/health", () => Results.Ok(new { status = "BgiCoordinatorServer running", maxRooms, playerTimeoutSeconds }));
+
+// 公开许可信息不依赖登录，不暴露配置、凭据、日志或房间数据。
+app.MapGet("/api/legal-info", () =>
+{
+    var directory = Path.Combine(AppContext.BaseDirectory, "wwwroot", "legal", "licenses");
+    var names = Directory.Exists(directory)
+        ? Directory.EnumerateFiles(directory).Select(Path.GetFileName).OfType<string>()
+        : Enumerable.Empty<string>();
+    return Results.Json(OpenSourceInfo.ForWeb("协调服务端", names));
+});
 
 app.Run();

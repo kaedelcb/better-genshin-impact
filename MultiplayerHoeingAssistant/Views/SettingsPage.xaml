@@ -736,13 +736,27 @@
                 </Grid>
             </Border>
 
-            <!-- ========== 卡片：关于 ========== -->
+            <!-- ========== 卡片：关于与开源许可 ========== -->
             <Border Style="{DynamicResource QuestCard}">
                 <StackPanel>
-                    <TextBlock Text="关于" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
+                    <TextBlock Text="关于与开源许可" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"
                                Margin="0,0,0,6"/>
                     <TextBlock Text="Nexus-BGI 联机助手 · 提瓦特生物灭绝计划"
                                FontSize="12" Foreground="{DynamicResource Dim}"/>
+                    <TextBlock x:Name="LegalVersionText" FontSize="11" Foreground="{DynamicResource Dim}"
+                               Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="代码采用 GPL v3；第三方组件和资源按各自许可证授权。软件按许可证规定不提供担保。"
+                               FontSize="12" Foreground="{DynamicResource Dim}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="新增与修改部分版权属于茶包及各自贡献者；保留 BetterGI 和第三方原有声明。社区项目，非 BetterGI 官方项目。"
+                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="使用 HarmonyOS Sans 字体 · Copyright 2021 Huawei Device Co., Ltd."
+                               FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,5,0,0" TextWrapping="Wrap"/>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Content="GPL 全文" Style="{DynamicResource BtnGhost}" Margin="0,0,8,8" Padding="12,6" Tag="LICENSE" Click="OpenLegalDocumentClick"/>
+                        <Button Content="第三方声明与字体协议" Style="{DynamicResource BtnGhost}" Margin="0,0,8,8" Padding="12,6" Tag="THIRD-PARTY-NOTICES.md" Click="OpenLegalDocumentClick"/>
+                        <Button x:Name="LegalSourceButton" Content="对应版本源码" Style="{DynamicResource BtnGhost}" Margin="0,0,8,8" Padding="12,6" Click="OpenSourceClick"/>
+                        <Button Content="使用风险说明" Style="{DynamicResource BtnGhost}" Margin="0,0,8,8" Padding="12,6" Click="OpenRiskInformationClick"/>
+                    </WrapPanel>
                     <TextBlock Text="配置保存于 assistant-config.json，修改后自动生效"
                                FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
                 </StackPanel>

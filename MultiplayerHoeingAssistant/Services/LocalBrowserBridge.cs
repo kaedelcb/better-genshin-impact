@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using NexusBGI.Legal;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -235,13 +236,21 @@ internal sealed class LocalBrowserBridge : IDisposable
     {
         var path = target.Split('?', 2)[0];
         if (path == "/") path = "/local-dodoco.html";
+        if (path == "/api/legal-info")
+        {
+            const string prefix = "LocalBrowser/legal/licenses/";
+            var names = Assembly.GetExecutingAssembly().GetManifestResourceNames()
+                .Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).Select(n => n[prefix.Length..]);
+            return ("application/json; charset=utf-8", JsonSerializer.SerializeToUtf8Bytes(OpenSourceInfo.ForWeb("联机助手", names)));
+        }
         var name = path.TrimStart('/');
         if (name.Contains("..", StringComparison.Ordinal) || name.Contains('\\') || name.Contains('%') || name.Length > 160) return null;
         var extension = Path.GetExtension(name);
         var contentType = extension switch
         {
             ".html" => "text/html; charset=utf-8", ".js" => "text/javascript; charset=utf-8",
-            ".css" => "text/css; charset=utf-8", ".png" => "image/png", _ => null
+            ".css" => "text/css; charset=utf-8", ".png" => "image/png",
+            ".txt" or ".md" => "text/plain; charset=utf-8", _ => null
         };
         if (contentType == null) return null;
         using var resource = Assembly.GetExecutingAssembly().GetManifestResourceStream("LocalBrowser/" + name);

@@ -12,6 +12,8 @@ public partial class SettingsPage : UserControl
     public SettingsPage()
     {
         InitializeComponent();
+        LegalVersionText.Text = NexusBGI.Legal.OpenSourceInfo.VersionDescription;
+        LegalSourceButton.Content = NexusBGI.Legal.OpenSourceInfo.HasRevision ? "对应版本源码" : "源码仓库";
         // 奥黛塔设置区每次进入都强制收起（不记忆展开状态，用户要求）
         IsVisibleChanged += (_, e) =>
         {
@@ -20,6 +22,15 @@ public partial class SettingsPage : UserControl
         };
         _codeTimer.Tick += (_, _) => RefreshWebCode();
     }
+
+    private void OpenLegalDocumentClick(object sender, RoutedEventArgs e)
+        => LegalDocumentWindow.ShowNotices(Window.GetWindow(this), (sender as FrameworkElement)?.Tag as string ?? "LICENSE");
+
+    private void OpenSourceClick(object sender, RoutedEventArgs e)
+        => LegalDocumentWindow.OpenSource(Window.GetWindow(this));
+
+    private void OpenRiskInformationClick(object sender, RoutedEventArgs e)
+        => DisclaimerWindow.ShowRiskInformation(Window.GetWindow(this));
 
     private void OpenLocalWebClick(object sender, RoutedEventArgs e)
     {

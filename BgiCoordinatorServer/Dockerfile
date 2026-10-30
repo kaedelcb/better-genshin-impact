@@ -8,7 +8,8 @@ WORKDIR /src
 COPY ["BgiCoordinatorServer.csproj", "."]
 RUN dotnet restore
 COPY . .
-RUN dotnet publish -c Release -o /app/publish
+ARG SOURCE_REVISION
+RUN dotnet publish -c Release -o /app/publish -p:SourceRevisionId="$SOURCE_REVISION"
 
 FROM base AS final
 WORKDIR /app
