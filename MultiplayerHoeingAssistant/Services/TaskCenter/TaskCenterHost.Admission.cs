@@ -903,6 +903,10 @@ public sealed partial class TaskCenterHost
         var ct = _shutdownCts.Token;
         _ = Task.Run(async () =>
         {
+            // Ownership heartbeat outlives the control/recovery call that created
+            // it. Its later online wake-ups must use their own control scope.
+            _automaticLeaseRecovery.Value = null;
+            _controlCall.Value = null;
             while (!ct.IsCancellationRequested)
             {
                 try

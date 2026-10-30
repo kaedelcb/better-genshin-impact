@@ -20,6 +20,9 @@ public sealed class ContinuousLeaseRecoveryTests
         private int _activeStatusProbe;
         internal bool WrongPayload;
         internal volatile bool StillActive;
+        internal long StopVersion;
+        internal TaskCompletionSource? QueryEntered;
+        internal TaskCompletionSource? QueryRelease;
         public bool IsReady => true;
         public bool HasCapability(string name) => true;
         public BgiEpoch ServerEpoch { get; } = new() { ProcessId = 123, StartTicksUtc = 456 };
@@ -27,7 +30,7 @@ public sealed class ContinuousLeaseRecoveryTests
         {
             if (operation == WorkflowStopAuthority.Operation)
                 return Task.FromResult(new BgiExternalResponse { Success = true, Data = JsonSerializer.Serialize(new
-                { bgiEpoch = new { processId = 123, startTicksUtc = 456 }, stopVersion = 0, monotonicFrequency = Stopwatch.Frequency }) });
+                { bgiEpoch = new { processId = 123, startTicksUtc = 456 }, stopVersion = StopVersion, lastManualStopTimestamp = StopVersion == 0 ? (long?)null : Stopwatch.GetTimestamp(), monotonicFrequency = Stopwatch.Frequency }) });
             Assert.Equal(BgiExternalClient.ExternalOperations.TaskStart, operation);
             Interlocked.Increment(ref Starts);
             var json = JsonSerializer.Serialize(payload);
@@ -61,11 +64,16 @@ public sealed class ContinuousLeaseRecoveryTests
             var job = Jobs[jobId] = Finished(Jobs[jobId], statusProbe: true);
             return (job.State, job);
         }
-        public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
+        public async Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
         {
+            if (Release.Task.IsCompleted && QueryRelease is { } gate)
+            {
+                QueryEntered!.TrySetResult();
+                await gate.Task.WaitAsync(ct);
+            }
             var jobs = Jobs.Values.Select(j => Release.Task.IsCompleted ? Finished(j) : j).ToList();
             if (Release.Task.IsCompleted && StillActive) RecoveryObserved.TrySetResult();
-            return Task.FromResult<BgiJobListSnapshot?>(new() { Epoch = ServerEpoch, Jobs = jobs });
+            return new() { Epoch = ServerEpoch, Jobs = jobs };
         }
         public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct) { Interlocked.Increment(ref Cancels); return Task.CompletedTask; }
     }
@@ -78,6 +86,10 @@ public sealed class ContinuousLeaseRecoveryTests
     [InlineData("other-owner")]
     [InlineData("stop-during-recovery")]
     [InlineData("still-running")]
+    [InlineData("online-wake-after-recovery")]
+    [InlineData("stop-during-query")]
+    [InlineData("pause-during-query")]
+    [InlineData("f11-cooled-down")]
     public async Task LiveDriverLeaseExpiry_ContinuesOnlyProvenOriginal_AndRespectsControls(string scenario)
     {
         var root = Path.Combine(Path.GetTempPath(), "continuous-lease-" + Guid.NewGuid().ToString("N"));
@@ -120,7 +132,21 @@ public sealed class ContinuousLeaseRecoveryTests
                 mono = TimeSpan.FromSeconds(3);
                 Assert.True(competing.TryAcquire("another-owner", 30, observer.Observe(competing.Read())).Success);
             }
+            if (scenario == "f11-cooled-down") port.StopVersion = 1; // Cooldown is already inactive; the original fence must still win.
+            if (scenario is "stop-during-query" or "pause-during-query")
+            {
+                port.QueryEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                port.QueryRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
             port.Release.TrySetResult();
+            if (scenario is "stop-during-query" or "pause-during-query")
+            {
+                await port.QueryEntered!.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                var control = host.RequestRunActionAsync(original.RunId,
+                    scenario == "stop-during-query" ? WorkflowRunAction.Stop : WorkflowRunAction.Pause);
+                port.QueryRelease!.TrySetResult();
+                await control;
+            }
             if (scenario == "still-running")
             {
                 await port.RecoveryObserved.Task.WaitAsync(TimeSpan.FromSeconds(15));
@@ -134,10 +160,13 @@ public sealed class ContinuousLeaseRecoveryTests
             }
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(25));
             while (host.IsDriving(flow.WorkflowId!)
-                || (scenario is "complete" or "still-running") && host.Runs.Load(original.RunId)?.IsTerminal != true
-                || (scenario is "f11" or "wrong-payload") && !logs.Any(l => l.Contains("自动接续未确认")))
+                || (scenario is "complete" or "still-running" or "online-wake-after-recovery") && host.Runs.Load(original.RunId)?.IsTerminal != true
+                || (scenario is "f11" or "wrong-payload") && !logs.Any(l => l.Contains("自动接续未确认"))
+                || (scenario is "stop-during-recovery" or "stop-during-query" or "pause-during-query")
+                    && !logs.Any(l => l.Contains("自动接续已取消") || l.Contains("自动接续未确认"))
+                || scenario == "f11-cooled-down" && host.Runs.Load(original.RunId)?.StopRequested != true)
                 await Task.Delay(25, budget.Token);
-            if (scenario is "complete" or "still-running")
+            if (scenario is "complete" or "still-running" or "online-wake-after-recovery")
             {
                 Assert.Equal(WorkflowRunState.Succeeded, host.Runs.Load(original.RunId)!.State);
                 Assert.Equal(2, port.Starts);
@@ -148,9 +177,39 @@ public sealed class ContinuousLeaseRecoveryTests
             }
             else Assert.Equal(1, port.Starts);
             Assert.Single(host.Runs.List());
-            if (scenario != "stop-during-recovery") Assert.Equal(0, port.Cancels);
+            if (!scenario.StartsWith("stop-", StringComparison.Ordinal) && scenario != "f11-cooled-down") Assert.Equal(0, port.Cancels);
+            if (scenario == "online-wake-after-recovery")
+            {
+                // Exercise the actual heartbeat born during automatic lease recovery,
+                // after that recovery has finished and an explicit control invalidated
+                // its old revision. It must still wake unrelated online waiters.
+                await host.RequestRunActionAsync(original.RunId, WorkflowRunAction.Stop);
+                var waitingFlow = new WorkflowDocument { Name = "锄地后等待计划", Activation = new() { Status = "active" },
+                    Nodes = [new() { NodeId = "end", Kind = "control.end" }] };
+                var revision = host.Workflows.Save(waitingFlow, null);
+                var waiting = host.Runs.CreateRun(waitingFlow.WorkflowId!, revision, handoff: new HandoffIdentity
+                {
+                    IntentKey = "online-original", ExecutionId = "online-execution", StepId = "start", Mode = StartupHandoffModes.Start,
+                }, admissionSourceScope: "bgi:local:123:456", stopAuthority: host.Runs.Load(original.RunId)!.StopAuthority);
+                waiting.State = WorkflowRunState.Interrupted;
+                waiting.OnlineHoeingGateParked = true;
+                waiting.TriggerConsumed = true;
+                waiting.Cursor = new() { NodeId = "end", Attempt = 1 };
+                host.Runs.Update(waiting);
+                typeof(TaskCenterHost).GetField("_priorityWaiterWakePending",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(host, 1);
+                using var wakeBudget = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                try
+                {
+                    while (host.Runs.Load(waiting.RunId)?.State != WorkflowRunState.Succeeded)
+                        await Task.Delay(25, wakeBudget.Token);
+                }
+                catch (OperationCanceledException) { throw new Xunit.Sdk.XunitException(string.Join("\n", logs)); }
+                Assert.False(host.Runs.Load(waiting.RunId)!.OnlineHoeingGateParked);
+                Assert.Equal(2, port.Starts); // A local waiter never replays either original job.
+            }
         }
-        finally { port.Release.TrySetResult(); await host.ShutdownAsync(); }
+        finally { port.Release.TrySetResult(); port.QueryRelease?.TrySetResult(); await host.ShutdownAsync(); }
     }
 
     [Fact]

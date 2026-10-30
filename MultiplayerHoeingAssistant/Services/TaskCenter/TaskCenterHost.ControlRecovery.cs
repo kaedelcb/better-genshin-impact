@@ -14,7 +14,7 @@ public sealed partial class TaskCenterHost
     {
         var previous = _controlCall.Value;
         if (previous?.Active == true) return new ControlScope(() => { });
-        if (_automaticLeaseRecovery.Value is null)
+        if (!IsAutomaticLeaseRecovery)
             lock (_gate) Interlocked.Increment(ref _controlRevision);
         var call = new ControlCall();
         _controlCall.Value = call;

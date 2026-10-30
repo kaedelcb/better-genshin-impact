@@ -5,13 +5,19 @@ namespace MultiplayerHoeingAssistant.Services;
 public sealed partial class TaskCenterHost
 {
     private long _controlRevision;
-    private sealed record AutomaticLeaseRecovery(string RunId, long ControlRevision);
+    private sealed record AutomaticLeaseRecovery(string RunId, long ControlRevision)
+    {
+        public bool Active = true;
+    }
     private readonly AsyncLocal<AutomaticLeaseRecovery?> _automaticLeaseRecovery = new();
+
+    private bool IsAutomaticLeaseRecovery
+        => _automaticLeaseRecovery.Value is { } recovery && Volatile.Read(ref recovery.Active);
 
     // Explicit controls invalidate a pending automatic continuation even when the
     // expired writer cannot persist their intent. They never get silently undone.
     private bool AutomaticRecoverySuperseded()
-        => _automaticLeaseRecovery.Value is { } recovery
+        => _automaticLeaseRecovery.Value is { } recovery && Volatile.Read(ref recovery.Active)
             && (_shutdown || Interlocked.Read(ref _controlRevision) != recovery.ControlRevision);
 
     private void ThrowIfAutomaticRecoverySuperseded()
@@ -55,7 +61,8 @@ public sealed partial class TaskCenterHost
 
     private async Task RecoverExpiredDriveAsync(string runId, long controlRevision)
     {
-        _automaticLeaseRecovery.Value = new(runId, controlRevision);
+        var recovery = new AutomaticLeaseRecovery(runId, controlRevision);
+        _automaticLeaseRecovery.Value = recovery;
         try
         {
             ThrowIfAutomaticRecoverySuperseded();
@@ -74,7 +81,13 @@ public sealed partial class TaskCenterHost
         }
         catch (OperationCanceledException) { TryLog("[任务中心] 自动接续已取消，保留用户控制意图。"); }
         catch (Exception ex) { TryLog("[任务中心] 自动接续未完成，保留原任务：" + ex.Message); }
-        finally { _automaticLeaseRecovery.Value = null; }
+        finally
+        {
+            // Child tasks can retain the AsyncLocal value after the caller clears it.
+            // Expire the shared scope too; it grants no lifetime authority to them.
+            Volatile.Write(ref recovery.Active, false);
+            _automaticLeaseRecovery.Value = null;
+        }
     }
 
     private async Task<bool> WaitForOriginalRecoveryExitAsync(string runId)
