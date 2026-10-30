@@ -57,8 +57,8 @@ public sealed class LeaseMutateResult
 /// - 禁止回滚复活旧所有者资格（回滚后按 Expired/Absent 须重新获取 + 对账）；
 /// - TTL 过期仅撤资格，不代表执行锁释放/任务取消/票据失效（§6.2 语义分离）。
 ///
-/// 并发协议：所有公开操作在跨进程锁（FileStream FileShare.None）内完成「读取→判定→校验→更新→发布」全程；
-/// 发布采用 UTF8 无 BOM + 临时文件 + 同目录原子替换（File.Move overwrite），finally 清理残件。
+/// 并发协议：变更在跨进程锁（FileStream FileShare.None）内完成读取、校验和发布；只读观察锁内打开原子快照、锁外读取。
+/// 发布采用 UTF8 无 BOM + 临时文件 + 同目录原子替换（File.Replace；首次发布 File.Move），finally 清理残件。
 /// </summary>
 public sealed class ArbitrationLeaseStore
 {
@@ -124,7 +124,7 @@ public sealed class ArbitrationLeaseStore
             {
                 if (TryOpenLockFile(out var lockStream))
                 {
-                    using (lockStream) return ReadCore();
+                    using (lockStream) return ReadSnapshot(lockStream!);
                 }
 
                 var unlocked = ReadCore();
@@ -134,7 +134,7 @@ public sealed class ArbitrationLeaseStore
                 // **丢弃快照**、改走锁内读取（宁可重读，也不返回可能陈旧的快照）。
                 if (TryOpenLockFile(out var lateLock))
                 {
-                    using (lateLock) return ReadCore();
+                    using (lateLock) return ReadSnapshot(lateLock!);
                 }
                 return unlocked;
             });
@@ -166,8 +166,30 @@ public sealed class ArbitrationLeaseStore
         }
     }
 
-    /// <summary>盘读判定核心（不做任何写盘；调用方负责是否持锁）。</summary>
-    private LeaseReadResult ReadCore()
+    // Hold the arbitration lock only while opening the published file. The open
+    // handle pins one atomic publication; Share.Delete permits the owner to replace
+    // it while a slow observer reads/parses the old snapshot. Mutations still use
+    // ReadCore under the physical lock and revalidate identity/revision there.
+    internal Action? SnapshotOpenedForTest { get; set; }
+    private LeaseReadResult ReadSnapshot(FileStream lockStream)
+    {
+        FileStream snapshot;
+        try { snapshot = new FileStream(_leasePath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete); }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return ReadCore(); // Missing-file/residue classification remains locked.
+        }
+        using (snapshot)
+        using (var reader = new StreamReader(snapshot, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        {
+            lockStream.Dispose();
+            SnapshotOpenedForTest?.Invoke();
+            return ReadCore(() => reader.ReadToEnd());
+        }
+    }
+
+    /// <summary>Read a pinned snapshot, or the authoritative file under the caller's lock.</summary>
+    private LeaseReadResult ReadCore(Func<string>? readSnapshot = null)
     {
         var now = _utcNow();
 
@@ -176,7 +198,9 @@ public sealed class ArbitrationLeaseStore
         string text;
         try
         {
-            text = WithContentionRetry(() => File.ReadAllText(_leasePath, Encoding.UTF8));
+            text = readSnapshot is null
+                ? WithContentionRetry(() => File.ReadAllText(_leasePath, Encoding.UTF8))
+                : readSnapshot();
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
@@ -992,7 +1016,14 @@ public sealed class ArbitrationLeaseStore
             // **[第五轮会诊重要项处置]** 发布内各文件访问点**逐点**有界重试（不再靠整段事务重放 ⇒
             // 业务回调不会被重复执行）；预算耗尽**原样抛出**＝响亮失败。
             WithContentionRetry(() => File.WriteAllBytes(tmp, bytes));
-            WithContentionRetry(() => File.Move(tmp, _leasePath, overwrite: true));
+            WithContentionRetry(() =>
+            {
+                // Windows MoveFileEx cannot replace a destination held by a snapshot
+                // reader even with Share.Delete. ReplaceFile preserves atomic publication
+                // and lets the pinned old handle finish without blocking renewal.
+                try { File.Replace(tmp, _leasePath, null); }
+                catch (FileNotFoundException) { File.Move(tmp, _leasePath); } // First publication only; never overwrite a racing creator.
+            });
         }
         finally
         {

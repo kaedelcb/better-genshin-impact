@@ -909,20 +909,7 @@ public sealed partial class TaskCenterHost
                 {
                     await Task.Delay(interval, ct).ConfigureAwait(false);
                     if (!ReferenceEquals(store, _admissionStore)) return;
-                    var read = store.Read(); // 锁内读当前文件（修订在文件级）
-                    var lease = read?.File?.Lease;
-                    if (lease is null || read!.File is null) continue;
-                    // 会诊 建议-1 处置：只续「本进程获取时捕获」的租约身份——所有权已更替=停止心跳（绝不为他人续命）；
-                    // 后续提交经锁内身份/TTL 校验自然响亮拒绝，重取走 §6.3 接管观察路径。
-                    if (!string.Equals(lease.LeaseId, leaseId, StringComparison.Ordinal)
-                        || !string.Equals(lease.OwnerEpoch, ownerEpoch, StringComparison.Ordinal))
-                    {
-                        _log?.Invoke("[任务中心] 仲裁租约所有权已更替（本进程停止续期；后续提交将响亮拒绝或经接管重取）。");
-                        return;
-                    }
-
-                    // 用最新修订变体：原「Read() 取修订 → TryRenew(捕获修订)」在同胞写入并发下会因修订漂移被误判
-                    // lease_stale_generation；续期误判累积到 TTL 即失去租约（会诊重要项）。
+                    // Renewal checks the captured identity and expiry under its own lock.
                     var renew = store.TryRenewLatest(leaseId, ownerEpoch);
                     if (!renew.Success)
                     {
@@ -1420,6 +1407,7 @@ public sealed partial class TaskCenterHost
         var workflowId = run.WorkflowId!;
         lock (_gate)
         {
+            if (AutomaticRecoverySuperseded()) return new SendOutcome.Rejected("automatic_recovery_superseded", false, "host:control");
             if (_shutdown) return new SendOutcome.Rejected("host_shutdown", false, "host:shutdown");
             if (CapabilityBlockReason() is { } cap) return new SendOutcome.Rejected("capability_blocked", false, "host:" + cap);
             // 会诊 P1 处置：E2 前置互斥检查在门面登记之前且不预留，与本次预留之间存在窗口——窗口内同流程其他运行

@@ -91,6 +91,7 @@ public sealed partial class TaskCenterHost
 
     private sealed class DriveEntry
     {
+        public long ControlRevision { get; init; }
         public required string WorkflowId { get; init; }
         /// <summary>准确运行身份（R4.9 移交路径已知；面板 Start 路径运行由引擎自建、为 null，收敛倒查兜底）。</summary>
         public string? RunId { get; init; }
@@ -651,6 +652,7 @@ public sealed partial class TaskCenterHost
     public async Task<HostActionResult> ResumeRunAsync(string runId)
     {
         using var controlCall = EnterControlCall();
+        ThrowIfAutomaticRecoverySuperseded();
         using var configurationOperation = TryBeginConfigurationOperation();
         if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
         // R4.9 I2：关闭/能力预检先于恢复屏障（恢复扫描会写运行文件，监控端不得先产生副作用）
@@ -722,6 +724,7 @@ public sealed partial class TaskCenterHost
             if (ValidateManagedFlowSnapshot(run.WorkflowId, resumeRevision) is { } staleFlow)
                 return HostActionResult.Unavailable(staleFlow);
 
+        ThrowIfAutomaticRecoverySuperseded();
         // R5.2 B2-β（E2）：接线后恢复一律经恢复专用准入边界（§5.1：不排序不产候选、意图持久化后发送、保留原票据责任）；
         // 未接线=旧路径（既有测试接缝默认——R4 行为合同不变）。
         if (_admissionWired)
@@ -2005,10 +2008,10 @@ public sealed partial class TaskCenterHost
     {
         var cts = new CancellationTokenSource();
         var started = new TaskCompletionSource<WorkflowRunRecord>(); // Preserve synchronous fault convergence outside the Host gate.
-        var entry = new DriveEntry { WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = started.Task };
+        var entry = new DriveEntry { ControlRevision = Interlocked.Read(ref _controlRevision), WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = started.Task };
         lock (_gate)
         {
-            if (_shutdown)
+            if (_shutdown || AutomaticRecoverySuperseded())
             {
                 _reservedWorkflows.Remove(workflowId);
                 cts.Dispose();
@@ -2018,19 +2021,27 @@ public sealed partial class TaskCenterHost
             _drives[workflowId] = entry;
             _driveCompletions.Add(entry);
         }
-        _ = ObserveDriveAsync(entry);
+        // The guard belongs to the admission attempt, not to the resumed runner's
+        // lifetime (including its later online handoff and explicit controls).
+        var automaticRecovery = _automaticLeaseRecovery.Value;
+        _automaticLeaseRecovery.Value = null;
         try
         {
-            var task = start(cts);
-            _ = CompleteStartedDriveAsync(task, started);
+            _ = ObserveDriveAsync(entry);
+            try
+            {
+                var task = start(cts);
+                _ = CompleteStartedDriveAsync(task, started);
+            }
+            catch (Exception ex)
+            {
+                started.TrySetException(ex);
+                return HostActionResult.Unavailable(ex.Message);
+            }
+            NotifyStateChanged();
+            return HostActionResult.Registered(registeredMessage);
         }
-        catch (Exception ex)
-        {
-            started.TrySetException(ex);
-            return HostActionResult.Unavailable(ex.Message);
-        }
-        NotifyStateChanged();
-        return HostActionResult.Registered(registeredMessage);
+        finally { _automaticLeaseRecovery.Value = automaticRecovery; }
     }
 
     private static async Task CompleteStartedDriveAsync(Task<WorkflowRunRecord> task,
@@ -2076,6 +2087,7 @@ public sealed partial class TaskCenterHost
     {
         var terminalRunId = entry.RunId;
         var reconcileObservedTerminal = false;
+        string? recoverExpiredRun = null;
         try
         {
             var run = await entry.Task.ConfigureAwait(false);
@@ -2086,6 +2098,7 @@ public sealed partial class TaskCenterHost
         catch (Exception ex)
         {
             // 一轮 B5 + 二轮 I1/I4：驱动异常收敛——未决外部事实→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
+            recoverExpiredRun = FindExpiredDriveRecovery(entry, ex);
             ConvergeDriveException(entry, ex);
             try { reconcileObservedTerminal = terminalRunId is not null && _runs.Load(terminalRunId)?.IsTerminal == true; }
             catch (Exception) { /* Preserve the unreadable record for explicit recovery. */ }
@@ -2113,6 +2126,8 @@ public sealed partial class TaskCenterHost
                 try { ObserveLocalWaitDriveCompletion(terminalRunId, reconcileObservedTerminal); }
                 catch (Exception ex) { TryLog("[任务中心] 等待接续观察暂未完成：" + ex.Message); }
                 NotifyStateChanged();
+                if (recoverExpiredRun is not null)
+                    _ = Task.Run(() => RecoverExpiredDriveAsync(recoverExpiredRun, entry.ControlRevision));
             }
         }
     }

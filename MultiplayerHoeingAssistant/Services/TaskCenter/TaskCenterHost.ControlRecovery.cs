@@ -14,6 +14,8 @@ public sealed partial class TaskCenterHost
     {
         var previous = _controlCall.Value;
         if (previous?.Active == true) return new ControlScope(() => { });
+        if (_automaticLeaseRecovery.Value is null)
+            lock (_gate) Interlocked.Increment(ref _controlRevision);
         var call = new ControlCall();
         _controlCall.Value = call;
         Interlocked.Increment(ref _controlCalls);
@@ -25,13 +27,15 @@ public sealed partial class TaskCenterHost
         });
     }
 
-    // Explicit control only: a new owner never upgrades a retained runner/store capability.
+    // Explicit or narrowly qualified automatic recovery installs a new capability;
+    // it never upgrades a retained runner/store capability.
     private async Task EnsureControlOwnershipAsync()
     {
         if (!_admissionWired) return;
         await _controlOwnershipGate.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
         try
         {
+            ThrowIfAutomaticRecoverySuperseded();
             if (_admission is null) await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
             try { _runs.VerifyBoundOwner(); CompleteDeferredAdministrativeRecovery(); return; }
             catch (RunRecordConflictException) { }
@@ -58,6 +62,7 @@ public sealed partial class TaskCenterHost
             // under the physical lock. A different healthy owner is never stolen from.
             await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
             _runs.VerifyBoundOwner();
+            ThrowIfAutomaticRecoverySuperseded();
             TryLog("[任务中心] 显式控制已重新取得租约；旧写者仍失效，原任务须按原身份核对，不自动重发。");
         }
         finally { _controlOwnershipGate.Release(); }
