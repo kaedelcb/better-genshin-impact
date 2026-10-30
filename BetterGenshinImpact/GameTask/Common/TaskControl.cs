@@ -29,7 +29,7 @@ using BetterGenshinImpact.Core.Simulator.Extensions;
 
 namespace BetterGenshinImpact.GameTask.Common;
 
-public class TaskControl
+public partial class TaskControl
 {
     public static ILogger Logger { get; } = App.GetLogger<TaskControl>();
 
@@ -61,7 +61,7 @@ public class TaskControl
 
     private static RecognitionObject GetConfirmRa(bool isOcrMatch = false,params string[] targetText)
     {
-        var screenArea = CaptureToRectArea();
+        using var screenArea = CaptureToRectArea();
         var x = (int)(screenArea.Width * 0.3);
         var y = (int)(screenArea.Height * 0.1);
         var width = (int)(screenArea.Width * 0.65);
@@ -77,8 +77,9 @@ public class TaskControl
 
     private static bool _isBless = false;
 
-    private static async Task CheckNetworkStatusAsync()
+    private static async Task CheckNetworkStatusAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         // 门控：非阻塞抢门。抢不到说明已有一个检查在跑，本次立即返回（等价于被节流跳过，
         // 符合 §3.2 preservation：同一时刻只跑一个，其余跳过）。
         if (!_networkCheckGate.Wait(0))
@@ -135,7 +136,7 @@ public class TaskControl
                         {
                             IsSuspendedByWindow = true;
                             Logger.LogWarning("点击: {enterDone.Text}",enterDone.Text);
-                            if(enterRa.IsExist())enterDone.Click();
+                            if (!ct.CanBeCanceled && enterRa.IsExist()) enterDone.Click();
                         }
                         else
                         {
@@ -156,14 +157,20 @@ public class TaskControl
             try
             {
                 using var ping = new Ping();
-                var reply = ping.Send(TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl);
+                var reply = ct.CanBeCanceled
+                    ? await ping.SendPingAsync(TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl, 1000).WaitAsync(ct)
+                    : ping.Send(TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl);
+                ct.ThrowIfCancellationRequested();
                 isSuspend = reply.Status != IPStatus.Success;
             }
             catch (Exception ex)
             {
+                ct.ThrowIfCancellationRequested();
                 Logger.LogError(ex, "网络状态检查：错误");
                 isSuspend = true;
             }
+
+            ct.ThrowIfCancellationRequested();
 
             // 恢复触发逻辑移出 ping 的 try/catch：无论 ping.Send 成功还是抛异常（如 DNS 解析失败），
             // 只要处于挂起态就驱动 NetworkRecovery.Start，使真实网络恢复后能自愈解除挂起。
@@ -178,6 +185,7 @@ public class TaskControl
                 if (NetworkRecoveryDecisions.ShouldEnterRecovery(IsSuspendedByNetwork, IsSuspendedByWindow))
                 {
                     enteredRecovery = true;
+                    if (ct.CanBeCanceled) IsSuspendedByNetwork = true;
                     Logger.LogWarning(IsSuspendedByWindow ? "窗口弹窗状态恢复中..." : "网络恢复中...");
 
                     // 单飞门控（D-2）：Wait(0) 抢恢复门。抢不到 => 已有一个 Start 在跑 => 本次跳过，
@@ -191,7 +199,10 @@ public class TaskControl
                             // 关键：置 AsyncLocal 标志，使 Start 内部所有经 Delay 重入的 TrySuspend
                             // 不因 IsSuspendedByNetwork 阻塞（否则恢复流程自锁，永远走不到结尾清除标志）。
                             _inNetworkRecovery.Value = true;
-                            await NetworkRecovery.Start(CancellationToken.None);
+                            if (ct.CanBeCanceled)
+                                await RecoverNetworkWithProtectionAsync(ct);
+                            else
+                                await NetworkRecovery.Start(CancellationToken.None);
                         }
                         finally
                         {
@@ -210,10 +221,14 @@ public class TaskControl
             }
             catch (Exception ex)
             {
+                ct.ThrowIfCancellationRequested();
                 Logger.LogError(ex, "网络状态检查：错误");
+                // 恢复器自身异常不能反复重建60秒预算；保留现场，显式等待用户继续。
+                if (ct.CanBeCanceled) await WaitForEnvironmentUserAsync(ct);
             }
             finally
             {
+                ct.ThrowIfCancellationRequested();
                 var pingFailed = isSuspend; // isSuspend 此时即首个 ping(www.baidu.com) 是否失败/抛异常
 
                 if (NetworkRecoveryDecisions.ShouldClearNetworkSuspend(recoverySucceeded, enteredRecovery, pingFailed))
@@ -224,12 +239,15 @@ public class TaskControl
                 else if (NetworkRecoveryDecisions.ShouldCountPingFailure(recoverySucceeded, enteredRecovery, pingFailed))
                 {
                     _networkFailureCount++;
-                    if (_networkFailureCount >= 3)
+                    if (_networkFailureCount >= 3 && (!ct.CanBeCanceled || !HasRecentVerifiedGameResponse))
                     {
                         try
                         {
                             using var ping2 = new Ping();
-                            var reply2 = ping2.Send("www.qq.com");
+                            var reply2 = ct.CanBeCanceled
+                                ? await ping2.SendPingAsync("www.qq.com", 1000).WaitAsync(ct)
+                                : ping2.Send("www.qq.com");
+                            ct.ThrowIfCancellationRequested();
                             if (reply2.Status != IPStatus.Success)
                             {
                                 IsSuspendedByNetwork = true;
@@ -237,6 +255,7 @@ public class TaskControl
                         }
                         catch (Exception ex)
                         {
+                            ct.ThrowIfCancellationRequested();
                             Logger.LogError(ex, "网络状态检查：错误");
                             IsSuspendedByNetwork = true;
                         }
@@ -280,67 +299,66 @@ public class TaskControl
         return (state & 0x8000) != 0;
     }
 
-    public static void TrySuspend()
+    public static void TrySuspend(CancellationToken ct = default)
     {
-        if (NetworkDetectionConfig)Task.Run(CheckNetworkStatusAsync);
+        ct = GetEnvironmentToken(ct);
+        ct.ThrowIfCancellationRequested();
+        if (NetworkDetectionConfig) ScheduleNetworkCheck();
+        if (_inNetworkRecovery.Value)
+        {
+            // 主任务/保护调用已经持有暂停状态；恢复线程只服从用户暂停，不能重复改写恢复点和拾取计数。
+            while (RunnerContext.Instance.IsSuspend)
+            {
+                if (ct.WaitHandle.WaitOne(100)) ct.ThrowIfCancellationRequested();
+            }
+            ct.ThrowIfCancellationRequested();
+            return;
+        }
         // 恢复自锁修复：若当前执行栈正处于网络恢复中（AsyncLocal 标志），本次 TrySuspend
         // 不把"网络暂停"计入阻塞条件——否则恢复流程的 Delay 会在此永久空转，导致恢复自锁。
         // 手动暂停（RunnerContext.Instance.IsSuspend）仍然生效。
         var networkBlocking = IsSuspendedByNetwork && !_inNetworkRecovery.Value;
-        var first = true;
-        //此处为了记录最开始的暂停状态
-        var isSuspend = RunnerContext.Instance.IsSuspend || networkBlocking;
-        while (RunnerContext.Instance.IsSuspend || (IsSuspendedByNetwork && !_inNetworkRecovery.Value))
+        if (!RunnerContext.Instance.IsSuspend && !networkBlocking) return;
+        var suspended = false;
+        var acknowledged = false;
+        var suspendables = RunnerContext.Instance.SuspendableDictionary.Values.ToArray();
+        try
         {
-            // 仅在用户手动暂停时清除网络暂停标志并置 RecoveryNetworkDone=true（手动暂停无需走网络恢复流程）。
-            // 修复前此行缺大括号，导致 NetworkRecovery.RecoveryNetworkDone = true 每秒无条件执行，
-            // 短路了 NetworkRecovery.Start 的实际恢复动作，使网络恢复后无法解除暂停。
-            // spec network-recovery-done-flag-prematurely-set-fix
-            if (RunnerContext.Instance.IsSuspend)
+            while (RunnerContext.Instance.IsSuspend || (IsSuspendedByNetwork && !_inNetworkRecovery.Value))
             {
-                IsSuspendedByNetwork = false;
-                NetworkRecovery.RecoveryNetworkDone = true;
-            }
-            if (first)
-            {
-                RunnerContext.Instance.StopAutoPick();
-                //使快捷键本身释放
-                Thread.Sleep(300);
-                foreach (User32.VK key in Enum.GetValues(typeof(User32.VK)))
+                ct.ThrowIfCancellationRequested();
+                if (RunnerContext.Instance.IsSuspend && _environmentLifetime == null)
                 {
-                    // 检查键是否被按下
-                    if (IsKeyPressed(key)) // 强制转换 VK 枚举为 int
+                    IsSuspendedByNetwork = false;
+                    NetworkRecovery.RecoveryNetworkDone = true;
+                }
+                if (!suspended)
+                {
+                    RunnerContext.Instance.StopAutoPick();
+                    suspended = true;
+                    if (_environmentLifetime != null) InputHub.ReleaseAll();
+                    Thread.Sleep(300); // 等暂停快捷键释放。
+                    foreach (User32.VK key in Enum.GetValues(typeof(User32.VK)))
                     {
-                        Logger.LogWarning($"解除{key}的按下状态.");
-                        InputHub.Foreground.Keyboard.KeyUp(key);
+                        if (IsKeyPressed(key)) InputHub.Foreground.Keyboard.KeyUp(key);
                     }
+                    Logger.LogWarning(IsSuspendedByNetwork ? "网络检测失败触发暂停，等待解除" : "快捷键触发暂停，等待解除");
+                    foreach (var item in suspendables) item.Suspend();
+                    Interlocked.Increment(ref _environmentPauseDepth);
+                    acknowledged = true;
                 }
-
-                Logger.LogWarning(IsSuspendedByNetwork ? "网络检测失败触发暂停，等待解除" : "快捷键触发暂停，等待解除");
-                foreach (var item in RunnerContext.Instance.SuspendableDictionary)
-                {
-                    item.Value.Suspend();
-                }
-
-                first = false;
+                if (IsSuspendedByNetwork) ScheduleNetworkCheck();
+                if (ct.WaitHandle.WaitOne(100)) ct.ThrowIfCancellationRequested();
             }
-
-            if (IsSuspendedByNetwork)
-            {
-                CheckNetworkStatusAsync().Wait(1000, CancellationToken.None);
-            }
-
-            Thread.Sleep(1000);
         }
-
-        //从暂停中解除
-        if (isSuspend)
+        finally
         {
-            Logger.LogWarning("暂停已经解除");
-            RunnerContext.Instance.ResumeAutoPick();
-            foreach (var item in RunnerContext.Instance.SuspendableDictionary)
+            if (suspended)
             {
-                item.Value.Resume();
+                if (acknowledged) Interlocked.Decrement(ref _environmentPauseDepth);
+                foreach (var item in suspendables) item.Resume();
+                RunnerContext.Instance.ResumeAutoPick();
+                if (!ct.IsCancellationRequested) Logger.LogWarning("暂停已经解除");
             }
         }
     }
@@ -378,7 +396,7 @@ public class TaskControl
             {
                 throw new NormalEndException("取消自动任务");
             }
-            TrySuspend();
+            TrySuspend(ct);
             CheckAndActivateGameWindow();
         }, TimeSpan.FromSeconds(1), 100);
         Thread.Sleep(millisecondsTimeout);
@@ -406,7 +424,7 @@ public class TaskControl
             {
                 throw new NormalEndException("取消自动任务");
             }
-            TrySuspend();
+            TrySuspend(ct);
             CheckAndActivateGameWindow();
         }, TimeSpan.FromSeconds(1), 100);
         await Task.Delay(millisecondsTimeout, ct);
@@ -505,6 +523,11 @@ public class TaskControl
         // 第 1 次尝试（正常路径，零延迟、零日志、零副作用）
         var image = gameCapture?.Capture();
         if (image != null) return image.Frame;
+        if (RecoveryProbeToken.Value.CanBeCanceled)
+        {
+            RecoveryProbeToken.Value.ThrowIfCancellationRequested();
+            throw new RetryException("环境恢复期间截图暂不可用");
+        }
 
         // 截图失败恢复（30s 恢复窗 / 焦点驱动 / session 重建）整体在 CaptureRecoveryService
         // （新文件，决策+执行体+信号位同域单文件，PR 零冲突；见 G4.3）

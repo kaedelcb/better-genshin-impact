@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.2.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.4" />
+    <Compile Include="../../BetterGenshinImpact/GameTask/Common/EnvironmentRecoveryWindow.cs" Link="EnvironmentRecoveryWindow.cs" />
+    <Compile Include="../../BetterGenshinImpact/GameTask/Common/TaskControl.EnvironmentRecovery.cs" Link="TaskControl.EnvironmentRecovery.cs" />
+    <Compile Include="../../BetterGenshinImpact/GameTask/Common/Exceptions/RetryException.cs" Link="RetryException.cs" />
+    <Compile Include="../BetterGenshinImpact.UnitTest/GameTaskTests/CommonTests/EnvironmentRecoveryWindowTests.cs" Link="EnvironmentRecoveryWindowTests.cs" />
+  </ItemGroup>
+</Project>

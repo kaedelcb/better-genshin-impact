@@ -806,6 +806,7 @@ public partial class PathExecutor
 
             for (var i = 0; i < RetryTimes; i++)
             {
+                var networkRecoveryVersion = NetworkRecoveryVersion;
                 try
                 {
                     // 段入口也受原 RetryException 分支保护；使用本段起点，避免上段路点残留。
@@ -1962,6 +1963,18 @@ public partial class PathExecutor
                 catch (RetryException retryException)
                 {
                     await CheckMultiplayerBoundaryAsync();
+                    if (!TaskContext.Instance().Config.TpConfig.UseOfficialTeleport
+                        && NetworkRecoveryVersion != networkRecoveryVersion
+                        && retryException.GetType() == typeof(RetryException)
+                        && !_cooperativeRecoveryPending)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        i--;
+                        StartSkipOtherOperations();
+                        Logger.LogWarning("路线步骤经过网络恢复，保留当前段重试，不消耗失败次数");
+                        ResetRecoveryStateForNewAttempt();
+                        continue;
+                    }
                     // 仅当本次重试确有真实复苏时才发布“恢复中”（Recovering 不豁免任何到达义务，
                     // 也不产生计划项；它只让队友知道本机在恢复）。局部保护重试/落后追赶不发布，
                     // 避免无谓占用重跑 RPC 门与产生团队可见噪声。
@@ -3467,6 +3480,8 @@ public partial class PathExecutor
             if ((DateTime.UtcNow - moveToStartTime).TotalSeconds > 240)
             {
                 Logger.LogWarning("执行超时，放弃此次追踪");
+                if (isPoint && await TryRecoverPathEnvironmentAsync(ct))
+                    throw new RetryNoCountException("环境恢复后重试当前路线段，不消耗重试次数");
                 throw new RetryException("路径点执行超时，放弃整条路径");
             }
 
@@ -3808,6 +3823,8 @@ public partial class PathExecutor
                                 if (isPoint)
                                 {
                                     Logger.LogWarning($"连续{distanceTooFarRetryCount}次距离异常，放弃此路径点");
+                                    if (isPoint && await TryRecoverPathEnvironmentAsync(ct))
+                                        throw new RetryNoCountException("环境恢复后重试当前路线段，不消耗重试次数");
                                     throw new HandledException("目标距离持续过远，可能是坐标识别异常，放弃此路径！");
                                 }
                                 else
@@ -3832,6 +3849,8 @@ public partial class PathExecutor
                         {
                             if (isPoint)
                             {
+                                if (isPoint && await TryRecoverPathEnvironmentAsync(ct))
+                                    throw new RetryNoCountException("环境恢复后重试当前路线段，不消耗重试次数");
                                 throw new HandledException("重试多次后，当前点位无法被识别，放弃此路径！");
                             }
                             else
@@ -3893,6 +3912,8 @@ public partial class PathExecutor
                             
                             if (_inTrap > 0)
                             {
+                                if (isPoint && await TryRecoverPathEnvironmentAsync(ct))
+                                    throw new RetryNoCountException("环境恢复后重试当前路线段，不消耗重试次数");
                                 throw new RetryException("此路线出现3次卡死，重试一次路线或放弃此路线！");
                             }
 

@@ -158,6 +158,7 @@ public class TaskRunner
                 CancellationContext.Instance.Set();
             }
             RunnerContext.Instance.Clear();
+            BeginEnvironmentRecovery(CancellationContext.Instance.Token);
             await action();
         }
         catch (NormalEndException e)
@@ -205,6 +206,13 @@ public class TaskRunner
             faulted |= scope.FailureCount > failuresBefore;
             wasCancelled |= interrupted || !scope.IsCurrentOwner;
             if (wasCancelled && scope.Result != TaskRunResult.Preempted) scope.Observe(TaskRunResult.Cancelled);
+            try { await EndEnvironmentRecoveryAsync(); }
+            catch (Exception ex)
+            {
+                faulted = true;
+                scope.Observe(TaskRunResult.Failed);
+                _logger.LogError(ex, "环境恢复监控清理失败，继续释放任务槽位");
+            }
             try { End(); }
             catch (Exception ex)
             {

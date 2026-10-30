@@ -18,7 +18,7 @@ public class NetworkRecovery
     
     private static RecognitionObject GetConfirmRa(bool isOcrMatch = false,params string[] targetText)
     {
-        var screenArea = CaptureToRectArea();
+        using var screenArea = CaptureToRectArea();
         var x = (int)(screenArea.Width * 0.3);
         var y = (int)(screenArea.Height * 0.1);
         var width = (int)(screenArea.Width * 0.65);
@@ -31,8 +31,9 @@ public class NetworkRecovery
     //完成任务标志
     public static bool RecoveryNetworkDone = false;
     
-    public static async Task Start(CancellationToken ct)
+    public static async Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true)
     {
+        ct.ThrowIfCancellationRequested();
         RecoveryNetworkDone = false;
         
         var aa =await NewRetry.WaitForElementDisappear(
@@ -79,7 +80,7 @@ public class NetworkRecovery
             1000
         );
         
-        await NewRetry.WaitForElementAppear(
+        var mainUiAppeared = await NewRetry.WaitForElementAppear(
             ElementAssets.Instance.PaimonMenuRo,
             ()  => {  
                 
@@ -131,8 +132,17 @@ public class NetworkRecovery
             1000
         );
         
+        ct.ThrowIfCancellationRequested();
+        if (verifyMainUi && !mainUiAppeared) return;
         Logger.LogWarning("回到主页-2");
         await new ReturnMainUiTask().Start(ct);
+        ct.ThrowIfCancellationRequested();
+        if (verifyMainUi)
+        {
+            using var screen = CaptureToRectArea();
+            if (!BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)) return;
+        }
+        if (!clearSuspend) return; // 快速拖动模式由真实开图/关图响应确认后统一解除。
         GameCaptureRegion.GameRegion1080PPosClick(960, 540);
         IsSuspendedByNetwork = false;
         RecoveryNetworkDone = true;

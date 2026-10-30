@@ -948,6 +948,7 @@ public class TpTaskFastDrag
 
     public async Task CheckInBigMapUi(int retryCount = 0, string? mapName = null)
     {
+        using var environmentOperation = BeginEnvironmentOperation();
         // 尝试打开地图失败后，先回到主界面后再次尝试打开地图
         if (!await TryToOpenBigMapUi(retryCount, mapName))
         {
@@ -955,7 +956,8 @@ public class TpTaskFastDrag
             await Delay(ApplyExtraDelay(500), ct);
             if (!await TryToOpenBigMapUi(retryCount, mapName))
             {
-                throw new RetryException("打开大地图失败，请检查按键绑定中「打开地图」按键设置是否和原神游戏中一致！");
+                await WaitForEnvironmentRecoveryAsync(
+                    token => new TpTaskFastDrag(token).ProbeMapForRecoveryAsync(mapName), ct);
             }
         }
     }
@@ -963,6 +965,28 @@ public class TpTaskFastDrag
     /// <summary>
     /// 尝试打开地图界面
     /// </summary>
+    internal async Task<bool> ProbeMapForRecoveryAsync(string? mapName = null)
+    {
+        ct.ThrowIfCancellationRequested();
+        PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+        using (var screen = CaptureToRectArea())
+        {
+            if (IsInBigMapUiViaAssets(screen)) return true;
+            if (!Bv.IsInMainUi(screen)) return false; // 加载/战斗过渡/弹窗期间不盲按 M。
+        }
+        if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+            && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
+        InputHub.Foreground.SimulateAction(GIActions.OpenMap);
+        // 恢复探测每轮仅按一次，给游戏响应和截图留足时间；过渡页交给下一轮观察。
+        for (var i = 0; i < 12; i++)
+        {
+            await Delay(100, ct);
+            using var screen = CaptureToRectArea();
+            if (IsInBigMapUiViaAssets(screen)) return true;
+        }
+        return false;
+    }
+
     private async Task<bool> TryToOpenBigMapUi(int retryCount = 0, string? mapName = null)
     {
         // M 打开地图识别当前位置，中心点为当前位置
@@ -1136,6 +1160,7 @@ public class TpTaskFastDrag
 
     public async Task<(double, double)> Tp(double tpX, double tpY, string mapName = "Teyvat", bool force = false, bool requireLoadingScreen = false, string? fastSyncId = null)
     {
+        using var environmentOperation = BeginEnvironmentOperation();
         _lastSwitchAreaFailed = false;
 
         // 仅当"点击后选项列表没有传送点(TpPointNotActivate)"时，下一次重试才把缩放拉到 5.5 稳定边沿识别。
@@ -1144,9 +1169,28 @@ public class TpTaskFastDrag
         bool lastWasTpPointNotActivate = false;
         for (var i = 0; i < 3; i++)
         {
+            var recoveryVersion = NetworkRecoveryVersion;
             try
             {
                 return await TpOnce(tpX, tpY, mapName, force, i, requireLoadingScreen, fastSyncId, lastWasTpPointNotActivate);
+            }
+            catch (Exception e) when (e is not NormalEndException && e is not OperationCanceledException
+                                      && NetworkRecoveryVersion != recoveryVersion)
+            {
+                ct.ThrowIfCancellationRequested();
+                InputHub.ReleaseAll();
+                i--;
+                lastWasTpPointNotActivate = false;
+                Logger.LogWarning("传送步骤经过网络恢复，丢弃中断前的识别/超时结果，原步骤重试且不计次数");
+                PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+            }
+            catch (MapUiUnavailableException)
+            {
+                await WaitForEnvironmentRecoveryAsync(
+                    token => new TpTaskFastDrag(token).ProbeMapForRecoveryAsync(mapName), ct);
+                i--; // 环境中断重做本次传送，保留普通错误的重试额度。
+                lastWasTpPointNotActivate = false;
+                PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
             }
             catch (TpPointNotActivate e)
             {
@@ -2240,7 +2284,7 @@ public class TpTaskFastDrag
             }
             else
             {
-                throw new RetryException("当前不在地图界面");
+                throw new MapUiUnavailableException("当前不在地图界面");
             }
         }, TimeSpan.FromMilliseconds(60), 20);
 
@@ -2669,7 +2713,7 @@ public class TpTaskFastDrag
         if (!inMapUi)
         {
             InputHub.Foreground.Mouse.LeftButtonUp();
-            throw new InvalidOperationException("当前不在地图界面");
+            throw new MapUiUnavailableException("当前不在地图界面");
         }
 
         if (p.IsEmpty())
@@ -3022,7 +3066,7 @@ public class TpTaskFastDrag
     public async Task ClickTpPoint(ImageRegion imageRegion)
     {
         // 1.判断是否在地图界面
-        if (!IsInBigMapUiViaAssets(imageRegion)) throw new RetryException("不在地图界面");
+        if (!IsInBigMapUiViaAssets(imageRegion)) throw new MapUiUnavailableException("不在地图界面");
 
         // 2. 判断是否已经点出传送按钮
         var hasTeleportButton = CheckTeleportButton(imageRegion);
