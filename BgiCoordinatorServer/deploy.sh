@@ -17,6 +17,7 @@
 if [ -z "${__DEPLOY_LF_FIXED:-}" ] && grep -q $'\r' "$0" 2>/dev/null; then
   tmp="$(mktemp)"
   sed 's/\r$//' "$0" > "$tmp"
+  export __DEPLOY_ORIGINAL_DIR="$(cd "$(dirname "$0")" && pwd)"
   export __DEPLOY_LF_FIXED=1
   exec bash "$tmp" "$@"
 fi
@@ -24,11 +25,31 @@ fi
 set -euo pipefail
 
 # 切到脚本所在目录，确保 docker compose 能找到 yml 文件
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="${__DEPLOY_ORIGINAL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 cd "$SCRIPT_DIR"
 
 if [ ! -f docker-compose.yml ]; then
   echo "[错误] 当前目录未找到 docker-compose.yml: $SCRIPT_DIR"
+  exit 1
+fi
+
+# 发布需要这些公开资料；漏传时在访问 Docker、改动配置之前明确报错。
+missing_files=()
+for required_file in LICENSE README.md THIRD-PARTY-NOTICES.md \
+  licenses/Semver-3.0.0-LICENSE.txt \
+  licenses/dotnet-MIT-LICENSE.txt \
+  licenses/aspnetcore-8.0.0-THIRD-PARTY-NOTICES.txt \
+  licenses/Microsoft.Extensions.Primitives-5.0.1-LICENSE.txt \
+  licenses/Microsoft.Extensions.Primitives-5.0.1-THIRD-PARTY-NOTICES.txt; do
+  if [ ! -s "$required_file" ]; then
+    missing_files+=("$required_file")
+  fi
+done
+if [ "${#missing_files[@]}" -gt 0 ]; then
+  echo "[错误] 部署源码不完整，缺少以下发布必需文件："
+  printf '  %s\n' "${missing_files[@]}"
+  echo "请从同一版本的 BgiCoordinatorServer 目录补传以上文件，保留 licenses 子目录。"
+  echo "不要过滤 .md、.txt 或无扩展名文件；尚未开始构建或重启容器。"
   exit 1
 fi
 
