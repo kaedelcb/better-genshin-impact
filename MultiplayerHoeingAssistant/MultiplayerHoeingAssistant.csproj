@@ -50,6 +50,14 @@
     <Resource Include="Assets\Pet\Sounds\*.wav" />
   </ItemGroup>
 
+  <!-- 授权文件随独立助手构建、发布及 BGI Tools 打包一起提供。 -->
+  <ItemGroup>
+    <None Update="LICENSE;README.md;THIRD-PARTY-NOTICES.md;licenses\**\*"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Update="Assets\Fonts\HarmonyOS-LICENSE.txt" TargetPath="licenses\HarmonyOS-LICENSE.txt"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- 排除 assistant-config.json：不复制到输出目录，防止用户配置被编译覆盖 -->
   <ItemGroup>
     <None Update="assistant-config.json" CopyToOutputDirectory="Never" />
