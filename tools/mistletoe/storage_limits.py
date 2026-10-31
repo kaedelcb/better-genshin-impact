@@ -281,12 +281,11 @@ class Session:
             self.save()
         finally:
             try:
+                import storage_reclaim
                 if (not self.process_unknown and self.entry.get('state') in {'retained','failed'}
                         and not (self.control/'inflight.json').exists()
                         and not (self.control/'recovery-required.json').exists()
-                        and not any((Path(p)/name).exists()
-                                    for p in self.entry.get('recovery_directories', [])
-                                    for name in ('inflight.json','recovery-required.json'))
+                        and not storage_reclaim.unresolved_recovery(self.entry)
                         and self.entry.get('temporary_outputs')):
                     import storage_reclaim
                     try:

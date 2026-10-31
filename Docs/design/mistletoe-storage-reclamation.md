@@ -12,7 +12,7 @@ python -B tools/mistletoe/validate_command.py --root . -- dotnet test Test/Multi
 
 入口调用已有 Windows Job Object 执行器，保留命令、退出码、标准输出、标准错误和进程终态。非零退出码仍是失败，不因清理成功变成通过。验证的整个多命令流程也可在一个 `Session` 中使用 `guard.temporary_output()`，待后续检查全部完成后再退出 Session。
 
-正常终止（包括已确认进程结束的失败）后，Session 自动回收上述独占输出中的 `.dll`、`.pdb`、`.exe`；另外回收 MSBuild `*.FileListAbsolute.txt` 明确登记且位于输出 bin/obj 下的模型、编译资源和复制的图片/本机库等资源。生成清单保留并绑定 SHA256；`.deps.json` 中 runtimeTargets/native 明确列出的本机库和跨平台包也可回收。未列入这些清单的图片、模型或压缩包不自动删除。日志、JSON、TRX、源码、截图、配置、User/data 子目录和受 Git 跟踪文件保留。出现进程终态未知或恢复标记时不清理。文件锁阻挡的项保留待回收清单；后续 Session 在计算配额前自动重试已登记清单。异常退出但已由原锁恢复逻辑确认终态的临时输出，也会在下一 Session 补做回收。
+正常终止（包括已确认进程结束的失败）后，Session 自动回收上述独占输出中的 `.dll`、`.pdb`、`.exe`；另外回收 MSBuild `*.FileListAbsolute.txt` 明确登记且位于输出 bin/obj 下的模型、编译资源和复制的图片/本机库等资源。生成清单保留并绑定 SHA256；`.deps.json` 中 runtimeTargets/native 明确列出的本机库和跨平台包也可回收。未列入这些清单的图片、模型或压缩包不自动删除。日志、JSON、TRX、源码、截图、配置、User/data 子目录和受 Git 跟踪文件保留。进程终态未知，或恢复标记缺少同一 Job 的零进程终态证明时不清理。同一验证请求和 Job 已有 active_processes=0 的清理证明时，可以回收明确登记的产物，但原异常、恢复标记和失败状态完整保留，不授权恢复执行或改成成功。文件锁阻挡的项保留待回收清单；后续 Session 在计算配额前自动重试已登记清单。异常退出但已由原锁恢复逻辑确认终态的临时输出，也会在下一 Session 补做回收。
 
 这不是任意 bin/obj 的通用清空器。普通 `track()`、产品运行目录、源码快照和收据绑定输出不自动降级为临时目录。已有脚本要使用 `temporary_output()` 或上述入口才有收尾回收；无法安全分类的旧资料不会仅因过期被删除。
 

@@ -248,6 +248,39 @@ def pending(root, control):
             apply(control, value)
 
 
+def unresolved_recovery(entry):
+    """Keep uncertainty, but a job-bound zero-process cleanup proof permits disposal.
+
+    Original recovery/failure markers remain untouched; this does not mark a
+    validation successful or authorize resuming a failed command.
+    """
+    import storage_limits as storage
+    parents=[Path(p).parent for p in entry.get('temporary_outputs', [])]
+    for directory in entry.get('recovery_directories', []):
+        directory=Path(directory)
+        markers=[directory/name for name in ('inflight.json','recovery-required.json')
+                 if (directory/name).exists()]
+        for marker in markers:
+            try:
+                value=json.loads(storage.regular_tree(marker).read_text(encoding='utf-8'))
+                request=Path(value['request'])
+                if (not request.is_absolute() or '..' in request.parts
+                        or not any(request.is_relative_to(p) for p in parents)
+                        or not request.name.endswith('-process-request.json')):
+                    return True
+                original=json.loads(storage.regular_tree(request).read_text(encoding='utf-8'))
+                proof_path=request.with_name(request.name.removesuffix('-process-request.json')+'-cleanup.json')
+                proof=json.loads(storage.regular_tree(proof_path).read_text(encoding='utf-8'))
+                if (not value.get('job') or original.get('job') != value['job']
+                        or proof.get('job') != value['job']
+                        or type(proof.get('active_processes')) is not int
+                        or proof['active_processes'] != 0):
+                    return True
+            except (OSError, ValueError, KeyError, TypeError, storage.Blocked):
+                return True
+    return False
+
+
 def recover_outputs(root, control, ledger):
     """Recover terminal sessions interrupted before their cleanup manifest was published."""
     import storage_limits as storage
@@ -255,8 +288,7 @@ def recover_outputs(root, control, ledger):
         if (entry.get('state') not in {'retained', 'failed'} or entry.get('reclamation_id')
                 or not entry.get('temporary_outputs')):
             continue
-        if any((Path(p)/name).exists() for p in entry.get('recovery_directories', [])
-               for name in ('inflight.json','recovery-required.json')):
+        if unresolved_recovery(entry):
             continue
         # Another worktree shares the ledger; only reclaim this root's outputs here.
         if not all(Path(p).is_relative_to(Path(root)/'Build'/'validation-runs')

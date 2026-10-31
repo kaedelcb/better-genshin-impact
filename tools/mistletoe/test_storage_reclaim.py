@@ -64,6 +64,21 @@ class ReclamationTests(unittest.TestCase):
             guard.process_unknown=True
         self.assertTrue((out/'app.dll').exists())
 
+    def test_recovery_marker_requires_matching_terminal_job_proof(self):
+        for proof_job in ('wrong-job','same-job'):
+            with self.assertRaisesRegex(RuntimeError,'original failure'):
+                with s.Session(self.root,'failed-job') as guard:
+                    out=guard.temporary_output();guard.write(out/'app.dll',b'generated')
+                    records=out.parent/'records';recovery=records/'recovery'
+                    guard.entry['recovery_directories']=[str(recovery)];guard.save()
+                    request=records/'run-process-request.json'
+                    guard.write(request,encode({'job':'same-job'}))
+                    guard.write(recovery/'recovery-required.json',encode({'job':'same-job','request':str(request)}))
+                    guard.write(records/'run-cleanup.json',encode({'job':proof_job,'active_processes':0}))
+                    raise RuntimeError('original failure')
+            self.assertEqual((out/'app.dll').exists(),proof_job != 'same-job')
+            self.assertTrue((recovery/'recovery-required.json').exists())
+
     def test_changed_or_tracked_files_are_kept(self):
         out=self.root/'Build/old/artifacts'; out.mkdir(parents=True)
         (out/'a.dll').write_bytes(b'old'); (out/'b.dll').write_bytes(b'keep')
@@ -223,6 +238,23 @@ class ReclamationTests(unittest.TestCase):
             self.assertEqual((records.parent/'artifacts/proof.log').read_text(),'proof')
             self.assertEqual(load(records/'result.json')['exit_code'],code)
             self.assertIn('real runner',(records/'validation-stdout.log').read_text())
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows terminated job proof')
+    def test_actual_timeout_reclaims_payload_and_keeps_failure_markers(self):
+        import validate_command
+        (self.root/'_workflow/storage-policy.json').write_bytes(encode(
+            dict(operation_bytes=1024*1024,retained_bytes=4*1024*1024,min_free_bytes=1)))
+        argv=[sys.executable,'-c',
+              "from pathlib import Path; import sys,time; "
+              "(Path(sys.argv[1])/'timeout.dll').write_bytes(b'generated'); time.sleep(30)",'{artifacts}']
+        with self.assertRaises(subprocess.TimeoutExpired):
+            validate_command.run(self.root,argv,2)
+        entry=load(s.control_dir(self.root)/'ledger.json')['entries'][-1]
+        self.assertEqual(entry['state'],'failed')
+        out=Path(entry['temporary_outputs'][0])
+        self.assertFalse((out/'timeout.dll').exists())
+        self.assertTrue((out.parent/'records/recovery/recovery-required.json').exists())
+        self.assertEqual(load(out.parent/'records/validation-cleanup.json')['active_processes'],0)
 
 
 if __name__=='__main__':unittest.main()
