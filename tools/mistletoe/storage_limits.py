@@ -46,7 +46,14 @@ def files_under(root):
 
 def size(roots):
     seen = set(); total = 0
-    for root in roots:
+    # Historical sessions frequently register the same output or its children.
+    # Validate every requested path, but walk each subtree only once.
+    unique = sorted({regular_tree(root) for root in roots}, key=lambda p: len(p.parts))
+    covering = []
+    for root in unique:
+        if not any(root.is_relative_to(parent) for parent in covering):
+            covering.append(root)
+    for root in covering:
         for _, s in files_under(root):
             key = (s.st_dev,s.st_ino)
             if key not in seen: total += s.st_size; seen.add(key)

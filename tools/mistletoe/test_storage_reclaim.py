@@ -29,6 +29,13 @@ class ReclamationTests(unittest.TestCase):
             self.assertEqual((out/name).read_bytes(),b'content')
         self.assertEqual(load(guard.control/'ledger.json')['entries'][-1]['state'],'retained')
 
+    def test_repeated_and_nested_roots_count_once_without_rewalking(self):
+        out=self.root/'Build/old/artifacts'; out.mkdir(parents=True)
+        (out/'a.dll').write_bytes(b'abcd')
+        with patch.object(s,'files_under', wraps=s.files_under) as walk:
+            self.assertEqual(s.size([out,out,out/'a.dll',out.parent]),4)
+        self.assertEqual(walk.call_count,1)
+
     def test_failure_keeps_failed_state_and_original_log(self):
         with self.assertRaisesRegex(RuntimeError,'test failed'):
             with s.Session(self.root,'test') as guard:
