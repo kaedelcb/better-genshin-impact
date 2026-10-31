@@ -100,47 +100,6 @@ public partial class App : Application
         else if (ConfigTransferService.RecoveredInterruptedImport)
             autoStartupResult = UnregisterAutoStartup(allowElevation: false);
 
-        // 全局异常处理
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            var ex = args.ExceptionObject as Exception;
-            if (args.IsTerminating && _mainViewModel?.HasRecoverableCoordinatedBatch == true)
-            {
-                RuntimeLog.WriteLine("[联机恢复] 助手致命异常，保留原安排交给存活 BGI 接续：" + args.ExceptionObject);
-                return; // Do not leave a fatal-process dialog holding its PID alive indefinitely.
-            }
-            MessageBox.Show($"未处理异常: {ex?.Message ?? args.ExceptionObject.ToString()}", "错误", 
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        };
-
-        var uiExceptionReporter = new UiExceptionReporter(RuntimeLog.WriteLine,
-            message => MessageBox.Show(message, "错误", MessageBoxButton.OK, MessageBoxImage.Error));
-        DispatcherUnhandledException += (_, args) =>
-        {
-            // 先标记已处理；错误提示会泵送消息，期间的界面刷新可能再次抛异常。
-            args.Handled = true;
-            uiExceptionReporter.Report(args.Exception);
-        };
-
-        TaskScheduler.UnobservedTaskException += (_, args) =>
-        {
-            // 未观察任务异常由 GC 的终结线程延迟通知，弹窗时间与故障时间无关。
-            // 保留完整异常到运行日志，并把摘要送到冒险日志；真实操作失败仍由原入口报告。
-            var error = args.Exception;
-            RuntimeLog.WriteLine("[未观察任务异常] " + error);
-            try
-            {
-                if (Dispatcher is { HasShutdownStarted: false } dispatcher)
-                    dispatcher.BeginInvoke(() =>
-                    {
-                        try { _mainViewModel?.AddLog("[后台任务异常] 请查看运行日志：" + error?.GetBaseException().Message); }
-                        catch { /* 关闭窗口期间的提示失败不转成新的 UI 异常。 */ }
-                    });
-            }
-            catch { /* 终结线程上的诊断不能再次触发全局异常。 */ }
-            args.SetObserved();
-        };
-
         // 创建托盘图标
         CreateTrayIcon();
 
@@ -157,12 +116,13 @@ public partial class App : Application
         {
             // 静默启动：隐藏窗口到系统托盘（不显示在任务栏，仅托盘图标可见）
             _mainWindow.ShowInTaskbar = false;
+            CancelWindowShow();
             _mainWindow.Hide();
         }
         else
         {
             // 弹窗启动：正常显示
-            _mainWindow.Show();
+            ShowMainWindowSafely();
         }
 
         if (autoStartupResult is { Success: false })
@@ -176,6 +136,7 @@ public partial class App : Application
         _mainWindow.Closing += (_, args) =>
         {
             args.Cancel = true;
+            CancelWindowShow();
             _mainWindow.Hide();
             _mainWindow.ShowInTaskbar = false;
         };
@@ -206,9 +167,8 @@ public partial class App : Application
         catch (Exception ex)
         {
             _initializationReady.TrySetResult(false);
-            MessageBox.Show($"初始化失败: {ex.Message}", "错误",
-                MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown();
+            RuntimeLog.WriteException("启动初始化", ex, false, "初始化失败，助手退出；未恢复");
+            Shutdown(1);
         }
     }
 
@@ -307,17 +267,15 @@ public partial class App : Application
         {
             // 静默启动：隐藏窗口到系统托盘
             _mainWindow.ShowInTaskbar = false;
+            CancelWindowShow();
             _mainWindow.Hide();
             ProbeLog($"ShowOrMinimizeWindow -> 已执行 Hide（窗口藏到托盘）。IsVisible={_mainWindow.IsVisible}");
         }
         else
         {
             // 弹窗启动：显示窗口
-            _mainWindow.Show();
-            _mainWindow.ShowInTaskbar = true;
-            _mainWindow.WindowState = WindowState.Normal;
-            _mainWindow.Activate();
-            ProbeLog("ShowOrMinimizeWindow -> 已执行 Show/Activate");
+            ShowMainWindowSafely();
+            ProbeLog("ShowOrMinimizeWindow -> 已提交显示请求；失败/恢复结果见异常日志");
         }
     }
 
@@ -404,6 +362,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        CancelWindowShow();
         // A deliberate application exit must not be mistaken for a crash by the surviving BGI.
         try { _mainViewModel?.PreserveCoordinatedIntentOnAssistantExit(); }
         catch (Exception ex) { RuntimeLog.WriteLine("[联机恢复] 退出意图记录失败：" + ex.Message); }
@@ -466,10 +425,7 @@ public partial class App : Application
     {
         if (_mainWindow != null)
         {
-            _mainWindow.Show();
-            _mainWindow.ShowInTaskbar = true;
-            _mainWindow.WindowState = WindowState.Normal;
-            _mainWindow.Activate();
+            ShowMainWindowSafely();
         }
     }
 
@@ -549,7 +505,7 @@ public partial class App : Application
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"弹窗事件监听异常: {ex.Message}");
+                RuntimeLog.WriteException("窗口唤起监听", ex, false, "监听线程已停止；未恢复");
             }
         })
         {

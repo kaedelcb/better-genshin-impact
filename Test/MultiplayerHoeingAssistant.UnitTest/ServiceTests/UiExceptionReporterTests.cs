@@ -8,7 +8,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public sealed class UiExceptionReporterTests
 {
     [Fact]
-    public async Task RepeatedVisualExceptions_DuringNestedDispatcherLoop_ShowOneDialogAndKeepStack()
+    public async Task RepeatedVisualExceptions_KeepStackAndNotifyFailureWithoutRepeating()
     {
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
@@ -23,7 +23,7 @@ public sealed class UiExceptionReporterTests
             {
                 messages.Add(message);
                 maxFrames = Math.Max(maxFrames, ++frames);
-                // MessageBox 也会泵送嵌套消息循环：弹窗未关时，刷新仍可能抛出相同异常。
+                // 即使通知实现引起嵌套调度，也不能递归通知同一故障。
                 var nested = new DispatcherFrame();
                 dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => nested.Continue = false));
                 Dispatcher.PushFrame(nested);
@@ -45,6 +45,9 @@ public sealed class UiExceptionReporterTests
 
                 Assert.Equal(20, handled);
                 Assert.Single(messages);
+                Assert.Contains("未自动恢复", messages[0]);
+                Assert.Contains("PID=", logs[0]);
+                Assert.Contains("Version=", logs[0]);
                 Assert.Equal(1, maxFrames);
                 Assert.Equal(5, logs.Count); // 1、2、4、8、16 次
                 Assert.Contains("TransformToDescendant", logs[0]);
@@ -69,7 +72,7 @@ public sealed class UiExceptionReporterTests
         reporter = new UiExceptionReporter(logs.Add, message =>
         {
             messages.Add(message);
-            reporter!.Report(new InvalidOperationException("弹窗期间的另一异常"));
+            reporter!.Report(new InvalidOperationException("通知期间的另一异常"));
         });
 
         reporter.Report(new InvalidOperationException("第一次界面异常"));
@@ -77,7 +80,7 @@ public sealed class UiExceptionReporterTests
 
         Assert.Equal(2, messages.Count);
         Assert.Contains("另一个入口异常", messages[1]);
-        Assert.Contains(logs, line => line.Contains("弹窗期间的另一异常"));
+        Assert.Contains(logs, line => line.Contains("通知期间的另一异常"));
     }
 
     [Fact]
@@ -88,7 +91,7 @@ public sealed class UiExceptionReporterTests
         var reporter = new UiExceptionReporter(logs.Add, _ =>
         {
             calls++;
-            throw new InvalidOperationException("提示窗口无法打开");
+            throw new InvalidOperationException("日志界面不可用");
         });
 
         reporter.Report(new InvalidOperationException("第一处异常"));
