@@ -238,10 +238,11 @@ public partial class TaskControl
         return Bv.IsInMainUi(restored);
     }
 
-    /// <summary>寻路即将放弃时复核。能正常开图则保留原错误处理；确有无响应才保护并无计数回段。</summary>
+    /// <summary>仅在已检测到网络或窗口异常时复核；普通寻路卡住保留原重试、放弃和跳段处理。</summary>
     public static async Task<bool> TryRecoverPathEnvironmentAsync(CancellationToken ct)
     {
         if (TaskContext.Instance().Config.TpConfig.UseOfficialTeleport) return false;
+        if (!IsSuspendedByNetwork && !IsSuspendedByWindow) return false;
         var unresponsive = false;
         await WaitForEnvironmentRecoveryAsync(async token =>
         {

@@ -87,10 +87,14 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath
 {
     public class TpTaskFastDrag(CancellationToken ct)
     {
+        public static Func<CancellationToken, Task<bool>>? ProbeForTest;
+        public static int ProbeCalls;
+
         public Task<bool> ProbeMapForRecoveryAsync(string? mapName = null)
         {
             ct.ThrowIfCancellationRequested();
-            return Task.FromResult(true);
+            Interlocked.Increment(ref ProbeCalls);
+            return ProbeForTest?.Invoke(ct) ?? Task.FromResult(true);
         }
     }
 }
