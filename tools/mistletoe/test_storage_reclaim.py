@@ -36,6 +36,17 @@ class ReclamationTests(unittest.TestCase):
             self.assertEqual(s.size([out,out,out/'a.dll',out.parent]),4)
         self.assertEqual(walk.call_count,1)
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows retained process handles')
+    def test_exited_process_with_open_handle_does_not_hold_lock(self):
+        from review_support import _process_alive
+        self.assertTrue(_process_alive(os.getpid()))
+        proc=subprocess.Popen([sys.executable,'-c','pass'])
+        proc.wait(timeout=10)
+        try:
+            self.assertFalse(_process_alive(proc.pid))
+        finally:
+            proc._handle.Close()
+
     def test_failure_keeps_failed_state_and_original_log(self):
         with self.assertRaisesRegex(RuntimeError,'test failed'):
             with s.Session(self.root,'test') as guard:

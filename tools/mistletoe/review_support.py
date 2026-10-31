@@ -48,9 +48,16 @@ def _process_alive(pid):
         kernel.OpenProcess.argtypes=[ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
         kernel.OpenProcess.restype=ctypes.c_void_p
         kernel.CloseHandle.argtypes=[ctypes.c_void_p]
-        handle=kernel.OpenProcess(0x1000, 0, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        kernel.WaitForSingleObject.argtypes=[ctypes.c_void_p, ctypes.c_uint32]
+        kernel.WaitForSingleObject.restype=ctypes.c_uint32
+        handle=kernel.OpenProcess(0x100000, 0, pid)  # SYNCHRONIZE
         if handle:
-            kernel.CloseHandle(handle); return True
+            try:
+                # A terminated Windows process can remain openable while a parent
+                # retains its handle. Only a signaled process is certainly exited.
+                return kernel.WaitForSingleObject(handle, 0) != 0
+            finally:
+                kernel.CloseHandle(handle)
         # Access denied still means the PID is occupied; only a definite invalid
         # parameter/not-found result is safe to treat as stale.
         return ctypes.get_last_error() not in (87, 1168)
