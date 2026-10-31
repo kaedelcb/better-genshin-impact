@@ -1,7 +1,7 @@
 {
   "files": {
     "../../Docs/design/mistletoe-review-process.md": "f5aab4583671672d8821f8cd61929043d0b40fe53755f8f1791749694fa55cdc",
-    "../../Docs/design/mistletoe-storage-limits.md": "747b359e5f5058a94232dc81a099cff13a3d880ac8b5f46194c6ac620434d228",
+    "../../Docs/design/mistletoe-storage-limits.md": "731f98bb55f0534046b6750596fec7ae56876d01442583f19e6117adad33a901",
     "../../Docs/design/mistletoe-workflow-facilities.md": "3a56070d9f6f51acb04875ad1b7a6d98cb668e2b33105a1ad0464824a05b6e8c",
     "README.md": "9ad1461e8f3d42cdfd32dc442ca6cad4da61d5c3ce4e414d813523d6144ab41c",
     "execution_evidence.py": "23967a80e6cfa917d794185003972aad90253ea19613c77b1e692a0cbe50e9af",
@@ -9,12 +9,13 @@
     "native_review.py": "b6b5db212c8c9941a8914ebb561b9e337c46f785c245c55492205b476f292f56",
     "process_runner.py": "55382cde6946870ee226a0b06de2b6db9ec8ce9dcd36179360618544c1a6b6e7",
     "review_process.py": "f0cdc732087967f3df94fc537f220b58bda785cb8d81b0d975b7886f62b5088c",
-    "review_support.py": "87a1ab6f1c59d033ba5037a0a6617539dcc46c8b8bd849c401c0ddc8d5154de4",
+    "review_support.py": "bfd6285a27a8c2d540bfa0a76db99cd55a81bac0f49c7f39ddbbcbf45b30c137",
     "run_suite.py": "cd2c7da7eff9270081c297ee1be9dfd603587d5a4a0b933dac28e773dbaefe34",
     "serena_read.py": "b01016da50a448d558e056384db45ca4c65f371b79e4efc6d230e59ad63a08cc",
     "skills/mistletoe-independent-review/SKILL.md": "f40917305bd512314fef25ca67d9ce69d279790f391bbf92da91a5af262b8ae7",
     "snapshot_reader.py": "64327a52738be8da3cc2311d89a7fe339fd1de6a9930d870e17ae57f9e2e02b5",
-    "storage_limits.py": "8067535e53a9ce48a683f01ab8a750aba8617f051ce395d17c6590dc563be421",
+    "storage_limits.py": "99eb7eca3a0aefa4a732f9757e61b567226fea75298c56263e13f55a20e8e4d6",
+    "storage_reclaim.py": "94c73136da89a953baba7fb02cf845c9fab6e91383ac48ade833411933ad6470",
     "templates/review-plan.json": "635e5d42e9a80e9a2ba9b1195f771af484295dde05b1df427ce16a1560efbce5",
     "workflow.py": "6845aa4152f28fa24755a63a24d812e55ec79ebe4c98a99902c3d8b1a1dacb81"
   },

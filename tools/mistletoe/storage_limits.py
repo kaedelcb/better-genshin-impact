@@ -1,4 +1,4 @@
-"""Bound new tooling artifacts. No background service or historical garbage collection."""
+"""Bound tooling artifacts and reclaim explicitly registered generated outputs."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -116,6 +116,9 @@ class Session:
                 require(not (self.control/'initialized.json').exists(), 'missing initialized storage ledger')
                 self.ledger=dict(version=1,domain=str(self.control),entries=[])
             validate_ledger(self.control,self.ledger)
+            import storage_reclaim
+            storage_reclaim.recover_outputs(self.root, self.control, self.ledger)
+            storage_reclaim.pending(self.root, self.control)
             self.old_roots=[p for e in self.ledger['entries'] for p in e['roots']]
             self.baseline=size(self.old_roots)
             require(len(self.ledger['entries'])<4096,'storage ledger entry limit reached; audited maintenance required')
@@ -231,6 +234,16 @@ class Session:
         (p/'owner.json').write_bytes(owner); self.written+=len(owner)
         self.save(); return p
 
+    def temporary_output(self):
+        """Fresh isolated build output, reclaimed at close; logs/data/source remain intact."""
+        p=regular_tree(self.root/'Build'/'validation-runs'/self.id/'artifacts')
+        require(not p.exists(), 'temporary build output already exists')
+        self.track(p)
+        self.entry.setdefault('temporary_outputs', []).append(str(p))
+        self.save()
+        p.mkdir(parents=True, exist_ok=False)
+        return p
+
     def immutable(self,base,target,data):
         """Pool only independent byte copies, never live source/User inode aliases."""
         pool=regular_tree(Path(base)/'.storage-objects'/sha(str(self.control).encode()))
@@ -260,7 +273,26 @@ class Session:
             self.entry['actual_retained_bytes']=size(self.old_roots+self.roots)-self.baseline
             self.save()
         finally:
-            ACTIVE.reset(self.token); self.lock.__exit__(kind,error,tb)
+            try:
+                if (not self.process_unknown and self.entry.get('state') in {'retained','failed'}
+                        and not (self.control/'inflight.json').exists()
+                        and not (self.control/'recovery-required.json').exists()
+                        and not any((Path(p)/name).exists()
+                                    for p in self.entry.get('recovery_directories', [])
+                                    for name in ('inflight.json','recovery-required.json'))
+                        and self.entry.get('temporary_outputs')):
+                    import storage_reclaim
+                    try:
+                        plan=storage_reclaim.prepare(self.root, self.control,
+                            self.entry['temporary_outputs'], 'finished isolated validation '+self.id)
+                        storage_reclaim.apply(self.control, plan)
+                        self.entry['reclamation_id']=plan['id']
+                        self.entry['released_unique_bytes']=plan['released_unique_bytes']
+                    except (OSError, Blocked) as failure:
+                        self.entry['cleanup_pending_reason']=str(failure)
+                    self.save()
+            finally:
+                ACTIVE.reset(self.token); self.lock.__exit__(kind,error,tb)
 
 def operation(purpose,root_argument=0,request=False,*,reserve_full_limit=False):
     def decorate(fn):
@@ -352,5 +384,22 @@ def prune_scratch(root,entry_id):
 
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__); p.add_argument('--root',required=True)
-    p.add_argument('--prune-scratch',required=True)
-    a=p.parse_args(); prune_scratch(a.root,a.prune_scratch)
+    commands=p.add_mutually_exclusive_group(required=True)
+    commands.add_argument('--prune-scratch')
+    commands.add_argument('--reclaim-output', action='append')
+    commands.add_argument('--reclaim-pending', action='store_true')
+    p.add_argument('--reason', default='')
+    a=p.parse_args()
+    if a.prune_scratch:
+        prune_scratch(a.root,a.prune_scratch)
+    else:
+        import storage_reclaim
+        root=Path(a.root).resolve(); control=control_dir(root)
+        with lock(control):
+            validate_ledger(control, load(control/'ledger.json'))
+            if a.reclaim_pending:
+                storage_reclaim.pending(root,control)
+            else:
+                plan=storage_reclaim.prepare(root,control,a.reclaim_output,a.reason)
+                result=storage_reclaim.apply(control,plan)
+                print(json.dumps({k:result[k] for k in ('id','state','unlinked_bytes','released_unique_bytes')}))

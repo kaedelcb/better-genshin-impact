@@ -243,7 +243,7 @@ def lock(directory):
         if not (directory / 'recovery-required.json').exists() and not (directory / 'inflight.json').exists():
             p.unlink()  # Only our lock. Crash/uncertain descendants remain fail-closed.
 
-BUNDLE_FILES = ('../../Docs/design/mistletoe-storage-limits.md', 'storage_limits.py', 'review_support.py', 'review_process.py', 'native_review.py', 'serena_read.py',
+BUNDLE_FILES = ('../../Docs/design/mistletoe-storage-limits.md', 'storage_limits.py', 'storage_reclaim.py', 'review_support.py', 'review_process.py', 'native_review.py', 'serena_read.py',
                 'skills/mistletoe-independent-review/SKILL.md', 'execution_evidence.py',
                 'snapshot_reader.py', 'process_runner.py', 'workflow.py', 'run_suite.py', 'templates/review-plan.json', 'legacy-openings.json',
                 'README.md', '../../Docs/design/mistletoe-review-process.md',

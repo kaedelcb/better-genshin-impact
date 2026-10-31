@@ -372,7 +372,7 @@ class StorageDiscrimination(unittest.TestCase):
     def test_storage_critical_guards_reject_bad_isolated_implementations(self):
         here=Path(s.__file__).parent; original=(here/'storage_limits.py').read_text()
         cases=[
-            ('quota',"require(required <= ceiling, 'storage operation budget exceeded')",'require(True,',
+            ('quota',"require(required <= ceiling, 'storage operation budget exceeded')",'pass',
              'StorageTests.test_write_limit_rejects_before_file_creation_and_preserves_previous'),
             ('reuse','os.link(obj,target)','target.write_bytes(data)',
              'StorageTests.test_pool_reuses_inode_without_aliasing_mutable_source'),
@@ -385,7 +385,7 @@ class StorageDiscrimination(unittest.TestCase):
                 self.assertEqual(original.count(old),1)
                 mutated=original.replace(old,new); compile(mutated,'storage_limits.py','exec')
                 dest=Path(temp); (dest/'storage_limits.py').write_text(mutated)
-                for name in ['review_support.py','native_review.py','test_native_review.py','test_storage_limits.py','process_runner.py','execution_evidence.py']:
+                for name in ['storage_reclaim.py','review_support.py','native_review.py','test_native_review.py','test_storage_limits.py','process_runner.py','execution_evidence.py']:
                     (dest/name).write_bytes((here/name).read_bytes())
                 result=subprocess.run([sys.executable,'-B','-m','unittest','test_storage_limits.'+target],cwd=dest,capture_output=True,text=True)
                 self.assertNotEqual(result.returncode,0); self.assertIn('FAIL:',result.stderr)
@@ -398,7 +398,7 @@ class StorageDiscrimination(unittest.TestCase):
         mutated=original.replace(old,'require(True,'); compile(mutated,'native_review.py','exec')
         with tempfile.TemporaryDirectory() as temp:
             dest=Path(temp); (dest/'native_review.py').write_text(mutated)
-            for name in ['review_support.py','storage_limits.py','test_native_review.py','test_storage_limits.py']:
+            for name in ['storage_reclaim.py','review_support.py','storage_limits.py','test_native_review.py','test_storage_limits.py']:
                 (dest/name).write_bytes((here/name).read_bytes())
             result=subprocess.run([sys.executable,'-B','-m','unittest','test_storage_limits.NativeStorageEntryTests.test_scratch_cannot_be_native_contract_input'],cwd=dest,capture_output=True,text=True)
             self.assertNotEqual(result.returncode,0);self.assertIn('FAIL:',result.stderr);self.assertNotIn('ERROR:',result.stderr)
