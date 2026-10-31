@@ -87,6 +87,11 @@ public class CommandLineOptions
         InstanceName = instanceName;
     }
 
+    // 旧 BAT 使用带 -- 的命令；解析和冷启动分发必须识别同一组别名。
+    internal static bool IsContinuousOneDragonCommand(string argument)
+        => argument.Equals("startContinuousOneDragon", StringComparison.OrdinalIgnoreCase)
+           || argument.Equals("--startContinuousOneDragon", StringComparison.OrdinalIgnoreCase);
+
     internal static CommandLineOptions Parse(string[] args)
     {
         var launchArgs = args.Skip(1).Select(x => x.Trim()).ToArray();
@@ -156,7 +161,7 @@ public class CommandLineOptions
                 oneDragonConfigName: extra.Length > 0 ? extra[0] : null);
         }
 
-        if (arg1.Equals("startContinuousOneDragon", StringComparison.OrdinalIgnoreCase))
+        if (IsContinuousOneDragonCommand(arg1))
         {
             return Create(
                 CommandLineAction.StartContinuousOneDragon,

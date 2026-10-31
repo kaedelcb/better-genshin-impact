@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using BetterGenshinImpact.Core.Monitor;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service.Instance;
+using BetterGenshinImpact.Service.Instance.MessageHandlers;
 
 namespace BetterGenshinImpact.UnitTest.ServiceTests.Instance;
 
@@ -76,13 +77,17 @@ public class InstanceIpcProtocolTests
         Assert.Equal(CommandLineAction.None, options.Action);
     }
 
-    [Fact]
-    public void CommandLineParser_ShouldRecognizeContinuousOneDragonCompatibilityCommand()
+    [Theory]
+    [InlineData("startContinuousOneDragon")]
+    [InlineData("--startContinuousOneDragon")]
+    [InlineData("STARTCONTINUOUSONEDRAGON")]
+    [InlineData("--STARTCONTINUOUSONEDRAGON")]
+    public void CommandLineParser_ShouldRecognizeContinuousOneDragonCompatibilityCommand(string command)
     {
         var options = CommandLineOptions.Parse(
         [
             "BetterGI.exe",
-            "startContinuousOneDragon",
+            command,
             "日常计划"
         ]);
 
@@ -91,13 +96,75 @@ public class InstanceIpcProtocolTests
         Assert.True(options.ShouldDeferGameStart);
     }
 
-    [Fact]
-    public void CommandLineParser_ShouldAllowUnnamedContinuousOneDragonCompatibilityCommand()
+    [Theory]
+    [InlineData("startContinuousOneDragon")]
+    [InlineData("--startContinuousOneDragon")]
+    public void CommandLineParser_ShouldAllowUnnamedContinuousOneDragonCompatibilityCommand(string command)
     {
-        var options = CommandLineOptions.Parse(["BetterGI.exe", "startContinuousOneDragon"]);
+        var options = CommandLineOptions.Parse(["BetterGI.exe", command]);
 
         Assert.Equal(CommandLineAction.StartContinuousOneDragon, options.Action);
         Assert.Null(options.ContinuousPlanName);
+    }
+
+    [Theory]
+    [InlineData("startContinuousOneDragon", true)]
+    [InlineData("--startContinuousOneDragon", true)]
+    [InlineData("--STARTCONTINUOUSONEDRAGON", true)]
+    [InlineData("startOneDragon", false)]
+    [InlineData("--startOneDragon", false)]
+    [InlineData("start", false)]
+    [InlineData("--startGroups", false)]
+    [InlineData("--TaskProgress", false)]
+    [InlineData("--startContinuousOneDragon-extra", false)]
+    public void ColdStartContinuousCommand_ShouldRecognizeOnlySupportedAliases(string command, bool expected)
+    {
+        // 冷启动宿主与解析器共用这个判定，避免冷启动只打开主页、热启动却能执行。
+        Assert.Equal(expected, CommandLineOptions.IsContinuousOneDragonCommand(command));
+    }
+
+    [Theory]
+    [InlineData("startContinuousOneDragon")]
+    [InlineData("--startContinuousOneDragon")]
+    public async Task ForwardedActivation_ShouldPreserveContinuousPlanAndInstanceMetadata(string command)
+    {
+        var request = InstanceIpcEnvelope.Request(InstanceOperations.ActivationDispatch, new ActivationDispatchRequest
+        {
+            Arguments = new[] { "BetterGI.exe", "--instance", "webview", "--instance-name", "测试窗口", command, "日常 计划" }
+        });
+        await using var stream = new MemoryStream();
+        await InstanceIpcProtocol.WriteJsonAsync(stream, request, CancellationToken.None);
+        stream.Position = 0;
+        var frame = await InstanceIpcProtocol.ReadFrameAsync(stream, CancellationToken.None);
+        var forwarded = InstanceIpcProtocol.ReadJson(frame!.Value);
+        var args = forwarded.Data!.ToObject<ActivationDispatchRequest>(InstanceIpcProtocol.Serializer)!.Arguments;
+
+        var options = CommandLineOptions.Parse(args);
+
+        Assert.Equal(InstanceOperations.ActivationDispatch, forwarded.Operation);
+        Assert.Equal(CommandLineAction.StartContinuousOneDragon, options.Action);
+        Assert.Equal("日常 计划", options.ContinuousPlanName);
+        Assert.Equal(BetterGiInstanceType.WebView, options.InstanceType);
+        Assert.Equal("测试窗口", options.InstanceName);
+        Assert.True(options.ShouldDeferGameStart);
+    }
+
+    [Theory]
+    [InlineData("startOneDragon", CommandLineAction.StartOneDragon)]
+    [InlineData("--startOneDragon", CommandLineAction.StartOneDragon)]
+    [InlineData("start", CommandLineAction.Start)]
+    [InlineData("--startGroups", CommandLineAction.StartGroups)]
+    [InlineData("--TaskProgress", CommandLineAction.TaskProgress)]
+    public void CommandLineParser_ShouldPreserveOtherActivationCommands(string command, CommandLineAction expected)
+    {
+        var options = CommandLineOptions.Parse(["BetterGI.exe", command, "测试配置"]);
+
+        Assert.Equal(expected, options.Action);
+        Assert.Null(options.ContinuousPlanName);
+        if (expected == CommandLineAction.StartOneDragon)
+            Assert.Equal("测试配置", options.OneDragonConfigName);
+        if (expected is CommandLineAction.StartGroups or CommandLineAction.TaskProgress)
+            Assert.Equal(new[] { "测试配置" }, options.GroupNames);
     }
 
     [Fact]

@@ -174,7 +174,7 @@ public class ApplicationHostService(
                     await Task.Run(() => ScriptRepoUpdater.Instance.AutoUpdateSubscribedScripts());
                 }
 
-                if (args[1].Trim().Equals("startContinuousOneDragon", StringComparison.InvariantCultureIgnoreCase))
+                if (CommandLineOptions.IsContinuousOneDragonCommand(args[1].Trim()))
                 {
                     _ = _navigationWindow.Navigate(typeof(HomePage));
                     DispatchContinuousPlanToAssistant(CommandLineOptions.Instance.ContinuousPlanName);
