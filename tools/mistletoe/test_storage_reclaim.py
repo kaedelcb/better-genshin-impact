@@ -123,6 +123,16 @@ class ReclamationTests(unittest.TestCase):
         self.assertFalse((out/'bin/app/runtimes/ios/native/runtime.zip').exists())
         self.assertTrue((out/'bin/app/user-archive.zip').exists())
 
+    def test_malformed_dependency_record_preserved_without_blocking_known_outputs(self):
+        with s.Session(self.root,'failed-build-metadata') as guard:
+            out=guard.temporary_output()
+            guard.write(out/'app.deps.json',b'')
+            guard.write(out/'app.dll',b'generated')
+            guard.write(out/'runtimes/linux/native/unknown.so',b'keep without evidence')
+        self.assertFalse((out/'app.dll').exists())
+        self.assertEqual((out/'app.deps.json').read_bytes(),b'')
+        self.assertTrue((out/'runtimes/linux/native/unknown.so').exists())
+
     def test_root_and_user_rejected(self):
         for p in (self.root,self.root/'Build',self.root/'Build/task',self.root/'Build/task/User',
                   self.root/'Build/task/artifacts/../../../outside'):

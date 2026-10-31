@@ -90,11 +90,24 @@ def generated_resources(output, files):
     result = {}
     for manifest, _ in files:
         if manifest.name.endswith('.deps.json'):
-            data = json.loads(manifest.read_text(encoding='utf-8-sig'))
-            for target in data.get('targets', {}).values():
+            try:
+                data = json.loads(manifest.read_text(encoding='utf-8-sig'))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue  # A failed build's empty/malformed record is not deletion evidence.
+            targets = data.get('targets', {}) if isinstance(data, dict) else {}
+            if not isinstance(targets, dict):
+                continue
+            for target in targets.values():
+                if not isinstance(target, dict):
+                    continue
                 for library in target.values():
+                    if not isinstance(library, dict):
+                        continue
                     for section in ('runtimeTargets', 'native'):
-                        for name in library.get(section, {}):
+                        items = library.get(section, {})
+                        if not isinstance(items, dict):
+                            continue
+                        for name in items:
                             relative = Path(name)
                             if relative.is_absolute() or '..' in relative.parts:
                                 continue
@@ -104,7 +117,11 @@ def generated_resources(output, files):
             continue
         if not manifest.name.endswith('.FileListAbsolute.txt'):
             continue
-        for line in manifest.read_text(encoding='utf-8-sig').splitlines():
+        try:
+            lines = manifest.read_text(encoding='utf-8-sig').splitlines()
+        except (OSError, UnicodeError):
+            continue
+        for line in lines:
             p = Path(line.strip())
             if (p.is_absolute() and '..' not in p.parts and p.is_relative_to(output)
                     and p.suffix.lower() in RESOURCE_SUFFIXES
