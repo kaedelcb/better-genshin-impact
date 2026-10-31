@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 from pathlib import Path
 import subprocess
 import sys
@@ -75,6 +76,53 @@ class ReclamationTests(unittest.TestCase):
         self.assertEqual((out/'a.dll').read_bytes(),b'new')
         self.assertEqual((out/'b.dll').read_bytes(),b'keep')
 
+    def test_msbuild_resources_removed_but_screenshots_and_user_assets_kept(self):
+        with s.Session(self.root,'resources') as guard:
+            out=guard.temporary_output()
+            for name in ('bin/app/Assets/model.onnx','bin/app/Assets/icon.png',
+                         'bin/app/User/photo.png','screenshot.png','result.json'):
+                guard.write(out/name,b'content')
+            manifest='\n'.join(str(out/name) for name in
+                ('bin/app/Assets/model.onnx','bin/app/Assets/icon.png','bin/app/User/photo.png'))
+            guard.write(out/'obj/app.csproj.FileListAbsolute.txt',manifest.encode())
+        self.assertFalse((out/'bin/app/Assets/model.onnx').exists())
+        self.assertFalse((out/'bin/app/Assets/icon.png').exists())
+        for name in ('bin/app/User/photo.png','screenshot.png','result.json'):
+            self.assertTrue((out/name).exists())
+
+    def test_default_test_output_uses_sibling_obj_manifest(self):
+        out=self.root/'Test/Example/bin/Debug';out.mkdir(parents=True)
+        obj=self.root/'Test/Example/obj/Debug';obj.mkdir(parents=True)
+        asset=out/'model.onnx';asset.write_bytes(b'generated')
+        (out/'screenshot.png').write_bytes(b'keep')
+        (obj/'Example.FileListAbsolute.txt').write_text(str(asset),encoding='utf-8')
+        with lock(s.control_dir(self.root)):
+            plan=reclaim.prepare(self.root,s.control_dir(self.root),[out],'finished test output')
+            reclaim.apply(s.control_dir(self.root),plan)
+        self.assertFalse(asset.exists());self.assertTrue((out/'screenshot.png').exists())
+        with self.assertRaises(Blocked):reclaim.output_path(self.root,self.root/'BetterGenshinImpact/bin/Debug')
+
+    def test_separately_selected_build_bin_and_obj_share_generation_lists(self):
+        out=self.root/'Build/old/bin';obj=self.root/'Build/old/obj'
+        out.mkdir(parents=True);obj.mkdir()
+        asset=out/'model.onnx';asset.write_bytes(b'generated')
+        (obj/'app.FileListAbsolute.txt').write_text(str(asset),encoding='utf-8')
+        with lock(s.control_dir(self.root)):
+            plan=reclaim.prepare(self.root,s.control_dir(self.root),[out,obj],'finished build')
+            reclaim.apply(s.control_dir(self.root),plan)
+        self.assertFalse(asset.exists())
+
+    def test_deps_manifest_removes_copied_native_payload_not_arbitrary_archive(self):
+        with s.Session(self.root,'native-assets') as guard:
+            out=guard.temporary_output()
+            guard.write(out/'bin/app/runtimes/ios/native/runtime.zip',b'generated')
+            guard.write(out/'bin/app/user-archive.zip',b'keep')
+            deps={'targets':{'net8':{'Package/1.0':{'runtimeTargets':{
+                'runtimes/ios/native/runtime.zip':{'assetType':'native'}}}}}}
+            guard.write(out/'bin/app/app.deps.json',encode(deps))
+        self.assertFalse((out/'bin/app/runtimes/ios/native/runtime.zip').exists())
+        self.assertTrue((out/'bin/app/user-archive.zip').exists())
+
     def test_root_and_user_rejected(self):
         for p in (self.root,self.root/'Build',self.root/'Build/task',self.root/'Build/task/User',
                   self.root/'Build/task/artifacts/../../../outside'):
@@ -109,6 +157,22 @@ class ReclamationTests(unittest.TestCase):
             reclaim.apply(control,plan)
         self.assertEqual(keep.read_bytes(),b'keep')
         self.assertEqual(plan['released_unique_bytes'],0)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows readonly hardlink semantics')
+    def test_readonly_alias_removed_without_changing_retained_copy(self):
+        out=self.root/'Build/old/artifacts';out.mkdir(parents=True)
+        keep=self.root/'keep.dll';keep.write_bytes(b'keep')
+        os.link(keep,out/'copy.dll');keep.chmod(stat.S_IREAD)
+        try:
+            attributes=keep.stat().st_file_attributes
+            with lock(s.control_dir(self.root)):
+                plan=reclaim.prepare(self.root,s.control_dir(self.root),[out],'old duplicate')
+                reclaim.apply(s.control_dir(self.root),plan)
+            self.assertFalse((out/'copy.dll').exists())
+            self.assertEqual(keep.read_bytes(),b'keep')
+            self.assertEqual(keep.stat().st_file_attributes,attributes)
+        finally:
+            keep.chmod(stat.S_IWRITE|stat.S_IREAD)
 
     def test_symlink_rejected(self):
         out=self.root/'Build/task/artifacts'; out.mkdir(parents=True)
