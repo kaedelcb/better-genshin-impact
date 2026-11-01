@@ -83,7 +83,7 @@ public class AccountUidSequenceTests
                 (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
 
         Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
-        Assert.Equal(3, reads);
+        Assert.Equal(5, reads);
         Assert.Equal(0, switches);
     }
 
@@ -119,7 +119,7 @@ public class AccountUidSequenceTests
             (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
 
         Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
-        Assert.Equal(3, reads);
+        Assert.Equal(firstStatus == OneDragonAccountCapability.UidVerifyStatus.ReadFailed ? 5 : 3, reads);
         Assert.Equal(0, switches);
     }
 
@@ -133,7 +133,7 @@ public class AccountUidSequenceTests
             (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
 
         Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
-        Assert.Equal(3, reads);
+        Assert.Equal(5, reads);
     }
 
     [Fact]
@@ -162,6 +162,201 @@ public class AccountUidSequenceTests
 
         Assert.False(switched);
         Assert.Equal(2, reads);
+    }
+
+    // Regression contract: a transient read failure may recover within five reads, but
+    // switching still requires three consecutive confirmed mismatches. These cases
+    // decide whether the issue #29 fix is safe without weakening Unknown handling.
+    [Fact]
+    public async Task ReadFailureThenThreeMismatches_SwitchesAndReverifies()
+    {
+        var reads = 0;
+        var steps = new List<string>();
+        var switched = await AccountUidSequence.EnsureAsync(
+            _ =>
+            {
+                steps.Add("verify");
+                var status = ++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                    : reads == 5 ? OneDragonAccountCapability.UidVerifyStatus.Matched
+                    : OneDragonAccountCapability.UidVerifyStatus.Mismatch;
+                return Task.FromResult(Verify(status));
+            },
+            (n, _) => { steps.Add("switch-" + n); return Task.FromResult(true); }, CancellationToken.None);
+
+        Assert.True(switched);
+        Assert.Equal(["verify", "verify", "verify", "verify", "switch-1", "verify"], steps);
+    }
+
+    [Fact]
+    public async Task TwoMismatchesReadFailureTwoMismatches_DoesNotCombineStaleEvidence()
+    {
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(new OneDragonAccountCapability.UidVerifyResult(
+                ++reads == 3 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                    : OneDragonAccountCapability.UidVerifyStatus.Mismatch,
+                reads == 3 ? "first-read-failure" : "last-mismatch")),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(5, reads);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Contains("first-read-failure", error.Message);
+    }
+
+    [Fact]
+    public async Task ReadFailureThenPreparationFailure_ResetsMismatchStreak()
+    {
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads switch
+            {
+                1 => OneDragonAccountCapability.UidVerifyStatus.ReadFailed,
+                3 => OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted,
+                _ => OneDragonAccountCapability.UidVerifyStatus.Mismatch,
+            })),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(5, reads);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+    }
+
+    [Fact]
+    public async Task ReadFailureThenMatch_DoesNotConsumeRemainingBudgetOrSwitch()
+    {
+        var reads = 0;
+        var switched = await AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                : OneDragonAccountCapability.UidVerifyStatus.Matched)),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None);
+
+        Assert.False(switched);
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public async Task InvalidExpectedAfterReadFailure_StopsImmediately()
+    {
+        var reads = 0;
+        await Assert.ThrowsAsync<AccountMismatchException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                : OneDragonAccountCapability.UidVerifyStatus.InvalidExpected)),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public async Task CancellationDuringExtendedBudget_StopsBeforeNextReadOrSwitch()
+    {
+        using var cts = new CancellationTokenSource();
+        var reads = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AccountUidSequence.EnsureAsync(
+            _ =>
+            {
+                if (++reads == 4) cts.Cancel();
+                return Task.FromResult(Verify(OneDragonAccountCapability.UidVerifyStatus.ReadFailed));
+            },
+            (_, _) => throw new InvalidOperationException("不应切号"), cts.Token));
+
+        Assert.Equal(4, reads);
+    }
+
+    [Fact]
+    public async Task ReadFailureAfterSwitch_ExtendsOnlyCurrentRoundAndDoesNotSwitchAgain()
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads <= 3 ? OneDragonAccountCapability.UidVerifyStatus.Mismatch
+                : OneDragonAccountCapability.UidVerifyStatus.ReadFailed)),
+            (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(8, reads);
+        Assert.Equal(1, switches);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+    }
+
+    [Fact]
+    public async Task RepeatedReadFailures_PreservesFirstFailureReason()
+    {
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(new OneDragonAccountCapability.UidVerifyResult(
+                OneDragonAccountCapability.UidVerifyStatus.ReadFailed, ++reads == 1 ? "first-failure" : "later-failure")),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(5, reads);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Contains("first-failure", error.Message);
+    }
+
+    [Fact]
+    public async Task TwoReadFailuresThenThreeMismatches_UsesFifthReadThenSwitches()
+    {
+        var reads = 0;
+        var switches = 0;
+        var switched = await AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads <= 2 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                : reads == 6 ? OneDragonAccountCapability.UidVerifyStatus.Matched
+                : OneDragonAccountCapability.UidVerifyStatus.Mismatch)),
+            (_, _) => { Assert.Equal(5, reads); switches++; return Task.FromResult(true); }, CancellationToken.None);
+
+        Assert.True(switched);
+        Assert.Equal(6, reads);
+        Assert.Equal(1, switches);
+    }
+
+    [Fact]
+    public async Task ExtendedRoundThenPreparationFailures_ResetBudgetAfterSwitch()
+    {
+        var reads = 0;
+        var switches = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(Verify(++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                : reads <= 4 ? OneDragonAccountCapability.UidVerifyStatus.Mismatch
+                : OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted)),
+            (_, _) => { switches++; return Task.FromResult(true); }, CancellationToken.None));
+
+        Assert.Equal(7, reads);
+        Assert.Equal(1, switches);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+    }
+
+    [Theory]
+    [InlineData(OneDragonAccountCapability.UidVerifyStatus.Matched)]
+    [InlineData(OneDragonAccountCapability.UidVerifyStatus.Mismatch)]
+    public async Task CancelledVerificationResult_CannotSucceedOrTriggerSwitch(
+        OneDragonAccountCapability.UidVerifyStatus lastStatus)
+    {
+        using var cts = new CancellationTokenSource();
+        var reads = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AccountUidSequence.EnsureAsync(
+            _ =>
+            {
+                if (++reads == 3) cts.Cancel();
+                return Task.FromResult(Verify(reads == 3 ? lastStatus
+                    : OneDragonAccountCapability.UidVerifyStatus.Mismatch));
+            },
+            (_, _) => throw new InvalidOperationException("不应切号"), cts.Token));
+
+        Assert.Equal(3, reads);
+    }
+
+    [Fact]
+    public async Task ReadFailureReason_IsNotHiddenByEarlierPreparationFailure()
+    {
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<PrerequisiteFailedException>(() => AccountUidSequence.EnsureAsync(
+            _ => Task.FromResult(new OneDragonAccountCapability.UidVerifyResult(
+                ++reads == 1 ? OneDragonAccountCapability.UidVerifyStatus.PreparationNotStarted
+                    : reads == 3 ? OneDragonAccountCapability.UidVerifyStatus.ReadFailed
+                    : OneDragonAccountCapability.UidVerifyStatus.Mismatch,
+                reads == 1 ? "preparation" : reads == 3 ? "read-failure" : "mismatch")),
+            (_, _) => throw new InvalidOperationException("不应切号"), CancellationToken.None));
+
+        Assert.Equal(5, reads);
+        Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
+        Assert.Contains("read-failure", error.Message);
     }
 
     private static OneDragonAccountCapability.UidVerifyResult Verify(OneDragonAccountCapability.UidVerifyStatus status)
