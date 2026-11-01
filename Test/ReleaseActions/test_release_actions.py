@@ -371,6 +371,13 @@ class WorkflowTests(unittest.TestCase):
         import yaml
         return yaml.load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
+    def test_run_title_survives_yaml_comment_parsing(self):
+        title = self.load("release-artifacts.yml")["run-name"]
+        self.assertTrue(title.startswith("${{"))
+        self.assertTrue(title.endswith("}}"))
+        self.assertIn("format('手动补发构建 #{0}', inputs.run_id)", title)
+        self.assertIn("format('自动发布构建 #{0}', github.event.workflow_run.id)", title)
+
     def test_auto_manual_share_controller_and_only_successful_builds(self):
         data = self.load("release-artifacts.yml")
         self.assertEqual(["BetterGI Publish"], data["on"]["workflow_run"]["workflows"])

@@ -1,5 +1,5 @@
 name: 发布构建产物（自动 / 手动补发）
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('手动补发构建 #{0}', inputs.run_id) || format('自动发布构建 #{0}', github.event.workflow_run.id) }}
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('手动补发构建 #{0}', inputs.run_id) || format('自动发布构建 #{0}', github.event.workflow_run.id) }}"
 
 on:
   workflow_run:
