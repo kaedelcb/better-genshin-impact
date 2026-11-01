@@ -972,7 +972,21 @@ public class TpTaskFastDrag
         using (var screen = CaptureToRectArea())
         {
             if (IsInBigMapUiViaAssets(screen)) return true;
-            if (!Bv.IsInMainUi(screen)) return false; // 加载/战斗过渡/弹窗期间不盲按 M。
+            if (!Bv.IsInMainUi(screen))
+            {
+                // 仅处理明确识别到的派蒙菜单；未知界面继续交给原有60秒保护。
+                using var menuBag = screen.Find(RecognitionAssets.Get("AutoWood", "MenuBag", screen));
+                if (!menuBag.IsExist()) return false;
+                if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+                    && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
+                ct.ThrowIfCancellationRequested();
+                Logger.LogInformation("环境恢复检测到派蒙菜单，退出后重新尝试开图");
+                // 每轮探测只按一次 Esc，等待动画后重新截图，未回主界面绝不开图。
+                InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+                await Delay(900, ct);
+                using var restored = CaptureToRectArea();
+                if (!Bv.IsInMainUi(restored)) return false;
+            }
         }
         if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
             && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
