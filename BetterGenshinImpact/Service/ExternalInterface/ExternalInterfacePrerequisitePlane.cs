@@ -174,7 +174,7 @@ internal static class ExternalInterfacePrerequisitePlane
         var capability = new OneDragonAccountCapability(); // I6：每操作新实例，临时状态天然隔离
         var switched = await AccountUidSequence.EnsureAsync(
             token => capability.VerifyAccountUidStrictAsync(uid, token),
-            (switchTime, token) => capability.SwitchAccountAsync(uid, bindingCode, token, switchTime), ct);
+            (switchTime, token) => capability.SwitchAccountAsync(uid, bindingCode, token, switchTime), ct, _logger);
         _logger.LogInformation("[prerequisite.account] {Action}，UID 验证完成：{Uid}",
             switched ? "切号后复验" : "当前账号匹配，无需切号", Helpers.SensitiveTextMask.MaskUid(uid));
         return switched ? "switched_and_verified" : "already_verified";
