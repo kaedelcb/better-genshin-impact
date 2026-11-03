@@ -63,6 +63,7 @@ public class MistletoeWebGateTests
         const string operation = "bgi.update.catalog";
         Task<object> Execute(JsonObject request, bool local) => vm.ExecuteMistletoeWebCoreAsync(request, "r", local, Recorder(seen));
         Assert.Equal("denied", Reply(await Execute(Request(operation), false))["status"]!.GetValue<string>());
+        Assert.Equal("denied", Reply(await Execute(Request("bgi.update.hint"), false))["status"]!.GetValue<string>());
         Assert.Equal("rejected", Reply(await Execute(Request(operation, "different"), true))["status"]!.GetValue<string>());
         var (code, _) = vm.WebOwners.CreateCode();
         var (browser, secret) = vm.WebOwners.Redeem(code, "更新测试");
@@ -70,6 +71,9 @@ public class MistletoeWebGateTests
         var local = Reply(await Execute(Request(operation), true));
         Assert.Equal("ok", remote["status"]!.GetValue<string>());
         Assert.Equal("ok", local["status"]!.GetValue<string>());
+        var hint = Reply(await Execute(Request("bgi.update.hint", browserId: browser, secret: secret), false));
+        Assert.Equal("ok", hint["status"]!.GetValue<string>());
+        Assert.False(hint["data"]!["available"]!.GetValue<bool>());
         Assert.Equal("autoBGI源", remote["data"]!["sources"]!.AsArray().Single(s => s!["id"]!.GetValue<string>() == "cnb")!["name"]!.GetValue<string>());
         Assert.Empty(seen);
 

@@ -10,6 +10,46 @@
         return mtTargets().find(t => t.uid === member?.playerUid && t.instanceId === member?.clientInstanceId && allowed(t));
     }
 
+    const hints = new Map();
+    const hintKey = target => JSON.stringify([target.local ? 'local' : roomCode, target.key, mtCredentialFor(target)?.browserId || '']);
+    function renderVersion(member) {
+        const version = String(member.bgiVersion || '版本未上报');
+        if (!member.bgiVersion || !member.clientInstanceId) return escapeHtml(version);
+        // 长版本号可以折行，最后几个字符与小点保持在同一行。
+        return escapeHtml(version.slice(0, -5)) + '<span class="bgi-version-tail">' + escapeHtml(version.slice(-5)) +
+            '<button type="button" class="bgi-update-dot" data-ui="bgi-update" data-uid="' + escapeHtml(member.playerUid) +
+            '" data-instance="' + escapeHtml(member.clientInstanceId) +
+            '" aria-label="有 BGI 更新，点击查看" title="有 BGI 更新，点击查看" hidden></button></span>';
+    }
+
+    function refreshHints(fetch = true) {
+        const buttons = document.querySelectorAll('.bgi-update-dot');
+        if (!buttons.length) return;
+        const targets = new Map(mtTargets().filter(t => allowed(t) && mtTargetReady(t)).map(t => [t.instanceId, t]));
+        const now = Date.now();
+        let changed = false;
+        for (const button of buttons) {
+            const target = targets.get(button.dataset.instance);
+            const valid = target && target.uid === button.dataset.uid;
+            const key = valid ? hintKey(target) : null;
+            const current = hints.get(key);
+            const visible = !!current?.sourceId && now - current.at < 30000;
+            if (button.hidden === visible) { button.hidden = !visible; changed = true; }
+            if (!fetch || document.hidden || !valid || current?.pending || (current && now - current.at < 15000)) continue;
+
+            const entry = { pending: true, at: current?.at ?? now, sourceId: current?.sourceId };
+            hints.set(key, entry);
+            mtSend('bgi.update.hint', undefined, { target }).then(reply => {
+                entry.sourceId = reply.status === 'ok' && reply.data?.available === true ? reply.data.sourceId : null;
+            }).catch(() => { entry.sourceId = null; }).finally(() => {
+                entry.at = Date.now(); entry.pending = false;
+                refreshHints(false);
+            });
+        }
+        for (const [key, entry] of hints) if (!entry.pending && now - entry.at >= 30000) hints.delete(key);
+        if (changed) scheduleMemberCardAlignment();
+    }
+
     function open(member) {
         if (document.getElementById('bgiUpdateDialog')) return;
         const targets = mtTargets().filter(allowed);
@@ -58,6 +98,7 @@
                 const name = data?.packages?.find(p => p.id === packages.value)?.fileName;
                 const sourceId = sources.value;
                 pending = null; remember(target, null); data = null;
+                hints.delete(hintKey(target)); refreshHints();
                 setTimeout(() => load(sourceId, name), 0); // 发起后票据已消耗，刷新后可继续安装刚下载的包。
             }
             if (!value.done && !pending) { pending = value.id; remember(target, pending); }
@@ -171,9 +212,9 @@
             };
         }
         dlg.showModal();
-        if (target) load();
+        if (target) load(hints.get(hintKey(target))?.sourceId);
     }
 
-    window.bgiWebUpdate = { targetFor, open };
+    window.bgiWebUpdate = { targetFor, open, renderVersion, refreshHints };
     document.getElementById('bgiUpdateNav')?.addEventListener('click', () => open());
 })();

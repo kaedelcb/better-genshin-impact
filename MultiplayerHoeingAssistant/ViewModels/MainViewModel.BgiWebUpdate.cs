@@ -54,6 +54,12 @@ public partial class MainViewModel
         object Reply(string status, string message, object? data = null) => WebReply(status, message, data, instanceId: instance);
         switch (operation)
         {
+            case "bgi.update.hint":
+            {
+                // 只读取助手已有的启动检查结果，不从网页发起网络查包。
+                var sourceId = AvailableBgiUpdateSourceId;
+                return Reply("ok", "", new { available = sourceId != null, sourceId });
+            }
             case "bgi.update.catalog":
             {
                 if (!CanEditConfiguration) return Reply("rejected", ConfigTransferBlockedMessage);
