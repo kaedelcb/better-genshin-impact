@@ -58,16 +58,16 @@ internal static class PickupCombatScriptExecutor
     private static bool IsPickupPress(CombatCommand command) => command.Method == Method.KeyPress
         && command.Args is { Count: 1 } args && User32Helper.ToVk(args[0]) == User32.VK.VK_F;
 
-    internal static Task ExecuteAsync(CombatScript script, CombatScenes scenes, CancellationToken routeToken, CancellationToken reachedToken)
+    internal static Task<bool> ExecuteAsync(CombatScript script, CombatScenes scenes, CancellationToken routeToken,
+        CancellationToken reachedToken, ILogger logger)
     {
-        if (!script.AvatarNames.Contains(CombatScriptParser.CurrentAvatarName)
-            && !scenes.GetAvatars().Any(avatar => script.AvatarNames.Contains(avatar.Name)))
+        if (!CombatScriptExecutor.HasRequiredAvatar(script, scenes, logger))
         {
-            Common.TaskControl.Logger.LogError("简易策略脚本要求的角色不存在！队伍中需要存在下面角色中的一个或多个：{AvatarNames}", string.Join(", ", script.AvatarNames));
-            return Task.CompletedTask;
+            // 保持既有语义：缺角色只记日志，不视作指令报错。
+            return Task.FromResult(true);
         }
 
-        return RunWithOwnedInputsAsync(InputHub.Foreground, routeToken, reachedToken, async (held, stop) =>
+        return RunWithOwnedInputsAsync(InputHub.Foreground, routeToken, reachedToken, logger, async (held, stop) =>
         {
             var commands = script.CombatCommands;
             var leadingPickupCount = 0;
@@ -79,7 +79,7 @@ internal static class PickupCombatScriptExecutor
                 stop.ThrowIfCancellationRequested();
                 if (i != 0 && i == leadingPickupCount)
                 {
-                    // 先给原有 F 的结果一点时间；过程中日志仍可立即打断，不追加拾取输入。
+                    // 先给原有 F 的结果一点时间；过程中拾取达标仍可立即打断，不追加拾取输入。
                     await WaitAsync(InitialPickupWaitMs, stop);
                 }
 
@@ -158,11 +158,12 @@ internal static class PickupCombatScriptExecutor
         stop.ThrowIfCancellationRequested();
     }
 
-    internal static async Task RunWithOwnedInputsAsync(IInputChannel channel, CancellationToken routeToken,
-        CancellationToken reachedToken, Func<HeldInputs, CancellationToken, Task> run)
+    internal static async Task<bool> RunWithOwnedInputsAsync(IInputChannel channel, CancellationToken routeToken,
+        CancellationToken reachedToken, ILogger logger, Func<HeldInputs, CancellationToken, Task> run)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(routeToken, reachedToken);
         var held = new HeldInputs(channel);
+        var completed = false;
         try
         {
             try
@@ -170,6 +171,14 @@ internal static class PickupCombatScriptExecutor
                 linked.Token.ThrowIfCancellationRequested();
                 await run(held, linked.Token);
                 linked.Token.ThrowIfCancellationRequested();
+                completed = true;
+            }
+            catch (Exception ex) when (!held.ReleaseFailed && ex is not OperationCanceledException)
+            {
+                if (CombatScriptExecutor.LogCommandFailureAndCheckRetry(ex, logger))
+                {
+                    throw;
+                }
             }
             finally
             {
@@ -182,11 +191,16 @@ internal static class PickupCombatScriptExecutor
             reachedToken.ThrowIfCancellationRequested();
             throw;
         }
+
+        routeToken.ThrowIfCancellationRequested();
+        return completed;
     }
 
     internal sealed class HeldInputs(IInputChannel channel)
     {
         private readonly HashSet<User32.VK> _owned = [];
+
+        internal bool ReleaseFailed { get; private set; }
 
         internal void Press(User32.VK key)
         {
@@ -198,8 +212,17 @@ internal static class PickupCombatScriptExecutor
 
         internal void Release(User32.VK key)
         {
-            channel.Keyboard.KeyUp(key);
-            _owned.Remove(key);
+            try
+            {
+                channel.Keyboard.KeyUp(key);
+                _owned.Remove(key);
+            }
+            catch
+            {
+                // 松键失败不能降级成普通命令错误；finally 仍会重试本节点拥有的键。
+                ReleaseFailed = true;
+                throw;
+            }
         }
 
         internal void ReleaseOwned()

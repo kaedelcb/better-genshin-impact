@@ -543,48 +543,19 @@ namespace BetterGenshinImpact.GameTask
                     PictureInPictureService.Hide();
                 }
 
-                PickupRowObservation pickupObservation = default;
-                PickupObtainedRowDetectionStats pickupDetection = default;
-                var sampledPickup = false;
-                if (pickup != null && isNewPickupFrame && (active || !window.RequiresForeground)
-                    && !RunnerContext.Instance.IsSuspend && !IsSuspendedByNetwork && !IsSuspendedByWindow)
-                {
-                    try
-                    {
-                        // CaptureContent 可能缩放并释放原图，精确颜色必须先在原始像素上取样。
-                        pickupObservation = PickupObtainedRowDetector.Detect(bitmap, out pickupDetection);
-                        sampledPickup = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        pickup.ReportFrameError(ex);
-                    }
-                }
+                // CaptureContent 可能缩放并释放原图；颜色只在原始像素上取样。
+                var pickupSample = pickup != null && isNewPickupFrame && (active || !window.RequiresForeground)
+                    && !RunnerContext.Instance.IsSuspend && !IsSuspendedByNetwork && !IsSuspendedByWindow
+                    ? pickup.SampleRawFrame(bitmap) : null;
 
                 // 循环执行所有触发器 有独占状态的触发器的时候只执行独占触发器
                 using var content = new CaptureContent(bitmap, _frameIndex, _timer.Interval);
                 ChatUiHotkeyGuard.UpdateVisualState(Bv.DetectChatUi(content.CaptureRectArea));
 
-                if (pickup != null)
-                {
-                    try
-                    {
-                        if ((!active && window.RequiresForeground) || RunnerContext.Instance.IsSuspend
-                            || IsSuspendedByNetwork || IsSuspendedByWindow)
-                            pickup.Observe(PickupRowObservation.Interrupted);
-                        else if (sampledPickup)
-                        {
-                            if (Bv.IsInMainUi(content.CaptureRectArea))
-                                pickup.ObserveFrame(pickupObservation, pickupDetection, pickupFrameTime, _timer.Interval);
-                            else
-                                pickup.Observe(PickupRowObservation.Interrupted);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        pickup.ReportFrameError(ex);
-                    }
-                }
+                pickup?.AcceptSample(pickupSample, content.CaptureRectArea,
+                    (!active && window.RequiresForeground) || RunnerContext.Instance.IsSuspend
+                        || IsSuspendedByNetwork || IsSuspendedByWindow,
+                    pickupFrameTime, _timer.Interval);
 
                 if (!hasEnabledTriggers)
                 {

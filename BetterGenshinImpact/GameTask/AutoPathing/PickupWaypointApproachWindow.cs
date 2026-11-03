@@ -68,6 +68,31 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
     internal bool IsDepartureFor(int waypointIndex) =>
         _departureResumeIndex.HasValue && waypointIndex == _ownerIndex + 1;
 
+    internal Action<Point2f>? WithDepartureObserver(IReadOnlyList<Waypoint> segment, int currentIndex,
+        Func<Waypoint, bool> canObserve, Action<Point2f>? observeApproach)
+    {
+        if (!IsDepartureFor(currentIndex))
+            return observeApproach;
+
+        var owner = segment[currentIndex - 1];
+        // 下一点的归属边界与能否提前开启它的观察独立：补捡点有动作时也不能串计。
+        var nextPickup = currentIndex + 1 < segment.Count && IsPickupTarget(segment[currentIndex + 1])
+            && SharesPositionSpace(owner, segment[currentIndex + 1]) ? segment[currentIndex + 1] : null;
+
+        return position =>
+        {
+            var approachingNextPickup = nextPickup != null && IsWithinStartDistance(nextPickup, position, out _);
+            ObserveDeparturePosition(currentIndex, owner,
+                !approachingNextPickup && canObserve(owner) ? position : default);
+            if (!IsDepartureFor(currentIndex))
+                observeApproach?.Invoke(position);
+        };
+    }
+
+    internal static bool SharesPositionSpace(Waypoint origin, Waypoint next)
+        => origin is not WaypointForTrack from || next is not WaypointForTrack to
+           || (from.MapName == to.MapName && from.MapMatchMethod == to.MapMatchMethod);
+
     internal void ObserveDeparturePosition(int waypointIndex, Waypoint owner, Point2f position)
     {
         if (!IsDepartureFor(waypointIndex))
@@ -135,4 +160,77 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         _disposed = true;
         Clear();
     }
+}
+
+internal static class PickupWaypointSkipDecisions
+{
+    internal static int? GetResumeIndex(IReadOnlyList<Waypoint> segment, int currentIndex, int skipCount)
+        => GetResumeIndex(segment, currentIndex, skipCount, out _);
+
+    internal static int? GetResumeIndex(IReadOnlyList<Waypoint> segment, int currentIndex, int skipCount, out string? reason)
+        => GetResumeIndex(segment, currentIndex, skipCount, isLastSegment: false, out reason);
+
+    internal static int? GetResumeIndex(IReadOnlyList<Waypoint> segment, int currentIndex, int skipCount,
+        bool isLastSegment, out string? reason)
+    {
+        // 路线按传送点分段。仅最后一段可恰好跳完，直接结束整条路线。
+        if (currentIndex < 0 || currentIndex >= segment.Count || skipCount <= 0)
+        {
+            reason = "当前点或跳点数量无效";
+            return null;
+        }
+
+        var remaining = segment.Count - currentIndex - 1;
+        if (skipCount > remaining || (skipCount == remaining && !isLastSegment))
+        {
+            reason = $"当前传送段只剩 {remaining} 个点，跳过 {skipCount} 个点后无法在本段保留续接点";
+            return null;
+        }
+
+        var resumeIndex = currentIndex + skipCount + 1;
+        if (resumeIndex < segment.Count && !IsMovementPoint(segment[resumeIndex]))
+        {
+            reason = $"跳过后的续接点（后第 {skipCount + 1} 点）不是可走到的点位，type={segment[resumeIndex].Type}";
+            return null;
+        }
+
+        for (var index = currentIndex + 1; index < resumeIndex; index++)
+        {
+            var point = segment[index];
+            if (!IsMovementPoint(point) || !string.IsNullOrWhiteSpace(point.SyncPointId)
+                || !IsPickupDetourAction(point.Action))
+            {
+                var sync = string.IsNullOrWhiteSpace(point.SyncPointId) ? "" : "，是同步点";
+                reason = $"后第 {index - currentIndex} 点不可跳过，type={point.Type}，action={point.Action ?? "(空)"}{sync}";
+                return null;
+            }
+        }
+
+        reason = null;
+        return resumeIndex;
+    }
+
+    internal static int? GetDepartureResumeIndex(IReadOnlyList<Waypoint> segment, int ownerIndex, int? plannedResume)
+    {
+        if (ownerIndex < 0 || ownerIndex >= segment.Count || plannedResume is not { } resume
+            || resume <= ownerIndex + 1 || resume > segment.Count)
+            return null;
+
+        var owner = segment[ownerIndex];
+        for (var index = ownerIndex + 1; index < resume; index++)
+        {
+            var point = segment[index];
+            if (point.PickupTargetCount.HasValue || !PickupWaypointApproachWindow.SharesPositionSpace(owner, point))
+                return index == ownerIndex + 1 ? null : index;
+        }
+
+        return resume;
+    }
+
+    private static bool IsMovementPoint(Waypoint point)
+        => point.Type == WaypointType.Path.Code || point.Type == WaypointType.Target.Code;
+
+    private static bool IsPickupDetourAction(string? action)
+        => string.IsNullOrEmpty(action) || action == ActionEnum.CombatScript.Code
+            || action == ActionEnum.PickAround.Code || action == ActionEnum.PickUpCollect.Code;
 }

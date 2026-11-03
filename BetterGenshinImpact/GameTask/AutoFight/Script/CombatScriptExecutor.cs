@@ -49,17 +49,9 @@ public static class CombatScriptExecutor
                 combatScenes.BeforeTask(ct);
             }
 
-            // 提前校验是否存在策略要求的角色
-            // 若脚本中有无前缀的命令（如 a(0.5)），解析后 AvatarNames 会包含 "当前角色" 占位符，
-            // 此时跳过队伍校验是刻意设计：无前缀命令使用当前屏幕上角色，不要求特定角色在队伍中。
-            if (!combatScript.AvatarNames.Contains(CombatScriptParser.CurrentAvatarName))
+            if (!HasRequiredAvatar(combatScript, combatScenes, logger))
             {
-                bool hasAvatar = combatScenes.GetAvatars().Any(avatar => combatScript.AvatarNames.Contains(avatar.Name));
-                if (!hasAvatar)
-                {
-                    logger.LogError("简易策略脚本要求的角色不存在！队伍中需要存在下面角色中的一个或多个：{AvatarNames}", string.Join(", ", combatScript.AvatarNames));
-                    return;
-                }
+                return;
             }
 
             try
@@ -73,14 +65,12 @@ public static class CombatScriptExecutor
                     command.Execute(combatScenes, lastCommand);
                 }
             }
-            catch (RetryException e)
-            {
-                logger.LogWarning("简易策略脚本执行时出现重试异常，原因：{Msg}，重试中...", e.Message);
-                throw;
-            }
             catch (Exception e)
             {
-                logger.LogError(e, "执行简易策略脚本时发生错误！");
+                if (LogCommandFailureAndCheckRetry(e, logger))
+                {
+                    throw;
+                }
             }
         }
         finally
@@ -90,6 +80,31 @@ public static class CombatScriptExecutor
                 SafeDispose(combatScenes!, logger);
             }
         }
+    }
+
+    internal static bool HasRequiredAvatar(CombatScript script, CombatScenes scenes, ILogger logger)
+    {
+        // 无角色前缀的指令使用当前角色，不要求队伍有指定角色。
+        if (script.AvatarNames.Contains(CombatScriptParser.CurrentAvatarName)
+            || scenes.GetAvatars().Any(avatar => script.AvatarNames.Contains(avatar.Name)))
+        {
+            return true;
+        }
+
+        logger.LogError("简易策略脚本要求的角色不存在！队伍中需要存在下面角色中的一个或多个：{AvatarNames}", string.Join(", ", script.AvatarNames));
+        return false;
+    }
+
+    internal static bool LogCommandFailureAndCheckRetry(Exception error, ILogger logger)
+    {
+        if (error is RetryException)
+        {
+            logger.LogWarning("简易策略脚本执行时出现重试异常，原因：{Msg}，重试中...", error.Message);
+            return true;
+        }
+
+        logger.LogError(error, "执行简易策略脚本时发生错误！");
+        return false;
     }
 
     /// <summary>

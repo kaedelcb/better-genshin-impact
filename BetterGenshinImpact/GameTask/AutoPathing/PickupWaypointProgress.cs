@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using BetterGenshinImpact.GameTask.Common.BgiVision;
+using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
+using Mat = OpenCvSharp.Mat;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
@@ -94,6 +97,42 @@ internal sealed class PickupWaypointProgress : IDisposable
 
     private bool IsDeparturePositionFresh() => _departurePositionAt != 0
         && Stopwatch.GetElapsedTime(_departurePositionAt).TotalMilliseconds <= DeparturePositionMaxAgeMs;
+
+    internal (PickupRowObservation Observation, PickupObtainedRowDetectionStats Detection)? SampleRawFrame(Mat bitmap)
+    {
+        try
+        {
+            var observation = PickupObtainedRowDetector.Detect(bitmap, out var detection);
+            return (observation, detection);
+        }
+        catch (Exception ex)
+        {
+            ReportFrameError(ex);
+            return null;
+        }
+    }
+
+    internal void AcceptSample(
+        (PickupRowObservation Observation, PickupObtainedRowDetectionStats Detection)? sample,
+        ImageRegion gameView, bool interrupted, long frameTime, double interval)
+    {
+        try
+        {
+            if (interrupted)
+                Observe(PickupRowObservation.Interrupted);
+            else if (sample is { } rawFrame)
+            {
+                if (Bv.IsInMainUi(gameView))
+                    ObserveFrame(rawFrame.Observation, rawFrame.Detection, frameTime, interval);
+                else
+                    Observe(PickupRowObservation.Interrupted);
+            }
+        }
+        catch (Exception ex)
+        {
+            ReportFrameError(ex);
+        }
+    }
 
     internal void ObserveFrame(PickupRowObservation observation, PickupObtainedRowDetectionStats detection,
         long frameTime, double interval)

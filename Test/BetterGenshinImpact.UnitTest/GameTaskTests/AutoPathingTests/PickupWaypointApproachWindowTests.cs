@@ -134,6 +134,36 @@ public sealed class PickupWaypointApproachWindowTests
         Assert.Null(PickupWaypointProgress.Capture());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("combat_script")]
+    [InlineData("pick_around")]
+    public void NeighboringPickupClosesDepartureEvenWhenFallbackActionBlocksItsEarlyObserver(string? fallbackAction)
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        var next = PickupPoint();
+        next.X = 18;
+        next.Y = 20;
+        Waypoint[] segment = [new() { X = 10, Y = 20 }, new() { Action = fallbackAction }, next];
+        Assert.True(window.BeginDeparture(0, 2));
+        window.EnterPoint(1);
+        var approachCalls = 0;
+        Action<Point2f>? nextObserver = PickupWaypointApproachWindow.SelectObservationIndex(segment, 1) == 2
+            ? _ => approachCalls++ : null;
+        var observe = window.WithDepartureObserver(segment, 1, _ => true, nextObserver)!;
+
+        observe(new Point2f(11, 20));
+        Assert.True(window.IsDepartureFor(1));
+        // 同时进入 A、C 的范围；此时 C 的提示不能把 A 从 2/4 补到 4/4。
+        observe(new Point2f(14, 20));
+        SampleRows(progress, 4);
+
+        Assert.Equal(2, progress.Count);
+        Assert.Null(window.FinishDeparture(1));
+        Assert.Equal(fallbackAction == null ? 1 : 0, approachCalls);
+    }
+
     [Fact]
     public void FinishingBeforeTheFallbackActionRejectsLateFramesAndReleasesTheNextObserver()
     {

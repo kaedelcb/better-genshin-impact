@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System;
 using System.Threading;
@@ -32,7 +33,8 @@ public sealed class PickupCombatScriptExecutorTests
         using var reached = new CancellationTokenSource();
         var waitStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var advanced = false;
-        var running = PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, route.Token, reached.Token, async (held, stop) =>
+        var running = PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, route.Token, reached.Token,
+            NullLogger.Instance, async (held, stop) =>
         {
             held.Press(alreadyHeld);
             held.Press(pickupHeld);
@@ -60,10 +62,50 @@ public sealed class PickupCombatScriptExecutorTests
         reached.Cancel();
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, CancellationToken.None, reached.Token,
-                (_, _) => throw new InvalidOperationException("达标后不应开始策略动作")));
+                NullLogger.Instance, (_, _) => throw new InvalidOperationException("达标后不应开始策略动作")));
 
         Assert.Equal(reached.Token, error.CancellationToken);
         channel.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvalidMoveCommandDoesNotAbortRouteUnlessOwnedKeyCannotBeReleased(bool releaseFails)
+    {
+        var keyboard = new Mock<IKeyboardInput>(MockBehavior.Strict);
+        var channel = new Mock<IInputChannel>(MockBehavior.Strict);
+        var key = User32.VK.VK_E;
+        channel.SetupGet(x => x.Keyboard).Returns(keyboard.Object);
+        channel.Setup(x => x.IsKeyDown(key)).Returns(false);
+        keyboard.Setup(x => x.KeyDown(key)).Returns(keyboard.Object);
+        var keyUp = keyboard.Setup(x => x.KeyUp(key));
+        var releaseError = new InvalidOperationException("松键失败");
+        if (releaseFails)
+            keyUp.Throws(releaseError);
+        else
+            keyUp.Returns(keyboard.Object);
+
+        var badCommand = new CombatCommand("万叶", "moveby(foo,0)");
+        var running = PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, CancellationToken.None,
+            CancellationToken.None, NullLogger.Instance, (held, _) =>
+            {
+                held.Press(key);
+                badCommand.Execute(avatar: null!); // 解析坐标时抛错，尚未发送移动操作。
+                return Task.CompletedTask;
+            });
+
+        if (releaseFails)
+        {
+            var error = await Assert.ThrowsAsync<AggregateException>(() => running);
+            Assert.Same(releaseError, Assert.Single(error.InnerExceptions));
+        }
+        else
+        {
+            Assert.False(await running);
+        }
+
+        keyboard.Verify(x => x.KeyUp(key), Times.Once);
     }
 
     [Fact]

@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
-using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using Microsoft.Extensions.Logging;
 using static BetterGenshinImpact.GameTask.Common.TaskControl;
-using BetterGenshinImpact.GameTask.AutoFight.Model;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 
@@ -99,7 +96,13 @@ public class CombatScriptHandler : IActionHandler
 
             try
             {
-                await PickupCombatScriptExecutor.ExecuteAsync(combatScript, combatScenes, ct, pickup.ReachedToken);
+                if (!await PickupCombatScriptExecutor.ExecuteAsync(combatScript, combatScenes, ct, pickup.ReachedToken, Logger))
+                {
+                    // 普通命令错误只结束本节点动作，不以失败节点的计数跳过后续点。
+                    pickup.Dispose();
+                    ct.ThrowIfCancellationRequested();
+                    return false;
+                }
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == pickup.ReachedToken
                 && pickup.ReachedToken.IsCancellationRequested)
