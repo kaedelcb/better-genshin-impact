@@ -1496,7 +1496,8 @@ public partial class PathExecutor
                                 {
                                     var pickupProgress = pickupWindow.GetForPoint(waypointIndex, out var plannedPickupResume);
                                     if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint))
-                                        Logger.LogInformation("【拾取达标】{Point} 未能在距目标 3 个距离单位内开启观察，按原路线执行", pickupPointLabel);
+                                        Logger.LogInformation("【拾取达标】{Point} 未能在距目标 {Distance} 个距离单位内开启观察，按原路线执行",
+                                            pickupPointLabel, PickupWaypointApproachWindow.StartDistance);
                                     pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint,
                                         pickupProgress, plannedPickupResume, pickupPointLabel);
                                 }

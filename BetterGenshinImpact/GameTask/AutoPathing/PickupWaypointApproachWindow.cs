@@ -9,7 +9,7 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 /// <summary>保留当前路线段的一次拾取观察；观察可在上一途经点开启，始终归属目标点。</summary>
 internal sealed class PickupWaypointApproachWindow : IDisposable
 {
-    private const double StartDistance = 3;
+    internal const double StartDistance = 5;
 
     private int _ownerIndex = -1;
     private int? _resumeIndex;

@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
@@ -13,7 +12,6 @@ internal sealed class PickupWaypointProgress : IDisposable
     private static PickupWaypointProgress? _active;
 
     private readonly PickupObtainedRowTracker _tracker = new();
-    private readonly TaskCompletionSource _baseline = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _reached = new();
     private readonly int _target;
     private readonly CancellationToken _routeToken;
@@ -21,6 +19,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     private readonly string? _pointLabel;
     private long _lastFrameTime;
     private long _lastDetectionLogTime;
+    private bool _baselineLogged;
     private bool _frameErrorReported;
     private bool _headerFallbackReported;
     private bool _missingHeaderReported;
@@ -59,19 +58,6 @@ internal sealed class PickupWaypointProgress : IDisposable
         var active = Volatile.Read(ref _active);
         return active != null && !active._routeToken.IsCancellationRequested && !active.ReachedToken.IsCancellationRequested
             ? active : null;
-    }
-
-    internal async Task<bool> WaitForBaselineAsync(CancellationToken ct)
-    {
-        try
-        {
-            await _baseline.Task.WaitAsync(TimeSpan.FromMilliseconds(400), ct);
-            return true;
-        }
-        catch (TimeoutException)
-        {
-            return false;
-        }
     }
 
     internal void ObserveFrame(PickupRowObservation observation, PickupObtainedRowDetectionStats detection,
@@ -115,7 +101,8 @@ internal sealed class PickupWaypointProgress : IDisposable
                 return;
 
             update = _tracker.Observe(observation);
-            establishedBaseline = update.BaselineReady && _baseline.TrySetResult();
+            establishedBaseline = update.BaselineReady && !_baselineLogged;
+            _baselineLogged |= establishedBaseline;
             if (update.AddedRows > 0)
             {
                 _count += Math.Min(update.AddedRows, int.MaxValue - _count);

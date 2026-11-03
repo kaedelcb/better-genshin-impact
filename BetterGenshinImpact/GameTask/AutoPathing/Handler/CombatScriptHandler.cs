@@ -44,13 +44,7 @@ public class CombatScriptHandler : IActionHandler
     internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint,
         PickupWaypointProgress pickup, string? pointLabel)
     {
-        if (!await pickup.WaitForBaselineAsync(ct))
-        {
-            pickup.Dispose();
-            Logger.LogWarning("【拾取达标】{Point} 未取得稳定的列表基线，按原路线执行", pointLabel);
-            return await RunCoreAsync(ct, waypoint, null, null);
-        }
-
+        // 观察已在移动时启动；基线尚未就绪时继续观察，不阻塞节点动作。
         // 靠近时已经拾够：移动照常到点，完全不发送节点策略指令。
         if (pickup.ReachedToken.IsCancellationRequested)
             return FinishPickup(ct, pickup, waypoint, pointLabel);

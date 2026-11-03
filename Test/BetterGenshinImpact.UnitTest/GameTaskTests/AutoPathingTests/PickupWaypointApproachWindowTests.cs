@@ -33,12 +33,12 @@ public sealed class PickupWaypointApproachWindowTests
     }
 
     [Fact]
-    public void DistanceUsesFreshCoordinatesAndIncludesThreeButNotBeyond()
+    public void DistanceUsesFreshCoordinatesAndIncludesFiveButNotBeyond()
     {
         var target = new Waypoint { X = 10, Y = 20 };
-        Assert.True(PickupWaypointApproachWindow.IsWithinStartDistance(target, new Point2f(13, 20), out var distance));
-        Assert.Equal(3, distance);
-        Assert.False(PickupWaypointApproachWindow.IsWithinStartDistance(target, new Point2f(13.01f, 20), out _));
+        Assert.True(PickupWaypointApproachWindow.IsWithinStartDistance(target, new Point2f(15, 20), out var distance));
+        Assert.Equal(5, distance);
+        Assert.False(PickupWaypointApproachWindow.IsWithinStartDistance(target, new Point2f(15.01f, 20), out _));
         Assert.False(PickupWaypointApproachWindow.IsWithinStartDistance(new Waypoint(), default, out _));
         Assert.False(PickupWaypointApproachWindow.IsWithinStartDistance(target, new Point2f(float.NaN, 20), out _));
     }
