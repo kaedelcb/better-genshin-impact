@@ -1707,13 +1707,20 @@ public partial class MainViewModel : INotifyPropertyChanged
             _config.CheckBgiUpdatesOnStartup = value;
             if (!value)
             {
-                _startupBgiUpdateRequest?.Cancel();
+                var previous = _startupBgiUpdateRequest;
+                _startupBgiUpdateRequest = null;
+                previous?.Cancel();
                 _startupBgiUpdate = null;
                 _startupBgiUpdateSourceId = null;
             }
             SaveConfigToDisk();
             OnPropertyChanged();
             NotifyRemoteUpdateStateChanged();
+            if (value)
+            {
+                _startupBgiUpdateAttempted = true;
+                _ = CheckBgiUpdateAsync();
+            }
         }
     }
 
@@ -1731,20 +1738,26 @@ public partial class MainViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(InstalledBgiVersion));
     }
 
-    /// <summary>在助手启动的界面线程调用。设置的开启只影响下一次启动；不启动后台定时轮询。</summary>
-    internal async Task CheckForBgiUpdateOnStartupAsync()
+    /// <summary>每次启动只调用一次；运行中勾选设置也会单独检查一次。</summary>
+    internal Task CheckForBgiUpdateOnStartupAsync()
     {
-        if (_startupBgiUpdateAttempted) return;
+        if (_startupBgiUpdateAttempted) return Task.CompletedTask;
         _startupBgiUpdateAttempted = true;
-        if (_disposing || _config is not { CheckBgiUpdatesOnStartup: true } config) return;
+        return CheckBgiUpdateAsync();
+    }
 
-        var source = BgiUpdateSources.SelectStartupSource(config);
+    private async Task CheckBgiUpdateAsync()
+    {
+        if (_disposing || _startupBgiUpdateRequest != null || _config is not { CheckBgiUpdatesOnStartup: true } config) return;
+
         using var cancellation = new CancellationTokenSource();
         _startupBgiUpdateRequest = cancellation;
         try
         {
+            var source = BgiUpdateSources.SelectStartupSource(config);
             var result = await BgiRemoteUpdateService.FetchSourceAsync(source, cancellation.Token);
-            if (cancellation.IsCancellationRequested || _disposing || !CheckBgiUpdatesOnStartup) return;
+            if (!ReferenceEquals(_startupBgiUpdateRequest, cancellation) || cancellation.IsCancellationRequested
+                || _disposing || !CheckBgiUpdatesOnStartup) return;
             _startupBgiUpdate = result.Packages.FirstOrDefault();
             _startupBgiUpdateSourceId = source.Id;
             NotifyRemoteUpdateStateChanged();
@@ -1752,9 +1765,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            if (!_disposing) AddLog($"[更新] 启动检查未完成：{ex.Message}");
+            if (!_disposing && ReferenceEquals(_startupBgiUpdateRequest, cancellation)) AddLog($"[更新] 更新检查未完成：{ex.Message}");
         }
-        finally { _startupBgiUpdateRequest = null; }
+        finally
+        {
+            if (ReferenceEquals(_startupBgiUpdateRequest, cancellation)) _startupBgiUpdateRequest = null;
+        }
     }
 
     /// <summary>

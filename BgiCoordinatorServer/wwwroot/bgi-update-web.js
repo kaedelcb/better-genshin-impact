@@ -11,6 +11,7 @@
     }
 
     const hints = new Map();
+    let hintTimer = 0;
     const hintKey = target => JSON.stringify([target.local ? 'local' : roomCode, target.key, mtCredentialFor(target)?.browserId || '']);
     function renderVersion(member) {
         const version = String(member.bgiVersion || '版本未上报');
@@ -23,10 +24,13 @@
     }
 
     function refreshHints(fetch = true) {
+        clearTimeout(hintTimer);
         const buttons = document.querySelectorAll('.bgi-update-dot');
         if (!buttons.length) return;
+        const pageVisible = !document.hidden && !document.getElementById('homeView')?.hidden;
         const targets = new Map(mtTargets().filter(t => allowed(t) && mtTargetReady(t)).map(t => [t.instanceId, t]));
         const now = Date.now();
+        let nextRead = Infinity;
         let changed = false;
         for (const button of buttons) {
             const target = targets.get(button.dataset.instance);
@@ -35,19 +39,27 @@
             const current = hints.get(key);
             const visible = !!current?.sourceId && now - current.at < 30000;
             if (button.hidden === visible) { button.hidden = !visible; changed = true; }
-            if (!fetch || document.hidden || !valid || current?.pending || (current && now - current.at < 15000)) continue;
+            if (!pageVisible || !valid || current?.pending) continue;
+            if (!fetch || (current && now < current.retryAt)) {
+                nextRead = Math.min(nextRead, current?.retryAt ?? now);
+                continue;
+            }
 
-            const entry = { pending: true, at: current?.at ?? now, sourceId: current?.sourceId };
+            const entry = { pending: true, at: current?.at ?? now, sourceId: current?.sourceId, retryDelay: 15000 };
             hints.set(key, entry);
             mtSend('bgi.update.hint', undefined, { target }).then(reply => {
                 entry.sourceId = reply.status === 'ok' && reply.data?.available === true ? reply.data.sourceId : null;
+                if (reply.status === 'ok') entry.retryDelay = 3000;
             }).catch(() => { entry.sourceId = null; }).finally(() => {
                 entry.at = Date.now(); entry.pending = false;
+                entry.retryAt = entry.at + entry.retryDelay;
                 refreshHints(false);
             });
         }
         for (const [key, entry] of hints) if (!entry.pending && now - entry.at >= 30000) hints.delete(key);
         if (changed) scheduleMemberCardAlignment();
+        // 只在可见的成员页读取执行端已有的提示状态；不检查网络安装包，也不需要房间广播变化。
+        if (Number.isFinite(nextRead)) hintTimer = setTimeout(refreshHints, Math.max(0, nextRead - Date.now()));
     }
 
     function open(member) {
@@ -216,5 +228,6 @@
     }
 
     window.bgiWebUpdate = { targetFor, open, renderVersion, refreshHints };
+    document.addEventListener('visibilitychange', () => refreshHints());
     document.getElementById('bgiUpdateNav')?.addEventListener('click', () => open());
 })();

@@ -401,7 +401,7 @@
                             <StackPanel>
                                 <TextBlock Text="启动时检查 BGI 更新" FontSize="13" FontWeight="Medium"
                                            Foreground="{DynamicResource White}"/>
-                                <TextBlock Text="下次启动助手时检查一次。有更新会在自己的版本号右边显示小点。"
+                                <TextBlock Text="勾选后立即检查一次，以后每次启动时检查一次。有新版会在自己的版本号旁显示小点。"
                                            FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                         </CheckBox>
