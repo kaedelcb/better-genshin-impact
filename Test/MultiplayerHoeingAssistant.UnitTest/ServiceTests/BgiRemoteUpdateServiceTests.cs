@@ -15,6 +15,23 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 /// </summary>
 public class BgiRemoteUpdateServiceTests
 {
+    [Fact]
+    public void StartupCheck_DefaultsOffForOldConfig_UsesPreferredNetworkSource()
+    {
+        var config = JsonSerializer.Deserialize<AssistConfig>("""{"serverUrl":"https://coordinator.example"}""")!;
+        Assert.False(config.CheckBgiUpdatesOnStartup);
+        Assert.Equal(BgiUpdateSourceKind.Coordinator, BgiUpdateSources.SelectStartupSource(config).Kind);
+        config.StandaloneMode = true;
+        config.BgiUpdateSourceId = BgiUpdateSources.LocalId;
+        Assert.Equal(BgiUpdateSourceKind.GitHubReleases, BgiUpdateSources.SelectStartupSource(config).Kind);
+        config.BgiUpdateSourceId = "github-actions";
+        Assert.Equal(BgiUpdateSourceKind.GitHubActions, BgiUpdateSources.SelectStartupSource(config).Kind);
+        const string manifest = "https://mirror.example/latest.json";
+        config.BgiCustomUpdateSources = [new("镜像", manifest)];
+        config.BgiUpdateSourceId = BgiUpdateSources.List(config).Single(s => s.Kind == BgiUpdateSourceKind.Custom).Id;
+        Assert.Equal(manifest, BgiUpdateSources.SelectStartupSource(config).Endpoint!.AbsoluteUri);
+    }
+
     // ===== 清单解析 =====
 
     [Fact]

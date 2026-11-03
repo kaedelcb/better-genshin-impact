@@ -58,6 +58,14 @@ public static class BgiUpdateSources
         return true;
     }
 
+    public static BgiUpdateSource SelectStartupSource(AssistConfig config)
+    {
+        var sources = List(config);
+        return sources.Find(s => s.Endpoint != null && s.Id == config.BgiUpdateSourceId)
+            ?? (config.StandaloneMode ? null : sources.Find(s => s.Kind == BgiUpdateSourceKind.Coordinator))
+            ?? sources.First(s => s.Kind == BgiUpdateSourceKind.GitHubReleases);
+    }
+
     internal static bool TryHttpUri(string? value, bool httpsOnly, out Uri? uri)
     {
         uri = null;

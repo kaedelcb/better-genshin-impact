@@ -131,6 +131,7 @@ public partial class SettingsWindow : Window
             AutoLaunchWithBgiMinimized = _configCopy?.AutoLaunchWithBgiMinimized ?? true,
             AutoLaunchOnBoot = _configCopy?.AutoLaunchOnBoot ?? false,
             AutoLaunchOnBootMinimized = _configCopy?.AutoLaunchOnBootMinimized ?? true,
+            CheckBgiUpdatesOnStartup = _configCopy?.CheckBgiUpdatesOnStartup ?? false,
             GuardBgi = _configCopy?.GuardBgi ?? false,
             // 实例标识必须保留：被清空后重新入房时服务端无法按 (UID, ClientInstanceId) 回收旧条目，
             // 会追加新条目并残留离线幽灵条目，导致成员"假离线"（在线状态被幽灵条目覆盖）

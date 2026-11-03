@@ -376,7 +376,7 @@
                     </Border>
 
                     <!-- ③ 守护 BGI（监控模式下隐藏：本机不创建 BGI 进程监控器） -->
-                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10"
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10" Margin="0,0,0,10"
                             Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -392,6 +392,19 @@
                                            FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
                             </StackPanel>
                         </Grid>
+                    </Border>
+
+                    <Border Background="#1E262660" CornerRadius="8" Padding="12,10">
+                        <CheckBox x:Name="CheckBgiUpdatesOnStartupBox" IsChecked="{Binding CheckBgiUpdatesOnStartup, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditConfiguration}" Style="{DynamicResource GuildCheckBox}"
+                                  AutomationProperties.Name="启动时检查 BGI 更新">
+                            <StackPanel>
+                                <TextBlock Text="启动时检查 BGI 更新" FontSize="13" FontWeight="Medium"
+                                           Foreground="{DynamicResource White}"/>
+                                <TextBlock Text="下次启动助手时检查一次。有更新会在自己的版本号右边显示小点。"
+                                           FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </CheckBox>
                     </Border>
 
                     </StackPanel>

@@ -88,6 +88,9 @@ public class AssistConfig
     [JsonPropertyName("guardBgi")]
     public bool GuardBgi { get; set; } = false;
 
+    [JsonPropertyName("checkBgiUpdatesOnStartup")]
+    public bool CheckBgiUpdatesOnStartup { get; set; }
+
     // ========== 抢占式中断（multiplayer-hoeing-preempt-interrupt spec）==========
 
     /// <summary>定时上线时间（HH:mm），空字符串表示未设置</summary>

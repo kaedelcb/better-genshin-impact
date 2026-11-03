@@ -46,8 +46,7 @@ public partial class UpdateBgiWindow : Window
         ExcludeList.ItemsSource = _excludeDirs;
         BackupExcludeCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
         RefreshCurrentVersion();
-        RebuildSourceChoices(vm.Config?.BgiUpdateSourceId ??
-            (vm.RemoteUpdateAvailable ? BgiUpdateSources.CoordinatorId : BgiUpdateSources.LocalId));
+        RebuildSourceChoices(vm.AvailableBgiUpdateSourceId ?? vm.Config?.BgiUpdateSourceId ?? BgiUpdateSources.LocalId);
         Closed += (_, _) =>
         {
             _sourceCheck?.Cancel();
@@ -446,7 +445,7 @@ public partial class UpdateBgiWindow : Window
                 lines.Add("请重启 BGI 使新版本生效。");
                 MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
-                // 本机版本已变：立即重算"服务器有新版本"判定（金色版本号/提醒条及时熄灭，不等下个 5 分钟轮询）
+                // 本机版本已变，重算启动检查提示点。
                 _vm.NotifyRemoteUpdateStateChanged();
                 StatusText.Text = $"更新完成（{result.ExtractedFiles} 个文件）。";
             }

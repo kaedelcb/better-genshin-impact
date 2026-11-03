@@ -36,14 +36,6 @@ public static class BgiRemoteUpdateService
 
     private static readonly HttpClient DownloadClient = new() { Timeout = Timeout.InfiniteTimeSpan };
 
-    public static async Task<BgiRemoteUpdateInfo?> FetchLatestAsync(string? serverBaseUrl, CancellationToken ct = default)
-    {
-        if (!BgiUpdateSources.TryHttpUri(serverBaseUrl, httpsOnly: false, out var uri) || uri!.Query.Length != 0) return null;
-        var source = new BgiUpdateSource(BgiUpdateSources.CoordinatorId, "协调服务器", BgiUpdateSourceKind.Coordinator,
-            new Uri(BuildManifestUrl(uri.AbsoluteUri)));
-        return (await FetchSourceAsync(source, ct)).Packages.FirstOrDefault();
-    }
-
     public static async Task<BgiUpdateSourceResult> FetchSourceAsync(BgiUpdateSource source, CancellationToken ct = default)
     {
         if (source.Endpoint is not { } endpoint) return new([]);

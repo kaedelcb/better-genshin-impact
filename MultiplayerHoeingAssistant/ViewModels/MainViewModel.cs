@@ -370,8 +370,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         // [离线优先] 本地状态采集循环先于服务器连接启动：采集是本机 IPC 事实源，不依赖 SignalR
         EnsureStatusTimerStarted();
 
-        // 服务器网络更新检测（"网络"来源包）：周期拉 /bgi-update/latest.json，单机模式内部自动跳过
-        StartRemoteUpdateTimer();
+        // 自愿开启的单次更新检查，不等待网络结果再连接房间。
+        _ = CheckForBgiUpdateOnStartupAsync();
 
         // 连接 SignalR（单机模式下由 ConnectSignalRAsync 入口门控直接跳过）
         await ConnectSignalRAsync();
@@ -1437,7 +1437,10 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (!IsTaskStatusPublishable(status, DateTimeOffset.UtcNow, taskStatusFromExternal,
                 taskStatusExpectedExternalEpoch, currentExternalEpoch))
             InvalidateTaskStatus(status);
+        var localVersionChanged = LatestLocalStatus?.BgiVersion != status.BgiVersion;
         LatestLocalStatus = status;
+        if (localVersionChanged && _startupBgiUpdate != null && !_disposing)
+            Application.Current?.Dispatcher.BeginInvoke(new Action(NotifyRemoteUpdateStateChanged));
         // [离线优先] 单机模式/刷新重建窗口 signalRClient 为 null：跳过上报，采集结果已落 LatestLocalStatus
         if (signalRClient == null) return;
         try
@@ -1688,70 +1691,70 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     // ===== 远程配置组编辑（契约见 Docs/远程配置组编辑-实施方案.md §1/§2/§5）=====
 
-    /// <summary>
-    // ===== 服务器网络更新检测（"网络"来源包，/bgi-update/latest.json）=====
+    // ===== 启动时检查 BGI 更新 =====
 
-    private System.Threading.Timer? _remoteUpdateCheckTimer;
-    private int _remoteUpdateChecking;
-    private BgiRemoteUpdateInfo? _remoteBgiUpdate;
+    private bool _startupBgiUpdateAttempted;
+    private CancellationTokenSource? _startupBgiUpdateRequest;
+    private BgiRemoteUpdateInfo? _startupBgiUpdate;
+    private string? _startupBgiUpdateSourceId;
 
-    /// <summary>服务器上检测到的最新更新包（null=未检测到/单机模式/未配置服务器地址）。</summary>
-    public BgiRemoteUpdateInfo? RemoteBgiUpdate
+    public bool CheckBgiUpdatesOnStartup
     {
-        get => IsStandaloneMode ? null : _remoteBgiUpdate;
-        private set
+        get => _config?.CheckBgiUpdatesOnStartup == true;
+        set
         {
-            if (_remoteBgiUpdate == value) return;
-            _remoteBgiUpdate = value;
-            OnPropertyChanged(nameof(RemoteBgiUpdate));
-            OnPropertyChanged(nameof(RemoteUpdateAvailable));
+            if (_config == null || !CanEditConfiguration || _config.CheckBgiUpdatesOnStartup == value) return;
+            _config.CheckBgiUpdatesOnStartup = value;
+            if (!value)
+            {
+                _startupBgiUpdateRequest?.Cancel();
+                _startupBgiUpdate = null;
+                _startupBgiUpdateSourceId = null;
+            }
+            SaveConfigToDisk();
+            OnPropertyChanged();
+            NotifyRemoteUpdateStateChanged();
         }
     }
 
-    /// <summary>服务器有比本机新的版本包：耕地机页版本号变金色、更新弹窗出提醒条。</summary>
-    public bool RemoteUpdateAvailable => RemoteBgiUpdate is { } info
-        && BgiUpdateDecisions.IsNewerThanLocal(info.NameInfo, ResolveLocalBgiVersion());
+    /// <summary>只提示比本机安装目录中的版本新的包。覆盖后可立即读到磁盘的新版本。</summary>
+    public bool RemoteUpdateAvailable => CheckBgiUpdatesOnStartup && _startupBgiUpdate is { } info
+        && BgiUpdateDecisions.IsNewerThanLocal(info.NameInfo, InstalledBgiVersion);
 
-    /// <summary>本机版本可能已变（如刚完成更新）：重新求值 RemoteUpdateAvailable 刷新版本号金色/提醒条。</summary>
+    public string? InstalledBgiVersion => BgiVersionResolver.FromExecutable(_config?.BgiPath) ?? ResolveLocalBgiVersion();
+
+    public string? AvailableBgiUpdateSourceId => RemoteUpdateAvailable ? _startupBgiUpdateSourceId : null;
+
     public void NotifyRemoteUpdateStateChanged()
     {
         OnPropertyChanged(nameof(RemoteUpdateAvailable));
+        OnPropertyChanged(nameof(InstalledBgiVersion));
     }
 
-    private void StartRemoteUpdateTimer()
+    /// <summary>在助手启动的界面线程调用。设置的开启只影响下一次启动；不启动后台定时轮询。</summary>
+    internal async Task CheckForBgiUpdateOnStartupAsync()
     {
-        // 首查延迟 20s（等启动流程稳定），之后每 5 分钟拉一次；单机模式/无服务器地址在检查内部直接跳过
-        _remoteUpdateCheckTimer = new System.Threading.Timer(
-            _ => { try { _ = CheckRemoteUpdateAsync(); } catch { /* 定时器回调绝不逃逸 */ } },
-            null, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(5));
-    }
+        if (_startupBgiUpdateAttempted) return;
+        _startupBgiUpdateAttempted = true;
+        if (_disposing || _config is not { CheckBgiUpdatesOnStartup: true } config) return;
 
-    /// <summary>拉取服务器最新更新包清单并刷新 RemoteBgiUpdate。任意线程可调；返回最新信息（null=无）。失败静默不打扰主流程。</summary>
-    public async Task<BgiRemoteUpdateInfo?> CheckRemoteUpdateAsync()
-    {
-        var baseUrl = _config?.ServerUrl;
-        if (_config is { StandaloneMode: true } || string.IsNullOrWhiteSpace(baseUrl)) return null;
-        if (Interlocked.Exchange(ref _remoteUpdateChecking, 1) == 1) return _remoteBgiUpdate; // 重入去重
+        var source = BgiUpdateSources.SelectStartupSource(config);
+        using var cancellation = new CancellationTokenSource();
+        _startupBgiUpdateRequest = cancellation;
         try
         {
-            var info = await BgiRemoteUpdateService.FetchLatestAsync(baseUrl);
-            var changed = info?.FileName != _remoteBgiUpdate?.FileName;
-            Application.Current?.Dispatcher.Invoke(() => RemoteBgiUpdate = info);
-            if (info != null && changed)
-            {
-                AddLog($"[更新] 检测到服务器更新包 {info.FileName}（{info.SizeText}），点自己卡片的版本号可打开「更新BGI」下载安装");
-            }
-            return info;
+            var result = await BgiRemoteUpdateService.FetchSourceAsync(source, cancellation.Token);
+            if (cancellation.IsCancellationRequested || _disposing || !CheckBgiUpdatesOnStartup) return;
+            _startupBgiUpdate = result.Packages.FirstOrDefault();
+            _startupBgiUpdateSourceId = source.Id;
+            NotifyRemoteUpdateStateChanged();
         }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            try { AddLog($"[更新] 检查服务器更新失败: {ex.Message}"); } catch { /* 日志自身失败不再上抛 */ }
-            return _remoteBgiUpdate;
+            if (!_disposing) AddLog($"[更新] 启动检查未完成：{ex.Message}");
         }
-        finally
-        {
-            Interlocked.Exchange(ref _remoteUpdateChecking, 0);
-        }
+        finally { _startupBgiUpdateRequest = null; }
     }
 
     /// <summary>
@@ -4710,6 +4713,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
+        _startupBgiUpdateRequest?.Cancel();
         StopSignalRRecovery();
         // R4.10 终审复核（重要2/3）退出协议：捕获段前移——同锁内「标志置位（幂等）+捕获引用+字段脱离」原子完成，
         // 后续任何清理抛异常都不得跳过宿主收敛（finally 保证到达）；锁外有界 ShutdownAsync（不持锁等待异步关闭）；
@@ -6524,10 +6528,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(ConfigurationScheduledOnlineMessage));
         OnPropertyChanged(nameof(ConfigurationTransferStatusMessage));
-        // 触发三个 CheckBox 和两个 ComboBox 的 UI 刷新
+        // 启动策略配置可能在界面创建后才加载。
         OnPropertyChanged(nameof(AutoLaunchWithBgi));
         OnPropertyChanged(nameof(AutoLaunchOnBoot));
         OnPropertyChanged(nameof(GuardBgi));
+        OnPropertyChanged(nameof(CheckBgiUpdatesOnStartup));
+        NotifyRemoteUpdateStateChanged();
         OnPropertyChanged(nameof(AutoLaunchWithBgiModeIndex));
         OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
         // （上线锄地「完成后动作」已移至绑定弹窗、按键策略移至按键设置弹窗，均为代码构建弹窗，不走设置页绑定刷新）

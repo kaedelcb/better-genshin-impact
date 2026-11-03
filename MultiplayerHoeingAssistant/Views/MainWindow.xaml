@@ -910,6 +910,32 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- 单机或房间尚未返回成员卡时，也能查看已发现的本机更新。 -->
+                        <Button x:Name="BgiUpdateWithoutMembersButton" Grid.Row="0" Panel.ZIndex="1" HorizontalAlignment="Left"
+                                VerticalAlignment="Top" Margin="12,5,0,0" FontSize="11" Padding="0"
+                                Command="{Binding OpenUpdateBgiCommand}" ToolTip="有 BGI 更新可用，点击查看"
+                                AutomationProperties.Name="有 BGI 更新可用">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Setter Property="Foreground" Value="#C8C4DD"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Members.Count}" Value="0"/>
+                                                <Condition Binding="{Binding RemoteUpdateAvailable}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding InstalledBgiVersion, StringFormat='本机 BGI {0}'}" VerticalAlignment="Center"/>
+                                <Ellipse Width="6" Height="6" Margin="5,0,0,0" VerticalAlignment="Center" Fill="{StaticResource Gold}"/>
+                            </StackPanel>
+                        </Button>
+
                         <!-- 成员委托卡列表 -->
                         <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">
                             <ItemsControl ItemsSource="{Binding Members}">
@@ -969,14 +995,13 @@
                                                                             </Style>
                                                                         </TextBlock.Style>
                                                                     </TextBlock>
-                                                                    <Button Content="{Binding BgiVersionDisplay}" FontSize="10" Padding="0" Margin="4,0,0,0"
+                                                                    <Button FontSize="10" Padding="0" Margin="4,0,0,0"
                                                                             VerticalAlignment="Center"
+                                                                            AutomationProperties.Name="更新本机 BGI"
                                                                             Command="{Binding DataContext.OpenUpdateBgiCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}">
                                                                         <Button.Style>
                                                                             <Style TargetType="Button" BasedOn="{StaticResource TextAction}">
-                                                                                <!-- Foreground/ToolTip 放 Style 内（本地属性会压过触发器）：
-                                                                                     服务器有新版本时自机版本号变金色提示 -->
                                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                                                 <Setter Property="Foreground" Value="#C8C4DD"/>
                                                                                 <Setter Property="ToolTip" Value="点击更新本机 BGI"/>
@@ -985,12 +1010,17 @@
                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     </DataTrigger>
                                                                                     <DataTrigger Binding="{Binding DataContext.RemoteUpdateAvailable, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                                                        <Setter Property="Foreground" Value="{StaticResource Gold}"/>
-                                                                                        <Setter Property="ToolTip" Value="服务器有新版本可更新，点击打开「更新BGI」"/>
+                                                                                        <Setter Property="ToolTip" Value="有 BGI 更新可用，点击查看"/>
                                                                                     </DataTrigger>
                                                                                 </Style.Triggers>
                                                                             </Style>
                                                                         </Button.Style>
+                                                                        <StackPanel Orientation="Horizontal">
+                                                                            <TextBlock Text="{Binding BgiVersionDisplay}" VerticalAlignment="Center"/>
+                                                                            <Ellipse x:Name="BgiUpdateDot" Width="6" Height="6" Margin="5,0,0,0"
+                                                                                     VerticalAlignment="Center" Fill="{StaticResource Gold}"
+                                                                                     Visibility="{Binding DataContext.RemoteUpdateAvailable, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"/>
+                                                                        </StackPanel>
                                                                     </Button>
                                                                 </StackPanel>
                                                             </StackPanel>
