@@ -14,24 +14,33 @@ namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 public class CombatScriptHandler : IActionHandler
 {
     public Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
-        => RunCoreAsync(ct, waypointForTrack, null);
+        => RunCoreAsync(ct, waypointForTrack, null, null);
 
-    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint, object? logSource)
+    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint, object? logSource, string? pointLabel)
     {
-        var supportsPickup = waypoint.CombatScript is { } script && PickupCombatScriptExecutor.Supports(script);
-        if (!supportsPickup && waypoint.CombatScript != null)
+        if (waypoint.CombatScript == null || !PickupCombatScriptExecutor.Supports(waypoint.CombatScript))
         {
-            Logger.LogWarning("当前节点的简易策略包含不支持安全中断的指令，仍执行完整动作");
+            Logger.LogWarning("【拾取达标】{Point} 策略为空或包含不支持安全中断的指令，按原路线执行", pointLabel);
+            return await RunCoreAsync(ct, waypoint, null, null);
         }
 
-        using var pickup = supportsPickup && waypoint.PickupTargetCount is { Count: > 0 } target
-            ? PickupWaypointProgress.TryBegin(target.Count, logSource)
-            : null;
+        if (waypoint.PickupTargetCount is not { Count: > 0 } target)
+            return await RunCoreAsync(ct, waypoint, null, null);
 
-        return await RunCoreAsync(ct, waypoint, pickup);
+        using var pickup = PickupWaypointProgress.TryBegin(target.Count, logSource);
+        if (pickup == null)
+        {
+            Logger.LogWarning("【拾取达标】{Point} 已有节点在计数，按原路线执行", pointLabel);
+            return await RunCoreAsync(ct, waypoint, null, null);
+        }
+
+        Logger.LogInformation("【拾取达标】{Point} 开始计数 0/{Target}，达标后跳过 {Skip} 点（调查不计）",
+            pointLabel, target.Count, target.SkipNextWaypoints);
+        return await RunCoreAsync(ct, waypoint, pickup, pointLabel);
     }
 
-    private static async Task<bool> RunCoreAsync(CancellationToken ct, WaypointForTrack? waypointForTrack, PickupWaypointProgress? pickup)
+    private static async Task<bool> RunCoreAsync(CancellationToken ct, WaypointForTrack? waypointForTrack,
+        PickupWaypointProgress? pickup, string? pointLabel)
     {
         if (waypointForTrack is { CombatScript: not null })
         {
@@ -41,6 +50,8 @@ public class CombatScriptHandler : IActionHandler
             if (combatScenes == null)
             {
                 Logger.LogError("队伍识别未初始化成功！");
+                if (pickup != null)
+                    Logger.LogWarning("【拾取达标】{Point} 队伍识别未初始化，本点不跳过后续点", pointLabel);
                 return false;
             }
 
@@ -62,11 +73,12 @@ public class CombatScriptHandler : IActionHandler
             }
 
             ct.ThrowIfCancellationRequested();
-            if (pickup.ReachedToken.IsCancellationRequested)
-            {
-                Logger.LogInformation("当前节点拾取计数已达 {Count}，结束剩余策略动作", waypointForTrack.PickupTargetCount?.Count);
-                return true;
-            }
+            pickup.Dispose(); // 收尾完成后停止计数，后到的日志不能改变本点结果。
+            var reached = pickup.ReachedToken.IsCancellationRequested;
+            Logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
+                pointLabel, pickup.Count, waypointForTrack.PickupTargetCount?.Count,
+                reached ? "达标，已完成动作收尾和松键" : "未达标，后续点照常执行");
+            return reached;
         }
         else
         {

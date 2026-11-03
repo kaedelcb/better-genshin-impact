@@ -871,6 +871,21 @@ public partial class PathExecutor
                         }
                         
                         CurWaypoint = (waypointIndex, waypoint);
+                        string? pickupPointLabel = null;
+                        if (waypoint.PickupTargetCount.HasValue)
+                        {
+                            var pointNumber = waypointsList.Take(CurWaypoints.Item1).Sum(segment => segment.Count) + waypointIndex + 1;
+                            var routeName = string.IsNullOrWhiteSpace(task.FileName) ? task.Info.Name : task.FileName;
+                            pickupPointLabel = $"{routeName} · JSON 第 {pointNumber} 点";
+                            if (!PartyConfig.EnablePickupTargetCount)
+                                Logger.LogInformation("【拾取达标】{Point} 当前配置组开关未打开，按原路线执行", pickupPointLabel);
+                            else if (waypoint.Type != WaypointType.Target.Code || waypoint.Action != ActionEnum.CombatScript.Code)
+                                Logger.LogWarning("【拾取达标】{Point} 仅 target + combat_script 支持计数（当前 type={Type}，action={Action}）",
+                                    pickupPointLabel, waypoint.Type, waypoint.Action);
+                            else if (MultiplayerCoordinator != null || CooperativeContext != null || _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame != false)
+                                Logger.LogInformation("【拾取达标】{Point} 联机或未确认单机状态，按原路线执行", pickupPointLabel);
+                        }
+
                         bool cooperativeFightInterrupted = false;
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
@@ -1473,7 +1488,7 @@ public partial class PathExecutor
                                 }
                                 else if (MultiplayerCoordinator == null)
                                 {
-                                    pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint, waypoints, waypointIndex);
+                                    pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint, waypoints, waypointIndex, pickupPointLabel);
                                 }
                                 else
                                 {
@@ -1936,7 +1951,7 @@ public partial class PathExecutor
                         if (pickupResumeIndex is { } resumeIndex)
                         {
                             ct.ThrowIfCancellationRequested();
-                            Logger.LogInformation("拾取已达标，跳过紧接的 {Count} 个补捡点", resumeIndex - waypointIndex - 1);
+                            Logger.LogInformation("【拾取达标】{Point} 跳过紧接的 {Count} 个补捡点", pickupPointLabel, resumeIndex - waypointIndex - 1);
                             pickupJumpFrom = waypoint;
                             waypointIndex = resumeIndex - 1; // for 循环下一次从续接点开始
                         }
@@ -4390,7 +4405,7 @@ public partial class PathExecutor
     }
 
     private async Task<int?> AfterMoveToTarget(WaypointForTrack waypoint, Waypoint? nextWaypoint,
-        IReadOnlyList<Waypoint>? segment = null, int waypointIndex = -1)
+        IReadOnlyList<Waypoint>? segment = null, int waypointIndex = -1, string? pickupPointLabel = null)
     {
         int? pickupResumeIndex = null;
         if (waypoint.Action == ActionEnum.NahidaCollect.Code
@@ -4418,18 +4433,20 @@ public partial class PathExecutor
                 && _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame == false
                 && handler is CombatScriptHandler combatScriptHandler)
             {
+                string? skipReason = null;
                 var plannedResume = target.SkipNextWaypoints > 0 && segment != null
-                    ? PickupWaypointSkipDecisions.GetResumeIndex(segment, waypointIndex, target.SkipNextWaypoints)
+                    ? PickupWaypointSkipDecisions.GetResumeIndex(segment, waypointIndex, target.SkipNextWaypoints, out skipReason)
                     : null;
                 if (target.SkipNextWaypoints == 0 || plannedResume.HasValue)
                 {
                     usedPickupExecutor = true;
-                    if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, PickupLogSource))
+                    if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, PickupLogSource, pickupPointLabel))
                         pickupResumeIndex = plannedResume;
                 }
                 else
                 {
-                    Logger.LogWarning("拾取跳点范围越界、跨传送段或包含不可跳过的路点，执行原路线");
+                    Logger.LogWarning("【拾取达标】{Point} 配置 {Target}/{Skip} 未启用：{Reason}；按原路线执行",
+                        pickupPointLabel, target.Count, target.SkipNextWaypoints, skipReason ?? "无可用的同段续接点");
                 }
             }
 

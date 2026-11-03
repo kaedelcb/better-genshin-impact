@@ -23,6 +23,8 @@ internal sealed class PickupWaypointProgress : IDisposable
 
     internal CancellationToken ReachedToken { get; }
 
+    internal int Count => Volatile.Read(ref _count);
+
     internal static PickupWaypointProgress? TryBegin(int target, object? scriptSource)
     {
         lock (Gate)
