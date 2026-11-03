@@ -78,20 +78,20 @@
                 <Button x:Name="RefreshPackagesButton" Content="刷新" Grid.Column="2" Width="56" Height="32" Style="{StaticResource Btn}" Click="RefreshPackagesButton_Click"/>
             </Grid>
 
-            <!-- 网络更新提醒条：服务器检测到比本机新的版本包时出现（点击"选中该包"直接选中网络来源条目） -->
+            <!-- 网络更新提醒条：服务器包比本机版本新时显示；同名包已在安装包目录时直接选中本地条目。 -->
             <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,7" BorderThickness="1"
                     Background="#1FE8A84E" BorderBrush="#55E8A84E"
-                    Visibility="{Binding DataContext.RemoteUpdateAvailable, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+                    Visibility="{Binding RemoteUpdateAvailable, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding DataContext.RemoteUpdateBannerText, RelativeSource={RelativeSource AncestorType=Window}}"
+                    <TextBlock Text="{Binding RemoteUpdateBannerText}"
                                FontSize="11" Foreground="#8A5B10" TextWrapping="Wrap" VerticalAlignment="Center"/>
                     <Button x:Name="SelectNetworkPackageButton" Content="选中该包" Grid.Column="1" Height="26" Padding="10,0"
                             Margin="10,0,0,0" Style="{StaticResource Btn}" VerticalAlignment="Center"
-                            ToolTip="选中服务器上的网络来源更新包"
+                            ToolTip="选中服务器提供的版本；本地已有该包时直接使用"
                             Click="SelectNetworkPackageButton_Click"/>
                 </Grid>
             </Border>

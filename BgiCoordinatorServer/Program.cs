@@ -132,7 +132,7 @@ if (Directory.Exists(legalRoot))
 
 // ===== BGI 更新包目录（可选，联机助手"网络"来源更新）=====
 // 挂载 BGI_UPDATE_ROOT（默认 wwwroot/bgi-update，可用 docker 卷挂到容器内任意路径）后：
-//   GET /bgi-update/{文件名}.7z   → 安装包本体（静态托管）
+//   GET /bgi-update/{文件名}.7z   → 安装包本体（支持 Range 下载）
 //   GET /bgi-update/latest.json   → 由目录扫描自动生成的最新包清单（取版本最新的合法茶包名 .7z），
 //                                    助手轮询此清单决定"版本号变金 + 弹窗提醒 + 网络来源下载更新"。
 // 只要把茶包版 .7z（BetterGI_v*+lcb.* 命名）丢进该目录即可，无需手写清单。
@@ -143,25 +143,30 @@ if (string.IsNullOrWhiteSpace(bgiUpdateRoot))
 }
 if (Directory.Exists(bgiUpdateRoot))
 {
-    app.UseStaticFiles(new StaticFileOptions
+    var updateDirectory = Path.GetFullPath(bgiUpdateRoot);
+    app.MapMethods("/bgi-update/{fileName}", ["GET", "HEAD"], (string fileName) =>
     {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.GetFullPath(bgiUpdateRoot)),
-        RequestPath = "/bgi-update",
+        if (!BgiUpdateCatalogDecisions.TryParse(fileName, out var package) || package is null)
+            return Results.NotFound();
+        var path = Path.Combine(updateDirectory, package.FileName);
+        return File.Exists(path)
+            ? Results.File(path, "application/x-7z-compressed", enableRangeProcessing: true)
+            : Results.NotFound();
     });
     app.MapGet("/bgi-update/latest.json", () =>
     {
         try
         {
-            var newest = BgiUpdateCatalogDecisions.PickNewest(Directory.EnumerateFiles(bgiUpdateRoot, "*.7z", SearchOption.TopDirectoryOnly));
+            var fileNames = Directory.EnumerateFiles(updateDirectory).Select(path => Path.GetFileName(path));
+            var newest = BgiUpdateCatalogDecisions.PickNewest(fileNames);
             if (newest == null) return Results.Json(new { error = "no valid package" }, statusCode: 404);
-            var fullPath = Path.Combine(bgiUpdateRoot, newest.FileName);
-            var sizeBytes = File.Exists(fullPath) ? new FileInfo(fullPath).Length : 0L;
-            DateTime? updatedAt = File.Exists(fullPath) ? new FileInfo(fullPath).LastWriteTimeUtc : null;
+            var file = new FileInfo(Path.Combine(updateDirectory, newest.FileName));
+            if (!file.Exists) return Results.Json(new { error = "no valid package" }, statusCode: 404);
             return Results.Json(new
             {
                 fileName = newest.FileName,
-                sizeBytes,
-                updatedAt,
+                sizeBytes = file.Length,
+                updatedAt = file.LastWriteTimeUtc,
                 url = "/bgi-update/" + Uri.EscapeDataString(newest.FileName),
             });
         }

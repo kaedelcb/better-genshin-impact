@@ -29,7 +29,8 @@ public static partial class BgiUpdateCatalogDecisions
     {
         info = null;
         if (string.IsNullOrWhiteSpace(fileName)) return false;
-        var name = fileName.Trim();
+        // 目录项需要保留原始名称，不能把带空格的非法文件映射为另一个文件。
+        var name = fileName;
         const string ext = ".7z";
         if (!name.EndsWith(ext, StringComparison.OrdinalIgnoreCase) || name.Length == ext.Length) return false;
         var stem = name[..^ext.Length];

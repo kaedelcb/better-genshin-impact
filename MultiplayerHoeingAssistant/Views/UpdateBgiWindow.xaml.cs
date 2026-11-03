@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -29,6 +30,7 @@ public partial class UpdateBgiWindow : Window
         // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
         MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.Initialize(this);
         _vm = vm;
+        DataContext = vm;
         var exePath = vm.Config?.BgiPath;
         BgiDirBox.Text = string.IsNullOrWhiteSpace(exePath) ? "" : (Path.GetDirectoryName(exePath) ?? "");
         PackageDirBox.Text = vm.Config?.BgiPackageDir ?? "";
@@ -36,10 +38,15 @@ public partial class UpdateBgiWindow : Window
         ExcludeList.ItemsSource = _excludeDirs;
         BackupExcludeCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
         RefreshCurrentVersion();
-        SetPackageList(BgiPackageUpdateService.ScanPackages(PackageDirBox.Text.Trim(), _vm.Config?.BgiPickedPackages));
-        Closed += (_, _) => PersistConfig();
-        // 打开弹窗时顺带触发一次网络更新检测；检测到服务器包后重建列表（把"网络"条目带进来，提醒条由绑定自动出现）
-        _ = CheckRemoteUpdateAndRescanAsync();
+        ScanPackages();
+        // 定时检测可能已经在进行，监听其结果也能刷新当前窗口。
+        _vm.PropertyChanged += RemoteUpdateChanged;
+        Closed += (_, _) =>
+        {
+            _vm.PropertyChanged -= RemoteUpdateChanged;
+            PersistConfig();
+        };
+        _ = _vm.CheckRemoteUpdateAsync();
     }
 
     private void RefreshCurrentVersion()
@@ -53,25 +60,27 @@ public partial class UpdateBgiWindow : Window
 
     // ===== 扫描 =====
 
-    private void RefreshPackagesButton_Click(object sender, RoutedEventArgs e) => ScanPackages();
-
-    private async Task CheckRemoteUpdateAndRescanAsync()
+    private void RefreshPackagesButton_Click(object sender, RoutedEventArgs e)
     {
-        try
-        {
-            var info = await _vm.CheckRemoteUpdateAsync();
-            if (info != null && !_updating) ScanPackages();
-        }
-        catch
-        {
-            // 网络检测失败静默：弹窗其余功能不受影响
-        }
+        ScanPackages();
+        _ = _vm.CheckRemoteUpdateAsync();
+    }
+
+    private void RemoteUpdateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.RemoteBgiUpdate) && !_updating) ScanPackages();
     }
 
     private void ScanPackages()
-        => SetPackageList(BgiRemoteUpdateService.MergeNetworkPackage(
+    {
+        var selectedPath = (PackageList.SelectedItem as BgiUpdatePackage)?.FullPath;
+        var packages = BgiRemoteUpdateService.MergeNetworkPackage(
             BgiPackageUpdateService.ScanPackages(PackageDir, _vm.Config?.BgiPickedPackages),
-            _vm.RemoteBgiUpdate, EffectiveDownloadDir()));
+            _vm.RemoteBgiUpdate, EffectiveDownloadDir());
+        SetPackageList(packages);
+        if (selectedPath != null)
+            PackageList.SelectedItem = packages.FirstOrDefault(p => string.Equals(p.FullPath, selectedPath, StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>网络包下载落盘目录：优先安装包目录，未设置则退 BGI 目录（两者都空时更新流程会拦住提示）。</summary>
     private string EffectiveDownloadDir()
@@ -83,11 +92,14 @@ public partial class UpdateBgiWindow : Window
 
     private void SelectNetworkPackageButton_Click(object sender, RoutedEventArgs e)
     {
-        ScanPackages(); // 确保网络条目已合并进列表
-        var net = (PackageList.ItemsSource as List<BgiUpdatePackage>)?.FirstOrDefault(p => p.Source == BgiPackageSource.Network);
-        if (net == null) return;
-        PackageList.SelectedItem = net;
-        PackageList.ScrollIntoView(net);
+        if (_vm.RemoteBgiUpdate is not { } info) return;
+        ScanPackages();
+        var path = Path.Combine(EffectiveDownloadDir(), info.FileName);
+        var packages = PackageList.ItemsSource as List<BgiUpdatePackage>;
+        var package = packages?.FirstOrDefault(p => string.Equals(p.FullPath, path, StringComparison.OrdinalIgnoreCase));
+        if (package == null) return;
+        PackageList.SelectedItem = package;
+        PackageList.ScrollIntoView(package);
     }
 
     private void SetPackageList(List<BgiUpdatePackage> packages)

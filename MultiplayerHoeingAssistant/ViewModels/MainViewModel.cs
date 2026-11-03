@@ -1698,10 +1698,10 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>服务器上检测到的最新更新包（null=未检测到/单机模式/未配置服务器地址）。</summary>
     public BgiRemoteUpdateInfo? RemoteBgiUpdate
     {
-        get => _remoteBgiUpdate;
+        get => IsStandaloneMode ? null : _remoteBgiUpdate;
         private set
         {
-            if (ReferenceEquals(_remoteBgiUpdate, value)) return;
+            if (_remoteBgiUpdate == value) return;
             _remoteBgiUpdate = value;
             OnPropertyChanged(nameof(RemoteBgiUpdate));
             OnPropertyChanged(nameof(RemoteUpdateAvailable));
@@ -1710,13 +1710,13 @@ public partial class MainViewModel : INotifyPropertyChanged
     }
 
     /// <summary>服务器有比本机新的版本包：耕地机页版本号变金色、更新弹窗出提醒条。</summary>
-    public bool RemoteUpdateAvailable => _remoteBgiUpdate != null
-        && BgiUpdateDecisions.IsNewerThanLocal(_remoteBgiUpdate.NameInfo, ResolveLocalBgiVersion());
+    public bool RemoteUpdateAvailable => RemoteBgiUpdate is { } info
+        && BgiUpdateDecisions.IsNewerThanLocal(info.NameInfo, ResolveLocalBgiVersion());
 
     /// <summary>更新弹窗提醒条文本（RemoteUpdateAvailable=true 时展示）。</summary>
-    public string RemoteUpdateBannerText => _remoteBgiUpdate == null
-        ? ""
-        : $"服务器有新版本：{_remoteBgiUpdate.FileName}（{_remoteBgiUpdate.SizeText}）。选中该包点「更新」将自动下载到安装包目录再安装。";
+    public string RemoteUpdateBannerText => RemoteBgiUpdate is { } info
+        ? $"服务器有新版本：{info.FileName}（{info.SizeText}）。选中该包点「更新」，本地未下载时会先下载。"
+        : "";
 
     /// <summary>本机版本可能已变（如刚完成更新）：重新求值 RemoteUpdateAvailable 刷新版本号金色/提醒条。</summary>
     public void NotifyRemoteUpdateStateChanged()
