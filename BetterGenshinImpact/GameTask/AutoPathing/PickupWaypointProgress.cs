@@ -14,7 +14,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     private static PickupWaypointProgress? _active;
 
     private readonly PickupObtainedRowTracker _tracker = new();
-    private readonly TaskCompletionSource<int> _baseline = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _baseline = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly CancellationTokenSource _reached = new();
     private readonly int _target;
     private readonly CancellationToken _routeToken;
@@ -59,15 +59,16 @@ internal sealed class PickupWaypointProgress : IDisposable
             ? active : null;
     }
 
-    internal async Task<int?> WaitForBaselineAsync(CancellationToken ct)
+    internal async Task<bool> WaitForBaselineAsync(CancellationToken ct)
     {
         try
         {
-            return await _baseline.Task.WaitAsync(TimeSpan.FromMilliseconds(400), ct);
+            await _baseline.Task.WaitAsync(TimeSpan.FromMilliseconds(400), ct);
+            return true;
         }
         catch (TimeoutException)
         {
-            return null;
+            return false;
         }
     }
 
@@ -103,6 +104,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     internal void Observe(PickupRowObservation observation)
     {
         PickupRowUpdate update;
+        bool establishedBaseline;
         int count;
         lock (Gate)
         {
@@ -110,8 +112,7 @@ internal sealed class PickupWaypointProgress : IDisposable
                 return;
 
             update = _tracker.Observe(observation);
-            if (update.BaselineReady)
-                _baseline.TrySetResult(observation.Rows?.Count ?? 0);
+            establishedBaseline = update.BaselineReady && _baseline.TrySetResult();
             if (update.AddedRows > 0)
             {
                 _count += Math.Min(update.AddedRows, int.MaxValue - _count);
@@ -121,6 +122,9 @@ internal sealed class PickupWaypointProgress : IDisposable
             count = _count;
         }
 
+        if (establishedBaseline)
+            _logger?.LogInformation("【拾取达标】{Point} 获得列表基线已就绪，已有 {Rows} 行不计，只计新增行",
+                _pointLabel, observation.Rows?.Count ?? 0);
         if (update.Cleared)
             _logger?.LogInformation("【拾取达标】{Point} 获得列表已消失，本点累计保留 {Count}/{Target}",
                 _pointLabel, count, _target);

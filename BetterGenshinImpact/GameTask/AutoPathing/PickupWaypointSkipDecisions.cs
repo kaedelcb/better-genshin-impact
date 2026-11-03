@@ -10,8 +10,12 @@ internal static class PickupWaypointSkipDecisions
         => GetResumeIndex(segment, currentIndex, skipCount, out _);
 
     internal static int? GetResumeIndex(IReadOnlyList<Waypoint> segment, int currentIndex, int skipCount, out string? reason)
+        => GetResumeIndex(segment, currentIndex, skipCount, isLastSegment: false, out reason);
+
+    internal static int? GetResumeIndex(IReadOnlyList<Waypoint> segment, int currentIndex, int skipCount,
+        bool isLastSegment, out string? reason)
     {
-        // 路线按传送点分段。必须在当前段留下一个可直接前往的续接点。
+        // 路线按传送点分段。仅最后一段可恰好跳完，直接结束整条路线。
         if (currentIndex < 0 || currentIndex >= segment.Count || skipCount <= 0)
         {
             reason = "当前点或跳点数量无效";
@@ -19,14 +23,14 @@ internal static class PickupWaypointSkipDecisions
         }
 
         var remaining = segment.Count - currentIndex - 1;
-        if (skipCount >= remaining)
+        if (skipCount > remaining || (skipCount == remaining && !isLastSegment))
         {
             reason = $"当前传送段只剩 {remaining} 个点，跳过 {skipCount} 个点后无法在本段保留续接点";
             return null;
         }
 
         var resumeIndex = currentIndex + skipCount + 1;
-        if (!IsMovementPoint(segment[resumeIndex]))
+        if (resumeIndex < segment.Count && !IsMovementPoint(segment[resumeIndex]))
         {
             reason = $"跳过后的续接点（后第 {skipCount + 1} 点）不是可走到的点位，type={segment[resumeIndex].Type}";
             return null;

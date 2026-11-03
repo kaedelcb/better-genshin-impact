@@ -53,6 +53,20 @@ public sealed class PickupCombatScriptExecutorTests
     }
 
     [Fact]
+    public async Task ReachedWhileApproachingDoesNotStartSendingNodeCommands()
+    {
+        var channel = new Mock<IInputChannel>(MockBehavior.Strict);
+        using var reached = new CancellationTokenSource();
+        reached.Cancel();
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, CancellationToken.None, reached.Token,
+                (_, _) => throw new InvalidOperationException("达标后不应开始策略动作")));
+
+        Assert.Equal(reached.Token, error.CancellationToken);
+        channel.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public void SupportsSharedArtifactRouteButLeavesUnsupportedCommandsWithLegacyExecutor()
     {
         var sample = CombatScriptParser.ParseContext(

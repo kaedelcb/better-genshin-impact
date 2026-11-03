@@ -51,4 +51,43 @@ public sealed class PickupWaypointSkipDecisionsTests
         Assert.Null(PickupWaypointSkipDecisions.GetResumeIndex(segment, currentIndex: 0, skipCount: 1));
         Assert.Null(PickupWaypointSkipDecisions.GetResumeIndex(segment, currentIndex: 0, skipCount: 2));
     }
+
+    [Theory]
+    [InlineData(true, 5)]
+    [InlineData(false, null)]
+    public void TwoTrailingPickupDetoursCanOnlyEndTheLastSegment(bool isLastSegment, int? expectedResumeIndex)
+    {
+        Waypoint[] segment =
+        [
+            new() { Type = "teleport" },
+            new() { Type = "target", Action = "stop_flying" },
+            new() { Type = "target", Action = "combat_script" },
+            new() { Type = "target", Action = "" },
+            new() { Type = "target", Action = "" },
+        ];
+
+        Assert.Equal(expectedResumeIndex,
+            PickupWaypointSkipDecisions.GetResumeIndex(segment, 2, 2, isLastSegment, out _));
+    }
+
+    [Theory]
+    [InlineData("teleport", null)]
+    [InlineData("target", "force_tp")]
+    [InlineData("target", "fight")]
+    public void LastSegmentCannotEndBySkippingARequiredTailPoint(string type, string? action)
+    {
+        Waypoint[] segment = [new(), new(), new() { Type = type, Action = action }];
+
+        Assert.Null(PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, 2, isLastSegment: true, out _));
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(int.MaxValue)]
+    public void LastSegmentCannotSkipBeyondTheRouteEnd(int skipCount)
+    {
+        Waypoint[] segment = [new(), new(), new()];
+
+        Assert.Null(PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, skipCount, isLastSegment: true, out _));
+    }
 }

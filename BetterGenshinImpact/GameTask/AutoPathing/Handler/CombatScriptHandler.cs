@@ -16,37 +16,57 @@ public class CombatScriptHandler : IActionHandler
     public Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
         => RunCoreAsync(ct, waypointForTrack, null, null);
 
-    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel)
+    internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel)
     {
         if (waypoint.CombatScript == null || !PickupCombatScriptExecutor.Supports(waypoint.CombatScript))
         {
             Logger.LogWarning("【拾取达标】{Point} 策略为空或包含不支持安全中断的指令，按原路线执行", pointLabel);
-            return await RunCoreAsync(ct, waypoint, null, null);
+            return null;
         }
 
         if (waypoint.PickupTargetCount is not { Count: > 0 } target)
-            return await RunCoreAsync(ct, waypoint, null, null);
+            return null;
 
-        using var pickup = PickupWaypointProgress.TryBegin(target.Count, ct, Logger, pointLabel);
+        var pickup = PickupWaypointProgress.TryBegin(target.Count, ct, Logger, pointLabel);
         if (pickup == null)
         {
+            ct.ThrowIfCancellationRequested();
             Logger.LogWarning("【拾取达标】{Point} 已有节点在计数，按原路线执行", pointLabel);
-            return await RunCoreAsync(ct, waypoint, null, null);
+            return null;
         }
 
-        Logger.LogInformation("【拾取达标】{Point} 开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
+        Logger.LogInformation("【拾取达标】{Point} 精确接近前开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
             pointLabel, target.Count, target.SkipNextWaypoints);
-        var existingRows = await pickup.WaitForBaselineAsync(ct);
-        if (!existingRows.HasValue)
+        return pickup;
+    }
+
+    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint,
+        PickupWaypointProgress pickup, string? pointLabel)
+    {
+        if (!await pickup.WaitForBaselineAsync(ct))
         {
             pickup.Dispose();
             Logger.LogWarning("【拾取达标】{Point} 未取得稳定的列表基线，按原路线执行", pointLabel);
             return await RunCoreAsync(ct, waypoint, null, null);
         }
 
-        Logger.LogInformation("【拾取达标】{Point} 获得列表基线已就绪，已有 {Rows} 行不计，只计新增行",
-            pointLabel, existingRows.Value);
+        // 靠近时已经拾够：移动照常到点，完全不发送节点策略指令。
+        if (pickup.ReachedToken.IsCancellationRequested)
+            return FinishPickup(ct, pickup, waypoint, pointLabel);
+
         return await RunCoreAsync(ct, waypoint, pickup, pointLabel);
+    }
+
+    private static bool FinishPickup(CancellationToken ct, PickupWaypointProgress pickup,
+        WaypointForTrack waypoint, string? pointLabel)
+    {
+        ct.ThrowIfCancellationRequested();
+        pickup.Dispose(); // 动作收尾后停止计数，后到的日志不能改变本点结果。
+        var reached = pickup.ReachedToken.IsCancellationRequested;
+        Logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
+            pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count,
+            reached ? "达标，已完成动作收尾和松键" : "未达标，后续点照常执行");
+        return reached;
     }
 
     private static async Task<bool> RunCoreAsync(CancellationToken ct, WaypointForTrack? waypointForTrack,
@@ -82,13 +102,7 @@ public class CombatScriptHandler : IActionHandler
                 // 执行器已经完成按键收尾，整条线路的停止仍优先。
             }
 
-            ct.ThrowIfCancellationRequested();
-            pickup.Dispose(); // 收尾完成后停止计数，后到的日志不能改变本点结果。
-            var reached = pickup.ReachedToken.IsCancellationRequested;
-            Logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
-                pointLabel, pickup.Count, waypointForTrack.PickupTargetCount?.Count,
-                reached ? "达标，已完成动作收尾和松键" : "未达标，后续点照常执行");
-            return reached;
+            return FinishPickup(ct, pickup, waypointForTrack, pointLabel);
         }
         else
         {
