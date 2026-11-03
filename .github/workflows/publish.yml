@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'BetterGI Version (eg: 0.35.1, 0.36.5-alpha.1)'
+        description: 'BetterGI 版本号；茶包分支填 release:版本号可在构建成功后公开发布'
         required: true
         type: string
       kachina-channel:
@@ -28,29 +28,37 @@ on:
         default: false
 
 jobs:
-  # Add validation job to check version format
   validate:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.set-version.outputs.version }}
+      publish: ${{ steps.set-version.outputs.publish }}
     steps:
-      - name: Set version from input or tag
+      - name: Validate version and publication choice
         id: set-version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          CREATE_DRAFT: ${{ inputs.create-release }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # Validate manual input version format
-            if ! [[ "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-              echo "❌ 错误：版本格式必须符合语义化版本规范 (例如: 1.2.3, 1.2.3-alpha, 1.2.3+build.123)"
+          version="$REQUESTED_VERSION"
+          publish=false
+          if [[ "$version" == release:* ]]; then
+            if [[ "$GITHUB_REPOSITORY" != kaedelcb/better-genshin-impact || ! "$GITHUB_REF" =~ ^refs/heads/main-OldTeaBag-B[0-9]+$ ]]; then
+              echo '::error::只能从本仓库的 main-OldTeaBag-B 数字分支公开发布。'
               exit 1
             fi
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "✨ 手动触发构建，版本号：${{ github.event.inputs.version }}"
-          else
-            # Extract version from tag name (remove 'v' prefix)
-            VERSION=${GITHUB_REF#refs/tags/v}
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-            echo "🏷️ 从 tag 触发构建，版本号：${VERSION}"
+            if [[ "$CREATE_DRAFT" == true ]]; then
+              echo '::error::公开发布和创建草稿只能选一种。使用 release: 时请取消勾选创建草稿。'
+              exit 1
+            fi
+            version="${version#release:}"
+            publish=true
           fi
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo '::error::版本格式不正确，例如 0.66.3+lcb.23.0-NexusBGI-fix9。'
+            exit 1
+          fi
+          printf 'version=%s\npublish=%s\n' "$version" "$publish" >> "$GITHUB_OUTPUT"
 
   build_web_map_editor:
     runs-on: ubuntu-latest
@@ -582,6 +590,33 @@ jobs:
           files: |
             artifacts/BetterGI_7z/*.7z
             artifacts/BetterGI_Install/*.exe
+
+  publish_release:
+    name: 公开发布 GitHub Release
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'kaedelcb/better-genshin-impact' &&
+      needs.validate.outputs.publish == 'true' && !inputs.create-release
+    needs: [validate, build_dist, build_installer, build_setup]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: bettergi-release-${{ needs.validate.outputs.version }}
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: 校验两项原始附件并公开发布
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_VERSION: ${{ needs.validate.outputs.version }}
+        run: python -B tools/release_actions.py
 
   mirrorchyan_uploading:
     if: github.repository_owner == 'babalae' && contains(needs.validate.outputs.version, '-')

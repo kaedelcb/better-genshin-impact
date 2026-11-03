@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,9 +23,8 @@ class FakeGitHub:
         self.workflow = {"id": 161}
         self.run = {"id": 123, "repository": {"id": 961}, "head_repository": {"id": 961},
                     "workflow_id": 161, "path": release.WORKFLOW, "event": "workflow_dispatch",
-                    "status": "completed", "conclusion": "success", "head_branch": "main-OldTeaBag-B185",
-                    "head_sha": "a" * 40, "display_title": "BetterGI " + version, "run_attempt": 1}
-        self.jobs = [{"name": name, "conclusion": "success"} for name in ("build_dist", "build_installer")]
+                    "status": "in_progress", "conclusion": None, "head_branch": "main-OldTeaBag-B185",
+                    "head_sha": "a" * 40, "display_title": "BetterGI release:" + version, "run_attempt": 1}
         self.archives = {}
         self.artifacts = []
         self.releases = []
@@ -77,8 +75,6 @@ class FakeGitHub:
         raise AssertionError("Unexpected read " + path)
 
     def pages(self, path, key=None):
-        if path.endswith("/jobs"):
-            return copy.deepcopy(self.jobs)
         if path.endswith("/artifacts"):
             return copy.deepcopy(self.artifacts)
         if path.endswith("/releases"):
@@ -162,35 +158,21 @@ class SourceTests(unittest.TestCase):
     def test_pr_trigger_rejected(self):
         self.reject_change(self.api.run, "event", "pull_request")
 
-    def test_failed_build_rejected(self):
-        self.reject_change(self.api.run, "conclusion", "failure")
-
-    def test_running_build_rejected(self):
-        self.reject_change(self.api.run, "status", "in_progress")
+    def test_completed_build_cannot_be_selected_by_this_workflow(self):
+        self.reject_change(self.api.run, "status", "completed")
 
     def test_untrusted_branches_rejected(self):
-        for branch in ("feature/test", "main-OldTeaBag-B185-evil", "main-OldTeaBag-Babc", "refs/heads/main"):
+        for branch in ("feature/test", "main-OldTeaBag-B185-evil", "main-OldTeaBag-Babc", "main"):
             with self.subTest(branch=branch):
                 self.reject_change(self.api.run, "head_branch", branch)
-
-    def test_default_branch_accepted(self):
-        self.api.run["head_branch"] = "main"
-        self.assertEqual("a" * 40, release.inspect_build(self.api, 123).sha)
 
     def test_bad_sha_rejected(self):
         self.reject_change(self.api.run, "head_sha", "main")
 
     def test_bad_version_rejected(self):
-        for title in ("BetterGI 1.2.3;echo x", "BetterGI ../1.2.3", "BetterGI 1.2", "Repo Bot 29"):
+        for title in ("BetterGI release:1.2.3;echo x", "BetterGI release:../1.2.3", "BetterGI release:1.2", "BetterGI 1.2.3"):
             with self.subTest(title=title):
                 self.reject_change(self.api.run, "display_title", title)
-
-    def test_required_job_missing_or_unsuccessful(self):
-        for jobs in (self.api.jobs[:1], [{"name": "build_dist", "conclusion": "success"}, {"name": "build_installer", "conclusion": "skipped"}]):
-            with self.subTest(jobs=jobs):
-                self.api.jobs = jobs
-                with self.assertRaises(release.ReleaseError):
-                    release.inspect_build(self.api, 123)
 
     def test_missing_duplicate_expired_and_unverifiable_artifacts(self):
         originals = copy.deepcopy(self.api.artifacts)
@@ -205,15 +187,6 @@ class SourceTests(unittest.TestCase):
                 with self.assertRaises(release.ReleaseError):
                     release.inspect_build(self.api, 123)
 
-    def test_explicit_legacy_draft_choice_detected(self):
-        self.api.jobs.append({"name": "create_release", "conclusion": "success"})
-        self.assertTrue(release.inspect_build(self.api, 123).requested_draft)
-
-    def test_auto_and_manual_select_same_run_without_interpolation(self):
-        notes = "$(do not run)\n标题 `literal`"
-        self.assertEqual((123, ""), release.select_run("workflow_run", {"workflow_run": {"id": 123}}))
-        self.assertEqual((123, notes), release.select_run("workflow_dispatch", {"inputs": {"run_id": "123", "notes": notes}}))
-
 
 class PublishTests(unittest.TestCase):
     def setUp(self):
@@ -222,8 +195,8 @@ class PublishTests(unittest.TestCase):
         self.addCleanup(self.folder.cleanup)
         self.path = Path(self.folder.name)
 
-    def publish(self, notes=""):
-        return release.publish(self.api, release.inspect_build(self.api, 123), self.path, notes)
+    def publish(self):
+        return release.publish(self.api, release.inspect_build(self.api, 123), self.path)
 
     def assert_private(self):
         self.assertFalse(any(m == "PATCH" for m, _, _ in self.api.writes))
@@ -231,14 +204,14 @@ class PublishTests(unittest.TestCase):
             self.assertTrue(self.api.releases[0]["draft"])
 
     def test_two_verified_original_files_published_after_uploads(self):
-        status, result = self.publish("离线测试说明")
+        status, result = self.publish()
         self.assertEqual("published", status)
         self.assertFalse(result["draft"])
         self.assertFalse(result["prerelease"])
         self.assertEqual("a" * 40, self.api.tag)
         self.assertEqual(2, len(self.api.uploads))
         self.assertEqual("legacy", self.api.writes[-1][2]["make_latest"])
-        self.assertIn("离线测试说明", result["body"])
+        self.assertIn("/actions/runs/123", result["body"])
         self.assertIn("a" * 40, result["body"])
 
     def test_stable_release_uses_github_latest_version_order(self):
@@ -365,60 +338,45 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(1, sum(m == "PATCH" for m, _, _ in self.api.writes))
         self.assertTrue(self.api.releases[0]["draft"])
 
-    def test_invalid_notes_fail_before_any_tag_or_upload(self):
-        with self.assertRaises(release.ReleaseError):
-            self.publish("文" * 32000)
-        self.assertEqual([], self.api.writes)
-        self.assertEqual([], self.api.downloads)
-
 
 class WorkflowTests(unittest.TestCase):
     def load(self, name):
         import yaml
         return yaml.load((ROOT / ".github/workflows" / name).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
-    def test_run_title_survives_yaml_comment_parsing(self):
-        title = self.load("release-artifacts.yml")["run-name"]
-        self.assertTrue(title.startswith("${{"))
-        self.assertTrue(title.endswith("}}"))
-        self.assertIn("format('手动补发构建 #{0}', inputs.run_id)", title)
-        self.assertIn("format('自动发布构建 #{0}', github.event.workflow_run.id)", title)
-
-    def test_auto_manual_share_controller_and_only_successful_builds(self):
-        data = self.load("release-artifacts.yml")
-        self.assertEqual(["BetterGI Publish"], data["on"]["workflow_run"]["workflows"])
-        self.assertEqual(["completed"], data["on"]["workflow_run"]["types"])
-        self.assertIn("workflow_dispatch", data["on"])
-        self.assertIn("conclusion == 'success'", data["jobs"]["inspect"]["if"])
-        commands = [s.get("run", "") for j in data["jobs"].values() for s in j["steps"]]
-        self.assertEqual(["python -B tools/release_actions.py inspect", "python -B tools/release_actions.py publish"], [c for c in commands if c])
+    def test_publication_uses_existing_dispatch_and_waits_for_all_packages(self):
+        data = self.load("publish.yml")
+        self.assertEqual({"workflow_dispatch"}, set(data["on"]))
+        self.assertEqual({"version", "kachina-channel", "create-release", "upload-to-steambird"},
+                         set(data["on"]["workflow_dispatch"]["inputs"]))
+        publish = data["jobs"]["publish_release"]
+        self.assertEqual({"validate", "build_dist", "build_installer", "build_setup"}, set(publish["needs"]))
+        self.assertIn("needs.validate.outputs.publish == 'true'", publish["if"])
+        self.assertIn("!inputs.create-release", publish["if"])
+        self.assertNotIn("always()", publish["if"])
 
     def test_permissions_concurrency_and_trusted_checkout(self):
-        data = self.load("release-artifacts.yml")
-        self.assertEqual({}, data["permissions"])
-        self.assertEqual({"contents": "read", "actions": "read"}, data["jobs"]["inspect"]["permissions"])
-        publish = data["jobs"]["publish"]
+        publish = self.load("publish.yml")["jobs"]["publish_release"]
         self.assertEqual({"contents": "write", "actions": "read"}, publish["permissions"])
-        self.assertIn("needs.inspect.outputs.version", publish["concurrency"]["group"])
+        self.assertIn("needs.validate.outputs.version", publish["concurrency"]["group"])
         self.assertEqual("false", publish["concurrency"]["cancel-in-progress"])
         self.assertEqual("max", publish["concurrency"]["queue"])
-        for job in data["jobs"].values():
-            checkout = job["steps"][0]
-            self.assertEqual("${{ github.sha }}", checkout["with"]["ref"])
-            self.assertEqual("false", checkout["with"]["persist-credentials"])
+        checkout = publish["steps"][0]
+        self.assertEqual("${{ github.sha }}", checkout["with"]["ref"])
+        self.assertEqual("false", checkout["with"]["persist-credentials"])
 
     def test_push_validation_cannot_publish_and_has_no_write_token(self):
         data = self.load("release-artifacts-check.yml")
         self.assertEqual({"contents": "read"}, data["permissions"])
         self.assertNotIn("workflow_dispatch", data["on"])
         text = json.dumps(data)
-        self.assertNotIn("release_actions.py publish", text)
+        self.assertNotIn("python -B tools/release_actions.py", text)
         self.assertNotIn("GH_TOKEN", text)
 
     def test_local_real_entry_is_blocked_before_network(self):
         environment = os.environ.copy()
         environment.pop("GITHUB_ACTIONS", None)
-        result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/release_actions.py"), "publish"],
+        result = subprocess.run([sys.executable, "-B", str(ROOT / "tools/release_actions.py")],
                                 env=environment, capture_output=True)
         self.assertNotEqual(0, result.returncode)
         self.assertIn("GitHub Actions", result.stdout.decode("utf-8", "replace"))

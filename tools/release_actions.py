@@ -1,7 +1,6 @@
 """Publish verified BetterGI Actions artifacts; never build or execute their contents."""
 from __future__ import annotations
 
-import argparse
 from dataclasses import dataclass
 import hashlib
 import json
@@ -16,6 +15,7 @@ import zipfile
 
 REPOSITORY = "kaedelcb/better-genshin-impact"
 WORKFLOW = ".github/workflows/publish.yml"
+TEABAG_BRANCH = r"main-OldTeaBag-B[0-9]+"
 VERSION = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
 MAX_FILE = 2 * 1024**3
 KINDS = {"BetterGI_7z": ("BetterGI_v{version}.7z", b"7z\xbc\xaf\x27\x1c"),
@@ -115,7 +115,6 @@ class Build:
     sha: str
     version: str
     artifacts: tuple
-    requested_draft: bool = False
 
     @property
     def prerelease(self):
@@ -138,19 +137,16 @@ def inspect_build(api, selected_id):
             run["repository"]["id"] == repo["id"] == run["head_repository"]["id"], "拒绝其他仓库或 fork 的构建")
     require(run["workflow_id"] == workflow["id"] and run["path"] == WORKFLOW, "必须选择本仓库 BetterGI Publish 构建")
     require(run["event"] == "workflow_dispatch", "拒绝非受信任的构建触发来源")
-    require(run["status"] == "completed" and run["conclusion"] == "success", "构建必须已完成且成功")
-    require(re.fullmatch(r"main(?:-OldTeaBag-B[0-9]+)?", run["head_branch"] or "") is not None, "构建分支不在可信名单中")
+    require(run["status"] == "in_progress", "发布必须在当前构建运行中执行")
+    require(re.fullmatch(TEABAG_BRANCH, run["head_branch"] or "") is not None, "构建分支不是受支持的茶包分支")
     require(re.fullmatch(r"[0-9a-f]{40}", run["head_sha"] or "") is not None, "构建源提交无效")
     title = run.get("display_title") or run.get("name") or ""
-    match = re.fullmatch(r"BetterGI (" + VERSION + r")", title)
-    require(match is not None, "构建标题中的版本号不符合发布约定")
+    match = re.fullmatch(r"BetterGI release:(" + VERSION + r")", title)
+    require(match is not None, "构建没有明确选择公开发布或版本号不正确")
     version = match.group(1)
     attempt = run["run_attempt"]
     require(type(attempt) is int and attempt > 0, "构建尝试编号无效")
-    jobs = list(api.pages(f"repos/{REPOSITORY}/actions/runs/{selected_id}/attempts/{attempt}/jobs", "jobs"))
-    for name in ("build_dist", "build_installer"):
-        found = [j for j in jobs if j["name"] == name]
-        require(len(found) == 1 and found[0]["conclusion"] == "success", f"必需任务 {name} 未成功")
+    # 工作流的 needs 已等到构建和安装包任务成功，此时整个运行尚未结束。
     artifacts = list(api.pages(f"repos/{REPOSITORY}/actions/runs/{selected_id}/artifacts", "artifacts"))
     chosen = []
     for name in KINDS:
@@ -163,8 +159,7 @@ def inspect_build(api, selected_id):
         require(re.fullmatch(r"sha256:[0-9a-f]{64}", artifact.get("digest") or "") is not None, "缺少可靠的产物 SHA256")
         require(artifact["workflow_run"]["id"] == selected_id and artifact["workflow_run"]["head_sha"] == run["head_sha"], "产物不属于所选构建提交")
         chosen.append(artifact)
-    requested_draft = any(j["name"] == "create_release" and j["conclusion"] == "success" for j in jobs)
-    return Build(selected_id, attempt, run["head_sha"], version, tuple(chosen), requested_draft)
+    return Build(selected_id, attempt, run["head_sha"], version, tuple(chosen))
 
 
 def tag_commit(api, tag):
@@ -248,8 +243,7 @@ def verify_remote(release, build, files, *, public=False):
     require(release["draft"] is (not public), "Release 草稿状态不正确")
 
 
-def publish(api, build, directory, notes=""):
-    require(isinstance(notes, str) and len(notes.encode("utf-8")) <= 32000, "更新说明无效或过长")
+def publish(api, build, directory):
     prior = existing_release(api, build)
     if prior:
         return "already-published", prior
@@ -259,14 +253,12 @@ def publish(api, build, directory, notes=""):
     if prior:
         return "already-published", prior
     current_run = api.get(f"repos/{REPOSITORY}/actions/runs/{build.run_id}")
-    require(current_run["status"] == "completed" and current_run["conclusion"] == "success" and
+    require(current_run["status"] == "in_progress" and
             current_run["run_attempt"] == build.attempt and current_run["head_sha"] == build.sha,
             "下载后构建状态或尝试编号已变化")
     api.write("POST", f"repos/{REPOSITORY}/git/refs", {"ref": "refs/tags/" + build.version, "sha": build.sha})
     require(tag_commit(api, build.version) == build.sha, "标签提交核对失败")
-    body = notes.strip()
-    require(len(body.encode("utf-8")) <= 32000, "更新说明过长")
-    body += ("\n\n" if body else "") + f"构建来源：[Actions #{build.run_id}](https://github.com/{REPOSITORY}/actions/runs/{build.run_id})\n\n源提交：`{build.sha}`。附件与该构建原始产物一致。"
+    body = f"构建来源：[Actions #{build.run_id}](https://github.com/{REPOSITORY}/actions/runs/{build.run_id})\n\n源提交：`{build.sha}`。附件与该构建原始产物一致。"
     release = api.write("POST", f"repos/{REPOSITORY}/releases", {
         "tag_name": build.version, "target_commitish": build.sha,
         "name": "BetterGI v" + build.version, "body": body,
@@ -289,45 +281,25 @@ def publish(api, build, directory, notes=""):
     return "published", current
 
 
-def select_run(event_name, event):
-    if event_name == "workflow_run":
-        return run_id(event["workflow_run"]["id"]), ""
-    require(event_name == "workflow_dispatch", "不支持的触发入口")
-    inputs = event.get("inputs") or {}
-    notes = inputs.get("notes") or ""
-    require(isinstance(notes, str) and len(notes.encode("utf-8")) <= 32000, "更新说明无效或过长")
-    return run_id(inputs.get("run_id", "")), notes
-
-
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("inspect", "publish"))
-    mode = parser.parse_args().mode
     require(os.environ.get("GITHUB_ACTIONS") == "true", "真实发布仅允许在 GitHub Actions runner 中执行")
     require(os.environ.get("GITHUB_REPOSITORY") == REPOSITORY, "仓库不受信任")
+    require(os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch", "发布必须手动触发")
+    require(re.fullmatch(r"refs/heads/" + TEABAG_BRANCH, os.environ.get("GITHUB_REF", "")) is not None,
+            "只能从茶包分支发布")
     require(bool(os.environ.get("GH_TOKEN")), "缺少临时 GITHUB_TOKEN")
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
-    event_name = os.environ["GITHUB_EVENT_NAME"]
-    selected, notes = select_run(event_name, event)
+    version = os.environ["EXPECTED_VERSION"]
+    inputs = event.get("inputs") or {}
+    require(inputs.get("version") == "release:" + version and inputs.get("create-release") in (None, False, "false"),
+            "本次运行未明确选择公开发布")
     api = GitHub()
-    repo = api.get(f"repos/{REPOSITORY}")
-    require(os.environ["GITHUB_REF"] == "refs/heads/" + repo["default_branch"], "发布控制器必须从默认分支运行")
-    build = inspect_build(api, selected)
-    should_publish = not (event_name == "workflow_run" and build.requested_draft)
-    if mode == "inspect":
-        values = {"version": build.version, "sha": build.sha, "attempt": str(build.attempt),
-                  "publish": str(should_publish).lower()}
-        with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-            for key, value in values.items():
-                output.write(f"{key}={value}\n")
-        message = "源构建和两项产物元数据已核实。" if should_publish else "源构建明确选择了创建草稿，自动入口保留该选择，不公开。"
-    else:
-        require(should_publish, "源构建选择保留草稿")
-        require(build.version == os.environ["EXPECTED_VERSION"] and build.sha == os.environ["EXPECTED_SHA"] and
-                str(build.attempt) == os.environ["EXPECTED_ATTEMPT"], "检查后构建身份发生变化")
-        with tempfile.TemporaryDirectory(prefix="bettergi-release-", dir=os.environ["RUNNER_TEMP"]) as folder:
-            status, release = publish(api, build, Path(folder), notes)
-        message = f"{'已发布' if status == 'published' else '同版本已完整发布，未做修改'}：[BetterGI v{build.version}]({release['html_url']})"
+    build = inspect_build(api, os.environ["GITHUB_RUN_ID"])
+    require(build.version == version and build.sha == os.environ["GITHUB_SHA"] and
+            str(build.attempt) == os.environ["GITHUB_RUN_ATTEMPT"], "构建身份与当前运行不一致")
+    with tempfile.TemporaryDirectory(prefix="bettergi-release-", dir=os.environ["RUNNER_TEMP"]) as folder:
+        status, release = publish(api, build, Path(folder))
+    message = f"{'已发布' if status == 'published' else '同版本已完整发布，未做修改'}：[BetterGI v{build.version}]({release['html_url']})"
     print(message)
     with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a", encoding="utf-8") as summary:
         summary.write(message + "\n")

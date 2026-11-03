@@ -3,12 +3,14 @@ name: 发布配置离线检查
 on:
   push:
     paths:
-      - '.github/workflows/release-artifacts*.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/release-artifacts-check.yml'
       - 'tools/release_actions.py'
       - 'Test/ReleaseActions/**'
   pull_request:
     paths:
-      - '.github/workflows/release-artifacts*.yml'
+      - '.github/workflows/publish.yml'
+      - '.github/workflows/release-artifacts-check.yml'
       - 'tools/release_actions.py'
       - 'Test/ReleaseActions/**'
 
