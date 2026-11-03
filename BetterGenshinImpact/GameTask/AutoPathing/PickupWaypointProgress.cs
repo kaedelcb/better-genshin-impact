@@ -8,6 +8,8 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 /// <summary>一次到点动作的获得列表计数，帧由现有截图调度器提供。</summary>
 internal sealed class PickupWaypointProgress : IDisposable
 {
+    // 定位长时间没有刷新时，不用旧坐标给离点后的新画面判归属。
+    private const int DeparturePositionMaxAgeMs = 1500;
     private static readonly object Gate = new();
     private static PickupWaypointProgress? _active;
 
@@ -20,6 +22,9 @@ internal sealed class PickupWaypointProgress : IDisposable
     private long _lastFrameTime;
     private long _lastDetectionLogTime;
     private bool _baselineLogged;
+    private bool _departing;
+    private long _departurePositionAt;
+    private long _firstDeparturePositionAt;
     private bool _frameErrorReported;
     private bool _headerFallbackReported;
     private bool _missingHeaderReported;
@@ -60,6 +65,36 @@ internal sealed class PickupWaypointProgress : IDisposable
             ? active : null;
     }
 
+    internal bool BeginDeparture()
+    {
+        lock (Gate)
+        {
+            if (!ReferenceEquals(_active, this) || _routeToken.IsCancellationRequested)
+                return false;
+
+            _departing = true;
+            return true;
+        }
+    }
+
+    internal bool ConfirmDeparturePosition()
+    {
+        lock (Gate)
+        {
+            if (!ReferenceEquals(_active, this) || !_departing || _routeToken.IsCancellationRequested
+                || (_departurePositionAt != 0 && !IsDeparturePositionFresh()))
+                return false;
+
+            _departurePositionAt = Stopwatch.GetTimestamp();
+            if (_firstDeparturePositionAt == 0)
+                _firstDeparturePositionAt = _departurePositionAt;
+            return true;
+        }
+    }
+
+    private bool IsDeparturePositionFresh() => _departurePositionAt != 0
+        && Stopwatch.GetElapsedTime(_departurePositionAt).TotalMilliseconds <= DeparturePositionMaxAgeMs;
+
     internal void ObserveFrame(PickupRowObservation observation, PickupObtainedRowDetectionStats detection,
         long frameTime, double interval)
     {
@@ -72,7 +107,7 @@ internal sealed class PickupWaypointProgress : IDisposable
             if (_lastFrameTime != 0 && Stopwatch.GetElapsedTime(_lastFrameTime, frameTime).TotalMilliseconds > Math.Max(300, interval * 3))
                 Observe(PickupRowObservation.Interrupted);
             _lastFrameTime = frameTime;
-            Observe(observation, detection);
+            Observe(observation, detection, frameTime);
         }
         catch (Exception ex)
         {
@@ -90,14 +125,17 @@ internal sealed class PickupWaypointProgress : IDisposable
         }
     }
 
-    internal void Observe(PickupRowObservation observation, PickupObtainedRowDetectionStats detection = default)
+    internal void Observe(PickupRowObservation observation, PickupObtainedRowDetectionStats detection = default,
+        long frameTime = 0)
     {
         PickupRowUpdate update;
         bool establishedBaseline;
         int count;
         lock (Gate)
         {
-            if (!ReferenceEquals(_active, this) || _count >= _target || _routeToken.IsCancellationRequested)
+            if (!ReferenceEquals(_active, this) || _count >= _target || _routeToken.IsCancellationRequested
+                || (_departing && !observation.InterruptsContinuity
+                    && (!IsDeparturePositionFresh() || (frameTime != 0 && frameTime < _firstDeparturePositionAt))))
                 return;
 
             update = _tracker.Observe(observation);

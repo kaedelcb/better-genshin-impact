@@ -1291,6 +1291,23 @@ public partial class PathExecutor
                                 ? CreatePickupApproachObserver(pickupWindow, waypoints, waypointIndex,
                                     CurWaypoints.Item1 == waypointsList.Count - 1, pickupRouteName, pickupSegmentOffset)
                                 : null;
+                            if (pickupWindow.IsDepartureFor(waypointIndex))
+                            {
+                                var fallbackIndex = waypointIndex;
+                                var owner = waypoints[fallbackIndex - 1];
+                                var observeApproach = observePickupPosition;
+                                // 普通补捡途中若进入下一独立拾取点的提前观察范围，让新点先接管。
+                                var nextPickup = observeApproach != null ? nextWaypoint : null;
+                                observePickupPosition = position =>
+                                {
+                                    var approachingNextPickup = nextPickup != null
+                                        && PickupWaypointApproachWindow.IsWithinStartDistance(nextPickup, position, out _);
+                                    pickupWindow.ObserveDeparturePosition(fallbackIndex, owner,
+                                        !approachingNextPickup && CanUseWaypointPickup(owner) ? position : default);
+                                    if (!pickupWindow.IsDepartureFor(fallbackIndex))
+                                        observeApproach?.Invoke(position);
+                                };
+                            }
 
                             // Path不用走得很近，Target需要接近，但都需要先移动到对应位置
                             if (waypoint.Type == WaypointType.Orientation.Code)
@@ -1355,6 +1372,19 @@ public partial class PathExecutor
                             }
 
                             await CheckMultiplayerBoundaryAsync();
+                            // 补捡途中达标也让导航正常收尾；此时还没发送补捡动作的按键。
+                            if (pickupWindow.FinishDeparture(waypointIndex) is { } departureResume
+                                && CanUseWaypointPickup(waypoints[waypointIndex - 1]))
+                            {
+                                ct.ThrowIfCancellationRequested();
+                                Logger.LogInformation("【拾取达标】{Route} · JSON 第 {Point} 点离点后达标，跳过当前补捡动作和后续 {Count} 个补捡点",
+                                    pickupRouteName, pickupSegmentOffset + waypointIndex, departureResume - waypointIndex - 1);
+                                _lastWaypoint = waypoint;
+                                pickupJumpFrom = waypoint;
+                                waypointIndex = departureResume - 1;
+                                continue;
+                            }
+
                             // === 形式集合等待块（fastsync-preclaim-fires-after-rendezvous-fix / OQ-1=方案甲）===
                             // 挪动后位置：MoveTo/MoveCloseTo（走向集合点）之后、Action 块之前。
                             // 守卫保持 waypoint.Type != Teleport（此分支本就是非传送），__fastSyncId 复用顶部反查。
@@ -1498,8 +1528,12 @@ public partial class PathExecutor
                                     if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint))
                                         Logger.LogInformation("【拾取达标】{Point} 未能在距目标 {Distance} 个距离单位内开启观察，按原路线执行",
                                             pickupPointLabel, PickupWaypointApproachWindow.StartDistance);
+                                    var departureResumeIndex = pickupProgress == null ? null
+                                        : PickupWaypointSkipDecisions.GetDepartureResumeIndex(waypoints, waypointIndex, plannedPickupResume);
                                     pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint,
-                                        pickupProgress, plannedPickupResume, pickupPointLabel);
+                                        pickupProgress, plannedPickupResume, pickupPointLabel, departureResumeIndex.HasValue);
+                                    if (!pickupResumeIndex.HasValue && departureResumeIndex is { } afterDepartureResume)
+                                        pickupWindow.BeginDeparture(waypointIndex, afterDepartureResume);
                                 }
                                 else
                                 {
@@ -4473,7 +4507,8 @@ public partial class PathExecutor
     }
 
     private async Task<int?> AfterMoveToTarget(WaypointForTrack waypoint, Waypoint? nextWaypoint,
-        PickupWaypointProgress? pickup = null, int? plannedPickupResume = null, string? pickupPointLabel = null)
+        PickupWaypointProgress? pickup = null, int? plannedPickupResume = null, string? pickupPointLabel = null,
+        bool keepObservingAfterAction = false)
     {
         int? pickupResumeIndex = null;
         if (waypoint.Action == ActionEnum.NahidaCollect.Code
@@ -4496,7 +4531,7 @@ public partial class PathExecutor
             var handler = ActionFactory.GetAfterHandler(waypoint.Action);
             if (pickup != null && CanUseWaypointPickup(waypoint) && handler is CombatScriptHandler combatScriptHandler)
             {
-                if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickup, pickupPointLabel))
+                if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickup, pickupPointLabel, keepObservingAfterAction))
                     pickupResumeIndex = plannedPickupResume;
             }
             else
@@ -4712,6 +4747,7 @@ public partial class PathExecutor
         int time = 0;
         if (position == new Point2f())
         {
+            observePickupPosition?.Invoke(default); // 尾窗不能沿用定位丢失前的坐标。
             if (!Bv.IsInMainUi(imageRegion))
             {
                 if (isPoint)
@@ -4739,8 +4775,8 @@ public partial class PathExecutor
 
         var distance = Navigation.GetDistance(waypoint, position);
         // 观察只使用本次定位，不能拿下方用于脱困的历史坐标判断玩家已经接近目标。
-        if (observePickupPosition != null && position != default && distance <= 500)
-            observePickupPosition(position);
+        if (observePickupPosition != null && position != default)
+            observePickupPosition(double.IsFinite(distance) && distance <= 500 ? position : default);
         //中途暂停过，地图未识别到
         if (position is {X:0,Y:0} && GetPositionAndTimeSuspendFlag && !TryConsumeRevivalSignal())
         {

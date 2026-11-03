@@ -6,13 +6,14 @@ using OpenCvSharp;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
-/// <summary>保留当前路线段的一次拾取观察；观察可在上一途经点开启，始终归属目标点。</summary>
+/// <summary>保留当前路线段的一次拾取观察，覆盖接近、节点动作和获准的首个补捡路段。</summary>
 internal sealed class PickupWaypointApproachWindow : IDisposable
 {
     internal const double StartDistance = 5;
 
     private int _ownerIndex = -1;
     private int? _resumeIndex;
+    private int? _departureResumeIndex;
     private PickupWaypointProgress? _progress;
     private bool _disposed;
 
@@ -50,8 +51,46 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
 
     internal void EnterPoint(int currentIndex)
     {
-        if (!HasObservationFor(currentIndex))
+        if (!HasObservationFor(currentIndex) && !IsDepartureFor(currentIndex))
             Clear();
+    }
+
+    internal bool BeginDeparture(int ownerIndex, int resumeIndex)
+    {
+        if (!HasObservationFor(ownerIndex) || _resumeIndex is not { } plannedResume
+            || resumeIndex <= ownerIndex + 1 || resumeIndex > plannedResume || !_progress!.BeginDeparture())
+            return false;
+
+        _departureResumeIndex = resumeIndex;
+        return true;
+    }
+
+    internal bool IsDepartureFor(int waypointIndex) =>
+        _departureResumeIndex.HasValue && waypointIndex == _ownerIndex + 1;
+
+    internal void ObserveDeparturePosition(int waypointIndex, Waypoint owner, Point2f position)
+    {
+        if (!IsDepartureFor(waypointIndex))
+            return;
+
+        if (IsWithinStartDistance(owner, position, out _) && _progress!.ConfirmDeparturePosition())
+            return;
+
+        // 关闭与计数使用同一把锁，先前已达标则保留结果给移动后的安全切换点。
+        _progress!.Dispose();
+        if (!_progress.ReachedToken.IsCancellationRequested)
+            Clear();
+    }
+
+    internal int? FinishDeparture(int waypointIndex)
+    {
+        if (!IsDepartureFor(waypointIndex))
+            return null;
+
+        _progress!.Dispose(); // 先封存，再读结果；此后到达的帧不能改变路线。
+        var resume = _progress.ReachedToken.IsCancellationRequested ? _departureResumeIndex : null;
+        Clear();
+        return resume;
     }
 
     internal bool HasObservationFor(int waypointIndex) => _progress != null && _ownerIndex == waypointIndex;
@@ -88,6 +127,7 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         _progress = null;
         _ownerIndex = -1;
         _resumeIndex = null;
+        _departureResumeIndex = null;
     }
 
     public void Dispose()

@@ -42,21 +42,28 @@ public class CombatScriptHandler : IActionHandler
     }
 
     internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint,
-        PickupWaypointProgress pickup, string? pointLabel)
+        PickupWaypointProgress pickup, string? pointLabel, bool keepObservingAfterAction = false)
     {
         // 观察已在移动时启动；基线尚未就绪时继续观察，不阻塞节点动作。
         // 靠近时已经拾够：移动照常到点，完全不发送节点策略指令。
         if (pickup.ReachedToken.IsCancellationRequested)
             return FinishPickup(ct, pickup, waypoint, pointLabel);
 
-        return await RunCoreAsync(ct, waypoint, pickup, pointLabel);
+        return await RunCoreAsync(ct, waypoint, pickup, pointLabel, keepObservingAfterAction);
     }
 
     private static bool FinishPickup(CancellationToken ct, PickupWaypointProgress pickup,
-        WaypointForTrack waypoint, string? pointLabel)
+        WaypointForTrack waypoint, string? pointLabel, bool keepObservingAfterAction = false)
     {
         ct.ThrowIfCancellationRequested();
-        pickup.Dispose(); // 动作收尾后停止计数，后到的日志不能改变本点结果。
+        if (keepObservingAfterAction && pickup.BeginDeparture() && !pickup.ReachedToken.IsCancellationRequested)
+        {
+            Logger.LogInformation("【拾取达标】{Point} 动作结束，已计 {Count}/{Target}，继续观察首个补捡路段",
+                pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count);
+            return false;
+        }
+
+        pickup.Dispose();
         var reached = pickup.ReachedToken.IsCancellationRequested;
         Logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
             pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count,
@@ -65,7 +72,7 @@ public class CombatScriptHandler : IActionHandler
     }
 
     private static async Task<bool> RunCoreAsync(CancellationToken ct, WaypointForTrack? waypointForTrack,
-        PickupWaypointProgress? pickup, string? pointLabel)
+        PickupWaypointProgress? pickup, string? pointLabel, bool keepObservingAfterAction = false)
     {
         if (waypointForTrack is { CombatScript: not null })
         {
@@ -76,7 +83,10 @@ public class CombatScriptHandler : IActionHandler
             {
                 Logger.LogError("队伍识别未初始化成功！");
                 if (pickup != null)
+                {
+                    pickup.Dispose();
                     Logger.LogWarning("【拾取达标】{Point} 队伍识别未初始化，本点不跳过后续点", pointLabel);
+                }
                 return false;
             }
 
@@ -97,7 +107,7 @@ public class CombatScriptHandler : IActionHandler
                 // 执行器已经完成按键收尾，整条线路的停止仍优先。
             }
 
-            return FinishPickup(ct, pickup, waypointForTrack, pointLabel);
+            return FinishPickup(ct, pickup, waypointForTrack, pointLabel, keepObservingAfterAction);
         }
         else
         {

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using OpenCvSharp;
@@ -77,6 +78,140 @@ public sealed class PickupWaypointApproachWindowTests
 
         Assert.False(window.HasObservationFor(1));
         Assert.Null(PickupWaypointProgress.Capture());
+    }
+
+    [Fact]
+    public void DepartureCountsOnlyNewRowsAfterFreshInRangePositionAndKeepsAReachedResult()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        var owner = new Waypoint { X = 10, Y = 20 };
+
+        Assert.True(window.BeginDeparture(0, 3));
+        window.EnterPoint(1);
+        Assert.True(window.IsDepartureFor(1));
+
+        // 新位置还没确认；这两帧不能补齐目标。
+        SampleRows(progress, 4);
+        Assert.Equal(2, progress.Count);
+
+        var preConfirmationFrame = Stopwatch.GetTimestamp() - Stopwatch.Frequency / 100;
+        window.ObserveDeparturePosition(1, owner, new Point2f(15, 20));
+        progress.ObserveFrame(Rows(4), default, preConfirmationFrame, 50);
+        progress.ObserveFrame(Rows(4), default, preConfirmationFrame + 1, 50);
+        Assert.Equal(2, progress.Count);
+        SampleRows(progress, 2);
+        Assert.Equal(2, progress.Count);
+        SampleRows(progress, 4);
+        Assert.Equal(4, progress.Count);
+
+        window.ObserveDeparturePosition(1, owner, new Point2f(15.01f, 20));
+        Assert.Equal(3, window.FinishDeparture(1));
+        Assert.Null(window.FinishDeparture(1));
+        Assert.Null(PickupWaypointProgress.Capture());
+    }
+
+    [Theory]
+    [InlineData(15.01f, 20f)]
+    [InlineData(0f, 0f)]
+    public void LeavingRangeOrLosingPositionSealsAnUnfinishedDeparture(float x, float y)
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        var owner = new Waypoint { X = 10, Y = 20 };
+
+        Assert.True(window.BeginDeparture(0, 3));
+        window.EnterPoint(1);
+        window.ObserveDeparturePosition(1, owner, new Point2f(14, 20));
+        // 首帧看见新增但尚未稳定。第二帧晚到时已失去对 A 的位置确认。
+        progress.ObserveFrame(Rows(4), default, Stopwatch.GetTimestamp(), 50);
+        window.ObserveDeparturePosition(1, owner, new Point2f(x, y));
+        window.ObserveDeparturePosition(1, owner, new Point2f(14, 20));
+        SampleRows(progress, 4);
+
+        Assert.Equal(2, progress.Count);
+        Assert.Null(window.FinishDeparture(1));
+        Assert.Null(PickupWaypointProgress.Capture());
+    }
+
+    [Fact]
+    public void FinishingBeforeTheFallbackActionRejectsLateFramesAndReleasesTheNextObserver()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        var owner = new Waypoint { X = 10, Y = 20 };
+        Assert.True(window.BeginDeparture(0, 3));
+        window.EnterPoint(1);
+        window.ObserveDeparturePosition(1, owner, new Point2f(14, 20));
+
+        Assert.Null(window.FinishDeparture(1));
+
+        using var next = PickupWaypointProgress.TryBegin(1);
+        Assert.NotNull(next);
+        SampleRows(progress, 4);
+        Assert.Equal(2, progress.Count);
+        Assert.Equal(0, next.Count);
+        Assert.Null(window.FinishDeparture(1));
+    }
+
+    [Fact]
+    public void ACountOnlyNodeCannotCarryItsObservationIntoTheNextPoint()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window, plannedResume: null);
+
+        Assert.False(window.BeginDeparture(0, 3));
+        window.EnterPoint(1);
+
+        Assert.False(window.IsDepartureFor(1));
+        Assert.Null(PickupWaypointProgress.Capture());
+    }
+
+    [Fact]
+    public void DepartureCannotSkipAnIndependentPickupPoint()
+    {
+        Waypoint[] nextIsIndependent = [PickupPoint(), PickupPoint(), new(), new()];
+        Assert.Null(PickupWaypointSkipDecisions.GetDepartureResumeIndex(nextIsIndependent, 0, 3));
+
+        Waypoint[] laterIsIndependent = [PickupPoint(), new(), PickupPoint(), new()];
+        Assert.Equal(2, PickupWaypointSkipDecisions.GetDepartureResumeIndex(laterIsIndependent, 0, 3));
+    }
+
+    [Fact]
+    public void DepartureKeepsTheEndOfRouteResumeOnlyForAnAlreadyValidFinalSegment()
+    {
+        Waypoint[] segment = [PickupPoint(), new(), new()];
+        var finalResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, 2, isLastSegment: true, out _);
+        var nonfinalResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, 2, isLastSegment: false, out _);
+
+        Assert.Equal(segment.Length, PickupWaypointSkipDecisions.GetDepartureResumeIndex(segment, 0, finalResume));
+        Assert.Null(PickupWaypointSkipDecisions.GetDepartureResumeIndex(segment, 0, nonfinalResume));
+    }
+
+    private static PickupWaypointProgress StartWithTwoRows(PickupWaypointApproachWindow window, int? plannedResume = 3)
+    {
+        var progress = PickupWaypointProgress.TryBegin(4)!;
+        window.EnterPoint(0);
+        window.Start(0, progress, plannedResume);
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        for (var i = 0; i < 2; i++) progress.Observe(Rows(2));
+        Assert.Equal(2, progress.Count);
+        return progress;
+    }
+
+    private static void SampleRows(PickupWaypointProgress progress, int count)
+    {
+        var observation = Rows(count);
+        for (var i = 0; i < 2; i++)
+            progress.ObserveFrame(observation, default, Stopwatch.GetTimestamp(), 50);
+    }
+
+    private static PickupRowObservation Rows(int count)
+    {
+        var rows = new PickupVisualRow[count];
+        for (var index = 0; index < rows.Length; index++)
+            rows[index] = new PickupVisualRow(563 + 48 * index, 0x789CE33256DBE2AC);
+        return new PickupRowObservation(true, rows);
     }
 
     private static Waypoint PickupPoint() => new()

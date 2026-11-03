@@ -52,6 +52,24 @@ internal static class PickupWaypointSkipDecisions
         return resumeIndex;
     }
 
+    internal static int? GetDepartureResumeIndex(IReadOnlyList<Waypoint> segment, int ownerIndex, int? plannedResume)
+    {
+        if (ownerIndex < 0 || ownerIndex >= segment.Count || plannedResume is not { } resume
+            || resume <= ownerIndex + 1 || resume > segment.Count)
+            return null;
+
+        var owner = segment[ownerIndex];
+        for (var index = ownerIndex + 1; index < resume; index++)
+        {
+            var point = segment[index];
+            if (point.PickupTargetCount.HasValue || (owner is WaypointForTrack origin && point is WaypointForTrack next
+                    && (origin.MapName != next.MapName || origin.MapMatchMethod != next.MapMatchMethod)))
+                return index == ownerIndex + 1 ? null : index;
+        }
+
+        return resume;
+    }
+
     private static bool IsMovementPoint(Waypoint point)
         => point.Type == WaypointType.Path.Code || point.Type == WaypointType.Target.Code;
 
