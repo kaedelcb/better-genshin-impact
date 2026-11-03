@@ -12,24 +12,26 @@ public sealed class PickupWaypointProgressTests
     public void ThresholdCombinesSeparateListAppearancesWithinTheSameNode()
     {
         Assert.Null(PickupWaypointProgress.Capture());
-        var point = PickupWaypointProgress.TryBegin(2)!;
+        var point = PickupWaypointProgress.TryBegin(3)!;
         var empty = new PickupRowObservation(true, []);
         var one = new PickupRowObservation(true, [new PickupVisualRow(563, 0x789CE33256DBE2AC)]);
+        var two = new PickupRowObservation(true,
+            [new PickupVisualRow(563, 0x789CE33256DBE2AC), new PickupVisualRow(611, 0x789CE33256DBE2AC)]);
         using (point)
         {
             Assert.Same(point, PickupWaypointProgress.Capture());
             for (var i = 0; i < 3; i++) point.Observe(empty);
-            point.Observe(one);
-            point.Observe(one);
-            Assert.Equal(1, point.Count);
+            point.Observe(two);
+            point.Observe(two);
+            Assert.Equal(2, point.Count);
 
             for (var i = 0; i < 3; i++) point.Observe(empty);
-            Assert.Equal(1, point.Count);
+            Assert.Equal(2, point.Count);
             Assert.False(point.ReachedToken.IsCancellationRequested);
 
             point.Observe(one);
             point.Observe(one);
-            Assert.Equal(2, point.Count);
+            Assert.Equal(3, point.Count);
             Assert.True(point.ReachedToken.IsCancellationRequested);
         }
 

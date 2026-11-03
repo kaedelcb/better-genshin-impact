@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenCvSharp;
+using Mat = OpenCvSharp.Mat;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
@@ -21,6 +21,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     private readonly ILogger? _logger;
     private readonly string? _pointLabel;
     private long _lastFrameTime;
+    private long _lastDetectionLogTime;
     private bool _frameErrorReported;
     private int _count;
 
@@ -83,7 +84,8 @@ internal sealed class PickupWaypointProgress : IDisposable
             if (_lastFrameTime != 0 && Stopwatch.GetElapsedTime(_lastFrameTime, frameTime).TotalMilliseconds > Math.Max(300, interval * 3))
                 Observe(PickupRowObservation.Interrupted);
             _lastFrameTime = frameTime;
-            Observe(PickupObtainedRowDetector.Detect(frame));
+            var observation = PickupObtainedRowDetector.Detect(frame, out var detection);
+            Observe(observation, detection);
         }
         catch (Exception ex)
         {
@@ -101,7 +103,7 @@ internal sealed class PickupWaypointProgress : IDisposable
         }
     }
 
-    internal void Observe(PickupRowObservation observation)
+    internal void Observe(PickupRowObservation observation, PickupObtainedRowDetectionStats detection = default)
     {
         PickupRowUpdate update;
         bool establishedBaseline;
@@ -120,6 +122,16 @@ internal sealed class PickupWaypointProgress : IDisposable
                     _reached.Cancel();
             }
             count = _count;
+        }
+
+        if (detection.RowComponents is { } rowComponents && _logger?.IsEnabled(LogLevel.Debug) == true
+            && (establishedBaseline || update.AddedRows > 0 || update.Cleared || _lastDetectionLogTime == 0
+                || Stopwatch.GetElapsedTime(_lastDetectionLogTime).TotalMilliseconds >= 500))
+        {
+            _lastDetectionLogTime = Stopwatch.GetTimestamp();
+            _logger.LogDebug("【拾取达标】{Point} 前景连通块：标题 {Header}（阈值 {HeaderThreshold}），各行 [{RowComponents}]（阈值 {RowThreshold}），有效行 {VisibleRows}",
+                _pointLabel, detection.HeaderComponents, detection.HeaderThreshold, string.Join(", ", rowComponents),
+                detection.RowThreshold, observation.IsAvailable ? observation.Rows?.Count : null);
         }
 
         if (establishedBaseline)
