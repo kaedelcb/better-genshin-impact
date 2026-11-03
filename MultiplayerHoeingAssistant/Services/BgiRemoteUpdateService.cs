@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 
@@ -15,7 +16,8 @@ public sealed record BgiRemoteUpdateInfo(
     DateTime? UpdatedAt,
     BgiArchiveName NameInfo,
     string? Sha256 = null,
-    long? ActionsRunId = null)
+    long? ActionsRunId = null,
+    string? CnbArtifactTag = null)
 {
     public string SizeText => SizeBytes is > 0 ? $"{SizeBytes / (double)(1L << 20):F1} MB" : "大小未知";
 }
@@ -24,6 +26,8 @@ public sealed record BgiUpdateSourceResult(IReadOnlyList<BgiRemoteUpdateInfo> Pa
 
 public static class BgiRemoteUpdateService
 {
+    private const string CnbPackageFile = "BetterGI_7z.7z";
+    private static readonly byte[] SevenZipSignature = [0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C];
     private static readonly HttpClient CatalogClient = new()
     {
         Timeout = TimeSpan.FromSeconds(12),
@@ -43,6 +47,9 @@ public static class BgiRemoteUpdateService
         {
             switch (source.Kind)
             {
+                case BgiUpdateSourceKind.Cnb:
+                    return await FetchCnbAsync(CatalogClient, endpoint, ct).ConfigureAwait(false);
+
                 case BgiUpdateSourceKind.GitHubActions:
                     var runs = FetchJsonAsync(endpoint, ct);
                     var artifacts = FetchJsonAsync(new Uri(BgiUpdateSources.ActionsArtifacts), ct);
@@ -80,6 +87,32 @@ public static class BgiRemoteUpdateService
         using var response = await CatalogClient.GetAsync(endpoint, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+    }
+
+    internal static async Task<BgiUpdateSourceResult> FetchCnbAsync(HttpClient client, Uri versionUrl, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+        var cancel = timeout.Token;
+        var version = (await client.GetStringAsync(versionUrl, cancel).ConfigureAwait(false)).Trim();
+        if (version.Length > 160 || !TryParseName($"BetterGI_v{version}.7z", out var name))
+            return new([], "CNB 没有返回有效的茶包版版本号。");
+
+        // CNB 的下载地址固定不变；HEAD 在发布入口可能没有 ETag，读取开头 64 字节来识别实际附件。
+        var packageUrl = new Uri(versionUrl, CnbPackageFile);
+        using var request = new HttpRequestMessage(HttpMethod.Get, packageUrl);
+        request.Headers.Range = new RangeHeaderValue(0, 63);
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.StatusCode != HttpStatusCode.PartialContent || response.Headers.ETag is not { IsWeak: false } tag
+            || response.Content.Headers.ContentRange is not { From: 0, Length: > 63 } range)
+            return new([], "CNB 无法确认当前安装包，可刷新重试或切换来源。");
+        await using var body = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
+        if (!await HasSevenZipSignatureAsync(body, cancel).ConfigureAwait(false))
+            return new([], "CNB 返回的文件不是茶包版 7z 安装包。");
+
+        return new([new(name!.FileName, packageUrl.AbsoluteUri, range.Length,
+            response.Content.Headers.LastModified?.UtcDateTime, name, CnbArtifactTag: tag.Tag)]);
     }
 
     public static BgiRemoteUpdateInfo? ParseManifest(string json, string serverBaseUrl)
@@ -226,20 +259,25 @@ public static class BgiRemoteUpdateService
     private static string ReceiptPath(string package) => package + ".download-info";
 
     private static string DownloadIdentity(BgiRemoteUpdateInfo info)
-        => BgiUpdateSources.Hash(JsonSerializer.Serialize(new
+    {
+        var identity = JsonSerializer.Serialize(new
         {
             info.FileName, info.ActionsRunId,
             Sha256 = info.Sha256?.ToUpperInvariant(),
             Url = info.Sha256 == null ? info.Url : null,
             Size = info.Sha256 == null ? info.SizeBytes : null,
             Modified = info.Sha256 == null ? info.UpdatedAt : null,
-        }));
+        });
+        // 保留其他下载源既有收据的身份；CNB 收据额外绑定选中时的附件 ETag。
+        return BgiUpdateSources.Hash(info.CnbArtifactTag == null ? identity : $"{identity}\n{info.CnbArtifactTag}");
+    }
 
     private static async Task<bool> IsSavedPackageValidAsync(BgiRemoteUpdateInfo info, string path,
         IProgress<string>? progress, CancellationToken ct)
     {
         // 只有文件名和 URL 时无法识别服务端是否替换过内容；仍可从本地列表手动选择已保存的包。
-        if (info.Sha256 == null && (info.SizeBytes == null || (info.UpdatedAt == null && info.ActionsRunId == null))) return false;
+        if (info.CnbArtifactTag == null && info.Sha256 == null
+            && (info.SizeBytes == null || (info.UpdatedAt == null && info.ActionsRunId == null))) return false;
         try
         {
             var receipt = new FileInfo(ReceiptPath(path));
@@ -266,7 +304,7 @@ public static class BgiRemoteUpdateService
         IProgress<string>? progress, CancellationToken ct = default)
     {
         if (!TryParseName(info.FileName, out _)
-            || !BgiUpdateSources.TryHttpUri(info.Url, httpsOnly: info.ActionsRunId.HasValue, out var url))
+            || !BgiUpdateSources.TryHttpUri(info.Url, httpsOnly: info.ActionsRunId.HasValue || info.CnbArtifactTag != null, out var url))
             throw new InvalidDataException("下载地址或安装包文件名无效。");
 
         Directory.CreateDirectory(destDir);
@@ -274,6 +312,7 @@ public static class BgiRemoteUpdateService
         var token = Guid.NewGuid().ToString("N");
         var downloadPath = Path.Combine(destDir, $".download-{token}.part");
         var extractedPath = Path.Combine(destDir, $".extract-{token}.part");
+        var inspectionPath = Path.Combine(destDir, $".version-{token}.part");
         var receiptPath = Path.Combine(destDir, $".receipt-{token}.part");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(30));
@@ -282,6 +321,9 @@ public static class BgiRemoteUpdateService
             var cancel = timeout.Token;
             using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
+            if (info.CnbArtifactTag is { } expectedTag && (response.StatusCode != HttpStatusCode.OK
+                || response.Headers.ETag is not { IsWeak: false } downloadTag || downloadTag.Tag != expectedTag))
+                throw new InvalidDataException("CNB 的安装包已变动，请刷新来源后重新选择。");
             var responseLength = response.Content.Headers.ContentLength;
             if (info.SizeBytes is { } expected && responseLength is { } actual && expected != actual)
                 throw new InvalidDataException("服务器返回的文件大小与更新清单不一致。");
@@ -305,10 +347,14 @@ public static class BgiRemoteUpdateService
 
             await using (var archive = File.OpenRead(candidate))
             {
-                var header = new byte[6];
-                if (await archive.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken: cancel).ConfigureAwait(false) != header.Length
-                    || !header.AsSpan().SequenceEqual(new byte[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }))
+                if (!await HasSevenZipSignatureAsync(archive, cancel).ConfigureAwait(false))
                     throw new InvalidDataException("下载的文件不是有效的 .7z 安装包。");
+            }
+            if (info.CnbArtifactTag != null)
+            {
+                progress?.Report("正在核对 CNB 安装包内的 BGI 版本…");
+                await Task.Run(() => BgiPackageUpdateService.VerifyCnbPackageVersion(candidate, inspectionPath, info.FileName, cancel), cancel)
+                    .ConfigureAwait(false);
             }
             await File.WriteAllLinesAsync(receiptPath, [DownloadIdentity(info), archiveHash], cancel).ConfigureAwait(false);
             cancel.ThrowIfCancellationRequested();
@@ -326,8 +372,16 @@ public static class BgiRemoteUpdateService
         {
             TryDelete(downloadPath);
             TryDelete(extractedPath);
+            TryDelete(inspectionPath);
             TryDelete(receiptPath);
         }
+    }
+
+    private static async Task<bool> HasSevenZipSignatureAsync(Stream stream, CancellationToken ct)
+    {
+        var header = new byte[SevenZipSignature.Length];
+        return await stream.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken: ct).ConfigureAwait(false) == header.Length
+            && header.AsSpan().SequenceEqual(SevenZipSignature);
     }
 
     private static async Task<string> CopyAndVerifyAsync(Stream input, string dest, long? size, string? digest,

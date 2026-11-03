@@ -156,6 +156,43 @@ public static class BgiPackageUpdateService
         IProgress<string>? progress, CancellationToken ct = default)
         => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupExcludedDirs, progress, ct), ct);
 
+    /// <summary>固定链接上的 CNB 包必须与所选版本一致；只读取将写入 BGI 根目录的主程序元数据。</summary>
+    internal static void VerifyCnbPackageVersion(string archivePath, string inspectionPath, string expectedFileName, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var archive = SevenZipArchive.Open(archivePath);
+        var entries = archive.Entries.Where(e => !e.IsDirectory).ToList();
+        var root = DetectCommonRoot(entries, out var rootError);
+        if (rootError != null) throw new InvalidDataException(rootError);
+        var executable = root == null ? "BetterGI.exe" : Path.Combine(root, "BetterGI.exe");
+        var candidates = entries.Where(e => string.Equals(NormalizeEntryPath(e.Key ?? ""), executable,
+            StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
+        if (candidates.Length != 1 || candidates[0].Size is <= 0 or > (512L << 20))
+            throw new InvalidDataException("无法从 CNB 安装包中确认唯一的 BetterGI.exe。");
+
+        var entry = candidates[0];
+        using (var input = entry.OpenEntryStream())
+        using (var output = new FileStream(inspectionPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        {
+            var buffer = new byte[1 << 16];
+            long remaining = entry.Size;
+            while (remaining > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                int read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                if (read == 0) throw new InvalidDataException("CNB 安装包中的 BetterGI.exe 不完整。");
+                output.Write(buffer, 0, read);
+                remaining -= read;
+            }
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var version = BgiVersionResolver.FromExecutable(inspectionPath);
+        var actual = BgiUpdateDecisions.BuildLocalComparableName(version)?.FileName;
+        if (!string.Equals(actual, expectedFileName, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"CNB 安装包实际版本为 {version ?? "未知"}，与所选版本不符。请刷新来源后重试。");
+    }
+
     public static BgiUpdateApplyResult Apply(string archivePath, string targetDir,
         IReadOnlyList<string> excludeDirs, bool backupExcludedDirs,
         IProgress<string>? progress, CancellationToken ct = default)

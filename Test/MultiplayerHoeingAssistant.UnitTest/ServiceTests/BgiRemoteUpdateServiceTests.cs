@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
@@ -15,6 +16,63 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 /// </summary>
 public class BgiRemoteUpdateServiceTests
 {
+    [Fact]
+    public async Task Cnb_SourceUsesTextVersionAndPinsTheActualAttachment()
+    {
+        var source = BgiUpdateSources.List(new AssistConfig()).Single(s => s.Kind == BgiUpdateSourceKind.Cnb);
+        using var client = new HttpClient(new CnbResponse("\"selected\"", ranged: true));
+        var result = await BgiRemoteUpdateService.FetchCnbAsync(client, source.Endpoint!, CancellationToken.None);
+        var package = Assert.Single(result.Packages);
+        Assert.Equal("BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z", package.FileName);
+        Assert.EndsWith("/BetterGI_7z.7z", package.Url);
+        Assert.Equal(530653734L, package.SizeBytes);
+        Assert.Equal("\"selected\"", package.CnbArtifactTag);
+    }
+
+    [Theory]
+    [InlineData("\"replaced\"", "安装包已变动")]
+    [InlineData("\"selected\"", "与所选版本不符")]
+    public async Task Cnb_DownloadRejectsChangedAttachmentOrWrongPackageWithoutReplacingSavedFile(string servedTag, string error)
+    {
+        const string name = "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z";
+        var fixture = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "TestData", name));
+        using var client = new HttpClient(new CnbResponse(servedTag, ranged: false, payload: fixture));
+        var directory = Directory.CreateTempSubdirectory("NexusBgiCnb-");
+        try
+        {
+            var path = Path.Combine(directory.FullName, name);
+            await File.WriteAllTextAsync(path, "prior archive");
+            var info = new BgiRemoteUpdateInfo(name, "https://cnb.cool/example/BetterGI_7z.7z", fixture.Length, null,
+                ParseName(name), CnbArtifactTag: "\"selected\"");
+            var ex = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                BgiRemoteUpdateService.PreparePackageAsync(client, info, directory.FullName, null));
+            Assert.Contains(error, ex.Message);
+            Assert.Equal("prior archive", await File.ReadAllTextAsync(path));
+            Assert.Equal(path, Assert.Single(Directory.GetFiles(directory.FullName)));
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
+    private sealed class CnbResponse(string tag, bool ranged, byte[]? payload = null) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith("/runForVersion.txt", StringComparison.Ordinal))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                { Content = new StringContent("0.64.2+lcb.22.7-NexusBGI-fix13\r\n") });
+            var response = new HttpResponseMessage(ranged ? HttpStatusCode.PartialContent : HttpStatusCode.OK);
+            response.Headers.ETag = new EntityTagHeaderValue(tag);
+            if (ranged)
+            {
+                Assert.Equal("bytes=0-63", request.Headers.Range?.ToString());
+                response.Content = new ByteArrayContent([0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]);
+                response.Content.Headers.ContentRange = new ContentRangeHeaderValue(0, 63, 530653734);
+            }
+            else response.Content = new ByteArrayContent(payload!);
+            return Task.FromResult(response);
+        }
+    }
+
     [Fact]
     public void StartupCheck_DefaultsOffForOldConfig_UsesPreferredNetworkSource()
     {
