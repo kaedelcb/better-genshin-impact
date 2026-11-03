@@ -14,7 +14,7 @@ public enum BgiPackageSource
     Directory = 0,
     /// <summary>用户"选择指定压缩包…"手动挑的（可能在任意目录）。</summary>
     PickedManually = 1,
-    /// <summary>（预留）从服务器下载的。下载功能后做，先占位统一来源标签体系。</summary>
+    /// <summary>从当前选择的下载源取得的。</summary>
     Network = 2,
 }
 
@@ -26,7 +26,9 @@ public sealed record BgiUpdatePackage(
     long LengthBytes,
     DateTime ModifiedTime,
     BgiArchiveName NameInfo,
-    BgiPackageSource Source = BgiPackageSource.Directory)
+    BgiPackageSource Source = BgiPackageSource.Directory,
+    BgiRemoteUpdateInfo? Remote = null,
+    BgiUpdateSource? DownloadSource = null)
 {
     public string SizeText => LengthBytes switch
     {
@@ -39,6 +41,10 @@ public sealed record BgiUpdatePackage(
 
     /// <summary>包所在目录（手动指定的包在列表里展示用）。</summary>
     public string DirectoryText => Path.GetDirectoryName(FullPath) ?? "";
+
+    public string BuildText => Remote?.ActionsRunId is long runId ? $" · 构建 #{runId}" : "";
+
+    public string ModifiedTimeText => ModifiedTime == DateTime.MinValue ? "时间未知" : ModifiedTime.ToString("yyyy-MM-dd HH:mm");
 
     /// <summary>来源标签文本（与 BgiPackageSource 一一对应；新来源在此登记文案）。</summary>
     public string SourceTagText => Source switch

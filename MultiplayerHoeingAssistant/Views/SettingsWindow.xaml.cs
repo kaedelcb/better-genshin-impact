@@ -111,6 +111,12 @@ public partial class SettingsWindow : Window
             PlayerUid = playerUid,
             TeamUids = teamUids,
             BgiPath = bgiPath,
+            BgiPackageDir = _configCopy?.BgiPackageDir ?? "",
+            BgiPickedPackages = _configCopy?.BgiPickedPackages ?? [],
+            BgiUpdateExcludeDirs = _configCopy?.BgiUpdateExcludeDirs ?? [],
+            BgiUpdateBackupBeforeUpdate = _configCopy?.BgiUpdateBackupBeforeUpdate ?? true,
+            BgiUpdateSourceId = _configCopy?.BgiUpdateSourceId,
+            BgiCustomUpdateSources = _configCopy?.BgiCustomUpdateSources ?? [],
             // 保留其他字段（不因设置弹窗保存而重置）
             ObserverMode = ObserverModeCheckBox.IsChecked == true,
             BypassSystemProxy = BypassSystemProxyCheckBox.IsChecked == true,

@@ -1705,7 +1705,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             _remoteBgiUpdate = value;
             OnPropertyChanged(nameof(RemoteBgiUpdate));
             OnPropertyChanged(nameof(RemoteUpdateAvailable));
-            OnPropertyChanged(nameof(RemoteUpdateBannerText));
         }
     }
 
@@ -1713,16 +1712,10 @@ public partial class MainViewModel : INotifyPropertyChanged
     public bool RemoteUpdateAvailable => RemoteBgiUpdate is { } info
         && BgiUpdateDecisions.IsNewerThanLocal(info.NameInfo, ResolveLocalBgiVersion());
 
-    /// <summary>更新弹窗提醒条文本（RemoteUpdateAvailable=true 时展示）。</summary>
-    public string RemoteUpdateBannerText => RemoteBgiUpdate is { } info
-        ? $"服务器有新版本：{info.FileName}（{info.SizeText}）。选中该包点「更新」，本地未下载时会先下载。"
-        : "";
-
     /// <summary>本机版本可能已变（如刚完成更新）：重新求值 RemoteUpdateAvailable 刷新版本号金色/提醒条。</summary>
     public void NotifyRemoteUpdateStateChanged()
     {
         OnPropertyChanged(nameof(RemoteUpdateAvailable));
-        OnPropertyChanged(nameof(RemoteUpdateBannerText));
     }
 
     private void StartRemoteUpdateTimer()

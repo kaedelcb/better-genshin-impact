@@ -9,7 +9,6 @@
         FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei"
         WindowStyle="SingleBorderWindow">
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style x:Key="Lbl" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
@@ -65,36 +64,41 @@
             </Grid>
             <TextBlock Style="{StaticResource Hint}" Text="默认取设置里 BetterGI.exe 所在目录。覆盖前会检查并（经你确认后）自动关闭该目录下正在运行的 BGI。"/>
 
-            <!-- 第三行：安装包目录 + 刷新 -->
-            <TextBlock Text="更新安装包目录（.7z）" Style="{StaticResource Lbl}"/>
+            <TextBlock Text="安装包目录（.7z）" Style="{StaticResource Lbl}"/>
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBox x:Name="PackageDirBox" Style="{StaticResource Txt}" Grid.Column="0" Margin="0,0,6,0"/>
-                <Button x:Name="BrowsePackageDirButton" Content="浏览" Grid.Column="1" Width="56" Height="32" Margin="0,0,6,0" Style="{StaticResource Btn}" Click="BrowsePackageDirButton_Click"/>
-                <Button x:Name="RefreshPackagesButton" Content="刷新" Grid.Column="2" Width="56" Height="32" Style="{StaticResource Btn}" Click="RefreshPackagesButton_Click"/>
+                <Button x:Name="BrowsePackageDirButton" Content="浏览" Grid.Column="1" Width="56" Height="32" Style="{StaticResource Btn}" Click="BrowsePackageDirButton_Click"/>
             </Grid>
 
-            <!-- 网络更新提醒条：服务器包比本机版本新时显示；同名包已在安装包目录时直接选中本地条目。 -->
-            <Border Margin="0,10,0,0" CornerRadius="6" Padding="10,7" BorderThickness="1"
-                    Background="#1FE8A84E" BorderBrush="#55E8A84E"
-                    Visibility="{Binding RemoteUpdateAvailable, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="{Binding RemoteUpdateBannerText}"
-                               FontSize="11" Foreground="#8A5B10" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                    <Button x:Name="SelectNetworkPackageButton" Content="选中该包" Grid.Column="1" Height="26" Padding="10,0"
-                            Margin="10,0,0,0" Style="{StaticResource Btn}" VerticalAlignment="Center"
-                            ToolTip="选中服务器提供的版本；本地已有该包时直接使用"
-                            Click="SelectNetworkPackageButton_Click"/>
-                </Grid>
-            </Border>
+            <TextBlock Text="下载来源" Style="{StaticResource Lbl}"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <ComboBox x:Name="SourceBox" DisplayMemberPath="Label" Height="32" FontSize="13"
+                          AutomationProperties.Name="下载来源" SelectionChanged="SourceBox_SelectionChanged" Margin="0,0,6,0"/>
+                <Button x:Name="RefreshPackagesButton" Content="刷新" Grid.Column="1" Width="56" Height="32"
+                        Style="{StaticResource Btn}" Click="RefreshPackagesButton_Click"/>
+            </Grid>
+            <Expander x:Name="SourceEditor" Header="管理自定义下载源" Margin="0,8,0,0" FontSize="12">
+                <StackPanel Margin="0,4,0,0">
+                    <TextBlock Text="名称（可选）" Style="{StaticResource Hint}"/>
+                    <TextBox x:Name="SourceNameBox" Style="{StaticResource Txt}" MaxLength="80" AutomationProperties.Name="自定义源名称"/>
+                    <TextBlock Text="HTTPS 更新清单网址（例如 https://mirror.example.com/bgi-update/latest.json）" Style="{StaticResource Hint}"/>
+                    <TextBox x:Name="SourceUrlBox" Style="{StaticResource Txt}" MaxLength="2048" AutomationProperties.Name="HTTPS 更新清单网址"/>
+                    <WrapPanel Margin="0,6,0,0">
+                        <Button Content="添加并选中" Height="28" Style="{StaticResource Btn}" Click="AddSourceButton_Click"/>
+                        <Button x:Name="RemoveSourceButton" Content="移除当前自定义源" Height="28" Margin="6,0,0,0"
+                                Style="{StaticResource Btn}" Click="RemoveSourceButton_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="SourceEditorStatus" TextWrapping="Wrap" Foreground="#8A5B10" Margin="0,3,0,0"/>
+                </StackPanel>
+            </Expander>
 
             <!-- 安装包列表 -->
             <ListBox x:Name="PackageList" Height="132" Margin="0,8,0,0" Background="White"
@@ -143,7 +147,8 @@
                             <TextBlock FontSize="10" Foreground="#8E8E93" TextTrimming="CharacterEllipsis">
                                 <Run Text="{Binding NameInfo.VersionSummary, Mode=OneWay}"/>
                                 <Run Text=" · "/><Run Text="{Binding SizeText, Mode=OneWay}"/>
-                                <Run Text=" · "/><Run Text="{Binding ModifiedTime, Mode=OneWay, StringFormat='yyyy-MM-dd HH:mm'}"/>
+                                <Run Text=" · "/><Run Text="{Binding ModifiedTimeText, Mode=OneWay}"/>
+                                <Run Text="{Binding BuildText, Mode=OneWay}"/>
                             </TextBlock>
                             <!-- 手动指定的包：额外显示其所在目录（可能不在安装包目录内） -->
                             <TextBlock Text="{Binding DirectoryText}" FontSize="9" Foreground="#9A9AA0"

@@ -1,10 +1,11 @@
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using Microsoft.Win32;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 
@@ -12,7 +13,7 @@ namespace MultiplayerHoeingAssistant.Views;
 
 /// <summary>
 /// "更新BGI"弹窗（成员卡 UID 右侧版本徽章点击，仅自机）。
-/// 三行结构：当前 BGI 版本 / BGI 目录 / 安装包目录（行尾刷新键）→ 包列表 → 排除目录 + 备份勾选 → 更新。
+/// 选择下载来源后，仅列出该来源的安装包；本地目录和手动指定包共用一个来源。
 /// 更新 = 把选中的茶包版 .7z 解压覆盖到 BGI 目录：
 ///   弹窗前置检查（BetterGI.exe 存在、BGI 运行中则经确认后关闭）→ 风险确认弹窗（需求硬约束）→
 ///   可选先备份排除目录 → 解压覆盖（排除目录整目录跳过、被占用文件改名腾位）→ 结果汇总 + 刷新版本显示。
@@ -22,6 +23,10 @@ public partial class UpdateBgiWindow : Window
 {
     private readonly MainViewModel _vm;
     private readonly ObservableCollection<string> _excludeDirs = [];
+    private readonly List<string> _pickedPackagePaths;
+    private readonly List<BgiCustomUpdateSource> _customSources;
+    private CancellationTokenSource? _sourceCheck;
+    private bool _sourcesReady;
     private bool _updating;
 
     public UpdateBgiWindow(MainViewModel vm)
@@ -30,7 +35,8 @@ public partial class UpdateBgiWindow : Window
         // 屏幕工作区适配：尺寸压到所在屏 95% 内并居中钳位，防止高缩放/小屏下窗口被截（与 MainWindow/SettingsWindow 同款）
         MultiplayerHoeingAssistant.Helpers.DpiAwarenessController.Initialize(this);
         _vm = vm;
-        DataContext = vm;
+        _pickedPackagePaths = vm.Config?.BgiPickedPackages?.ToList() ?? [];
+        _customSources = vm.Config?.BgiCustomUpdateSources?.ToList() ?? [];
         var exePath = vm.Config?.BgiPath;
         BgiDirBox.Text = string.IsNullOrWhiteSpace(exePath) ? "" : (Path.GetDirectoryName(exePath) ?? "");
         PackageDirBox.Text = vm.Config?.BgiPackageDir ?? "";
@@ -38,15 +44,15 @@ public partial class UpdateBgiWindow : Window
         ExcludeList.ItemsSource = _excludeDirs;
         BackupExcludeCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
         RefreshCurrentVersion();
-        ScanPackages();
-        // 定时检测可能已经在进行，监听其结果也能刷新当前窗口。
-        _vm.PropertyChanged += RemoteUpdateChanged;
+        RebuildSourceChoices(vm.Config?.BgiUpdateSourceId ??
+            (vm.RemoteUpdateAvailable ? BgiUpdateSources.CoordinatorId : BgiUpdateSources.LocalId));
         Closed += (_, _) =>
         {
-            _vm.PropertyChanged -= RemoteUpdateChanged;
+            _sourceCheck?.Cancel();
+            _sourceCheck = null;
             PersistConfig();
         };
-        _ = _vm.CheckRemoteUpdateAsync();
+        Closing += (_, e) => e.Cancel = _updating;
     }
 
     private void RefreshCurrentVersion()
@@ -60,59 +66,101 @@ public partial class UpdateBgiWindow : Window
 
     // ===== 扫描 =====
 
-    private void RefreshPackagesButton_Click(object sender, RoutedEventArgs e)
+    private async void RefreshPackagesButton_Click(object sender, RoutedEventArgs e)
     {
-        ScanPackages();
-        _ = _vm.CheckRemoteUpdateAsync();
+        await RefreshSourceAsync(preserveSelection: true);
     }
 
-    private void RemoteUpdateChanged(object? sender, PropertyChangedEventArgs e)
+    private void RebuildSourceChoices(string? selectedId)
     {
-        if (e.PropertyName == nameof(MainViewModel.RemoteBgiUpdate) && !_updating) ScanPackages();
+        _sourcesReady = false;
+        var sources = BgiUpdateSources.List(_vm.Config, _customSources);
+        SourceBox.ItemsSource = sources;
+        SourceBox.SelectedItem = sources.Find(s => s.Id == selectedId) ?? sources[0];
+        _sourcesReady = true;
+        _ = RefreshSourceAsync();
     }
 
-    private void ScanPackages()
+    private async void SourceBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var selectedPath = (PackageList.SelectedItem as BgiUpdatePackage)?.FullPath;
-        var packages = BgiRemoteUpdateService.MergeNetworkPackage(
-            BgiPackageUpdateService.ScanPackages(PackageDir, _vm.Config?.BgiPickedPackages),
-            _vm.RemoteBgiUpdate, EffectiveDownloadDir());
-        SetPackageList(packages);
-        if (selectedPath != null)
-            PackageList.SelectedItem = packages.FirstOrDefault(p => string.Equals(p.FullPath, selectedPath, StringComparison.OrdinalIgnoreCase));
+        if (_sourcesReady) await RefreshSourceAsync();
     }
 
-    /// <summary>网络包下载落盘目录：优先安装包目录，未设置则退 BGI 目录（两者都空时更新流程会拦住提示）。</summary>
-    private string EffectiveDownloadDir()
+    private async Task RefreshSourceAsync(bool preserveSelection = false)
     {
-        if (PackageDir.Length > 0) return PackageDir;
-        if (BgiDir.Length > 0) return BgiDir;
-        return Path.GetTempPath();
+        if (_updating || SourceBox.SelectedItem is not BgiUpdateSource source) return;
+        _sourceCheck?.Cancel();
+        _sourceCheck = null;
+        var selected = preserveSelection ? PackageList.SelectedItem as BgiUpdatePackage : null;
+        PickPackageFileButton.Visibility = source.Kind == BgiUpdateSourceKind.Local ? Visibility.Visible : Visibility.Collapsed;
+        RemoveSourceButton.IsEnabled = source.Kind == BgiUpdateSourceKind.Custom;
+        if (source.Kind == BgiUpdateSourceKind.Local)
+        {
+            try
+            {
+                var packages = BgiPackageUpdateService.ScanPackages(PackageDir, _pickedPackagePaths);
+                SetPackageList(packages, packages.Count == 0 ? "没有找到符合茶包版命名的本地 .7z 安装包。" : $"共 {packages.Count} 个本地安装包。");
+                if (selected != null) PackageList.SelectedItem = packages.Find(p => p.FullPath == selected.FullPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                SetPackageList([], "无法读取安装包目录，请检查路径和访问权限。");
+            }
+            return;
+        }
+
+        using var check = new CancellationTokenSource();
+        _sourceCheck = check;
+        SetPackageList([], $"正在检查 {source.Label}…");
+        try
+        {
+            var result = await BgiRemoteUpdateService.FetchSourceAsync(source, check.Token).ConfigureAwait(false);
+            await Dispatcher.InvokeAsync(() =>
+            {
+                // 慢源返回时，用户可能已经切换了来源；只有当前请求可以改列表。
+                if (_sourceCheck != check || check.IsCancellationRequested) return;
+                _sourceCheck = null;
+                var packages = result.Packages.Select(p => new BgiUpdatePackage(p.FileName, p.Url,
+                    p.SizeBytes ?? 0, p.UpdatedAt?.ToLocalTime() ?? DateTime.MinValue, p.NameInfo, BgiPackageSource.Network, p, source)).ToList();
+                SetPackageList(packages, result.Message ?? $"{source.Label} · {packages.Count} 个可下载包。选中安装包后点「更新」。");
+                if (selected?.Remote != null) PackageList.SelectedItem = packages.Find(p => p.Remote == selected.Remote);
+            }, DispatcherPriority.Normal, check.Token).Task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (check.IsCancellationRequested || Dispatcher.HasShutdownStarted) { }
     }
 
-    private void SelectNetworkPackageButton_Click(object sender, RoutedEventArgs e)
+    private string EffectiveDownloadDir() => PackageDir.Length > 0 ? PackageDir : BgiDir;
+
+    private void AddSourceButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_vm.RemoteBgiUpdate is not { } info) return;
-        ScanPackages();
-        var path = Path.Combine(EffectiveDownloadDir(), info.FileName);
-        var packages = PackageList.ItemsSource as List<BgiUpdatePackage>;
-        var package = packages?.FirstOrDefault(p => string.Equals(p.FullPath, path, StringComparison.OrdinalIgnoreCase));
-        if (package == null) return;
-        PackageList.SelectedItem = package;
-        PackageList.ScrollIntoView(package);
+        if (!BgiUpdateSources.TryCustom(SourceNameBox.Text, SourceUrlBox.Text, out var source))
+        {
+            SourceEditorStatus.Text = "请填写有效的 HTTPS 清单网址，名称不能包含控制字符。";
+            return;
+        }
+        _customSources.RemoveAll(x => x != null && BgiUpdateSources.TryCustom(x.Label, x.ManifestUrl, out var existing) && existing!.Id == source!.Id);
+        _customSources.Add(new(SourceNameBox.Text.Trim(), source!.Endpoint!.AbsoluteUri));
+        RebuildSourceChoices(source.Id);
+        SourceNameBox.Clear();
+        SourceUrlBox.Clear();
+        SourceEditorStatus.Text = "已保存并切换到此来源。";
+        SourceEditor.IsExpanded = false;
+        PersistConfig();
     }
 
-    private void SetPackageList(List<BgiUpdatePackage> packages)
+    private void RemoveSourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SourceBox.SelectedItem is not BgiUpdateSource { Kind: BgiUpdateSourceKind.Custom } source) return;
+        _customSources.RemoveAll(x => x != null && BgiUpdateSources.TryCustom(x.Label, x.ManifestUrl, out var existing) && existing!.Id == source.Id);
+        RebuildSourceChoices(BgiUpdateSources.LocalId);
+        SourceEditorStatus.Text = "已移除该来源。";
+        PersistConfig();
+    }
+
+    private void SetPackageList(List<BgiUpdatePackage> packages, string message)
     {
         PackageList.ItemsSource = packages;
-        UpdatePackageHint(packages);
-    }
-
-    private void UpdatePackageHint(List<BgiUpdatePackage> packages)
-    {
-        PackageListHint.Text = packages.Count == 0
-            ? "该目录下没有符合茶包版命名规范的 .7z 安装包（名称必须含 +lcb. 段，仅茶包版可更新）。"
-            : $"共 {packages.Count} 个合法茶包版安装包（按版本从新到旧排列）。只列出文件名规范的包（必须含 +lcb. 段），校验不通过的不允许更新。";
+        PackageListHint.Text = message;
     }
 
     /// <summary>不经目录扫描，弹窗直接指定一个 .7z 安装包。同样过名字校验（不合法不允许用于更新），
@@ -147,7 +195,8 @@ public partial class UpdateBgiWindow : Window
             packages = packages
                 .OrderByDescending(p => p.NameInfo, Comparer<BgiArchiveName>.Create(BgiUpdateDecisions.CompareNewer))
                 .ToList();
-            SetPackageList(packages);
+            _pickedPackagePaths.Add(fi.FullName);
+            SetPackageList(packages, $"共 {packages.Count} 个本地安装包。");
             PersistConfig(); // 立即持久化：崩溃/直接关窗也不丢
         }
         PackageList.SelectedItem = picked;
@@ -176,7 +225,8 @@ public partial class UpdateBgiWindow : Window
         if (dlg.ShowDialog(this) == true)
         {
             PackageDirBox.Text = dlg.FolderName;
-            ScanPackages();
+            if (SourceBox.SelectedItem is BgiUpdateSource { Kind: BgiUpdateSourceKind.Local })
+                _ = RefreshSourceAsync();
         }
     }
 
@@ -236,7 +286,8 @@ public partial class UpdateBgiWindow : Window
             MessageBox.Show(this, "请先在列表中选择一个安装包。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        if (BgiDir.Length == 0 || !Directory.Exists(BgiDir))
+        var targetDir = BgiDir;
+        if (targetDir.Length == 0 || !Directory.Exists(targetDir))
         {
             MessageBox.Show(this, "请先填写有效的 BGI 目录。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
@@ -247,42 +298,30 @@ public partial class UpdateBgiWindow : Window
             MessageBox.Show(this, $"安装包文件名不合法，已拒绝更新：\n{package.FileName}", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
             return;
         }
-        if (!File.Exists(Path.Combine(BgiDir, "BetterGI.exe")))
+        if (!File.Exists(Path.Combine(targetDir, "BetterGI.exe")))
         {
             var proceed = MessageBox.Show(this,
-                $"目标目录下没有找到 BetterGI.exe：\n{BgiDir}\n\n确定仍要解压到该目录吗？",
+                $"目标目录下没有找到 BetterGI.exe：\n{targetDir}\n\n确定仍要解压到该目录吗？",
                 "更新BGI", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (proceed != MessageBoxResult.Yes) return;
         }
 
-        // 网络来源包：解析下载信息（服务器清单可能已刷新，兜底按包名重建下载地址）
-        BgiRemoteUpdateInfo? remoteInfo = null;
-        if (package.Source == BgiPackageSource.Network)
-        {
-            remoteInfo = _vm.RemoteBgiUpdate != null && string.Equals(_vm.RemoteBgiUpdate.FileName, package.FileName, StringComparison.OrdinalIgnoreCase)
-                ? _vm.RemoteBgiUpdate
-                : new BgiRemoteUpdateInfo(package.FileName,
-                    BgiRemoteUpdateService.BuildDownloadUrl(_vm.Config?.ServerUrl ?? "", package.FileName),
-                    package.LengthBytes > 0 ? package.LengthBytes : null, package.ModifiedTime, package.NameInfo);
-        }
+        // 固定用户选中的包及其下载源；刷新或出现同名包也不会改用其他来源。
+        var remoteInfo = package.Remote;
+        var source = package.DownloadSource;
+        var downloadDirectory = source?.DownloadDirectory(EffectiveDownloadDir(), remoteInfo?.ActionsRunId);
 
         // 运行中的 BGI 会锁住 exe/DLL：先在风险确认里说明，经确认后自动关闭
-        var running = BgiPackageUpdateService.FindBgiProcessesUnder(BgiDir);
+        var running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
         string confirmText = "更新有风险，建议先备份数据（用户配置、脚本仓库等重要目录可用下方「排除目录+备份」保护）。\n\n"
-            + $"安装包：{package.FileName}\n目标目录：{BgiDir}\n"
+            + $"安装包：{package.FileName}\n目标目录：{targetDir}\n"
             + $"排除目录：{(_excludeDirs.Count == 0 ? "无" : string.Join("、", _excludeDirs))}"
             + (BackupExcludeCheckBox.IsChecked == true && _excludeDirs.Count > 0 ? "\n（更新前先备份排除目录）" : "")
-            + (remoteInfo != null ? $"\n该包来自服务器，将先下载到 {EffectiveDownloadDir()}（{remoteInfo.SizeText}）。" : "")
-            + (running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行，点击「确定」将自动关闭后继续。" : "")
+            + (remoteInfo != null ? $"\n下载来源：{source!.Label}（{source.Endpoint!.Host}）\n将先下载到 {downloadDirectory}（{remoteInfo.SizeText}），校验后才关闭目标目录中正在运行的 BGI。" : "")
+            + (remoteInfo == null && running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行，点击「确定」将自动关闭后继续。" : "")
             + "\n\n确定继续更新？";
         if (MessageBox.Show(this, confirmText, "更新BGI", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
-
-        if (running.Count > 0 && !TryKillBgiProcesses(running))
-        {
-            MessageBox.Show(this, "BGI 进程关闭失败，已中止更新（请手动关闭后重试）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
-            return;
-        }
 
         _updating = true;
         SetBusy(true);
@@ -293,11 +332,17 @@ public partial class UpdateBgiWindow : Window
             if (remoteInfo != null)
             {
                 var dlProgress = new Progress<string>(s => StatusText.Text = s);
-                archivePath = await BgiRemoteUpdateService.DownloadAsync(remoteInfo, EffectiveDownloadDir(), dlProgress);
+                archivePath = await BgiRemoteUpdateService.DownloadAsync(remoteInfo, downloadDirectory!, dlProgress);
+                running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
+            }
+            if (running.Count > 0 && !TryKillBgiProcesses(running))
+            {
+                MessageBox.Show(this, "BGI 进程关闭失败，已中止更新（请手动关闭后重试）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
 
             var progress = new Progress<string>(s => StatusText.Text = $"正在更新… {s}");
-            var result = await BgiPackageUpdateService.ApplyAsync(archivePath, BgiDir,
+            var result = await BgiPackageUpdateService.ApplyAsync(archivePath, targetDir,
                 _excludeDirs.ToList(), BackupExcludeCheckBox.IsChecked == true, progress);
 
             if (result.Success)
@@ -364,6 +409,10 @@ public partial class UpdateBgiWindow : Window
     {
         UpdateButton.IsEnabled = !busy;
         RefreshPackagesButton.IsEnabled = !busy;
+        SourceBox.IsEnabled = !busy;
+        SourceEditor.IsEnabled = !busy;
+        PackageDirBox.IsEnabled = !busy;
+        BgiDirBox.IsEnabled = !busy;
         BrowseBgiDirButton.IsEnabled = !busy;
         BrowsePackageDirButton.IsEnabled = !busy;
         AddExcludeButton.IsEnabled = !busy;
@@ -379,11 +428,9 @@ public partial class UpdateBgiWindow : Window
         _vm.Config.BgiPackageDir = PackageDir;
         _vm.Config.BgiUpdateExcludeDirs = _excludeDirs.ToList();
         _vm.Config.BgiUpdateBackupBeforeUpdate = BackupExcludeCheckBox.IsChecked == true;
-        // 手动指定的包路径持久化（列表里来源为"指定"的条目）；文件已消失/名字失效的条目在下次打开时自动剔除
-        _vm.Config.BgiPickedPackages = (PackageList.ItemsSource as List<BgiUpdatePackage> ?? [])
-            .Where(p => p.Source == BgiPackageSource.PickedManually)
-            .Select(p => p.FullPath)
-            .ToList();
+        _vm.Config.BgiPickedPackages = _pickedPackagePaths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _vm.Config.BgiUpdateSourceId = (SourceBox.SelectedItem as BgiUpdateSource)?.Id;
+        _vm.Config.BgiCustomUpdateSources = _customSources.ToList();
         _vm.SaveConfigToDisk();
     }
 }

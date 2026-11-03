@@ -35,6 +35,12 @@ public class AssistConfig
     [JsonPropertyName("bgiPickedPackages")]
     public List<string> BgiPickedPackages { get; set; } = [];
 
+    [JsonPropertyName("bgiUpdateSourceId")]
+    public string? BgiUpdateSourceId { get; set; }
+
+    [JsonPropertyName("bgiCustomUpdateSources")]
+    public List<BgiCustomUpdateSource> BgiCustomUpdateSources { get; set; } = [];
+
     /// <summary>更新前是否备份排除目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
     [JsonPropertyName("bgiUpdateBackupBeforeUpdate")]
     public bool BgiUpdateBackupBeforeUpdate { get; set; } = true;
@@ -144,3 +150,5 @@ public class AssistConfig
     // 注意：成员卡片 6 个按键（配置组/一条龙/快捷键/停止/启动BGI/关闭游戏）的策略为固定行为：
     // 本机忙时一律「立即执行 + 执行完停止」（suspend 抢占 → 执行键动作 → 清上下文不恢复），无 UI、无配置项、不持久化。
 }
+
+public sealed record BgiCustomUpdateSource(string Label, string ManifestUrl);
