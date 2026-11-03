@@ -215,8 +215,6 @@ public partial class PathExecutor
     /// </summary>
     public MultiplayerCoordinator? MultiplayerCoordinator { get; set; }
 
-    internal object? PickupLogSource { get; set; }
-
     public BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeRouteContext? CooperativeContext { get; set; }
 
     /// <summary>Current fight scope; its PointId is captured at fight entry and is safe for delayed callbacks.</summary>
@@ -4440,7 +4438,7 @@ public partial class PathExecutor
                 if (target.SkipNextWaypoints == 0 || plannedResume.HasValue)
                 {
                     usedPickupExecutor = true;
-                    if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, PickupLogSource, pickupPointLabel))
+                    if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickupPointLabel))
                         pickupResumeIndex = plannedResume;
                 }
                 else

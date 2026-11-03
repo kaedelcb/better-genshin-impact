@@ -36,6 +36,7 @@ public class GraphicsCapture(bool captureHdr = false) : IGameCapture
 
     // 最新帧的存储
     private Mat? _latestFrame;
+    private long _latestFrameIdentity;
     private readonly ReaderWriterLockSlim _frameAccessLock = new();
 
     // 用于获取帧数据的临时纹理和暂存资源
@@ -254,6 +255,7 @@ public class GraphicsCapture(bool captureHdr = false) : IGameCapture
                 // 新帧构造成功后再替换，异常时保留上一帧
                 var oldFrame = _latestFrame;
                 _latestFrame = newFrame;
+                _latestFrameIdentity++;
                 oldFrame?.Dispose();
             }
             catch (SharpDXException e)
@@ -277,7 +279,7 @@ public class GraphicsCapture(bool captureHdr = false) : IGameCapture
             var frame = _latestFrame?.Clone();
             return frame == null
                 ? null
-                : new GameCaptureFrame(frame, _captureRect);
+                : new GameCaptureFrame(frame, _captureRect) { FrameIdentity = _latestFrameIdentity };
         }
         finally
         {

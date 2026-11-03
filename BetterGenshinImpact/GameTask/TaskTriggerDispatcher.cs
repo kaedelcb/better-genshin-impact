@@ -15,6 +15,7 @@ using System.Threading;
 using System.Windows;
 using BetterGenshinImpact.GameTask.AutoEat;
 using BetterGenshinImpact.GameTask.AutoPick;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoSkip;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Runtime;
@@ -103,6 +104,7 @@ namespace BetterGenshinImpact.GameTask
 
         private static readonly object _locker = new();
         private int _frameIndex = 0;
+        private long? _lastPickupFrameIdentity;
 
         private RECT _gameRect = RECT.Empty;
         private bool _prevGameActive;
@@ -248,6 +250,7 @@ namespace BetterGenshinImpact.GameTask
 
             // 启动定时器
             _frameIndex = 0;
+            _lastPickupFrameIdentity = null;
             _timer.Interval = interval;
             if (!_timer.Enabled)
             {
@@ -513,9 +516,15 @@ namespace BetterGenshinImpact.GameTask
                 {
                     tickMetrics.Begin();
                 }
-                // 捕获游戏画面
+                // 截图开始时绑定当前节点，防止帧跨节点归属。缓存帧不能用来确认列表变化。
+                var pickup = PickupWaypointProgress.Capture();
+                var pickupFrameTime = pickup == null ? 0 : Stopwatch.GetTimestamp();
                 var captureFrame = gameCapture.Capture();
                 var bitmap = captureFrame?.Frame;
+                var frameIdentity = captureFrame?.FrameIdentity;
+                var isNewPickupFrame = !frameIdentity.HasValue || frameIdentity != _lastPickupFrameIdentity;
+                if (bitmap != null)
+                    _lastPickupFrameIdentity = frameIdentity;
                 tickMetrics.EndCapture();
                 speedTimer.Record("截图");
 
@@ -537,6 +546,27 @@ namespace BetterGenshinImpact.GameTask
                 // 循环执行所有触发器 有独占状态的触发器的时候只执行独占触发器
                 using var content = new CaptureContent(bitmap, _frameIndex, _timer.Interval);
                 ChatUiHotkeyGuard.UpdateVisualState(Bv.DetectChatUi(content.CaptureRectArea));
+
+                if (pickup != null)
+                {
+                    try
+                    {
+                        if ((!active && window.RequiresForeground) || RunnerContext.Instance.IsSuspend
+                            || IsSuspendedByNetwork || IsSuspendedByWindow)
+                            pickup.Observe(PickupRowObservation.Interrupted);
+                        else if (isNewPickupFrame)
+                        {
+                            if (Bv.IsInMainUi(content.CaptureRectArea))
+                                pickup.ObserveFrame(content.CaptureRectArea.SrcMat, pickupFrameTime, _timer.Interval);
+                            else
+                                pickup.Observe(PickupRowObservation.Interrupted);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        pickup.ReportFrameError(ex);
+                    }
+                }
 
                 if (!hasEnabledTriggers)
                 {

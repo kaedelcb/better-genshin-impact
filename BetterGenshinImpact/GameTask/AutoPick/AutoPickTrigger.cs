@@ -4,7 +4,6 @@ using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
 using BetterGenshinImpact.Core.Recognition.ONNX.SVTR;
 using BetterGenshinImpact.Core.Script.Dependence.Model.TimerConfig;
-using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.Service;
@@ -530,13 +529,8 @@ public partial class AutoPickTrigger : ITaskTrigger
             speedTimer.DebugPrint();
             return;
         }
-        var pickup = PickupWaypointProgress.Capture();
-        var logged = LogPick(content, text);
+        LogPick(content, text);
         InputHub.Foreground.Keyboard.KeyPress(_autoPickAssets.PickVk);
-        if (logged)
-        {
-            pickup?.ReportHere(text);
-        }
     }
 
     private bool DoNotPick(string text)
@@ -626,17 +620,15 @@ public partial class AutoPickTrigger : ITaskTrigger
     /// </summary>
     /// <param name="content"></param>
     /// <param name="text"></param>
-    private bool LogPick(CaptureContent content, string text)
+    private void LogPick(CaptureContent content, string text)
     {
-        var shouldLog = _lastText != text || Math.Abs(content.FrameIndex - _prevClickFrameIndex) >= 5;
-        if (shouldLog)
+        if (_lastText != text || (_lastText == text && Math.Abs(content.FrameIndex - _prevClickFrameIndex) >= 5))
         {
             _logger.LogInformation("交互或拾取：{Text}", text);
         }
 
         _lastText = text;
         _prevClickFrameIndex = content.FrameIndex;
-        return shouldLog;
     }
 
     /// <summary>

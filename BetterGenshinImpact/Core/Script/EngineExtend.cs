@@ -39,11 +39,10 @@ public class EngineExtend
 
         // 添加我的自定义实例化对象
         engine.AddHostObject("keyMouseScript", new KeyMouseScript(workDir));
-        var pathingScript = new AutoPathingScript(workDir, config);
-        engine.AddHostObject("pathingScript", pathingScript);
+        engine.AddHostObject("pathingScript", new AutoPathingScript(workDir, config));
         engine.AddHostObject("genshin", new Dependence.Genshin());
         engine.AddHostObject("characterDevelopmentTask", new CharacterDevelopmentTask());
-        engine.AddHostObject("log", new Log(pathingScript));
+        engine.AddHostObject("log", new Log());
         engine.AddHostObject("file", new LimitedFile(workDir)); // 限制文件访问
         engine.AddHostObject("http", new Http()); // 限制网络访问
         engine.AddHostObject("yolo", new YoloDetection(workDir)); // YOLO ONNX 检测

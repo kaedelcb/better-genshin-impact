@@ -16,7 +16,7 @@ public class CombatScriptHandler : IActionHandler
     public Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
         => RunCoreAsync(ct, waypointForTrack, null, null);
 
-    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint, object? logSource, string? pointLabel)
+    internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel)
     {
         if (waypoint.CombatScript == null || !PickupCombatScriptExecutor.Supports(waypoint.CombatScript))
         {
@@ -27,15 +27,25 @@ public class CombatScriptHandler : IActionHandler
         if (waypoint.PickupTargetCount is not { Count: > 0 } target)
             return await RunCoreAsync(ct, waypoint, null, null);
 
-        using var pickup = PickupWaypointProgress.TryBegin(target.Count, logSource);
+        using var pickup = PickupWaypointProgress.TryBegin(target.Count, ct, Logger, pointLabel);
         if (pickup == null)
         {
             Logger.LogWarning("【拾取达标】{Point} 已有节点在计数，按原路线执行", pointLabel);
             return await RunCoreAsync(ct, waypoint, null, null);
         }
 
-        Logger.LogInformation("【拾取达标】{Point} 开始计数 0/{Target}，达标后跳过 {Skip} 点（调查不计）",
+        Logger.LogInformation("【拾取达标】{Point} 开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
             pointLabel, target.Count, target.SkipNextWaypoints);
+        var existingRows = await pickup.WaitForBaselineAsync(ct);
+        if (!existingRows.HasValue)
+        {
+            pickup.Dispose();
+            Logger.LogWarning("【拾取达标】{Point} 未取得稳定的列表基线，按原路线执行", pointLabel);
+            return await RunCoreAsync(ct, waypoint, null, null);
+        }
+
+        Logger.LogInformation("【拾取达标】{Point} 获得列表基线已就绪，已有 {Rows} 行不计，只计新增行",
+            pointLabel, existingRows.Value);
         return await RunCoreAsync(ct, waypoint, pickup, pointLabel);
     }
 

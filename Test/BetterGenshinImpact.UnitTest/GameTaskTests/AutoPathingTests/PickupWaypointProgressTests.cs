@@ -9,23 +9,33 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests;
 public sealed class PickupWaypointProgressTests
 {
     [Fact]
-    public void ThresholdCountsOnlyNewMatchingLogsAndKeepsIdenticalItemsDistinct()
+    public void ThresholdCombinesSeparateListAppearancesWithinTheSameNode()
     {
-        var engine = new object();
-        Assert.Null(PickupWaypointProgress.Capture(engine));
-        var point = PickupWaypointProgress.TryBegin(2, engine)!;
+        Assert.Null(PickupWaypointProgress.Capture());
+        var point = PickupWaypointProgress.TryBegin(2)!;
+        var empty = new PickupRowObservation(true, []);
+        var one = new PickupRowObservation(true, [new PickupVisualRow(563, 0x789CE33256DBE2AC)]);
         using (point)
         {
-            PickupWaypointProgress.Capture()?.ReportHere(" 调查 ");
-            PickupWaypointProgress.Capture(new object())?.ReportHere("游医");
-            PickupWaypointProgress.Capture(engine)?.ReportHere("游医");
+            Assert.Same(point, PickupWaypointProgress.Capture());
+            for (var i = 0; i < 3; i++) point.Observe(empty);
+            point.Observe(one);
+            point.Observe(one);
+            Assert.Equal(1, point.Count);
+
+            for (var i = 0; i < 3; i++) point.Observe(empty);
+            Assert.Equal(1, point.Count);
             Assert.False(point.ReachedToken.IsCancellationRequested);
-            PickupWaypointProgress.Capture()?.ReportHere("游医");
+
+            point.Observe(one);
+            point.Observe(one);
+            Assert.Equal(2, point.Count);
             Assert.True(point.ReachedToken.IsCancellationRequested);
         }
 
-        using var next = PickupWaypointProgress.TryBegin(1, engine)!;
-        point.ReportHere("上一点迟到的记录");
+        using var next = PickupWaypointProgress.TryBegin(1)!;
+        point.Observe(one); // 上一节点的迟到画面不能算到下一点。
+        Assert.Equal(0, next.Count);
         Assert.False(next.ReachedToken.IsCancellationRequested);
     }
 
