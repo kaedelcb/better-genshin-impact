@@ -23,6 +23,8 @@ internal sealed class PickupWaypointProgress : IDisposable
     private long _lastFrameTime;
     private long _lastDetectionLogTime;
     private bool _frameErrorReported;
+    private bool _headerFallbackReported;
+    private bool _missingHeaderReported;
     private int _count;
 
     private PickupWaypointProgress(int target, CancellationToken routeToken, ILogger? logger, string? pointLabel)
@@ -124,14 +126,34 @@ internal sealed class PickupWaypointProgress : IDisposable
             count = _count;
         }
 
-        if (detection.RowComponents is { } rowComponents && _logger?.IsEnabled(LogLevel.Debug) == true
-            && (establishedBaseline || update.AddedRows > 0 || update.Cleared || _lastDetectionLogTime == 0
-                || Stopwatch.GetElapsedTime(_lastDetectionLogTime).TotalMilliseconds >= 500))
+        if (detection.RowComponents is { } rowComponents)
         {
-            _lastDetectionLogTime = Stopwatch.GetTimestamp();
-            _logger.LogDebug("【拾取达标】{Point} 前景连通块：标题 {Header}（阈值 {HeaderThreshold}），各行 [{RowComponents}]（阈值 {RowThreshold}），有效行 {VisibleRows}",
-                _pointLabel, detection.HeaderComponents, detection.HeaderThreshold, string.Join(", ", rowComponents),
-                detection.RowThreshold, observation.IsAvailable ? observation.Rows?.Count : null);
+            if (!_headerFallbackReported && detection.HeaderTop is { } top
+                && detection.OriginalHeaderComponents < detection.HeaderThreshold)
+            {
+                _headerFallbackReported = true;
+                _logger?.LogInformation("【拾取达标】{Point} 获得标题用 {Match} 找到（Y={Top}，原框 {Original} 块，命中框 {Header} 块，阈值 {Threshold}）",
+                    _pointLabel, detection.HeaderMatch, top, detection.OriginalHeaderComponents,
+                    detection.HeaderComponents, detection.HeaderThreshold);
+            }
+            else if (!_missingHeaderReported && detection.HeaderTop == null
+                && Array.Exists(rowComponents, components => components >= detection.RowThreshold))
+            {
+                _missingHeaderReported = true;
+                _logger?.LogInformation("【拾取达标】{Point} 检测到物品行候选，但获得标题未确认（原框 {Original} 块，最佳候选 {Header} 块，阈值 {Threshold}），暂不计数",
+                    _pointLabel, detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold);
+            }
+
+            if (_logger?.IsEnabled(LogLevel.Debug) == true
+                && (establishedBaseline || update.AddedRows > 0 || update.Cleared || _lastDetectionLogTime == 0
+                    || Stopwatch.GetElapsedTime(_lastDetectionLogTime).TotalMilliseconds >= 500))
+            {
+                _lastDetectionLogTime = Stopwatch.GetTimestamp();
+                _logger.LogDebug("【拾取达标】{Point} 前景连通块：标题原框 {Original}，命中或最佳候选 {Header}（阈值 {HeaderThreshold}，方式 {Match}，标题框 Y={Top}），各行 [{RowComponents}]（阈值 {RowThreshold}），有效行 {VisibleRows}",
+                    _pointLabel, detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold,
+                    detection.HeaderMatch ?? "未命中", detection.HeaderTop, string.Join(", ", rowComponents),
+                    detection.RowThreshold, observation.IsAvailable ? observation.Rows?.Count : null);
+            }
         }
 
         if (establishedBaseline)
