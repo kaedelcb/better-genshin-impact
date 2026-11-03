@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Mat = OpenCvSharp.Mat;
 
 namespace BetterGenshinImpact.GameTask.AutoPathing;
 
@@ -75,7 +74,8 @@ internal sealed class PickupWaypointProgress : IDisposable
         }
     }
 
-    internal void ObserveFrame(Mat frame, long frameTime, double interval)
+    internal void ObserveFrame(PickupRowObservation observation, PickupObtainedRowDetectionStats detection,
+        long frameTime, double interval)
     {
         if (!ReferenceEquals(Capture(), this))
             return;
@@ -86,7 +86,6 @@ internal sealed class PickupWaypointProgress : IDisposable
             if (_lastFrameTime != 0 && Stopwatch.GetElapsedTime(_lastFrameTime, frameTime).TotalMilliseconds > Math.Max(300, interval * 3))
                 Observe(PickupRowObservation.Interrupted);
             _lastFrameTime = frameTime;
-            var observation = PickupObtainedRowDetector.Detect(frame, out var detection);
             Observe(observation, detection);
         }
         catch (Exception ex)
@@ -149,8 +148,9 @@ internal sealed class PickupWaypointProgress : IDisposable
                     || Stopwatch.GetElapsedTime(_lastDetectionLogTime).TotalMilliseconds >= 500))
             {
                 _lastDetectionLogTime = Stopwatch.GetTimestamp();
-                _logger.LogDebug("【拾取达标】{Point} 前景连通块：标题原框 {Original}，命中或最佳候选 {Header}（阈值 {HeaderThreshold}，方式 {Match}，标题框 Y={Top}），各行 [{RowComponents}]（阈值 {RowThreshold}），有效行 {VisibleRows}",
-                    _pointLabel, detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold,
+                _logger.LogDebug("【拾取达标】{Point} 精确 RGB({Red},{Green},{Blue}) 四连通块：标题原框 {Original}，命中或最佳候选 {Header}（至少 {HeaderThreshold}，方式 {Match}，标题框 Y={Top}），各行 [{RowComponents}]（至少 {RowThreshold}），有效行 {VisibleRows}",
+                    _pointLabel, PickupObtainedRowDetector.TextRed, PickupObtainedRowDetector.TextGreen,
+                    PickupObtainedRowDetector.TextBlue, detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold,
                     detection.HeaderMatch ?? "未命中", detection.HeaderTop, string.Join(", ", rowComponents),
                     detection.RowThreshold, observation.IsAvailable ? observation.Rows?.Count : null);
             }

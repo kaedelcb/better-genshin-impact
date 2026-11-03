@@ -5,110 +5,103 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests;
 
 public sealed class PickupWaypointObtainedRowDetectorTests
 {
-    [Fact]
-    public void OneObtainedCaptionAndTwoFixedRowSlotsProduceTwoRows()
+    private static readonly Scalar ExactColor = new(216, 229, 236);
+
+    [Theory]
+    [InlineData(1920, 1080)]
+    [InlineData(1280, 720)]
+    [InlineData(2560, 1440)]
+    public void OneExactTitleAndThreeExactRowsProduceThreeRows(int width, int height)
     {
-        using var frame = NewScene();
-        DrawTextBlocks(frame, 169, 511);
-        DrawTextBlocks(frame, 160, 554);
-        DrawTextBlocks(frame, 160, 602);
+        using var frame = NewScene(width, height);
+        DrawTextBlocks(frame, 169, 511, ExactColor);
+        for (var row = 0; row < 3; row++)
+            DrawTextBlocks(frame, 160, 554 + 48 * row, ExactColor);
 
         var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
 
         Assert.True(observation.IsAvailable);
-        Assert.Equal(3, stats.HeaderComponents);
         Assert.Equal(3, stats.OriginalHeaderComponents);
-        Assert.Equal("原框原色", stats.HeaderMatch);
-        Assert.Equal(505, stats.HeaderTop);
-        Assert.Equal(new[] { 3, 3, 0, 0, 0, 0 }, stats.RowComponents);
-        Assert.Collection(observation.Rows!,
-            row => Assert.InRange(row.Y, 560, 569),
-            row => Assert.InRange(row.Y, 608, 617));
+        Assert.Equal("原框指定色", stats.HeaderMatch);
+        Assert.Equal(new[] { 3, 3, 3, 0, 0, 0 }, stats.RowComponents);
+        Assert.Equal(3, observation.Rows!.Count);
     }
 
     [Theory]
-    [InlineData(474, 213, 215, 218, "邻框原色")]
-    [InlineData(511, 245, 245, 245, "原框浅色")]
-    [InlineData(474, 154, 154, 154, "邻框浅色")]
-    public void NearbyOrPaleCaptionStillRequiresItsOwnConnectedBlocks(
-        int top, int blue, int green, int red, string match)
+    [InlineData(217, 229, 236)]
+    [InlineData(216, 230, 236)]
+    [InlineData(216, 229, 237)]
+    [InlineData(222, 235, 242)]
+    public void SimilarColorsDoNotCountAsTitleOrItemText(int blue, int green, int red)
     {
         using var frame = NewScene();
-        DrawTextBlocks(frame, 169, top, new Scalar(blue, green, red));
-        DrawTextBlocks(frame, 160, 554);
-        DrawTextBlocks(frame, 160, 602);
-        DrawTextBlocks(frame, 160, 650);
+        var other = new Scalar(blue, green, red);
+        DrawTextBlocks(frame, 169, 511, other);
+        DrawTextBlocks(frame, 160, 554, other);
+
+        var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
+
+        Assert.True(observation.IsAvailable);
+        Assert.Equal(0, stats.HeaderComponents);
+        Assert.Equal(0, stats.RowComponents![0]);
+        Assert.Empty(observation.Rows!);
+    }
+
+    [Fact]
+    public void SameExactColorWorksInNeighboringTitleBox()
+    {
+        using var frame = NewScene();
+        DrawTextBlocks(frame, 169, 474, ExactColor);
+        DrawTextBlocks(frame, 160, 554, ExactColor);
 
         var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
 
         Assert.True(observation.IsAvailable);
         Assert.Equal(0, stats.OriginalHeaderComponents);
-        Assert.Equal(match, stats.HeaderMatch);
-        Assert.InRange(stats.HeaderTop!.Value, 457, 517);
-        Assert.True(stats.HeaderComponents >= stats.HeaderThreshold);
-        Assert.Equal(3, observation.Rows!.Count);
+        Assert.Equal("邻框指定色", stats.HeaderMatch);
+        Assert.Single(observation.Rows!);
     }
 
     [Fact]
-    public void BrightRowLikeTextWithoutObtainedCaptionIsAmbiguous()
+    public void LargeExactBlockAndSinglePixelsDoNotConfirmTitle()
     {
         using var frame = NewScene();
-        DrawTextBlocks(frame, 160, 554);
+        Cv2.Rectangle(frame, new Rect(164, 457, 55, 92), ExactColor, thickness: -1);
+        DrawTextBlocks(frame, 160, 554, ExactColor);
+        for (var i = 0; i < 5; i++)
+            Cv2.Rectangle(frame, new Rect(170 + i * 4, 605, 1, 1), ExactColor, thickness: -1);
 
         var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
 
         Assert.False(observation.IsAvailable);
-        Assert.Equal(0, stats.HeaderComponents);
-        Assert.Null(stats.HeaderMatch);
+        Assert.Equal(1, stats.HeaderComponents);
         Assert.Equal(3, stats.RowComponents![0]);
-    }
-
-    [Fact]
-    public void BroadBrightBackgroundDoesNotActAsCaption()
-    {
-        using var frame = NewScene();
-        Cv2.Rectangle(frame, new Rect(164, 457, 55, 92), new Scalar(245, 245, 245), thickness: -1);
-        DrawTextBlocks(frame, 160, 554);
-        DrawTextBlocks(frame, 160, 602);
-        DrawTextBlocks(frame, 160, 650);
-
-        var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
-
-        Assert.False(observation.IsAvailable);
-        Assert.Null(stats.HeaderMatch);
-        Assert.Equal(new[] { 3, 3, 3, 0, 0, 0 }, stats.RowComponents);
+        Assert.Equal(0, stats.RowComponents[1]);
     }
 
     [Fact]
     public void CaptionWithMissingFirstRowIsAmbiguous()
     {
         using var frame = NewScene();
-        DrawTextBlocks(frame, 169, 511);
-        DrawTextBlocks(frame, 160, 602);
+        DrawTextBlocks(frame, 169, 511, ExactColor);
+        DrawTextBlocks(frame, 160, 602, ExactColor);
 
         Assert.False(PickupObtainedRowDetector.Detect(frame).IsAvailable);
     }
 
-    [Fact]
-    public void EmptyFixedSlotsAndBlackFrameHaveDifferentOutcomes()
+    private static Mat NewScene(int width = 1920, int height = 1080)
+        => new(height, width, MatType.CV_8UC3, new Scalar(92, 80, 71));
+
+    private static void DrawTextBlocks(Mat frame, int left, int top, Scalar color)
     {
-        using var frame = NewScene();
-        var empty = PickupObtainedRowDetector.Detect(frame);
-        Assert.True(empty.IsAvailable);
-        Assert.Empty(empty.Rows!);
-
-        using var black = new Mat(1080, 1920, MatType.CV_8UC3, Scalar.Black);
-        Assert.False(PickupObtainedRowDetector.Detect(black).IsAvailable);
-    }
-
-    private static Mat NewScene() => new(1080, 1920, MatType.CV_8UC3, new Scalar(92, 80, 71));
-
-    private static void DrawTextBlocks(Mat frame, int left, int top, Scalar? color = null)
-    {
+        var xScale = frame.Width / 1920d;
+        var yScale = frame.Height / 1080d;
         for (var i = 0; i < 3; i++)
         {
-            Cv2.Rectangle(frame, new Rect(left + i * 13, top, 8, 18),
-                color ?? new Scalar(213, 215, 218), thickness: -1);
+            var x = (int)Math.Round((left + i * 13) * xScale);
+            var y = (int)Math.Round(top * yScale);
+            Cv2.Rectangle(frame, new Rect(x, y, (int)Math.Round(8 * xScale), (int)Math.Round(18 * yScale)),
+                color, thickness: -1);
         }
     }
 }

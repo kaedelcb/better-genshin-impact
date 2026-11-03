@@ -46,7 +46,11 @@ public sealed class PickupWaypointProgressTests
     [InlineData(",\"pickup_target_count\":0")]
     [InlineData(",\"pickup_target_count\":-1")]
     [InlineData(",\"pickup_target_count\":2.5")]
-    [InlineData(",\"pickup_target_count\":\"2\"")]
+    [InlineData(",\"pickup_target_count\":\"0\"")]
+    [InlineData(",\"pickup_target_count\":\"-3\"")]
+    [InlineData(",\"pickup_target_count\":\"+3\"")]
+    [InlineData(",\"pickup_target_count\":\" 3\"")]
+    [InlineData(",\"pickup_target_count\":\"2147483648\"")]
     [InlineData(",\"pickup_target_count\":{\"invalid\":true}")]
     [InlineData(",\"pickup_target_count\":[2]")]
     [InlineData(",\"pickup_target_count\":\"2/\"")]
@@ -68,14 +72,15 @@ public sealed class PickupWaypointProgressTests
     }
 
     [Theory]
-    [InlineData("2", 0, "2")]
-    [InlineData("\"2/0\"", 0, "2")]
-    [InlineData("\"2/3\"", 3, "\"2/3\"")]
-    [InlineData("\"2/2147483647\"", int.MaxValue, "\"2/2147483647\"")]
-    public void ValidCountRoundTripsThroughTheSameField(string input, int skip, string output)
+    [InlineData("2", 2, 0, "2")]
+    [InlineData("\"3\"", 3, 0, "3")]
+    [InlineData("\"2/0\"", 2, 0, "2")]
+    [InlineData("\"2/3\"", 2, 3, "\"2/3\"")]
+    [InlineData("\"2/2147483647\"", 2, int.MaxValue, "\"2/2147483647\"")]
+    public void ValidCountRoundTripsThroughTheSameField(string input, int count, int skip, string output)
     {
         var point = JsonSerializer.Deserialize<Waypoint>("{\"pickup_target_count\":" + input + "}", PathRecorder.JsonOptions)!;
-        Assert.Equal(new PickupTarget(2, skip), point.PickupTargetCount);
+        Assert.Equal(new PickupTarget(count, skip), point.PickupTargetCount);
         var saved = JsonSerializer.Serialize(point, PathRecorder.JsonOptions);
         using var document = JsonDocument.Parse(saved);
         Assert.Equal(output, document.RootElement.GetProperty("pickup_target_count").GetRawText());

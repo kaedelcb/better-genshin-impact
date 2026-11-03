@@ -543,6 +543,24 @@ namespace BetterGenshinImpact.GameTask
                     PictureInPictureService.Hide();
                 }
 
+                PickupRowObservation pickupObservation = default;
+                PickupObtainedRowDetectionStats pickupDetection = default;
+                var sampledPickup = false;
+                if (pickup != null && isNewPickupFrame && (active || !window.RequiresForeground)
+                    && !RunnerContext.Instance.IsSuspend && !IsSuspendedByNetwork && !IsSuspendedByWindow)
+                {
+                    try
+                    {
+                        // CaptureContent 可能缩放并释放原图，精确颜色必须先在原始像素上取样。
+                        pickupObservation = PickupObtainedRowDetector.Detect(bitmap, out pickupDetection);
+                        sampledPickup = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        pickup.ReportFrameError(ex);
+                    }
+                }
+
                 // 循环执行所有触发器 有独占状态的触发器的时候只执行独占触发器
                 using var content = new CaptureContent(bitmap, _frameIndex, _timer.Interval);
                 ChatUiHotkeyGuard.UpdateVisualState(Bv.DetectChatUi(content.CaptureRectArea));
@@ -554,10 +572,10 @@ namespace BetterGenshinImpact.GameTask
                         if ((!active && window.RequiresForeground) || RunnerContext.Instance.IsSuspend
                             || IsSuspendedByNetwork || IsSuspendedByWindow)
                             pickup.Observe(PickupRowObservation.Interrupted);
-                        else if (isNewPickupFrame)
+                        else if (sampledPickup)
                         {
                             if (Bv.IsInMainUi(content.CaptureRectArea))
-                                pickup.ObserveFrame(content.CaptureRectArea.SrcMat, pickupFrameTime, _timer.Interval);
+                                pickup.ObserveFrame(pickupObservation, pickupDetection, pickupFrameTime, _timer.Interval);
                             else
                                 pickup.Observe(PickupRowObservation.Interrupted);
                         }
