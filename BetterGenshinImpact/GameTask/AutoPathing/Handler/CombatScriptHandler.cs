@@ -16,7 +16,8 @@ public class CombatScriptHandler : IActionHandler
     public Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
         => RunCoreAsync(ct, waypointForTrack, null, null);
 
-    internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel)
+    internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel,
+        double distance, bool fromPreviousPoint)
     {
         if (waypoint.CombatScript == null || !PickupCombatScriptExecutor.Supports(waypoint.CombatScript))
         {
@@ -35,8 +36,8 @@ public class CombatScriptHandler : IActionHandler
             return null;
         }
 
-        Logger.LogInformation("【拾取达标】{Point} 精确接近前开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
-            pointLabel, target.Count, target.SkipNextWaypoints);
+        Logger.LogInformation("【拾取达标】{Point} {Phase}距目标 {Distance:F2}，开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
+            pointLabel, fromPreviousPoint ? "上一点移动中，" : "本点移动中，", distance, target.Count, target.SkipNextWaypoints);
         return pickup;
     }
 

@@ -803,6 +803,8 @@ public partial class PathExecutor
             AutoFightTask.IsTpForRecover = false;
             _faceToMark = false;
             CurWaypoints = (waypointsList.FindIndex(wps => wps == waypoints), waypoints);
+            var pickupSegmentOffset = waypointsList.Take(CurWaypoints.Item1).Sum(segment => segment.Count);
+            var pickupRouteName = string.IsNullOrWhiteSpace(task.FileName) ? task.Info.Name : task.FileName;
 
             for (var i = 0; i < RetryTimes; i++)
             {
@@ -831,8 +833,10 @@ public partial class PathExecutor
                     double? nextDdistance = null;
                     var last2Waypoints = false;
                     WaypointForTrack? pickupJumpFrom = null;
+                    using var pickupWindow = new PickupWaypointApproachWindow();
                     for (var waypointIndex = 0; waypointIndex < waypoints.Count; waypointIndex++)
                     {
+                        pickupWindow.EnterPoint(waypointIndex);
                         var waypoint = waypoints[waypointIndex];
                         int? pickupResumeIndex = null;
                         await CheckMultiplayerBoundaryAsync();
@@ -872,9 +876,7 @@ public partial class PathExecutor
                         string? pickupPointLabel = null;
                         if (waypoint.PickupTargetCount.HasValue)
                         {
-                            var pointNumber = waypointsList.Take(CurWaypoints.Item1).Sum(segment => segment.Count) + waypointIndex + 1;
-                            var routeName = string.IsNullOrWhiteSpace(task.FileName) ? task.Info.Name : task.FileName;
-                            pickupPointLabel = $"{routeName} · JSON 第 {pointNumber} 点";
+                            pickupPointLabel = $"{pickupRouteName} · JSON 第 {pickupSegmentOffset + waypointIndex + 1} 点";
                             if (!PartyConfig.EnablePickupTargetCount)
                                 Logger.LogInformation("【拾取达标】{Point} 当前配置组开关未打开，按原路线执行", pickupPointLabel);
                             else if (waypoint.Type != WaypointType.Target.Code || waypoint.Action != ActionEnum.CombatScript.Code)
@@ -1285,7 +1287,11 @@ public partial class PathExecutor
                         else
                         {
                             await BeforeMoveToTarget(waypoint);
-                            
+                            var observePickupPosition = PartyConfig.EnablePickupTargetCount
+                                ? CreatePickupApproachObserver(pickupWindow, waypoints, waypointIndex,
+                                    CurWaypoints.Item1 == waypointsList.Count - 1, pickupRouteName, pickupSegmentOffset)
+                                : null;
+
                             // Path不用走得很近，Target需要接近，但都需要先移动到对应位置
                             if (waypoint.Type == WaypointType.Orientation.Code)
                             {
@@ -1335,22 +1341,17 @@ public partial class PathExecutor
                                 {
                                     // Logger.LogWarning("战斗后节点较近222！！-2");
                                     last2Waypoints = false;
-                                    await MoveTo(waypoint,true,task,nextWaypoint,nextDdistance, fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint);
+                                    await MoveTo(waypoint,true,task,nextWaypoint,nextDdistance, fastSyncId: __nextPendingSyncId,
+                                        fastSyncWaypoint: __nextPendingSyncWaypoint, observePickupPosition: observePickupPosition);
                                 }
                             }
                             
-                            int? plannedPickupResume = null;
-                            // 自动拾取可能在精确到点之前就发生。粗略接近完成后才开本节点观察，
-                            // 与精确移动并行建立基线；达标信号不取消这段移动。
-                            using var pickupProgress = pickupPointLabel == null ? null
-                                : PrepareWaypointPickup(waypoint, waypoints, waypointIndex,
-                                    CurWaypoints.Item1 == waypointsList.Count - 1, pickupPointLabel, out plannedPickupResume);
-
                             await BeforeMoveCloseToTarget(waypoint);
 
                             if (IsTargetPoint(waypoint))
                             {
-                                await MoveCloseTo(waypoint, fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint);
+                                await MoveCloseTo(waypoint, fastSyncId: __nextPendingSyncId,
+                                    fastSyncWaypoint: __nextPendingSyncWaypoint, observePickupPosition: observePickupPosition);
                             }
 
                             await CheckMultiplayerBoundaryAsync();
@@ -1493,6 +1494,9 @@ public partial class PathExecutor
                                 }
                                 else if (MultiplayerCoordinator == null)
                                 {
+                                    var pickupProgress = pickupWindow.GetForPoint(waypointIndex, out var plannedPickupResume);
+                                    if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint))
+                                        Logger.LogInformation("【拾取达标】{Point} 未能在距目标 3 个距离单位内开启观察，按原路线执行", pickupPointLabel);
                                     pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint,
                                         pickupProgress, plannedPickupResume, pickupPointLabel);
                                 }
@@ -3363,7 +3367,7 @@ public partial class PathExecutor
 
     public DateTime moveToStartTime;
 
-    public async Task MoveTo(WaypointForTrack waypoint,bool isGetOut = true, PathingTask? task = null, Waypoint? nextWaypoint = null,double? nextDistance = null,int retryDis = 4, bool isPoint = true, double? closeDistance = null, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, double? returnMoveBudgetSeconds = null)
+    public async Task MoveTo(WaypointForTrack waypoint,bool isGetOut = true, PathingTask? task = null, Waypoint? nextWaypoint = null,double? nextDistance = null,int retryDis = 4, bool isPoint = true, double? closeDistance = null, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, double? returnMoveBudgetSeconds = null, Action<Point2f>? observePickupPosition = null)
     {
         // Logger.LogWarning("999");
         bool fastReported = false;  // 抢报一次性短路 bool（fastsync-redesign-parameter-passing spec）
@@ -3421,7 +3425,7 @@ public partial class PathExecutor
             await SwitchAvatar(PartyConfig.MainAvatarIndex, false, task, true);
         }
         
-        var (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint,isPoint);
+        var (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint, isPoint, observePickupPosition);
         var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
         Logger.LogDebug("粗略接近途经点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
         // Logger.LogError("324234 {t}",targetOrientation);
@@ -3559,7 +3563,7 @@ public partial class PathExecutor
                 }
             }
 
-             (position, additionalTimeInMs) = await GetPositionAndTime(screen2, waypoint,isPoint);
+             (position, additionalTimeInMs) = await GetPositionAndTime(screen2, waypoint, isPoint, observePickupPosition);
              if (additionalTimeInMs>0)
              {
                  if (!InputHub.Foreground.IsKeyDown(GIActions.MoveForward.ToActionKey().ToVK()))
@@ -3637,7 +3641,7 @@ public partial class PathExecutor
                         Logger.LogWarning("检测到离开目标点异常，停止移动，距离1：{distance}- {x} - {y}", distance,position.X, position.Y);
                         await Delay(1000, ct);
                         using var screen23 = CaptureToRectArea();
-                        (position, additionalTimeInMs) = await GetPositionAndTime(screen23, waypoint,isPoint);
+                        (position, additionalTimeInMs) = await GetPositionAndTime(screen23, waypoint, isPoint, observePickupPosition);
                     distance = Navigation.GetDistance(waypoint, position);
                     if (position is not { X: 0, Y: 0 } && distance <= 500)
                     {
@@ -3656,7 +3660,7 @@ public partial class PathExecutor
                     {
                         Logger.LogWarning("重新识别位置异常，停止移动，距离3：{distance} - {x} - {y}", distance,position.X, position.Y);
                         using var screen233 = CaptureToRectArea();
-                        (position, additionalTimeInMs) = await GetPositionAndTime(screen233, waypoint,isPoint);
+                        (position, additionalTimeInMs) = await GetPositionAndTime(screen233, waypoint, isPoint, observePickupPosition);
                         distance = Navigation.GetDistance(waypoint, position);
                         if (position is not { X: 0, Y: 0 } && distance <= 500)
                         {
@@ -3669,7 +3673,7 @@ public partial class PathExecutor
                         else
                         {
                             using var screen2334 = CaptureToRectArea();
-                            (position, additionalTimeInMs) = await GetPositionAndTime(screen2334, waypoint,isPoint);
+                            (position, additionalTimeInMs) = await GetPositionAndTime(screen2334, waypoint, isPoint, observePickupPosition);
 
                             if (position is  { X: 0, Y: 0 })
                             {
@@ -4251,7 +4255,7 @@ public partial class PathExecutor
     /// 联机万叶聚物战后回点分支已经先用 MoveTo 粗接近至 < 4，故只需少量精接近步数即可，传 10（约 0.8 秒）即可。
     /// 单机 / 联机其它调用点不传新参数即保持原行为，单机零回归。
     /// </summary>
-    public async Task MoveCloseTo(WaypointForTrack waypoint, double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false)
+    public async Task MoveCloseTo(WaypointForTrack waypoint, double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false, Action<Point2f>? observePickupPosition = null)
     {
         Point2f position;
         int targetOrientation;
@@ -4309,7 +4313,7 @@ public partial class PathExecutor
                 await Delay(500, ct);
             }
 
-            position = await GetPosition(screen, waypoint);
+            position = await GetPosition(screen, waypoint, observePickupPosition);
             var distance = Navigation.GetDistance(waypoint, position);
 
             // 坐标跳变护栏（hoeing-kazuha-return-movecloseto-jump-guard spec，C2）：
@@ -4425,26 +4429,46 @@ public partial class PathExecutor
            && MultiplayerCoordinator == null && CooperativeContext == null
            && _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame == false;
 
-    private PickupWaypointProgress? PrepareWaypointPickup(WaypointForTrack waypoint, IReadOnlyList<Waypoint> segment,
-        int waypointIndex, bool isLastSegment, string pickupPointLabel, out int? plannedResume)
+    private Action<Point2f>? CreatePickupApproachObserver(PickupWaypointApproachWindow window,
+        IReadOnlyList<WaypointForTrack> segment, int currentIndex, bool isLastSegment, string routeName, int segmentOffset)
     {
-        plannedResume = null;
-        if (!CanUseWaypointPickup(waypoint) || waypoint.PickupTargetCount is not { } target)
+        if (PickupWaypointApproachWindow.SelectObservationIndex(segment, currentIndex) is not { } targetIndex
+            || window.HasObservationFor(targetIndex))
             return null;
 
+        var point = segment[targetIndex];
+        var current = segment[currentIndex];
+        if (!CanUseWaypointPickup(point) || point.PickupTargetCount is not { } target
+            || current.MapName != point.MapName || current.MapMatchMethod != point.MapMatchMethod)
+            return null;
+
+        var pointLabel = $"{routeName} · JSON 第 {segmentOffset + targetIndex + 1} 点";
+        int? plannedResume = null;
         if (target.SkipNextWaypoints > 0)
         {
-            plannedResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, waypointIndex,
+            plannedResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, targetIndex,
                 target.SkipNextWaypoints, isLastSegment, out var skipReason);
             if (!plannedResume.HasValue)
             {
-                Logger.LogWarning("【拾取达标】{Point} 配置 {Target}/{Skip} 未启用：{Reason}；按原路线执行",
-                    pickupPointLabel, target.Count, target.SkipNextWaypoints, skipReason);
+                if (targetIndex == currentIndex)
+                    Logger.LogWarning("【拾取达标】{Point} 配置 {Target}/{Skip} 未启用：{Reason}；按原路线执行",
+                        pointLabel, target.Count, target.SkipNextWaypoints, skipReason);
                 return null;
             }
         }
 
-        return CombatScriptHandler.TryStartPickup(ct, waypoint, pickupPointLabel);
+        var tried = false;
+        return position =>
+        {
+            if (tried || ct.IsCancellationRequested || !CanUseWaypointPickup(point)
+                || !PickupWaypointApproachWindow.IsWithinStartDistance(point, position, out var distance))
+                return;
+
+            tried = true;
+            var progress = CombatScriptHandler.TryStartPickup(ct, point, pointLabel, distance, targetIndex != currentIndex);
+            if (progress != null)
+                window.Start(targetIndex, progress, plannedResume);
+        };
     }
 
     private async Task<int?> AfterMoveToTarget(WaypointForTrack waypoint, Waypoint? nextWaypoint,
@@ -4674,13 +4698,14 @@ public partial class PathExecutor
         
     }
 
-    private async Task<Point2f> GetPosition(ImageRegion imageRegion, WaypointForTrack waypoint)
+    private async Task<Point2f> GetPosition(ImageRegion imageRegion, WaypointForTrack waypoint, Action<Point2f>? observePickupPosition = null)
     {
-        return (await GetPositionAndTime(imageRegion, waypoint)).point;
+        return (await GetPositionAndTime(imageRegion, waypoint, observePickupPosition: observePickupPosition)).point;
     }
     //
     public bool GetPositionAndTimeSuspendFlag = false;
-    private async Task<(Point2f point,int additionalTimeInMs)> GetPositionAndTime(ImageRegion imageRegion, WaypointForTrack waypoint,bool isPoint = true)
+    private async Task<(Point2f point,int additionalTimeInMs)> GetPositionAndTime(ImageRegion imageRegion,
+        WaypointForTrack waypoint, bool isPoint = true, Action<Point2f>? observePickupPosition = null)
     {
         var position = Navigation.GetPosition(imageRegion, waypoint.MapName, waypoint.MapMatchMethod);
         int time = 0;
@@ -4712,6 +4737,9 @@ public partial class PathExecutor
         }
 
         var distance = Navigation.GetDistance(waypoint, position);
+        // 观察只使用本次定位，不能拿下方用于脱困的历史坐标判断玩家已经接近目标。
+        if (observePickupPosition != null && position != default && distance <= 500)
+            observePickupPosition(position);
         //中途暂停过，地图未识别到
         if (position is {X:0,Y:0} && GetPositionAndTimeSuspendFlag && !TryConsumeRevivalSignal())
         {
