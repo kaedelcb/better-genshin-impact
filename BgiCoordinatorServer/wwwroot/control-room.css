@@ -142,6 +142,13 @@ small,.small{font-size:12px}
 .confirmation-member p{color:var(--muted);font-size:13px;margin-top:5px;overflow-wrap:anywhere}
 .modal-overlay{position:fixed;inset:0;background:#090b18cc;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px}
 .modal{width:min(640px,100%);max-height:88dvh;overflow:auto;background:var(--panel);border:1px solid #5a526a;border-radius:18px;padding:26px;box-shadow:0 16px 60px #0006;overflow-wrap:anywhere}
+.bgi-update-dialog{width:min(620px,calc(100% - 24px));color:#eee9fa;margin:auto;box-sizing:border-box}
+.bgi-update-dialog::backdrop{background:#121024c9}
+.bgi-update-head,.bgi-update-actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.bgi-update-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.bgi-update-dialog label{display:block;min-width:0}.bgi-update-dialog select{display:block;width:100%;margin:5px 0 10px;min-height:44px}
+.bgi-update-status{white-space:pre-wrap}.detail-bgi-update{margin-inline-start:8px}
+@media(max-width:500px){.bgi-update-fields{grid-template-columns:minmax(0,1fr)}}
 .modal h3{font-size:20px;margin-bottom:14px}
 .modal p{color:var(--muted)}
 .modal .btn-row{display:flex;justify-content:flex-end;gap:10px;margin-top:20px;flex-wrap:wrap;position:sticky;bottom:-26px;background:var(--panel);padding:12px 0}

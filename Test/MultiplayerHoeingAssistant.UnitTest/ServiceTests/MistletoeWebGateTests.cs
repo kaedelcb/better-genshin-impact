@@ -57,6 +57,29 @@ public class MistletoeWebGateTests
     }
 
     [Fact]
+    public async Task BgiUpdateCatalog_IsAvailableOnlyToPairedLocalOrAuthorizedExecutorBrowser()
+    {
+        var (vm, seen) = NewVm();
+        const string operation = "bgi.update.catalog";
+        Task<object> Execute(JsonObject request, bool local) => vm.ExecuteMistletoeWebCoreAsync(request, "r", local, Recorder(seen));
+        Assert.Equal("denied", Reply(await Execute(Request(operation), false))["status"]!.GetValue<string>());
+        Assert.Equal("rejected", Reply(await Execute(Request(operation, "different"), true))["status"]!.GetValue<string>());
+        var (code, _) = vm.WebOwners.CreateCode();
+        var (browser, secret) = vm.WebOwners.Redeem(code, "更新测试");
+        var remote = Reply(await Execute(Request(operation, browserId: browser, secret: secret), false));
+        var local = Reply(await Execute(Request(operation), true));
+        Assert.Equal("ok", remote["status"]!.GetValue<string>());
+        Assert.Equal("ok", local["status"]!.GetValue<string>());
+        Assert.Equal("autoBGI源", remote["data"]!["sources"]!.AsArray().Single(s => s!["id"]!.GetValue<string>() == "cnb")!["name"]!.GetValue<string>());
+        Assert.Empty(seen);
+
+        var (observer, commands) = NewVm(observer: true);
+        var denied = Reply(await observer.ExecuteMistletoeWebCoreAsync(Request(operation), "r", true, Recorder(commands)));
+        Assert.Equal("rejected", denied["status"]!.GetValue<string>());
+        Assert.Empty(commands);
+    }
+
+    [Fact]
     public async Task IdentityReportsOwnershipWithoutExecuting_AndWrongInstanceIsRejected()
     {
         var (vm, seen) = NewVm();

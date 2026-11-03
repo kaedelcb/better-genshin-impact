@@ -40,7 +40,7 @@ public static class BgiUpdateSources
         }
         sources.Add(new("github-releases", "GitHub Releases", BgiUpdateSourceKind.GitHubReleases, GitHubEndpoint));
         sources.Add(new("github-actions", "GitHub Actions 构建", BgiUpdateSourceKind.GitHubActions, new Uri(ActionsRuns)));
-        sources.Add(new(CnbId, "CNB（茶包版）", BgiUpdateSourceKind.Cnb, CnbEndpoint));
+        sources.Add(new(CnbId, "autoBGI源", BgiUpdateSourceKind.Cnb, CnbEndpoint));
 
         foreach (var configured in custom ?? config?.BgiCustomUpdateSources ?? [])
         {

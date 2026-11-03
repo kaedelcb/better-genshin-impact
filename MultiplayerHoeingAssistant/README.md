@@ -43,11 +43,13 @@ dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Rel
 - **协调服务器**：读取助手当前配置的协调服务器的 /bgi-update/latest.json。旧服务端若返回 404，需要更新协调服务并保留已挂载的安装包目录。
 - **GitHub Releases**：读取茶包仓库中已正式发布的 .7z 附件。
 - **GitHub Actions 构建**：读取茶包仓库 BetterGI Publish 工作流最近成功且产物未过期的运行；通过 [nightly.link](https://nightly.link/) 下载 BetterGI_7z 的外层 ZIP，只取对应版本的 .7z。发布版本和构建版本可分别选择。
-- **CNB（茶包版）**：读取 [CNB 版本文件](https://cnb.cool/wjdsg/wjdsg-bgi/-/releases/download/wjdsg-bgi/runForVersion.txt) 和固定地址的安装包。文件在检查后被替换，或包内的 BGI 版本与选中版本不一致，助手会中止并提示刷新。
+- **autoBGI源**：读取 [CNB 版本文件](https://cnb.cool/wjdsg/wjdsg-bgi/-/releases/download/wjdsg-bgi/runForVersion.txt) 和固定地址的安装包。文件在检查后被替换，或包内的 BGI 版本与选中版本不一致，助手会中止并提示刷新。
 
 网络包保存在安装包目录的「网络安装包」子目录中，各来源分开保存；Actions 的不同构建也分开保存。文件名相同不代表内容相同。
 
 选中网络包后，点「仅下载」可先保存，不会关闭 BGI 或安装。下载完成的包也能在「本地安装包」里找到，可离线使用。下次从原来源点「更新」时，如果清单仍能确认是同一份文件，校验通过后会直接复用。两种操作在下载安装包期间都可以点「取消下载」。
+
+耕地机网页也有「更新 BGI」。本机配对网页可更新本机执行端；远程网页需要先用该执行端助手的网页授权码授权，只能操作自己已授权的执行端。安装包由执行端下载和保存，下载期间可取消；网页覆盖前须退出执行端 BGI，覆盖会保留 User 目录，其他排除和备份沿用助手设置。
 
 ### 接入自建下载源
 

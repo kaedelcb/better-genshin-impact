@@ -7,6 +7,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public class BgiProcessMonitor : IDisposable
 {
     private readonly string _bgiPath;
+    private readonly Func<string, Action, bool>? _launchGuard;
     /// <summary>[P2 仲裁] 用户可见日志出口（MainViewModel 注入 AddLog）；null 时静默（仅 Debug.WriteLine）。</summary>
     private readonly Action<string>? _log;
     private Timer? _checkTimer;
@@ -49,10 +50,11 @@ public class BgiProcessMonitor : IDisposable
     public bool IsBgiRunning => GetCurrentSessionBgiProcesses().Length > 0;
 
     /// <param name="log">[P2 仲裁] 可选日志回调（MainViewModel.AddLog），仲裁器关键决策打可见日志。</param>
-    public BgiProcessMonitor(string bgiPath, Action<string>? log = null)
+    public BgiProcessMonitor(string bgiPath, Action<string>? log = null, Func<string, Action, bool>? launchGuard = null)
     {
         _bgiPath = bgiPath;
         _log = log;
+        _launchGuard = launchGuard;
     }
 
     /// <summary>
@@ -373,7 +375,12 @@ public class BgiProcessMonitor : IDisposable
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Normal
             };
-            Process.Start(startInfo);
+            if (_launchGuard != null && !_launchGuard(_bgiPath, () => Process.Start(startInfo)))
+            {
+                _log?.Invoke("BGI 正在更新，未启动程序。");
+                return false;
+            }
+            if (_launchGuard == null) Process.Start(startInfo);
             OnBgiStarted?.Invoke();
             return true;
         }

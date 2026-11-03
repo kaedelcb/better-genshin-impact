@@ -305,6 +305,9 @@ public partial class UpdateBgiWindow : Window
             return;
         }
 
+        using var operation = BgiPackageUpdateService.TryBeginPackageOperation();
+        if (operation == null) { StatusText.Text = "另一个 BGI 下载或更新正在进行。"; return; }
+
         SetBusy(true);
         try
         {
@@ -413,6 +416,8 @@ public partial class UpdateBgiWindow : Window
 
     private async Task ApplyConfirmedUpdateAsync(BgiUpdatePackage package, string targetDir, string? downloadDirectory)
     {
+        using var operation = BgiPackageUpdateService.TryBeginPackageOperation();
+        if (operation == null) { StatusText.Text = "另一个 BGI 下载或更新正在进行。"; return; }
         SetBusy(true, installing: true);
         try
         {
@@ -535,7 +540,8 @@ public partial class UpdateBgiWindow : Window
         _vm.Config.BgiPackageDir = PackageDir;
         _vm.Config.BgiUpdateExcludeDirs = _excludeDirs.ToList();
         _vm.Config.BgiUpdateBackupBeforeUpdate = BackupExcludeCheckBox.IsChecked == true;
-        _vm.Config.BgiPickedPackages = _pickedPackagePaths.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        _vm.Config.BgiPickedPackages = _pickedPackagePaths.Concat(_vm.Config.BgiPickedPackages ?? [])
+            .Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _vm.Config.BgiUpdateSourceId = (SourceBox.SelectedItem as BgiUpdateSource)?.Id;
         _vm.Config.BgiCustomUpdateSources = _customSources.ToList();
         _vm.SaveConfigToDisk();

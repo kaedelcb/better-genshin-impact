@@ -37,18 +37,20 @@ public partial class MainViewModel
         string requesterConnectionId, string roomCode)
     {
         var epoch = Interlocked.Read(ref _mistletoeWebEpoch);
+        bool CurrentRequest() => DateTimeOffset.UtcNow < deadline && client.IsControlRoomReady
+            && client.CurrentRoomCode == roomCode && ReferenceEquals(client, _signalRClient)
+            && epoch == Interlocked.Read(ref _mistletoeWebEpoch) && !string.IsNullOrEmpty(requesterConnectionId);
         _ = Task.Run(async () =>
         {
             object reply;
             try
             {
-                if (DateTimeOffset.UtcNow >= deadline || !client.IsControlRoomReady || client.CurrentRoomCode != roomCode
-                    || !ReferenceEquals(client, _signalRClient)
-                    || epoch != Interlocked.Read(ref _mistletoeWebEpoch) || string.IsNullOrEmpty(requesterConnectionId))
+                if (!CurrentRequest())
                     reply = WebReply("rejected", "请求已过期或连接已变化，未执行");
                 else
                     reply = await Application.Current.Dispatcher.InvokeAsync(
-                        () => ExecuteMistletoeWebAsync(request, requestId, local: false)).Task.Unwrap();
+                        () => CurrentRequest() ? ExecuteMistletoeWebAsync(request, requestId, local: false)
+                            : Task.FromResult(WebReply("rejected", "请求已过期或连接已变化，未执行"))).Task.Unwrap();
             }
             catch (Exception ex) { reply = WebReply("unknown", "执行端处理异常，结果未确认：" + ex.Message); }
             try { await client.ReportMistletoeAsync(requestId, reply); }
@@ -116,6 +118,8 @@ public partial class MainViewModel
         }
         if (!owner)
             return WebReply("denied", "此浏览器尚未获得本人授权：请在执行端助手「设置 → 网页授权」生成授权码后输入", instanceId: instance);
+        if (operation.StartsWith(BgiWebUpdatePrefix, StringComparison.Ordinal))
+            return await ExecuteBgiWebUpdateAsync(operation, request, local, config);
         if (!IsExecutorMode && operation.StartsWith("task.", StringComparison.Ordinal))
             return WebReply("rejected", "该助手是监控端，任务中心只在执行端可用", instanceId: instance);
 

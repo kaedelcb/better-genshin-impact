@@ -96,7 +96,7 @@ public static class BgiRemoteUpdateService
         var cancel = timeout.Token;
         var version = (await client.GetStringAsync(versionUrl, cancel).ConfigureAwait(false)).Trim();
         if (version.Length > 160 || !TryParseName($"BetterGI_v{version}.7z", out var name))
-            return new([], "CNB 没有返回有效的茶包版版本号。");
+            return new([], "autoBGI源没有返回有效的茶包版版本号。");
 
         // CNB 的下载地址固定不变；HEAD 在发布入口可能没有 ETag，读取开头 64 字节来识别实际附件。
         var packageUrl = new Uri(versionUrl, CnbPackageFile);
@@ -106,10 +106,10 @@ public static class BgiRemoteUpdateService
         response.EnsureSuccessStatusCode();
         if (response.StatusCode != HttpStatusCode.PartialContent || response.Headers.ETag is not { IsWeak: false } tag
             || response.Content.Headers.ContentRange is not { From: 0, Length: > 63 } range)
-            return new([], "CNB 无法确认当前安装包，可刷新重试或切换来源。");
+            return new([], "autoBGI源无法确认当前安装包，可刷新重试或切换来源。");
         await using var body = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false);
         if (!await HasSevenZipSignatureAsync(body, cancel).ConfigureAwait(false))
-            return new([], "CNB 返回的文件不是茶包版 7z 安装包。");
+            return new([], "autoBGI源返回的文件不是茶包版 7z 安装包。");
 
         return new([new(name!.FileName, packageUrl.AbsoluteUri, range.Length,
             response.Content.Headers.LastModified?.UtcDateTime, name, CnbArtifactTag: tag.Tag)]);
@@ -323,7 +323,7 @@ public static class BgiRemoteUpdateService
             response.EnsureSuccessStatusCode();
             if (info.CnbArtifactTag is { } expectedTag && (response.StatusCode != HttpStatusCode.OK
                 || response.Headers.ETag is not { IsWeak: false } downloadTag || downloadTag.Tag != expectedTag))
-                throw new InvalidDataException("CNB 的安装包已变动，请刷新来源后重新选择。");
+                throw new InvalidDataException("autoBGI源的安装包已变动，请刷新来源后重新选择。");
             var responseLength = response.Content.Headers.ContentLength;
             if (info.SizeBytes is { } expected && responseLength is { } actual && expected != actual)
                 throw new InvalidDataException("服务器返回的文件大小与更新清单不一致。");
@@ -352,7 +352,7 @@ public static class BgiRemoteUpdateService
             }
             if (info.CnbArtifactTag != null)
             {
-                progress?.Report("正在核对 CNB 安装包内的 BGI 版本…");
+                progress?.Report("正在核对 autoBGI源安装包内的 BGI 版本…");
                 await Task.Run(() => BgiPackageUpdateService.VerifyCnbPackageVersion(candidate, inspectionPath, info.FileName, cancel), cancel)
                     .ConfigureAwait(false);
             }

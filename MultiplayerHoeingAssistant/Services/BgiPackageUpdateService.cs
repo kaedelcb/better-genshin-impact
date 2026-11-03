@@ -91,6 +91,58 @@ public sealed record BgiUpdateApplyResult(
 /// </summary>
 public static class BgiPackageUpdateService
 {
+    private static int _operationInProgress;
+    private static readonly object ExecutableGate = new();
+    private static string? _webInstallExecutable;
+
+    internal static IDisposable? TryBeginPackageOperation()
+        => Interlocked.CompareExchange(ref _operationInProgress, 1, 0) == 0 ? new PackageOperation() : null;
+
+    private sealed class PackageOperation : IDisposable
+    {
+        private int _disposed;
+        public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) Interlocked.Exchange(ref _operationInProgress, 0); }
+    }
+
+    // 与助手启动 BGI 的实际 Process.Start 串行；网页不能在自动守护刚拉起时覆盖程序。
+    internal static IDisposable? TryReserveStoppedWebInstall(string executable)
+    {
+        lock (ExecutableGate)
+        {
+            if (_webInstallExecutable != null) return null;
+            var processes = FindBgiProcessesUnder(Path.GetDirectoryName(executable)!);
+            try { if (processes.Count != 0) return null; }
+            finally { foreach (var process in processes) process.Dispose(); }
+            _webInstallExecutable = executable;
+            return new WebInstallReservation();
+        }
+    }
+
+    internal static bool TryLaunchWhileNotInstalling(string executable, Action launch)
+    {
+        lock (ExecutableGate)
+        {
+            if (_webInstallExecutable != null && string.Equals(Path.GetFullPath(executable), _webInstallExecutable,
+                StringComparison.OrdinalIgnoreCase)) return false;
+            launch();
+            return true;
+        }
+    }
+
+    private sealed class WebInstallReservation : IDisposable
+    {
+        private bool _disposed;
+        public void Dispose()
+        {
+            lock (ExecutableGate)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _webInstallExecutable = null;
+            }
+        }
+    }
+
     /// <summary>备份根目录名（固定放 BGI 目录下，时间戳子目录每次更新独立一份）。</summary>
     public const string BackupRootDirName = "_update_backup";
 
@@ -168,7 +220,7 @@ public static class BgiPackageUpdateService
         var candidates = entries.Where(e => string.Equals(NormalizeEntryPath(e.Key ?? ""), executable,
             StringComparison.OrdinalIgnoreCase)).Take(2).ToArray();
         if (candidates.Length != 1 || candidates[0].Size is <= 0 or > (512L << 20))
-            throw new InvalidDataException("无法从 CNB 安装包中确认唯一的 BetterGI.exe。");
+            throw new InvalidDataException("无法从 autoBGI源的安装包中确认唯一的 BetterGI.exe。");
 
         var entry = candidates[0];
         using (var input = entry.OpenEntryStream())
@@ -180,7 +232,7 @@ public static class BgiPackageUpdateService
             {
                 ct.ThrowIfCancellationRequested();
                 int read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
-                if (read == 0) throw new InvalidDataException("CNB 安装包中的 BetterGI.exe 不完整。");
+                if (read == 0) throw new InvalidDataException("autoBGI源安装包中的 BetterGI.exe 不完整。");
                 output.Write(buffer, 0, read);
                 remaining -= read;
             }
@@ -190,7 +242,7 @@ public static class BgiPackageUpdateService
         var version = BgiVersionResolver.FromExecutable(inspectionPath);
         var actual = BgiUpdateDecisions.BuildLocalComparableName(version)?.FileName;
         if (!string.Equals(actual, expectedFileName, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException($"CNB 安装包实际版本为 {version ?? "未知"}，与所选版本不符。请刷新来源后重试。");
+            throw new InvalidDataException($"autoBGI源安装包实际版本为 {version ?? "未知"}，与所选版本不符。请刷新来源后重试。");
     }
 
     public static BgiUpdateApplyResult Apply(string archivePath, string targetDir,

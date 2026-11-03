@@ -1808,15 +1808,15 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (_processMonitor != null)
                 {
                     // 执行模式：走标准启动路径（含启动探针日志与 OnBgiStarted 事件）
-                    _processMonitor.RestartBgi();
+                    if (!_processMonitor.RestartBgi()) return false;
                 }
                 else
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    if (!BgiPackageUpdateService.TryLaunchWhileNotInstalling(bgiPath, () => Process.Start(new ProcessStartInfo
                     {
                         FileName = bgiPath,
                         UseShellExecute = true
-                    });
+                    }))) return false;
                 }
                 AddLog("已自动启动 BGI，等待其就绪...");
             }
@@ -6067,7 +6067,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
         else if (!string.IsNullOrEmpty(_config?.BgiPath))
         {
-            _processMonitor = new BgiProcessMonitor(_config.BgiPath, AddLog);
+            _processMonitor = new BgiProcessMonitor(_config.BgiPath, AddLog, BgiPackageUpdateService.TryLaunchWhileNotInstalling);
             // [P1] 原 OnBgiStarted 处理器（`_lastOnlineGeneration = 0`）已整体删除、不再订阅：
             // BGI 重启后的 0 快照由 OnlineIntentLifecycle 的本会话 generation 高水位忽略；
             // 新触发会继续使用持久化的递增 generation。主动清零基线会把旧高 gen 残留

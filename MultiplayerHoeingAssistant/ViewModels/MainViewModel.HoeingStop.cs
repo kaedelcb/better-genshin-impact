@@ -150,7 +150,7 @@ public partial class MainViewModel
             // Stopping remains available when normal initialization could not bind an executor.
             var path = string.IsNullOrWhiteSpace(_config?.BgiPath)
                 ? System.IO.Path.Combine(ResolveConfiguredBgiDirectory(), "BetterGI.exe") : _config.BgiPath;
-            _processMonitor ??= new BgiProcessMonitor(path, AddLog);
+            _processMonitor ??= new BgiProcessMonitor(path, AddLog, BgiPackageUpdateService.TryLaunchWhileNotInstalling);
             return _commandExecutor ??= new CommandExecutor(_processMonitor, path, () => _externalClient, AddLog);
         }
     }

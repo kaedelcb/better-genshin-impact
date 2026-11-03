@@ -11,7 +11,7 @@ const mtEl = id => document.getElementById(id);
 const mte = value => escapeHtml(value);
 const MT_CRED_KEY = 'bgi.mistletoe.owner.v1';
 const MT_UNCONFIRMED_KEY = 'bgi.mistletoe.unconfirmed.v1';
-const MT_READ_OPS = new Set(['web.identity','startup.get','startup.status','task.list','task.flow.get','task.flow.export','task.schedule.export','task.resource.layout.get','task.resource.revision.get','task.bgiPath.get','startup.programs.list','operation.get']);
+const MT_READ_OPS = new Set(['web.identity','startup.get','startup.status','task.list','task.flow.get','task.flow.export','task.schedule.export','task.resource.layout.get','task.resource.revision.get','task.bgiPath.get','startup.programs.list','operation.get','bgi.update.catalog','bgi.update.status']);
 /**
  * 执行端留有持久回执（operation.get 可查终态）的操作，与 PC 远程中心 UsesDurableCenterReceipt 一致。
  * 只有这些操作进入「未确认台账」：结果未知时阻断再次发起，核对后才解除。
