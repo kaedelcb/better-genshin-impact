@@ -26,8 +26,10 @@ public partial class UpdateBgiWindow : Window
     private readonly List<string> _pickedPackagePaths;
     private readonly List<BgiCustomUpdateSource> _customSources;
     private CancellationTokenSource? _sourceCheck;
+    private CancellationTokenSource? _downloadCancellation;
     private bool _sourcesReady;
-    private bool _updating;
+    private bool _busy;
+    private bool _closeAfterDownload;
 
     public UpdateBgiWindow(MainViewModel vm)
     {
@@ -52,7 +54,14 @@ public partial class UpdateBgiWindow : Window
             _sourceCheck = null;
             PersistConfig();
         };
-        Closing += (_, e) => e.Cancel = _updating;
+        Closing += (_, e) =>
+        {
+            if (!_busy) return;
+            e.Cancel = true;
+            if (_downloadCancellation == null) return;
+            _closeAfterDownload = true;
+            CancelDownload();
+        };
     }
 
     private void RefreshCurrentVersion()
@@ -88,7 +97,7 @@ public partial class UpdateBgiWindow : Window
 
     private async Task RefreshSourceAsync(bool preserveSelection = false)
     {
-        if (_updating || SourceBox.SelectedItem is not BgiUpdateSource source) return;
+        if (_busy || SourceBox.SelectedItem is not BgiUpdateSource source) return;
         _sourceCheck?.Cancel();
         _sourceCheck = null;
         var selected = preserveSelection ? PackageList.SelectedItem as BgiUpdatePackage : null;
@@ -278,9 +287,86 @@ public partial class UpdateBgiWindow : Window
 
     // ===== 更新 =====
 
+    private void PackageList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_sourcesReady) RefreshDownloadAction();
+    }
+
+    private async void DownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_downloadCancellation != null)
+        {
+            CancelDownload();
+            return;
+        }
+        if (_busy || PackageList.SelectedItem is not BgiUpdatePackage { Remote: { } remote, DownloadSource: { } source }) return;
+        if (PackageDir.Length == 0 && !Directory.Exists(BgiDir))
+        {
+            StatusText.Text = "请先填写保存文件的安装包目录。";
+            return;
+        }
+
+        SetBusy(true);
+        try
+        {
+            var directory = source.DownloadDirectory(EffectiveDownloadDir(), remote.ActionsRunId);
+            var path = await PrepareDownloadAsync(remote, directory);
+            if (path == null) return;
+            // 也可从本地来源找到这份文件，稍后在没有网络的情况下安装。
+            var fullPath = Path.GetFullPath(path);
+            if (!_pickedPackagePaths.Contains(fullPath, StringComparer.OrdinalIgnoreCase))
+                _pickedPackagePaths.Add(fullPath);
+            PersistConfig();
+            StatusText.Text = $"安装包已保存：{fullPath}。可在「本地安装包」中稍后更新。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"下载失败：{ex.Message}";
+        }
+        finally { EndOperation(); }
+    }
+
+    private async Task<string?> PrepareDownloadAsync(BgiRemoteUpdateInfo remote, string directory)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _downloadCancellation = cancellation;
+        RefreshDownloadAction();
+        StatusText.Text = "正在准备下载…";
+        var progress = new Progress<string>(message =>
+        {
+            if (_downloadCancellation == cancellation && !cancellation.IsCancellationRequested)
+                StatusText.Text = message;
+        });
+        try
+        {
+            var path = await BgiRemoteUpdateService.PreparePackageAsync(remote, directory, progress, cancellation.Token);
+            // 文件刚就绪时也可能收到取消；先确认再进入不可取消的覆盖阶段。
+            cancellation.Token.ThrowIfCancellationRequested();
+            return path;
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            StatusText.Text = "已取消下载，未开始更新。";
+            return null;
+        }
+        finally
+        {
+            _downloadCancellation = null;
+            RefreshDownloadAction();
+        }
+    }
+
+    private void CancelDownload()
+    {
+        if (_downloadCancellation is not { IsCancellationRequested: false } cancellation) return;
+        StatusText.Text = "正在取消下载…";
+        DownloadButton.IsEnabled = false;
+        cancellation.Cancel();
+    }
+
     private async void UpdateButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_updating) return;
+        if (_busy) return;
         if (PackageList.SelectedItem is not BgiUpdatePackage package)
         {
             MessageBox.Show(this, "请先在列表中选择一个安装包。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -317,24 +403,29 @@ public partial class UpdateBgiWindow : Window
             + $"安装包：{package.FileName}\n目标目录：{targetDir}\n"
             + $"排除目录：{(_excludeDirs.Count == 0 ? "无" : string.Join("、", _excludeDirs))}"
             + (BackupExcludeCheckBox.IsChecked == true && _excludeDirs.Count > 0 ? "\n（更新前先备份排除目录）" : "")
-            + (remoteInfo != null ? $"\n下载来源：{source!.Label}（{source.Endpoint!.Host}）\n将先下载到 {downloadDirectory}（{remoteInfo.SizeText}），校验后才关闭目标目录中正在运行的 BGI。" : "")
+            + (remoteInfo != null ? $"\n下载来源：{source!.Label}（{source.Endpoint!.Host}）\n将复用已校验的安装包，或下载到 {downloadDirectory}（{remoteInfo.SizeText}）。安装包就绪后才关闭目标目录中正在运行的 BGI。" : "")
             + (remoteInfo == null && running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行，点击「确定」将自动关闭后继续。" : "")
             + "\n\n确定继续更新？";
         if (MessageBox.Show(this, confirmText, "更新BGI", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
-        _updating = true;
-        SetBusy(true);
+        await ApplyConfirmedUpdateAsync(package, targetDir, downloadDirectory);
+    }
+
+    private async Task ApplyConfirmedUpdateAsync(BgiUpdatePackage package, string targetDir, string? downloadDirectory)
+    {
+        SetBusy(true, installing: true);
         try
         {
             // 网络来源包：先下载到安装目录（.part 临时文件，成功后改名覆盖），再走本地解压覆盖流程
             var archivePath = package.FullPath;
-            if (remoteInfo != null)
+            if (package.Remote is { } remoteInfo)
             {
-                var dlProgress = new Progress<string>(s => StatusText.Text = s);
-                archivePath = await BgiRemoteUpdateService.DownloadAsync(remoteInfo, downloadDirectory!, dlProgress);
-                running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
+                var prepared = await PrepareDownloadAsync(remoteInfo, downloadDirectory!);
+                if (prepared == null) return;
+                archivePath = prepared;
             }
+            var running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
             if (running.Count > 0 && !TryKillBgiProcesses(running))
             {
                 MessageBox.Show(this, "BGI 进程关闭失败，已中止更新（请手动关闭后重试）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -371,11 +462,7 @@ public partial class UpdateBgiWindow : Window
             StatusText.Text = "更新失败。";
             MessageBox.Show(this, $"更新失败：{ex.Message}", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
         }
-        finally
-        {
-            _updating = false;
-            SetBusy(false);
-        }
+        finally { EndOperation(); }
     }
 
     private bool TryKillBgiProcesses(List<Process> processes)
@@ -405,8 +492,9 @@ public partial class UpdateBgiWindow : Window
         return processes.All(p => p.HasExited);
     }
 
-    private void SetBusy(bool busy)
+    private void SetBusy(bool busy, bool installing = false)
     {
+        _busy = busy;
         UpdateButton.IsEnabled = !busy;
         RefreshPackagesButton.IsEnabled = !busy;
         SourceBox.IsEnabled = !busy;
@@ -416,8 +504,28 @@ public partial class UpdateBgiWindow : Window
         BrowseBgiDirButton.IsEnabled = !busy;
         BrowsePackageDirButton.IsEnabled = !busy;
         AddExcludeButton.IsEnabled = !busy;
+        ExcludeList.IsEnabled = !busy;
+        BackupExcludeCheckBox.IsEnabled = !busy;
+        PackageList.IsEnabled = !busy;
         PickPackageFileButton.IsEnabled = !busy;
-        UpdateButton.Content = busy ? "更新中…" : "更新";
+        UpdateButton.Content = busy && installing ? "更新中…" : "更新";
+        RefreshDownloadAction();
+    }
+
+    private void RefreshDownloadAction()
+    {
+        DownloadButton.Content = _downloadCancellation != null ? "取消下载" : "仅下载";
+        DownloadButton.IsEnabled = _downloadCancellation is { IsCancellationRequested: false }
+            || (!_busy && PackageList.SelectedItem is BgiUpdatePackage { Remote: not null, DownloadSource: not null });
+        CloseButton.IsEnabled = !_busy || _downloadCancellation != null;
+    }
+
+    private void EndOperation()
+    {
+        SetBusy(false);
+        if (!_closeAfterDownload) return;
+        _closeAfterDownload = false;
+        Close();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();

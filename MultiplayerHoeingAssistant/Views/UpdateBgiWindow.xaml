@@ -39,6 +39,19 @@
         </Style>
     </Window.Resources>
 
+    <DockPanel LastChildFill="True">
+        <Border DockPanel.Dock="Bottom" BorderBrush="#DDD7CC" BorderThickness="0,1,0,0" Padding="20,10,20,14">
+            <StackPanel>
+                <TextBlock x:Name="StatusText" FontSize="12" Foreground="#6E6E73" TextWrapping="Wrap" Text=""/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button x:Name="CloseButton" Content="关闭" Width="90" Height="34" Margin="0,0,10,0" Style="{StaticResource Btn}" Click="CloseButton_Click"/>
+                    <Button x:Name="DownloadButton" Content="仅下载" IsEnabled="False" Width="96" Height="34" Margin="0,0,10,0"
+                            Style="{StaticResource Btn}" Click="DownloadButton_Click"/>
+                    <Button x:Name="UpdateButton" Content="更新" Width="110" Height="34"
+                            Background="#007AFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="UpdateButton_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16,20,20">
             <TextBlock Text="更新 BGI" FontSize="18" FontWeight="SemiBold" Foreground="#1D1D1F"/>
@@ -101,7 +114,7 @@
             </Expander>
 
             <!-- 安装包列表 -->
-            <ListBox x:Name="PackageList" Height="132" Margin="0,8,0,0" Background="White"
+            <ListBox x:Name="PackageList" Height="132" Margin="0,8,0,0" Background="White" SelectionChanged="PackageList_SelectionChanged"
                      BorderBrush="#D1D1D6" BorderThickness="1" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
@@ -219,14 +232,7 @@
                 </TextBlock>
             </CheckBox>
 
-            <TextBlock x:Name="StatusText" FontSize="12" Foreground="#6E6E73" TextWrapping="Wrap" Margin="0,12,0,0" Text=""/>
-
-            <!-- 按钮 -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                <Button x:Name="CloseButton" Content="关闭" Width="90" Height="34" Margin="0,0,10,0" Style="{StaticResource Btn}" Click="CloseButton_Click"/>
-                <Button x:Name="UpdateButton" Content="更新" Width="110" Height="34"
-                        Background="#007AFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="UpdateButton_Click"/>
-            </StackPanel>
         </StackPanel>
     </ScrollViewer>
+    </DockPanel>
 </Window>

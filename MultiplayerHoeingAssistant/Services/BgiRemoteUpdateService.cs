@@ -216,11 +216,60 @@ public static class BgiRemoteUpdateService
     public static string BuildManifestUrl(string serverBaseUrl)
         => serverBaseUrl.TrimEnd('/') + "/bgi-update/latest.json";
 
-    /// <summary>先下载并校验临时文件；Actions 仅取 ZIP 内与运行版本匹配的一个 .7z。</summary>
-    public static Task<string> DownloadAsync(BgiRemoteUpdateInfo info, string destDir,
+    public static Task<string> PreparePackageAsync(BgiRemoteUpdateInfo info, string destDir,
         IProgress<string>? progress, CancellationToken ct = default)
-        => DownloadAsync(DownloadClient, info, destDir, progress, ct);
+        => PreparePackageAsync(DownloadClient, info, destDir, progress, ct);
 
+    internal static async Task<string> PreparePackageAsync(HttpClient client, BgiRemoteUpdateInfo info, string destDir,
+        IProgress<string>? progress, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (!TryParseName(info.FileName, out _)) throw new InvalidDataException("安装包文件名无效。");
+        var path = Path.Combine(destDir, info.FileName);
+        if (await IsSavedPackageValidAsync(info, path, progress, ct).ConfigureAwait(false))
+            return path;
+        return await DownloadAsync(client, info, destDir, progress, ct).ConfigureAwait(false);
+    }
+
+    private static string ReceiptPath(string package) => package + ".download-info";
+
+    private static string DownloadIdentity(BgiRemoteUpdateInfo info)
+        => BgiUpdateSources.Hash(JsonSerializer.Serialize(new
+        {
+            info.FileName, info.ActionsRunId,
+            Sha256 = info.Sha256?.ToUpperInvariant(),
+            Url = info.Sha256 == null ? info.Url : null,
+            Size = info.Sha256 == null ? info.SizeBytes : null,
+            Modified = info.Sha256 == null ? info.UpdatedAt : null,
+        }));
+
+    private static async Task<bool> IsSavedPackageValidAsync(BgiRemoteUpdateInfo info, string path,
+        IProgress<string>? progress, CancellationToken ct)
+    {
+        // 只有文件名和 URL 时无法识别服务端是否替换过内容；仍可从本地列表手动选择已保存的包。
+        if (info.Sha256 == null && (info.SizeBytes == null || (info.UpdatedAt == null && info.ActionsRunId == null))) return false;
+        try
+        {
+            var receipt = new FileInfo(ReceiptPath(path));
+            if (!File.Exists(path) || !receipt.Exists || receipt.Length > 512) return false;
+            var lines = await File.ReadAllLinesAsync(receipt.FullName, ct).ConfigureAwait(false);
+            if (lines.Length != 2 || lines[0] != DownloadIdentity(info)
+                || !TryDigest(lines[1], out var expected) || expected == null) return false;
+
+            // Actions 清单的 SHA-256 属于外层 ZIP；收据另存已经提取的 .7z 的哈希。
+            progress?.Report("正在校验已下载的安装包…");
+            await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                bufferSize: 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var actual = await SHA256.HashDataAsync(file, ct).ConfigureAwait(false);
+            return Convert.ToHexString(actual).Equals(expected, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>先下载并校验临时文件；Actions 仅取 ZIP 内与运行版本匹配的一个 .7z。</summary>
     internal static async Task<string> DownloadAsync(HttpClient client, BgiRemoteUpdateInfo info, string destDir,
         IProgress<string>? progress, CancellationToken ct = default)
     {
@@ -233,19 +282,21 @@ public static class BgiRemoteUpdateService
         var token = Guid.NewGuid().ToString("N");
         var downloadPath = Path.Combine(destDir, $".download-{token}.part");
         var extractedPath = Path.Combine(destDir, $".extract-{token}.part");
+        var receiptPath = Path.Combine(destDir, $".receipt-{token}.part");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(30));
         try
         {
             var cancel = timeout.Token;
-            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel);
+            using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             var responseLength = response.Content.Headers.ContentLength;
             if (info.SizeBytes is { } expected && responseLength is { } actual && expected != actual)
                 throw new InvalidDataException("服务器返回的文件大小与更新清单不一致。");
-            await using (var input = await response.Content.ReadAsStreamAsync(cancel))
+            string archiveHash;
+            await using (var input = await response.Content.ReadAsStreamAsync(cancel).ConfigureAwait(false))
             {
-                await CopyAndVerifyAsync(input, downloadPath, info.SizeBytes ?? responseLength, info.Sha256, progress, cancel);
+                archiveHash = await CopyAndVerifyAsync(input, downloadPath, info.SizeBytes ?? responseLength, info.Sha256, progress, cancel).ConfigureAwait(false);
             }
 
             var candidate = downloadPath;
@@ -256,19 +307,22 @@ public static class BgiRemoteUpdateService
                 var entries = zip.Entries.Where(e => e.Name == info.FileName && e.Length > 0).ToList();
                 if (entries.Count != 1) throw new InvalidDataException("Actions 产物没有唯一匹配所选版本的 .7z 安装包。");
                 await using var entry = entries[0].Open();
-                await CopyAndVerifyAsync(entry, extractedPath, entries[0].Length, null, null, cancel);
+                archiveHash = await CopyAndVerifyAsync(entry, extractedPath, entries[0].Length, null, null, cancel).ConfigureAwait(false);
                 candidate = extractedPath;
             }
 
             await using (var archive = File.OpenRead(candidate))
             {
                 var header = new byte[6];
-                if (await archive.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken: cancel) != header.Length
+                if (await archive.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false, cancellationToken: cancel).ConfigureAwait(false) != header.Length
                     || !header.AsSpan().SequenceEqual(new byte[] { 0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C }))
                     throw new InvalidDataException("下载的文件不是有效的 .7z 安装包。");
             }
+            await File.WriteAllLinesAsync(receiptPath, [DownloadIdentity(info), archiveHash], cancel).ConfigureAwait(false);
             cancel.ThrowIfCancellationRequested();
             File.Move(candidate, finalPath, overwrite: true);
+            try { File.Move(receiptPath, ReceiptPath(finalPath), overwrite: true); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* 已下载的包仍可作为本地包使用。 */ }
             progress?.Report("安装包已下载并校验。");
             return finalPath;
         }
@@ -280,24 +334,25 @@ public static class BgiRemoteUpdateService
         {
             TryDelete(downloadPath);
             TryDelete(extractedPath);
+            TryDelete(receiptPath);
         }
     }
 
-    private static async Task CopyAndVerifyAsync(Stream input, string dest, long? size, string? digest,
+    private static async Task<string> CopyAndVerifyAsync(Stream input, string dest, long? size, string? digest,
         IProgress<string>? progress, CancellationToken ct)
     {
-        using var hash = digest == null ? null : IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         await using var output = new FileStream(dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, useAsync: true);
         var buffer = new byte[65536];
         var timer = Stopwatch.StartNew();
         long received = 0;
         int read;
-        while ((read = await input.ReadAsync(buffer.AsMemory(), ct)) > 0)
+        while ((read = await input.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
         {
             received += read;
             if (size.HasValue && received > size.Value) throw new InvalidDataException("下载文件大于预期大小。");
-            hash?.AppendData(buffer, 0, read);
-            await output.WriteAsync(buffer.AsMemory(0, read), ct);
+            hash.AppendData(buffer, 0, read);
+            await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
             if (progress != null && timer.ElapsedMilliseconds >= 300)
             {
                 progress.Report(size is > 0
@@ -307,8 +362,10 @@ public static class BgiRemoteUpdateService
             }
         }
         if (size.HasValue && received != size.Value) throw new InvalidDataException("文件不完整，无法更新。");
-        if (hash != null && !Convert.ToHexString(hash.GetHashAndReset()).Equals(digest, StringComparison.OrdinalIgnoreCase))
+        var result = Convert.ToHexString(hash.GetHashAndReset());
+        if (digest != null && !result.Equals(digest, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("安装包 SHA-256 校验失败，请更换来源或重新下载。");
+        return result;
     }
 
     private static void TryDelete(string path)

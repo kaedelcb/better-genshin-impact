@@ -131,7 +131,7 @@ public class BgiRemoteUpdateServiceTests
     }
 
     [Fact]
-    public async Task ActionsDownload_VerifiesZipAndExtractsOnlySelectedPackage_WithoutReplacingOnHashMismatch()
+    public async Task ActionsDownload_ReusesVerifiedInnerPackage_WithoutReplacingOnHashMismatch()
     {
         const string name = "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z";
         var fixture = await File.ReadAllBytesAsync(Path.Combine(AppContext.BaseDirectory, "TestData", name));
@@ -148,22 +148,36 @@ public class BgiRemoteUpdateServiceTests
         var directory = Directory.CreateTempSubdirectory("NexusBgiDownload-");
         try
         {
-            using var client = new HttpClient(new ArchiveResponse(archive));
+            using var response = new ArchiveResponse(archive);
+            using var client = new HttpClient(response, disposeHandler: false);
             var path = await BgiRemoteUpdateService.DownloadAsync(client, info, directory.FullName, null);
             Assert.Equal(fixture, await File.ReadAllBytesAsync(path));
-            await Assert.ThrowsAsync<InvalidDataException>(() => BgiRemoteUpdateService.DownloadAsync(
+            Assert.Equal(path, await BgiRemoteUpdateService.PreparePackageAsync(client, info, directory.FullName, null));
+            Assert.Equal(1, response.Requests); // 不能拿外层 ZIP 的哈希和已提取的 .7z 比较后误判。
+            await Assert.ThrowsAsync<InvalidDataException>(() => BgiRemoteUpdateService.PreparePackageAsync(
                 client, info with { Sha256 = new string('0', 64) }, directory.FullName, null));
+            Assert.Equal(2, response.Requests);
             Assert.Equal(fixture, await File.ReadAllBytesAsync(path));
-            Assert.Equal(path, Assert.Single(Directory.GetFiles(directory.FullName)));
-            Assert.False(File.Exists(Path.Combine(directory.Parent!.FullName, "escaped.txt")));
+            Assert.Equal(path, Assert.Single(Directory.GetFiles(directory.FullName, "*.7z")));
+            Assert.Empty(Directory.GetFiles(directory.FullName, "*.part"));
+            // 同一来源清单不变，但磁盘上的副本已被改动时也不能复用。
+            await File.WriteAllTextAsync(path, "changed");
+            Assert.Equal(path, await BgiRemoteUpdateService.PreparePackageAsync(client, info, directory.FullName, null));
+            Assert.Equal(3, response.Requests);
+            Assert.Equal(fixture, await File.ReadAllBytesAsync(path));
         }
         finally { directory.Delete(recursive: true); }
     }
 
     private sealed class ArchiveResponse(byte[] content) : HttpMessageHandler
     {
+        public int Requests { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) });
+        {
+            Requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(content) });
+        }
     }
 
     private static BgiArchiveName ParseName(string fileName)

@@ -44,6 +44,8 @@ dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Rel
 
 网络包保存在安装包目录的「网络安装包」子目录中，各来源分开保存；Actions 的不同构建也分开保存。文件名相同不代表内容相同。
 
+选中网络包后，点「仅下载」可先保存，不会关闭 BGI 或安装。下载完成的包也能在「本地安装包」里找到，可离线使用。下次从原来源点「更新」时，如果清单仍能确认是同一份文件，校验通过后会直接复用。两种操作在下载安装包期间都可以点「取消下载」。
+
 ### 接入自建下载源
 
 维护者可以使用 HTTPS 静态站点、对象存储或现有协调服务。把 .7z 上传完毕后，再发布或替换同一个清单网址。例如把以下内容放到 https://mirror.example.com/bgi-update/latest.json：
