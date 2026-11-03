@@ -44,25 +44,25 @@ public class CombatScriptHandler : IActionHandler
         // 观察已在移动时启动；基线尚未就绪时继续观察，不阻塞节点动作。
         // 靠近时已经拾够：移动照常到点，完全不发送节点策略指令。
         if (pickup.ReachedToken.IsCancellationRequested)
-            return FinishPickup(ct, pickup, waypoint, pointLabel);
+            return FinishPickup(ct, pickup, waypoint, pointLabel, false, Logger);
 
         return await RunCoreAsync(ct, waypoint, pickup, pointLabel, keepObservingAfterAction);
     }
 
     private static bool FinishPickup(CancellationToken ct, PickupWaypointProgress pickup,
-        WaypointForTrack waypoint, string? pointLabel, bool keepObservingAfterAction = false)
+        Waypoint waypoint, string? pointLabel, bool keepObservingAfterAction, ILogger logger)
     {
         ct.ThrowIfCancellationRequested();
         if (keepObservingAfterAction && pickup.BeginDeparture() && !pickup.ReachedToken.IsCancellationRequested)
         {
-            Logger.LogInformation("【拾取达标】{Point} 动作结束，已计 {Count}/{Target}，继续观察首个补捡路段",
+            logger.LogInformation("【拾取达标】{Point} 动作结束，已计 {Count}/{Target}，继续观察首个补捡路段",
                 pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count);
             return false;
         }
 
         pickup.Dispose();
         var reached = pickup.ReachedToken.IsCancellationRequested;
-        Logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
+        logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
             pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count,
             reached ? "达标，已完成动作收尾和松键" : "未达标，后续点照常执行");
         return reached;
@@ -94,23 +94,8 @@ public class CombatScriptHandler : IActionHandler
                 return false;
             }
 
-            try
-            {
-                if (!await PickupCombatScriptExecutor.ExecuteAsync(combatScript, combatScenes, ct, pickup.ReachedToken, Logger))
-                {
-                    // 普通命令错误只结束本节点动作，不以失败节点的计数跳过后续点。
-                    pickup.Dispose();
-                    ct.ThrowIfCancellationRequested();
-                    return false;
-                }
-            }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == pickup.ReachedToken
-                && pickup.ReachedToken.IsCancellationRequested)
-            {
-                // 执行器已经完成按键收尾，整条线路的停止仍优先。
-            }
-
-            return FinishPickup(ct, pickup, waypointForTrack, pointLabel, keepObservingAfterAction);
+            return await RunPickupCommandsAsync(ct, pickup, waypointForTrack, pointLabel, keepObservingAfterAction, Logger,
+                () => PickupCombatScriptExecutor.ExecuteAsync(combatScript, combatScenes, ct, pickup.ReachedToken, Logger));
         }
         else
         {
@@ -118,6 +103,28 @@ public class CombatScriptHandler : IActionHandler
         }
 
         return false;
+    }
+
+    internal static async Task<bool> RunPickupCommandsAsync(CancellationToken ct, PickupWaypointProgress pickup,
+        Waypoint waypoint, string? pointLabel, bool keepObservingAfterAction, ILogger logger, Func<Task<bool>> executeCommands)
+    {
+        try
+        {
+            if (!await executeCommands())
+            {
+                // 普通命令错误只结束本节点动作，不以失败节点的计数跳过后续点。
+                pickup.Dispose();
+                ct.ThrowIfCancellationRequested();
+                return false;
+            }
+        }
+        catch (OperationCanceledException ex) when (ex.CancellationToken == pickup.ReachedToken
+            && pickup.ReachedToken.IsCancellationRequested)
+        {
+            // 执行器已经完成按键收尾，整条线路的停止仍优先。
+        }
+
+        return FinishPickup(ct, pickup, waypoint, pointLabel, keepObservingAfterAction, logger);
     }
 
     // private static bool IsOnlyCurrentAvatar(CombatScript combatScript)

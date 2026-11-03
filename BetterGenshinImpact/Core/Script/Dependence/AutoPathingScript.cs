@@ -14,9 +14,16 @@ public class AutoPathingScript
     private object? _config = null;
     private string _rootPath;
     private readonly LimitedFile _autoPathingFile;
+    private readonly Func<PathExecutor, PathingTask, Task> _runPathing;
 
     public AutoPathingScript(string rootPath, object? config)
+        : this(rootPath, config, static (executor, task) => executor.Pathing(task))
     {
+    }
+
+    internal AutoPathingScript(string rootPath, object? config, Func<PathExecutor, PathingTask, Task> runPathing)
+    {
+        _runPathing = runPathing;
         _config = config;
         _rootPath = rootPath;
         _autoPathingFile = new LimitedFile(Global.Absolute(@"User\AutoPathing"));
@@ -43,7 +50,7 @@ public class AutoPathingScript
                 pathExecutor.PartyConfig = patyConfig;
             }
 
-            await pathExecutor.Pathing(task);
+            await _runPathing(pathExecutor, task);
         }
         catch (OperationCanceledException)
         {

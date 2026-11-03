@@ -205,6 +205,24 @@ public partial class ScriptGroupProject : ObservableObject
         return string.Join("|", Project.Manifest.HttpAllowedUrls);
     }
 
+    internal PathingPartyConfig? GetJavaScriptPathingConfig()
+        => GroupInfo?.Config.PathingConfig?.CloneForSoloTask();
+
+    internal (PathingTask Task, PathExecutor Executor)? PrepareDirectPathing(string routeRoot)
+    {
+        var task = PathingTask.BuildFromFilePath(Path.Combine(routeRoot, FolderName, Name));
+        if (task == null)
+        {
+            return null;
+        }
+
+        PathingConditionConfig.GetCountryName(task.FullPath);
+
+        var executor = new PathExecutor(CancellationContext.Instance.Cts.Token);
+        executor.PartyConfig = GroupInfo?.Config.PathingConfig;
+        return (task, executor);
+    }
+
     public async Task Run()
     {
         //执行记录
@@ -237,8 +255,7 @@ public partial class ScriptGroupProject : ObservableObject
 
             // JS 脚本任务豁免"配置组地图追踪切队"：拷贝后置 SkipPartySwitch=true，
             // 不原地 mutate 共享的 GroupInfo.Config.PathingConfig（防止污染同组后续 Pathing 任务）。
-            var pathingPartyConfig = GroupInfo?.Config.PathingConfig?.CloneForSoloTask();
-            await Project.ExecuteAsync(JsScriptSettingsObject, pathingPartyConfig);
+            await Project.ExecuteAsync(JsScriptSettingsObject, GetJavaScriptPathingConfig());
         }
         else if (Type == "KeyMouse")
         {
@@ -249,16 +266,12 @@ public partial class ScriptGroupProject : ObservableObject
         else if (Type == "Pathing")
         {
             // 加载并执行
-            var task = PathingTask.BuildFromFilePath(Path.Combine(MapPathingViewModel.PathJsonPath, FolderName, Name));
-            if (task == null)
+            if (PrepareDirectPathing(MapPathingViewModel.PathJsonPath) is not { } route)
             {
                 return;
             }
 
-            PathingConditionConfig.GetCountryName(task.FullPath);
-
-            var pathingTask = new PathExecutor(CancellationContext.Instance.Cts.Token);
-            pathingTask.PartyConfig = GroupInfo?.Config.PathingConfig;
+            var (task, pathingTask) = route;
             if (!pathingTask.PartyConfig.Enabled || pathingTask.PartyConfig.AutoPickEnabled)
             {
                 TaskTriggerDispatcher.Instance().AddTrigger("AutoPick", null);

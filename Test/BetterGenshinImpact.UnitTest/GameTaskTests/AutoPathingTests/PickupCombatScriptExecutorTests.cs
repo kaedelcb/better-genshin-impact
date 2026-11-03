@@ -1,6 +1,8 @@
 using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
+using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System;
@@ -11,6 +13,7 @@ using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests;
 
+[Collection("GlobalUserRoot")]
 public sealed class PickupCombatScriptExecutorTests
 {
     [Theory]
@@ -106,6 +109,48 @@ public sealed class PickupCombatScriptExecutorTests
         }
 
         keyboard.Verify(x => x.KeyUp(key), Times.Once);
+    }
+
+    [Fact]
+    public async Task CommandErrorAtPickupNodeReleasesTheKeyAndRetiresObservationWithoutSkippingTheNextPoint()
+    {
+        Waypoint[] segment =
+        [
+            new() { Type = "target", Action = "combat_script", PickupTargetCount = new PickupTarget(99, 1) },
+            new(),
+            new()
+        ];
+        var plannedResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, 1);
+        Assert.Equal(2, plannedResume); // 达标原本会跳过第一个补捡点。
+
+        var keyboard = new Mock<IKeyboardInput>(MockBehavior.Strict);
+        var channel = new Mock<IInputChannel>(MockBehavior.Strict);
+        var key = User32.VK.VK_A;
+        channel.SetupGet(x => x.Keyboard).Returns(keyboard.Object);
+        channel.Setup(x => x.IsKeyDown(key)).Returns(false);
+        var order = new List<string>();
+        keyboard.Setup(x => x.KeyDown(key)).Callback(() => order.Add("按下")).Returns(keyboard.Object);
+        keyboard.Setup(x => x.KeyUp(key)).Callback(() => order.Add("松开")).Returns(keyboard.Object);
+
+        using var window = new PickupWaypointApproachWindow();
+        using var pickup = PickupWaypointProgress.TryBegin(99)!;
+        window.Start(0, pickup, plannedResume);
+        var badCommand = new CombatCommand("万叶", "moveby(foo,0)");
+        var shouldSkip = await CombatScriptHandler.RunPickupCommandsAsync(CancellationToken.None, pickup,
+            segment[0], "测试线路 · 第 1 点", keepObservingAfterAction: true, NullLogger.Instance,
+            () => PickupCombatScriptExecutor.RunWithOwnedInputsAsync(channel.Object, CancellationToken.None,
+                pickup.ReachedToken, NullLogger.Instance, (held, _) =>
+                {
+                    held.Press(key);
+                    badCommand.Execute(avatar: null!);
+                    return Task.CompletedTask;
+                }));
+        order.Add("动作返回");
+
+        Assert.Equal(new[] { "按下", "松开", "动作返回" }, order);
+        Assert.False(shouldSkip);
+        Assert.Null(PickupWaypointProgress.Capture());
+        Assert.False(window.BeginDeparture(0, plannedResume!.Value));
     }
 
     [Fact]
