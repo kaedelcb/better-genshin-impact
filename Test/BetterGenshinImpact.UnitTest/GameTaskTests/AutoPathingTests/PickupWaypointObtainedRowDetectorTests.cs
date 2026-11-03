@@ -6,33 +6,34 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoPathingTests;
 public sealed class PickupWaypointObtainedRowDetectorTests
 {
     private static readonly Scalar ExactColor = new(216, 229, 236);
+    private static readonly Scalar SecondSampleColor = new(222, 235, 242);
 
     [Theory]
     [InlineData(1920, 1080)]
     [InlineData(1280, 720)]
     [InlineData(2560, 1440)]
-    public void OneExactTitleAndThreeExactRowsProduceThreeRows(int width, int height)
+    public void OneTitleAndThreeRowsWithBothSampledColorsAreCounted(int width, int height)
     {
         using var frame = NewScene(width, height);
         DrawTextBlocks(frame, 169, 511, ExactColor);
         for (var row = 0; row < 3; row++)
-            DrawTextBlocks(frame, 160, 554 + 48 * row, ExactColor);
+            DrawTextBlocks(frame, 160, 554 + 48 * row, row == 1 ? SecondSampleColor : ExactColor);
 
         var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
 
         Assert.True(observation.IsAvailable);
-        Assert.Equal(3, stats.OriginalHeaderComponents);
+        Assert.Equal(5, stats.OriginalHeaderComponents);
         Assert.Equal("原框指定色", stats.HeaderMatch);
-        Assert.Equal(new[] { 3, 3, 3, 0, 0, 0 }, stats.RowComponents);
+        Assert.Equal(new[] { 5, 5, 5, 0, 0, 0 }, stats.RowComponents);
         Assert.Equal(3, observation.Rows!.Count);
     }
 
     [Theory]
-    [InlineData(217, 229, 236)]
-    [InlineData(216, 230, 236)]
-    [InlineData(216, 229, 237)]
-    [InlineData(222, 235, 242)]
-    public void SimilarColorsDoNotCountAsTitleOrItemText(int blue, int green, int red)
+    [InlineData(215, 229, 236)]
+    [InlineData(216, 228, 236)]
+    [InlineData(216, 229, 235)]
+    [InlineData(223, 235, 242)]
+    public void ColorsOutsideTheTwoSamplesDoNotCountAsTitleOrItemText(int blue, int green, int red)
     {
         using var frame = NewScene();
         var other = new Scalar(blue, green, red);
@@ -75,8 +76,24 @@ public sealed class PickupWaypointObtainedRowDetectorTests
 
         Assert.False(observation.IsAvailable);
         Assert.Equal(1, stats.HeaderComponents);
-        Assert.Equal(3, stats.RowComponents![0]);
+        Assert.Equal(5, stats.RowComponents![0]);
         Assert.Equal(0, stats.RowComponents[1]);
+    }
+
+    [Theory]
+    [InlineData(4, 5)]
+    [InlineData(5, 4)]
+    public void FewerThanFiveBlocksCannotConfirmTitleOrRow(int titleBlocks, int rowBlocks)
+    {
+        using var frame = NewScene();
+        DrawTextBlocks(frame, 169, 511, ExactColor, titleBlocks);
+        DrawTextBlocks(frame, 160, 554, SecondSampleColor, rowBlocks);
+
+        var observation = PickupObtainedRowDetector.Detect(frame, out var stats);
+
+        Assert.Equal(titleBlocks, stats.OriginalHeaderComponents);
+        Assert.Equal(rowBlocks, stats.RowComponents![0]);
+        Assert.False(observation.IsAvailable);
     }
 
     [Fact]
@@ -92,15 +109,15 @@ public sealed class PickupWaypointObtainedRowDetectorTests
     private static Mat NewScene(int width = 1920, int height = 1080)
         => new(height, width, MatType.CV_8UC3, new Scalar(92, 80, 71));
 
-    private static void DrawTextBlocks(Mat frame, int left, int top, Scalar color)
+    private static void DrawTextBlocks(Mat frame, int left, int top, Scalar color, int count = 5)
     {
         var xScale = frame.Width / 1920d;
         var yScale = frame.Height / 1080d;
-        for (var i = 0; i < 3; i++)
+        for (var i = 0; i < count; i++)
         {
-            var x = (int)Math.Round((left + i * 13) * xScale);
+            var x = (int)Math.Round((left + i * 10) * xScale);
             var y = (int)Math.Round(top * yScale);
-            Cv2.Rectangle(frame, new Rect(x, y, (int)Math.Round(8 * xScale), (int)Math.Round(18 * yScale)),
+            Cv2.Rectangle(frame, new Rect(x, y, (int)Math.Round(6 * xScale), (int)Math.Round(18 * yScale)),
                 color, thickness: -1);
         }
     }

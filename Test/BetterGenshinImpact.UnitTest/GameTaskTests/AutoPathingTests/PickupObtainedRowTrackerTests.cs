@@ -101,6 +101,35 @@ public sealed class PickupObtainedRowTrackerTests
     }
 
     [Fact]
+    public void EmptyBaselineSurvivesTitleFadeAndCountsAllThreeRows()
+    {
+        var tracker = WithEmptyBaseline();
+        for (var frame = 0; frame < 4; frame++)
+            Assert.Equal(new PickupRowUpdate(0, false, true), tracker.Observe(default));
+
+        var oneRow = Frame((553, A));
+        var twoRows = Frame((553, A), (601, A));
+        var threeRows = Frame((553, A), (601, A), (649, A));
+        foreach (var list in new[] { oneRow, twoRows, threeRows })
+        {
+            Assert.Equal(0, tracker.Observe(list).AddedRows);
+            Assert.Equal(1, tracker.Observe(list).AddedRows);
+            Assert.Equal(0, tracker.Observe(list).AddedRows);
+        }
+    }
+
+    [Fact]
+    public void InterruptedEmptyBaselineDoesNotCountRowsThatAppearDuringTheGap()
+    {
+        var tracker = WithEmptyBaseline();
+        Assert.False(tracker.Observe(PickupRowObservation.Interrupted).BaselineReady);
+        Assert.False(tracker.Observe(default).BaselineReady);
+        var oneRow = Frame((553, A));
+        Assert.False(tracker.Observe(oneRow).BaselineReady);
+        Assert.Equal(new PickupRowUpdate(0, false, true), tracker.Observe(oneRow));
+    }
+
+    [Fact]
     public void InPlaceUnrelatedOrReorderedListsDoNotProveNewRows()
     {
         var tracker = WithEmptyBaseline();

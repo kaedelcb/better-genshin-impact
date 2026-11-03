@@ -148,9 +148,11 @@ internal sealed class PickupWaypointProgress : IDisposable
                     || Stopwatch.GetElapsedTime(_lastDetectionLogTime).TotalMilliseconds >= 500))
             {
                 _lastDetectionLogTime = Stopwatch.GetTimestamp();
-                _logger.LogDebug("【拾取达标】{Point} 精确 RGB({Red},{Green},{Blue}) 四连通块：标题原框 {Original}，命中或最佳候选 {Header}（至少 {HeaderThreshold}，方式 {Match}，标题框 Y={Top}），各行 [{RowComponents}]（至少 {RowThreshold}），有效行 {VisibleRows}",
-                    _pointLabel, PickupObtainedRowDetector.TextRed, PickupObtainedRowDetector.TextGreen,
-                    PickupObtainedRowDetector.TextBlue, detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold,
+                _logger.LogDebug("【拾取达标】{Point} RGB 容错 R={RedMin}–{RedMax} G={GreenMin}–{GreenMax} B={BlueMin}–{BlueMax} 四连通块：标题原框 {Original}，命中或最佳候选 {Header}（至少 {HeaderThreshold}，方式 {Match}，标题框 Y={Top}），各行 [{RowComponents}]（至少 {RowThreshold}），有效行 {VisibleRows}",
+                    _pointLabel, PickupObtainedRowDetector.TextRedMin, PickupObtainedRowDetector.TextRedMax,
+                    PickupObtainedRowDetector.TextGreenMin, PickupObtainedRowDetector.TextGreenMax,
+                    PickupObtainedRowDetector.TextBlueMin, PickupObtainedRowDetector.TextBlueMax,
+                    detection.OriginalHeaderComponents, detection.HeaderComponents, detection.HeaderThreshold,
                     detection.HeaderMatch ?? "未命中", detection.HeaderTop, string.Join(", ", rowComponents),
                     detection.RowThreshold, observation.IsAvailable ? observation.Rows?.Count : null);
             }

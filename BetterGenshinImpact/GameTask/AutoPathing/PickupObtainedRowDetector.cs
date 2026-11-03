@@ -8,7 +8,7 @@ internal readonly record struct PickupObtainedRowDetectionStats(
     int HeaderComponents, int[]? RowComponents, int HeaderThreshold, int RowThreshold,
     int OriginalHeaderComponents, string? HeaderMatch, int? HeaderTop);
 
-/// <summary>在固定框内，只对指定 RGB 的原始像素做四连通计数。</summary>
+/// <summary>在固定框内，对两次取色之间的原始像素做四连通计数。</summary>
 internal static class PickupObtainedRowDetector
 {
     private const int ReferenceWidth = 1920;
@@ -27,12 +27,13 @@ internal static class PickupObtainedRowDetector
     private const int PaneBottom = FirstRowTop + (MaxRows - 1) * RowPitch + RowHeight;
     private static readonly int[] NearbyHeaderTops = [497, 513, 489, 517, 481, 473, 465, 457];
 
-    internal const int TextRed = 236;
-    internal const int TextGreen = 229;
-    internal const int TextBlue = 216;
-    private static readonly Scalar TextColor = new(TextBlue, TextGreen, TextRed);
-    private const int HeaderThreshold = 3;
-    private const int RowThreshold = 3;
+    internal const int TextRedMin = 236, TextRedMax = 242;
+    internal const int TextGreenMin = 229, TextGreenMax = 235;
+    internal const int TextBlueMin = 216, TextBlueMax = 222;
+    private static readonly Scalar TextColorMin = new(TextBlueMin, TextGreenMin, TextRedMin);
+    private static readonly Scalar TextColorMax = new(TextBlueMax, TextGreenMax, TextRedMax);
+    private const int HeaderThreshold = 5;
+    private const int RowThreshold = 5;
 
     internal static PickupRowObservation Detect(Mat frame) => Detect(frame, out _);
 
@@ -55,9 +56,9 @@ internal static class PickupObtainedRowDetector
         if (channels == 4)
             Cv2.CvtColor(source, bgr, ColorConversionCodes.BGRA2BGR);
 
-        // 插值会改变色值，只在原始像素上做等值匹配。
+        // 插值会改变色值，使用原始像素和两次取色给定的窄范围。
         using var mask = new Mat();
-        Cv2.InRange(channels == 4 ? bgr : source, TextColor, TextColor, mask);
+        Cv2.InRange(channels == 4 ? bgr : source, TextColorMin, TextColorMax, mask);
 
         using var labels = new Mat();
         using var components = new Mat();
@@ -148,7 +149,7 @@ internal static class PickupObtainedRowDetector
 
     private static ulong RowSignature(Mat mask)
     {
-        // 已完成等值检测和连通计数；缩小二值掩膜只用于跨帧去重。
+        // 已完成颜色检测和连通计数；缩小二值掩膜只用于跨帧去重。
         using var density = new Mat();
         Cv2.Resize(mask, density, new Size(16, 4), interpolation: InterpolationFlags.Area);
         ulong bits = 0;

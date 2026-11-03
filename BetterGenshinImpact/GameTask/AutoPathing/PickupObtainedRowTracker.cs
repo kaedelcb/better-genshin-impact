@@ -37,14 +37,16 @@ internal sealed class PickupObtainedRowTracker
     {
         if (observation.InterruptsContinuity || !TryGetOrderedRows(observation, out var rows))
         {
-            // 列表淡入会造成短暂模糊，不因一两帧识别不清而丢失原有基线。
-            // 确认断帧或长时间看不清则重新建基线，不猜测期间发生的拾取。
+            // 淡入时可能连续多帧只有标题。已确认的空列表仍可作为基线，
+            // 否则淡入后的第一行会被当成旧行而漏计。
+            // 真正断帧，或已有物品行却长时间看不清时，仍不猜测期间发生的拾取。
             ResetPending();
             _emptyFrames = 0;
             if (observation.InterruptsContinuity || ++_ambiguousFrames >= DisappearanceFrames)
             {
                 _ambiguousFrames = DisappearanceFrames;
-                _baselineReady = false;
+                if (observation.InterruptsContinuity || _visibleRows.Length != 0)
+                    _baselineReady = false;
             }
             return new(0, false, _baselineReady);
         }
