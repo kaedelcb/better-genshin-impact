@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Recognition.OCR;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPick.Assets;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -557,8 +558,10 @@ public sealed class MojangPickLoop
     /// </summary>
     private bool Interact(string name, string itemName, AutoPickAssets assets)
     {
+        var pickup = PickupWaypointProgress.Capture();
         if (_execution?.Press(assets.PickVk) != true) return false;
         _scrollSearch.ClearProgress();
+        pickup?.ReportHere(name);
         _logger.LogInformation("交互或拾取：{Name}", name);
         // 记录拾取历史（背包名 + 交互名 + 时间戳），供 JS 侧 dispatcher.getPickRecords() 获取及满背包自动黑名单使用；
         // 背包名与交互名可能不一致（如 交互名"黄金蟹" 对应 背包名"螃蟹"），满背包提示显示的是背包名

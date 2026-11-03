@@ -50,6 +50,7 @@ public class WaypointForTrack : Waypoint
         MoveMode = waypoint.MoveMode;
         Action = waypoint.Action;
         ActionParams = waypoint.ActionParams;
+        PickupTargetCount = waypoint.PickupTargetCount;
         // route-variant-sync-by-logical-id spec / R3：透传逻辑同步点标记，
         // 使手动模式 BuildSyncPointMapManual 能从 WaypointForTrack 读到 SyncPointId。
         SyncPointId = waypoint.SyncPointId;

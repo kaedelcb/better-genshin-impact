@@ -377,17 +377,23 @@ public class Avatar
     /// 切换到本角色
     /// 切换cd是1秒，如果切换失败，会尝试再次切换，最多尝试5次
     /// </summary>
-    public void Switch()
+    public void Switch() => SwitchCore(null);
+
+    internal void SwitchForPickup(CancellationToken stop) => SwitchCore(stop);
+
+    private void SwitchCore(CancellationToken? pickupStop)
     {
         var context = new AvatarActiveCheckContext();
         for (var i = 0; i < 30; i++)
         {
+            pickupStop?.ThrowIfCancellationRequested();
             if (Ct is { IsCancellationRequested: true })
             {
                 return;
             }
 
             using var region = CaptureToRectArea();
+            pickupStop?.ThrowIfCancellationRequested();
             ThrowWhenDefeated(region, Ct);
 
             // 切换成功
@@ -400,18 +406,22 @@ public class Avatar
                 return;
             }
 
-            SimulateSwitchAction(Index);
+            SimulateSwitchAction(Index, pickupStop);
             // Debug.WriteLine($"切换到{Index}号位");
             // Cv2.ImWrite($"log/切换.png", region.SrcMat);
             
-            Offset60Fix(i);
+            pickupStop?.ThrowIfCancellationRequested();
+            Offset60Fix(i, pickupStop);
             
             if (region.Find(AutoFightAssets.Get(region).ConfirmRa).IsExist())
             {
                 return;
             }
             
-            Sleep(240, Ct);
+            if (pickupStop is { } stop)
+                WaitForPickupCommand(240, stop);
+            else
+                Sleep(240, Ct);
         }
     }
 
@@ -568,9 +578,11 @@ public class Avatar
         return false;
     }
 
-    private void SimulateSwitchAction(int index)
+    private void SimulateSwitchAction(int index, CancellationToken? pickupStop = null)
     {
+        pickupStop?.ThrowIfCancellationRequested();
         InputHub.Foreground.SimulateAction(GIActions.Drop); //反正会重试就不等落地了
+        pickupStop?.ThrowIfCancellationRequested();
         switch (index)
         {
             case 1:
@@ -627,13 +639,13 @@ public class Avatar
     }
 
     private static readonly Random Random = new Random();
-    private void Offset60Fix(int i)
+    private void Offset60Fix(int i, CancellationToken? pickupStop = null)
     {
         // 3次失败考虑是否偏移出现问题，修改偏移位置
         if (i <= 2 || AutoFightTask.FightStatusFlag)
         {
             // Logger.LogInformation("切换角色1111111 {t}",i);
-            if (i == 13 && AutoFightTask.FightStatusFlag)
+            if (i == 13 && AutoFightTask.FightStatusFlag && pickupStop == null)
             {
                 AutoFightTask.SwitchTryCount += 1;
                 //战斗中防卡死
@@ -686,6 +698,7 @@ public class Avatar
                 }
             }
             
+            pickupStop?.ThrowIfCancellationRequested();
             InputHub.Foreground.SimulateAction(GIActions.Drop);
         }
     }
@@ -778,7 +791,11 @@ public class Avatar
     /// 普通攻击
     /// </summary>
     /// <param name="ms">攻击时长，建议是200的倍数</param>
-    public void Attack(int ms = 0)
+    public void Attack(int ms = 0) => AttackCore(ms, null);
+
+    internal void AttackForPickup(int ms, CancellationToken stop) => AttackCore(ms, stop);
+
+    private void AttackCore(int ms, CancellationToken? pickupStop)
 {
     var isTimes = 0;
     var qiTimes = 0;
@@ -790,6 +807,7 @@ public class Avatar
 
     while (ms >= 0)
     {
+        pickupStop?.ThrowIfCancellationRequested();
         if (Ct is { IsCancellationRequested: true })
         {
             return;
@@ -996,7 +1014,10 @@ public class Avatar
         {
             InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
             ms -= 200;
-            Sleep(200, Ct);
+            if (pickupStop is { } stop)
+                WaitForPickupCommand(200, stop);
+            else
+                Sleep(200, Ct);
         }
     }
 }
@@ -1046,10 +1067,15 @@ public class Avatar
     /// <summary>
     /// 使用元素战技 E
     /// </summary>
-    public void UseSkill(bool hold = false,int retryTimes = 1)
+    public void UseSkill(bool hold = false,int retryTimes = 1) => UseSkillCore(hold, retryTimes, null);
+
+    internal void TapSkillForPickup(CancellationToken stop) => UseSkillCore(false, 1, stop);
+
+    private void UseSkillCore(bool hold, int retryTimes, CancellationToken? pickupStop)
     {
         for (var i = 0; i < retryTimes; i++)
         {
+            pickupStop?.ThrowIfCancellationRequested();
             if (Ct is { IsCancellationRequested: true })
             {
                 return;
@@ -1170,6 +1196,7 @@ public class Avatar
             else
             {
                 if(_arlecchino)return;
+                pickupStop?.ThrowIfCancellationRequested();
                 InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
             }
             
@@ -1205,19 +1232,29 @@ public class Avatar
             }
             else
             {
-                Sleep(200, Ct);
-                var region = CaptureToRectArea();
-                ThrowWhenDefeated(region, Ct);
-            
+                if (pickupStop is { } stop)
+                    WaitForPickupCommand(200, stop);
+                else
+                    Sleep(200, Ct);
+
                 double cd = 0;
                 for (var attempt = 0; attempt < (Name == "莉奈娅"? 4:2); attempt++)
                 {
-                    if (attempt > 0) region = CaptureToRectArea(); // 非首次尝试时重新截图
+                    pickupStop?.ThrowIfCancellationRequested();
+                    using var region = CaptureToRectArea();
+                    pickupStop?.ThrowIfCancellationRequested();
+                    if (attempt == 0) ThrowWhenDefeated(region, Ct);
                     cd = AfterUseSkill(region);
                     if (cd > 0) break;
-                    Thread.Sleep(Name == "茜特菈莉"? 200:100);
+
+                    var delay = Name == "茜特菈莉" ? 200 : 100;
+                    if (pickupStop is { } retryStop)
+                    {
+                        if (retryStop.WaitHandle.WaitOne(delay)) retryStop.ThrowIfCancellationRequested();
+                    }
+                    else
+                        Thread.Sleep(delay);
                 }
-                region.Dispose();
                 
                 var recordedCd = ESkillCdTracker.Record(Name, cd);
                 if (recordedCd <= 0)
@@ -1630,6 +1667,32 @@ public class Avatar
     public void Wait(int ms)
     {
         Sleep(ms); // 由于存在宏操作，等待不应被cts取消
+    }
+
+    internal static void PreparePickupCommandWait(CancellationToken stop)
+    {
+        // 保留普通等待的暂停/窗口检查；此入口只服务显式开启拾取达标的采集点。
+        for (var attempt = 0; ; attempt++)
+        {
+            stop.ThrowIfCancellationRequested();
+            try
+            {
+                TrySuspend(stop);
+                WindowFocusRecoveryService.CheckAndActivateGameWindow();
+                stop.ThrowIfCancellationRequested();
+                return;
+            }
+            catch (RetryException) when (attempt < 99)
+            {
+                if (stop.WaitHandle.WaitOne(1000)) stop.ThrowIfCancellationRequested();
+            }
+        }
+    }
+
+    private static void WaitForPickupCommand(int ms, CancellationToken stop)
+    {
+        PreparePickupCommandWait(stop);
+        if (stop.WaitHandle.WaitOne(ms)) stop.ThrowIfCancellationRequested();
     }
     
     /// <summary>

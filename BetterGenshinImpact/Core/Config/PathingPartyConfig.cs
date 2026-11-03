@@ -321,6 +321,10 @@ public partial class PathingPartyConfig : ObservableObject, IJsonOnDeserialized
     
     [ObservableProperty]
     private int _combatScriptEndDelayMs = 900;
+
+    /// <summary>按路线节点的拾取目标数量提前结束简易策略脚本。</summary>
+    [ObservableProperty]
+    private bool _enablePickupTargetCount = false;
     
     [ObservableProperty]
     private bool _disableAutoFetchDispatch = false;

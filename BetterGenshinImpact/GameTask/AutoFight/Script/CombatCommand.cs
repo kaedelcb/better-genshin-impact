@@ -94,6 +94,15 @@ public class CombatCommand
 
     public void Execute(CombatScenes combatScenes, CombatCommand? lastCommand = null)
     {
+        var avatar = ResolveAvatar(combatScenes, lastCommand);
+        if (avatar != null)
+        {
+            Execute(avatar);
+        }
+    }
+
+    internal Avatar? ResolveAvatar(CombatScenes combatScenes, CombatCommand? lastCommand, CancellationToken? pickupStop = null)
+    {
         Avatar? avatar = null;
         if (Name == CombatScriptParser.CurrentAvatarName)
         {
@@ -106,13 +115,13 @@ public class CombatCommand
             avatar = combatScenes.SelectAvatar(Name);
             if (avatar == null)
             {
-                return;
+                return null;
             }
 
             if (lastCommand != null && lastCommand.Name != Name)
             {
                 // 上一个命令和当前命令不是同一个角色，直接切换角色
-                avatar.Switch();
+                SwitchAvatar(avatar, pickupStop);
             }
             else
             {
@@ -128,11 +137,23 @@ public class CombatCommand
                     && Method != Method.Scroll
                     && Method != Method.Ready)
                 {
-                    avatar.Switch();
+                    SwitchAvatar(avatar, pickupStop);
                 }
             }
         }
-        Execute(avatar);
+        return avatar;
+    }
+
+    private static void SwitchAvatar(Avatar avatar, CancellationToken? pickupStop)
+    {
+        if (pickupStop is { } stop)
+        {
+            avatar.SwitchForPickup(stop);
+        }
+        else
+        {
+            avatar.Switch();
+        }
     }
 
     public void Execute(Avatar avatar)
@@ -323,7 +344,7 @@ public class CombatCommand
     /// KeyUp/KeyPress 为 E 键时，触发 E 技能 CD 检测（由调度层处理，不入侵按键层）。
     /// 内联实现：最多重试 4 次 OCR 截屏检测，防抖由 ESkillCdTracker.TriggerECheck 处理。
     /// </summary>
-    private static void TryTriggerESkillCdCheck(Avatar avatar, string key)
+    internal static void TryTriggerESkillCdCheck(Avatar avatar, string key)
     {
         try
         {

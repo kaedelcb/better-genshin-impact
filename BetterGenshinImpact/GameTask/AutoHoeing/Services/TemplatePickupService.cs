@@ -1,6 +1,7 @@
 using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.Core.Recognition;
 using BetterGenshinImpact.Core.Simulator;
+using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
@@ -182,7 +183,9 @@ public class TemplatePickupService
                     else
                     {
                         // 拾取
+                        var pickup = PickupWaypointProgress.Capture();
                         InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_F);
+                        pickup?.ReportHere(itemName);
                         Logger.LogInformation("交互或拾取：{Name}", itemName);
                         lastCenterYF = centerYF;
                         lastItemName = itemName;

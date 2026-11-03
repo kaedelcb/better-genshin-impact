@@ -67,6 +67,12 @@ public class Waypoint
     public string? Action { get; set; }
     
     public string? ActionParams { get; set; }
+
+    /// <summary>当前采集节点达到拾取目标后，结束策略脚本并按配置跳过后续点位。</summary>
+    [JsonPropertyName("pickup_target_count")]
+    [JsonConverter(typeof(PickupTargetCountConverter))]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PickupTarget? PickupTargetCount { get; set; }
     
     /// <summary>
     /// 怪物、特产

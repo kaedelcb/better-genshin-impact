@@ -215,6 +215,8 @@ public partial class PathExecutor
     /// </summary>
     public MultiplayerCoordinator? MultiplayerCoordinator { get; set; }
 
+    internal object? PickupLogSource { get; set; }
+
     public BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeRouteContext? CooperativeContext { get; set; }
 
     /// <summary>Current fight scope; its PointId is captured at fight entry and is safe for delayed callbacks.</summary>
@@ -830,8 +832,11 @@ public partial class PathExecutor
                     Waypoint? nextWaypoint = null;
                     double? nextDdistance = null;
                     var last2Waypoints = false;
-                    foreach (var waypoint in waypoints) // 一条路径
+                    WaypointForTrack? pickupJumpFrom = null;
+                    for (var waypointIndex = 0; waypointIndex < waypoints.Count; waypointIndex++)
                     {
+                        var waypoint = waypoints[waypointIndex];
+                        int? pickupResumeIndex = null;
                         await CheckMultiplayerBoundaryAsync();
                         // === 实时中断检查（multiplayer-abort-and-realign spec）===
                         // 在每个路径点迭代时检查是否收到中断指令
@@ -865,7 +870,7 @@ public partial class PathExecutor
                             throw new RetryException("联机：主循环检测到已倒下复苏，神像回血后按异常处理");
                         }
                         
-                        CurWaypoint = (waypoints.FindIndex(wps => wps == waypoint), waypoint);
+                        CurWaypoint = (waypointIndex, waypoint);
                         bool cooperativeFightInterrupted = false;
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
@@ -878,7 +883,9 @@ public partial class PathExecutor
                             var __curIdx = CurWaypoint.Item1;
                             if (__curIdx >= 1)
                             {
-                                var __prevWp = waypoints[__curIdx - 1];
+                                // 跳过补捡点时，用实际走过的 A 点播种，不使用跳过点的坐标。
+                                var __prevWp = pickupJumpFrom ?? waypoints[__curIdx - 1];
+                                pickupJumpFrom = null;
                                 // 排除 orientation 朝向点：朝向点不移动角色，角色仍停在上一帧真实位置，
                                 // 不能用 waypoint 坐标播种锚点（否则局部匹配锚错到目标点附近，导致坐标漂移、朝向角度跳变走歪）。
                                 // 仅对会真实移动角色的节点做中间节点播种。
@@ -935,7 +942,7 @@ public partial class PathExecutor
                         }
 
                         //计算下一个节点到当前节点的距离
-                        nextWaypoint = waypoint == waypoints.Last() ? null : waypoints[waypoints.IndexOf(waypoint) + 1];
+                        nextWaypoint = waypointIndex + 1 < waypoints.Count ? waypoints[waypointIndex + 1] : null;
                         if (nextWaypoint != null)
                         {
                            nextDdistance = Navigation.GetDistance(waypoint, new Point2f((float)nextWaypoint.X, (float)nextWaypoint.Y));
@@ -1464,10 +1471,14 @@ public partial class PathExecutor
                                             await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
                                     }
                                 }
+                                else if (MultiplayerCoordinator == null)
+                                {
+                                    pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint, waypoints, waypointIndex);
+                                }
                                 else
                                 {
                                     await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
-                                            () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
+                                        () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
                                 }
                                 
                                 if (waypoint.Action == ActionEnum.Fight.Code)
@@ -1922,6 +1933,13 @@ public partial class PathExecutor
                         }
 
                         _lastWaypoint = waypoint;
+                        if (pickupResumeIndex is { } resumeIndex)
+                        {
+                            ct.ThrowIfCancellationRequested();
+                            Logger.LogInformation("拾取已达标，跳过紧接的 {Count} 个补捡点", resumeIndex - waypointIndex - 1);
+                            pickupJumpFrom = waypoint;
+                            waypointIndex = resumeIndex - 1; // for 循环下一次从续接点开始
+                        }
                     }
 
                     // ============================================================================
@@ -2622,8 +2640,11 @@ public partial class PathExecutor
         var skipPartySwitch = PartyConfig.SkipPartySwitch;
         if (PartyConfig is { Enabled: false })
         {
+            // 组内节点行为独立于“强制行走配置”总开关。
+            var enablePickupTargetCount = PartyConfig.EnablePickupTargetCount;
             PartyConfig = pathingConditionConfig.BuildPartyConfigByCondition(_combatScenes);
             PartyConfig.SkipPartySwitch = skipPartySwitch;
+            PartyConfig.EnablePickupTargetCount = enablePickupTargetCount;
         }
 
         // 校验角色是否存在
@@ -4368,8 +4389,10 @@ public partial class PathExecutor
         }
     }
 
-    private async Task AfterMoveToTarget(WaypointForTrack waypoint, Waypoint? nextWaypoint = null)
+    private async Task<int?> AfterMoveToTarget(WaypointForTrack waypoint, Waypoint? nextWaypoint,
+        IReadOnlyList<Waypoint>? segment = null, int waypointIndex = -1)
     {
+        int? pickupResumeIndex = null;
         if (waypoint.Action == ActionEnum.NahidaCollect.Code
             || waypoint.Action == ActionEnum.PickAround.Code
             || waypoint.Action == ActionEnum.Fight.Code
@@ -4388,7 +4411,30 @@ public partial class PathExecutor
             || waypoint.Action == ActionEnum.PickUpCollect.Code)
         {
             var handler = ActionFactory.GetAfterHandler(waypoint.Action);
-            await handler.RunAsync(ct, waypoint, PartyConfig);
+            var usedPickupExecutor = false;
+            if (PartyConfig.EnablePickupTargetCount
+                && waypoint.Type == WaypointType.Target.Code && waypoint.PickupTargetCount is { Count: > 0 } target
+                && MultiplayerCoordinator == null && CooperativeContext == null
+                && _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame == false
+                && handler is CombatScriptHandler combatScriptHandler)
+            {
+                var plannedResume = target.SkipNextWaypoints > 0 && segment != null
+                    ? PickupWaypointSkipDecisions.GetResumeIndex(segment, waypointIndex, target.SkipNextWaypoints)
+                    : null;
+                if (target.SkipNextWaypoints == 0 || plannedResume.HasValue)
+                {
+                    usedPickupExecutor = true;
+                    if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, PickupLogSource))
+                        pickupResumeIndex = plannedResume;
+                }
+                else
+                {
+                    Logger.LogWarning("拾取跳点范围越界、跨传送段或包含不可跳过的路点，执行原路线");
+                }
+            }
+
+            if (!usedPickupExecutor)
+                await handler.RunAsync(ct, waypoint, PartyConfig);
             
             //统计结束战斗的次数
             if (waypoint.Action == ActionEnum.Fight.Code)
@@ -4400,11 +4446,11 @@ public partial class PathExecutor
             {
                 if (nextWaypoint?.Type != WaypointType.Teleport.Code)
                 {
-                    return;
+                    return pickupResumeIndex;
                 }
                 
                 await Delay(100, ct);
-                return;
+                return pickupResumeIndex;
             }
 
             if (waypoint.Action == ActionEnum.CombatScript.Code)
@@ -4416,6 +4462,8 @@ public partial class PathExecutor
                 await Delay(895, ct);
             }
         }
+
+        return pickupResumeIndex;
     }
 
     private async Task<Avatar?> SwitchAvatar(string index, bool needSkill = false , PathingTask? pathingTask = null, bool? forceRefresh = false)

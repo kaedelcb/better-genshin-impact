@@ -37,7 +37,7 @@ public class AutoPathingScript
             }
 
             var task = PathingTask.BuildFromJson(json);
-            var pathExecutor = new PathExecutor(ct);
+            var pathExecutor = new PathExecutor(ct) { PickupLogSource = this };
             if (_config != null && _config is PathingPartyConfig patyConfig)
             {
                 pathExecutor.PartyConfig = patyConfig;
