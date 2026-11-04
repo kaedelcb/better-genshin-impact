@@ -22,7 +22,15 @@ public partial class UpdateBgiWindow
         var workArea = DpiAwarenessController.GetLogicalWorkAreaRect(this, Owner) ?? SystemParameters.WorkArea;
         ApplyNormalWorkArea(workArea);
         DpiAwarenessController.PlaceWithinWorkArea(this, workArea, MaxHeight, margin: 0);
-        Loaded += (_, _) => DpiAwarenessController.PlaceWithinWorkArea(this, _updateWorkArea, ActualHeight, margin: 0);
+        // 首次显示时，SizeToContent 与卡片高度绑定会继续安排布局；稳定后只居中一次。
+        Dispatcher.InvokeAsync(() =>
+        {
+            if (WindowState != WindowState.Normal || new WindowInteropHelper(this).Handle == 0)
+                return;
+
+            UpdateLayout();
+            DpiAwarenessController.PlaceWithinWorkArea(this, _updateWorkArea, ActualHeight, margin: 0);
+        }, DispatcherPriority.ApplicationIdle);
         LocationChanged += (_, _) => RefreshWorkArea();
         DpiChanged += (_, _) => Dispatcher.InvokeAsync(() => RefreshWorkArea(force: true), DispatcherPriority.Loaded);
         StateChanged += (_, _) =>

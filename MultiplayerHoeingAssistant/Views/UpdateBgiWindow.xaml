@@ -130,44 +130,47 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <Style x:Key="SourceEditorHeader" TargetType="ToggleButton">
+            <Setter Property="MinHeight" Value="27"/>
+            <Setter Property="Foreground" Value="#D9D1ED"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="FocusBorder" BorderBrush="Transparent" BorderThickness="1"
+                                Background="Transparent" CornerRadius="5" Padding="3,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Path x:Name="Arrow" Data="M 0,0 L 4,4 L 8,0" Stroke="{StaticResource Dim}"
+                                      StrokeThickness="1.4" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="Data" Value="M 0,4 L 4,0 L 8,4"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusBorder" Property="BorderBrush" Value="{StaticResource Gold}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.46"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="SourceExpander" TargetType="Expander">
-            <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+            <Setter Property="Focusable" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Expander">
-                        <StackPanel>
-                            <ToggleButton x:Name="HeaderSite" MinHeight="28" HorizontalAlignment="Left"
-                                          IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
-                                          Foreground="#D9D1ED" Cursor="Hand" Content="{TemplateBinding Header}">
-                                <ToggleButton.Template>
-                                    <ControlTemplate TargetType="ToggleButton">
-                                        <Border x:Name="FocusBorder" BorderBrush="Transparent" BorderThickness="1"
-                                                Background="Transparent" CornerRadius="5" Padding="3,0">
-                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Path x:Name="Arrow" Data="M 0,0 L 4,4 L 8,0" Stroke="{StaticResource Dim}"
-                                                      StrokeThickness="1.4" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                <ContentPresenter VerticalAlignment="Center" RecognizesAccessKey="True"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsChecked" Value="True">
-                                                <Setter TargetName="Arrow" Property="Data" Value="M 0,4 L 4,0 L 8,4"/>
-                                            </Trigger>
-                                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                                <Setter TargetName="FocusBorder" Property="BorderBrush" Value="{StaticResource Gold}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </ToggleButton.Template>
-                            </ToggleButton>
-                            <ContentPresenter x:Name="ExpandSite" ContentSource="Content" Visibility="Collapsed"/>
-                        </StackPanel>
+                        <ContentPresenter x:Name="ExpandSite" ContentSource="Content" Visibility="Collapsed"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsExpanded" Value="True">
                                 <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="HeaderSite" Property="Opacity" Value="0.46"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -435,7 +438,17 @@
                                                Text="解压覆盖同路径文件，不删除个人文件"
                                                ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"/>
                                 </Grid>
-                                <TextBlock Text="下载来源" Style="{StaticResource Lbl}"/>
+                                <Grid Margin="0,3,0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="下载来源" Style="{StaticResource Lbl}" Margin="0" VerticalAlignment="Center"/>
+                                    <ToggleButton x:Name="SourceEditorToggle" Grid.Column="1" Content="管理自定义下载源"
+                                                  Style="{StaticResource SourceEditorHeader}" VerticalAlignment="Center"
+                                                  IsChecked="{Binding IsExpanded, ElementName=SourceEditor, Mode=TwoWay}"
+                                                  IsEnabled="{Binding IsEnabled, ElementName=SourceEditor}"/>
+                                </Grid>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -453,7 +466,7 @@
                                     <Button x:Name="RefreshPackagesButton" Content="刷新" Grid.Column="1" Width="56" Height="32"
                                             Style="{StaticResource Btn}" Click="RefreshPackagesButton_Click"/>
                                 </Grid>
-                                <Expander x:Name="SourceEditor" Header="管理自定义下载源" Margin="0,4,0,0" Style="{StaticResource SourceExpander}">
+                                <Expander x:Name="SourceEditor" Style="{StaticResource SourceExpander}">
                                     <StackPanel Margin="0,4,0,0">
                                         <TextBlock Text="名称（可选）" Style="{StaticResource Hint}"/>
                                         <TextBox x:Name="SourceNameBox" Style="{StaticResource Txt}" MaxLength="80" AutomationProperties.Name="自定义源名称"/>
@@ -485,6 +498,17 @@
                                             </Style.Triggers>
                                         </Style>
                                     </ListBox.Style>
+                                    <ListBox.Template>
+                                        <ControlTemplate TargetType="ListBox">
+                                            <ScrollViewer x:Name="PART_ScrollViewer" Style="{DynamicResource GoldScrollViewer}"
+                                                          Focusable="False" Padding="{TemplateBinding Padding}"
+                                                          CanContentScroll="True"
+                                                          HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
+                                                          VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
+                                                <ItemsPresenter/>
+                                            </ScrollViewer>
+                                        </ControlTemplate>
+                                    </ListBox.Template>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid>
