@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:MultiplayerHoeingAssistant.Views"
         xmlns:services="clr-namespace:MultiplayerHoeingAssistant.Services"
         Title="Nexus-BGI - 更新BGI"
-        Width="950" Height="730"
+        Width="950" SizeToContent="Height"
         MinWidth="520" MinHeight="560"
         WindowStartupLocation="CenterOwner"
         FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei"
@@ -283,7 +283,8 @@
                         <ColumnDefinition Width="0.94*"/>
                         <ColumnDefinition Width="1.06*"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel>
+                    <!-- 左栏按内容测量，不受右栏安装包条目数量影响。 -->
+                    <StackPanel x:Name="UpdateSettingsColumn" VerticalAlignment="Top">
                         <StackPanel.Style>
                             <Style TargetType="StackPanel">
                                 <Setter Property="Grid.ColumnSpan" Value="2"/>
@@ -407,6 +408,7 @@
                                         <Setter Property="Grid.Column" Value="1"/>
                                         <Setter Property="Grid.ColumnSpan" Value="1"/>
                                         <Setter Property="Margin" Value="0"/>
+                                        <Setter Property="Height" Value="{Binding ActualHeight, ElementName=UpdateSettingsColumn}"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -469,10 +471,20 @@
                             </StackPanel>
                             <Border Grid.Row="1" Background="{StaticResource InputBg}" BorderBrush="{StaticResource Stroke}"
                                     BorderThickness="1" CornerRadius="8">
-                                <ListBox x:Name="PackageList" MinHeight="132" MaxHeight="360"
+                                <ListBox x:Name="PackageList"
                                          Background="Transparent" Foreground="{StaticResource Ink}" BorderThickness="0"
                                          Padding="5" SelectionChanged="PackageList_SelectionChanged" ItemContainerStyle="{StaticResource PackageItem}"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="安装包列表">
+                                    <ListBox.Style>
+                                        <Style TargetType="ListBox">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ActualWidth, ElementName=LayoutRoot, Converter={StaticResource WideLayout}}" Value="False">
+                                                    <Setter Property="MinHeight" Value="132"/>
+                                                    <Setter Property="MaxHeight" Value="360"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ListBox.Style>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid>
