@@ -336,7 +336,15 @@ small,.small{font-size:12px}
 #detailHeader .detail-top{margin:10px 0 0}
 .detail-identity{min-width:0}
 .detail-identity h1{line-height:1.2}
-.detail-identity p{margin-top:3px;font-size:13px}
+.detail-meta{margin-top:3px;font-size:13px}
+@media(max-width:860px){
+  /* 剩余列让副标题占满可用宽度，按钮仍紧跟昵称。 */
+  .detail-identity-with-update{display:grid;flex:1;grid-template-columns:minmax(0,max-content) max-content minmax(0,1fr);align-items:center}
+  .detail-identity-with-update h1{grid-area:1/1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .detail-identity-with-update .detail-meta{display:contents}
+  .detail-identity-with-update .detail-meta-text{grid-column:1/-1;grid-row:2;margin-top:3px;overflow-wrap:anywhere}
+  .detail-identity-with-update .detail-bgi-update{grid-area:1/2;display:inline-flex;align-items:center;padding:0 8px;line-height:1.2;white-space:nowrap}
+}
 @media(min-width:861px){
   #detailView:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,520px);column-gap:24px;align-items:end;margin-top:4px}
   #detailHeader{grid-column:1;min-width:0}

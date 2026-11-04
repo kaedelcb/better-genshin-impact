@@ -172,12 +172,13 @@ function renderDetailHeader() {
     const host = document.getElementById('detailHeader');
     if (!p) { host.innerHTML = '<button class="back-button" onclick="showHome()">‹ 返回房间</button><p class="error">该成员已离开，操作前请重新选择。</p>'; return; }
     const state = memberState(p);
-    host.innerHTML = `<button class="back-button" onclick="showHome()">‹ 返回房间</button><div class="detail-top">${avatarFor(p)}<div class="detail-identity"><h1>${webEscapeHtml(p.playerName || p.playerUid)}</h1><p class="muted">${webEscapeHtml(p.playerUid)} · <span class="${state.tone}">${webEscapeHtml(state.label)}</span><span class="detail-version"> · BGI ${webEscapeHtml(p.bgiVersion || '版本未上报')}</span></p></div></div>`;
+    host.innerHTML = `<button class="back-button" onclick="showHome()">‹ 返回房间</button><div class="detail-top">${avatarFor(p)}<div class="detail-identity"><h1>${webEscapeHtml(p.playerName || p.playerUid)}</h1><div class="muted detail-meta"><span class="detail-meta-text">${webEscapeHtml(p.playerUid)} · <span class="${state.tone}">${webEscapeHtml(state.label)}</span> · BGI ${webEscapeHtml(p.bgiVersion || '版本未上报')}</span></div></div></div>`;
     if (window.bgiWebUpdate?.targetFor(p)) {
         const update = document.createElement('button');
         update.className = 'text-button detail-bgi-update'; update.type = 'button'; update.textContent = '更新 BGI';
         update.onclick = () => window.bgiWebUpdate.open(p);
-        host.querySelector('.detail-version').after(update);
+        host.querySelector('.detail-meta').append(update);
+        host.querySelector('.detail-identity').classList.add('detail-identity-with-update');
     }
 }
 function renderDetailTabs() {
