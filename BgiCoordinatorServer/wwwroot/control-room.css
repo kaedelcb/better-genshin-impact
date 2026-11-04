@@ -349,7 +349,9 @@ small,.small{font-size:12px}
   #detailView:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,520px);column-gap:24px;align-items:end;margin-top:4px}
   #detailHeader{grid-column:1;min-width:0}
   #detailHeader .back-button{min-height:28px;font-size:13px}
-  #detailHeader .detail-top{gap:14px;margin:4px 0 0}
+  #detailHeader .detail-top{gap:14px;margin:4px 0 0;align-items:flex-start}
+  #detailHeader .detail-identity{align-self:center}
+  #detailHeader .detail-bgi-update{min-height:26px;padding-block:0;vertical-align:middle}
   #detailHeader .detail-top .avatar{width:56px;height:56px}
   #detailHeader .detail-top h1{font-size:22px}
   #detailView #detailTabs{grid-column:2;align-self:end;margin:0}
