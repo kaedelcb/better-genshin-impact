@@ -45,7 +45,7 @@ public class AssistConfig
     [JsonPropertyName("bgiUpdateBackupDirs")]
     public List<string> BgiUpdateBackupDirs { get; set; } = DefaultBgiUpdateBackupDirs();
 
-    internal static List<string> DefaultBgiUpdateBackupDirs() => ["User", "Tool"];
+    internal static List<string> DefaultBgiUpdateBackupDirs() => ["User", "Tool", "Log"];
 
     /// <summary>更新前是否备份指定目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
     [JsonPropertyName("bgiUpdateBackupBeforeUpdate")]

@@ -93,7 +93,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     public void BackupConfig_DefaultsForLegacyJson_AndPreservesExplicitEmptyList()
     {
         var legacy = JsonSerializer.Deserialize<AssistConfig>("""{"bgiUpdateExcludeDirs":["NewDir"]}""")!;
-        Assert.Equal(new[] { "User", "Tool" }, legacy.BgiUpdateBackupDirs);
+        Assert.Equal(new[] { "User", "Tool", "Log" }, legacy.BgiUpdateBackupDirs);
         Assert.True(legacy.BgiUpdateBackupBeforeUpdate);
         Assert.Equal(new[] { "NewDir" }, legacy.BgiUpdateExcludeDirs);
         legacy.BgiUpdateBackupBeforeUpdate = false;
