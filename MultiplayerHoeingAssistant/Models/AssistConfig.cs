@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MultiplayerHoeingAssistant.Models;
 
-public class AssistConfig
+public class AssistConfig : IJsonOnDeserialized
 {
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = "http://localhost:5000";
@@ -45,7 +45,32 @@ public class AssistConfig
     [JsonPropertyName("bgiUpdateBackupDirs")]
     public List<string> BgiUpdateBackupDirs { get; set; } = DefaultBgiUpdateBackupDirs();
 
-    internal static List<string> DefaultBgiUpdateBackupDirs() => ["User", "Tool", "Log"];
+    internal static List<string> DefaultBgiUpdateBackupDirs() => ["User", "Tools", "log"];
+
+    private int _bgiUpdateBackupDirsVersion = 1;
+    private bool _bgiUpdateBackupDirsVersionRead;
+
+    // 区分旧版默认列表与新版中用户主动选择的同名目录，避免反复改写用户设置。
+    [JsonPropertyName("bgiUpdateBackupDirsVersion")]
+    public int BgiUpdateBackupDirsVersion
+    {
+        get => _bgiUpdateBackupDirsVersion;
+        set
+        {
+            _bgiUpdateBackupDirsVersion = value;
+            _bgiUpdateBackupDirsVersionRead = true;
+        }
+    }
+
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        if (_bgiUpdateBackupDirsVersionRead) return;
+        // 仅转换历史上实际发布过的完整默认列表；用户修改过的列表保持原样。
+        if (BgiUpdateBackupDirs is ["User", "Tool", "Log"])
+            BgiUpdateBackupDirs = ["User", "Tools", "log"];
+        else if (BgiUpdateBackupDirs is ["User", "Tool"])
+            BgiUpdateBackupDirs = ["User", "Tools"];
+    }
 
     /// <summary>更新前是否备份指定目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
     [JsonPropertyName("bgiUpdateBackupBeforeUpdate")]

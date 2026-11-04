@@ -93,7 +93,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     public void BackupConfig_DefaultsForLegacyJson_AndPreservesExplicitEmptyList()
     {
         var legacy = JsonSerializer.Deserialize<AssistConfig>("""{"bgiUpdateExcludeDirs":["NewDir"]}""")!;
-        Assert.Equal(new[] { "User", "Tool", "Log" }, legacy.BgiUpdateBackupDirs);
+        Assert.Equal(new[] { "User", "Tools", "log" }, legacy.BgiUpdateBackupDirs);
         Assert.True(legacy.BgiUpdateBackupBeforeUpdate);
         Assert.Equal(new[] { "NewDir" }, legacy.BgiUpdateExcludeDirs);
         legacy.BgiUpdateBackupBeforeUpdate = false;
@@ -103,6 +103,48 @@ public class BgiPackageUpdateServiceTests : IDisposable
         Assert.False(saved.BgiUpdateBackupBeforeUpdate);
         Assert.Empty(saved.BgiUpdateBackupDirs);
         Assert.Equal(new[] { "NewDir" }, saved.BgiUpdateExcludeDirs);
+    }
+
+    [Theory]
+    [InlineData("""{"bgiUpdateBackupDirs":["User","Tool","Log"]}""", "User,Tools,log")]
+    [InlineData("""{"bgiUpdateBackupDirs":["User","Tool"]}""", "User,Tools")]
+    public void BackupConfig_MigratesKnownLegacyDefaults(string json, string expected)
+    {
+        var config = JsonSerializer.Deserialize<AssistConfig>(json)!;
+        Assert.Equal(expected.Split(','), config.BgiUpdateBackupDirs);
+        Assert.Equal(config.BgiUpdateBackupDirs,
+            JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(config))!.BgiUpdateBackupDirs);
+    }
+
+    [Fact]
+    public void BackupConfig_PreservesCustomListsAndLaterExplicitSelections()
+    {
+        var custom = JsonSerializer.Deserialize<AssistConfig>(
+            """{"bgiUpdateBackupDirs":["User","Tool","Log","Screenshots"]}""")!;
+        Assert.Equal(new[] { "User", "Tool", "Log", "Screenshots" }, custom.BgiUpdateBackupDirs);
+
+        var explicitlySelected = new AssistConfig { BgiUpdateBackupDirs = ["User", "Tool", "Log"] };
+        var roundTrip = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(explicitlySelected))!;
+        Assert.Equal(explicitlySelected.BgiUpdateBackupDirs, roundTrip.BgiUpdateBackupDirs);
+    }
+
+    [Fact]
+    public void Apply_MigratedDefaults_BackUpActualUserToolsAndLogDirectories()
+    {
+        Directory.CreateDirectory(Path.Combine(_bgiDir, "Tools", "MultiplayerHoeingAssistant"));
+        Directory.CreateDirectory(Path.Combine(_bgiDir, "log"));
+        File.WriteAllText(Path.Combine(_bgiDir, "Tools", "MultiplayerHoeingAssistant", "assistant.txt"), "TOOLS-DATA");
+        File.WriteAllText(Path.Combine(_bgiDir, "log", "bgi.log"), "LOG-DATA");
+        var config = JsonSerializer.Deserialize<AssistConfig>(
+            """{"bgiUpdateBackupDirs":["User","Tool","Log"]}""")!;
+
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, [], config.BgiUpdateBackupDirs, progress: null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.NotNull(result.BackupDir);
+        Assert.Equal("USER-DATA", Read(result.BackupDir!, "User", "config.json"));
+        Assert.Equal("TOOLS-DATA", Read(result.BackupDir!, "Tools", "MultiplayerHoeingAssistant", "assistant.txt"));
+        Assert.Equal("LOG-DATA", Read(result.BackupDir!, "log", "bgi.log"));
     }
 
     [Fact]
