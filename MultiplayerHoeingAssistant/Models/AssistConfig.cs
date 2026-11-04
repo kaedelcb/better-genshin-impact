@@ -41,7 +41,13 @@ public class AssistConfig
     [JsonPropertyName("bgiCustomUpdateSources")]
     public List<BgiCustomUpdateSource> BgiCustomUpdateSources { get; set; } = [];
 
-    /// <summary>更新前是否备份排除目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
+    /// <summary>更新前备份的目录，相对 BGI 目录。与排除目录分别保存；空列表表示未选目录。</summary>
+    [JsonPropertyName("bgiUpdateBackupDirs")]
+    public List<string> BgiUpdateBackupDirs { get; set; } = DefaultBgiUpdateBackupDirs();
+
+    internal static List<string> DefaultBgiUpdateBackupDirs() => ["User", "Tool"];
+
+    /// <summary>更新前是否备份指定目录（复制到 BGI\_update_backup\时间戳\）。默认开启。</summary>
     [JsonPropertyName("bgiUpdateBackupBeforeUpdate")]
     public bool BgiUpdateBackupBeforeUpdate { get; set; } = true;
 

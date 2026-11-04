@@ -1,4 +1,7 @@
+using System.Globalization;
 using System.IO;
+using System.Text.Json;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using SharpCompress.Archives;
 using Xunit;
@@ -38,7 +41,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_bgiDir, "Tool", "MultiplayerHoeingAssistant"));
         File.WriteAllText(Path.Combine(_bgiDir, "BetterGI.exe"), "OLD-BGI-EXE");
         File.WriteAllText(Path.Combine(_bgiDir, "User", "config.json"), "USER-DATA");
-        File.WriteAllText(Path.Combine(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "assistant.dll"), "OLD-ASSISTANT");
+        File.WriteAllText(Path.Combine(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "MultiplayerHoeingAssistant.dll"), "OLD-ASSISTANT");
     }
 
     public void Dispose()
@@ -49,34 +52,28 @@ public class BgiPackageUpdateServiceTests : IDisposable
     private string Read(params string[] parts) => File.ReadAllText(Path.Combine(parts));
 
     [Fact]
-    public void Apply_OverwritesFiles_And_SkipsExcludedDirs()
+    public void Apply_BacksUpSelectedDirsBeforeOverwrite_AndExcludesIndependently()
     {
-        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir,
-            [@"User", "Tool/MultiplayerHoeingAssistant"], backupExcludedDirs: true, progress: null);
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, ["User"], ["Tool"], progress: null);
 
         Assert.True(result.Success, result.Error);
-        // 包内条目 4 个：1 覆盖（BetterGI.exe）+ 2 排除 + 1 新增（NewDir/newfile.dll）
-        Assert.Equal(2, result.ExtractedFiles);
-        Assert.Equal(2, result.ExcludedFiles);
+        Assert.Equal(3, result.ExtractedFiles);
+        Assert.Equal(1, result.ExcludedFiles);
         Assert.Empty(result.SkippedFiles);
-        // 被覆盖
         Assert.Equal("NEW-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));
-        // 排除目录原样未动
         Assert.Equal("USER-DATA", Read(_bgiDir, "User", "config.json"));
-        Assert.Equal("OLD-ASSISTANT", Read(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "assistant.dll"));
-        // 新增文件正常落盘（新建子目录）
+        Assert.Equal("NEW-ASSISTANT", Read(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "MultiplayerHoeingAssistant.dll"));
         Assert.Equal("NEW-FILE", Read(_bgiDir, "NewDir", "newfile.dll"));
-        // 备份先行：排除目录内容已复制到 _update_backup\时间戳\
         Assert.NotNull(result.BackupDir);
         Assert.StartsWith(Path.Combine(_bgiDir, "_update_backup"), result.BackupDir);
-        Assert.Equal("USER-DATA", Read(result.BackupDir!, "User", "config.json"));
-        Assert.Equal("OLD-ASSISTANT", Read(result.BackupDir!, "Tool", "MultiplayerHoeingAssistant", "assistant.dll"));
+        Assert.False(Directory.Exists(Path.Combine(result.BackupDir!, "User")));
+        Assert.Equal("OLD-ASSISTANT", Read(result.BackupDir!, "Tool", "MultiplayerHoeingAssistant", "MultiplayerHoeingAssistant.dll"));
     }
 
     [Fact]
     public void Apply_WithoutBackup_NoBackupDirCreated()
     {
-        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, ["User"], backupExcludedDirs: false, progress: null);
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, ["User"], [], progress: null);
         Assert.True(result.Success, result.Error);
         Assert.Null(result.BackupDir);
         Assert.False(Directory.Exists(Path.Combine(_bgiDir, "_update_backup")));
@@ -84,12 +81,78 @@ public class BgiPackageUpdateServiceTests : IDisposable
     }
 
     [Fact]
-    public void Apply_ExcludedDirNotOnDisk_BackupSkipsIt()
+    public void Apply_BackupDirNotOnDisk_DoesNotCreateEmptyBackup()
     {
-        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, ["NoSuchDir"], backupExcludedDirs: true, progress: null);
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, [], ["NoSuchDir"], progress: null);
         Assert.True(result.Success, result.Error);
-        Assert.NotNull(result.BackupDir);
-        Assert.False(Directory.Exists(Path.Combine(result.BackupDir!, "NoSuchDir")));
+        Assert.Null(result.BackupDir);
+        Assert.False(Directory.Exists(Path.Combine(_bgiDir, "_update_backup")));
+    }
+
+    [Fact]
+    public void BackupConfig_DefaultsForLegacyJson_AndPreservesExplicitEmptyList()
+    {
+        var legacy = JsonSerializer.Deserialize<AssistConfig>("""{"bgiUpdateExcludeDirs":["NewDir"]}""")!;
+        Assert.Equal(new[] { "User", "Tool" }, legacy.BgiUpdateBackupDirs);
+        Assert.True(legacy.BgiUpdateBackupBeforeUpdate);
+        Assert.Equal(new[] { "NewDir" }, legacy.BgiUpdateExcludeDirs);
+        legacy.BgiUpdateBackupBeforeUpdate = false;
+        legacy.BgiUpdateBackupDirs.Clear();
+
+        var saved = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(legacy))!;
+        Assert.False(saved.BgiUpdateBackupBeforeUpdate);
+        Assert.Empty(saved.BgiUpdateBackupDirs);
+        Assert.Equal(new[] { "NewDir" }, saved.BgiUpdateExcludeDirs);
+    }
+
+    [Fact]
+    public void Apply_PrunesOnlyRecognizableBackupsOlderThanTenDays()
+    {
+        var now = DateTime.Now;
+        var root = Path.Combine(_bgiDir, "_update_backup");
+        string MakeBackup(string name, DateTime created)
+        {
+            var path = Path.Combine(root, name);
+            Directory.CreateDirectory(Path.Combine(path, "User"));
+            File.WriteAllText(Path.Combine(path, "User", "config.json"), name);
+            Directory.SetCreationTime(path, created);
+            return path;
+        }
+
+        var legacy = now.AddDays(-12);
+        var expired = now.AddDays(-11);
+        var recent = now.AddDays(-9);
+        var oldLegacy = MakeBackup(legacy.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture), legacy);
+        var oldCurrent = MakeBackup(expired.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture), expired);
+        var kept = MakeBackup(recent.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture), recent);
+        var unrelated = MakeBackup("manual-backup", expired);
+        var mismatched = MakeBackup(expired.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture), now);
+
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, ["User"], ["Tool"], progress: null);
+
+        Assert.True(result.Success, result.Error);
+        Assert.Null(result.BackupCleanupWarning);
+        Assert.False(Directory.Exists(oldLegacy));
+        Assert.False(Directory.Exists(oldCurrent));
+        Assert.True(Directory.Exists(kept));
+        Assert.True(Directory.Exists(unrelated));
+        Assert.True(Directory.Exists(mismatched));
+        Assert.Equal("USER-DATA", Read(_bgiDir, "User", "config.json"));
+        Assert.Equal("OLD-ASSISTANT", Read(result.BackupDir!, "Tool", "MultiplayerHoeingAssistant", "MultiplayerHoeingAssistant.dll"));
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("User/../Tool")]
+    [InlineData("_update_backup/previous")]
+    public void Apply_UnsafeBackupPath_AbortsBeforeOverwrite(string selected)
+    {
+        var result = BgiPackageUpdateService.Apply(FixturePath, _bgiDir, [], ["User", selected], progress: null);
+
+        Assert.False(result.Success);
+        Assert.Contains("备份目录无效", result.Error);
+        Assert.False(Directory.Exists(Path.Combine(_bgiDir, "_update_backup")));
+        Assert.Equal("OLD-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));
     }
 
     [Fact]
@@ -97,7 +160,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     {
         // 名字不合法 → 直接拒绝，绝不解压覆盖（需求硬约束）；文件不存在都不该被碰到
         var badName = Path.Combine(_root, "SomeRandomPackage.7z");
-        var result = BgiPackageUpdateService.Apply(badName, _bgiDir, [], backupExcludedDirs: true, progress: null);
+        var result = BgiPackageUpdateService.Apply(badName, _bgiDir, [], ["User", "Tool"], progress: null);
         Assert.False(result.Success);
         Assert.Contains("茶包版", result.Error);
         Assert.Equal("OLD-BGI-EXE", Read(_bgiDir, "BetterGI.exe")); // 目标目录未被触碰
@@ -107,7 +170,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     public void Apply_MissingArchiveFile_FailsCleanly()
     {
         var missing = Path.Combine(_root, "BetterGI_v9.9.9+lcb.99.9.7z");
-        var result = BgiPackageUpdateService.Apply(missing, _bgiDir, [], backupExcludedDirs: false, progress: null);
+        var result = BgiPackageUpdateService.Apply(missing, _bgiDir, [], [], progress: null);
         Assert.False(result.Success);
         Assert.Contains("不存在", result.Error);
     }
@@ -203,7 +266,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     {
         // 7z 空文件无数据流，旧实现 OpenEntryStream 抛 "File does not have a stream"
         // 导致一个 0 字节占位文件中断整个更新；新实现直接落空文件继续
-        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, [], backupExcludedDirs: false, progress: null);
+        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, [], [], progress: null);
 
         Assert.True(result.Success, result.Error);
         var placeholder = new FileInfo(Path.Combine(_bgiDir, "EmptyDir", "placeholder.txt"));
@@ -223,7 +286,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
         Directory.CreateDirectory(Path.Combine(tsDir, "User"));
         File.WriteAllText(Path.Combine(tsDir, "User", "config.json"), "REAL-BACKUP");
 
-        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, ["User"], backupExcludedDirs: true, progress: null);
+        var result = BgiPackageUpdateService.Apply(Fixture16Path, _bgiDir, ["User"], ["User", "Tool"], progress: null);
 
         Assert.True(result.Success, result.Error);
         Assert.False(File.Exists(Path.Combine(tsDir, "BetterGI.exe"))); // 恶意条目未落盘
@@ -236,7 +299,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     public void Apply_RootedPackage_StripsCommonRoot_AndLandsAtTargetRoot()
     {
         // Nexus 实包所有条目都在顶层 BetterGI/ 下：不剥根会把整包解压成 目标目录\BetterGI\...（2026-09-17 实跑踩坑）
-        var result = BgiPackageUpdateService.Apply(Fixture17RootedPath, _bgiDir, [], backupExcludedDirs: false, progress: null);
+        var result = BgiPackageUpdateService.Apply(Fixture17RootedPath, _bgiDir, [], [], progress: null);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal("NEW-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));          // 落到目标根并覆盖
@@ -251,12 +314,12 @@ public class BgiPackageUpdateServiceTests : IDisposable
     {
         // 排除匹配按剥根后的相对路径进行：带根包的 User/Tool 目录同样能被排除+备份
         var result = BgiPackageUpdateService.Apply(Fixture17RootedPath, _bgiDir,
-            ["User", "Tool/MultiplayerHoeingAssistant"], backupExcludedDirs: true, progress: null);
+            ["User", "Tool/MultiplayerHoeingAssistant"], ["User", "Tool"], progress: null);
 
         Assert.True(result.Success, result.Error);
         Assert.Equal(2, result.ExcludedFiles);
         Assert.Equal("USER-DATA", Read(_bgiDir, "User", "config.json"));
-        Assert.Equal("OLD-ASSISTANT", Read(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "assistant.dll"));
+        Assert.Equal("OLD-ASSISTANT", Read(_bgiDir, "Tool", "MultiplayerHoeingAssistant", "MultiplayerHoeingAssistant.dll"));
         Assert.NotNull(result.BackupDir);
         Assert.Equal("USER-DATA", Read(result.BackupDir!, "User", "config.json"));
         Assert.Equal("NEW-BGI-EXE", Read(_bgiDir, "BetterGI.exe"));
@@ -266,7 +329,7 @@ public class BgiPackageUpdateServiceTests : IDisposable
     public void Apply_MixedRootPackage_RejectedBeforeAnyExtraction()
     {
         // 部分条目在包根、其余集中在一个顶层目录下：无法判定是否为包裹目录，整体拒绝且目标不被触碰
-        var result = BgiPackageUpdateService.Apply(FixtureMixedRootPath, _bgiDir, ["User"], backupExcludedDirs: true, progress: null);
+        var result = BgiPackageUpdateService.Apply(FixtureMixedRootPath, _bgiDir, ["User"], ["User", "Tool"], progress: null);
 
         Assert.False(result.Success);
         Assert.Contains("结构异常", result.Error);

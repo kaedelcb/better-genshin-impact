@@ -16,13 +16,14 @@ namespace MultiplayerHoeingAssistant.Views;
 /// 选择下载来源后，仅列出该来源的安装包；本地目录和手动指定包共用一个来源。
 /// 更新 = 把选中的茶包版 .7z 解压覆盖到 BGI 目录：
 ///   弹窗前置检查（BetterGI.exe 存在、BGI 运行中则经确认后关闭）→ 风险确认弹窗（需求硬约束）→
-///   可选先备份排除目录 → 解压覆盖（排除目录整目录跳过、被占用文件改名腾位）→ 结果汇总 + 刷新版本显示。
-/// 包目录/排除目录/备份勾选在窗口关闭时持久化到配置。
+///   可选先备份指定目录 → 解压覆盖（排除目录整目录跳过、被占用文件改名腾位）→ 结果汇总 + 刷新版本显示。
+/// 包目录/排除目录/备份设置在窗口关闭时持久化到配置。
 /// </summary>
 public partial class UpdateBgiWindow : Window
 {
     private readonly MainViewModel _vm;
     private readonly ObservableCollection<string> _excludeDirs = [];
+    private readonly ObservableCollection<string> _backupDirs = [];
     private readonly List<string> _pickedPackagePaths;
     private readonly List<BgiCustomUpdateSource> _customSources;
     private CancellationTokenSource? _sourceCheck;
@@ -44,7 +45,9 @@ public partial class UpdateBgiWindow : Window
         PackageDirBox.Text = vm.Config?.BgiPackageDir ?? "";
         foreach (var dir in vm.Config?.BgiUpdateExcludeDirs ?? []) _excludeDirs.Add(dir);
         ExcludeList.ItemsSource = _excludeDirs;
-        BackupExcludeCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
+        foreach (var dir in vm.Config?.BgiUpdateBackupDirs ?? AssistConfig.DefaultBgiUpdateBackupDirs()) _backupDirs.Add(dir);
+        BackupList.ItemsSource = _backupDirs;
+        BackupCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
         RefreshCurrentVersion();
         RebuildSourceChoices(vm.AvailableBgiUpdateSourceId ?? vm.Config?.BgiUpdateSourceId ?? BgiUpdateSources.LocalId);
         Closed += (_, _) =>
@@ -241,47 +244,58 @@ public partial class UpdateBgiWindow : Window
     private string DefaultBrowseRoot()
         => Directory.Exists(BgiDir) ? BgiDir : (Path.GetDirectoryName(_vm.Config?.BgiPath) is { Length: > 0 } p ? p : "");
 
-    // ===== 排除目录 =====
-
     private void AddExcludeButton_Click(object sender, RoutedEventArgs e)
+        => AddDirectories(_excludeDirs, "排除目录", "选择不参与覆盖的目录");
+
+    private void AddBackupButton_Click(object sender, RoutedEventArgs e)
+        => AddDirectories(_backupDirs, "备份目录", "选择更新前备份的目录");
+
+    private void AddDirectories(ObservableCollection<string> directories, string label, string title)
     {
-        if (BgiDir.Length == 0 || !Directory.Exists(BgiDir))
+        var bgiDir = BgiDir;
+        if (!Directory.Exists(bgiDir))
         {
-            MessageBox.Show(this, "请先填写有效的 BGI 目录，再添加排除目录。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"请先填写有效的 BGI 目录，再添加{label}。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        var root = Path.GetFullPath(bgiDir);
+        var prefix = Path.EndsInDirectorySeparator(root) ? root : root + Path.DirectorySeparatorChar;
         var dlg = new OpenFolderDialog
         {
-            Title = "选择不参与覆盖的目录（可按住 Ctrl 多选）",
-            InitialDirectory = BgiDir,
+            Title = title + "（可按住 Ctrl 多选）",
+            InitialDirectory = root,
             Multiselect = true,
         };
         if (dlg.ShowDialog(this) != true) return;
 
-        int added = 0, rejected = 0;
-        foreach (var full in dlg.FolderNames)
+        int rejected = 0;
+        foreach (var folder in dlg.FolderNames)
         {
-            // 排除目录按 BGI 目录内相对路径记录；选到 BGI 目录外没有意义，拒收
-            if (!full.StartsWith(Path.GetFullPath(BgiDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+            if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(full, Path.TrimEndingDirectorySeparator(root), StringComparison.OrdinalIgnoreCase))
             {
                 rejected++;
                 continue;
             }
-            var rel = Path.GetRelativePath(BgiDir, full);
-            if (_excludeDirs.Any(d => string.Equals(d.Replace('\\', '/'), rel.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)))
-                continue; // 已存在，去重
-            if (string.Equals(rel, BgiPackageUpdateService.BackupRootDirName, StringComparison.OrdinalIgnoreCase))
-                continue; // 备份目录自身不排除（否则备份无意义）
-            _excludeDirs.Add(rel);
-            added++;
+            var rel = Path.GetRelativePath(root, full);
+            if (BgiUpdateDecisions.IsExcludedPath(rel, [BgiPackageUpdateService.BackupRootDirName]))
+            {
+                rejected++;
+                continue;
+            }
+            if (!directories.Any(d => string.Equals(d.Replace('\\', '/'), rel.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase)))
+                directories.Add(rel);
         }
         if (rejected > 0)
-            MessageBox.Show(this, $"有 {rejected} 个目录在 BGI 目录之外，已忽略（排除目录必须是 BGI 目录的子目录）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show(this, $"已忽略 {rejected} 个不能添加的目录。{label}必须是 BGI 的子目录，且不能位于 _update_backup 中。",
+                "更新BGI", MessageBoxButton.OK, MessageBoxImage.Warning);
     }
 
-    private void RemoveExcludeButton_Click(object sender, RoutedEventArgs e)
+    private void RemoveDirectoryButton_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is string dir) _excludeDirs.Remove(dir);
+        if (sender is Button { Tag: ObservableCollection<string> directories, DataContext: string dir })
+            directories.Remove(dir);
     }
 
     // ===== 更新 =====
@@ -401,10 +415,13 @@ public partial class UpdateBgiWindow : Window
 
         // 运行中的 BGI 会锁住 exe/DLL：先在风险确认里说明，经确认后自动关闭
         var running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
-        string confirmText = "更新有风险，建议先备份数据（用户配置、脚本仓库等重要目录可用下方「排除目录+备份」保护）。\n\n"
+        string backupSummary = BackupCheckBox.IsChecked != true ? "已关闭" :
+            _backupDirs.Count == 0 ? "未选择目录" : string.Join("、", _backupDirs);
+        string confirmText = "更新采用解压覆盖。只有与安装包路径相同的文件会被覆盖，不会删除其他个人文件。\n\n"
             + $"安装包：{package.FileName}\n目标目录：{targetDir}\n"
             + $"排除目录：{(_excludeDirs.Count == 0 ? "无" : string.Join("、", _excludeDirs))}"
-            + (BackupExcludeCheckBox.IsChecked == true && _excludeDirs.Count > 0 ? "\n（更新前先备份排除目录）" : "")
+            + (_excludeDirs.Count == 0 ? "" : "\n请确认排除列表不含 BGI 需要更新的目录，否则部分功能可能无法使用。")
+            + $"\n更新前备份：{backupSummary}"
             + (remoteInfo != null ? $"\n下载来源：{source!.Label}（{source.Endpoint!.Host}）\n将复用已校验的安装包，或下载到 {downloadDirectory}（{remoteInfo.SizeText}）。安装包就绪后才关闭目标目录中正在运行的 BGI。" : "")
             + (remoteInfo == null && running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行，点击「确定」将自动关闭后继续。" : "")
             + "\n\n确定继续更新？";
@@ -438,7 +455,7 @@ public partial class UpdateBgiWindow : Window
 
             var progress = new Progress<string>(s => StatusText.Text = $"正在更新… {s}");
             var result = await BgiPackageUpdateService.ApplyAsync(archivePath, targetDir,
-                _excludeDirs.ToList(), BackupExcludeCheckBox.IsChecked == true, progress);
+                _excludeDirs.ToList(), BackupCheckBox.IsChecked == true ? _backupDirs.ToList() : [], progress);
 
             if (result.Success)
             {
@@ -446,7 +463,8 @@ public partial class UpdateBgiWindow : Window
                 if (result.ExcludedFiles > 0) lines.Add($"排除目录跳过 {result.ExcludedFiles} 个文件（未触碰）。");
                 if (result.RenamedAside > 0) lines.Add($"{result.RenamedAside} 个被占用文件已改名腾位后覆盖。");
                 if (result.SkippedFiles.Count > 0) lines.Add($"{result.SkippedFiles.Count} 个文件被跳过：\n{string.Join("\n", result.SkippedFiles)}");
-                if (result.BackupDir != null) lines.Add($"排除目录已备份到：{result.BackupDir}");
+                if (result.BackupDir != null) lines.Add($"备份已保存到：{result.BackupDir}");
+                if (result.BackupCleanupWarning != null) lines.Add(result.BackupCleanupWarning);
                 lines.Add("请重启 BGI 使新版本生效。");
                 MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
@@ -457,7 +475,7 @@ public partial class UpdateBgiWindow : Window
             else
             {
                 StatusText.Text = "更新失败。";
-                MessageBox.Show(this, $"更新失败：{result.Error}\n\n（排除目录如有备份，位于：{result.BackupDir ?? "未生成"}）",
+                MessageBox.Show(this, $"更新失败：{result.Error}\n\n（备份位置：{result.BackupDir ?? "未生成"}）",
                     "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -509,7 +527,9 @@ public partial class UpdateBgiWindow : Window
         BrowsePackageDirButton.IsEnabled = !busy;
         AddExcludeButton.IsEnabled = !busy;
         ExcludeList.IsEnabled = !busy;
-        BackupExcludeCheckBox.IsEnabled = !busy;
+        AddBackupButton.IsEnabled = !busy;
+        BackupList.IsEnabled = !busy;
+        BackupCheckBox.IsEnabled = !busy;
         PackageList.IsEnabled = !busy;
         PickPackageFileButton.IsEnabled = !busy;
         UpdateButton.Content = busy && installing ? "更新中…" : "更新";
@@ -539,7 +559,8 @@ public partial class UpdateBgiWindow : Window
         if (_vm.Config == null) return;
         _vm.Config.BgiPackageDir = PackageDir;
         _vm.Config.BgiUpdateExcludeDirs = _excludeDirs.ToList();
-        _vm.Config.BgiUpdateBackupBeforeUpdate = BackupExcludeCheckBox.IsChecked == true;
+        _vm.Config.BgiUpdateBackupDirs = _backupDirs.ToList();
+        _vm.Config.BgiUpdateBackupBeforeUpdate = BackupCheckBox.IsChecked == true;
         _vm.Config.BgiPickedPackages = _pickedPackagePaths.Concat(_vm.Config.BgiPickedPackages ?? [])
             .Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         _vm.Config.BgiUpdateSourceId = (SourceBox.SelectedItem as BgiUpdateSource)?.Id;

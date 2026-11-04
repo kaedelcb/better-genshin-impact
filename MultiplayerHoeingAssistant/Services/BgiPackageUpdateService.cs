@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -65,6 +66,8 @@ public sealed record BgiUpdateApplyResult(
     string? BackupDir,
     string? Error)
 {
+    public string? BackupCleanupWarning { get; init; }
+
     public static BgiUpdateApplyResult Fail(string error, string? backupDir = null)
         => new(false, 0, 0, 0, [], backupDir, error);
 }
@@ -75,9 +78,8 @@ public sealed record BgiUpdateApplyResult(
 /// 解压：整包覆盖到 BGI 目录——
 ///   ① 解压前对包名再校验一道（不合法直接拒绝解压，与扫描双保险）；
 ///   ② 条目相对路径做逃逸防护（7z 版 zip-slip）；
-///   ③ 排除目录（用户选定不覆盖的目录，相对 BGI 目录）：可选先整目录备份到
-///      BGI\_update_backup\时间戳\，解压时条目一律跳过，绝不触碰；
-///      备份目录 _update_backup 自身无条件视为排除目录（硬保护，包内条目永不覆盖备份）；
+///   ③ 排除目录在解压时一律跳过；备份目录列表独立，在解压前复制到
+///      BGI\_update_backup\时间戳\ 下。包内条目不能覆盖 _update_backup。
 ///   ④ 0 字节条目（7z 空文件无数据流，OpenEntryStream 会抛
 ///      "File does not have a stream"）直接落一个空文件，不再中断整个更新；
 ///   ⑤ 文件被占用（助手部署在 BGI 目录内时，包内助手自身文件必被占用）先"改名腾位"再覆盖，
@@ -145,6 +147,9 @@ public static class BgiPackageUpdateService
 
     /// <summary>备份根目录名（固定放 BGI 目录下，时间戳子目录每次更新独立一份）。</summary>
     public const string BackupRootDirName = "_update_backup";
+    private const int BackupRetentionDays = 10;
+    private const string BackupTimestampFormat = "yyyyMMdd-HHmmss-fff";
+    private const string LegacyBackupTimestampFormat = "yyyyMMdd-HHmmss";
 
     /// <summary>
     /// 扫描目录顶层（不递归）的合法 .7z 更新包，并合并持久化的"指定压缩包"（用户手动挑的、可能在任意目录）。
@@ -204,9 +209,9 @@ public static class BgiPackageUpdateService
     }
 
     public static Task<BgiUpdateApplyResult> ApplyAsync(string archivePath, string targetDir,
-        IReadOnlyList<string> excludeDirs, bool backupExcludedDirs,
+        IReadOnlyList<string> excludeDirs, IReadOnlyList<string> backupDirs,
         IProgress<string>? progress, CancellationToken ct = default)
-        => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupExcludedDirs, progress, ct), ct);
+        => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupDirs, progress, ct), ct);
 
     /// <summary>固定链接上的 CNB 包必须与所选版本一致；只读取将写入 BGI 根目录的主程序元数据。</summary>
     internal static void VerifyCnbPackageVersion(string archivePath, string inspectionPath, string expectedFileName, CancellationToken ct)
@@ -246,7 +251,7 @@ public static class BgiPackageUpdateService
     }
 
     public static BgiUpdateApplyResult Apply(string archivePath, string targetDir,
-        IReadOnlyList<string> excludeDirs, bool backupExcludedDirs,
+        IReadOnlyList<string> excludeDirs, IReadOnlyList<string> backupDirs,
         IProgress<string>? progress, CancellationToken ct = default)
     {
         // ① 解压前再校验包名：不合法绝不解压覆盖（需求硬约束）。
@@ -274,16 +279,15 @@ public static class BgiPackageUpdateService
             var stripRoot = DetectCommonRoot(entries, out var rootError);
             if (rootError is not null) return BgiUpdateApplyResult.Fail(rootError);
 
-            if (excludes.Count > 0 && backupExcludedDirs)
+            if (backupDirs.Count > 0)
             {
                 try
                 {
-                    backupDir = BackupExcludedDirs(targetRoot, excludes, progress);
+                    backupDir = BackupSelectedDirs(targetRoot, backupDirs, progress, ct);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    // 备份失败 = 安全网缺失，宁可中止也不覆盖
-                    return BgiUpdateApplyResult.Fail($"更新前备份排除目录失败（已中止，未做任何覆盖）：{ex.Message}");
+                    return BgiUpdateApplyResult.Fail($"更新前备份失败（已中止，未做任何覆盖）：{ex.Message}");
                 }
             }
 
@@ -319,7 +323,8 @@ public static class BgiPackageUpdateService
                     DrainEntry(solid, entry);
                     continue;
                 }
-                if (BgiUpdateDecisions.IsExcludedPath(rel, extractExcludes))
+                var resolvedRelative = Path.GetRelativePath(targetRoot, fullTarget);
+                if (BgiUpdateDecisions.IsExcludedPath(resolvedRelative, extractExcludes))
                 {
                     excluded++;
                     DrainEntry(solid, entry);
@@ -363,7 +368,10 @@ public static class BgiPackageUpdateService
         {
             return new BgiUpdateApplyResult(false, extracted, renamedAside, excluded, skipped, backupDir, $"解压失败：{ex.Message}");
         }
-        return new BgiUpdateApplyResult(true, extracted, renamedAside, excluded, skipped, backupDir, null);
+        return new BgiUpdateApplyResult(true, extracted, renamedAside, excluded, skipped, backupDir, null)
+        {
+            BackupCleanupWarning = skipped.Count == 0 ? PruneExpiredBackups(targetRoot, progress) : null
+        };
     }
 
     /// <summary>
@@ -419,36 +427,145 @@ public static class BgiPackageUpdateService
         }
     }
 
-    /// <summary>把存在的排除目录整目录复制到 BGI\_update_backup\时间戳\ 下（相对结构原样保留）。</summary>
-    private static string BackupExcludedDirs(string targetRoot, IReadOnlyList<string> excludes, IProgress<string>? progress)
+    private static string? BackupSelectedDirs(string targetRoot, IReadOnlyList<string> directories,
+        IProgress<string>? progress, CancellationToken ct)
     {
-        var backupDir = Path.Combine(targetRoot, BackupRootDirName, DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-        Directory.CreateDirectory(backupDir);
-        foreach (var raw in excludes)
+        // 只接受目标根内的普通相对路径；备份仓库本身不能再被备份。
+        var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in directories)
         {
-            progress?.Report($"备份排除目录 {raw}");
-            if (string.IsNullOrWhiteSpace(raw)) continue;
-            var rel = raw.Trim().Replace('/', Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar);
-            // GetFullPath + 前缀校验：手滑填 ".."/绝对路径时源目录不在 BGI 内，直接跳过该目录
-            var src = Path.GetFullPath(Path.Combine(targetRoot, rel));
-            if (!src.StartsWith(targetRoot, StringComparison.OrdinalIgnoreCase)) continue;
-            if (!Directory.Exists(src)) continue; // 目录不存在无需备份
-            CopyDirectory(src, Path.Combine(backupDir, rel));
+            var relative = raw?.Replace('/', Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar);
+            if (string.IsNullOrWhiteSpace(relative) || Path.IsPathRooted(relative) ||
+                relative.Split(Path.DirectorySeparatorChar).Any(part => part.Length == 0 ||
+                    part.EndsWith('.') || part.EndsWith(' ') || part.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) ||
+                !Path.GetFullPath(relative, targetRoot).StartsWith(targetRoot, StringComparison.OrdinalIgnoreCase))
+                throw new IOException($"备份目录无效：{raw}");
+
+            relative = Path.GetRelativePath(targetRoot, Path.GetFullPath(relative, targetRoot));
+            if (BgiUpdateDecisions.IsExcludedPath(relative, [BackupRootDirName]))
+                throw new IOException($"备份目录无效：{raw}");
+            selected.Add(relative);
+        }
+
+        string? backupDir = null;
+        foreach (var relative in selected.OrderBy(path => path.Length))
+        {
+            ct.ThrowIfCancellationRequested();
+            // 父目录已经包含子目录时不重复复制。
+            if (selected.Any(path => relative.StartsWith(path + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var source = Path.TrimEndingDirectorySeparator(targetRoot);
+            bool exists = true;
+            foreach (var part in relative.Split(Path.DirectorySeparatorChar))
+            {
+                source = Path.Combine(source, part);
+                if (ReadBackupDirectory(source)) continue;
+                exists = false;
+                break;
+            }
+            if (!exists) continue;
+
+            backupDir ??= CreateBackupDirectory(targetRoot);
+            progress?.Report($"正在备份 {relative}…");
+            CopyDirectory(source, Path.Combine(backupDir, relative), ct);
         }
         return backupDir;
     }
 
-    private static void CopyDirectory(string srcDir, string dstDir)
+    private static string CreateBackupDirectory(string targetRoot)
     {
-        Directory.CreateDirectory(dstDir);
-        foreach (var file in Directory.EnumerateFiles(srcDir, "*", SearchOption.TopDirectoryOnly))
+        var root = Path.Combine(targetRoot, BackupRootDirName);
+        if (!ReadBackupDirectory(root)) Directory.CreateDirectory(root);
+        var timestamp = DateTime.Now;
+        while (true)
         {
-            File.Copy(file, Path.Combine(dstDir, Path.GetFileName(file)), overwrite: true);
+            var path = Path.Combine(root, timestamp.ToString(BackupTimestampFormat, CultureInfo.InvariantCulture));
+            if (!ReadBackupDirectory(path))
+            {
+                Directory.CreateDirectory(path);
+                return path;
+            }
+            timestamp = timestamp.AddMilliseconds(1);
         }
-        foreach (var sub in Directory.EnumerateDirectories(srcDir, "*", SearchOption.TopDirectoryOnly))
+    }
+
+    private static bool ReadBackupDirectory(string path)
+    {
+        FileAttributes attributes;
+        try { attributes = File.GetAttributes(path); }
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+
+        if ((attributes & FileAttributes.Directory) == 0 || (attributes & FileAttributes.ReparsePoint) != 0)
+            throw new IOException($"不是可备份的普通目录：{path}");
+        return true;
+    }
+
+    private static void CopyDirectory(string source, string destination, CancellationToken ct)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var item in new DirectoryInfo(source).EnumerateFileSystemInfos())
         {
-            CopyDirectory(sub, Path.Combine(dstDir, Path.GetFileName(sub.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))));
+            ct.ThrowIfCancellationRequested();
+            var attributes = item.Attributes;
+            if ((attributes & FileAttributes.ReparsePoint) != 0)
+                throw new IOException($"备份目录内含链接，无法安全复制：{item.FullName}");
+
+            var target = Path.Combine(destination, item.Name);
+            if ((attributes & FileAttributes.Directory) != 0)
+                CopyDirectory(item.FullName, target, ct);
+            else
+                File.Copy(item.FullName, target);
         }
+    }
+
+    private static string? PruneExpiredBackups(string targetRoot, IProgress<string>? progress)
+    {
+        var root = Path.Combine(targetRoot, BackupRootDirName);
+        var cutoff = DateTime.Now.AddDays(-BackupRetentionDays);
+        var failed = new List<string>();
+        try
+        {
+            if (!ReadBackupDirectory(root)) return null;
+            foreach (var backup in new DirectoryInfo(root).EnumerateDirectories())
+            {
+                try
+                {
+                    if (!DateTime.TryParseExact(backup.Name, [BackupTimestampFormat, LegacyBackupTimestampFormat],
+                        CultureInfo.InvariantCulture, DateTimeStyles.None, out var timestamp) ||
+                        timestamp >= cutoff || (backup.Attributes & FileAttributes.ReparsePoint) != 0 ||
+                        (backup.CreationTime - timestamp).Duration() > TimeSpan.FromMinutes(1) ||
+                        backup.CreationTime >= cutoff)
+                        continue;
+
+                    // 不跟随备份里后来加入的链接，也不删除这类来源已不确定的备份。
+                    if (ContainsBackupLinks(backup)) continue;
+                    progress?.Report($"正在清理过期备份 {backup.Name}…");
+                    backup.Delete(recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    failed.Add($"{backup.Name}：{ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            failed.Add(ex.Message);
+        }
+        return failed.Count == 0 ? null : $"有过期备份未能清理：{string.Join("；", failed)}";
+    }
+
+    private static bool ContainsBackupLinks(DirectoryInfo directory)
+    {
+        foreach (var item in directory.EnumerateFileSystemInfos())
+        {
+            if ((item.Attributes & FileAttributes.ReparsePoint) != 0 ||
+                item is DirectoryInfo child && ContainsBackupLinks(child))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>写条目数据：0 字节条目（7z 空文件无数据流，OpenEntryStream 会抛
@@ -574,7 +691,7 @@ public static class BgiPackageUpdateService
         var p = key.Trim().Replace('\\', '/').TrimStart('/');
         if (p.Contains(':')) return null;
         var segments = p.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length == 0 || segments.Contains("..")) return null;
+        if (segments.Length == 0 || segments.Any(part => part.EndsWith('.') || part.EndsWith(' '))) return null;
         return string.Join(Path.DirectorySeparatorChar, segments);
     }
 

@@ -37,6 +37,31 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>
+        <Style x:Key="DirectoryList" TargetType="ItemsControl">
+            <Setter Property="Margin" Value="0,4,0,0"/>
+            <Setter Property="ItemsPanel">
+                <Setter.Value>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="ItemTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <Border Background="#EFEAE0" BorderBrush="#D8D2C4" BorderThickness="1" CornerRadius="6"
+                                Padding="8,3" Margin="0,0,6,6" ToolTip="{Binding}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding}" FontSize="11" Foreground="#1D1D1F" VerticalAlignment="Center"
+                                           MaxWidth="380" TextWrapping="Wrap"/>
+                                <Button Content="✕" FontSize="10" Padding="4,0" Margin="5,0,0,0" Background="Transparent"
+                                        BorderThickness="0" Cursor="Hand" Foreground="#6E6E73" Click="RemoveDirectoryButton_Click"
+                                        AutomationProperties.Name="{Binding StringFormat='移除 {0}'}"
+                                        Tag="{Binding ItemsSource, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <DockPanel LastChildFill="True">
@@ -55,8 +80,8 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16,20,20">
             <TextBlock Text="更新 BGI" FontSize="18" FontWeight="SemiBold" Foreground="#1D1D1F"/>
-            <TextBlock Text="把茶包版安装包（.7z）解压覆盖到本机 BGI 目录。更新有风险，建议先备份数据。"
-                       FontSize="12" Foreground="#6E6E73" Margin="0,4,0,4"/>
+            <TextBlock Text="更新会将茶包版安装包（.7z）解压到 BGI 目录，不会删除个人文件。只有路径与包内文件相同的文件会被覆盖。"
+                       FontSize="12" Foreground="#6E6E73" TextWrapping="Wrap" Margin="0,4,0,4"/>
 
             <!-- 第一行：当前 BGI 版本 -->
             <TextBlock Text="当前 BGI 版本" Style="{StaticResource Lbl}"/>
@@ -203,34 +228,23 @@
                 <TextBlock Text="排除目录（更新时不覆盖）" Style="{StaticResource Lbl}" VerticalAlignment="Center"/>
                 <Button x:Name="AddExcludeButton" Content="添加目录…" Grid.Column="1" Height="28" Padding="12,0" Style="{StaticResource Btn}" Click="AddExcludeButton_Click"/>
             </Grid>
-            <ItemsControl x:Name="ExcludeList" Margin="0,4,0,0">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <WrapPanel/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="#EFEAE0" BorderBrush="#D8D2C4" BorderThickness="1" CornerRadius="6"
-                                Padding="8,3" Margin="0,0,6,6" ToolTip="{Binding}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding}" FontSize="11" Foreground="#1D1D1F" VerticalAlignment="Center"/>
-                                <Button Content="✕" FontSize="10" Padding="4,0" Margin="5,0,0,0" Background="Transparent"
-                                        BorderThickness="0" Cursor="Hand" Foreground="#8E8E93" Click="RemoveExcludeButton_Click"/>
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <ItemsControl x:Name="ExcludeList" Style="{StaticResource DirectoryList}"/>
             <TextBlock Style="{StaticResource Hint}"
-                       Text="弹出的文件夹选择窗支持按住 Ctrl 一次选多个；选中的目录解压时整个跳过，包内同名文件不会覆盖它们。"/>
-            <CheckBox x:Name="BackupExcludeCheckBox" IsChecked="True" Margin="0,6,0,0" Cursor="Hand">
-                <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="#1D1D1F">
-                    <Run FontWeight="SemiBold" Text="更新前备份排除目录"/>
-                    <LineBreak/>
-                    <Run FontSize="10" Foreground="#8E8E93" Text="勾选后，解压前先把上面这些目录原样复制到 BGI 目录下 _update_backup\时间戳\，更新失败可从中恢复。"/>
-                </TextBlock>
-            </CheckBox>
+                       Text="通常留空即可。选中的目录会在解压时整个跳过；请勿排除 BGI 需要更新的目录，否则部分功能可能缺失或无法使用。按住 Ctrl 可多选。"/>
+            <Grid Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="备份目录" Style="{StaticResource Lbl}" VerticalAlignment="Center"/>
+                <Button x:Name="AddBackupButton" Content="添加目录…" Grid.Column="1" Height="28" Padding="12,0"
+                        Style="{StaticResource Btn}" AutomationProperties.Name="添加备份目录" Click="AddBackupButton_Click"/>
+            </Grid>
+            <ItemsControl x:Name="BackupList" Style="{StaticResource DirectoryList}"/>
+            <CheckBox x:Name="BackupCheckBox" Content="更新前备份" IsChecked="True" Margin="0,6,0,0" Cursor="Hand"
+                      FontSize="12" FontWeight="SemiBold" Foreground="#1D1D1F"/>
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="按住 Ctrl 可多选。勾选后，解压前将所选目录复制到 BGI 目录下的 _update_backup。每次成功更新后清理超过 10 天的更新备份。"/>
 
         </StackPanel>
     </ScrollViewer>

@@ -12,7 +12,7 @@ public partial class MainViewModel
     private readonly Dictionary<string, WebBgiUpdateJob> _webBgiJobs = new(StringComparer.Ordinal);
 
     private sealed record WebBgiPackageTicket(string Owner, string Instance, string Executable, string DownloadRoot,
-        string[] Excludes, bool Backup, BgiUpdatePackage Package, DateTimeOffset Expires);
+        string[] Excludes, BgiUpdatePackage Package, DateTimeOffset Expires);
 
     private sealed class WebBgiUpdateJob(string id, string owner, string ticketId, bool install)
     {
@@ -92,8 +92,7 @@ public partial class MainViewModel
                 {
                     var id = Guid.NewGuid().ToString("N");
                     _webBgiTickets[id] = new(owner, instance, executable ?? "", downloadRoot,
-                        WebBgiExcludes(config, executable),
-                        config.BgiUpdateBackupBeforeUpdate, package, DateTimeOffset.UtcNow.AddMinutes(10));
+                        WebBgiExcludes(config, executable), package, DateTimeOffset.UtcNow.AddMinutes(10));
                     return new { id, fileName = package.FileName, size = package.SizeText, canDownload = package.Remote != null && downloadRoot.Length != 0 };
                 }).ToArray();
 
@@ -153,7 +152,9 @@ public partial class MainViewModel
                 _webBgiTickets.Remove(ticketId);
                 var job = new WebBgiUpdateJob(id, owner, ticketId, install);
                 _webBgiJobs.Add(id, job);
-                _ = RunWebBgiUpdateAsync(job, ticket, StillAuthorized, packageLease, configLease);
+                string[] backupDirs = install && config.BgiUpdateBackupBeforeUpdate
+                    ? (config.BgiUpdateBackupDirs ?? AssistConfig.DefaultBgiUpdateBackupDirs()).ToArray() : [];
+                _ = RunWebBgiUpdateAsync(job, ticket, backupDirs, StillAuthorized, packageLease, configLease);
                 return Reply("ok", "", JobView(job));
             }
             default:
@@ -161,7 +162,7 @@ public partial class MainViewModel
         }
     }
 
-    private async Task RunWebBgiUpdateAsync(WebBgiUpdateJob job, WebBgiPackageTicket ticket,
+    private async Task RunWebBgiUpdateAsync(WebBgiUpdateJob job, WebBgiPackageTicket ticket, string[] backupDirs,
         Func<bool> stillAuthorized, IDisposable packageLease, IDisposable? configLease)
     {
         using (packageLease)
@@ -203,15 +204,17 @@ public partial class MainViewModel
                 if (reservation == null)
                     throw new IOException("BGI 正在运行、路径已变化或无法确认进程状态。已保留下载包，请在执行端退出 BGI 后重新更新。");
                 job.State = "installing";
-                job.Message = "正在备份并覆盖执行端 BGI…";
+                job.Message = "正在更新执行端 BGI…";
                 var target = Path.GetDirectoryName(ticket.Executable)!;
-                var result = await BgiPackageUpdateService.ApplyAsync(path, target, ticket.Excludes, ticket.Backup,
+                var result = await BgiPackageUpdateService.ApplyAsync(path, target, ticket.Excludes, backupDirs,
                     new Progress<string>(message => { if (job.State == "installing") job.Message = message; }));
                 NotifyRemoteUpdateStateChanged();
                 if (!result.Success || result.SkippedFiles.Count > 0)
                     throw new IOException((result.Error ?? $"有 {result.SkippedFiles.Count} 个文件未覆盖。") +
                         (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}"));
-                job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。";
+                job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。" +
+                    (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
+                    (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}");
             }
             else job.Message = "安装包已保存，可稍后更新。";
             job.State = "done";

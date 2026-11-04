@@ -114,6 +114,7 @@ public partial class SettingsWindow : Window
             BgiPackageDir = _configCopy?.BgiPackageDir ?? "",
             BgiPickedPackages = _configCopy?.BgiPickedPackages ?? [],
             BgiUpdateExcludeDirs = _configCopy?.BgiUpdateExcludeDirs ?? [],
+            BgiUpdateBackupDirs = _configCopy?.BgiUpdateBackupDirs?.ToList() ?? AssistConfig.DefaultBgiUpdateBackupDirs(),
             BgiUpdateBackupBeforeUpdate = _configCopy?.BgiUpdateBackupBeforeUpdate ?? true,
             BgiUpdateSourceId = _configCopy?.BgiUpdateSourceId,
             BgiCustomUpdateSources = _configCopy?.BgiCustomUpdateSources ?? [],
