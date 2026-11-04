@@ -310,7 +310,7 @@
                                     <Border Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Top"
                                             Background="#76181631" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
                                             CornerRadius="8" Padding="8,3" Margin="8,0,0,0"
-                                            ToolTip="优先取运行中 BGI 上报的版本；BGI 未运行时读 exe 内记录的版本。更新完成后自动刷新。">
+                                            ToolTip="显示所选 BGI 目录下 BetterGI.exe 的版本；更换目录或更新成功后会刷新。">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>

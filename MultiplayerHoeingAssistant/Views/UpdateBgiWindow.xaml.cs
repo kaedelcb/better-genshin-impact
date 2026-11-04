@@ -49,6 +49,7 @@ public partial class UpdateBgiWindow : Window
         BackupList.ItemsSource = _backupDirs;
         BackupCheckBox.IsChecked = vm.Config?.BgiUpdateBackupBeforeUpdate ?? true;
         RefreshCurrentVersion();
+        BgiDirBox.TextChanged += (_, _) => RefreshCurrentVersion();
         RebuildSourceChoices(vm.AvailableBgiUpdateSourceId ?? vm.Config?.BgiUpdateSourceId ?? BgiUpdateSources.LocalId);
         Closed += (_, _) =>
         {
@@ -68,8 +69,11 @@ public partial class UpdateBgiWindow : Window
 
     private void RefreshCurrentVersion()
     {
-        // 更新完成后 exe 已换新、外部通道已死，Resolve 会自然落到读 exe 的兜底分支
-        CurrentVersionText.Text = _vm.ResolveLocalBgiVersion() ?? "未知（未找到 BetterGI.exe）";
+        // 更新目标可能不是助手当前连接的实例，版本以目标目录里的程序为准。
+        var targetDir = BgiDir;
+        var version = targetDir.Length == 0 ? null
+            : BgiVersionResolver.FromExecutable(Path.Combine(targetDir, "BetterGI.exe"));
+        CurrentVersionText.Text = version ?? "未知";
     }
 
     private string BgiDir => BgiDirBox.Text.Trim();
