@@ -206,6 +206,37 @@ public class BgiRemoteUpdateServiceTests
     }
 
     [Fact]
+    public void Actions_RecognizesReleasePrefix_WithoutAcceptingInvalidOrUnavailablePackages()
+    {
+        const string runs = """
+        {"workflow_runs":[
+         {"id":41761665747,"display_title":"BetterGI release:0.66.3+lcb.23.0-NexusBGI-fix9","conclusion":"success"},
+         {"id":41622420441,"display_title":"BetterGI 0.66.3+lcb.23.0-NexusBGI-fix8","conclusion":"success"},
+         {"id":3,"display_title":"BetterGI release:0.66.3+lcb.23.0-NexusBGI-fix10","conclusion":"failure"},
+         {"id":4,"display_title":"BetterGI release:0.66.3+lcb.23.0-NexusBGI-fix11","conclusion":"success"},
+         {"id":5,"display_title":"BetterGI release:0.66.3","conclusion":"success"},
+         {"id":6,"display_title":"BetterGI release:release:0.66.3+lcb.23.0-NexusBGI-fix12","conclusion":"success"}]}
+        """;
+        const string artifacts = """
+        {"artifacts":[
+         {"name":"BetterGI_7z","expired":false,"size_in_bytes":530942110,"digest":"sha256:142c2b4048bf12b257ab1067b4bbf10f1d6fd4e4a223d5acb9a641180a6131a3","workflow_run":{"id":41761665747}},
+         {"name":"BetterGI_7z","expired":false,"size_in_bytes":530938547,"workflow_run":{"id":41622420441}},
+         {"name":"BetterGI_7z","expired":false,"size_in_bytes":400,"workflow_run":{"id":3}},
+         {"name":"BetterGI_7z","expired":true,"size_in_bytes":400,"workflow_run":{"id":4}},
+         {"name":"BetterGI_7z","expired":false,"size_in_bytes":400,"workflow_run":{"id":5}},
+         {"name":"BetterGI_7z","expired":false,"size_in_bytes":400,"workflow_run":{"id":6}}]}
+        """;
+
+        var packages = BgiRemoteUpdateService.ParseActions(runs, artifacts);
+        Assert.Equal(new[] { "fix9", "fix8" }, packages.Select(p => p.NameInfo.TailRest));
+        Assert.Equal("BetterGI_v0.66.3+lcb.23.0-NexusBGI-fix9.7z", packages[0].FileName);
+        Assert.Equal(41761665747L, packages[0].ActionsRunId);
+        Assert.Equal(530942110L, packages[0].SizeBytes);
+        Assert.Equal("142c2b4048bf12b257ab1067b4bbf10f1d6fd4e4a223d5acb9a641180a6131a3", packages[0].Sha256);
+        Assert.EndsWith("/actions/runs/41761665747/BetterGI_7z.zip", packages[0].Url);
+    }
+
+    [Fact]
     public async Task ActionsDownload_ReusesVerifiedInnerPackage_WithoutReplacingOnHashMismatch()
     {
         const string name = "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z";

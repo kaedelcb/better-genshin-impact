@@ -183,8 +183,11 @@ public static class BgiRemoteUpdateService
             var runId = ReadPositiveLength(run, "id");
             var title = ReadString(run, "display_title");
             if (runId is null || title == null || !title.StartsWith("BetterGI ", StringComparison.Ordinal)
-                || ReadString(run, "conclusion") != "success"
-                || !TryParseName("BetterGI_v" + title["BetterGI ".Length..] + ".7z", out var nameInfo)) continue;
+                || ReadString(run, "conclusion") != "success") continue;
+            var version = title["BetterGI ".Length..];
+            // 公开发布时工作流标题保留输入标记，实际构建版本和安装包名称不包含它。
+            if (version.StartsWith("release:", StringComparison.Ordinal)) version = version["release:".Length..];
+            if (!TryParseName("BetterGI_v" + version + ".7z", out var nameInfo)) continue;
 
             // 同一个 run 用固定的 BetterGI_7z 产物，既不混入 .exe，也不接受失败、过期或其他工作流的包。
             var items = available[runId.Value].ToList();
