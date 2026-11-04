@@ -93,7 +93,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <ComboBox x:Name="SourceBox" DisplayMemberPath="Label" Height="32" FontSize="13"
+                <ComboBox x:Name="SourceBox" DisplayMemberPath="Label" Height="32" FontSize="13" VerticalContentAlignment="Center"
                           AutomationProperties.Name="下载来源" SelectionChanged="SourceBox_SelectionChanged" Margin="0,0,6,0"/>
                 <Button x:Name="RefreshPackagesButton" Content="刷新" Grid.Column="1" Width="56" Height="32"
                         Style="{StaticResource Btn}" Click="RefreshPackagesButton_Click"/>
