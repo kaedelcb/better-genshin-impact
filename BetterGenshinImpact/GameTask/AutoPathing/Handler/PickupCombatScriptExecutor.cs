@@ -5,8 +5,6 @@ using BetterGenshinImpact.Helpers;
 using BetterGenshinImpact.ViewModel.Pages;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Vanara.PInvoke;
@@ -16,79 +14,6 @@ namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 internal static class PickupCombatScriptExecutor
 {
     private const int InitialPickupWaitMs = 250;
-
-    internal static bool Supports(CombatScript script) => Supports(script, out _);
-
-    internal static bool Supports(CombatScript script, out string? reason, CombatScenes? scenes = null)
-    {
-        if (script.CombatCommands.Count == 0)
-        {
-            reason = "策略没有可执行指令";
-            return false;
-        }
-
-        for (var i = 0; i < script.CombatCommands.Count; i++)
-        {
-            var command = script.CombatCommands[i];
-            var specialCurrentAttack = command.Method == Method.Attack
-                && command.Name == CombatScriptParser.CurrentAvatarName
-                && scenes?.GetAvatars().Any(avatar => avatar.Name == "阿蕾奇诺" && avatar.ArlecchinoAutoEnabled) == true;
-            if (!IsSupportedCommand(command) || specialCurrentAttack)
-            {
-                var text = $"{command.Name} {command.Method.Alias[0]}({string.Join(",", command.Args ?? [])})";
-                var detail = specialCurrentAttack ? "队伍启用了阿蕾奇诺特殊普攻，不能保证当前角色攻击的安全中断"
-                    : command.Method == Method.KeyPress ? "仅支持 keypress(f) 和 keypress(x)"
-                    : command.Method == Method.Attack && command.Name == "阿蕾奇诺" ? "特殊普攻包含额外连招"
-                    : command.Method == Method.Attack || command.Method == Method.Wait ? "时长参数必须是可用的非负秒数"
-                    : command.Method == Method.Skill ? "仅支持可安全中断的具名角色短按战技"
-                    : "该指令尚不支持安全中断";
-                reason = $"第 {i + 1} 条「{text}」：{detail}";
-                return false;
-            }
-        }
-
-        reason = null;
-        return true;
-    }
-
-    private static bool IsSupportedCommand(CombatCommand command)
-    {
-        var method = command.Method;
-        if (method == Method.Wait || method == Method.Attack)
-        {
-            if (method == Method.Attack && command.Name == "阿蕾奇诺")
-                return false; // 特化普攻内部可能连续按住多个键，仍由旧执行器执行。
-            return method == Method.Attack && command.Args is { Count: 0 }
-                || command.Args is { Count: 1 } args && IsSafeDuration(args[0]);
-        }
-
-        if (method == Method.Skill)
-        {
-            return command.Args is { Count: 0 }
-                && command.Name != CombatScriptParser.CurrentAvatarName
-                && command.Name is not ("阿蕾奇诺" or "玛薇卡"); // 这些角色有额外的战斗状态处理。
-        }
-
-        return method == Method.KeyDown || method == Method.KeyUp || method == Method.MouseDown || method == Method.MouseUp
-            || method == Method.Click || method == Method.MoveBy || IsSupportedPress(command);
-    }
-
-    private static bool IsSafeDuration(string text)
-    {
-        try
-        {
-            var seconds = CombatCommand.ParseSeconds(text);
-            return seconds >= 0 && seconds <= int.MaxValue / 1000d;
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-    }
-
-    private static bool IsSupportedPress(CombatCommand command) => command.Method == Method.KeyPress
-        && command.Args is { Count: 1 } args
-        && User32Helper.ToVk(args[0]) is User32.VK.VK_F or User32.VK.VK_X;
 
     private static bool IsPickupPress(CombatCommand command) => command.Method == Method.KeyPress
         && command.Args is { Count: 1 } args && User32Helper.ToVk(args[0]) == User32.VK.VK_F;
@@ -119,10 +44,19 @@ internal static class PickupCombatScriptExecutor
                 }
 
                 var command = commands[i];
-                var avatar = command.ResolveAvatar(scenes, commands[i == 0 ? 0 : i - 1], stop);
-                stop.ThrowIfCancellationRequested();
-                if (avatar != null)
-                    await ExecuteCommandAsync(command, avatar, held, stop);
+                try
+                {
+                    var avatar = command.ResolveAvatar(scenes, commands[i == 0 ? 0 : i - 1], stop);
+                    stop.ThrowIfCancellationRequested();
+                    if (avatar != null)
+                        await ExecuteCommandAsync(command, avatar, held, stop);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException && !stop.IsCancellationRequested)
+                {
+                    logger.LogError(ex, "【拾取达标】第 {Index} 条指令「{Name} {Method}({Args})」执行失败",
+                        i + 1, command.Name, command.Method.Alias[0], string.Join(",", command.Args ?? []));
+                    throw;
+                }
             }
         });
     }
@@ -138,7 +72,9 @@ internal static class PickupCombatScriptExecutor
         {
             avatar.AttackForPickup(DurationMs(command), stop);
         }
-        else if (method == Method.Skill)
+        else if (method == Method.Skill && command.Args is { Count: 0 }
+            && command.Name != CombatScriptParser.CurrentAvatarName
+            && command.Name is not ("阿蕾奇诺" or "玛薇卡"))
         {
             avatar.TapSkillForPickup(stop);
         }
@@ -197,30 +133,28 @@ internal static class PickupCombatScriptExecutor
         CancellationToken reachedToken, ILogger logger, Func<HeldInputs, CancellationToken, Task> run)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(routeToken, reachedToken);
-        var held = new HeldInputs(channel);
         var completed = false;
         try
         {
-            try
+            // 所有既有指令都在同一输入作用域内执行，包括原先未列入白名单的长按、行走和角色特化动作。
+            using (InputHub.BeginOperation(linked.Token, channel))
             {
-                linked.Token.ThrowIfCancellationRequested();
-                await run(held, linked.Token);
-                linked.Token.ThrowIfCancellationRequested();
-                completed = true;
-            }
-            catch (Exception ex) when (!held.ReleaseFailed && ex is not OperationCanceledException)
-            {
-                if (CombatScriptExecutor.LogCommandFailureAndCheckRetry(ex, logger))
+                var held = new HeldInputs(InputHub.Foreground);
+                try
                 {
-                    throw;
+                    linked.Token.ThrowIfCancellationRequested();
+                    await run(held, linked.Token);
+                    linked.Token.ThrowIfCancellationRequested();
+                    completed = true;
                 }
-            }
-            finally
-            {
-                held.ReleaseOwned();
-            }
+                catch (Exception ex) when (!held.ReleaseFailed && ex is not OperationCanceledException)
+                {
+                    if (CombatScriptExecutor.LogCommandFailureAndCheckRetry(ex, logger))
+                        throw;
+                }
+            } // 输入作用域先松键；释放失败不能被普通命令报错的 catch 吞掉。
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == linked.Token && linked.IsCancellationRequested)
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
         {
             routeToken.ThrowIfCancellationRequested();
             reachedToken.ThrowIfCancellationRequested();
@@ -233,49 +167,21 @@ internal static class PickupCombatScriptExecutor
 
     internal sealed class HeldInputs(IInputChannel channel)
     {
-        private readonly HashSet<User32.VK> _owned = [];
-
         internal bool ReleaseFailed { get; private set; }
 
-        internal void Press(User32.VK key)
-        {
-            // 别接管玩家、移动动作或其他执行器已经按住的键。
-            if (!channel.IsKeyDown(key))
-                _owned.Add(key);
-            channel.Keyboard.KeyDown(key);
-        }
+        internal void Press(User32.VK key) => channel.Keyboard.KeyDown(key);
 
         internal void Release(User32.VK key)
         {
             try
             {
                 channel.Keyboard.KeyUp(key);
-                _owned.Remove(key);
             }
             catch
             {
-                // 松键失败不能降级成普通命令错误；finally 仍会重试本节点拥有的键。
                 ReleaseFailed = true;
                 throw;
             }
-        }
-
-        internal void ReleaseOwned()
-        {
-            List<Exception>? failures = null;
-            foreach (var key in _owned)
-            {
-                try
-                {
-                    channel.Keyboard.KeyUp(key);
-                }
-                catch (Exception ex)
-                {
-                    (failures ??= []).Add(ex);
-                }
-            }
-            _owned.Clear();
-            if (failures != null) throw new AggregateException("采集点收尾时释放按键失败", failures);
         }
     }
 }

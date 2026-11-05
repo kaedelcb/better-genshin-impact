@@ -15,24 +15,12 @@ public class CombatScriptHandler : IActionHandler
         => RunCoreAsync(ct, waypointForTrack, null, null);
 
     internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel,
-        double distance, bool fromPreviousPoint, CombatScenes? scenes = null)
+        double distance, bool fromPreviousPoint, CombatScenes? scenes = null, bool counting = true)
     {
-        if (waypoint.CombatScript == null)
-        {
-            Logger.LogWarning("【拾取达标】{Point} 策略为空，未开启计数，按原路线执行", pointLabel);
-            return null;
-        }
-
-        if (!PickupCombatScriptExecutor.Supports(waypoint.CombatScript, out var reason, scenes))
-        {
-            Logger.LogWarning("【拾取达标】{Point} 未开启计数，{Reason}；按原路线执行", pointLabel, reason);
-            return null;
-        }
-
         if (waypoint.PickupTargetCount is not { Count: > 0 } target)
             return null;
 
-        var pickup = PickupWaypointProgress.TryBegin(target.Count, ct, Logger, pointLabel);
+        var pickup = PickupWaypointProgress.TryBegin(target.Count, ct, Logger, pointLabel, counting);
         if (pickup == null)
         {
             ct.ThrowIfCancellationRequested();
@@ -40,8 +28,12 @@ public class CombatScriptHandler : IActionHandler
             return null;
         }
 
-        Logger.LogInformation("【拾取达标】{Point} {Phase}距目标 {Distance:F2}，开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
-            pointLabel, fromPreviousPoint ? "上一点移动中，" : "本点移动中，", distance, target.Count, target.SkipNextWaypoints);
+        if (counting)
+            Logger.LogInformation("【拾取达标】{Point} {Phase}距目标 {Distance:F2}，开始观察获得列表，目标 {Target} 行，达标后跳过 {Skip} 点",
+                pointLabel, fromPreviousPoint ? "上一点移动中，" : "本点移动中，", distance, target.Count, target.SkipNextWaypoints);
+        else
+            Logger.LogInformation("【拾取达标】{Point} 预备获得列表基线，正常到点或距目标 5 个距离单位内开始计数，目标 {Target} 行",
+                pointLabel, target.Count);
         return pickup;
     }
 

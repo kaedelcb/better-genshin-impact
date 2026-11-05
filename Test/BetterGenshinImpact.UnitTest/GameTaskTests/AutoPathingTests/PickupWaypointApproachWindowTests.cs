@@ -19,18 +19,37 @@ public sealed class PickupWaypointApproachWindowTests
     }
 
     [Theory]
-    [InlineData("teleport", null, null, false)]
-    [InlineData("orientation", null, null, false)]
-    [InlineData("target", "pick_around", null, false)]
-    [InlineData("path", null, "sync_1", false)]
-    [InlineData("path", null, null, true)]
-    public void CompetingOrMarkedPointCannotStartObservationForNextPoint(
-        string type, string? action, string? syncId, bool marked)
+    [InlineData("path", null)]
+    [InlineData("path", "combat_script")]
+    [InlineData("target", "fight")]
+    [InlineData("target", "pick_around")]
+    [InlineData("orientation", "log_output")]
+    [InlineData("actionOnly", "nahida_collect")]
+    [InlineData("teleport", null)]
+    public void EveryValidMarkedNodeIsObservedWithoutTypeOrActionWhitelist(string type, string? action)
     {
-        Waypoint[] segment = [new() { Type = type, Action = action, SyncPointId = syncId,
-            PickupTargetCount = marked ? new PickupTarget(1, 0) : null }, PickupPoint()];
+        var point = new Waypoint { Type = type, Action = action, PickupTargetCount = new PickupTarget(1, 0) };
+        Assert.True(PickupWaypointApproachWindow.IsPickupTarget(point));
+        Assert.Equal(0, PickupWaypointApproachWindow.SelectObservationIndex([point, PickupPoint()], 0));
+        var executor = new PathExecutor(CancellationToken.None)
+        {
+            PartyConfig = new BetterGenshinImpact.Core.Config.PathingPartyConfig { EnablePickupTargetCount = true },
+        };
+        Assert.True(executor.CanUseWaypointPickup(point));
+        executor.PartyConfig.EnablePickupTargetCount = false;
+        Assert.False(executor.CanUseWaypointPickup(point));
+    }
 
-        Assert.Null(PickupWaypointApproachWindow.SelectObservationIndex(segment, 0));
+    [Theory]
+    [InlineData("path", "pick_around", null)]
+    [InlineData("target", "combat_script", null)]
+    [InlineData("orientation", null, null)]
+    [InlineData("actionOnly", null, "sync_1")]
+    public void PreviousActionsAndSyncMarksDoNotDisablePreparingTheNextMarkedNode(string type, string? action, string? syncId)
+    {
+        Waypoint[] segment = [new() { Type = type, Action = action, SyncPointId = syncId }, PickupPoint()];
+        Assert.Equal(1, PickupWaypointApproachWindow.SelectObservationIndex(segment, 0));
+        Assert.Null(PickupWaypointApproachWindow.SelectObservationIndex([new() { Type = "teleport" }, PickupPoint()], 0));
     }
 
     [Fact]
@@ -138,7 +157,7 @@ public sealed class PickupWaypointApproachWindowTests
     [InlineData(null)]
     [InlineData("combat_script")]
     [InlineData("pick_around")]
-    public void NeighboringPickupClosesDepartureEvenWhenFallbackActionBlocksItsEarlyObserver(string? fallbackAction)
+    public void NeighboringPickupClosesDepartureWithAnyFallbackAction(string? fallbackAction)
     {
         using var window = new PickupWaypointApproachWindow();
         using var progress = StartWithTwoRows(window);
@@ -161,7 +180,7 @@ public sealed class PickupWaypointApproachWindowTests
 
         Assert.Equal(2, progress.Count);
         Assert.Null(window.FinishDeparture(1));
-        Assert.Equal(fallbackAction == null ? 1 : 0, approachCalls);
+        Assert.Equal(1, approachCalls);
     }
 
     [Fact]
@@ -219,20 +238,101 @@ public sealed class PickupWaypointApproachWindowTests
     }
 
     [Fact]
-    public void RejectedObservationAttemptDoesNotTurnIntoADistanceWarningAtTheTarget()
+    public void NormalPathArrivalActivatesPreparedCountingWithoutAnExtraMoveOrWait()
     {
         using var window = new PickupWaypointApproachWindow();
-        window.EnterPoint(0);
-        Assert.True(window.ShouldReportMissingObservation(1));
+        using var progress = PickupWaypointProgress.TryBegin(2, counting: false)!;
+        var owner = new Waypoint { Type = "path", X = 10, Y = 20, PickupTargetCount = new PickupTarget(2, 0) };
+        window.Start(0, progress, null);
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        Assert.Equal(0, progress.Count);
 
-        // 上一点移动中已到观察距离，但指令兼容检查拒绝启动。
-        window.MarkObservationAttempt(1);
-        Assert.False(window.ShouldReportMissingObservation(1));
-        window.EnterPoint(1);
-        Assert.False(window.ShouldReportMissingObservation(1));
+        Assert.False(PickupWaypointApproachWindow.IsWithinStartDistance(owner, new Point2f(15.5f, 20), out _));
+        Assert.True(window.ActivateForPoint(0));
+        SampleRows(progress, 2);
+        Assert.Equal(2, progress.Count);
+        Assert.Null(window.CompletePoint([owner], 0));
+        Assert.True(progress.IsDisposed);
+    }
 
-        window.EnterPoint(2);
-        Assert.True(window.ShouldReportMissingObservation(2));
+    [Theory]
+    [InlineData(null)]
+    [InlineData("pick_around")]
+    [InlineData("fight")]
+    [InlineData("log_output")]
+    public void MarkedNodeCanCompleteAndSkipWithoutACombatScript(string? action)
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = PickupWaypointProgress.TryBegin(1)!;
+        Waypoint[] segment =
+        [
+            new() { Type = "path", Action = action, PickupTargetCount = new PickupTarget(1, 1) },
+            new(),
+            new()
+        ];
+        window.Start(0, progress, 2);
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        SampleRows(progress, 1);
+        Assert.Equal(2, window.CompletePoint(segment, 0));
+        Assert.True(progress.IsDisposed);
+    }
+
+    [Fact]
+    public void ARejectedSkipPlanDoesNotDisableTheCurrentNodesCount()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = PickupWaypointProgress.TryBegin(1)!;
+        Waypoint[] segment =
+        [
+            new() { Type = "path", PickupTargetCount = new PickupTarget(1, 2) },
+            new() { Type = "teleport" }
+        ];
+        var resume = PickupWaypointSkipDecisions.GetResumeIndex(segment, 0, 2);
+        Assert.Null(resume);
+        window.Start(0, progress, resume);
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        SampleRows(progress, 1);
+        Assert.True(progress.ReachedToken.IsCancellationRequested);
+        Assert.Null(window.CompletePoint(segment, 0));
+    }
+
+    [Fact]
+    public void RetiredFailedActionsCannotTurnTheirCountIntoASkipAtTheNodeBoundary()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        progress.Dispose();
+        Assert.Null(window.CompletePoint([new(), new(), new(), new()], 0));
+    }
+
+    [Fact]
+    public void AFrameCapturedBeforeCountingActivationCannotIncrementTheNode()
+    {
+        using var progress = PickupWaypointProgress.TryBegin(2, counting: false)!;
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        var oldFrame = Stopwatch.GetTimestamp() - 1;
+        Assert.True(progress.ActivateCounting());
+        progress.ObserveFrame(Rows(2), default, oldFrame, 50);
+        progress.ObserveFrame(Rows(2), default, oldFrame, 50);
+        Assert.Equal(0, progress.Count);
+        SampleRows(progress, 2);
+        Assert.Equal(2, progress.Count);
+    }
+
+    [Fact]
+    public void ReachedCountCannotSwallowAnUnrelatedOrRouteCancellation()
+    {
+        using var progress = PickupWaypointProgress.TryBegin(1)!;
+        for (var i = 0; i < 3; i++) progress.Observe(Rows(0));
+        SampleRows(progress, 1);
+        using var operation = new CancellationTokenSource();
+        using var other = new CancellationTokenSource();
+        using var route = new CancellationTokenSource();
+        Assert.True(progress.IsOwnCancellation(new OperationCanceledException(operation.Token), operation.Token, route.Token));
+        Assert.True(progress.IsOwnCancellation(new OperationCanceledException(progress.ReachedToken), operation.Token, route.Token));
+        Assert.False(progress.IsOwnCancellation(new OperationCanceledException(other.Token), operation.Token, route.Token));
+        route.Cancel();
+        Assert.False(progress.IsOwnCancellation(new OperationCanceledException(operation.Token), operation.Token, route.Token));
     }
 
     private static PickupWaypointProgress StartWithTwoRows(PickupWaypointApproachWindow window, int? plannedResume = 3)

@@ -159,59 +159,80 @@ public sealed class PickupCombatScriptExecutorTests
         Assert.False(window.BeginDeparture(0, plannedResume!.Value));
     }
 
+    [Theory]
+    [InlineData("万叶", "wait(30)")]
+    [InlineData("万叶", "walk(a,30)")]
+    [InlineData("万叶", "charge(30)")]
+    [InlineData("万叶", "keypress(q)")]
+    [InlineData("万叶", "scroll(1)")]
+    [InlineData("坎蒂丝", "e(hold)")]
+    [InlineData("阿蕾奇诺", "attack(30)")]
+    public async Task PreviouslyExcludedCommandsRemainCancelableBeforeSendingInput(string name, string text)
+    {
+        using var runtime = new CommandRuntime(name);
+        runtime.Avatar.ArlecchinoAutoEnabled = name == "阿蕾奇诺";
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+        var command = Assert.Single(CombatScriptParser.ParseContext($"{name} {text}", false).CombatCommands);
+        var held = new PickupCombatScriptExecutor.HeldInputs(runtime.Channel.Object);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.ExecuteCommandAsync(command, runtime.Avatar, held, stop.Token));
+
+        runtime.Channel.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("坎蒂丝", "e(hold)", GIActions.ElementalSkill, User32.VK.VK_E)]
+    [InlineData("枫原万叶", "charge(30)", GIActions.NormalAttack, User32.VK.VK_LBUTTON)]
+    public async Task LegacyHoldAndChargeCommandsUseTheOriginalDownActionAndReleaseOnCancellation(
+        string name, string text, GIActions action, User32.VK key)
+    {
+        using var runtime = new CommandRuntime(name);
+        using var reached = new CancellationTokenSource();
+        runtime.Channel.Setup(x => x.IsKeyDown(key)).Returns(false);
+        runtime.Channel.Setup(x => x.SimulateAction(action, KeyType.KeyDown))
+            .Callback(() => reached.Cancel()).Returns(runtime.Channel.Object);
+        runtime.Keyboard.Setup(x => x.KeyUp(key)).Returns(runtime.Keyboard.Object);
+        var command = Assert.Single(CombatScriptParser.ParseContext($"{name} {text}", false).CombatCommands);
+
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.RunWithOwnedInputsAsync(runtime.Channel.Object, CancellationToken.None,
+                reached.Token, NullLogger.Instance, (held, stop) =>
+                    PickupCombatScriptExecutor.ExecuteCommandAsync(command, runtime.Avatar, held, stop))
+                .WaitAsync(TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(reached.Token, canceled.CancellationToken);
+        runtime.Channel.Verify(x => x.SimulateAction(action, KeyType.KeyDown), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyUp(key), Times.Once);
+    }
+
     [Fact]
-    public void SupportsTheUnmodifiedLatestArtifactRoute()
+    public async Task LegacyWalkCommandReleasesItsMovementKeyWithoutWaitingForTheOldDuration()
     {
-        var script = CombatScriptParser.ParseContext(
-            "keypress(x),wait(0.2),attack(0.03);万叶 attack(0.08),keydown(E),wait(0.7),keyup(E),attack(0.2);琴 attack(0.08),keydown(E),wait(0.4),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,-3500),wait(1.8),keyup(E),wait(0.3),click(middle);",
-            false);
+        using var runtime = new CommandRuntime();
+        using var reached = new CancellationTokenSource();
+        var key = User32.VK.VK_A;
+        runtime.Channel.Setup(x => x.IsKeyDown(key)).Returns(false);
+        runtime.Keyboard.Setup(x => x.KeyDown(key)).Callback(() => reached.Cancel()).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyUp(key)).Returns(runtime.Keyboard.Object);
+        var command = Assert.Single(CombatScriptParser.ParseContext("万叶 walk(a,30)", false).CombatCommands);
 
-        Assert.Equal(CombatScriptParser.CurrentAvatarName, script.CombatCommands[2].Name);
-        Assert.True(PickupCombatScriptExecutor.Supports(script, out var reason));
-        Assert.Null(reason);
+        var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.RunWithOwnedInputsAsync(runtime.Channel.Object, CancellationToken.None,
+                reached.Token, NullLogger.Instance, (held, stop) =>
+                    PickupCombatScriptExecutor.ExecuteCommandAsync(command, runtime.Avatar, held, stop))
+                .WaitAsync(TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(reached.Token, canceled.CancellationToken);
+        runtime.Keyboard.Verify(x => x.KeyUp(key), Times.Once);
     }
 
     [Theory]
-    [InlineData("attack")]
-    [InlineData("attack(0.03)")]
-    [InlineData("keypress(X)")]
-    [InlineData("keypress(VK_X)")]
-    public void AcceptsTheNewlySupportedForms(string text)
-    {
-        Assert.True(PickupCombatScriptExecutor.Supports(CombatScriptParser.ParseContext(text, false), out var reason));
-        Assert.Null(reason);
-    }
-
-    [Theory]
-    [InlineData("keypress(q)", "第 1 条", "keypress(q)")]
-    [InlineData("keypress(x);纳西妲 e(hold)", "第 2 条", "hold")]
-    [InlineData("阿蕾奇诺 attack(0.2)", "第 1 条", "阿蕾奇诺")]
-    [InlineData("wait(-1)", "第 1 条", "wait(-1)")]
-    public void UnsupportedCommandReportsItsPositionAndContent(string text, string position, string content)
-    {
-        Assert.False(PickupCombatScriptExecutor.Supports(CombatScriptParser.ParseContext(text, false), out var reason));
-        Assert.Contains(position, reason);
-        Assert.Contains(content, reason);
-    }
-
-    [Fact]
-    public void CurrentAvatarAttackKeepsTheExistingSpecialComboSafetyFallback()
-    {
-        using var runtime = new CommandRuntime("阿蕾奇诺");
-        runtime.Avatar.ArlecchinoAutoEnabled = true;
-        var script = CombatScriptParser.ParseContext("keypress(x);attack(0.03)", false);
-
-        Assert.False(PickupCombatScriptExecutor.Supports(script, out var reason, runtime.Scenes));
-        Assert.Contains("第 2 条", reason);
-        Assert.Contains("特殊普攻", reason);
-        runtime.Avatar.ArlecchinoAutoEnabled = false;
-        Assert.True(PickupCombatScriptExecutor.Supports(script, out _, runtime.Scenes));
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task KeypressXInTheRealCommandLoopStopsBeforeFollowingCommandsAndReleasesHeldKeys(bool stopRoute)
+    [InlineData("x", User32.VK.VK_X, false)]
+    [InlineData("q", User32.VK.VK_Q, false)]
+    [InlineData("r", User32.VK.VK_R, true)]
+    public async Task AnyKeypressInTheRealCommandLoopStopsBeforeFollowingCommandsAndReleasesHeldKeys(string text, User32.VK key, bool stopRoute)
     {
         using var runtime = new CommandRuntime();
         using var route = new CancellationTokenSource();
@@ -219,19 +240,21 @@ public sealed class PickupCombatScriptExecutorTests
         runtime.Channel.Setup(x => x.IsKeyDown(User32.VK.VK_E)).Returns(false);
         runtime.Keyboard.Setup(x => x.KeyDown(User32.VK.VK_E)).Returns(runtime.Keyboard.Object);
         runtime.Keyboard.Setup(x => x.KeyUp(User32.VK.VK_E)).Returns(runtime.Keyboard.Object);
-        runtime.Keyboard.Setup(x => x.KeyPress(User32.VK.VK_X)).Callback(() =>
+        runtime.Channel.Setup(x => x.IsKeyDown(key)).Returns(false);
+        runtime.Keyboard.Setup(x => x.KeyUp(key)).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyPress(key)).Callback(() =>
         {
             if (stopRoute) route.Cancel();
             reached.Cancel();
         }).Returns(runtime.Keyboard.Object);
-        var script = CombatScriptParser.ParseContext("万叶 keydown(E),keypress(x),keydown(W);", false);
+        var script = CombatScriptParser.ParseContext($"万叶 keydown(E),keypress({text}),keydown(W);", false);
 
         var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             PickupCombatScriptExecutor.ExecuteAsync(script, runtime.Scenes, route.Token, reached.Token, NullLogger.Instance)
                 .WaitAsync(TimeSpan.FromSeconds(3)));
 
         Assert.Equal(stopRoute ? route.Token : reached.Token, error.CancellationToken);
-        runtime.Keyboard.Verify(x => x.KeyPress(User32.VK.VK_X), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyPress(key), Times.Once);
         runtime.Keyboard.Verify(x => x.KeyUp(User32.VK.VK_E), Times.Once);
         runtime.Keyboard.Verify(x => x.KeyDown(User32.VK.VK_W), Times.Never);
     }
@@ -248,6 +271,8 @@ public sealed class PickupCombatScriptExecutorTests
         runtime.Keyboard.Setup(x => x.KeyDown(owned)).Returns(runtime.Keyboard.Object);
         runtime.Keyboard.Setup(x => x.KeyDown(foreign)).Returns(runtime.Keyboard.Object);
         runtime.Keyboard.Setup(x => x.KeyUp(owned)).Returns(runtime.Keyboard.Object);
+        runtime.Channel.Setup(x => x.IsKeyDown(User32.VK.VK_LBUTTON)).Returns(false);
+        runtime.Keyboard.Setup(x => x.KeyUp(User32.VK.VK_LBUTTON)).Returns(runtime.Keyboard.Object);
         runtime.Channel.Setup(x => x.SimulateAction(GIActions.NormalAttack, KeyType.KeyPress))
             .Callback(() => reached.Cancel()).Returns(runtime.Channel.Object);
         var command = Assert.Single(CombatScriptParser.ParseContext("attack(30)", false).CombatCommands);
@@ -266,18 +291,6 @@ public sealed class PickupCombatScriptExecutorTests
         runtime.Channel.Verify(x => x.SimulateAction(GIActions.NormalAttack, KeyType.KeyPress), Times.Once);
         runtime.Keyboard.Verify(x => x.KeyUp(owned), Times.Once);
         runtime.Keyboard.Verify(x => x.KeyUp(foreign), Times.Never);
-    }
-
-    [Fact]
-    public void SupportsSharedArtifactRouteButLeavesUnsupportedCommandsWithLegacyExecutor()
-    {
-        var sample = CombatScriptParser.ParseContext(
-            "keypress(f);万叶 attack(0.08),keydown(E),wait(0.51),keyup(E),attack(0.2),wait(0.5);琴 attack(0.08),keydown(E),wait(0.4),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,-3500),wait(1.8),keyup(E),wait(0.3),click(middle);芙宁娜 e;",
-            false);
-        var legacy = CombatScriptParser.ParseContext("keypress(f);纳西妲 e(hold);", false);
-
-        Assert.True(PickupCombatScriptExecutor.Supports(sample));
-        Assert.False(PickupCombatScriptExecutor.Supports(legacy));
     }
 
     private sealed class CommandRuntime : IDisposable

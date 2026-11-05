@@ -879,14 +879,16 @@ public partial class PathExecutor
                             pickupPointLabel = $"{pickupRouteName} · JSON 第 {pickupSegmentOffset + waypointIndex + 1} 点";
                             if (!PartyConfig.EnablePickupTargetCount)
                                 Logger.LogInformation("【拾取达标】{Point} 当前配置组开关未打开，按原路线执行", pickupPointLabel);
-                            else if (waypoint.Type != WaypointType.Target.Code || waypoint.Action != ActionEnum.CombatScript.Code)
-                                Logger.LogWarning("【拾取达标】{Point} 仅 target + combat_script 支持计数（当前 type={Type}，action={Action}）",
-                                    pickupPointLabel, waypoint.Type, waypoint.Action);
-                            else if (MultiplayerCoordinator != null || CooperativeContext != null || _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame != false)
-                                Logger.LogInformation("【拾取达标】{Point} 联机或未确认单机状态，按原路线执行", pickupPointLabel);
                         }
 
                         bool cooperativeFightInterrupted = false;
+                        var observePickupPosition = PartyConfig.EnablePickupTargetCount
+                            ? CreatePickupApproachObserver(pickupWindow, waypoints, waypointIndex,
+                                CurWaypoints.Item1 == waypointsList.Count - 1, pickupRouteName, pickupSegmentOffset)
+                            : null;
+                        if (pickupWindow.IsDepartureFor(waypointIndex))
+                            observePickupPosition = pickupWindow.WithDepartureObserver(waypoints, waypointIndex,
+                                CanUseWaypointPickup, observePickupPosition);
 
                         // return-to-point-stale-prev-position-drift-fix (d) 线路中间节点首帧播种（进入该节点一次，Q8）：
                         // 区别于上方第 0 个 waypoint 首帧播种（waypoints[0] 非 TP 时已 SetPrevPosition）——此处处理 i>=1 的中间节点。
@@ -1287,13 +1289,6 @@ public partial class PathExecutor
                         else
                         {
                             await BeforeMoveToTarget(waypoint);
-                            var observePickupPosition = PartyConfig.EnablePickupTargetCount
-                                ? CreatePickupApproachObserver(pickupWindow, waypoints, waypointIndex,
-                                    CurWaypoints.Item1 == waypointsList.Count - 1, pickupRouteName, pickupSegmentOffset)
-                                : null;
-                            if (pickupWindow.IsDepartureFor(waypointIndex))
-                                observePickupPosition = pickupWindow.WithDepartureObserver(waypoints, waypointIndex,
-                                    CanUseWaypointPickup, observePickupPosition);
 
                             // Path不用走得很近，Target需要接近，但都需要先移动到对应位置
                             if (waypoint.Type == WaypointType.Orientation.Code)
@@ -1388,569 +1383,592 @@ public partial class PathExecutor
                             }
 
                             await CheckMultiplayerBoundaryAsync();
-                            //skipOtherOperations如果重试，则跳过相关操作，
-                            if ((!string.IsNullOrEmpty(waypoint.Action) && !_skipOtherOperations) ||
-                                waypoint.Action == ActionEnum.CombatScript.Code)
+                            if (CanUseWaypointPickup(waypoint) && pickupWindow.ActivateForPoint(waypointIndex))
+                                Logger.LogInformation("【拾取达标】{Point} 已按原路线到点，开始计数（不追加靠近或等待）", pickupPointLabel);
+
+                            var nodePickup = pickupWindow.GetForPoint(waypointIndex, out var nodePlannedResume);
+                            var nodeDepartureResume = nodePickup == null ? null
+                                : PickupWaypointSkipDecisions.GetDepartureResumeIndex(waypoints, waypointIndex, nodePlannedResume);
+                            async Task RunAfterWaypointAction()
                             {
-                                if (waypoint.Action == ActionEnum.Fight.Code)
+                                pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint,
+                                    nodePickup, nodePlannedResume, pickupPointLabel, nodeDepartureResume.HasValue);
+                                if (!pickupResumeIndex.HasValue && nodeDepartureResume is { } departure)
+                                    pickupWindow.BeginDeparture(waypointIndex, departure);
+                            }
+
+                            using var nodeCancellation = nodePickup == null ? null
+                                : CancellationTokenSource.CreateLinkedTokenSource(ct, nodePickup.ReachedToken);
+                            // 策略执行器已有相同的输入所有权作用域，其余动作在节点边界统一接入。
+                            using var nodeInputs = nodeCancellation != null && waypoint.Action != ActionEnum.CombatScript.Code
+                                ? InputHub.BeginOperation(nodeCancellation.Token) : null;
+                            try
+                            {
+                                nodeCancellation?.Token.ThrowIfCancellationRequested();
+                                //skipOtherOperations如果重试，则跳过相关操作，
+                                if ((!string.IsNullOrEmpty(waypoint.Action) && !_skipOtherOperations) ||
+                                    waypoint.Action == ActionEnum.CombatScript.Code)
                                 {
-                                    var cooperativePoint = CooperativeContext?.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1);
-                                    if (cooperativePoint != null && CooperativeContext!.ShouldSkipFight(cooperativePoint))
+                                    if (waypoint.Action == ActionEnum.Fight.Code)
                                     {
-                                        CooperativeContext.MarkIncomplete("Fight skipped after arrival: " + cooperativePoint);
-                                        _lastWaypoint = waypoint;
-                                        continue;
-                                    }
-
-                                    // === 联机 v3：同伴复苏战斗点级跳过（hoeing-multiplayer-route-retry-mode §9 改动 B）===
-                                    // 收到同伴复苏广播且当前走到复苏战斗点时，直接跳过本战斗点（不进战斗、不战后拾取）。
-                                    // 仅联机 retry-route 场景非 -1；单机 MultiplayerCoordinator == null 短路，逐字节零感知。
-                                    if (CooperativeContext == null && MultiplayerCoordinator != null && SkipRevivalFightPointId != -1)
-                                    {
-                                        var curFp = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
-                                        if (FightPointSkipDecisions.IsMatch(SkipRevivalFightPointId, curFp))
+                                        var cooperativePoint = CooperativeContext?.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1);
+                                        if (cooperativePoint != null && CooperativeContext!.ShouldSkipFight(cooperativePoint))
                                         {
-                                            Logger.LogWarning("[联机][重试模式] 跳过复苏战斗点: fp={Fp}", curFp);
-                                            SkipRevivalFightPointId = -1;      // 消费一次
-                                            continue;                           // 不进战斗，跳过本战斗点及战后动作，走向下一 waypoint
+                                            CooperativeContext.MarkIncomplete("Fight skipped after arrival: " + cooperativePoint);
+                                            _lastWaypoint = waypoint;
+                                            continue;
                                         }
-                                    }
 
-                                    // === 基于经验判断停止锄地：战斗节点起点创建经验检测器（multiplayer-hoeing-exp-cap-stop）===
-                                    // 创建前先释放上一节点残留实例（重试/异常路径泄漏兜底），保证至多一个存活。
-                                    // 检测窗口覆盖：战斗 + 战后回点 + 万叶聚物/拾取，直到 _lastWaypoint 赋值处消费。
-                                    if (MultiplayerCoordinator?.IsExpCapStopEnabled == true)
-                                    {
-                                        _expCapDetector?.Dispose();
-                                        _expCapDetector = null;
-                                        if (MultiplayerCoordinator.ExpCapDetectAllExp)
+                                        // === 联机 v3：同伴复苏战斗点级跳过（hoeing-multiplayer-route-retry-mode §9 改动 B）===
+                                        // 收到同伴复苏广播且当前走到复苏战斗点时，直接跳过本战斗点（不进战斗、不战后拾取）。
+                                        // 仅联机 retry-route 场景非 -1；单机 MultiplayerCoordinator == null 短路，逐字节零感知。
+                                        if (CooperativeContext == null && MultiplayerCoordinator != null && SkipRevivalFightPointId != -1)
                                         {
-                                            // 检测所有经验（精英+小怪）：复用好感任务 exp.png 通用模板
-                                            _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.AllExpDetector(ct);
-                                            _expCapDetector.Start();
-                                        }
-                                        else
-                                        {
-                                            // 仅检测精英经验（57/58/60 数字模板）：复用自动战斗 ExperienceDetector
-                                            var expSysInfo = TaskContext.Instance().SystemInfo;
-                                            var expCaptureRect = expSysInfo.ScaleMax1080PCaptureRect;
-                                            var expAssets = AutoFightAssets.Get(expCaptureRect.Width, expCaptureRect.Height);
-                                            var expRos = expAssets.InitializeRecognitionObjects();
-                                            if (expRos.Count > 0)
+                                            var curFp = CurWaypoints.Item1 * 10000 + CurWaypoint.Item1;
+                                            if (FightPointSkipDecisions.IsMatch(SkipRevivalFightPointId, curFp))
                                             {
-                                                _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector(expRos, ct);
+                                                Logger.LogWarning("[联机][重试模式] 跳过复苏战斗点: fp={Fp}", curFp);
+                                                SkipRevivalFightPointId = -1;      // 消费一次
+                                                continue;                           // 不进战斗，跳过本战斗点及战后动作，走向下一 waypoint
+                                            }
+                                        }
+
+                                        // === 基于经验判断停止锄地：战斗节点起点创建经验检测器（multiplayer-hoeing-exp-cap-stop）===
+                                        // 创建前先释放上一节点残留实例（重试/异常路径泄漏兜底），保证至多一个存活。
+                                        // 检测窗口覆盖：战斗 + 战后回点 + 万叶聚物/拾取，直到 _lastWaypoint 赋值处消费。
+                                        if (MultiplayerCoordinator?.IsExpCapStopEnabled == true)
+                                        {
+                                            _expCapDetector?.Dispose();
+                                            _expCapDetector = null;
+                                            if (MultiplayerCoordinator.ExpCapDetectAllExp)
+                                            {
+                                                // 检测所有经验（精英+小怪）：复用好感任务 exp.png 通用模板
+                                                _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.AllExpDetector(ct);
                                                 _expCapDetector.Start();
                                             }
+                                            else
+                                            {
+                                                // 仅检测精英经验（57/58/60 数字模板）：复用自动战斗 ExperienceDetector
+                                                var expSysInfo = TaskContext.Instance().SystemInfo;
+                                                var expCaptureRect = expSysInfo.ScaleMax1080PCaptureRect;
+                                                var expAssets = AutoFightAssets.Get(expCaptureRect.Width, expCaptureRect.Height);
+                                                var expRos = expAssets.InitializeRecognitionObjects();
+                                                if (expRos.Count > 0)
+                                                {
+                                                    _expCapDetector = new BetterGenshinImpact.GameTask.AutoFight.ExperienceDetector(expRos, ct);
+                                                    _expCapDetector.Start();
+                                                }
+                                            }
                                         }
-                                    }
 
-                                    AutoFightTask.FightWaypoint = waypoint;
-                                    PathingConditionConfig.CombatScenesGoBackUp = _combatScenes;//把地图追踪的战斗CD等同步给战斗节点
-                                    
-                                    Task.Run( () =>{
-                                        var screen2 = CaptureToRectArea();
-                                        if ((_lastWaypoint?.Action != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly) || 
-                                                screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255)
-                                        {
-                                            Logger.LogWarning("战斗状态下落攻击");
-                                            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
-                                        }
-                                    });
-                                    
-                                }
-                                else
-                                {
-                                    AutoFightTask.FightEndFlag = true;
-                                    AutoFightTask.FightWaypoint = null;
-                                }
-                                // 执行 action11
-                                
-                                //如果上一节点和当前节点坐标一致，不执行action以避免卡死
-                                // 联机模式：战斗节点上报 Fighting 状态（需求 4）
-                                if (waypoint.Action == ActionEnum.Fight.Code && MultiplayerCoordinator != null)
-                                {
-                                    CooperativeFightScope? fightScope = null;
-                                    if (CooperativeContext != null)
-                                    {
-                                        var fightPointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1)
-                                            ?? CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
-                                        fightScope = new CooperativeFightScope(fightPointId,
-                                            () => CooperativeContext.ShouldSkipFight(fightPointId), ct);
-                                        _activeCooperativeFightKey = CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
-                                        ActiveCooperativeFight = fightScope;
+                                        AutoFightTask.FightWaypoint = waypoint;
+                                        PathingConditionConfig.CombatScenesGoBackUp = _combatScenes;//把地图追踪的战斗CD等同步给战斗节点
+
+                                        Task.Run( () =>{
+                                            var screen2 = CaptureToRectArea();
+                                            if ((_lastWaypoint?.Action != MoveModeEnum.Fly.Code && Bv.GetMotionStatus(screen2) == MotionStatus.Fly) ||
+                                                    screen2.SrcMat.At<Vec3b>(1028, 1584).Item0 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item1 == 255 && screen2.SrcMat.At<Vec3b>(1028, 1584).Item2 == 255)
+                                            {
+                                                Logger.LogWarning("战斗状态下落攻击");
+                                                InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+                                            }
+                                        });
+
                                     }
-                                    await MultiplayerCoordinator.ReportFightingStatusAsync(true, ct);
-                                    try
+                                    else
+                                    {
+                                        AutoFightTask.FightEndFlag = true;
+                                        AutoFightTask.FightWaypoint = null;
+                                    }
+                                    // 执行 action11
+
+                                    //如果上一节点和当前节点坐标一致，不执行action以避免卡死
+                                    // 联机模式：战斗节点上报 Fighting 状态（需求 4）
+                                    if (waypoint.Action == ActionEnum.Fight.Code && MultiplayerCoordinator != null)
+                                    {
+                                        CooperativeFightScope? fightScope = null;
+                                        if (CooperativeContext != null)
+                                        {
+                                            var fightPointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1)
+                                                ?? CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
+                                            fightScope = new CooperativeFightScope(fightPointId,
+                                                () => CooperativeContext.ShouldSkipFight(fightPointId), ct);
+                                            _activeCooperativeFightKey = CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
+                                            ActiveCooperativeFight = fightScope;
+                                        }
+                                        await MultiplayerCoordinator.ReportFightingStatusAsync(true, ct);
+                                        try
+                                        {
+                                            await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                                                RunAfterWaypointAction, ct);
+                                            cooperativeFightInterrupted = fightScope?.CheckStop() == true;
+                                            if (fightScope != null && !cooperativeFightInterrupted && _multiplayerRevivalDetected == 0 && !ct.IsCancellationRequested)
+                                                CooperativeContext?.CompleteFight(fightScope.PointId);
+                                        }
+                                        catch (OperationCanceledException) when (!ct.IsCancellationRequested && fightScope?.IsInterrupted == true)
+                                        {
+                                            cooperativeFightInterrupted = true;
+                                        }
+                                        finally
+                                        {
+                                            if (fightScope != null)
+                                            {
+                                                cooperativeFightInterrupted |= fightScope.IsInterrupted;
+                                                if (cooperativeFightInterrupted) CooperativeContext?.MarkIncomplete("Fight interrupted: " + fightScope.PointId);
+                                                await fightScope.StopMonitoringAsync();
+                                                fightScope.Dispose();
+                                                ActiveCooperativeFight = null;
+                                                _activeCooperativeFightKey = null;
+                                            }
+                                            // 无论战斗正常结束还是超时（AutoFightTask 内部处理），都清除 Fighting 状态
+                                            if (!ct.IsCancellationRequested)
+                                                await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
+                                        }
+                                    }
+                                    else
                                     {
                                         await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
-                                            () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
-                                        cooperativeFightInterrupted = fightScope?.CheckStop() == true;
-                                        if (fightScope != null && !cooperativeFightInterrupted && _multiplayerRevivalDetected == 0 && !ct.IsCancellationRequested)
-                                            CooperativeContext?.CompleteFight(fightScope.PointId);
+                                            RunAfterWaypointAction, ct);
                                     }
-                                    catch (OperationCanceledException) when (!ct.IsCancellationRequested && fightScope?.IsInterrupted == true)
+
+                                    if (waypoint.Action == ActionEnum.Fight.Code)
                                     {
-                                        cooperativeFightInterrupted = true;
-                                    }
-                                    finally
-                                    {
-                                        if (fightScope != null)
+                                        if (PathingConditionConfig.CombatScenesGoBackUp is not null)
                                         {
-                                            cooperativeFightInterrupted |= fightScope.IsInterrupted;
-                                            if (cooperativeFightInterrupted) CooperativeContext?.MarkIncomplete("Fight interrupted: " + fightScope.PointId);
-                                            await fightScope.StopMonitoringAsync();
-                                            fightScope.Dispose();
-                                            ActiveCooperativeFight = null;
-                                            _activeCooperativeFightKey = null;
-                                        }
-                                        // 无论战斗正常结束还是超时（AutoFightTask 内部处理），都清除 Fighting 状态
-                                        if (!ct.IsCancellationRequested)
-                                            await MultiplayerCoordinator.ReportFightingStatusAsync(false, ct);
-                                    }
-                                }
-                                else if (MultiplayerCoordinator == null)
-                                {
-                                    var pickupProgress = pickupWindow.GetForPoint(waypointIndex, out var plannedPickupResume);
-                                    if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint)
-                                        && pickupWindow.ShouldReportMissingObservation(waypointIndex))
-                                        Logger.LogInformation("【拾取达标】{Point} 未能在距目标 {Distance} 个距离单位内开启观察，按原路线执行",
-                                            pickupPointLabel, PickupWaypointApproachWindow.StartDistance);
-                                    var departureResumeIndex = pickupProgress == null ? null
-                                        : PickupWaypointSkipDecisions.GetDepartureResumeIndex(waypoints, waypointIndex, plannedPickupResume);
-                                    pickupResumeIndex = await AfterMoveToTarget(waypoint, nextWaypoint,
-                                        pickupProgress, plannedPickupResume, pickupPointLabel, departureResumeIndex.HasValue);
-                                    if (!pickupResumeIndex.HasValue && departureResumeIndex is { } afterDepartureResume)
-                                        pickupWindow.BeginDeparture(waypointIndex, afterDepartureResume);
-                                }
-                                else
-                                {
-                                    await RunMultiplayerActionAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
-                                        () => AfterMoveToTarget(waypoint, nextWaypoint), ct);
-                                }
-                                
-                                if (waypoint.Action == ActionEnum.Fight.Code)
-                                {
-                                    if (PathingConditionConfig.CombatScenesGoBackUp is not null)
-                                    {
-                                        if (PathingConditionConfig.CombatScenesGoBackUp.Avatars.Select(avatar => avatar.Name).ToArray()
-                                            .SequenceEqual(_combatScenes.Avatars.Select(a => a.Name).ToArray()))
-                                        {
-                                            Logger.LogInformation("地图追踪：继承自动战斗队伍Cd信息...");
-                                            _combatScenes = PathingConditionConfig.CombatScenesGoBackUp;
-                                            // foreach (var avatar in _combatScenes.GetAvatars())
-                                            // {
-                                            //     Logger.LogInformation("队伍角色 {Name} 当前剩余E技能CD：{Cd} 秒",
-                                            //         avatar.Name,
-                                            //         Math.Round(avatar.GetSkillCdSeconds(), 2));
-                                            // }
-                                        }
-                                    }
-                                    // === 联机模式：战斗中触发复苏的统一处理 ===
-                                    // 优先级：先消费复苏信号 → 去神像 → 抛 RetryException 跳到下一段汇合
-                                    // 设计参考 design.md §3 / bugfix.md 2.1 / 2.2 / 2.9
-                                    // 钩子放在最开头：先于其他重置（MainAvatarIndex / AutoEatCount / CombatScenesGoBackUp），
-                                    // 避免无谓重置后又抛异常
-                                    if (TryConsumeRevivalSignal())
-                                    {
-                                        Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
-                                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
-
-                                        // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
-                                        // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
-                                        // 屏障保证复苏者到齐前队友不放行 → 广播必然已送达 → 全员一起重跑（确定性）。
-                                        throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
-                                    }
-
-                                    // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
-                                    // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
-                                    await HandleCollectiveSkipAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
-                                        ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1), async request =>
-                                        {
-                                            Logger.LogWarning("[联机] 战斗结束收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
-                                                request.SkipId, request.TargetProgress);
-                                            await TpStatueOfTheSeven(requireLoadingScreen: true);
-                                        }, ct);
-
-                                    if(!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex)) PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
-                                    // fix-kazuha-collect-layer1-dead-code：清空前把战斗快照副本交给聚物协调器，
-                                    // 修活三层取队第 1 层（零识别兜底）。共享字段清空时机不变，单机/非联机路径零感知。
-                                    MultiplayerCoordinator?.KazuhaCollectSync?.CaptureCombatSnapshot(PathingConditionConfig.CombatScenesGoBackUp);
-                                    PathingConditionConfig.CombatScenesGoBackUp = null;
-                                    ResetRecoveryStateForNewAttempt();
-
-                                    // 联机模式：战斗完成后走回战斗点集合
-                                    if (MultiplayerCoordinator != null)
-                                    {
-                                        // 读 KazuhaCollectSync.IsConfigEnabled（持有 AutoHoeingTask 拷贝/覆盖后的 _config），
-                                        // 不能读 TaskContext.Instance().Config.AutoHoeingConfig（全局）：
-                                        // 配置组（ScriptGroup）启动时 AutoHoeingTask 在深拷贝上应用 ApplySettingsOverride，
-                                        // 全局未被覆盖；若读全局会导致"配置组开了万叶聚物但 PathExecutor 跳过聚物分支"。
-                                        // 此处用 IsConfigEnabled（仅判配置）而非 IsEnabled（含 IsConnected）：
-                                        // SignalR 临时断开时仍进 WaitAtFightPointAsync，由其内部走兜底 Delay，
-                                        // 与原代码 if (config.EnableKazuhaSync) 行为对齐。
-                                        //
-                                        // 同战斗点连战跳过：当前是 Fight ∧ nextWaypoint 也是 Fight ∧ 两点距离 < 10.0 时
-                                        // 跳过整个聚物流程（路线由房主同步，所有客户端 nextWaypoint 一致，决策必然全员对齐，
-                                        // 不会出现万叶等其他玩家、其他玩家在等万叶的死锁）。
-                                        // 两战斗点距离 ≥ 10.0 时视为独立战斗点，仍正常聚物。
-                                        // 详见 PathExecutorDecisions.ShouldSkipKazuhaCollectWhenNextIsFight。
-                                        var distanceToNext = nextWaypoint == null
-                                            ? double.PositiveInfinity
-                                            : Navigation.GetDistance(waypoint, new Point2f((float)nextWaypoint.X, (float)nextWaypoint.Y));
-                                        var skipForNextFight = PathExecutorDecisions.ShouldSkipKazuhaCollectWhenNextIsFight(
-                                            waypoint.Action, nextWaypoint?.Action, distanceToNext, 10.0, ActionEnum.Fight.Code);
-                                        if (MultiplayerCoordinator.KazuhaCollectSync?.IsConfigEnabled == true && !skipForNextFight)
-                                        {
-                                            Logger.LogInformation("[联机] 战斗完成，走回战斗点集合");
-                                            waypoint.Type =  WaypointType.Target.Code;
-
-                                            // kazuha-collect-synckey-rerun-isolation：把本轮重跑后缀同步给协调器，
-                                            // 保证万叶侧广播 syncKey 与下方成员侧等待 syncKey 携带相同 _rerun_r{N} 后缀。
-                                            // 覆盖 __coordTrusted==false 的路径（该路径跳过下方赋值但仍会进 WaitAtFightPointAsync）。
-                                            MultiplayerCoordinator.KazuhaCollectSync.RerunSyncIdSuffix = RerunSyncIdSuffix;
-
-                                            // 玛薇卡摩托下车（恒开，无需配置）：
-                                            // 战后回点全程持续检测摩托状态：第一次在 MoveTo 前检测（等派蒙稳定画面），
-                                            // 之后启动后台定时任务每 500ms 检测一次，覆盖 MoveTo、两段 MoveCloseTo、
-                                            // 等待广播的整个回点流程，直到 WaitAtFightPointAsync 完成后取消。
-                                            // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中），
-                                            // 三者缺一即跳过 → 非玛薇卡队伍 / 玛薇卡未出战 / 非摩托态一次都不按 E（不会误骑上车）。
-                                            // 摩托判定用目标模板匹配（SqDiffNormed + 掩膜，见 IsMavuikaOnMotorcycleByTemplate）。
-                                            // 整块 try-catch 兜底：检测/按键任何异常都不影响后续回点主流程（取消透传）。
-                                            CancellationTokenSource? _mavuikaDismountCts = null;
-                                            try
+                                            if (PathingConditionConfig.CombatScenesGoBackUp.Avatars.Select(avatar => avatar.Name).ToArray()
+                                                .SequenceEqual(_combatScenes.Avatars.Select(a => a.Name).ToArray()))
                                             {
-                                                var __mavuika = _combatScenes?.SelectAvatar("玛薇卡");
-                                                if (__mavuika != null)
+                                                Logger.LogInformation("地图追踪：继承自动战斗队伍Cd信息...");
+                                                _combatScenes = PathingConditionConfig.CombatScenesGoBackUp;
+                                                // foreach (var avatar in _combatScenes.GetAvatars())
+                                                // {
+                                                //     Logger.LogInformation("队伍角色 {Name} 当前剩余E技能CD：{Cd} 秒",
+                                                //         avatar.Name,
+                                                //         Math.Round(avatar.GetSkillCdSeconds(), 2));
+                                                // }
+                                            }
+                                        }
+                                        // === 联机模式：战斗中触发复苏的统一处理 ===
+                                        // 优先级：先消费复苏信号 → 去神像 → 抛 RetryException 跳到下一段汇合
+                                        // 设计参考 design.md §3 / bugfix.md 2.1 / 2.2 / 2.9
+                                        // 钩子放在最开头：先于其他重置（MainAvatarIndex / AutoEatCount / CombatScenesGoBackUp），
+                                        // 避免无谓重置后又抛异常
+                                        if (TryConsumeRevivalSignal())
+                                        {
+                                            Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
+                                            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
+
+                                            // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
+                                            // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
+                                            // 屏障保证复苏者到齐前队友不放行 → 广播必然已送达 → 全员一起重跑（确定性）。
+                                            throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
+                                        }
+
+                                        // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
+                                        // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
+                                        await HandleCollectiveSkipAsync(MultiplayerCoordinator, CooperativeContext?.IsReplay == true,
+                                            ComputeProgress(CurWaypoints.Item1, CurWaypoint.Item1), async request =>
+                                            {
+                                                Logger.LogWarning("[联机] 战斗结束收到集体跳段请求，skipId={SkipId}, target={Target}，前往七天神像回血",
+                                                    request.SkipId, request.TargetProgress);
+                                                await TpStatueOfTheSeven(requireLoadingScreen: true);
+                                            }, ct);
+
+                                        if(!string.IsNullOrEmpty(PartyConfig.MainAvatarIndex)) PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
+                                        // fix-kazuha-collect-layer1-dead-code：清空前把战斗快照副本交给聚物协调器，
+                                        // 修活三层取队第 1 层（零识别兜底）。共享字段清空时机不变，单机/非联机路径零感知。
+                                        MultiplayerCoordinator?.KazuhaCollectSync?.CaptureCombatSnapshot(PathingConditionConfig.CombatScenesGoBackUp);
+                                        PathingConditionConfig.CombatScenesGoBackUp = null;
+                                        ResetRecoveryStateForNewAttempt();
+
+                                        // 联机模式：战斗完成后走回战斗点集合
+                                        if (MultiplayerCoordinator != null)
+                                        {
+                                            // 读 KazuhaCollectSync.IsConfigEnabled（持有 AutoHoeingTask 拷贝/覆盖后的 _config），
+                                            // 不能读 TaskContext.Instance().Config.AutoHoeingConfig（全局）：
+                                            // 配置组（ScriptGroup）启动时 AutoHoeingTask 在深拷贝上应用 ApplySettingsOverride，
+                                            // 全局未被覆盖；若读全局会导致"配置组开了万叶聚物但 PathExecutor 跳过聚物分支"。
+                                            // 此处用 IsConfigEnabled（仅判配置）而非 IsEnabled（含 IsConnected）：
+                                            // SignalR 临时断开时仍进 WaitAtFightPointAsync，由其内部走兜底 Delay，
+                                            // 与原代码 if (config.EnableKazuhaSync) 行为对齐。
+                                            //
+                                            // 同战斗点连战跳过：当前是 Fight ∧ nextWaypoint 也是 Fight ∧ 两点距离 < 10.0 时
+                                            // 跳过整个聚物流程（路线由房主同步，所有客户端 nextWaypoint 一致，决策必然全员对齐，
+                                            // 不会出现万叶等其他玩家、其他玩家在等万叶的死锁）。
+                                            // 两战斗点距离 ≥ 10.0 时视为独立战斗点，仍正常聚物。
+                                            // 详见 PathExecutorDecisions.ShouldSkipKazuhaCollectWhenNextIsFight。
+                                            var distanceToNext = nextWaypoint == null
+                                                ? double.PositiveInfinity
+                                                : Navigation.GetDistance(waypoint, new Point2f((float)nextWaypoint.X, (float)nextWaypoint.Y));
+                                            var skipForNextFight = PathExecutorDecisions.ShouldSkipKazuhaCollectWhenNextIsFight(
+                                                waypoint.Action, nextWaypoint?.Action, distanceToNext, 10.0, ActionEnum.Fight.Code);
+                                            if (MultiplayerCoordinator.KazuhaCollectSync?.IsConfigEnabled == true && !skipForNextFight)
+                                            {
+                                                Logger.LogInformation("[联机] 战斗完成，走回战斗点集合");
+                                                waypoint.Type =  WaypointType.Target.Code;
+
+                                                // kazuha-collect-synckey-rerun-isolation：把本轮重跑后缀同步给协调器，
+                                                // 保证万叶侧广播 syncKey 与下方成员侧等待 syncKey 携带相同 _rerun_r{N} 后缀。
+                                                // 覆盖 __coordTrusted==false 的路径（该路径跳过下方赋值但仍会进 WaitAtFightPointAsync）。
+                                                MultiplayerCoordinator.KazuhaCollectSync.RerunSyncIdSuffix = RerunSyncIdSuffix;
+
+                                                // 玛薇卡摩托下车（恒开，无需配置）：
+                                                // 战后回点全程持续检测摩托状态：第一次在 MoveTo 前检测（等派蒙稳定画面），
+                                                // 之后启动后台定时任务每 500ms 检测一次，覆盖 MoveTo、两段 MoveCloseTo、
+                                                // 等待广播的整个回点流程，直到 WaitAtFightPointAsync 完成后取消。
+                                                // 三层门控保证零误触（队里有玛薇卡 + 当前出战是玛薇卡 + 摩托模板命中），
+                                                // 三者缺一即跳过 → 非玛薇卡队伍 / 玛薇卡未出战 / 非摩托态一次都不按 E（不会误骑上车）。
+                                                // 摩托判定用目标模板匹配（SqDiffNormed + 掩膜，见 IsMavuikaOnMotorcycleByTemplate）。
+                                                // 整块 try-catch 兜底：检测/按键任何异常都不影响后续回点主流程（取消透传）。
+                                                CancellationTokenSource? _mavuikaDismountCts = null;
+                                                try
                                                 {
-                                                    // 画面稳定门控：战斗刚结束画面未稳定，摩托图标 / 队伍栏尚未渲染，
-                                                    // 直接截图会 MISS。识别前先等派蒙菜单图标出现（最多 2 秒：10×200ms），
-                                                    // 确认已回到主界面、画面稳定后再截取用于 IsActive + 摩托模板匹配。
-                                                    await Bv.WaitUntilFound(
-                                                        ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
-                                                    
-                                                    await Delay(500, ct);
-
-                                                    using var __dismountRegion = CaptureToRectArea();
-                                                    var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
-                                                    if (__mavuikaActive && IsMavuikaOnMotorcycleByTemplate(__dismountRegion))
+                                                    var __mavuika = _combatScenes?.SelectAvatar("玛薇卡");
+                                                    if (__mavuika != null)
                                                     {
-                                                        Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
-                                                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                                                        // 画面稳定门控：战斗刚结束画面未稳定，摩托图标 / 队伍栏尚未渲染，
+                                                        // 直接截图会 MISS。识别前先等派蒙菜单图标出现（最多 2 秒：10×200ms），
+                                                        // 确认已回到主界面、画面稳定后再截取用于 IsActive + 摩托模板匹配。
+                                                        await Bv.WaitUntilFound(
+                                                            ElementAssets.Instance.PaimonMenuRo, ct, retryTimes: 10, delayMs: 200);
+
                                                         await Delay(500, ct);
-                                                    }
 
-                                                    // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个回点流程
-                                                    _mavuikaDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                                                    var __dismountCts = _mavuikaDismountCts; // 捕获局部变量供闭包使用
-                                                    var __mavuikaRef = __mavuika;
-                                                    _ = Task.Run(async () =>
-                                                    {
-                                                        var __lastDismountTime = DateTime.MinValue; // 上次按 E 下车的时间
-                                                        while (!__dismountCts.IsCancellationRequested)
+                                                        using var __dismountRegion = CaptureToRectArea();
+                                                        var __mavuikaActive = _combatScenes!.AvatarCount <= 1 || __mavuika.IsActive(__dismountRegion);
+                                                        if (__mavuikaActive && IsMavuikaOnMotorcycleByTemplate(__dismountRegion))
                                                         {
-                                                            try
+                                                            Logger.LogInformation("[联机] 战后回点：检测到玛薇卡在摩托上，按 E 下车");
+                                                            InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                                                            await Delay(500, ct);
+                                                        }
+
+                                                        // 启动后台定时检测任务：每 1000ms 检测一次摩托状态，覆盖整个回点流程
+                                                        _mavuikaDismountCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                                                        var __dismountCts = _mavuikaDismountCts; // 捕获局部变量供闭包使用
+                                                        var __mavuikaRef = __mavuika;
+                                                        _ = Task.Run(async () =>
+                                                        {
+                                                            var __lastDismountTime = DateTime.MinValue; // 上次按 E 下车的时间
+                                                            while (!__dismountCts.IsCancellationRequested)
                                                             {
-                                                                await Task.Delay(1000, __dismountCts.Token);
-                                                                using var __loopRegion = CaptureToRectArea();
-                                                                var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
-                                                                if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
+                                                                try
                                                                 {
-                                                                    // 下车后 1.5 秒静默期：避免重复下车
-                                                                    if ((DateTime.UtcNow - __lastDismountTime).TotalMilliseconds < 1500)
+                                                                    await Task.Delay(1000, __dismountCts.Token);
+                                                                    using var __loopRegion = CaptureToRectArea();
+                                                                    var __loopActive = _combatScenes!.AvatarCount <= 1 || __mavuikaRef.IsActive(__loopRegion);
+                                                                    if (__loopActive && IsMavuikaOnMotorcycleByTemplate(__loopRegion))
                                                                     {
-                                                                        continue;
+                                                                        // 下车后 1.5 秒静默期：避免重复下车
+                                                                        if ((DateTime.UtcNow - __lastDismountTime).TotalMilliseconds < 1500)
+                                                                        {
+                                                                            continue;
+                                                                        }
+
+                                                                        Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
+                                                                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                                                                        __lastDismountTime = DateTime.UtcNow;
+
+                                                                        // 启动异步任务在 1.1 秒后做一次确认：下车成功则结束循环，不再自动下车
+                                                                        var __confirmCts = __dismountCts;
+                                                                        var __confirmMavuika = __mavuikaRef;
+                                                                        _ = Task.Run(async () =>
+                                                                        {
+                                                                            try
+                                                                            {
+                                                                                await Task.Delay(1200, __confirmCts.Token);
+                                                                                using var __confirmRegion = CaptureToRectArea();
+                                                                                var __confirmActive = _combatScenes!.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
+                                                                                if (!__confirmActive || !IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
+                                                                                {
+                                                                                    // 下车成功，取消循环，后续不再自动下车
+                                                                                    Logger.LogInformation("[联机] 回点中：下车成功，结束摩托下车检测");
+                                                                                    __dismountCts.Cancel();
+                                                                                }
+                                                                                else
+                                                                                {
+                                                                                    Logger.LogInformation("[联机] 回点中：1.1秒后仍在摩托上，再按一次 E 下车");
+                                                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                                                                                    __lastDismountTime = DateTime.UtcNow;
+                                                                                }
+                                                                            }
+                                                                            catch (OperationCanceledException) { }
+                                                                            catch (Exception __confirmEx)
+                                                                            {
+                                                                                Logger.LogWarning(__confirmEx, "[联机] 回点中：摩托下车二次确认异常");
+                                                                            }
+                                                                        }, __confirmCts.Token);
                                                                     }
-
-                                                                    Logger.LogInformation("[联机] 回点中：检测到玛薇卡在摩托上，按 E 下车");
-                                                                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                                                                    __lastDismountTime = DateTime.UtcNow;
-
-                                                                    // 启动异步任务在 1.1 秒后做一次确认：下车成功则结束循环，不再自动下车
-                                                                    var __confirmCts = __dismountCts;
-                                                                    var __confirmMavuika = __mavuikaRef;
-                                                                    _ = Task.Run(async () =>
-                                                                    {
-                                                                        try
-                                                                        {
-                                                                            await Task.Delay(1200, __confirmCts.Token);
-                                                                            using var __confirmRegion = CaptureToRectArea();
-                                                                            var __confirmActive = _combatScenes!.AvatarCount <= 1 || __confirmMavuika.IsActive(__confirmRegion);
-                                                                            if (!__confirmActive || !IsMavuikaOnMotorcycleByTemplate(__confirmRegion))
-                                                                            {
-                                                                                // 下车成功，取消循环，后续不再自动下车
-                                                                                Logger.LogInformation("[联机] 回点中：下车成功，结束摩托下车检测");
-                                                                                __dismountCts.Cancel();
-                                                                            }
-                                                                            else
-                                                                            {
-                                                                                Logger.LogInformation("[联机] 回点中：1.1秒后仍在摩托上，再按一次 E 下车");
-                                                                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                                                                                __lastDismountTime = DateTime.UtcNow;
-                                                                            }
-                                                                        }
-                                                                        catch (OperationCanceledException) { }
-                                                                        catch (Exception __confirmEx)
-                                                                        {
-                                                                            Logger.LogWarning(__confirmEx, "[联机] 回点中：摩托下车二次确认异常");
-                                                                        }
-                                                                    }, __confirmCts.Token);
+                                                                }
+                                                                catch (OperationCanceledException) { break; }
+                                                                catch (Exception __innerEx)
+                                                                {
+                                                                    Logger.LogWarning(__innerEx, "[联机] 回点中：摩托下车检测异常，跳过");
                                                                 }
                                                             }
-                                                            catch (OperationCanceledException) { break; }
-                                                            catch (Exception __innerEx)
-                                                            {
-                                                                Logger.LogWarning(__innerEx, "[联机] 回点中：摩托下车检测异常，跳过");
-                                                            }
-                                                        }
-                                                    }, __dismountCts.Token);
-                                                }
-                                            }
-                                            catch (OperationCanceledException) { throw; }
-                                            catch (Exception __dismountEx)
-                                            {
-                                                Logger.LogWarning(__dismountEx, "[联机] 战后回点：玛薇卡摩托下车检测异常，跳过下车继续回点");
-                                            }
-
-                                            // kazuha-collect-fightpoint-position-misrecognition-fix 方案 A（首帧播种）：
-                                            // 走回战斗点的 MoveTo/MoveCloseTo 逐帧 GetPosition 之前，用战斗点坐标播种 Navigation 单例锚点，
-                                            // 避免沿用上一段远处残留的 _prevX/_prevY 导致局部匹配锚错 / 全局 garbage（BC1/BC2）。
-                                            // 仅 SetPrevPosition 覆写 prev，绝不调用 Navigation.Reset()（Navigation 是进程级共享单例，避免副作用）。
-                                            var __seed = KazuhaCollectPositionGuardDecisions.ComputeSeedAnchor(waypoint.X, waypoint.Y);
-                                            Navigation.SetPrevPosition((float)__seed.X, (float)__seed.Y);
-
-                                            // multiplayer-kazuha-collect-speedup-and-position-fix:
-                                            // BC3+BC4: MoveCloseTo 之前 kick off 后台预备（仅万叶玩家+缓存命中时实际工作，
-                                            //          否则立即返回 PreparationResult.Skipped）。必须在 MoveCloseTo 之前
-                                            //          kick off，才能与走路时间并行。
-                                            var prepTask = MultiplayerCoordinator.KazuhaCollectSync.BeginPreparationAsync(ct);
-
-                                            // multiplayer-kazuha-pre-cast-positioning EB1: 二段式接近——长距离 (>4.0) 先用 MoveTo
-                                            // 真寻路 (自动赶路 / 卡死回退完整鲁棒) 粗接近，再交给 MoveCloseTo 精接近至 < 1.0；
-                                            // 短距离 (<=4.0) 直接 MoveCloseTo 单段快速路径，零额外开销。
-                                            // 仅本调用点显式生效，PathExecutor 其它 MoveCloseTo 调用保持原行为。
-                                            // 详见 .kiro/specs/multiplayer-kazuha-pre-cast-positioning/design.md §3.6
-                                            //
-                                            // 注意：用 Navigation.GetPosition（公开 static）直接取小地图坐标，
-                                            // 不能用 PathExecutor.GetPosition（默认 isPoint:true 会触发 ResolveAnomalies / 按 ESC）。
-                                            // 位置识别失败 → 返回 (0,0) → 跳过 MoveTo 走 MoveCloseTo 单段兜底。
-                                            // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
-                                            // __coordTrusted 门控——坐标 N 次重识别仍异常时置 false，
-                                            // 跳过 MoveTo + 两段 MoveCloseTo + 广播二段，仅进 WaitAtFightPointAsync 兜底。
-                                            bool __coordTrusted = true;
-                                            {
-                                                Point2f currentPos;
-                                                try
-                                                {
-                                                    using var screen = CaptureToRectArea();
-                                                    currentPos = Navigation.GetPosition(screen, waypoint.MapName, waypoint.MapMatchMethod);
+                                                        }, __dismountCts.Token);
+                                                    }
                                                 }
                                                 catch (OperationCanceledException) { throw; }
-                                                catch (Exception ex)
+                                                catch (Exception __dismountEx)
                                                 {
-                                                    Logger.LogDebug(ex, "[联机] 战后聚物分支距离预判位置识别失败，跳过 MoveTo 走 MoveCloseTo 兜底");
-                                                    currentPos = new Point2f(0, 0);
+                                                    Logger.LogWarning(__dismountEx, "[联机] 战后回点：玛薇卡摩托下车检测异常，跳过下车继续回点");
                                                 }
-                                                // hoeing-kazuha-return-predistance-zero-coord-skip-moveto-fix：
-                                                // 距离预判帧 (0,0)（识别失败）不再直接跳过 MoveTo——先在约 2s 时间窗内用
-                                                // GetPositionStable（全局匹配）有限重试拿有效坐标。恢复成功则改写 currentPos，
-                                                // 自然落入下方既有 if 真分支（守卫 + ShouldPreMoveTo + MoveTo），复用既有逻辑；
-                                                // 仍 (0,0) 则 currentPos 不变，落入现状退化路径（__coordTrusted 保持 true，Q3）。
-                                                if (currentPos is { X: 0, Y: 0 })
-                                                {
-                                                    var __preCfg = TaskContext.Instance().Config.AutoHoeingConfig;
-                                                    var __preResolve = await KazuhaReturnPreDistanceResolver.ResolveZeroCoordAsync(
-                                                        __preCfg.KazuhaReturnPreDistanceZeroRetryTimeoutMs,
-                                                        reSampleStable: () =>
-                                                        {
-                                                            using var s = CaptureToRectArea();
-                                                            return Navigation.GetPositionStable(s, waypoint.MapName, waypoint.MapMatchMethod);
-                                                        },
-                                                        delay: token => Task.Delay(KazuhaReturnReseedGuard.ReseedReSampleDelayMs, token),
-                                                        nowMs: () => Environment.TickCount64,
-                                                        log: m => Logger.LogInformation("[联机] 战后聚物回点{Msg}", m),
-                                                        ct: ct);
-                                                    if (__preResolve.Recovered)
-                                                    {
-                                                        // 恢复出有效坐标（可能仍是远点，交既有守卫块判定）→ 改写 currentPos 落入既有真分支。
-                                                        currentPos = __preResolve.Pos;
-                                                    }
-                                                    // 未恢复：currentPos 仍为 (0,0)，下方 if 为假，退化到现状跳过 MoveTo（行为等价 F）。
-                                                }
-                                                if (currentPos is not { X: 0, Y: 0 })
-                                                {
-                                                    // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
-                                                    // (0,0) 过滤后、ShouldPreMoveTo 之前插入"异常判定 + 重播种 + 重识别重试"helper，
-                                                    // 与路径 A 调用同一 KazuhaReturnReseedGuard 保证对称（bugfix §3.9）。
-                                                    // 阈值/次数读 AutoHoeingConfig 调试参数（默认 50 / 3，替代旧硬编码 180）。
-                                                    var __hoeingCfg = TaskContext.Instance().Config.AutoHoeingConfig;
-                                                    var __guardResult = await KazuhaReturnReseedGuard.EvaluateAndReseedAsync(
-                                                        currentPos, waypoint.X, waypoint.Y,
-                                                        __hoeingCfg.KazuhaReturnAbnormalCoordThreshold,
-                                                        __hoeingCfg.KazuhaReturnReseedRetryCount,
-                                                        __hoeingCfg.KazuhaReturnZeroCoordStableRetryCount,
-                                                        reseedAnchor: () => Navigation.SetPrevPosition((float)waypoint.X, (float)waypoint.Y),
-                                                        reSample: () =>
-                                                        {
-                                                            using var s = CaptureToRectArea();
-                                                            return Navigation.GetPosition(s, waypoint.MapName, waypoint.MapMatchMethod);
-                                                        },
-                                                        // hoeing-kazuha-return-minimap-recognition-fail-getpositionstable-retry-fix：
-                                                        // (0,0) 识别失败时改走 GetPositionStable 全局匹配（其内部局部失败/跳跃>150 自动 Reset 全局匹配）。
-                                                        reSampleStable: () =>
-                                                        {
-                                                            using var s = CaptureToRectArea();
-                                                            return Navigation.GetPositionStable(s, waypoint.MapName, waypoint.MapMatchMethod);
-                                                        },
-                                                        delay: token => Task.Delay(KazuhaReturnReseedGuard.ReseedReSampleDelayMs, token),
-                                                        // 画面稳定门控（本次修复）：重识别前先派蒙检测。CaptureToRectArea + Bv.IsInMainUi。
-                                                        isScreenStable: () =>
-                                                        {
-                                                            using var s = CaptureToRectArea();
-                                                            return Bv.IsInMainUi(s);
-                                                        },
-                                                        screenStablePollDelay: token => Task.Delay(KazuhaReturnReseedGuard.ScreenStablePollIntervalMs, token),
-                                                        log: m => Logger.LogInformation("[联机] 战后聚物回点{Msg}", m),
-                                                        ct: ct);
 
-                                                    if (!__guardResult.ShouldMove)
+                                                // kazuha-collect-fightpoint-position-misrecognition-fix 方案 A（首帧播种）：
+                                                // 走回战斗点的 MoveTo/MoveCloseTo 逐帧 GetPosition 之前，用战斗点坐标播种 Navigation 单例锚点，
+                                                // 避免沿用上一段远处残留的 _prevX/_prevY 导致局部匹配锚错 / 全局 garbage（BC1/BC2）。
+                                                // 仅 SetPrevPosition 覆写 prev，绝不调用 Navigation.Reset()（Navigation 是进程级共享单例，避免副作用）。
+                                                var __seed = KazuhaCollectPositionGuardDecisions.ComputeSeedAnchor(waypoint.X, waypoint.Y);
+                                                Navigation.SetPrevPosition((float)__seed.X, (float)__seed.Y);
+
+                                                // multiplayer-kazuha-collect-speedup-and-position-fix:
+                                                // BC3+BC4: MoveCloseTo 之前 kick off 后台预备（仅万叶玩家+缓存命中时实际工作，
+                                                //          否则立即返回 PreparationResult.Skipped）。必须在 MoveCloseTo 之前
+                                                //          kick off，才能与走路时间并行。
+                                                var prepTask = MultiplayerCoordinator.KazuhaCollectSync.BeginPreparationAsync(ct);
+
+                                                // multiplayer-kazuha-pre-cast-positioning EB1: 二段式接近——长距离 (>4.0) 先用 MoveTo
+                                                // 真寻路 (自动赶路 / 卡死回退完整鲁棒) 粗接近，再交给 MoveCloseTo 精接近至 < 1.0；
+                                                // 短距离 (<=4.0) 直接 MoveCloseTo 单段快速路径，零额外开销。
+                                                // 仅本调用点显式生效，PathExecutor 其它 MoveCloseTo 调用保持原行为。
+                                                // 详见 .kiro/specs/multiplayer-kazuha-pre-cast-positioning/design.md §3.6
+                                                //
+                                                // 注意：用 Navigation.GetPosition（公开 static）直接取小地图坐标，
+                                                // 不能用 PathExecutor.GetPosition（默认 isPoint:true 会触发 ResolveAnomalies / 按 ESC）。
+                                                // 位置识别失败 → 返回 (0,0) → 跳过 MoveTo 走 MoveCloseTo 单段兜底。
+                                                // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
+                                                // __coordTrusted 门控——坐标 N 次重识别仍异常时置 false，
+                                                // 跳过 MoveTo + 两段 MoveCloseTo + 广播二段，仅进 WaitAtFightPointAsync 兜底。
+                                                bool __coordTrusted = true;
+                                                {
+                                                    Point2f currentPos;
+                                                    try
                                                     {
-                                                        // N 次重播种+重识别仍异常 → 放弃本轮移动（绝不以 garbage 坐标 MoveTo/MoveCloseTo），
-                                                        // 跳过两段 MoveCloseTo + 广播二段，仅进 WaitAtFightPointAsync 参与全队同步兜底。
-                                                        Logger.LogWarning("[联机] 战后聚物回点坐标持续异常，放弃本轮移动，交聚物同步兜底");
-                                                        __coordTrusted = false;
+                                                        using var screen = CaptureToRectArea();
+                                                        currentPos = Navigation.GetPosition(screen, waypoint.MapName, waypoint.MapMatchMethod);
                                                     }
-                                                    else
+                                                    catch (OperationCanceledException) { throw; }
+                                                    catch (Exception ex)
                                                     {
-                                                        currentPos = __guardResult.TrustedPos;
-                                                        var preDistance = Navigation.GetDistance(waypoint, currentPos);
-                                                        if (PathExecutorDecisions.ShouldPreMoveTo(preDistance, 4.0))
+                                                        Logger.LogDebug(ex, "[联机] 战后聚物分支距离预判位置识别失败，跳过 MoveTo 走 MoveCloseTo 兜底");
+                                                        currentPos = new Point2f(0, 0);
+                                                    }
+                                                    // hoeing-kazuha-return-predistance-zero-coord-skip-moveto-fix：
+                                                    // 距离预判帧 (0,0)（识别失败）不再直接跳过 MoveTo——先在约 2s 时间窗内用
+                                                    // GetPositionStable（全局匹配）有限重试拿有效坐标。恢复成功则改写 currentPos，
+                                                    // 自然落入下方既有 if 真分支（守卫 + ShouldPreMoveTo + MoveTo），复用既有逻辑；
+                                                    // 仍 (0,0) 则 currentPos 不变，落入现状退化路径（__coordTrusted 保持 true，Q3）。
+                                                    if (currentPos is { X: 0, Y: 0 })
+                                                    {
+                                                        var __preCfg = TaskContext.Instance().Config.AutoHoeingConfig;
+                                                        var __preResolve = await KazuhaReturnPreDistanceResolver.ResolveZeroCoordAsync(
+                                                            __preCfg.KazuhaReturnPreDistanceZeroRetryTimeoutMs,
+                                                            reSampleStable: () =>
+                                                            {
+                                                                using var s = CaptureToRectArea();
+                                                                return Navigation.GetPositionStable(s, waypoint.MapName, waypoint.MapMatchMethod);
+                                                            },
+                                                            delay: token => Task.Delay(KazuhaReturnReseedGuard.ReseedReSampleDelayMs, token),
+                                                            nowMs: () => Environment.TickCount64,
+                                                            log: m => Logger.LogInformation("[联机] 战后聚物回点{Msg}", m),
+                                                            ct: ct);
+                                                        if (__preResolve.Recovered)
                                                         {
-                                                            Logger.LogInformation("[联机] 距战斗点 {Dist:F1} > 4.0，先 MoveTo 粗接近", preDistance);
-                                                            // multiplayer-kazuha-pre-cast-positioning: 战后回点全员强制 Walk
-                                                            // （避免 fightWaypoint 录制 MoveMode 是 Dash/Run 时全员同时疾跑消耗体力）。
-                                                            // 注意：直接改 waypoint.MoveMode 会"污染"原 Waypoint 实例后续被其他调用点使用，
-                                                            // 但此场景下 fightWaypoint 是战斗节点，本次 MoveTo 后立即进 MoveCloseTo（其内部不读 MoveMode）
-                                                            // 再交给 WaitAtFightPointAsync，路线不会再次复用同一 fightWaypoint 实例做远距离移动，
-                                                            // 故对原对象的污染影响可控。
-                                                            waypoint.MoveMode = MoveModeEnum.Walk.Code;
-                                                            // BC3 调用点③（kazuha-continuous-return-abnormal-coord-and-moveto-distance-fix 改动 3）：
-                                                            // isGetOut: true → false 关闭卡死脱困，避免脱困逻辑在战后聚物粗接近期间
-                                                            // 随机扭动/跳跃/复苏传送，与战斗主循环/聚物定位抢镜头抢移动。
-                                                            // hoeing-return-fightpoint-moveto-stuck-sync-timeout-fix:
-                                                            // 仅此回点调用点传入预算 = KazuhaSyncTimeoutSeconds(与 WaitAtFightPointAsync 等待终态同源:
-                                                            // MultiplayerCoordinator.EffectiveConfig 与 KazuhaCollectSync 内部 _config 是同一实例)。
-                                                            // 单机 MultiplayerCoordinator==null → 传 null → 旧行为(只受 240s)。
-                                                            await MoveTo(waypoint, isGetOut: false, task: null, nextWaypoint: null,
-                                                                nextDistance: null, retryDis: 4, isPoint: false, escapeClimbOnReturn: true,
-                                                                returnMoveBudgetSeconds: MultiplayerCoordinator?.EffectiveConfig?.KazuhaSyncTimeoutSeconds);
+                                                            // 恢复出有效坐标（可能仍是远点，交既有守卫块判定）→ 改写 currentPos 落入既有真分支。
+                                                            currentPos = __preResolve.Pos;
                                                         }
+                                                        // 未恢复：currentPos 仍为 (0,0)，下方 if 为假，退化到现状跳过 MoveTo（行为等价 F）。
                                                     }
-                                                }
-                                            }
-
-                                            // BC1+BC5: 第一段 MoveCloseTo 显式覆盖：
-                                            //   closeDistance: 2.0  — 粗略停下即可（精接近交给二段聚物点 MoveCloseTo）。
-                                            //   tailDelayMs: 0      — 去掉到点后硬编码 1s 停顿。
-                                            //   maxSteps: 5         — 上限约 0.4s（前面已用 MoveTo 粗接近，5 步内收敛到 2.0 单位足够）。
-                                            //   仅本调用点显式传新参数，其它所有 MoveCloseTo 调用保持默认参数 = 原行为，单机零回归。
-                                            // 配合下方"非万叶玩家二段 MoveCloseTo 到聚物点 closeDistance:0.5"使用：
-                                            //   收到聚物点广播 → 第一段粗停 + 二段精接近，总耗时 ≤ 0.9s
-                                            //   未收到广播（退化）→ 仅第一段，停在距战斗点 ≤ 2.0 单位（与原版 closeDistance:2.0 默认行为等价）
-
-                                            // multiplayer-kazuha-collect-point-broadcast: 非万叶玩家"等聚物点广播"与第一段并行。
-                                            // ...（守卫四重 + 5s 超时见原注释）
-                                            // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
-                                            // 坐标可信才做两段接近；放弃移动（__coordTrusted=false）时整块跳过，
-                                            // 绝不以 garbage 坐标 MoveCloseTo，直接进 WaitAtFightPointAsync 兜底。
-                                            if (__coordTrusted)
-                                            {
-                                                var ks = MultiplayerCoordinator.KazuhaCollectSync;
-                                                // kazuha-collect-synckey-rerun-isolation：与协调器侧同源追加 RerunSyncIdSuffix，
-                                                // 重跑期间不与上一轮缓存的聚物点匹配（旧缓存 key 无后缀 → 自然失配）。
-                                                var collectPointSyncKey = waypoint == null
-                                                    ? KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, 0, 0, RerunSyncIdSuffix)
-                                                    : KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, waypoint.X, waypoint.Y, RerunSyncIdSuffix);
-                                                Task<bool>? collectPointWaitTask = null;
-                                                if (ks != null && !ks.IsCurrentPlayerKazuha)
-                                                {
-                                                    collectPointWaitTask = ks.TryWaitForCollectPointAsync(collectPointSyncKey, timeoutMs: 5000, ct);
-                                                }
-
-                                                // 后台定时任务每 500ms 检测一次，覆盖整个回点流程，此处无需额外调用
-
-                                                await MoveCloseTo(waypoint, closeDistance: 2.0, tailDelayMs: 0, maxSteps: 5, escapeClimbOnReturn: true);
-
-                                                // 第一段走完，await 后台 wait task 看是否拿到广播 → 拿到则二段精接近聚物点。
-                                                // 超时未到 → 退化到第二段精接近"战斗点"（与原 spec closeDistance:1.0 单段路径等价的体验）。
-                                                // 任意失败：catch + LogWarning，不让二段失败传播到主流程，继续 WaitAtFightPointAsync 兜底。
-                                                try
-                                                {
-                                                    if (ks != null && !ks.IsCurrentPlayerKazuha && collectPointWaitTask != null)
+                                                    if (currentPos is not { X: 0, Y: 0 })
                                                     {
-                                                        var got = await collectPointWaitTask;
-                                                        double tx, ty;
-                                                        if (got && ks.TryGetCollectPointForCurrent(collectPointSyncKey, out var cx, out var cy))
+                                                        // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
+                                                        // (0,0) 过滤后、ShouldPreMoveTo 之前插入"异常判定 + 重播种 + 重识别重试"helper，
+                                                        // 与路径 A 调用同一 KazuhaReturnReseedGuard 保证对称（bugfix §3.9）。
+                                                        // 阈值/次数读 AutoHoeingConfig 调试参数（默认 50 / 3，替代旧硬编码 180）。
+                                                        var __hoeingCfg = TaskContext.Instance().Config.AutoHoeingConfig;
+                                                        var __guardResult = await KazuhaReturnReseedGuard.EvaluateAndReseedAsync(
+                                                            currentPos, waypoint.X, waypoint.Y,
+                                                            __hoeingCfg.KazuhaReturnAbnormalCoordThreshold,
+                                                            __hoeingCfg.KazuhaReturnReseedRetryCount,
+                                                            __hoeingCfg.KazuhaReturnZeroCoordStableRetryCount,
+                                                            reseedAnchor: () => Navigation.SetPrevPosition((float)waypoint.X, (float)waypoint.Y),
+                                                            reSample: () =>
+                                                            {
+                                                                using var s = CaptureToRectArea();
+                                                                return Navigation.GetPosition(s, waypoint.MapName, waypoint.MapMatchMethod);
+                                                            },
+                                                            // hoeing-kazuha-return-minimap-recognition-fail-getpositionstable-retry-fix：
+                                                            // (0,0) 识别失败时改走 GetPositionStable 全局匹配（其内部局部失败/跳跃>150 自动 Reset 全局匹配）。
+                                                            reSampleStable: () =>
+                                                            {
+                                                                using var s = CaptureToRectArea();
+                                                                return Navigation.GetPositionStable(s, waypoint.MapName, waypoint.MapMatchMethod);
+                                                            },
+                                                            delay: token => Task.Delay(KazuhaReturnReseedGuard.ReseedReSampleDelayMs, token),
+                                                            // 画面稳定门控（本次修复）：重识别前先派蒙检测。CaptureToRectArea + Bv.IsInMainUi。
+                                                            isScreenStable: () =>
+                                                            {
+                                                                using var s = CaptureToRectArea();
+                                                                return Bv.IsInMainUi(s);
+                                                            },
+                                                            screenStablePollDelay: token => Task.Delay(KazuhaReturnReseedGuard.ScreenStablePollIntervalMs, token),
+                                                            log: m => Logger.LogInformation("[联机] 战后聚物回点{Msg}", m),
+                                                            ct: ct);
+
+                                                        if (!__guardResult.ShouldMove)
                                                         {
-                                                            tx = cx; ty = cy;
-                                                            Logger.LogInformation("[联机] 非万叶玩家：收到聚物点广播 ({CX:F1},{CY:F1})，二段精接近", tx, ty);
+                                                            // N 次重播种+重识别仍异常 → 放弃本轮移动（绝不以 garbage 坐标 MoveTo/MoveCloseTo），
+                                                            // 跳过两段 MoveCloseTo + 广播二段，仅进 WaitAtFightPointAsync 参与全队同步兜底。
+                                                            Logger.LogWarning("[联机] 战后聚物回点坐标持续异常，放弃本轮移动，交聚物同步兜底");
+                                                            __coordTrusted = false;
                                                         }
                                                         else
                                                         {
-                                                            // 退化：等聚物点超时 / 未到 → 二段改为精接近"战斗点"，
-                                                            // 把停点从距战斗点 < 2.0 缩到 < 0.5，体验等价于原 spec closeDistance:1.0 单段。
-                                                            tx = waypoint.X; ty = waypoint.Y;
-                                                            Logger.LogDebug("[联机] 非万叶玩家：等聚物点广播超时，退化为精接近战斗点 ({TX:F1},{TY:F1})", tx, ty);
-                                                        }
-
-                                                        // 构造临时 WaypointForTrack：MapName / MapMatchMethod 沿用 fightWaypoint，
-                                                        // 但 X/Y/MatX/MatY 直接覆盖为 (tx, ty)（已经是小地图坐标系，
-                                                        // 与 Navigation.GetPosition 返回值同坐标系，绕过基类构造的坐标系转换）。
-                                                        // GameX/GameY 不参与 MoveCloseTo（其内部仅读 X/Y），写 0 即可。
-                                                        // 不修改原 waypoint 实例任何字段。
-                                                        var tmp = new WaypointForTrack(
-                                                            new Waypoint
+                                                            currentPos = __guardResult.TrustedPos;
+                                                            var preDistance = Navigation.GetDistance(waypoint, currentPos);
+                                                            if (PathExecutorDecisions.ShouldPreMoveTo(preDistance, 4.0))
                                                             {
-                                                                X = 0, Y = 0,
-                                                                Type = waypoint.Type,
-                                                                Action = string.Empty,
-                                                                MoveMode = MoveModeEnum.Walk.Code,
-                                                            },
-                                                            waypoint.MapName,
-                                                            waypoint.MapMatchMethod)
-                                                        {
-                                                            X = tx, Y = ty,
-                                                            MatX = tx, MatY = ty,
-                                                            GameX = 0, GameY = 0,
-                                                        };
-                                                        // multiplayer-kazuha-collect-point-broadcast: 二段 maxSteps 改为可配置（KazuhaSecondApproachMaxSteps）。
-                                                        var cfgMaxSteps = TaskContext.Instance().Config.AutoHoeingConfig.KazuhaSecondApproachMaxSteps;
-                                                        var maxSteps = cfgMaxSteps >= 1 && cfgMaxSteps <= 30 ? cfgMaxSteps : 6;
-                                                        await MoveCloseTo(tmp, closeDistance: 0.5, tailDelayMs: 0, maxSteps: maxSteps, escapeClimbOnReturn: true);
+                                                                Logger.LogInformation("[联机] 距战斗点 {Dist:F1} > 4.0，先 MoveTo 粗接近", preDistance);
+                                                                // multiplayer-kazuha-pre-cast-positioning: 战后回点全员强制 Walk
+                                                                // （避免 fightWaypoint 录制 MoveMode 是 Dash/Run 时全员同时疾跑消耗体力）。
+                                                                // 注意：直接改 waypoint.MoveMode 会"污染"原 Waypoint 实例后续被其他调用点使用，
+                                                                // 但此场景下 fightWaypoint 是战斗节点，本次 MoveTo 后立即进 MoveCloseTo（其内部不读 MoveMode）
+                                                                // 再交给 WaitAtFightPointAsync，路线不会再次复用同一 fightWaypoint 实例做远距离移动，
+                                                                // 故对原对象的污染影响可控。
+                                                                waypoint.MoveMode = MoveModeEnum.Walk.Code;
+                                                                // BC3 调用点③（kazuha-continuous-return-abnormal-coord-and-moveto-distance-fix 改动 3）：
+                                                                // isGetOut: true → false 关闭卡死脱困，避免脱困逻辑在战后聚物粗接近期间
+                                                                // 随机扭动/跳跃/复苏传送，与战斗主循环/聚物定位抢镜头抢移动。
+                                                                // hoeing-return-fightpoint-moveto-stuck-sync-timeout-fix:
+                                                                // 仅此回点调用点传入预算 = KazuhaSyncTimeoutSeconds(与 WaitAtFightPointAsync 等待终态同源:
+                                                                // MultiplayerCoordinator.EffectiveConfig 与 KazuhaCollectSync 内部 _config 是同一实例)。
+                                                                // 单机 MultiplayerCoordinator==null → 传 null → 旧行为(只受 240s)。
+                                                                await MoveTo(waypoint, isGetOut: false, task: null, nextWaypoint: null,
+                                                                    nextDistance: null, retryDis: 4, isPoint: false, escapeClimbOnReturn: true,
+                                                                    returnMoveBudgetSeconds: MultiplayerCoordinator?.EffectiveConfig?.KazuhaSyncTimeoutSeconds);
+                                                            }
+                                                        }
                                                     }
                                                 }
-                                                catch (OperationCanceledException) { throw; }
-                                                catch (Exception ex)
+
+                                                // BC1+BC5: 第一段 MoveCloseTo 显式覆盖：
+                                                //   closeDistance: 2.0  — 粗略停下即可（精接近交给二段聚物点 MoveCloseTo）。
+                                                //   tailDelayMs: 0      — 去掉到点后硬编码 1s 停顿。
+                                                //   maxSteps: 5         — 上限约 0.4s（前面已用 MoveTo 粗接近，5 步内收敛到 2.0 单位足够）。
+                                                //   仅本调用点显式传新参数，其它所有 MoveCloseTo 调用保持默认参数 = 原行为，单机零回归。
+                                                // 配合下方"非万叶玩家二段 MoveCloseTo 到聚物点 closeDistance:0.5"使用：
+                                                //   收到聚物点广播 → 第一段粗停 + 二段精接近，总耗时 ≤ 0.9s
+                                                //   未收到广播（退化）→ 仅第一段，停在距战斗点 ≤ 2.0 单位（与原版 closeDistance:2.0 默认行为等价）
+
+                                                // multiplayer-kazuha-collect-point-broadcast: 非万叶玩家"等聚物点广播"与第一段并行。
+                                                // ...（守卫四重 + 5s 超时见原注释）
+                                                // hoeing-kazuha-return-abnormal-coord-reseed-moveto-fix 路径 B：
+                                                // 坐标可信才做两段接近；放弃移动（__coordTrusted=false）时整块跳过，
+                                                // 绝不以 garbage 坐标 MoveCloseTo，直接进 WaitAtFightPointAsync 兜底。
+                                                if (__coordTrusted)
                                                 {
-                                                    Logger.LogWarning(ex, "[联机] 非万叶玩家：二段精接近异常，跳过并进 WaitAtFightPointAsync 兜底");
+                                                    var ks = MultiplayerCoordinator.KazuhaCollectSync;
+                                                    // kazuha-collect-synckey-rerun-isolation：与协调器侧同源追加 RerunSyncIdSuffix，
+                                                    // 重跑期间不与上一轮缓存的聚物点匹配（旧缓存 key 无后缀 → 自然失配）。
+                                                    var collectPointSyncKey = waypoint == null
+                                                        ? KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, 0, 0, RerunSyncIdSuffix)
+                                                        : KazuhaSyncKeyBuilder.BuildSyncKey(MultiplayerCoordinator.CurrentRouteIndex, waypoint.X, waypoint.Y, RerunSyncIdSuffix);
+                                                    Task<bool>? collectPointWaitTask = null;
+                                                    if (ks != null && !ks.IsCurrentPlayerKazuha)
+                                                    {
+                                                        collectPointWaitTask = ks.TryWaitForCollectPointAsync(collectPointSyncKey, timeoutMs: 5000, ct);
+                                                    }
+
+                                                    // 后台定时任务每 500ms 检测一次，覆盖整个回点流程，此处无需额外调用
+
+                                                    await MoveCloseTo(waypoint, closeDistance: 2.0, tailDelayMs: 0, maxSteps: 5, escapeClimbOnReturn: true);
+
+                                                    // 第一段走完，await 后台 wait task 看是否拿到广播 → 拿到则二段精接近聚物点。
+                                                    // 超时未到 → 退化到第二段精接近"战斗点"（与原 spec closeDistance:1.0 单段路径等价的体验）。
+                                                    // 任意失败：catch + LogWarning，不让二段失败传播到主流程，继续 WaitAtFightPointAsync 兜底。
+                                                    try
+                                                    {
+                                                        if (ks != null && !ks.IsCurrentPlayerKazuha && collectPointWaitTask != null)
+                                                        {
+                                                            var got = await collectPointWaitTask;
+                                                            double tx, ty;
+                                                            if (got && ks.TryGetCollectPointForCurrent(collectPointSyncKey, out var cx, out var cy))
+                                                            {
+                                                                tx = cx; ty = cy;
+                                                                Logger.LogInformation("[联机] 非万叶玩家：收到聚物点广播 ({CX:F1},{CY:F1})，二段精接近", tx, ty);
+                                                            }
+                                                            else
+                                                            {
+                                                                // 退化：等聚物点超时 / 未到 → 二段改为精接近"战斗点"，
+                                                                // 把停点从距战斗点 < 2.0 缩到 < 0.5，体验等价于原 spec closeDistance:1.0 单段。
+                                                                tx = waypoint.X; ty = waypoint.Y;
+                                                                Logger.LogDebug("[联机] 非万叶玩家：等聚物点广播超时，退化为精接近战斗点 ({TX:F1},{TY:F1})", tx, ty);
+                                                            }
+
+                                                            // 构造临时 WaypointForTrack：MapName / MapMatchMethod 沿用 fightWaypoint，
+                                                            // 但 X/Y/MatX/MatY 直接覆盖为 (tx, ty)（已经是小地图坐标系，
+                                                            // 与 Navigation.GetPosition 返回值同坐标系，绕过基类构造的坐标系转换）。
+                                                            // GameX/GameY 不参与 MoveCloseTo（其内部仅读 X/Y），写 0 即可。
+                                                            // 不修改原 waypoint 实例任何字段。
+                                                            var tmp = new WaypointForTrack(
+                                                                new Waypoint
+                                                                {
+                                                                    X = 0, Y = 0,
+                                                                    Type = waypoint.Type,
+                                                                    Action = string.Empty,
+                                                                    MoveMode = MoveModeEnum.Walk.Code,
+                                                                },
+                                                                waypoint.MapName,
+                                                                waypoint.MapMatchMethod)
+                                                            {
+                                                                X = tx, Y = ty,
+                                                                MatX = tx, MatY = ty,
+                                                                GameX = 0, GameY = 0,
+                                                            };
+                                                            // multiplayer-kazuha-collect-point-broadcast: 二段 maxSteps 改为可配置（KazuhaSecondApproachMaxSteps）。
+                                                            var cfgMaxSteps = TaskContext.Instance().Config.AutoHoeingConfig.KazuhaSecondApproachMaxSteps;
+                                                            var maxSteps = cfgMaxSteps >= 1 && cfgMaxSteps <= 30 ? cfgMaxSteps : 6;
+                                                            await MoveCloseTo(tmp, closeDistance: 0.5, tailDelayMs: 0, maxSteps: maxSteps, escapeClimbOnReturn: true);
+                                                        }
+                                                    }
+                                                    catch (OperationCanceledException) { throw; }
+                                                    catch (Exception ex)
+                                                    {
+                                                        Logger.LogWarning(ex, "[联机] 非万叶玩家：二段精接近异常，跳过并进 WaitAtFightPointAsync 兜底");
+                                                    }
                                                 }
-                                            }
 
-                                            // multiplayer-kazuha-collect-sync: 走"万叶分支 / 普通成员分支"的同步流程
-                                            // 始终执行（放弃移动也要 join 全队同步，由其内部兜底接管恢复）。
-                                            Logger.LogInformation("[联机] 到达战斗点，进入聚物同步流程");
-                                            await MultiplayerCoordinator.KazuhaCollectSync.WaitAtFightPointAsync(waypoint, prepTask, ct);
+                                                // multiplayer-kazuha-collect-sync: 走"万叶分支 / 普通成员分支"的同步流程
+                                                // 始终执行（放弃移动也要 join 全队同步，由其内部兜底接管恢复）。
+                                                Logger.LogInformation("[联机] 到达战斗点，进入聚物同步流程");
+                                                await MultiplayerCoordinator.KazuhaCollectSync.WaitAtFightPointAsync(waypoint, prepTask, ct);
 
-                                            // 回点流程结束，取消后台定时检测任务
-                                            if (_mavuikaDismountCts != null)
-                                            {
-                                                _mavuikaDismountCts.Cancel();
-                                                _mavuikaDismountCts.Dispose();
-                                                _mavuikaDismountCts = null;
+                                                // 回点流程结束，取消后台定时检测任务
+                                                if (_mavuikaDismountCts != null)
+                                                {
+                                                    _mavuikaDismountCts.Cancel();
+                                                    _mavuikaDismountCts.Dispose();
+                                                    _mavuikaDismountCts = null;
+                                                }
                                             }
                                         }
                                     }
                                 }
+                            }
+                            catch (OperationCanceledException error) when (nodePickup != null && nodeCancellation != null
+                                && nodePickup.IsOwnCancellation(error, nodeCancellation.Token, ct)
+                                && !cooperativeFightInterrupted && CooperativeContext?.IsAborted != true
+                                && MultiplayerCoordinator?.IsAbortRequested != true)
+                            {
+                                if (waypoint.Action == ActionEnum.Fight.Code && CooperativeContext != null)
+                                {
+                                    // 此标记明确以拾取达标作为本点完成条件；不覆盖协作中止或未决状态。
+                                    var pointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1)
+                                        ?? CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
+                                    CooperativeContext.CompleteFight(pointId);
+                                }
+                                Logger.LogInformation("【拾取达标】{Point} 已请求停止节点动作，完成按键收尾后继续路线", pickupPointLabel);
                             }
                         }
 
@@ -1977,6 +1995,14 @@ public partial class PathExecutor
                             {
                                 detector.Dispose();
                             }
+                        }
+
+                        if (CanUseWaypointPickup(waypoint))
+                        {
+                            if (pickupWindow.ActivateForPoint(waypointIndex))
+                                Logger.LogInformation("【拾取达标】{Point} 节点已完成原移动，开始计数", pickupPointLabel);
+                            var completedResume = pickupWindow.CompletePoint(waypoints, waypointIndex);
+                            pickupResumeIndex ??= completedResume;
                         }
 
                         _lastWaypoint = waypoint;
@@ -4463,17 +4489,13 @@ public partial class PathExecutor
         }
     }
 
-    private bool CanUseWaypointPickup(Waypoint waypoint)
-        => PartyConfig.EnablePickupTargetCount && waypoint.Type == WaypointType.Target.Code
-           && waypoint.Action == ActionEnum.CombatScript.Code && waypoint.PickupTargetCount is { Count: > 0 }
-           && MultiplayerCoordinator == null && CooperativeContext == null
-           && _combatScenes?.CurrentMultiGameStatus?.IsInMultiGame == false;
+    internal bool CanUseWaypointPickup(Waypoint waypoint)
+        => PartyConfig.EnablePickupTargetCount && PickupWaypointApproachWindow.IsPickupTarget(waypoint);
 
     private Action<Point2f>? CreatePickupApproachObserver(PickupWaypointApproachWindow window,
         IReadOnlyList<WaypointForTrack> segment, int currentIndex, bool isLastSegment, string routeName, int segmentOffset)
     {
-        if (PickupWaypointApproachWindow.SelectObservationIndex(segment, currentIndex) is not { } targetIndex
-            || window.HasObservationFor(targetIndex))
+        if (PickupWaypointApproachWindow.SelectObservationIndex(segment, currentIndex) is not { } targetIndex)
             return null;
 
         var point = segment[targetIndex];
@@ -4483,32 +4505,32 @@ public partial class PathExecutor
             return null;
 
         var pointLabel = $"{routeName} · JSON 第 {segmentOffset + targetIndex + 1} 点";
-        int? plannedResume = null;
-        if (target.SkipNextWaypoints > 0)
+        if (!window.HasObservationFor(targetIndex))
         {
-            plannedResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, targetIndex,
-                target.SkipNextWaypoints, isLastSegment, out var skipReason);
-            if (!plannedResume.HasValue)
+            int? plannedResume = null;
+            if (target.SkipNextWaypoints > 0)
             {
-                if (targetIndex == currentIndex)
-                    Logger.LogWarning("【拾取达标】{Point} 配置 {Target}/{Skip} 未启用：{Reason}；按原路线执行",
-                        pointLabel, target.Count, target.SkipNextWaypoints, skipReason);
-                return null;
+                plannedResume = PickupWaypointSkipDecisions.GetResumeIndex(segment, targetIndex,
+                    target.SkipNextWaypoints, isLastSegment, out var skipReason);
+                if (!plannedResume.HasValue)
+                    Logger.LogWarning("【拾取达标】{Point} 后续跳点不启用：{Reason}；当前节点仍正常计数",
+                        pointLabel, skipReason);
             }
+
+            var progress = CombatScriptHandler.TryStartPickup(ct, point, pointLabel, double.PositiveInfinity,
+                targetIndex != currentIndex, _combatScenes, counting: false);
+            if (progress != null)
+                window.Start(targetIndex, progress, plannedResume);
         }
 
-        var tried = false;
         return position =>
         {
-            if (tried || ct.IsCancellationRequested || !CanUseWaypointPickup(point)
+            if (ct.IsCancellationRequested || !CanUseWaypointPickup(point)
                 || !PickupWaypointApproachWindow.IsWithinStartDistance(point, position, out var distance))
                 return;
 
-            tried = true;
-            window.MarkObservationAttempt(targetIndex);
-            var progress = CombatScriptHandler.TryStartPickup(ct, point, pointLabel, distance, targetIndex != currentIndex, _combatScenes);
-            if (progress != null)
-                window.Start(targetIndex, progress, plannedResume);
+            if (window.ActivateForPoint(targetIndex))
+                Logger.LogInformation("【拾取达标】{Point} 距目标 {Distance:F2}，开始计数", pointLabel, distance);
         };
     }
 
@@ -4538,12 +4560,26 @@ public partial class PathExecutor
             if (pickup != null && CanUseWaypointPickup(waypoint) && handler is CombatScriptHandler combatScriptHandler)
             {
                 if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickup, pickupPointLabel, keepObservingAfterAction))
-                    pickupResumeIndex = plannedPickupResume;
+                    return plannedPickupResume;
             }
             else
             {
-                pickup?.Dispose();
-                await handler.RunAsync(ct, waypoint, PartyConfig);
+                try
+                {
+                    (InputHub.CurrentOperationToken ?? ct).ThrowIfCancellationRequested();
+                    await handler.RunAsync(InputHub.CurrentOperationToken ?? ct, waypoint, PartyConfig);
+                    (InputHub.CurrentOperationToken ?? ct).ThrowIfCancellationRequested();
+                }
+                catch (OperationCanceledException error) when (pickup != null
+                    && pickup.IsOwnCancellation(error, InputHub.CurrentOperationToken ?? ct, ct)
+                    && ActiveCooperativeFight?.IsInterrupted != true && CooperativeContext?.IsAborted != true
+                    && MultiplayerCoordinator?.IsAbortRequested != true)
+                {
+                    // 输入作用域负责松键；达标是本节点的正常结束条件。
+                }
+
+                if (pickup?.ReachedToken.IsCancellationRequested == true)
+                    pickupResumeIndex = plannedPickupResume;
             }
             
             //统计结束战斗的次数
@@ -4551,6 +4587,9 @@ public partial class PathExecutor
             {
                 SuccessFight++;
             }
+
+            if (pickup is { IsDisposed: false } && pickup.ReachedToken.IsCancellationRequested)
+                return plannedPickupResume;
 
             if (PartyConfig.QuicklySkip && (_lastWaypoint?.Action == ActionEnum.Fight.Code || waypoint.Action == ActionEnum.Fight.Code || nextWaypoint?.Action == ActionEnum.Fight.Code))
             {
@@ -4565,15 +4604,38 @@ public partial class PathExecutor
 
             if (waypoint.Action == ActionEnum.CombatScript.Code)
             {
-                await Delay(PartyConfig.CombatScriptEndDelayMs>0 ? PartyConfig.CombatScriptEndDelayMs : 1, ct);
+                await WaitForNodeTail(PartyConfig.CombatScriptEndDelayMs > 0 ? PartyConfig.CombatScriptEndDelayMs : 1);
             }
             else
             {
-                await Delay(895, ct);
+                await WaitForNodeTail(895);
             }
         }
 
         return pickupResumeIndex;
+
+        async Task WaitForNodeTail(int delay)
+        {
+            if (pickup == null || pickup.IsDisposed)
+            {
+                await Delay(delay, ct);
+                return;
+            }
+
+            using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct, pickup.ReachedToken);
+            using var inputs = InputHub.CurrentOperationToken == null ? InputHub.BeginOperation(stop.Token) : null;
+            try
+            {
+                await Delay(delay, ct);
+            }
+            catch (OperationCanceledException error) when (
+                pickup.IsOwnCancellation(error, InputHub.CurrentOperationToken ?? stop.Token, ct)
+                && ActiveCooperativeFight?.IsInterrupted != true && CooperativeContext?.IsAborted != true
+                && MultiplayerCoordinator?.IsAbortRequested != true)
+            {
+                pickupResumeIndex = plannedPickupResume;
+            }
+        }
     }
 
     private async Task<Avatar?> SwitchAvatar(string index, bool needSkill = false , PathingTask? pathingTask = null, bool? forceRefresh = false)

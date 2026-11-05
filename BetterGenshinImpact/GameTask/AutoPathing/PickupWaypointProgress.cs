@@ -11,8 +11,6 @@ namespace BetterGenshinImpact.GameTask.AutoPathing;
 /// <summary>一次到点动作的获得列表计数，帧由现有截图调度器提供。</summary>
 internal sealed class PickupWaypointProgress : IDisposable
 {
-    // 定位长时间没有刷新时，不用旧坐标给离点后的新画面判归属。
-    private const int DeparturePositionMaxAgeMs = 1500;
     private static readonly object Gate = new();
     private static PickupWaypointProgress? _active;
 
@@ -32,10 +30,14 @@ internal sealed class PickupWaypointProgress : IDisposable
     private bool _headerFallbackReported;
     private bool _missingHeaderReported;
     private int _count;
+    private bool _counting;
+    private long _countingStartedAt;
+    private bool _disposed;
 
-    private PickupWaypointProgress(int target, CancellationToken routeToken, ILogger? logger, string? pointLabel)
+    private PickupWaypointProgress(int target, CancellationToken routeToken, ILogger? logger, string? pointLabel, bool counting)
     {
         _target = target;
+        _counting = counting;
         _routeToken = routeToken;
         _logger = logger;
         _pointLabel = pointLabel;
@@ -46,8 +48,33 @@ internal sealed class PickupWaypointProgress : IDisposable
 
     internal int Count => Volatile.Read(ref _count);
 
+    internal bool IsDisposed => Volatile.Read(ref _disposed);
+
+    internal bool ActivateCounting()
+    {
+        lock (Gate)
+        {
+            if (_counting || _disposed || !ReferenceEquals(_active, this) || _routeToken.IsCancellationRequested)
+                return false;
+
+            _counting = true;
+            _countingStartedAt = Stopwatch.GetTimestamp();
+            return true;
+        }
+    }
+
+    internal bool IsOwnCancellation(OperationCanceledException error, CancellationToken operationToken,
+        CancellationToken routeToken)
+        => !routeToken.IsCancellationRequested && ReachedToken.IsCancellationRequested
+           && (error.CancellationToken == operationToken || error.CancellationToken == ReachedToken);
+
+    internal void LogPointCompleted(bool departing)
+        => _logger?.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
+            _pointLabel, Count, _target, ReachedToken.IsCancellationRequested ? "达标，已完成动作收尾和松键"
+                : departing ? "未达标，继续观察首个补捡路段" : "未达标，后续点照常执行");
+
     internal static PickupWaypointProgress? TryBegin(int target, CancellationToken routeToken = default,
-        ILogger? logger = null, string? pointLabel = null)
+        ILogger? logger = null, string? pointLabel = null, bool counting = true)
     {
         lock (Gate)
         {
@@ -55,7 +82,7 @@ internal sealed class PickupWaypointProgress : IDisposable
             if (_active != null || target <= 0 || routeToken.IsCancellationRequested)
                 return null;
 
-            var progress = new PickupWaypointProgress(target, routeToken, logger, pointLabel);
+            var progress = new PickupWaypointProgress(target, routeToken, logger, pointLabel, counting);
             Volatile.Write(ref _active, progress);
             return progress;
         }
@@ -84,8 +111,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     {
         lock (Gate)
         {
-            if (!ReferenceEquals(_active, this) || !_departing || _routeToken.IsCancellationRequested
-                || (_departurePositionAt != 0 && !IsDeparturePositionFresh()))
+            if (!ReferenceEquals(_active, this) || !_departing || _routeToken.IsCancellationRequested)
                 return false;
 
             _departurePositionAt = Stopwatch.GetTimestamp();
@@ -95,8 +121,7 @@ internal sealed class PickupWaypointProgress : IDisposable
         }
     }
 
-    private bool IsDeparturePositionFresh() => _departurePositionAt != 0
-        && Stopwatch.GetElapsedTime(_departurePositionAt).TotalMilliseconds <= DeparturePositionMaxAgeMs;
+    private bool HasDeparturePosition() => _departurePositionAt != 0;
 
     internal (PickupRowObservation Observation, PickupObtainedRowDetectionStats Detection)? SampleRawFrame(Mat bitmap)
     {
@@ -169,24 +194,27 @@ internal sealed class PickupWaypointProgress : IDisposable
     {
         PickupRowUpdate update;
         bool establishedBaseline;
+        bool counting;
         int count;
         lock (Gate)
         {
             if (!ReferenceEquals(_active, this) || _count >= _target || _routeToken.IsCancellationRequested
+                || (_counting && frameTime != 0 && _countingStartedAt != 0 && frameTime < _countingStartedAt)
                 || (_departing && !observation.InterruptsContinuity
-                    && (!IsDeparturePositionFresh() || (frameTime != 0 && frameTime < _firstDeparturePositionAt))))
+                    && (!HasDeparturePosition() || (frameTime != 0 && frameTime < _firstDeparturePositionAt))))
                 return;
 
             update = _tracker.Observe(observation);
             establishedBaseline = update.BaselineReady && !_baselineLogged;
             _baselineLogged |= establishedBaseline;
-            if (update.AddedRows > 0)
+            if (_counting && update.AddedRows > 0)
             {
                 _count += Math.Min(update.AddedRows, int.MaxValue - _count);
                 if (_count >= _target)
                     _reached.Cancel();
             }
             count = _count;
+            counting = _counting;
         }
 
         if (detection.RowComponents is { } rowComponents)
@@ -228,7 +256,7 @@ internal sealed class PickupWaypointProgress : IDisposable
         if (update.Cleared)
             _logger?.LogInformation("【拾取达标】{Point} 获得列表已消失，本点累计保留 {Count}/{Target}",
                 _pointLabel, count, _target);
-        if (update.AddedRows > 0)
+        if (counting && update.AddedRows > 0)
             _logger?.LogInformation("【拾取达标】{Point} 获得列表新增 {Rows} 行，累计 {Count}/{Target}",
                 _pointLabel, update.AddedRows, count, _target);
     }
@@ -237,10 +265,12 @@ internal sealed class PickupWaypointProgress : IDisposable
     {
         lock (Gate)
         {
-            if (!ReferenceEquals(_active, this))
+            if (_disposed)
                 return;
 
-            Volatile.Write(ref _active, null);
+            _disposed = true;
+            if (ReferenceEquals(_active, this))
+                Volatile.Write(ref _active, null);
             _reached.Dispose();
         }
     }

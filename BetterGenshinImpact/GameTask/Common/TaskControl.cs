@@ -275,19 +275,22 @@ public partial class TaskControl
 
     public static void CheckAndSleep(int millisecondsTimeout)
     {
+        InputHub.ThrowIfOperationCancelled();
         TrySuspend();
         CheckAndActivateGameWindow();
-        Thread.Sleep(millisecondsTimeout);
+        InputHub.WaitInOperation(millisecondsTimeout);
     }
 
     public static void Sleep(int millisecondsTimeout)
     {
+        InputHub.ThrowIfOperationCancelled();
         NewRetry.Do(() =>
         {
+            InputHub.ThrowIfOperationCancelled();
             TrySuspend();
             CheckAndActivateGameWindow();
         }, TimeSpan.FromSeconds(1), 100);
-        Thread.Sleep(millisecondsTimeout);
+        InputHub.WaitInOperation(millisecondsTimeout);
     }
 
     private static bool IsKeyPressed(User32.VK key)
@@ -300,6 +303,29 @@ public partial class TaskControl
     }
 
     public static void TrySuspend(CancellationToken ct = default)
+    {
+        if (!InputHub.CurrentOperationToken.HasValue)
+        {
+            TrySuspendCore(ct);
+            return;
+        }
+
+        using var operationLink = InputHub.CombineOperationToken(ct, out var combined);
+        try
+        {
+            InputHub.ThrowIfOperationCancelled();
+            TrySuspendCore(combined);
+            InputHub.ThrowIfOperationCancelled();
+        }
+        catch (OperationCanceledException)
+        {
+            InputHub.ThrowIfOperationCancelled();
+            ct.ThrowIfCancellationRequested();
+            throw;
+        }
+    }
+
+    private static void TrySuspendCore(CancellationToken ct)
     {
         ct = GetEnvironmentToken(ct);
         ct.ThrowIfCancellationRequested();
@@ -337,7 +363,7 @@ public partial class TaskControl
                     RunnerContext.Instance.StopAutoPick();
                     suspended = true;
                     if (_environmentLifetime != null) InputHub.ReleaseAll();
-                    Thread.Sleep(300); // 等暂停快捷键释放。
+                    InputHub.WaitInOperation(300); // 等暂停快捷键释放。
                     foreach (User32.VK key in Enum.GetValues(typeof(User32.VK)))
                     {
                         if (IsKeyPressed(key)) InputHub.Foreground.Keyboard.KeyUp(key);
@@ -380,6 +406,25 @@ public partial class TaskControl
 
     public static void Sleep(int millisecondsTimeout, CancellationToken ct)
     {
+        if (InputHub.CurrentOperationToken.HasValue)
+        {
+            using var operationLink = InputHub.CombineOperationToken(ct, out var combined);
+            try
+            {
+                if (!PrepareOperationWait(millisecondsTimeout, combined)) return;
+                InputHub.WaitInOperation(millisecondsTimeout, ct);
+                InputHub.ThrowIfOperationCancelled();
+                ct.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                InputHub.ThrowIfOperationCancelled();
+                ct.ThrowIfCancellationRequested();
+                throw;
+            }
+            return;
+        }
+
         if (ct.IsCancellationRequested)
         {
             throw new NormalEndException("取消自动任务");
@@ -408,6 +453,25 @@ public partial class TaskControl
 
     public static async Task Delay(int millisecondsTimeout, CancellationToken ct)
     {
+        if (InputHub.CurrentOperationToken.HasValue)
+        {
+            using var operationLink = InputHub.CombineOperationToken(ct, out var combined);
+            try
+            {
+                if (!PrepareOperationWait(millisecondsTimeout, combined)) return;
+                await InputHub.DelayInOperation(millisecondsTimeout, ct);
+                InputHub.ThrowIfOperationCancelled();
+                ct.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException)
+            {
+                InputHub.ThrowIfOperationCancelled();
+                ct.ThrowIfCancellationRequested();
+                throw;
+            }
+            return;
+        }
+
         if (ct is { IsCancellationRequested: true })
         {
             throw new NormalEndException("取消自动任务");
@@ -432,6 +496,21 @@ public partial class TaskControl
         {
             throw new NormalEndException("取消自动任务");
         }
+    }
+
+    private static bool PrepareOperationWait(int millisecondsTimeout, CancellationToken ct)
+    {
+        InputHub.ThrowIfOperationCancelled();
+        ct.ThrowIfCancellationRequested();
+        if (millisecondsTimeout <= 0) return false;
+        NewRetry.Do(() =>
+        {
+            InputHub.ThrowIfOperationCancelled();
+            ct.ThrowIfCancellationRequested();
+            TrySuspend(ct);
+            CheckAndActivateGameWindow();
+        }, TimeSpan.FromSeconds(1), 100);
+        return true;
     }
 
     /// <summary>

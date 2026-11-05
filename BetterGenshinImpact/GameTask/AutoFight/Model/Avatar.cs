@@ -679,7 +679,7 @@ public class Avatar
                         InputHub.Foreground.SimulateAction(GIActions.MoveLeft, KeyType.KeyDown);
                         break;
                 }
-                Thread.Sleep(1000);
+                InputHub.WaitInOperation(1000);
                 InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
                 //释放所有按键
                 InputHub.ReleaseAll();
@@ -1163,21 +1163,21 @@ public class Avatar
                 else if (Name == "坎蒂丝")
                 {
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyDown);
-                    Thread.Sleep(3000);
+                    InputHub.WaitInOperation(3000);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyUp);
                 }
                 else if(Name == "莉奈娅")
                 {
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
-                    Thread.Sleep(200);
+                    InputHub.WaitInOperation(200);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
-                    Thread.Sleep(200);
+                    InputHub.WaitInOperation(200);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
-                    Thread.Sleep(200);
+                    InputHub.WaitInOperation(200);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
-                    Thread.Sleep(200);
+                    InputHub.WaitInOperation(200);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
-                    Thread.Sleep(200);
+                    InputHub.WaitInOperation(200);
                     InputHub.Foreground.SimulateAction(GIActions.ElementalSkill, KeyType.KeyPress);
                     ManualSkillCd = 17;
                     OcrSkillCd = DateTime.UtcNow.AddSeconds(17);
@@ -1253,7 +1253,7 @@ public class Avatar
                         if (retryStop.WaitHandle.WaitOne(delay)) retryStop.ThrowIfCancellationRequested();
                     }
                     else
-                        Thread.Sleep(delay);
+                        InputHub.WaitInOperation(delay);
                 }
                 
                 var recordedCd = ESkillCdTracker.Record(Name, cd);
@@ -2153,7 +2153,7 @@ public class Avatar
                         {
                             Task.Run(() =>
                             {
-                                Thread.Sleep(200);
+                                InputHub.WaitInOperation(200);
                                 double cd = 0;
                                 var cooldownDetected = false;
 
@@ -2171,7 +2171,7 @@ public class Avatar
 
                                     if (attempt < 3)
                                     {
-                                        Thread.Sleep(100);
+                                        InputHub.WaitInOperation(100);
                                     }
                                 }
 
@@ -2257,7 +2257,7 @@ public class Avatar
                         {
                             Task.Run(() =>
                             {
-                                Thread.Sleep(200);
+                                InputHub.WaitInOperation(200);
                                 double cd = 0;
                                 var cooldownDetected = false;
 
@@ -2275,7 +2275,7 @@ public class Avatar
 
                                     if (attempt < 3)
                                     {
-                                        Thread.Sleep(100);
+                                        InputHub.WaitInOperation(100);
                                     }
                                 }
 

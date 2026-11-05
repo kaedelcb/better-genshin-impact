@@ -12,7 +12,6 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
     internal const double StartDistance = 5;
 
     private int _ownerIndex = -1;
-    private int _attemptedIndex = -1;
     private int? _resumeIndex;
     private int? _departureResumeIndex;
     private PickupWaypointProgress? _progress;
@@ -27,18 +26,15 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         if (IsPickupTarget(current))
             return currentIndex;
 
-        // 只从没有其他动作的普通移动点提前观察紧接的目标，避免串点计数或跨传送。
-        if (currentIndex + 1 >= segment.Count || current.PickupTargetCount.HasValue
-            || !string.IsNullOrEmpty(current.Action) || !string.IsNullOrWhiteSpace(current.SyncPointId)
-            || (current.Type != WaypointType.Path.Code && current.Type != WaypointType.Target.Code))
+        // 当前带参数的点优先；其它节点可预备下一点，传送后的观察由新段接管。
+        if (currentIndex + 1 >= segment.Count || current.Type == WaypointType.Teleport.Code)
             return null;
 
         return IsPickupTarget(segment[currentIndex + 1]) ? currentIndex + 1 : null;
     }
 
-    private static bool IsPickupTarget(Waypoint waypoint)
-        => waypoint.Type == WaypointType.Target.Code && waypoint.Action == ActionEnum.CombatScript.Code
-           && waypoint.PickupTargetCount is { Count: > 0 };
+    internal static bool IsPickupTarget(Waypoint waypoint)
+        => waypoint.PickupTargetCount is { Count: > 0 };
 
     internal static bool IsWithinStartDistance(Waypoint target, Point2f position, out double distance)
     {
@@ -119,10 +115,32 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         return resume;
     }
 
-    internal void MarkObservationAttempt(int waypointIndex) => _attemptedIndex = waypointIndex;
+    internal bool ActivateForPoint(int waypointIndex)
+        => HasObservationFor(waypointIndex) && _progress!.ActivateCounting();
 
-    internal bool ShouldReportMissingObservation(int waypointIndex)
-        => !HasObservationFor(waypointIndex) && _attemptedIndex != waypointIndex;
+    internal int? CompletePoint(IReadOnlyList<Waypoint> segment, int waypointIndex)
+    {
+        if (!HasObservationFor(waypointIndex) || _progress!.IsDisposed)
+            return null;
+
+        if (_progress.ReachedToken.IsCancellationRequested)
+        {
+            _progress.Dispose();
+            _progress.LogPointCompleted(departing: false);
+            return _resumeIndex;
+        }
+
+        var departureResume = PickupWaypointSkipDecisions.GetDepartureResumeIndex(segment, waypointIndex, _resumeIndex);
+        if (departureResume is { } resume && BeginDeparture(waypointIndex, resume))
+        {
+            _progress.LogPointCompleted(departing: true);
+            return null;
+        }
+
+        _progress.Dispose();
+        _progress.LogPointCompleted(departing: false);
+        return null;
+    }
 
     internal bool HasObservationFor(int waypointIndex) => _progress != null && _ownerIndex == waypointIndex;
 
