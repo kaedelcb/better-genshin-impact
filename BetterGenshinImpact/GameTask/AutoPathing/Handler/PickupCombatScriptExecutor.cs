@@ -17,15 +17,46 @@ internal static class PickupCombatScriptExecutor
 {
     private const int InitialPickupWaitMs = 250;
 
-    internal static bool Supports(CombatScript script) => script.CombatCommands.Count > 0
-        && script.CombatCommands.All(IsSupportedCommand);
+    internal static bool Supports(CombatScript script) => Supports(script, out _);
+
+    internal static bool Supports(CombatScript script, out string? reason, CombatScenes? scenes = null)
+    {
+        if (script.CombatCommands.Count == 0)
+        {
+            reason = "策略没有可执行指令";
+            return false;
+        }
+
+        for (var i = 0; i < script.CombatCommands.Count; i++)
+        {
+            var command = script.CombatCommands[i];
+            var specialCurrentAttack = command.Method == Method.Attack
+                && command.Name == CombatScriptParser.CurrentAvatarName
+                && scenes?.GetAvatars().Any(avatar => avatar.Name == "阿蕾奇诺" && avatar.ArlecchinoAutoEnabled) == true;
+            if (!IsSupportedCommand(command) || specialCurrentAttack)
+            {
+                var text = $"{command.Name} {command.Method.Alias[0]}({string.Join(",", command.Args ?? [])})";
+                var detail = specialCurrentAttack ? "队伍启用了阿蕾奇诺特殊普攻，不能保证当前角色攻击的安全中断"
+                    : command.Method == Method.KeyPress ? "仅支持 keypress(f) 和 keypress(x)"
+                    : command.Method == Method.Attack && command.Name == "阿蕾奇诺" ? "特殊普攻包含额外连招"
+                    : command.Method == Method.Attack || command.Method == Method.Wait ? "时长参数必须是可用的非负秒数"
+                    : command.Method == Method.Skill ? "仅支持可安全中断的具名角色短按战技"
+                    : "该指令尚不支持安全中断";
+                reason = $"第 {i + 1} 条「{text}」：{detail}";
+                return false;
+            }
+        }
+
+        reason = null;
+        return true;
+    }
 
     private static bool IsSupportedCommand(CombatCommand command)
     {
         var method = command.Method;
         if (method == Method.Wait || method == Method.Attack)
         {
-            if (method == Method.Attack && (command.Name == CombatScriptParser.CurrentAvatarName || command.Name == "阿蕾奇诺"))
+            if (method == Method.Attack && command.Name == "阿蕾奇诺")
                 return false; // 特化普攻内部可能连续按住多个键，仍由旧执行器执行。
             return method == Method.Attack && command.Args is { Count: 0 }
                 || command.Args is { Count: 1 } args && IsSafeDuration(args[0]);
@@ -39,7 +70,7 @@ internal static class PickupCombatScriptExecutor
         }
 
         return method == Method.KeyDown || method == Method.KeyUp || method == Method.MouseDown || method == Method.MouseUp
-            || method == Method.Click || method == Method.MoveBy || IsPickupPress(command);
+            || method == Method.Click || method == Method.MoveBy || IsSupportedPress(command);
     }
 
     private static bool IsSafeDuration(string text)
@@ -54,6 +85,10 @@ internal static class PickupCombatScriptExecutor
             return false;
         }
     }
+
+    private static bool IsSupportedPress(CombatCommand command) => command.Method == Method.KeyPress
+        && command.Args is { Count: 1 } args
+        && User32Helper.ToVk(args[0]) is User32.VK.VK_F or User32.VK.VK_X;
 
     private static bool IsPickupPress(CombatCommand command) => command.Method == Method.KeyPress
         && command.Args is { Count: 1 } args && User32Helper.ToVk(args[0]) == User32.VK.VK_F;
@@ -92,7 +127,7 @@ internal static class PickupCombatScriptExecutor
         });
     }
 
-    private static async Task ExecuteCommandAsync(CombatCommand command, Avatar avatar, HeldInputs held, CancellationToken stop)
+    internal static async Task ExecuteCommandAsync(CombatCommand command, Avatar avatar, HeldInputs held, CancellationToken stop)
     {
         var method = command.Method;
         if (method == Method.Wait)
@@ -141,7 +176,7 @@ internal static class PickupCombatScriptExecutor
         }
         else
         {
-            // F、移动视角、单次鼠标点击沿用原输入处理。
+            // F、X、移动视角、单次鼠标点击沿用原输入处理。
             stop.ThrowIfCancellationRequested();
             command.Execute(avatar);
         }

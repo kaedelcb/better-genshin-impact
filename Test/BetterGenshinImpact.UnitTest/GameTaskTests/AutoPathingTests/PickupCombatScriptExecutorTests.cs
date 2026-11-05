@@ -3,6 +3,12 @@ using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
+using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Simulator.Extensions;
+using BetterGenshinImpact.GameTask.AutoFight.Model;
+using BetterGenshinImpact.Service;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using System;
@@ -154,6 +160,115 @@ public sealed class PickupCombatScriptExecutorTests
     }
 
     [Fact]
+    public void SupportsTheUnmodifiedLatestArtifactRoute()
+    {
+        var script = CombatScriptParser.ParseContext(
+            "keypress(x),wait(0.2),attack(0.03);万叶 attack(0.08),keydown(E),wait(0.7),keyup(E),attack(0.2);琴 attack(0.08),keydown(E),wait(0.4),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,0),wait(0.2),moveby(1000,-3500),wait(1.8),keyup(E),wait(0.3),click(middle);",
+            false);
+
+        Assert.Equal(CombatScriptParser.CurrentAvatarName, script.CombatCommands[2].Name);
+        Assert.True(PickupCombatScriptExecutor.Supports(script, out var reason));
+        Assert.Null(reason);
+    }
+
+    [Theory]
+    [InlineData("attack")]
+    [InlineData("attack(0.03)")]
+    [InlineData("keypress(X)")]
+    [InlineData("keypress(VK_X)")]
+    public void AcceptsTheNewlySupportedForms(string text)
+    {
+        Assert.True(PickupCombatScriptExecutor.Supports(CombatScriptParser.ParseContext(text, false), out var reason));
+        Assert.Null(reason);
+    }
+
+    [Theory]
+    [InlineData("keypress(q)", "第 1 条", "keypress(q)")]
+    [InlineData("keypress(x);纳西妲 e(hold)", "第 2 条", "hold")]
+    [InlineData("阿蕾奇诺 attack(0.2)", "第 1 条", "阿蕾奇诺")]
+    [InlineData("wait(-1)", "第 1 条", "wait(-1)")]
+    public void UnsupportedCommandReportsItsPositionAndContent(string text, string position, string content)
+    {
+        Assert.False(PickupCombatScriptExecutor.Supports(CombatScriptParser.ParseContext(text, false), out var reason));
+        Assert.Contains(position, reason);
+        Assert.Contains(content, reason);
+    }
+
+    [Fact]
+    public void CurrentAvatarAttackKeepsTheExistingSpecialComboSafetyFallback()
+    {
+        using var runtime = new CommandRuntime("阿蕾奇诺");
+        runtime.Avatar.ArlecchinoAutoEnabled = true;
+        var script = CombatScriptParser.ParseContext("keypress(x);attack(0.03)", false);
+
+        Assert.False(PickupCombatScriptExecutor.Supports(script, out var reason, runtime.Scenes));
+        Assert.Contains("第 2 条", reason);
+        Assert.Contains("特殊普攻", reason);
+        runtime.Avatar.ArlecchinoAutoEnabled = false;
+        Assert.True(PickupCombatScriptExecutor.Supports(script, out _, runtime.Scenes));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task KeypressXInTheRealCommandLoopStopsBeforeFollowingCommandsAndReleasesHeldKeys(bool stopRoute)
+    {
+        using var runtime = new CommandRuntime();
+        using var route = new CancellationTokenSource();
+        using var reached = new CancellationTokenSource();
+        runtime.Channel.Setup(x => x.IsKeyDown(User32.VK.VK_E)).Returns(false);
+        runtime.Keyboard.Setup(x => x.KeyDown(User32.VK.VK_E)).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyUp(User32.VK.VK_E)).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyPress(User32.VK.VK_X)).Callback(() =>
+        {
+            if (stopRoute) route.Cancel();
+            reached.Cancel();
+        }).Returns(runtime.Keyboard.Object);
+        var script = CombatScriptParser.ParseContext("万叶 keydown(E),keypress(x),keydown(W);", false);
+
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.ExecuteAsync(script, runtime.Scenes, route.Token, reached.Token, NullLogger.Instance)
+                .WaitAsync(TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(stopRoute ? route.Token : reached.Token, error.CancellationToken);
+        runtime.Keyboard.Verify(x => x.KeyPress(User32.VK.VK_X), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyUp(User32.VK.VK_E), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyDown(User32.VK.VK_W), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolvedCurrentAvatarAttackCancelsItsLongWaitAndReleasesOnlyOwnedKeys()
+    {
+        using var runtime = new CommandRuntime();
+        using var reached = new CancellationTokenSource();
+        var owned = User32.VK.VK_E;
+        var foreign = User32.VK.VK_A;
+        runtime.Channel.Setup(x => x.IsKeyDown(owned)).Returns(false);
+        runtime.Channel.Setup(x => x.IsKeyDown(foreign)).Returns(true);
+        runtime.Keyboard.Setup(x => x.KeyDown(owned)).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyDown(foreign)).Returns(runtime.Keyboard.Object);
+        runtime.Keyboard.Setup(x => x.KeyUp(owned)).Returns(runtime.Keyboard.Object);
+        runtime.Channel.Setup(x => x.SimulateAction(GIActions.NormalAttack, KeyType.KeyPress))
+            .Callback(() => reached.Cancel()).Returns(runtime.Channel.Object);
+        var command = Assert.Single(CombatScriptParser.ParseContext("attack(30)", false).CombatCommands);
+        Assert.Equal(CombatScriptParser.CurrentAvatarName, command.Name);
+
+        var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            PickupCombatScriptExecutor.RunWithOwnedInputsAsync(runtime.Channel.Object, CancellationToken.None,
+                reached.Token, NullLogger.Instance, async (held, stop) =>
+                {
+                    held.Press(owned);
+                    held.Press(foreign);
+                    await PickupCombatScriptExecutor.ExecuteCommandAsync(command, runtime.Avatar, held, stop);
+                }).WaitAsync(TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(reached.Token, error.CancellationToken);
+        runtime.Channel.Verify(x => x.SimulateAction(GIActions.NormalAttack, KeyType.KeyPress), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyUp(owned), Times.Once);
+        runtime.Keyboard.Verify(x => x.KeyUp(foreign), Times.Never);
+    }
+
+    [Fact]
     public void SupportsSharedArtifactRouteButLeavesUnsupportedCommandsWithLegacyExecutor()
     {
         var sample = CombatScriptParser.ParseContext(
@@ -164,4 +279,42 @@ public sealed class PickupCombatScriptExecutorTests
         Assert.True(PickupCombatScriptExecutor.Supports(sample));
         Assert.False(PickupCombatScriptExecutor.Supports(legacy));
     }
+
+    private sealed class CommandRuntime : IDisposable
+    {
+        private static readonly PropertyInfo ConfigProperty = typeof(ConfigService).GetProperty(nameof(ConfigService.Config))!;
+        private static readonly FieldInfo BackendField = typeof(InputHub).GetField("_backend", BindingFlags.Static | BindingFlags.NonPublic)!;
+        private readonly object? _originalConfig;
+        private readonly object? _originalBackend;
+
+        internal CommandRuntime(string name = "枫原万叶")
+        {
+            _originalConfig = ConfigProperty.GetValue(null);
+            ConfigProperty.SetValue(null, new AllConfig());
+            Keyboard = new Mock<IKeyboardInput>(MockBehavior.Strict);
+            Channel = new Mock<IInputChannel>(MockBehavior.Strict);
+            Channel.SetupGet(x => x.Keyboard).Returns(Keyboard.Object);
+            var backend = new Mock<IInputBackend>(MockBehavior.Strict);
+            backend.SetupGet(x => x.Foreground).Returns(Channel.Object);
+            _originalBackend = BackendField.GetValue(null);
+            BackendField.SetValue(null, backend.Object);
+            Avatar = (Avatar)RuntimeHelpers.GetUninitializedObject(typeof(Avatar));
+            Avatar.Name = name;
+            Scenes = (CombatScenes)RuntimeHelpers.GetUninitializedObject(typeof(CombatScenes));
+            Scenes.Avatars = [Avatar];
+            Avatar.CombatScenes = Scenes;
+        }
+
+        internal Avatar Avatar { get; }
+        internal CombatScenes Scenes { get; }
+        internal Mock<IKeyboardInput> Keyboard { get; }
+        internal Mock<IInputChannel> Channel { get; }
+
+        public void Dispose()
+        {
+            BackendField.SetValue(null, _originalBackend);
+            ConfigProperty.SetValue(null, _originalConfig);
+        }
+    }
+
 }

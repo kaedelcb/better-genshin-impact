@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using Microsoft.Extensions.Logging;
@@ -14,11 +15,17 @@ public class CombatScriptHandler : IActionHandler
         => RunCoreAsync(ct, waypointForTrack, null, null);
 
     internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel,
-        double distance, bool fromPreviousPoint)
+        double distance, bool fromPreviousPoint, CombatScenes? scenes = null)
     {
-        if (waypoint.CombatScript == null || !PickupCombatScriptExecutor.Supports(waypoint.CombatScript))
+        if (waypoint.CombatScript == null)
         {
-            Logger.LogWarning("【拾取达标】{Point} 策略为空或包含不支持安全中断的指令，按原路线执行", pointLabel);
+            Logger.LogWarning("【拾取达标】{Point} 策略为空，未开启计数，按原路线执行", pointLabel);
+            return null;
+        }
+
+        if (!PickupCombatScriptExecutor.Supports(waypoint.CombatScript, out var reason, scenes))
+        {
+            Logger.LogWarning("【拾取达标】{Point} 未开启计数，{Reason}；按原路线执行", pointLabel, reason);
             return null;
         }
 

@@ -1511,7 +1511,8 @@ public partial class PathExecutor
                                 else if (MultiplayerCoordinator == null)
                                 {
                                     var pickupProgress = pickupWindow.GetForPoint(waypointIndex, out var plannedPickupResume);
-                                    if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint))
+                                    if (pickupProgress == null && observePickupPosition != null && CanUseWaypointPickup(waypoint)
+                                        && pickupWindow.ShouldReportMissingObservation(waypointIndex))
                                         Logger.LogInformation("【拾取达标】{Point} 未能在距目标 {Distance} 个距离单位内开启观察，按原路线执行",
                                             pickupPointLabel, PickupWaypointApproachWindow.StartDistance);
                                     var departureResumeIndex = pickupProgress == null ? null
@@ -4504,7 +4505,8 @@ public partial class PathExecutor
                 return;
 
             tried = true;
-            var progress = CombatScriptHandler.TryStartPickup(ct, point, pointLabel, distance, targetIndex != currentIndex);
+            window.MarkObservationAttempt(targetIndex);
+            var progress = CombatScriptHandler.TryStartPickup(ct, point, pointLabel, distance, targetIndex != currentIndex, _combatScenes);
             if (progress != null)
                 window.Start(targetIndex, progress, plannedResume);
         };

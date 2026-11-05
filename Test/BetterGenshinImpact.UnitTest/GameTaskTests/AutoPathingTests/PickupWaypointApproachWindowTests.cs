@@ -218,6 +218,23 @@ public sealed class PickupWaypointApproachWindowTests
         Assert.Null(PickupWaypointSkipDecisions.GetDepartureResumeIndex(segment, 0, nonfinalResume));
     }
 
+    [Fact]
+    public void RejectedObservationAttemptDoesNotTurnIntoADistanceWarningAtTheTarget()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        window.EnterPoint(0);
+        Assert.True(window.ShouldReportMissingObservation(1));
+
+        // 上一点移动中已到观察距离，但指令兼容检查拒绝启动。
+        window.MarkObservationAttempt(1);
+        Assert.False(window.ShouldReportMissingObservation(1));
+        window.EnterPoint(1);
+        Assert.False(window.ShouldReportMissingObservation(1));
+
+        window.EnterPoint(2);
+        Assert.True(window.ShouldReportMissingObservation(2));
+    }
+
     private static PickupWaypointProgress StartWithTwoRows(PickupWaypointApproachWindow window, int? plannedResume = 3)
     {
         var progress = PickupWaypointProgress.TryBegin(4)!;

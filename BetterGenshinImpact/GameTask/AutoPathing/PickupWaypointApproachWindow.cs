@@ -12,6 +12,7 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
     internal const double StartDistance = 5;
 
     private int _ownerIndex = -1;
+    private int _attemptedIndex = -1;
     private int? _resumeIndex;
     private int? _departureResumeIndex;
     private PickupWaypointProgress? _progress;
@@ -117,6 +118,11 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         Clear();
         return resume;
     }
+
+    internal void MarkObservationAttempt(int waypointIndex) => _attemptedIndex = waypointIndex;
+
+    internal bool ShouldReportMissingObservation(int waypointIndex)
+        => !HasObservationFor(waypointIndex) && _attemptedIndex != waypointIndex;
 
     internal bool HasObservationFor(int waypointIndex) => _progress != null && _ownerIndex == waypointIndex;
 
