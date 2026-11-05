@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -91,35 +92,75 @@ def capture(args, cwd=ROOT):
     return subprocess.check_output(args, cwd=cwd)
 
 
-def snapshot(source, target, guard):
-    # Worktree bytes include edits to tracked code. Never copy untracked runtime data.
-    paths = capture(['git', '-C', str(source), 'ls-files', '-z']).split(b'\0')
-    existing = [source / Path(os.fsdecode(raw)) for raw in paths if raw]
+def file_digest(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').digest()
+
+
+def is_user_default(path):
+    return tuple(part.casefold() for part in path.parts[:2]) == ('bettergenshinimpact', 'user')
+
+
+def snapshot(source, target, guard, commit=None):
+    # Copy tracked worktree edits, but take shipped User defaults from one fixed commit.
+    commit = commit or capture(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip()
+    if capture(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip() != commit:
+        raise RuntimeError('源码分支已发生变化，请重新构建')
+    tracked = capture(['git', '-C', str(source), 'ls-files', '-z'])
+    paths = [Path(os.fsdecode(raw)) for raw in tracked.split(b'\0') if raw]
+    existing = [source / rel for rel in paths if not is_user_default(rel)]
     guard.check(sum(p.stat().st_size for p in existing if p.is_file()), measure=True, location=target)
-    for raw in paths:
-        if not raw:
+    checked = []
+    for rel in paths:
+        if is_user_default(rel):
             continue
-        rel = Path(os.fsdecode(raw))
-        src, dst = source / rel, target / rel
-        if not src.is_file():  # sparse-checkout intentionally omits historical files
-            continue
-        if src.is_symlink() or not src.resolve().is_relative_to(source.resolve()):
+        src = source / rel
+        if src.is_symlink():
             raise RuntimeError(f'源码包含链接，无法安全复制: {rel}')
+        if not src.is_file():  # sparse-checkout intentionally omits historical files
+            if src.exists():
+                raise RuntimeError(f'源码路径不是文件: {rel}')
+            checked.append((rel, None))
+            continue
+        if not src.resolve().is_relative_to(source.resolve()):
+            raise RuntimeError(f'源码包含链接，无法安全复制: {rel}')
+        before = file_digest(src)
+        checked.append((rel, before))
+    for rel, before in checked:
+        if before is None:
+            continue
+        src, dst = source / rel, target / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        # Published defaults come from Git, not potentially private local User edits.
-        if rel.parts[:2] == ('BetterGenshinImpact', 'User'):
-            data = capture(['git', '-C', str(source), 'show', 'HEAD:' + rel.as_posix()])
-            dst.write_bytes(data)
-        else:
-            shutil.copyfile(src, dst)
+        shutil.copyfile(src, dst)
+        if file_digest(dst) != before:
+            raise RuntimeError(f'复制期间源码发生变化: {rel}')
+    defaults = capture(['git', '-C', str(source), 'ls-tree', '-r', '-z', '--name-only', commit, '--', 'BetterGenshinImpact/User'])
+    for raw in defaults.split(b'\0'):
+        if raw:
+            rel = Path(os.fsdecode(raw))
+            dst = target / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(capture(['git', '-C', str(source), 'show', commit + ':' + rel.as_posix()]))
+    if (capture(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip() != commit
+            or capture(['git', '-C', str(source), 'ls-files', '-z']) != tracked):
+        raise RuntimeError('复制期间分支或已跟踪文件列表发生变化，请重新构建')
+    for rel, digest in checked:
+        src = source / rel
+        if src.is_symlink() or (digest is None and src.exists()):
+            raise RuntimeError(f'复制期间源码发生变化: {rel}')
+        if digest is not None and (not src.is_file() or not src.resolve().is_relative_to(source.resolve()) or file_digest(src) != digest):
+            raise RuntimeError(f'复制期间源码发生变化: {rel}')
+    if (capture(['git', '-C', str(source), 'rev-parse', 'HEAD']).decode().strip() != commit
+            or capture(['git', '-C', str(source), 'ls-files', '-z']) != tracked):
+        raise RuntimeError('复制期间分支或已跟踪文件列表发生变化，请重新构建')
     guard.check(measure=True)
 
 
-def untracked_sources():
+def untracked_sources(root=ROOT):
     dirs = ['BetterGenshinImpact', 'MultiplayerHoeingAssistant', 'BgiCoordinatorServer',
             'Mistletoe.Shared', 'AutoHoeingUpdater', 'Test/OneDragonMigration/Core']
-    output = capture(['git', '-C', str(ROOT), 'ls-files', '--others', '--exclude-standard', '-z', '--', *dirs])
-    return [os.fsdecode(x) for x in output.split(b'\0') if x]
+    output = capture(['git', '-C', str(root), 'ls-files', '--others', '--exclude-standard', '-z', '--', *dirs])
+    return [os.fsdecode(x) for x in output.split(b'\0') if x and not is_user_default(Path(os.fsdecode(x)))]
 
 
 def unzip_safe(archive, dest):
@@ -192,7 +233,10 @@ def main(version, reuse_web=None):
             print('构建提交:', commit, '\n结果目录:', output, flush=True)
             source = work / 'source'
             source.mkdir()
-            snapshot(ROOT, source, guard)
+            snapshot(ROOT, source, guard, commit)
+            extra = untracked_sources()
+            if extra:
+                raise RuntimeError('复制期间发现未纳入 Git 的源码，请先处理:\n' + '\n'.join(extra[:20]))
             project = source / 'BetterGenshinImpact' / 'BetterGenshinImpact.csproj'
             contents = project.read_text(encoding='utf-8-sig')
             contents, count = re.subn(r'<Version>.*?</Version>', f'<Version>{version}</Version>', contents, count=1)
