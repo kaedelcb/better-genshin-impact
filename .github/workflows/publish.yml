@@ -8,6 +8,11 @@ on:
         description: 'BetterGI 版本号；茶包分支填 release:版本号可在构建成功后公开发布'
         required: true
         type: string
+      expected-sha:
+        description: '期望的完整源码提交；网页手动运行可留空'
+        required: false
+        type: string
+        default: ''
       kachina-channel:
         type: choice
         description: 'Kachina Installer Channel'
@@ -39,7 +44,15 @@ jobs:
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
           CREATE_DRAFT: ${{ inputs.create-release }}
+          EXPECTED_SHA: ${{ inputs['expected-sha'] }}
         run: |
+          # expected-commit-guard-v1
+          if [[ -n "$EXPECTED_SHA" ]]; then
+            if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$EXPECTED_SHA" != "$GITHUB_SHA" ]]; then
+              echo '::error::选择的源码提交已变化，本次构建与发布已停止。'
+              exit 1
+            fi
+          fi
           version="$REQUESTED_VERSION"
           publish=false
           if [[ "$version" == release:* ]]; then

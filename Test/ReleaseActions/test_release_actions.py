@@ -4,6 +4,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shutil
 import struct
 import subprocess
 import sys
@@ -347,13 +348,34 @@ class WorkflowTests(unittest.TestCase):
     def test_publication_uses_existing_dispatch_and_waits_for_all_packages(self):
         data = self.load("publish.yml")
         self.assertEqual({"workflow_dispatch"}, set(data["on"]))
-        self.assertEqual({"version", "kachina-channel", "create-release", "upload-to-steambird"},
+        self.assertEqual({"version", "expected-sha", "kachina-channel", "create-release", "upload-to-steambird"},
                          set(data["on"]["workflow_dispatch"]["inputs"]))
         publish = data["jobs"]["publish_release"]
         self.assertEqual({"validate", "build_dist", "build_installer", "build_setup"}, set(publish["needs"]))
         self.assertIn("needs.validate.outputs.publish == 'true'", publish["if"])
         self.assertIn("!inputs.create-release", publish["if"])
         self.assertNotIn("always()", publish["if"])
+
+    def test_expected_sha_guard_allows_matching_or_empty_and_rejects_mismatch(self):
+        data = self.load("publish.yml")
+        option = data["on"]["workflow_dispatch"]["inputs"]["expected-sha"]
+        self.assertEqual("false", option["required"])
+        step = data["jobs"]["validate"]["steps"][0]
+        self.assertEqual("${{ inputs['expected-sha'] }}", step["env"]["EXPECTED_SHA"])
+        guard, separator, _ = step["run"].partition('\nversion=')
+        self.assertTrue(separator, '提交守卫必须在版本处理之前执行')
+        git = shutil.which('git')
+        candidate = Path(git).resolve().parent.parent / 'bin' / 'bash.exe' if git and os.name == 'nt' else None
+        bash = str(candidate) if candidate and candidate.is_file() else shutil.which('bash')
+        if not bash:
+            self.skipTest('需要 Bash 验证 Actions 的实际守卫')
+        sha = 'a' * 40
+        for expected, succeeds in [('', True), (sha, True), ('b' * 40, False), ('not-a-sha', False)]:
+            with self.subTest(expected=expected):
+                env = os.environ.copy()
+                env.update({'EXPECTED_SHA': expected, 'GITHUB_SHA': sha})
+                result = subprocess.run([bash, '-c', guard], env=env, capture_output=True)
+                self.assertEqual(succeeds, result.returncode == 0, result.stdout.decode('utf-8', 'replace'))
 
     def test_permissions_concurrency_and_trusted_checkout(self):
         publish = self.load("publish.yml")["jobs"]["publish_release"]
