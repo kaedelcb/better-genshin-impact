@@ -50,6 +50,7 @@
 .mt-tool-row{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap}
 .mt-tool-row .dd-check{min-height:34px;font-size:13px}
 .mt-tool-row .dd-actions{margin-left:auto}
+#mtSaveState{flex:0 0 180px;min-height:20px;line-height:20px}
 .mt-save-state{font-size:12.5px;color:#a0e1c8}
 .mt-save-state.is-dirty{color:#f0d39d}.mt-save-state.is-error{color:#f3b7a6;overflow-wrap:anywhere}
 
@@ -344,3 +345,88 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .dd-owner-note .dd-filters{margin:0}
 /* 运行备注是执行端的内部记录，同 PC 只显示两行，完整内容在悬停提示和运行记录里。 */
 .tc-run-note{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* 两个中心共用寄存器，沿用现有卡片、金色选中态与表单控件。 */
+#mtTriggers:not(:empty),#mtTaskPrompts:not(:empty){margin-bottom:12px}
+#mtTaskPrompts{display:grid;gap:8px}
+.mt-register-strip{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;min-width:0}
+.mt-register-head{font-size:13px;color:var(--muted);white-space:nowrap}
+.mt-register-cells{display:grid;grid-template-columns:repeat(10,minmax(30px,1fr));gap:5px;flex:1 1 340px;max-width:560px;min-width:0}
+.mt-register-cell{display:grid;place-items:center;gap:1px;min-height:44px;min-width:0;padding:3px;border:1px solid var(--line);border-radius:8px;background:var(--dd-inset);color:var(--muted);cursor:pointer}
+.mt-register-cell small{font-size:10px;line-height:14px}.mt-register-cell strong{font:600 16px/20px Consolas,monospace;color:var(--text)}
+.mt-register-cell:hover:not(:disabled){border-color:#7a6a49;background:var(--dd-soft)}
+.mt-register-cell.is-one{border-color:#7a6a49;background:#302d45}.mt-register-cell.is-one strong{color:var(--gold)}
+.mt-register-cell.is-unknown{border-style:dashed}.mt-register-cell:disabled{cursor:default;opacity:.65}
+.mt-register-feedback{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.mt-register-feedback:empty{display:none}
+.mt-register-settings{padding:16px;display:grid;gap:14px}
+.mt-register-settings .dd-field{min-width:0}.mt-register-settings .dd-field input,.mt-register-settings .dd-field select{width:100%}
+.mt-register-time,.mt-register-delay{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+.mt-register-delay .dd-field{flex:1 1 60px;min-width:54px}.mt-register-delay input{max-width:100%}
+.mt-register-selection{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
+.mt-register-row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--dd-inset);min-width:0}
+.mt-register-label{display:grid;gap:2px;min-width:0;font-size:13px;overflow-wrap:anywhere}.mt-register-label small{font-size:11px;color:var(--muted)}
+.mt-register-row select{flex:none;width:auto;min-width:80px;min-height:36px;padding:5px 8px}
+.mt-register-row:focus-within{border-color:#7a6a49}
+#mistletoeView button:focus-visible,#mistletoeView input:focus-visible,#mistletoeView select:focus-visible,#mistletoeView summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media(max-width:700px){
+  .mt-register-strip{gap:8px}.mt-register-head{flex-basis:100%}
+  .mt-register-cells{flex-basis:100%;max-width:none;gap:4px;grid-template-columns:repeat(10,minmax(0,1fr))}
+  .mt-register-cell{min-height:46px}.mt-register-cell small{font-size:9px}
+  .mt-register-selection{grid-template-columns:minmax(0,1fr)}
+  .mt-register-settings .dd-actions{flex-wrap:wrap}.mt-register-settings .dd-actions .dd-btn{flex:1 1 100px;min-height:40px}
+}
+@media(prefers-reduced-motion:reduce){#mistletoeView *,#mistletoeView *::before,#mistletoeView *::after{animation:none!important;scroll-behavior:auto!important}}
+
+/* 通用流程与独立车道使用原计划表的卡片、折叠行与参数表单。 */
+.tc-composition{display:grid;gap:8px;min-width:0}
+.tc-composition-row{min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset)}
+.tc-composition-row>summary{display:flex;align-items:center;gap:8px 10px;min-height:38px;cursor:pointer;flex-wrap:wrap}
+.tc-composition-row>summary strong{font-size:14px;overflow-wrap:anywhere;min-width:0}
+.tc-composition-row>summary small{color:var(--muted);font-size:12px;flex:1 1 180px;overflow-wrap:anywhere}
+.tc-composition-row[open]>summary{margin-bottom:8px}.tc-composition-row>.dd-actions{flex-wrap:wrap}
+.tc-lanes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.tc-lane{min-width:0;border:1px solid var(--line);border-top:2px solid var(--mt-yes);border-radius:10px;padding:10px;background:var(--dd-card)}
+.tc-lane:nth-child(2){border-top-color:var(--mt-no)}
+.tc-lane>header{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:8px}
+.tc-lane h4{display:grid;gap:4px;min-width:0;margin:0;font-size:13px;overflow-wrap:anywhere}
+.tc-lane h4 small{font-weight:400;color:var(--muted)}
+.tc-composition-resource{display:grid;grid-template-columns:22px minmax(120px,1.5fr) minmax(70px,.7fr) minmax(85px,.8fr) minmax(80px,.8fr) auto auto;align-items:center;gap:6px;min-width:0;padding:6px;border-radius:8px;background:var(--dd-inset);margin:5px 0}
+.tc-composition-resource.off{opacity:.6}.tc-composition-resource>.dd-actions{flex-wrap:wrap;justify-content:flex-end}
+.tc-lane .tc-composition-resource{grid-template-columns:20px minmax(0,1fr) auto}
+.tc-lane .tc-composition-resource>.tc-name{grid-column:2}.tc-lane .tc-composition-resource>.tc-cell:not(.tc-name){grid-column:2}
+.tc-lane .tc-composition-resource>.dd-check{grid-column:3;grid-row:1/4}.tc-lane .tc-composition-resource>.dd-actions{grid-column:1/-1}
+.tc-flow-summary{padding-left:20px;margin:6px 0;min-width:0}.tc-flow-summary li{min-width:0;margin:3px 0}
+.tc-flow-summary .tc-cell{display:grid;text-align:left;max-width:100%}.tc-flow-summary small{color:var(--muted);overflow-wrap:anywhere}
+.tc-composition-dialog{width:min(1020px,96vw)}
+.tc-composition-dialog .tc-dialog-body{padding:14px 16px;min-width:0}
+.tc-flow-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(180px,230px);gap:14px;align-items:start;min-width:0}
+.tc-flow-tree{min-width:0;max-height:48vh;overflow:auto;padding:3px}
+.tc-flow-catalog{max-height:42vh;overflow:auto;display:grid;gap:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset)}
+.tc-flow-catalog h5{margin:6px 0 0;font-size:12px;color:var(--muted)}
+.tc-flow-catalog .dd-actions{gap:6px}
+.tc-flow-catalog h4{margin:2px 0;font-size:12px;color:var(--muted)}
+.tc-flow-catalog .dd-btn{white-space:normal;text-align:left;min-height:36px}
+.tc-flow-step{padding:7px;margin:5px 0;border:1px solid var(--line);border-radius:9px;background:var(--dd-inset);min-width:0}
+.tc-flow-step.selected{border-color:#7a6a49;background:#302d45}.tc-flow-step.off{opacity:.6}
+.tc-flow-select{display:grid;gap:3px;text-align:left;width:100%;min-height:40px;padding:5px 7px;border-radius:6px;overflow-wrap:anywhere}
+.tc-flow-select small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.tc-flow-chain{border-left:2px solid #6fd8ce66;padding-left:9px;margin:8px 0 5px 6px;min-width:0}
+.tc-flow-chain>summary{cursor:pointer;font-size:12px;color:var(--muted);min-height:30px}
+.tc-flow-parameters{display:grid;gap:10px;min-width:0;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.tc-flow-parameters .dd-field{min-width:0}.tc-flow-parameters input,.tc-flow-parameters select{max-width:100%}
+.tc-flow-parameters textarea{width:100%;min-height:72px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--dd-inset);color:var(--text);resize:vertical}
+.tc-flow-preview{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.7;color:var(--muted);background:var(--dd-inset);padding:10px;border:1px solid var(--line);border-radius:9px}
+.tc-flow-error{color:#f3b7a6;font-size:13px;overflow-wrap:anywhere}.tc-flow-error:empty{display:none}
+.tc-composition-dialog .tc-dialog-foot{position:sticky;bottom:0;background:var(--dd-card);z-index:1;display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);flex-wrap:wrap}
+.mt-trigger-summary{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;cursor:pointer;min-height:38px;line-height:1.6;font-size:14px;overflow-wrap:anywhere}
+.mt-trigger-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+.mt-trigger-list{max-height:210px;overflow-y:auto;overscroll-behavior:contain}
+.mt-fire-list small{display:block;color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+@media(max-width:1000px){.tc-composition-resource{grid-template-columns:22px minmax(120px,1fr) auto}.tc-composition-resource>.tc-cell:not(.tc-name){grid-column:2}.tc-composition-resource>.dd-check{grid-column:3;grid-row:1/4}.tc-composition-resource>.dd-actions{grid-column:1/-1}}
+@media(max-width:700px){
+  .tc-lanes{grid-template-columns:minmax(0,1fr)}.tc-composition-row{padding:8px}
+  .tc-flow-editor{grid-template-columns:minmax(0,1fr)}.tc-flow-tree{max-height:42vh}
+  .tc-flow-catalog{grid-template-columns:minmax(0,1fr)}.tc-flow-catalog .dd-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.tc-flow-catalog h4{grid-column:1/-1}
+  .tc-composition-dialog{width:100vw;max-width:100vw}.tc-composition-dialog .tc-dialog-body{padding:12px}
+  .tc-composition-dialog .dd-btn{min-height:40px}.tc-composition-dialog .tc-dialog-foot .dd-btn{flex:1}
+}

@@ -39,7 +39,7 @@ test('折叠卡统计两个来源，刷新保持展开选择且根定时明确�
     assert.ok(!x.host.innerHTML.includes('mt-trigger-card" open'));
     x.run('su.triggersExpanded=true;mtRenderTriggers()');
     assert.match(x.host.innerHTML,/mt-trigger-card" open/);
-    assert.match(x.host.innerHTML,/max-height:210px/);
+    assert.match(x.host.innerHTML,/class="mt-trigger-list"/);
     assert.match(x.host.innerHTML,/管理计划/);
     x.run("su.triggerFilter='taskCenter';mtRenderTriggers()");
     assert.equal((x.host.innerHTML.match(/class="mt-trigger"/g)||[]).length,2);
@@ -60,4 +60,11 @@ test('旧端和断连不能冒充任务中心无挂载',()=>{
     x.run('su.triggerStale=true;mtRenderTriggers()');
     assert.match(x.host.innerHTML,/状态未知/);
     assert.match(x.host.innerHTML,/data-cancel="0" disabled/);
+});
+test('所属步骤已删除时定位明确提示查看挂载快照',async()=>{
+    const x=setup(),notices=[];x.ctx.tcLocateFlowStep=async()=>false;
+    x.ctx.mtToast=(message)=>notices.push(message);fill(x);
+    x.run("su.unifiedTriggers.items[1].workflowId='wf-a';mtRenderTriggers()");
+    await x.groups.locate[1].onclick();
+    assert.match(notices[0],/不在当前计划.*挂载时流程/);
 });

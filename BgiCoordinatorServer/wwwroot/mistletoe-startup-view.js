@@ -18,11 +18,10 @@ function mtRenderStartup(host) {
         </div>
         <div class="mt-tool-row">
           <label class="dd-check"><input id="mtAutoExpand" type="checkbox">执行时展开走过的分支</label>
-          <span id="mtSaveState" class="mt-save-state"></span>
+          <span id="mtSaveState" class="mt-save-state"></span><div id="mtStartupRegisters"></div>
           <div class="dd-actions"><button id="mtClearStates" class="dd-btn dd-btn-sm dd-btn-quiet">清除路径显示</button><button id="mtReloadStartup" class="dd-btn dd-btn-sm">读取最新启动设置</button></div>
         </div>
       </section>
-      <section id="mtTriggers"></section>
       <section id="mtEditor" class="mt-editor${su.selected ? ' has-selection' : ''}" data-pane="${su.mobilePane}">
         <nav class="mt-pane-switch" aria-label="编辑视图"><button data-pane="outline">流程大纲</button><button data-pane="canvas">流程图</button></nav>
         <div class="dd-card mt-outline"><header class="mt-outline-head"><div><h2>启动流程</h2><p class="dodoco-hint">从上到下依次执行；条件节点分「是 / 否」支路，跑完回到主流程。拖 ⠿ 排序</p></div><button id="mtExpandAll" class="dd-btn dd-btn-sm dd-btn-quiet">展开 / 收起分支</button></header><div id="mtOutline" class="mt-outline-body"></div></div>
@@ -43,6 +42,7 @@ function mtRenderStartup(host) {
     mtEl('mtEditor').querySelectorAll('.mt-pane-switch [data-pane]').forEach(b => b.onclick = () => { su.mobilePane = b.dataset.pane; mtEl('mtEditor').dataset.pane = su.mobilePane; if (su.mobilePane === 'canvas') mtRenderCanvas(); mtPaneButtons(); });
     mtPaneButtons();
     mtRenderSchemes(); mtRenderStartupRun(); mtRenderTriggers(); mtRenderSaveState(); mtRenderOutline(); mtRenderCanvas(); mtRenderInspector();
+    mtRenderRegisterStrip('mtStartupRegisters');
     mtBindStage();
 }
 function mtPaneButtons() { mtEl('mtEditor')?.querySelectorAll('.mt-pane-switch [data-pane]').forEach(b => b.classList.toggle('active', b.dataset.pane === su.mobilePane)); }
@@ -82,7 +82,7 @@ function mtRenderStartupRun(withSettings) {
         <span class="dd-pill${running ? ' mt-pill-run' : ' ok'}">${running ? '● 执行中' : '空闲'}</span>
         <p class="mt-run-text">${mte(su.statusText || (running ? '启动流程正在执行' : '启动流程未在运行'))}</p>
         <div class="dd-actions"><button id="mtRunNow" class="dd-btn dd-btn-primary"${running || mt.busy ? ' disabled' : ''}>▶ 立即执行</button><button id="mtCancelRun" class="dd-btn dd-btn-danger"${running ? '' : ' disabled'}>停止流程</button></div></div>
-      ${prompts.map(p => `<div class="mt-prompt"><div><strong>执行端等待人工确认</strong><p>${mte(mtPick(p, 'message'))}</p><small>是 → ${mte(mtPick(p, 'yesPreview') || '（空）')}；否 → ${mte(mtPick(p, 'noPreview') || '（空）')}${mtPick(p, 'remainingSeconds') > 0 ? ` · 剩余约 ${mtPick(p, 'remainingSeconds')} 秒` : ''}</small></div><div class="dd-actions"><button class="dd-btn dd-btn-primary" data-answer="1" data-id="${mte(mtPick(p, 'runtimeId'))}">选择是</button><button class="dd-btn" data-answer="0" data-id="${mte(mtPick(p, 'runtimeId'))}">选择否</button></div></div>`).join('')}`;
+      ${prompts.map(p => `<div class="mt-prompt"><div><strong>执行端等待人工确认</strong><p>${mte(mtPick(p, 'message'))}</p><small>是 → ${mte(mtPick(p, 'yesPreview') || '（空）')}；否 → ${mte(mtPick(p, 'noPreview') || '（空）')}${mtPick(p, 'remainingSeconds') > 0 ? ` · 剩余约 ${mtPick(p, 'remainingSeconds')} 秒` : ''}</small></div><div class="dd-actions"><button class="dd-btn dd-btn-primary" data-answer="1" data-id="${mte(mtPick(p, 'runtimeId'))}"${su.triggerStale ? ' disabled' : ''}>选择是</button><button class="dd-btn" data-answer="0" data-id="${mte(mtPick(p, 'runtimeId'))}"${su.triggerStale ? ' disabled' : ''}>选择否</button></div></div>`).join('')}`;
     mtEl('mtRunNow').onclick = mtRunStartup; mtEl('mtCancelRun').onclick = mtCancelStartup;
     mtEl('mtRunLive').querySelectorAll('[data-answer]').forEach(b => b.onclick = () => mtAnswerPrompt(b.dataset.id, b.dataset.answer === '1'));
     if (withSettings) mtRenderRunSettings();
@@ -113,11 +113,11 @@ function mtRenderTriggers() {
     const filtered = list.map((t,i) => ({t,i})).filter(({t}) => su.triggerFilter === 'all' || mtPick(t, 'source') === su.triggerFilter);
     host.className = 'dd-card mt-triggers';
     host.innerHTML = `<details class="mt-trigger-card"${su.triggersExpanded ? ' open' : ''}>
-      <summary style="cursor:pointer;padding:5px 0;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><strong>运行中触发器</strong><span>${su.triggerStale ? '状态未知' : tasksKnown ? list.length : '已知 ' + list.length}</span><small>启动中心 ${startupCount} · 任务中心 ${tasksKnown ? taskCount : '该端未提供'}</small></summary>
-      <div style="margin:8px 0"><select aria-label="触发器来源" id="mtTriggerSource"><option value="all">全部来源</option><option value="startup">启动中心</option><option value="taskCenter">任务中心</option></select></div>
-      <div class="mt-trigger-list" style="max-height:210px;overflow-y:auto">${filtered.map(({t,i}) => {
-        const task = mtPick(t, 'source') === 'taskCenter', note = mtPick(t, 'note'), root = mtPick(t, 'isRootTimer');
-        return `<div class="mt-trigger"><span class="dd-pill">${task ? '任务中心' : '启动中心'}</span><div class="mt-trigger-text"><strong>${mte(mtPick(t, 'text'))}</strong>${note ? `<small>${mte(note)}</small>` : ''}</div><div class="dd-actions"><button class="dd-btn dd-btn-sm" data-locate="${i}">定位</button><button class="dd-btn dd-btn-sm" data-flow="${i}">流程</button><button class="dd-btn dd-btn-sm${root ? '' : ' dd-btn-danger'}" data-cancel="${i}"${su.triggerStale ? ' disabled' : ''}>${root ? '管理计划' : '取消'}</button></div></div>`;
+      <summary class="mt-trigger-summary"><strong>运行中触发器</strong><span>${su.triggerStale ? '状态未知' : tasksKnown ? list.length : '已知 ' + list.length}</span><small>启动中心 ${startupCount} · 任务中心 ${tasksKnown ? taskCount : '该端未提供'}</small></summary>
+      <div class="mt-trigger-filter"><select aria-label="触发器来源" id="mtTriggerSource"><option value="all">全部来源</option><option value="startup">启动中心</option><option value="taskCenter">任务中心</option></select></div>
+      <div class="mt-trigger-list">${filtered.map(({t,i}) => {
+        const task = mtPick(t, 'source') === 'taskCenter', note = mtPick(t, 'note'), root = mtPick(t, 'isRootTimer'), canCancel = mtPick(t, 'canCancel') !== false;
+        return `<div class="mt-trigger"><span class="dd-pill">${task ? '任务中心' : '启动中心'}</span><div class="mt-trigger-text"><strong>${mte(mtPick(t, 'text'))}</strong>${note ? `<small>${mte(note)}</small>` : ''}</div><div class="dd-actions"><button class="dd-btn dd-btn-sm" data-locate="${i}">定位</button><button class="dd-btn dd-btn-sm" data-flow="${i}">流程</button><button class="dd-btn dd-btn-sm${root ? '' : ' dd-btn-danger'}" data-cancel="${i}"${su.triggerStale || !root && !canCancel ? ' disabled' : ''}>${root ? '管理计划' : '取消'}</button></div></div>`;
       }).join('') || '<p class="dodoco-hint">当前筛选没有已知运行实例</p>'}</div>
       <p class="dodoco-hint">${su.triggerStale ? '执行端状态未确认；列表是上次快照，取消已暂停。' : tasksKnown ? '取消只撤本实例，不删除配置。计划定时在所属计划管理；各类实例按自己的作用范围结束。' : '该端尚未提供任务中心触发器，不能视为没有挂载。'}</p></details>`;
     host.querySelector('details').ontoggle = e => { su.triggersExpanded = e.target.open; };
@@ -128,30 +128,47 @@ function mtRenderTriggers() {
         if (mtPick(t, 'source') === 'taskCenter') {
             const id = mtPick(t, 'workflowId'); if (!id) return mtToast('实例没有可定位的计划身份', true);
             if (su.dirty) { await mtSaveConfig(); if (su.dirty) return; }
-            if (tc.dirty && !(await tcFlush())) return;
-            await tcLoad(true); await tcOpen(id, true);
-            mt.tab = 'taskcenter'; tc.selectedNode = mtPick(t, 'flowNodeId') || '';
-            mtRenderHead(); mtRenderBody();
-            mtToast('已定位所属计划；内部节点详见实例的挂载流程。');
+            if (typeof tcLocateFlowStep === 'function') {
+                const found = await tcLocateFlowStep(id, mtPick(t, 'flowNodeId') || '', mtPick(t, 'stepId') || '');
+                if (!found) mtToast('这个运行实例不在当前计划的对应步骤中，可查看挂载时流程。', true);
+            }
+            else { if (tc.dirty && !(await tcFlush())) return; await tcLoad(true); await tcOpen(id, true); mt.tab = 'taskcenter'; mtRenderHead(); mtRenderBody(); }
             return;
         }
-        const step = mtPick(t, 'step');
-        if (!step || !mtFind(step.id)) return mtToast('这个运行实例不在当前启动流程中，可查看挂载时流程', true);
-        mtSelect(step.id, true);
+        if (typeof tc !== 'undefined' && tc.dirty && !(await tcFlush())) return;
+        mt.tab = 'startup'; mtRenderHead(); await mtRenderBody();
+        if (!su.loaded) await mtLoadStartup(true);
+        const stepId = mtPick(t, 'stepId') || mtPick(mtPick(t, 'step'), 'id');
+        if (!stepId || !mtFind(stepId)) return mtToast('这个运行实例不在当前启动流程中，可查看挂载时流程', true);
+        mtSelect(stepId, true);
     }
     host.querySelectorAll('[data-locate]').forEach(b => b.onclick = () => locate(list[+b.dataset.locate]));
     host.querySelectorAll('[data-flow]').forEach(b => b.onclick = () => mtShowFireChain(list[+b.dataset.flow]));
     host.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => {
         const t = list[+b.dataset.cancel];
         if (mtPick(t, 'isRootTimer')) return locate(t);
+        if (mtPick(t, 'canCancel') === false) return;
         return mtCancelTrigger(mtPick(t, 'runtimeId'), mtPick(t, 'text'), mtPick(t, 'source') || 'startup', mtPick(t, 'runId') || '');
     });
 }
 function mtShowFireChain(trigger) {
     const dialog = mtDialog('mtPickDialog'), step = mtPick(trigger, 'step');
-    const rows = []; mtWalk(step?.fireSteps || [], (s, chain, index, parent) => { let depth = 0; for (let p = parent; p; p = null) depth++; rows.push(`<li>${MT_KIND[s.kind]?.icon || '•'} <b>${mte(mtDisplayName(s))}</b> <small>${mte(mtSummary(s))}</small></li>`); });
-    dialog.innerHTML = `<header class="mt-dialog-head"><h3>${mte(mtPick(trigger, 'text'))}</h3><button class="dd-btn dd-btn-sm" data-close>关闭</button></header><ol class="mt-fire-list">${rows.join('') || (mtPick(trigger, 'isRootTimer') ? '<li>计划定时：按此运行已选定的时间/窗口启动所属计划。' + mte(mtPick(trigger, 'note') || '') + '</li>' : '<li class="dd-empty">（空：触发时无动作）</li>')}</ol>`;
+    const renderChain = chain => `<ol class="mt-fire-list">${(chain || []).map(s => {
+        const branches = [['trueSteps','条件满足时'],['falseSteps','条件不满足时'],['fireSteps',s.kind === 'timerTrigger' ? '到点时' : '触发时'],['beforeAttemptSteps','任务每次开始前']]
+            .filter(([key]) => Array.isArray(s[key]) && s[key].length);
+        return `<li><b>${mte(mtDisplayName(s))}${s.enabled === false ? '（已停用）' : ''}</b><small>${mte(mtSummary(s))}</small>${branches.map(([key,label]) => `<details open><summary>${label}</summary>${renderChain(s[key])}</details>`).join('')}</li>`;
+    }).join('')}</ol>`;
+    const content = mtPick(trigger, 'isRootTimer') ? `<p class="dodoco-hint">计划定时：${mte(mtPick(trigger, 'note') || '按本次运行的触发时刻启动所属计划。')}</p>`
+        : (step?.fireSteps?.length ? renderChain(step.fireSteps) : '<p class="dd-empty">（空：触发时无动作）</p>')
+            + (step?.beforeAttemptSteps?.length ? '<h4>指定任务每次开始前</h4>' + renderChain(step.beforeAttemptSteps) : '');
+    dialog.innerHTML = `<header class="mt-dialog-head"><div><h3>${mte(mtPick(trigger, 'text'))}</h3><p class="dodoco-hint">${mtPick(trigger, 'source') === 'taskCenter' ? '任务中心' : '启动中心'} · 本实例挂载时的只读流程快照</p></div><button class="dd-btn dd-btn-sm" data-close>关闭</button></header>${content}`;
     dialog.querySelector('[data-close]').onclick = () => dialog.close(); dialog.showModal();
+}
+function mtRenderTaskPrompts(host) {
+    if (!host) return;
+    const prompts = mt.tab === 'startup' ? [] : (su.prompts || []).filter(p => mtPick(p, 'source') === 'taskCenter');
+    host.innerHTML = prompts.map(p => `<section class="dd-card mt-prompt"><div><strong>任务中心等待人工确认</strong><p>${mte(mtPick(p, 'message'))}</p><small>是 → ${mte(mtPick(p, 'yesPreview') || '（空）')}；否 → ${mte(mtPick(p, 'noPreview') || '（空）')}${mtPick(p, 'remainingSeconds') > 0 ? ` · 剩余约 ${mtPick(p, 'remainingSeconds')} 秒` : ''}</small>${su.triggerStale ? '<p class="dodoco-hint">执行端状态未确认，选择已暂停。</p>' : ''}</div><div class="dd-actions"><button class="dd-btn dd-btn-primary" data-answer="1" data-id="${mte(mtPick(p, 'runtimeId'))}"${su.triggerStale ? ' disabled' : ''}>选择是</button><button class="dd-btn" data-answer="0" data-id="${mte(mtPick(p, 'runtimeId'))}"${su.triggerStale ? ' disabled' : ''}>选择否</button></div></section>`).join('');
+    host.querySelectorAll('[data-answer]').forEach(b => b.onclick = () => mtAnswerPrompt(b.dataset.id, b.dataset.answer === '1', 'taskCenter'));
 }
 
 // ---------- 大纲 ----------
@@ -209,7 +226,7 @@ function mtBindOutline(host) {
 function mtOpenAdd(chain, label) {
     if (mtChainHasEnd(chain)) return mtToast(`「${label}」已有「结束流程」节点，它是终点，之后不能再添加节点`, true);
     const dialog = mtDialog('mtAddDialog');
-    const group = (title, type) => `<h4>${title}</h4><div class="mt-kind-grid">${MT_KINDS.filter(k => k[1] === type).map(([key, , name, icon, color]) => `<button class="mt-kind" data-kind="${key}" style="--c:${color}"><span class="mt-ic">${icon}</span><span>${name}</span></button>`).join('')}</div>`;
+    const group = (title, type) => `<h4>${title}</h4><div class="mt-kind-grid">${MT_KINDS.filter(k => k[1] === type).map(([key, , name, icon, color]) => `<button class="mt-kind" data-kind="${key}" style="--c:${color}"${['setRegister','judgeRegister'].includes(key) && !mtRegistersSupported() ? ' disabled title="执行端未提供寄存器能力"' : ''}><span class="mt-ic">${icon}</span><span>${name}</span></button>`).join('')}</div>`;
     dialog.innerHTML = `<header class="mt-dialog-head"><div><h3>添加节点</h3><p class="dodoco-hint">添加到${label.startsWith('「') ? mte(label) : '「' + mte(label) + '」'}末尾</p></div><button class="dd-btn dd-btn-sm" data-close>取消</button></header>${group('条件判断', 'condition')}${group('动作', 'action')}${group('触发器', 'trigger')}`;
     dialog.querySelector('[data-close]').onclick = () => dialog.close();
     dialog.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { dialog.close(); mtAddStep(b.dataset.kind, chain, label); });
@@ -419,6 +436,7 @@ function mtKindFields(s) {
     const exp = (a, b) => mtSel('expectRunning', mtBool(s.expectRunning), [['1', a], ['0', b]]);
     const repeat = () => mtField('触发后', mtSel('watchRepeat', mtBool(s.watchRepeat), [['1', '继续循环'], ['0', '停止']]));
     switch (s.kind) {
+        case 'setRegister': case 'judgeRegister': return mtRegisterFields(s);
         case 'timeRange': return `<div class="mt-form-row">${mtField('开始', mtInput('timeStart', s.timeStart, 'type="time"'))}${mtField('结束', mtInput('timeEnd', s.timeEnd, 'type="time"'))}</div><p class="dodoco-hint">HH:mm，起点大于终点表示跨零点。</p>`;
         case 'weekday': return `<div class="dd-field"><span>星期</span><div class="mt-week">${MT_WEEK.map((w, i) => `<label><input type="checkbox" data-week="${i + 1}"${(s.weekdays || []).includes(i + 1) ? ' checked' : ''}>${w}</label>`).join('')}</div></div>`;
         case 'bgiRunning': case 'gameRunning': return mtField('「是」条件', exp('正在运行时走「是」', '未运行时走「是」')) + mtStatusSourceFields(s, s.kind);
@@ -501,6 +519,7 @@ function mtRenderInspector() {
         el.addEventListener('input', () => { if (el.type !== 'checkbox' && el.tagName !== 'SELECT') commit(el, false); });
         el.addEventListener('change', () => commit(el, true));
     });
+    mtBindRegisterFields(host, s, () => mtEdited(null, true));
     host.querySelectorAll('[data-week]').forEach(el => el.onchange = () => {
         const set = new Set(s.weekdays || []); el.checked ? set.add(+el.dataset.week) : set.delete(+el.dataset.week);
         s.weekdays = [...set].sort((a, b) => a - b); mtEdited(null, true);

@@ -5,8 +5,8 @@ const MT_KINDS = [
     ['timeRange','condition','时间区间','◷','#E8C96D'], ['weekday','condition','星期判断','▦','#E8C96D'],
     ['bgiRunning','condition','BGI 进程状态','◇','#6FD8CE'], ['gameRunning','condition','游戏进程状态','◇','#6FD8CE'],
     ['processRunning','condition','指定进程状态','◇','#6FD8CE'], ['bgiTaskRunning','condition','BGI 任务状态','◇','#6FD8CE'],
-    ['bgiTaskName','condition','BGI 当前任务名','◇','#6FD8CE'], ['manualConfirm','condition','人工确认','?','#B39DDB'],
-    ['startBgi','action','启动 BGI','▶','#48C87E'], ['stopBgi','action','关闭 BGI','■','#EF5350'],
+    ['bgiTaskName','condition','BGI 当前任务名','◇','#6FD8CE'], ['judgeRegister','condition','判断寄存器','◇','#E8C96D'], ['manualConfirm','condition','人工确认','?','#B39DDB'],
+    ['setRegister','action','设置寄存器','▦','#E8C96D'], ['startBgi','action','启动 BGI','▶','#48C87E'], ['stopBgi','action','关闭 BGI','■','#EF5350'],
     ['startGame','action','启动游戏','▶','#48C87E'], ['startProgram','action','启动第三方程序','▶','#64B5F6'],
     ['killProgram','action','关闭程序','■','#EF5350'], ['runCmd','action','执行 CMD 命令','›_','#9575CD'],
     ['wait','action','等待','⧗','#9C97C0'], ['enterTaskCenter','action','进入任务中心执行','➤','#E8C96D'],
@@ -37,6 +37,8 @@ function mtNewStep(kind) {
         triggerTime:'08:00', repeatDaily:false, watchKind:'bgiTaskRunning', watchIntervalSeconds:30, watchRepeat:true,
         watchConfirmSeconds:1, watchConfirmTimes:1, killBeforeStart:false, statusSource:'currentSession', statusTargetOrder:1,
         statusTargetUser:'', taskName:'', logKeyword:'', taskCenterFlowId:'', taskCenterHandoffMode:'start', continueAfterTaskCenterHandoff:false };
+    if (kind === 'setRegister') s.registerWrite = { values:Array(10).fill(null) };
+    if (kind === 'judgeRegister') s.registerCondition = { values:Array(10).fill(null), match:'all' };
     if (kind === 'weekday') s.weekdays = [1,2,3,4,5,6,7];
     if (kind === 'processRunning') s.processName = 'notepad';
     if (kind === 'runCmd') s.arguments = 'echo hello';
@@ -63,6 +65,7 @@ function mtWatchDesc(s) {
 function mtSummary(s) {
     const clamp = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
     switch (s.kind) {
+        case 'setRegister': case 'judgeRegister': return mtRegisterSummary(s);
         case 'timeRange': return `${s.timeStart} ~ ${s.timeEnd}`;
         case 'weekday': return (s.weekdays || []).length === 7 ? '每天' : !(s.weekdays || []).length ? '（未勾选任何星期）' : '周' + [...s.weekdays].sort().map(d => MT_WEEK[d - 1]).join('、');
         case 'bgiRunning': return s.expectRunning ? 'BGI 正在运行 → 是' : 'BGI 未运行 → 是';
@@ -100,6 +103,7 @@ function mtTaken(s) { const st = mtNodeState(s); return st === 'condTrue' ? 'tru
 function mtChainHasEnd(chain) { return (chain || []).some(s => s.kind === 'endFlow'); }
 function mtCountKind(kind) { let n = 0; mtWalk(su.config.steps, s => { if (s.kind === kind) n++; }); return n; }
 function mtAddStep(kind, chain, label) {
+    if (['setRegister','judgeRegister'].includes(kind) && !mtRegistersSupported()) return mtToast('当前执行端未提供寄存器能力，未添加；请检查连接或版本。', true);
     if (mtChainHasEnd(chain)) return mtToast(`「${label}」已有「结束流程」节点，它是终点，之后不能再添加节点`, true);
     if (kind === 'enterTaskCenter' && mtCountKind('enterTaskCenter')) return mtToast('启动流程中只能有一个「进入任务中心执行」节点；如需调整位置，请删除后重新添加', true);
     const step = mtNewStep(kind);
@@ -154,60 +158,74 @@ async function mtLoadStartup(force) {
     if (su.loading) return;
     if (su.dirty && !force) return;
     su.loading = true; mtRenderStartupBody();
+    const targetKey = mt.target?.key, registerVersion = mtRegistersVersion();
     try {
         const reply = await mtRead('startup.get');
+        if (mt.target?.key !== targetKey) return;
         const d = reply.data || {};
         su.config = mtPick(d, 'config') || { enabled:false, delaySeconds:5, steps:[], autoExpandBranch:true };
         su.config.steps = su.config.steps || [];
         su.revision = mtPick(d, 'revision') || reply.revision || '';
         su.schemes = mtPick(d, 'schemes') || []; su.schemesRevision = mtPick(d, 'schemesRevision') || '';
         su.autoLaunch = { enabled:!!mtPick(d, 'autoLaunchOnBoot'), mode:mtPick(d, 'autoLaunchOnBootModeIndex') || 0, revision:mtPick(d, 'autoLaunchRevision') || '' };
-        mtApplyStatus(d);
+        mtApplyStatus(d, registerVersion);
         su.dirty = false; su.saveError = ''; su.loaded = true; su.statusSig = ''; mtViewReset();
         if (su.selected && !mtFind(su.selected)) su.selected = null;
         mtToast('已读取执行端启动中心。');
-    } catch (error) { mtToast('启动中心读取失败：' + error.message, true); }
-    finally { su.loading = false; mtRenderStartupBody(); }
-    if (mt.identity?.isExecutor) mtLoadFlowChoices();
+    } catch (error) { if (mt.target?.key === targetKey) mtToast('启动中心读取失败：' + error.message, true); }
+    finally { if (mt.target?.key === targetKey) { su.loading = false; mtRenderStartupBody(); } }
+    if (mt.target?.key === targetKey && mt.identity?.isExecutor) mtLoadFlowChoices();
 }
-function mtApplyStatus(d) {
-    su.isRunning = !!mtPick(d, 'isRunning'); su.statusText = mtPick(d, 'statusText') || '';
+function mtApplyStatus(d, registerVersion = mtRegistersVersion()) {
     const u = mtPick(d, 'unifiedTriggers');
     if (u && mtPick(u, 'version') === 1) {
         const at = Date.parse(mtPick(u, 'capturedAtUtc')) || 0, seq = mtPick(u, 'sequence') || 0, epoch = mtPick(u, 'epoch') || '';
         if (at < su.triggerCapturedAt || epoch === su.triggerEpoch && seq < su.triggerSequence) return false;
         su.unifiedTriggers = u; su.triggerCapturedAt = at; su.triggerSequence = seq; su.triggerEpoch = epoch;
     } else su.unifiedTriggers = null;
+    su.isRunning = !!mtPick(d, 'isRunning'); su.statusText = mtPick(d, 'statusText') || '';
+    mtRegistersApply(mtPick(d, 'registers'), registerVersion);
     su.triggerStale = false;
     su.triggers = mtPick(d, 'triggers') || []; su.prompts = [...(mtPick(d, 'prompts') || []), ...(mtPick(d, 'taskPrompts') || [])];
     su.states = new Map((mtPick(d, 'nodeStates') || []).map(x => [mtPick(x, 'stepId'), { state:MT_RUN[mtPick(x, 'state')] || '', note:mtPick(x, 'note') || '' }]));
     return true;
 }
 async function mtLoadFlowChoices() {
+    const targetKey = mt.target?.key;
     try {
         const reply = await mtRead('task.list');
+        if (mt.target?.key !== targetKey) return;
         su.flows = (mtPick(reply.data, 'flows') || []).map(f => ({ id:mtPick(f, 'workflowId'), name:mtPick(f, 'name'), status:mtPick(f, 'status') }));
         // 只影响「进入任务中心执行」的目标名称显示。
         if (mt.tab === 'startup' && mtEl('mtOutline')) { mtRenderOutline(); mtRenderCanvas(); mtRenderInspector(); }
     } catch { /* 目标流程下拉退化为显示原身份 */ }
 }
 async function mtPollStartup() {
-    if (!mt.active || mt.tab !== 'startup' || !su.loaded || mt.busy || !mtTargetReady() || !mtOwner()) return;
+    if (!mt.active || mt.busy || !mtTargetReady() || !mtOwner() || su.statusLoading) return;
+    const targetKey = mt.target?.key, registerVersion = mtRegistersVersion(), pending = {};
+    su.statusLoading = pending;
     try {
         const reply = await mtRead('startup.status', undefined, { timeout:12000 });
+        if (mt.target?.key !== targetKey) return;
         if (mt.unconfirmed) await mtReconcile(true);
+        if (mt.target?.key !== targetKey) return;
         // 状态没变就不重绘，避免每 3 秒替换大纲和画布打断点击、拖动。
         const d = reply.data || {}, u = mtPick(d, 'unifiedTriggers');
-        const sig = JSON.stringify([mtPick(d, 'isRunning'), mtPick(d, 'statusText'), mtPick(d, 'triggers'), u ? mtPick(u, 'items') : null, mtPick(d, 'prompts'), mtPick(d, 'taskPrompts'), mtPick(d, 'nodeStates')]);
-        if (sig === su.statusSig && mtEl('mtRunCard')) return;
+        const sig = JSON.stringify([mtPick(d, 'isRunning'), mtPick(d, 'statusText'), mtPick(d, 'triggers'), u ? mtPick(u, 'items') : null, mtPick(d, 'prompts'), mtPick(d, 'taskPrompts'), mtPick(d, 'nodeStates'), mtPick(d, 'registers')]);
+        if (sig === su.statusSig && !su.triggerStale) { mtRegistersApply(mtPick(d, 'registers'), registerVersion); mtRenderTriggers(); mtRenderTaskPrompts(mtEl('mtTaskPrompts')); return; }
         su.statusSig = sig;
-        if (mtApplyStatus(reply.data || {}) === false) return;
-        mtRenderStartupLive();
-    } catch (error) { su.triggerStale = true; mtRenderTriggers(); mtToast('运行状态刷新失败：' + error.message, true); }
+        if (mtApplyStatus(reply.data || {}, registerVersion) === false) return;
+        mtRenderTriggers();
+        if (mt.tab === 'startup') mtRenderStartupLive();
+        else mtRenderTaskPrompts(mtEl('mtTaskPrompts'));
+    } catch (error) { if (mt.target?.key === targetKey) { su.triggerStale = true; mtRegistersFail('执行端状态未确认：' + error.message); mtRenderTriggers(); mtRenderTaskPrompts(mtEl('mtTaskPrompts')); mtToast('运行状态刷新失败：' + error.message, true); } }
+    finally { if (su.statusLoading === pending) su.statusLoading = false; }
 }
 async function mtSaveConfig() {
     clearTimeout(su.saveTimer);
     if (!su.dirty || su.saving || !su.config) return;
+    const registerError = mtValidateRegisterSteps(su.config.steps);
+    if (registerError) { su.saveError = registerError; mtRenderSaveState(); return; }
     su.saving = true; mtRenderSaveState();
     const snapshot = JSON.stringify(su.config);
     const reply = await mtOperate('startup.save', mtClone(su.config), { expectedRevision:() => su.revision, label:'保存启动流程', proceedAfterCheck:true });
@@ -288,6 +306,8 @@ async function mtSchemeImport() {
 // ---------- 运行 ----------
 async function mtRunStartup() {
     if (su.isRunning) return mtToast('启动流程已在运行', true);
+    const registerError = mtValidateRegisterSteps(su.config?.steps);
+    if (registerError) return mtToast(registerError, true);
     if (su.dirty) { await mtSaveConfig(); if (su.dirty) return mtToast('启动流程尚未确认保存，已取消执行', true); }
     mt.busy = true; mtRenderStartupRun();
     const reply = await mtOperate('startup.run', undefined, { label:'立即执行启动流程', onStage:mtStageBar, waitBudget:4000 });
@@ -300,8 +320,9 @@ async function mtCancelStartup() {
     if (reply.status !== 'accepted' && reply.status !== 'ok') mtToast('停止请求未确认：' + (reply.message || ''), true);
     setTimeout(mtPollStartup, 800);
 }
-async function mtAnswerPrompt(runtimeId, yes) {
-    const reply = await mtOperate((su.prompts.find(p => mtPick(p, 'runtimeId') === runtimeId) && mtPick(su.prompts.find(p => mtPick(p, 'runtimeId') === runtimeId), 'source') === 'taskCenter') ? 'task.prompt.answer' : 'startup.prompt.answer', { runtimeId, yes }, { label:`人工确认选择「${yes ? '是' : '否'}」`, onStage:mtStageBar });
+async function mtAnswerPrompt(runtimeId, yes, source) {
+    if (su.triggerStale) return mtToast('执行端状态未确认，请刷新后操作', true);
+    const reply = await mtOperate((source === 'taskCenter' || su.prompts.find(p => mtPick(p, 'runtimeId') === runtimeId && mtPick(p, 'source') === 'taskCenter')) ? 'task.prompt.answer' : 'startup.prompt.answer', { runtimeId, yes }, { label:`人工确认选择「${yes ? '是' : '否'}」`, onStage:mtStageBar });
     if (reply.status !== 'ok') mtToast(reply.message || '人工确认未送达', true);
     mtPollStartup();
 }

@@ -42,6 +42,13 @@ public sealed class LocalBrowserBridgeTests
         Assert.Equal(HttpStatusCode.OK, script.StatusCode);
         using var starStyle = await client.GetAsync("/project-star.css");
         Assert.Equal(HttpStatusCode.OK, starStyle.StatusCode);
+        foreach (var asset in new[] { "mistletoe-registers.js", "mistletoe-composition.js" })
+        {
+            using var module = await client.GetAsync("/" + asset);
+            Assert.Equal(HttpStatusCode.OK, module.StatusCode);
+            Assert.Equal("text/javascript", module.Content.Headers.ContentType!.MediaType);
+            Assert.False(string.IsNullOrWhiteSpace(await module.Content.ReadAsStringAsync()));
+        }
         var token = PairToken(bridge);
         using var noOrigin = await Post(client, "/api/pair", new { token });
         Assert.Equal(HttpStatusCode.Forbidden, noOrigin.StatusCode);

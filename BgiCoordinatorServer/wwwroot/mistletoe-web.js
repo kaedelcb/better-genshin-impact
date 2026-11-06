@@ -16,6 +16,8 @@ function mtRender() {
       <p id="mtStatus" class="dodoco-status dd-status" role="status" aria-live="polite"></p>
       <div id="mtOpStage" class="mt-opstage" hidden></div>
       <div id="mtPending"></div>
+      <div id="mtTaskPrompts"></div>
+      <div id="mtTriggers"></div>
       <div id="mtContent" class="dd-body"></div>`;
     mtRoot.querySelectorAll('[data-mt-tab]').forEach(b => b.onclick = async () => {
         if (b.dataset.mtTab === mt.tab) return;
@@ -56,9 +58,12 @@ function mtChooseTarget(key) {
 }
 function mtResetTarget() {
     mt.identity = null; mt.identityError = ''; mt.lastReady = mt.target ? mtTargetReady() : null;
-    Object.assign(su, { loaded:false, loading:false, config:null, dirty:false, saving:false, saveError:'', selected:null, states:new Map(), flows:[], triggers:[], unifiedTriggers:null, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0 });
+    Object.assign(su, { loaded:false, loading:false, statusLoading:false, statusSig:'', config:null, dirty:false, saving:false, saveError:'', selected:null, states:new Map(), flows:[], triggers:[], unifiedTriggers:null, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0 });
     clearTimeout(su.saveTimer); mtViewReset();
     if (typeof tcReset === 'function') tcReset();
+    if (typeof mtRegistersResetState === 'function') mtRegistersResetState();
+    mtRoot.querySelectorAll('dialog[open]').forEach(d => d.close());
+    for (const id of ['mtTriggers','mtTaskPrompts']) { const el = mtEl(id); if (el) el.innerHTML = ''; }
 }
 /** 执行端重新可用后补存离线期间留下的草稿；保存仍带原修订，执行端已被他处修改时按冲突处理、草稿保留。 */
 function mtResumeDrafts() {
@@ -110,9 +115,11 @@ async function mtRenderBody() {
         mtRenderHead();
     }
     if (!mtOwner()) return mtRenderAuthorize(host);
+    mtRenderTaskPrompts(mtEl('mtTaskPrompts'));
     if (mt.tab === 'startup') mtRenderStartup(host);
     else if (mt.tab === 'taskcenter') tcRender(host);
     else tcRenderHistory(host);
+    if (mt.tab !== 'startup') mtPollStartup();
 }
 function mtRenderAuthorize(host) {
     // 替换「请选择执行端」之类的旧提示；首次绑定和授权被撤销都会走到这里。
@@ -142,8 +149,8 @@ function mtRenderPending() {
 }
 async function mtPoll() {
     if (!mt.active || !mt.target || !mtTargetReady() || !mtOwner() || document.hidden) return;
-    if (mt.tab === 'startup') await mtPollStartup();
-    else if (typeof tcPoll === 'function') await tcPoll();
+    await mtPollStartup();
+    if (mt.tab !== 'startup' && typeof tcPoll === 'function') await tcPoll();
     mtRenderPending();
 }
 /** 嘟嘟可远程修改类操作用的本人凭据：按成员 UID 找到其助手实例，再取这个浏览器为该实例保存的凭据。 */

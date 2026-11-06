@@ -11,13 +11,13 @@ const mtEl = id => document.getElementById(id);
 const mte = value => escapeHtml(value);
 const MT_CRED_KEY = 'bgi.mistletoe.owner.v1';
 const MT_UNCONFIRMED_KEY = 'bgi.mistletoe.unconfirmed.v1';
-const MT_READ_OPS = new Set(['web.identity','startup.get','startup.status','task.list','task.flow.get','task.flow.export','task.schedule.export','task.resource.layout.get','task.resource.revision.get','task.bgiPath.get','startup.programs.list','operation.get','bgi.update.hint','bgi.update.catalog','bgi.update.status']);
+const MT_READ_OPS = new Set(['web.identity','startup.get','startup.status','registers.get','task.list','task.flow.get','task.flow.export','task.schedule.export','task.resource.layout.get','task.resource.revision.get','task.bgiPath.get','startup.programs.list','operation.get','bgi.update.hint','bgi.update.catalog','bgi.update.status']);
 /**
  * 执行端留有持久回执（operation.get 可查终态）的操作，与 PC 远程中心 UsesDurableCenterReceipt 一致。
  * 只有这些操作进入「未确认台账」：结果未知时阻断再次发起，核对后才解除。
  * 人工确认、取消触发器、清除路径显示按运行身份天然幂等，与 PC 一样不登记、不受台账阻挡。
  */
-const MT_DURABLE_OPS = new Set(['startup.save','startup.schemes.save','startup.autoLaunch.save','startup.run',
+const MT_DURABLE_OPS = new Set(['registers.configure','registers.reset','startup.save','startup.schemes.save','startup.autoLaunch.save','startup.run',
     'task.resource.layout.save','task.resource.editor.open','task.bgiPath.save','task.flow.save','task.flow.delete','task.flow.restore',
     'task.catalog.connect','task.flow.import','task.schedule.import','task.migration.prepare','task.migration.activate',
     'task.migration.rollback','task.migration.rehearsal','task.run.start','task.run.resume','task.flow.resetExecutionState']);
@@ -113,6 +113,7 @@ async function mtSend(operation, payload, options = {}) {
     const request = { operation, targetInstanceId:target.instanceId };
     if (payload !== undefined) request.payload = payload;
     if (options.expectedRevision) request.expectedRevision = options.expectedRevision;
+    if (options.flowEditVersion !== undefined) request.flowEditVersion = options.flowEditVersion;
     if (options.extra) Object.assign(request, options.extra);
     const cred = mtCredentialFor(target);
     if (!target.local && cred) { request.browserId = cred.browserId; request.browserSecret = cred.secret; }

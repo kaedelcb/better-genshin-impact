@@ -201,6 +201,10 @@ async function layoutAudit(page, name) {
       await executor.waitForFunction(() => sim.answer === true);
       await page.locator('.mt-prompt').waitFor({ state: 'detached', timeout: 8000 });
       // 触发器：定位、查看流程、对不在当前流程中的实例给出说明、取消。
+      if (await page.locator('#mtTriggers details').getAttribute('open') === null) {
+        await page.locator('#mtTriggers summary').click();
+        await page.waitForFunction(() => su.triggersExpanded);
+      }
       await page.locator('#mtTriggers [data-locate="0"]').click();
       assert.equal(await page.evaluate(() => su.selected), 't1');
       await page.locator('#mtTriggers [data-flow="0"]').click();
@@ -360,9 +364,10 @@ async function layoutAudit(page, name) {
       await page.locator('#tcNodes .tc-tr[data-node="n-a"]').waitFor({ timeout: 10000 });
       // 新增任务：连接 BGI 后目录有配置组、整龙、单项；默认选中配置组（与 PC 一致）。
       await page.locator('#tcAdd').click();
+      await page.locator('#tcDialog [data-kind="resource"]').click();
       await page.locator('#tcConnect').click();
       await page.locator('#tcDialog .tc-add-item').first().waitFor({ timeout: 10000 });
-      await page.keyboard.press('Escape'); await page.locator('#tcAdd').click(); await page.locator('#tcDialog .tc-add-item').first().waitFor();
+      await page.keyboard.press('Escape'); await page.locator('#tcAdd').click(); await page.locator('#tcDialog [data-kind="resource"]').click(); await page.locator('#tcDialog .tc-add-item').first().waitFor();
       assert.equal((await page.locator('#tcDialog [data-cat].active').textContent()).trim(), '配置组');
       assert.match(await page.locator('#tcDialog .tc-add-list').textContent(), /锄地/);
       await layoutAudit(page, '新增任务 1440');

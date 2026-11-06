@@ -46,7 +46,7 @@ public class MistletoeWebGateTests
     public async Task RemoteRequestWithoutOwnerCredentialIsDeniedBeforeAnyExecution()
     {
         var (vm, seen) = NewVm();
-        foreach (var op in new[] { "startup.get", "startup.run", "startup.cancel", "task.run.start", "task.flow.save", "operation.get", "registers.get", "registers.configure" })
+        foreach (var op in new[] { "startup.get", "startup.run", "startup.cancel", "task.run.start", "task.flow.save", "operation.get", "registers.get", "registers.configure", "registers.reset", "task.trigger.cancel", "task.prompt.answer" })
         {
             var reply = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request(op), "r", local: false, Recorder(seen)));
             Assert.Equal("denied", reply["status"]!.GetValue<string>());
@@ -91,6 +91,9 @@ public class MistletoeWebGateTests
         Assert.Equal("ok", identity["status"]!.GetValue<string>());
         Assert.False(identity["data"]!["owner"]!.GetValue<bool>());
         Assert.Equal("inst-a", identity["data"]!["instanceId"]!.GetValue<string>());
+        var capabilities = identity["data"]!["capabilities"]!.AsArray().Select(x => x!.GetValue<string>()).ToArray();
+        Assert.Contains("flowEditV1", capabilities);
+        Assert.Contains("unifiedTriggersV1", capabilities);
         var local = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request("web.identity"), "r", true, Recorder(seen)));
         Assert.True(local["data"]!["owner"]!.GetValue<bool>());
         var stale = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request("startup.get", instance: "inst-old"), "r", true, Recorder(seen)));
@@ -144,6 +147,52 @@ public class MistletoeWebGateTests
         var startup = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request("startup.status"), "r", true, Recorder(seen)));
         Assert.Equal("ok", startup["status"]!.GetValue<string>());
         Assert.Single(seen);
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(1, true)]
+    [InlineData(2, false)]
+    public async Task FlowEditorVersionReachesTheCompositionSaveGuard(int? version, bool accepted)
+    {
+        var (vm, seen) = NewVm();
+        var document = new WorkflowDocument
+        {
+            WorkflowId = "composed-web",
+            Nodes = [new WorkflowNode { NodeId = "flow-row", Kind = "control.flow", Flow = new() }]
+        };
+        var request = Request("task.flow.save", payload: JsonSerializer.SerializeToNode(document));
+        request["expectedRevision"] = "revision-before";
+        if (version.HasValue) request["flowEditVersion"] = version.Value;
+        var reply = Reply(await vm.ExecuteMistletoeWebCoreAsync(request, "bridge", true, command =>
+        {
+            seen.Add(command);
+            var center = JsonSerializer.Deserialize<RemoteCenterRequest>(RemoteCenterProtocol.PayloadOf(command)!)!;
+            Assert.Equal(version, center.FlowEditVersion);
+            Assert.Equal("revision-before", center.ExpectedRevision);
+            var incoming = JsonSerializer.Deserialize<WorkflowDocument>(center.PayloadJson!)!;
+            var result = RemoteCenterProtocol.CanSaveFlow(center, incoming, document)
+                ? RemoteCenterReply.Ok(revision: "revision-after")
+                : RemoteCenterReply.Rejected("编辑端不支持流程/车道");
+            return Task.FromResult<RemoteCommand?>(RemoteCenterProtocol.Reply(command, "owner-uid", "执行端", result));
+        }));
+        Assert.Single(seen);
+        Assert.Equal(accepted ? "ok" : "rejected", reply["status"]!.GetValue<string>());
+        if (accepted) Assert.Equal("revision-after", reply["revision"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("\"1\"")]
+    [InlineData("true")]
+    [InlineData("{}")]
+    public async Task InvalidFlowEditorVersionIsRejectedWithoutExecution(string json)
+    {
+        var (vm, seen) = NewVm();
+        var request = Request("task.flow.save", payload: new JsonObject { ["workflowId"] = "composed-web" });
+        request["flowEditVersion"] = JsonNode.Parse(json);
+        var reply = Reply(await vm.ExecuteMistletoeWebCoreAsync(request, "bridge", true, Recorder(seen)));
+        Assert.Equal("rejected", reply["status"]!.GetValue<string>());
+        Assert.Empty(seen);
     }
 
     [Fact]

@@ -101,7 +101,9 @@ public partial class MainViewModel
             {
                 uid = config.PlayerUid, name = config.PlayerName, instanceId = instance,
                 machineId = HostMachineIdentity.Current, isExecutor = IsExecutorMode, owner,
-                capabilities = IsExecutorMode ? new[] { "startup", "taskCenter" } : new[] { "startup" }
+                capabilities = IsExecutorMode
+                    ? new[] { "startup", "taskCenter", "flowEditV1", "unifiedTriggersV1" }
+                    : new[] { "startup", "unifiedTriggersV1" }
             }, instanceId: instance);
         if (operation == "web.authorize")
         {
@@ -125,11 +127,19 @@ public partial class MainViewModel
 
         // 交给 PC 远程中心的同一处理流程；SenderUid 固定为本人，执行端身份核对保持原样。
         var payload = request["payload"];
+        int? flowEditVersion = null;
+        if (request["flowEditVersion"] is { } version)
+        {
+            if (version is not JsonValue value || !value.TryGetValue<int>(out var parsed))
+                return WebReply("rejected", "流程编辑协议版本无效，未执行", instanceId: instance);
+            flowEditVersion = parsed;
+        }
         var centerRequest = new RemoteCenterRequest
         {
             Operation = operation,
             TargetInstanceId = instance,
             ExpectedRevision = request["expectedRevision"]?.GetValue<string>(),
+            FlowEditVersion = flowEditVersion,
             PayloadJson = payload is null ? null : payload.ToJsonString()
         };
         if (centerRequest.PayloadJson is { Length: > 2_000_000 })

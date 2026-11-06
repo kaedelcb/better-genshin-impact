@@ -17,7 +17,7 @@ function tcFlows() { return (mtPick(tc.list, 'flows') || []).map(f => ({ id:mtPi
     candidate:mtPick(f, 'activationStatus') === 'candidate-ready' })); }
 function tcFlow(id = tc.selected) { return tcFlows().find(f => f.id === id) || null; }
 function tcHasFlowRows(doc = tc.doc) { return (doc?.nodes || []).some(n => n.kind === 'control.flow' || n.kind === 'control.lanes'); }
-function tcCanEdit(f) { return f && !f.candidate && !f.quarantined && !(f.id === tc.selected && tcHasFlowRows()); }
+function tcCanEdit(f) { return f && !f.candidate && !f.quarantined; }
 function tcCanStart(f) { return f && !f.candidate && !f.quarantined && !f.unsupported.length; }
 function tcActive() { return mtPick(tc.list, 'active') || []; }
 function tcDriving(id) { return (mtPick(tc.list, 'drivingWorkflowIds') || []).includes(id); }
@@ -144,14 +144,14 @@ function tcEdited(message) {
 }
 async function tcSave() {
     clearTimeout(tc.saveTimer);
-    if (tcHasFlowRows()) { mtToast('此计划包含流程和车道，请在桌面助手中编辑；网页未保存任何改动。', true); return false; }
     if (!tc.dirty || tc.saving || !tc.doc) return !tc.dirty;
     if (tc.conflict) { mtToast(tc.conflict, true); return false; }
     tc.saving = true; tcRenderPlanHead();
-    const snapshot = JSON.stringify(tc.doc), id = tc.selected;
-    const reply = await mtOperate('task.flow.save', mtClone(tc.doc), { expectedRevision:() => tc.revision, label:'保存任务计划', scope:id, proceedAfterCheck:true });
+    const snapshot = JSON.stringify(tc.doc), id = tc.selected, target = mt.target;
+    const reply = await mtOperate('task.flow.save', mtClone(tc.doc), { expectedRevision:() => tc.revision, flowEditVersion:1, label:'保存任务计划', scope:id, proceedAfterCheck:true });
+    if (id !== tc.selected || target !== mt.target) return false;
     tc.saving = false;
-    if (reply.status === 'ok' && reply.revision && id === tc.selected) {
+    if (reply.status === 'ok' && reply.revision && id === tc.selected && target === mt.target) {
         tc.revision = reply.revision; tc.base = JSON.parse(snapshot);
         tc.dirty = JSON.stringify(tc.doc) !== snapshot;
         if (tc.dirty) tc.saveTimer = setTimeout(tcSave, 600); else mtToast('计划已自动保存到执行端。');
@@ -178,9 +178,10 @@ function tcRender(host) {
         else if (!tc.loading) tcLoad().then(() => mt.tab === 'taskcenter' && tcRender(mtEl('mtContent')));
         return;
     }
-    host.innerHTML = `<div id="tcRuns"></div><div class="tc-layout"><aside class="dd-card tc-plans"><header class="tc-plans-head"><h2>计划表</h2><div class="dd-actions"><button id="tcNew" class="dd-btn dd-btn-sm" title="新建计划表">＋ 新建</button><button id="tcManage" class="dd-btn dd-btn-sm" title="导入、导出、恢复已删除计划">⋯ 管理</button></div></header><div id="tcPlanList" class="tc-plan-list"></div></aside>
+    host.innerHTML = `<section id="tcRegisters" class="dd-card mt-tools"></section><div id="tcRuns"></div><div class="tc-layout"><aside class="dd-card tc-plans"><header class="tc-plans-head"><h2>计划表</h2><div class="dd-actions"><button id="tcNew" class="dd-btn dd-btn-sm" title="新建计划表">＋ 新建</button><button id="tcManage" class="dd-btn dd-btn-sm" title="导入、导出、恢复已删除计划">⋯ 管理</button></div></header><div id="tcPlanList" class="tc-plan-list"></div></aside>
       <section class="tc-main"><div id="tcPlanHead" class="dd-card tc-plan-head"></div><div id="tcNodes" class="dd-card tc-nodes"></div></section></div>`;
     mtEl('tcNew').onclick = tcNewFlow; mtEl('tcManage').onclick = tcManage;
+    if (typeof mtRenderRegisterStrip === 'function') mtRenderRegisterStrip('tcRegisters');
     tcRenderRuns(); tcRenderPlans(); tcRenderPlanHead(); tcRenderNodes();
 }
 function tcRenderRuns() {
@@ -229,35 +230,8 @@ function tcRenderPlanHead() {
     if (mtEl('tcActivate')) mtEl('tcActivate').onclick = () => tcMigration('task.migration.activate', f.id, `激活候选「${f.name}」`);
     mtEl('tcWindowSwitch').onchange = e => { doc.nodeTimeWindowEnabled = e.target.checked; tcEdited(e.target.checked ? '已开启按时段执行：时段外任务跳过。' : '已关闭按时段执行：保留时段设置，按原计划执行。'); };
 }
-// 含编排的计划按作者结构只读展示，不能将车道里的资源重新扁平化到主线。
-function tcRenderFlowRows(host, doc) {
-    const all = doc.nodes || [], byId = new Map(all.map(n => [n.nodeId, n]));
-    const integrated = new Set(all.filter(n => n.kind === 'control.lanes' && !n.lanes?.decision && n.lanes?.sourceFlowNodeId).map(n => n.lanes.sourceFlowNodeId));
-    const inLane = new Set(all.flatMap(n => n.kind === 'control.lanes'
-        ? [...(n.lanes?.yesNodeIds || []), ...(n.lanes?.noNodeIds || [])] : []));
-    const resource = n => '<div class="tc-flow-resource"><b>' + mte(tcNodeName(n)) + '</b><small> · ' + mte(TC_KIND[n.kind] || n.kind) + '</small></div>';
-    const stepName = s => s.name || s.displayName || ({
-        wait:'等待', weekday:'星期判断', timeRange:'时间区间', setRegister:'设置寄存器', judgeRegister:'判断寄存器',
-        logTrigger:'日志触发器', timerTrigger:'定时触发器', watchdog:'电子狗', manualConfirm:'人工确认',
-        bgiRunning:'BGI 进程状态', gameRunning:'游戏进程状态', processRunning:'指定进程状态',
-        bgiTaskRunning:'BGI 任务状态', bgiTaskName:'BGI 当前任务名', startProgram:'启动第三方程序'
-    }[s.kind] || s.kind || '节点');
-    const steps = (list, depth = 0) => depth > 16 ? '<p>子链层级过深，请在桌面助手查看。</p>' : (list || []).map(s =>
-        '<li>' + mte(stepName(s)) + (s.enabled === false ? '（已禁用）' : '') +
-        [ ['是',s.trueSteps], ['否',s.falseSteps], ['触发时',s.fireSteps] ].filter(x => x[1]?.length)
-            .map(([label, sub]) => '<div><small>' + label + '</small><ol>' + steps(sub, depth + 1) + '</ol></div>').join('') + '</li>').join('');
-    const lane = (name, ids) => '<section class="dd-card"><h4>' + mte(name) + '</h4>' +
-        ((ids || []).length ? ids.map(id => byId.has(id) ? resource(byId.get(id)) : '<p>任务引用已失效</p>').join('') : '<p>空车道，直接汇流。</p>') + '</section>';
-    host.innerHTML = '<header class="tc-nodes-head"><div><h3>任务与流程</h3><p class="dodoco-hint">只读：请在桌面助手编辑流程与车道。展开可查看执行顺序；未选择的车道不会执行。</p></div></header>' +
-        all.filter(n => !inLane.has(n.nodeId) && !integrated.has(n.nodeId)).map((n, i) => {
-            if (n.kind === 'control.flow') return '<details class="dd-card"><summary>' + (i + 1) + ' · 流程 · ' + mte(tcNodeName(n)) + '</summary><ol>' + steps(n.flow?.steps) + '</ol><small>' + (n.flow?.exitStepId ? '末端判断输出是 / 否，交给配对车道。' : '动作完成后继续主线。') + '</small></details>';
-            if (n.kind === 'control.lanes') { const decision = n.lanes?.decision || byId.get(n.lanes?.sourceFlowNodeId)?.flow; return '<details class="dd-card"><summary>' + (i + 1) + ' · 车道 · ' + mte(tcNodeName(n)) + '</summary><p>先判断：</p><ol>' + steps(decision?.steps) + '</ol>' +
-                lane('满足条件 · ' + (n.lanes?.yesName || '是车道'), n.lanes?.yesNodeIds) +
-                lane('其他情况 · ' + (n.lanes?.noName || '否车道'), n.lanes?.noNodeIds) +
-                '<p class="dodoco-hint">只走一条路线，完成后继续下一项任务。</p></details>'; }
-            return '<section class="dd-card">' + (i + 1) + ' · ' + resource(n) + '</section>';
-        }).join('');
-}
+// 含编排的计划按作者结构编辑，车道成员始终保留在所属路线中。
+function tcRenderFlowRows(host, doc) { tcRenderCompositionRows(host, doc); }
 function tcRenderNodes() {
     const host = mtEl('tcNodes'); if (!host) return;
     const f = tcFlow(), doc = tc.doc;
@@ -266,7 +240,7 @@ function tcRenderNodes() {
     if (tcHasFlowRows(doc)) { tcRenderFlowRows(host, doc); return; }
     const editable = tcCanEdit(f), nodes = tcResourceNodes(), marker = tcStartMarker(), now = tcNow();
     const head = `<header class="tc-nodes-head"><div><h3>配置单</h3><p class="dodoco-hint">${editable ? '拖动 ⠿ 调整顺序；点日期、时段或账号直接编辑。运行中修改会在下一个任务边界生效。' : '只读：' + (f.quarantined ? '隔离计划不可编辑' : '候选计划需先激活')}</p></div>${editable ? '<button id="tcAdd" class="dd-btn dd-btn-sm dd-btn-primary">＋ 新增任务</button>' : ''}</header>`;
-    if (!nodes.length) { host.innerHTML = head + `<p class="dd-empty">${editable ? '这张计划表还是空的。先添加一个配置单，修改会自动保存，之后即可启动计划。' : '没有配置单。'}</p>`; if (editable) mtEl('tcAdd').onclick = () => tcAddDialog(); return; }
+    if (!nodes.length) { host.innerHTML = head + `<p class="dd-empty">${editable ? '这张计划表还是空的。先添加任务、流程或车道，修改会自动保存，之后即可启动计划。' : '没有配置单。'}</p>`; if (editable) mtEl('tcAdd').onclick = tcAddMenu; return; }
     host.innerHTML = head + `<div class="tc-table" role="table"><div class="tc-tr tc-th" role="row"><span></span><span>顺序</span><span>配置单</span><span>执行日期</span><span>执行时段</span><span>UID / 账号</span><span>启用</span><span></span></div>`
         + nodes.map((n, i) => {
             const acc = tcStrat(n, 'prerequisite.account'), out = doc.nodeTimeWindowEnabled && !tcInWindow(n, now) && tcEnabled(n);
@@ -279,7 +253,7 @@ function tcRenderNodes() {
               <label class="tc-toggle"><input type="checkbox" data-enable${tcEnabled(n) ? ' checked' : ''}${editable ? '' : ' disabled'} aria-label="启用此配置单"></label>
               <span class="tc-row-act"><button class="dd-btn dd-btn-sm dd-btn-icon" data-tasks title="设置此配置单内部任务的启用、顺序和执行起点">⚙</button><button class="dd-btn dd-btn-sm dd-btn-icon" data-more title="更多操作">⋯</button></span></div>`;
         }).join('') + '</div>';
-    if (editable) mtEl('tcAdd').onclick = () => tcAddDialog();
+    if (editable) mtEl('tcAdd').onclick = tcAddMenu;
     host.querySelectorAll('.tc-tr[data-node]').forEach(row => {
         const node = doc.nodes.find(n => n.nodeId === row.dataset.node);
         row.onclick = e => { if (e.target.closest('button,input,label')) return; tc.selectedNode = node.nodeId; tcRenderNodes(); };
@@ -302,13 +276,14 @@ function tcSetEnabled(n, on) {
 }
 /** 同 PC MoveNodeTo：在完整节点数组里移动（控制节点位置不变），保留节点对象和稳定身份。 */
 function tcMoveTo(id, targetId, after) {
+    if (typeof tcMoveComposition === 'function') { tcMoveComposition(id, targetId, after); return; }
     const list = tc.doc.nodes, from = list.findIndex(n => n.nodeId === id); let to = list.findIndex(n => n.nodeId === targetId);
     if (from < 0 || to < 0) return;
     const [node] = list.splice(from, 1); to = list.findIndex(n => n.nodeId === targetId) + (after ? 1 : 0); list.splice(to, 0, node);
     tcEdited(`已把「${tcNodeName(node)}」移到第 ${tcResourceNodes().indexOf(node) + 1} 位`);
 }
 function tcMove(node, delta) {
-    const res = tcResourceNodes(), i = res.indexOf(node), j = i + delta;
+    const res = typeof tcCompositionSiblings === 'function' ? tcCompositionSiblings(node) : tcResourceNodes(), i = res.indexOf(node), j = i + delta;
     if (j < 0 || j >= res.length) return;
     tcMoveTo(node.nodeId, res[j].nodeId, delta > 0);
 }
@@ -323,6 +298,8 @@ function tcDialogShell(title, sub, body, foot) {
     return dialog;
 }
 function tcNodeDialog(node, focus) {
+    const context = { target:mt.target, workflowId:tc.selected, nodeId:node.nodeId, original:JSON.stringify(node) };
+    node = mtClone(node);
     const w = tcStrat(node, 'condition.weekdays'), days = Array.isArray(w?.days) ? w.days : TC_WEEK, acc = tcStrat(node, 'prerequisite.account');
     const fail = tcStrat(node, 'execution.failure'), pr = tcStrat(node, 'schedule.priority'), win = node.timeWindow;
     const redeem = tcStrat(node, 'prerequisite.redeemCode');
@@ -343,6 +320,9 @@ function tcNodeDialog(node, focus) {
     q('[data-cancel]').onclick = () => dialog.close();
     q('[data-ok]').onclick = () => {
         try {
+            if (context.target !== mt.target || context.workflowId !== tc.selected || !tcCanEdit(tcFlow())) throw new Error('当前执行端或计划已切换，设置草稿仍保留在窗口中。');
+            const currentIndex = tc.doc.nodes.findIndex(n => n.nodeId === context.nodeId);
+            if (currentIndex < 0 || JSON.stringify(tc.doc.nodes[currentIndex]) !== context.original) throw new Error('原任务已修改或删除，未覆盖新内容；设置草稿仍保留在窗口中。');
             const s = node.strategies ||= [];
             // 执行日期：相对原值有变化才重建 days；空选择保持「未选择日期」（不会被当作每天）。
             const on = q('#tcWeekOn').checked, picked = [...dialog.querySelectorAll('#tcWeekDays input:checked')].map(x => x.value);
@@ -369,17 +349,19 @@ function tcNodeDialog(node, focus) {
             const p = q('#tcPriority').value.trim(), old = pr?.priority ?? 0;
             if (!/^-?\d+$/.test(p)) throw new Error('节点优先级须为整数（数值越大越优先，默认 0）');
             if (+p !== old) { const target = pr || (s.push({ kind:'schedule.priority' }), s[s.length - 1]); target.priority = +p; }
+            tc.doc.nodes[currentIndex] = node;
             dialog.close(); tcEdited(`已修改「${tcNodeName(node)}」的设置，正在自动保存。`);
         } catch (error) { mtToast(error.message, true); }
     };
 }
 function tcNodeMenu(node) {
-    const f = tcFlow(), editable = tcCanEdit(f), res = tcResourceNodes(), i = res.indexOf(node), marker = tcStartMarker();
-    const block = tcBlocking(f.id);
+    const f = tcFlow(), editable = tcCanEdit(f), res = typeof tcCompositionSiblings === 'function' ? tcCompositionSiblings(node) : tcResourceNodes(), i = res.indexOf(node), marker = tcStartMarker();
+    const block = tcBlocking(f.id), canEntry = typeof tcCanUseEntry !== 'function' || tcCanUseEntry(node.nodeId);
     const dialog = tcDialogShell(mte(tcNodeName(node)), `第 ${i + 1} 个配置单 · ${TC_KIND[node.kind]}`, `<div class="tc-menu">
-        <button class="dd-btn" data-a="single"${!tcCanStart(f) || block || tc.starting ? ' disabled' : ''}>▶ 启动单任务（只执行这一项）</button>
-        <button class="dd-btn" data-a="from"${!tcCanStart(f) || block || tc.starting ? ' disabled' : ''}>⏵⏵ 从这里开始执行到最后</button>
-        ${editable ? `<button class="dd-btn" data-a="mark">${marker === node.nodeId ? '清除「在此执行」起点' : '设为起点（下次点「连续一条龙」从这里开始）'}</button>
+        <button class="dd-btn" data-a="single"${!tcCanStart(f) || block || tc.starting || !canEntry ? ' disabled' : ''}>▶ 启动单任务（只执行这一项）</button>
+        <button class="dd-btn" data-a="from"${!tcCanStart(f) || block || tc.starting || !canEntry ? ' disabled' : ''}>⏵⏵ 从这里开始执行到最后</button>
+        ${!canEntry ? '<p class="dodoco-hint">此任务关联流程监听或车道选路，请从计划开头执行。</p>' : ''}
+        ${editable ? `<button class="dd-btn" data-a="mark"${!canEntry && marker !== node.nodeId ? ' disabled' : ''}>${marker === node.nodeId ? '清除「在此执行」起点' : '设为起点（下次点「连续一条龙」从这里开始）'}</button>
         <button class="dd-btn" data-a="up"${i === 0 ? ' disabled' : ''}>↑ 上移</button><button class="dd-btn" data-a="down"${i === res.length - 1 ? ' disabled' : ''}>↓ 下移</button>
         <button class="dd-btn" data-a="dup">复制此配置单</button><button class="dd-btn" data-a="settings">配置单设置…</button>
         <button class="dd-btn" data-a="ref">读取刚才的修改（同步 BGI 引用修订）</button>
@@ -392,6 +374,7 @@ function tcNodeMenu(node) {
         if (a === 'mark') return tcMark(node, marker !== node.nodeId);
         if (a === 'up' || a === 'down') return tcMove(node, a === 'up' ? -1 : 1);
         if (a === 'dup') {
+            if (typeof tcDuplicateComposition === 'function') return tcDuplicateComposition(node);
             const copy = mtClone(node); copy.nodeId = tcNewNodeId(); const list = tc.doc.nodes; list.splice(list.indexOf(node) + 1, 0, copy);
             tc.selectedNode = copy.nodeId; return tcEdited(`已复制「${tcNodeName(node)}」`);
         }
@@ -400,6 +383,7 @@ function tcNodeMenu(node) {
         if (a === 'editor') return tcOpenEditor(node);
         if (a === 'del') {
             if (!confirm(`从计划删除配置单「${tcNodeName(node)}」？`)) return;
+            if (typeof tcRemoveComposition === 'function') return tcRemoveComposition(node);
             tc.doc.nodes.splice(tc.doc.nodes.indexOf(node), 1);
             if (tc.doc[TC_START_KEY] === node.nodeId) delete tc.doc[TC_START_KEY];
             if (tc.selectedNode === node.nodeId) tc.selectedNode = '';
@@ -408,6 +392,7 @@ function tcNodeMenu(node) {
     });
 }
 async function tcMark(node, on) {
+    if (on && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(node.nodeId)) return mtToast('此起点会绕过流程监听或车道选路，请从计划开头执行。', true);
     if (on) { tc.consumed.delete(tc.selected); tc.doc[TC_START_KEY] = node.nodeId; }
     else { tc.consumed.set(tc.selected, tc.doc[TC_START_KEY]); delete tc.doc[TC_START_KEY]; }
     tc.dirty = true; const ok = await tcSave();
@@ -441,6 +426,7 @@ function tcSources() {
 }
 function tcTaskId(e) { const prefix = 'single:' + e.ownerConfig + ':'; return e.kind === 2 && e.ownerConfig && e.stableId.startsWith(prefix) ? e.stableId.slice(prefix.length) : null; }
 function tcAddDialog(state = { cat:null, q:'', picked:new Set() }) {
+    if (!state.workflowId) { state.workflowId = tc.selected; state.target = mt.target; }
     const all = tcSources(), cat = tcCatalog(), kinds = [[0, '配置组', 1], [1, '整龙', 0], [2, '单项', 2]];
     // 与 PC BasicTaskCenterView 一致：有配置组先选配置组，否则整龙，否则单项（条目 kind：0 整龙、1 配置组、2 单项）。
     if (state.cat === null) state.cat = all.some(e => e.kind === 1) ? 0 : all.some(e => e.kind === 0) ? 1 : all.some(e => e.kind === 2) ? 2 : 0;
@@ -456,11 +442,15 @@ function tcAddDialog(state = { cat:null, q:'', picked:new Set() }) {
     dialog.querySelector('#tcConnect').onclick = async () => { await tcConnectCatalog(); if (mtDialog('tcDialog').open) tcAddDialog(state); };
     dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
     dialog.querySelector('[data-ok]').onclick = () => {
+        if (state.workflowId !== tc.selected || state.target !== mt.target || !tcCanEdit(tcFlow())) return mtToast('当前执行端或计划已切换，本次没有添加任务。', true);
+        const lane = state.laneNodeId ? tc.doc.nodes.find(n => n.nodeId === state.laneNodeId)?.lanes : null;
+        if (state.laneNodeId && (!lane || !['yesNodeIds','noNodeIds'].includes(state.laneKey))) return mtToast('车道已经变化，请重新打开添加任务。', true);
         const add = all.filter(e => state.picked.has(e.stableId));
         for (const e of add) {
             const node = { nodeId:tcNewNodeId(), kind:['resource.oneDragonConfig', 'resource.configGroup', 'resource.singleTask'][e.kind] || 'resource.oneDragonConfig',
                 ref:{ config:e.kind === 2 ? e.ownerConfig : e.displayName, revision:e.configRevision ?? null, ...(e.kind === 2 ? { taskId:tcTaskId(e) } : {}) }, strategies:[] };
             tc.doc.nodes.push(node);
+            if (lane) (lane[state.laneKey] ||= []).push(node.nodeId);
         }
         dialog.close(); tcEdited(`已添加 ${add.length} 个任务，正在自动保存计划。`);
     };
@@ -621,6 +611,7 @@ async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
         if (!(await tcFlush())) { mtToast('执行端计划尚未确认保存，已取消启动', true); return; }
         const marker = !entryNodeId ? tcStartMarker() : null;
         const entry = entryNodeId || marker || null;
+        if (entry && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(entry)) return mtToast('当前起点会绕过流程监听或车道选路。本次没有启动，请先在该任务的更多操作中清除起点，再从计划开头执行。', true);
         const label = stopAfterNodeId ? '启动单任务' : fromHere ? '从此处开始执行' : '连续一条龙';
         const reply = await mtOperate('task.run.start', { workflowId:f.id, entryNodeId:entry, expectedRevision:tc.revision, stopAfterNodeId:stopAfterNodeId || null }, { label, onStage:mtStageBar, waitBudget:12000 });
         if (reply.status === 'ok' && marker) { tc.consumed.set(f.id, marker); delete tc.doc[TC_START_KEY]; tc.dirty = true; await tcSave(); }
