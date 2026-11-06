@@ -26,7 +26,7 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 /// 变化只在"线上消息形状"：65 个旧 Hub 方法 → 网关消息名（映射表见 GatewayProtocol 与服务器
 /// GatewayProtocol.LegacyMethodMap/LegacyEventMap）。
 /// </summary>
-public class CoordinatorClient : IAsyncDisposable
+public partial class CoordinatorClient : IAsyncDisposable
 {
     private readonly ILogger<CoordinatorClient> _logger = App.GetLogger<CoordinatorClient>();
     private BgiGatewayClient? _gateway;
@@ -103,6 +103,7 @@ public class CoordinatorClient : IAsyncDisposable
         _taskCancellation = taskToken.Register(() =>
         {
             lock (_roomLock) _taskStopped = true;
+            _worldPlanStopCts.Cancel();
             EndRoomSession("task-cancelled");
         });
     }
@@ -470,6 +471,7 @@ public class CoordinatorClient : IAsyncDisposable
     {
         try
         {
+            if (!AcceptRoomEvent(env)) return;
             switch (env.Name)
             {
                 case GatewayProtocol.Events.RoomPlayerListChanged:
@@ -788,6 +790,11 @@ public class CoordinatorClient : IAsyncDisposable
 
     internal async Task OnReconnected(string? newConnectionId)
     {
+        if (IsWorldPlanTransferring)
+        {
+            await RecoverWorldPlanTransportAsync(false);
+            return;
+        }
         RoomSession? session;
         lock (_roomLock) session = _roomSession;
         if (session == null || !IsCurrent(session)) return;
@@ -828,6 +835,11 @@ public class CoordinatorClient : IAsyncDisposable
     private async Task OnConnectionClosed(Exception? ex)
     {
         await OnReconnecting(ex);
+        if (IsWorldPlanTransferring)
+        {
+            await RecoverWorldPlanTransportAsync(true);
+            return;
+        }
         RoomSession? session;
         lock (_roomLock) session = _roomSession;
         if (session == null || !IsCurrent(session)) return;
@@ -942,6 +954,7 @@ public class CoordinatorClient : IAsyncDisposable
             lock (_roomLock)
                 if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
             DetachRoomForExplicitChange();
+            BeginExplicitRoomEvents(roomCode);
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
             {
                 roomCode, playerName, playerUid = playerUid ?? "", hoeingBatchId = batchId,
@@ -955,6 +968,7 @@ public class CoordinatorClient : IAsyncDisposable
                 var session = BeginRoomSession(roomCode, playerName, playerUid, batchId);
                 ct.ThrowIfCancellationRequested();
                 MarkRoomReady(session);
+                CompleteExplicitRoomEvents();
                 result = IsCurrent(session);
             }
             _logger.LogInformation("JoinRoomAsync 完成: Room={RoomCode}, Player={PlayerName}, Result={Result}", roomCode, playerName, result);
@@ -966,7 +980,7 @@ public class CoordinatorClient : IAsyncDisposable
             _logger.LogError(ex, "JoinRoomAsync 失败: Room={RoomCode}, Player={PlayerName}", roomCode, playerName);
             return false;
         }
-        finally { _recoveryGate.Release(); }
+        finally { ClearExplicitRoomEvents(); _recoveryGate.Release(); }
     }
 
     public async Task LeaveRoomAsync()
@@ -1238,6 +1252,7 @@ public class CoordinatorClient : IAsyncDisposable
             lock (_roomLock)
                 if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
             DetachRoomForExplicitChange();
+            BeginExplicitRoomEvents(null);
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
             {
                 playerName, whitelist = whitelist ?? new List<string>(), playerUid, expectedPlayerCount,
@@ -1251,12 +1266,13 @@ public class CoordinatorClient : IAsyncDisposable
             var session = BeginRoomSession(result, playerName, playerUid, batchId);
             ct.ThrowIfCancellationRequested();
             MarkRoomReady(session);
+            CompleteExplicitRoomEvents();
             return IsCurrent(session) ? result : null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         { _logger.LogError(ex, "CreateRoomAsync 失败"); return null; }
-        finally { _recoveryGate.Release(); }
+        finally { ClearExplicitRoomEvents(); _recoveryGate.Release(); }
     }
 
     /// <summary>

@@ -628,9 +628,9 @@ public partial class AutoHoeingConfig : ObservableObject
     private int _multiWorldCount = 4;
 
     /// <summary>
-    /// 多世界重开续跑：房主重开时把已完成房主 UID 上报服务端裁剪权威序列，全组跳过已完成世界。
-    /// 默认 true。房主侧配置（不进 RoomConfig、不下发成员）；效果通过裁剪序列全局生效。
-    /// 关闭 → 上报空集合 → 全量序列 → 逐轮试探（现状）。单机零感知。
+    /// 多世界续开重跑：每次开队先预判当前线路，全组直接进入原计划中首个有线路的世界。
+    /// 默认开启，由发起房主下发，服务端汇总本次结果；无线路的成员仍参队。
+    /// 关闭时保留逐世界进入检查的旧流程，单机不启用预判。
     /// hoeing-multiworld-host-restart-resume-round Req 5。
     /// </summary>
     [ObservableProperty]

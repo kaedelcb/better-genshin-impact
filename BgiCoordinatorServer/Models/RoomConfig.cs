@@ -33,6 +33,7 @@ public class RoomConfig
     public int PartyTimeoutSeconds { get; set; } = 300;
     public bool MultiWorldEnabled { get; set; } = false;
     public int MultiWorldCount { get; set; } = 2;
+    public bool MultiWorldResumeEnabled { get; set; } = true;
     public string SelectedBuiltinRoute { get; set; } = "";
     /// <summary>联机模式下的战斗超时时间（秒），由房主设定</summary>
     public int FightTimeoutSeconds { get; set; } = 120;

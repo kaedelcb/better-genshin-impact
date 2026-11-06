@@ -11,6 +11,7 @@ public static class GatewayProtocol
 {
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
+    public const string WorldPlanCapability = "hoeing.worldPlan.v1";
 
     public static class MessageTypes
     {
@@ -45,6 +46,16 @@ public static class GatewayProtocol
     /// <summary>客户端 → 服务端消息名（§9.2 按族，本切片实际用到的子集）。</summary>
     public static class Names
     {
+        public const string WorldPlanBegin = "worldPlan.begin";
+        public const string WorldPlanAcquire = "worldPlan.acquire";
+        public const string WorldPlanReport = "worldPlan.report";
+        public const string WorldPlanGet = "worldPlan.get";
+        public const string WorldPlanAck = "worldPlan.ack";
+        public const string WorldPlanCreateTarget = "worldPlan.createTarget";
+        public const string WorldPlanValidateTarget = "worldPlan.validateTarget";
+        public const string WorldPlanLeaveSource = "worldPlan.leaveSource";
+        public const string WorldPlanAbort = "worldPlan.abort";
+
         public const string SessionHello = "session.hello";
         public const string SessionHeartbeat = "session.heartbeat";
 

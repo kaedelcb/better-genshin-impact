@@ -154,6 +154,15 @@ public class RoomManager
         {
             if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room))
                 return (false, "房间不存在");
+            if (room.WorldPlanParticipantUids is { } planned)
+            {
+                if (!planned.Contains(playerUid, StringComparer.Ordinal))
+                    return (false, "world_plan_not_participant");
+                if (room.Players.Any(p => p.PlayerUid == playerUid && p.ConnectionId != connectionId
+                    && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
+                    && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
+                    return (false, "world_plan_duplicate_participant");
+            }
             if (room.HoeingBatchId is not null && !room.ExpectedParticipantUids.Contains(playerUid, StringComparer.Ordinal))
                 return (false, "hoeing_start_not_participant");
             if (room.HoeingBatchId is not null && room.Players.Any(p => p.PlayerUid == playerUid
@@ -838,6 +847,19 @@ public class RoomManager
 
     private void RemoveConnectionMappingLocked(string connectionId, string roomCode)
         => _connectionRoomMap.TryRemove(new KeyValuePair<string, string>(connectionId, roomCode));
+
+    /// <summary>预判交接专用的条件退出。旧请求只移除其指向的房间实例，绝不操作后继房间。</summary>
+    public bool EndRoomIfMatches(string roomCode, string sessionId)
+    {
+        if (!_rooms.TryGetValue(roomCode, out var room)) return false;
+        lock (room)
+        {
+            if (room.SessionId != sessionId || !_rooms.TryGetValue(roomCode, out var current)
+                || !ReferenceEquals(room, current) || !RemoveRoomLocked(roomCode, room)) return false;
+        }
+        NotifyRoomLogEnded(room);
+        return true;
+    }
 
     /// <summary>在当前成员锁内确定断线身份；迟到的旧连接回调不再影响已重连成员。</summary>
     internal GameDisconnectResult? BeginGameDisconnect(string connectionId, DateTime utcNow, TimeSpan memberGrace)

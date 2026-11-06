@@ -50,11 +50,16 @@ public sealed class GatewayBroadcaster
     }
 
     /// <summary>向调用方定向发送：按调用方协议来源只发一份（旧名或 evt）。</summary>
-    public async Task SendToCallerAsync(GatewayHandlerContext ctx, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
+    public Task SendToCallerAsync(GatewayHandlerContext ctx, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
+        => SendToCallerAsync(ctx, legacyEventName, evtPayload, legacyArgs, roomCode: null);
+
+    /// <summary>房间业务的定向补发保留来源房间码；旧协议参数列表保持原样。</summary>
+    public async Task SendToCallerAsync(GatewayHandlerContext ctx, string legacyEventName, object? evtPayload,
+        object?[] legacyArgs, string? roomCode)
     {
         if (ctx.IsV3)
         {
-            await SendEvtSafeAsync(_gatewayHub.Clients.Client(ctx.ConnectionId), null, legacyEventName, evtPayload);
+            await SendEvtSafeAsync(_gatewayHub.Clients.Client(ctx.ConnectionId), roomCode, legacyEventName, evtPayload);
             return;
         }
         await _legacyHub.Clients.Client(ctx.ConnectionId).SendCoreAsync(legacyEventName, legacyArgs);

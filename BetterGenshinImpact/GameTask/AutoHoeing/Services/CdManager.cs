@@ -17,8 +17,11 @@ public class CdManager
     private Dictionary<string, CdRecord> _records = new();
     private string _filePath = "";
 
+    public bool LoadSucceeded { get; private set; } = true;
+
     public void Load(string dataDir, string accountName)
     {
+        LoadSucceeded = true;
         _filePath = Path.Combine(dataDir, "records", $"{accountName}.json");
         if (!File.Exists(_filePath))
         {
@@ -34,6 +37,7 @@ public class CdManager
         }
         catch (Exception ex)
         {
+            LoadSucceeded = false;
             Logger.LogWarning("加载CD记录失败: {Msg}", ex.Message);
             _records = new();
         }
@@ -80,6 +84,9 @@ public class CdManager
 
         return DateTime.Now < record.CdTime;
     }
+
+    internal bool IsOnCooldownAt(RouteInfo route, DateTime at)
+        => _records.TryGetValue(route.FileName, out var record) && at < record.CdTime;
 
     /// <summary>
     /// 初始化路线的CD和运行记录

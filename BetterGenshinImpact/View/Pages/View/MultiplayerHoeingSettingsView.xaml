@@ -644,12 +644,12 @@
                     <StackPanel>
                         <ui:TextBlock Margin="0,0,0,8"
                                       FontTypography="BodyStrong"
-                                      Text="重开续跑（跳过已完成世界）" />
+                                      Text="续开重跑（开队前跳过无线路世界）" />
                         <ui:ToggleSwitch Margin="0,0,0,4"
-                                         Content="启用重开续跑"
+                                         Content="启用续开重跑"
                                          IsChecked="{Binding MultiWorldResumeEnabled, Mode=TwoWay}" />
                         <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="房主中途停止后重新开始时，全组直接跳到第一个待执行的轮次，跳过已锄完的房主世界（默认开启）。关闭则回退为从第 1 轮逐个世界试探的旧行为。仅房主可见，效果作用于全组。"
+                                      Text="开启后，每次开队先预判各家待执行线路，全组直接进入首个有线路的世界；无线可跑的成员仍参队。关闭则从第 1 轮逐家进入并检查。预判无法确认时，全组回到逐家检查；仅房主设置生效。"
                                       TextWrapping="Wrap" />
                     </StackPanel>
                 </ui:Card>

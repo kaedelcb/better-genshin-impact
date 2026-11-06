@@ -4,6 +4,8 @@ public class Room
 {
     public string? HoeingBatchId { get; init; }
     public IReadOnlyList<string> ExpectedParticipantUids { get; init; } = [];
+    /// <summary>开队预判冻结的参队名册；不代表已经进世界或已开锄。旧流程保持 null。</summary>
+    public IReadOnlyList<string>? WorldPlanParticipantUids { get; set; }
     public string Code { get; set; } = "";
     public string HostConnectionId { get; set; } = "";
 

@@ -129,8 +129,8 @@ public sealed partial class RoomOperations
             ctx,
             "SyncBarrierFailed",
             new { syncPointId, reason },
-            syncPointId,
-            reason);
+            new object?[] { syncPointId, reason },
+            roomCode: roomCode);
         _logger.LogInformation("房间 {Code} 向迟到门禁调用方补发失败: {SyncId}", roomCode, syncPointId);
         return true;
     }
@@ -227,7 +227,8 @@ public sealed partial class RoomOperations
         {
             _logger.LogInformation("[WaitForAllPlayers] 该同步点本轮已放行，补发 AllArrived 给晚到调用方: 房间={RoomCode}, 同步点={SyncId}, 连接={ConnId}",
                 roomCode, syncId, ctx.ConnectionId);
-            await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId }, syncId);
+            await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId },
+                new object?[] { syncId }, roomCode: roomCode);
             // collective-stuck-orphan-arrivalset fix：补发即放行，清掉刚才 RecordArrival 写入的到达记录，
             // 避免在已广播过的 syncId 上留下孤儿集合（该点本轮不会再全量广播，残留永不消）
             _roomManager.RemoveArrival(roomCode, syncId, ctx.ConnectionId);
@@ -245,7 +246,8 @@ public sealed partial class RoomOperations
             // 集合内只剩 caller 一人且其他玩家不会再到达，残留即孤儿，会虚增集体卡死判定的 C1 计数。
             _logger.LogInformation("[WaitForAllPlayers] caller 为孤立落后者，补发 AllArrived 放行: 房间={RoomCode}, 同步点={SyncId}, 进度={Progress}, 连接={ConnId}",
                 roomCode, syncId, syncProgress, ctx.ConnectionId);
-            await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId }, syncId);
+            await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId },
+                new object?[] { syncId }, roomCode: roomCode);
             _roomManager.RemoveArrival(roomCode, syncId, ctx.ConnectionId);
         }
 

@@ -38,7 +38,7 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing;
 /// 锄地一条龙 - BetterGI原生C#独立任务
 /// 将JS脚本"锄地一条龙"的全部功能转写为原生任务
 /// </summary>
-public class AutoHoeingTask : ISoloTask
+public partial class AutoHoeingTask : ISoloTask
 {
     public string Name => "锄地一条龙";
 
@@ -639,6 +639,13 @@ public class AutoHoeingTask : ISoloTask
         }
         finally
         {
+            if (_worldPlanAdmission != null && !_completedNormally && !_mainExecutionReturned)
+            {
+                using var planCleanup = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                try { await _coordinatorClientRef!.AbortWorldPlanAsync(_worldPlanAdmission, planCleanup.Token); }
+                catch (Exception ex) { _logger.LogDebug(ex, "[续开重跑] 终止原计划上报失败"); }
+            }
+
             // 清除全局联机锄地进度信号
             AutoHoeingProgress.Clear();
 
@@ -820,7 +827,7 @@ public class AutoHoeingTask : ISoloTask
             if (Multiplayer.CoordinatedHoeingOutcome.IsIncomplete(
                     executionFailed: executionFailure != null, expCapStop: _expCapStopTriggered,
                     completedNormally: _completedNormally, sessionTerminated: _sessionTerminated,
-                    setupIncomplete: _config.MultiplayerEnabled && !_config.SoloDebugMode && !_multiplayerPartyReady,
+                    setupIncomplete: _config.MultiplayerEnabled && !_config.SoloDebugMode && !_multiplayerPartyReady && !_worldPlanNoWorkConfirmed,
                     multiWorldExpected: _config.MultiplayerEnabled && _config.MultiWorldEnabled,
                     unexecutedCount: guardUnexecuted))
             {
@@ -1142,6 +1149,7 @@ public class AutoHoeingTask : ISoloTask
                     KazuhaSecondApproachMaxSteps = _config.KazuhaSecondApproachMaxSteps,
                     PartyTimeoutSeconds = _config.PartyTimeoutSeconds,
                     MultiWorldEnabled = _config.MultiWorldEnabled,
+                    MultiWorldResumeEnabled = _config.MultiWorldResumeEnabled,
                     MultiWorldCount = _config.MultiWorldCount,
                     SelectedBuiltinRoute = _config.SelectedBuiltinRoute,
                     FightTimeoutSeconds = _config.FightTimeoutSeconds,
@@ -1433,6 +1441,8 @@ public class AutoHoeingTask : ISoloTask
 
             // 自动组队：游戏内加入/等待
             _worldStateMonitor.IsPartyPhase = true;
+            if (await TryPrepareWorldStartAsync(client, isHost)) return;
+            await RequireWorldPlanTargetAsync(client, _ct);
             var autoParty = new AutoPartyTask();
             if (isHost)
             {
@@ -1626,58 +1636,7 @@ public class AutoHoeingTask : ISoloTask
                     if (hostConfig != null)
                     {
                         RequireMatchingRoomBatch(hostConfig);
-                        _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
-                        _config.StartRouteIndex = hostConfig.StartRouteIndex;
-                        _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
-                        // 线路重试模式关键词房主同步（hoeing-multiplayer-route-retry-mode §0 / EB-v2-4）
-                        _config.RouteRetryModeKeywords = hostConfig.RouteRetryModeKeywords;
-                        _config.UseFixedDebugRoutes = hostConfig.UseFixedDebugRoutes;
-                        _config.FixedDebugRoutePath = hostConfig.FixedDebugRoutePath;
-                        _config.DebugMode = hostConfig.DebugMode;
-                        _config.EnableKazuhaSync = hostConfig.EnableKazuhaSync;
-                        _config.KazuhaSyncWaitSeconds = hostConfig.KazuhaSyncWaitSeconds;
-                        _config.KazuhaSyncTimeoutSeconds = hostConfig.KazuhaSyncTimeoutSeconds;
-                        _config.KazuhaWaitSkillCdSeconds = hostConfig.KazuhaWaitSkillCdSeconds;
-                        _config.KazuhaSecondApproachMaxSteps = hostConfig.KazuhaSecondApproachMaxSteps;
-                        _config.PartyTimeoutSeconds = hostConfig.PartyTimeoutSeconds;
-                        _config.MultiWorldEnabled = hostConfig.MultiWorldEnabled;
-                        _config.MultiWorldCount = hostConfig.MultiWorldCount;
-                        _config.SelectedBuiltinRoute = hostConfig.SelectedBuiltinRoute;
-                        _config.FightExtraWaitSeconds = hostConfig.FightExtraWaitSeconds;
-                        _config.RejoinMaxWaitSeconds = hostConfig.RejoinMaxWaitSeconds;
-                        // === 集体卡死监测同步（multiplayer-mutual-wait-collective-skip §8.8）===
-                        _config.EnableMutualWaitCollectiveSkip = hostConfig.EnableMutualWaitCollectiveSkip;
-                        _config.EnableRouteAnchor = hostConfig.EnableRouteAnchor;
-                        _config.MutualWaitMinWaitersRatio = hostConfig.MutualWaitMinWaitersRatio;
-                        _config.MutualWaitStableSeconds = hostConfig.MutualWaitStableSeconds;
-                        _config.MaxConsecutiveCollectiveSkips = hostConfig.MaxConsecutiveCollectiveSkips;
-                        // === 快速同步点抢报同步（multiplayer-fast-sync-host-controlled spec FR5）===
-                        _config.FastSyncPointEnabled = hostConfig.FastSyncPointEnabled;
-                        _config.FastSyncPathingDistance = FastSyncDecisions.ClampPathingDistance(hostConfig.FastSyncPathingDistance);
-                        _config.FastSyncTeleportLoadingDelayMs = FastSyncDecisions.ClampTeleportDelay(hostConfig.FastSyncTeleportLoadingDelayMs);
-                        // === 共享战斗配额结束同步同步（multiplayer-shared-fight-end-quorum-sync spec）===
-                        _config.SharedFightEndQuorumEnabled = hostConfig.SharedFightEndQuorumEnabled;
-                        _config.SharedFightEndQuorumRatio = SharedFightEndQuorumDecisions.ClampRatio(hostConfig.SharedFightEndQuorumRatio);
-                        // === 落后追赶同步（hoeing-lagging-catchup-host-synced-setting spec，成员回填房主下发值）===
-                        _config.EnableLaggingCatchUp = hostConfig.EnableLaggingCatchUp;
-                        _config.LagSegmentThreshold = Math.Clamp(hostConfig.LagSegmentThreshold, 1, 3);
-                        // === 基于经验判断停止锄地同步（multiplayer-hoeing-exp-cap-stop，成员回填房主下发值）===
-                        _config.EnableExpCapStop = hostConfig.EnableExpCapStop;
-                        _config.ExpCapDetectAllExp = hostConfig.ExpCapDetectAllExp;
-                        // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，成员回填房主下发值）===
-                        _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
-                        _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
-                        // === 自动更新线路同步（hoeing-autoupdate-routes，成员回填房主下发值）===
-                        _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
-                        _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
-
-                        // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
-                        ApplyHostExecParams(hostConfig);
-
-                        // 联机模式：设置战斗超时覆盖值（不修改原始配置）
-                        PathingConditionConfig.MultiplayerFightTimeoutOverride = hostConfig.FightTimeoutSeconds;
-                        // multiplayer-hoeing-selectable-fight-strategy §C5: 战斗策略开关纯本地，读本机 _config（不读 hostConfig）
-                        PathingConditionConfig.MultiplayerUseFixedFightStrategyOverride = _config.MultiplayerUseFixedFightStrategy;
+                        ApplyWorldHostConfig(hostConfig);
 
                         // 多世界模式：保存第一任房主的配置
                         if (_config.MultiWorldEnabled)
@@ -1705,7 +1664,8 @@ public class AutoHoeingTask : ISoloTask
                     }
 
                     // 加入世界前先确认自己在房间花名册，掉了就用房间码重新加入（网络抖动容错）
-                    await client.EnsureInRoomAsync(_ct);
+                    HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(_ct), "房间成员登记", _ct);
+                    await RequireWorldPlanTargetAsync(client, _ct);
 
                     _logger.LogInformation("[联机] 当前为成员，尝试加入房主世界，房主 UID: {Uid}", AutoPartyTask.MaskUid(hostUid));
                     var joinOk = await autoParty.JoinHostWorldAsync(hostUid, _ct);
@@ -2112,6 +2072,12 @@ public class AutoHoeingTask : ISoloTask
 
             await InitializeMultiplayerAsync();
 
+            if (_worldPlanNoWorkConfirmed)
+            {
+                _mainExecutionReturned = true;
+                return;
+            }
+
             // 组队守卫（方案A）：只要联机组队没有达到"可开锄"状态（连接失败 / 加入房间失败 /
             // 拿不到房主 UID / 房主未就绪超时 / 加入房主世界失败 / 等待全员就绪超时 / 初始化异常等），
             // 一律不进入锄地，杜绝成员在自己世界单跑、房主未满员被动开跑。
@@ -2197,12 +2163,14 @@ public class AutoHoeingTask : ISoloTask
         // 多世界轮换序列：优先采用服务端权威序列（首任房主 MarkRoomStarted 时生成，各端一致），
         // 旧服务端 / 未填 UID / 查询失败 → 降级本地 CurrentPlayerList 快照（现状行为）。
         // multiplayer-server-authoritative-round-order §B2。
-        var snapshot = new List<PlayerInfo>(client.CurrentPlayerList);
+        var snapshot = _worldStartPlan?.Players ?? new List<PlayerInfo>(client.CurrentPlayerList);
         var initialHostUid = client.HostPlayerUid;
-        _isInitialHost = client.IsHost;
+        _isInitialHost = _worldStartPlan == null ? client.IsHost : _worldStartPlan.InitialHostUid == _config.PlayerUid;
         var resumeOrderSignature = MultiWorldResumeDecisions.ComputeOrderSignature(snapshot.Select(p => p.PlayerUid));
         List<string>? authoritativeUids = null;
-        if (!string.IsNullOrEmpty(_config.PlayerUid))
+        if (_worldStartPlan != null)
+            authoritativeUids = _worldStartPlan.RemainingHostUids;
+        else if (!string.IsNullOrEmpty(_config.PlayerUid))
         {
             // 短重试给房主 MarkRoomStarted 留时间（成员可能早于房主生成序列），最多 ~3s。
             for (int i = 0; i < 6; i++)
@@ -2214,7 +2182,7 @@ public class AutoHoeingTask : ISoloTask
         }
 
         List<PlayerInfo> playerOrder = RoundHostOrderClientMapping.BuildPlayerOrder(snapshot, authoritativeUids);
-        if (_isGuardRestartRun && _config.MultiWorldResumeEnabled
+        if (_worldStartPlan == null && _isGuardRestartRun && _config.MultiWorldResumeEnabled
             && _guardResumeProgress?.Matches(resumeOrderSignature, _config.MultiWorldCount) == true)
         {
             // 原来只计划两轮时，裁剪掉已完成世界不能把第三、四个世界补进来。
@@ -2531,7 +2499,7 @@ public class AutoHoeingTask : ISoloTask
             // 任何陌生人都能在 GetOnlineRooms 看到新房间并 JoinRoom（spec lock-room-after-start §5 / bugfix §1.6 / §2.10）。
             // 用户原始白名单（whitelist）取并集保留，确保用户已配置但不在 CurrentPlayerList 中
             // 的玩家不丢失（bugfix §3.13）。
-            var allPlayerNames = client.CurrentPlayerList
+            var allPlayerNames = (_worldStartPlan?.Players ?? client.CurrentPlayerList)
                 .Select(p => p.PlayerName)
                 .Where(n => !string.IsNullOrEmpty(n));
             List<string> multiWorldWhitelist = whitelist != null
@@ -2547,7 +2515,14 @@ public class AutoHoeingTask : ISoloTask
                 string? newCode = null;
                 for (int retry = 1; retry <= 3; retry++)
                 {
-                    newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount, _ct);
+                    if (_worldPlanAdmission != null && round == 0)
+                    {
+                        var targetPlan = await client.CreateWorldPlanTargetAsync(_worldPlanAdmission, _ct);
+                        _worldStartPlan = targetPlan;
+                        newCode = targetPlan.TargetRoomCode;
+                    }
+                    else
+                        newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount, _ct);
                     if (newCode != null)
                     {
                         _logger.LogInformation("[多世界] 第 {Round} 轮创建房间成功（第{N}次尝试）: {Code}", round + 1, retry, newCode);
@@ -2625,6 +2600,7 @@ public class AutoHoeingTask : ISoloTask
                     return RoundSetupOutcome.Abort;
                 }
 
+                await RequireWorldPlanTargetAsync(client, _ct, round);
                 await client.ReportHostReadyAsync();
 
                 var actualCount = await autoParty.WaitForMembersAsync(
@@ -2681,6 +2657,19 @@ public class AutoHoeingTask : ISoloTask
                 while (DateTime.UtcNow < deadline)
                 {
                     attempt++;
+                    if (_worldPlanAdmission != null && round == 0)
+                    {
+                        var targetPlan = await client.ReadWorldPlanAsync(_worldPlanAdmission, _ct);
+                        if (targetPlan.Stage == "Aborted") throw new InvalidOperationException("本次开队已中止");
+                        if (!string.IsNullOrEmpty(targetPlan.TargetRoomCode))
+                        {
+                            _worldStartPlan = targetPlan;
+                            if (await client.JoinRoomAsync(targetPlan.TargetRoomCode, _config.PlayerName, _config.PlayerUid, _ct))
+                            { newRoomCode = targetPlan.TargetRoomCode; break; }
+                        }
+                        await Task.Delay(500, _ct);
+                        continue;
+                    }
                     var rooms = await client.GetOnlineRoomsAsync();
                     var target = rooms.FirstOrDefault(r =>
                         (!string.IsNullOrEmpty(roundHostPlayer.PlayerUid) && r.HostUid == roundHostPlayer.PlayerUid) ||
@@ -2772,6 +2761,7 @@ public class AutoHoeingTask : ISoloTask
                     _config.KazuhaSecondApproachMaxSteps = hostConfig.KazuhaSecondApproachMaxSteps;
                     _config.PartyTimeoutSeconds = hostConfig.PartyTimeoutSeconds;
                     _config.MultiWorldEnabled = hostConfig.MultiWorldEnabled;
+                    _config.MultiWorldResumeEnabled = hostConfig.MultiWorldResumeEnabled;
                     _config.MultiWorldCount = hostConfig.MultiWorldCount;
                     _config.SelectedBuiltinRoute = hostConfig.SelectedBuiltinRoute;
                     _config.FightExtraWaitSeconds = hostConfig.FightExtraWaitSeconds;
@@ -2822,9 +2812,10 @@ public class AutoHoeingTask : ISoloTask
                 }
 
                 // 加入世界前先确认自己在房间花名册，掉了就用房间码重新加入（网络抖动容错）
-                await client.EnsureInRoomAsync(_ct);
+                HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(_ct), "房间成员登记", _ct);
 
                 // 加入新房主世界
+                await RequireWorldPlanTargetAsync(client, _ct, round);
                 var joinOk = await autoParty.JoinHostWorldAsync(roundHostPlayer.PlayerUid, _ct);
                 if (!joinOk)
                 {
@@ -3159,34 +3150,7 @@ public class AutoHoeingTask : ISoloTask
         }
         else
         {
-            // 预处理路线
-            var pathingDir = Path.Combine(_dataDir, "pathing");
-            var routes = RouteInfoLoader.LoadRoutes(
-                pathingDir, _monsterRepo, _config.IgnoreRate, groupTags[0]);
-
-            // 初始化CD和运行记录
-            foreach (var route in routes)
-                _cdManager.InitializeRoute(route);
-
-            // 自我优化
-            SelfOptimizer.Apply(routes, _config.DisableSelfOptimization, _config.CuriosityFactor);
-
-            // 标记过滤
-            var priorityTags = ParseChineseTags(_config.PriorityTags);
-            var excludeTags = ParseChineseTags(_config.ExcludeTags);
-            if (!_config.PickupMode.Contains("模板匹配") && !excludeTags.Contains("沙暴"))
-                excludeTags.Add("沙暴");
-
-            RouteMarker.MarkRoutes(routes, groupTags, priorityTags, excludeTags);
-
-            // 路线选择优化
-            var targetElite = Math.Max(0, _config.TargetEliteNum) + 5;
-            var targetMonster = Math.Max(0, _config.TargetMonsterNum) + 25;
-            _routeSelector.SelectOptimalRoutes(
-                routes, _config.EfficiencyIndex, targetElite, targetMonster, _config.SortMode);
-
-            // 分组分配
-            RouteGroupAssigner.AssignGroups(routes, groupTags);
+            var routes = PrepareNormalWorldRoutes(groupTags);
 
             if (operationMode == "调试路线分配")
             {
@@ -3228,21 +3192,7 @@ public class AutoHoeingTask : ISoloTask
 
         _logger.LogInformation("目标怪物模式：{Monsters}", string.Join("、", targetMonsters));
 
-        var pathingDir = Path.Combine(_dataDir, "pathing");
-        var fakeGroupTags = Enumerable.Range(0, 10).Select(_ => new List<string>()).ToList();
-        var routes = RouteInfoLoader.LoadRoutes(pathingDir, _monsterRepo, _config.IgnoreRate, fakeGroupTags[0]);
-
-        foreach (var route in routes)
-            _cdManager.InitializeRoute(route);
-
-        // 逐路线匹配
-        foreach (var route in routes)
-        {
-            var textToSearch = (route.FullPath ?? "") + " " +
-                string.Join(" ", route.MonsterInfo.Keys);
-            route.Selected = targetMonsters.Any(m => textToSearch.Contains(m));
-            route.Group = route.Selected ? 1 : 0;
-        }
+        var routes = PrepareTargetWorldRoutes(targetMonsters);
 
         var selectedCount = routes.Count(p => p.Selected);
         _logger.LogInformation("目标怪物模式：共找到 {Count} 条相关路线", selectedCount);
@@ -3500,22 +3450,8 @@ public class AutoHoeingTask : ISoloTask
             if (isHost || string.IsNullOrEmpty(_coordinatorClientRef.HostPlayerUid))
             {
                 // 房主：CD 过滤后上传最终路线文件名列表
-                var keywordsHost = RouteKeywordFilterDecisions.ParseKeywords(_config.RouteFilterKeywords);
-                var hostRouteNames = groupRoutes
-                    .Where(r => _config.StartRouteIndex > 0 || !_cdManager.IsOnCooldown(r))
-                    .Where(r =>
-                    {
-                        var nameNoExt = Path.GetFileNameWithoutExtension(r.FileName);
-                        if (RouteKeywordFilterDecisions.ShouldSkip(nameNoExt, keywordsHost))
-                        {
-                            var hit = RouteKeywordFilterDecisions.MatchedKeyword(nameNoExt, keywordsHost);
-                            _logger.LogInformation("[联机] 房主关键词过滤跳过线路 {Name}（命中关键词：{Keyword}）", r.FileName, hit);
-                            return false;
-                        }
-                        return true;
-                    })
-                    .Select(r => r.FileName)
-                    .ToList();
+                var hostRouteNames = SelectHostWorldRoutes(groupRoutes, preview: false)
+                    .Select(r => r.FileName).ToList();
                 await _coordinatorClientRef.SetHostRouteListAsync(hostRouteNames);
                 if (cooperative != null && hostRouteNames.Count == 0) cooperative.EmptyRound = true;
                 _logger.LogInformation("[联机] 房主已上传路线列表，共 {Count} 条（CD+关键词过滤后）", hostRouteNames.Count);
@@ -4864,6 +4800,7 @@ public class AutoHoeingTask : ISoloTask
                 @"Tools\AutoHoeingUpdater\AutoHoeingUpdater.exe --silent --target ""%CD%"" --force-download",
                 new ShellConfig { Timeout = 120, NoWindow = true, Output = true }));
             await updateTask.Start(_ct);
+            _worldRoutesUpdateSucceeded = true;
             _logger.LogInformation("[自动更新线路] 更新完成");
             if (waitMs > 0)
             {
@@ -4873,6 +4810,7 @@ public class AutoHoeingTask : ISoloTask
         }
         catch (Exception ex)
         {
+            _worldRoutesUpdateSucceeded = false;
             _logger.LogWarning(ex, "[自动更新线路] 更新失败（不影响后续任务继续执行）");
         }
     }
@@ -5473,6 +5411,7 @@ public class AutoHoeingTask : ISoloTask
         if (_settingsOverride.ContainsKey("selectedBuiltinRoute"))
             _config.SelectedBuiltinRoute = Get("selectedBuiltinRoute", _config.SelectedBuiltinRoute);
 
+        _config.MultiWorldResumeEnabled = Get("multiWorldResumeEnabled", _config.MultiWorldResumeEnabled);
         _config.MultiWorldEnabled = Get("multiWorldEnabled", _config.MultiWorldEnabled);
         _config.MultiWorldCount = Get("multiWorldCount", _config.MultiWorldCount);
 

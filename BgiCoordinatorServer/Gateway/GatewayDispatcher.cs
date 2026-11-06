@@ -173,6 +173,7 @@ public sealed partial class GatewayDispatcher
         RegisterMistletoe();
         RegisterRerun();
         RegisterRouteAnchor();
+        RegisterWorldPlan();
     }
 
     partial void RegisterRoomLifecycle();
@@ -192,4 +193,5 @@ public sealed partial class GatewayDispatcher
     partial void RegisterMistletoe();
     partial void RegisterRerun();
     partial void RegisterRouteAnchor();
+    partial void RegisterWorldPlan();
 }

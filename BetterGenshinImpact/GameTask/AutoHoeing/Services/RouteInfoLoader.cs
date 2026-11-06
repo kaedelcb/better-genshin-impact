@@ -28,11 +28,12 @@ public class RouteInfoLoader
         string pathingDir,
         MonsterInfoRepository monsterRepo,
         int ignoreRate,
-        List<string> allGroupTags)
+        List<string> allGroupTags, bool strict = false)
     {
         var routes = new List<RouteInfo>();
         if (!Directory.Exists(pathingDir))
         {
+            if (strict) throw new DirectoryNotFoundException(pathingDir);
             Logger.LogError("路线目录不存在: {Dir}", pathingDir);
             return routes;
         }
@@ -44,7 +45,7 @@ public class RouteInfoLoader
         {
             try
             {
-                var route = ParseRouteFile(filePath, monsterRepo, ignoreRate, allGroupTags);
+                var route = ParseRouteFile(filePath, monsterRepo, ignoreRate, allGroupTags, strict);
                 if (route != null)
                 {
                     route.Index = ++index;
@@ -53,6 +54,7 @@ public class RouteInfoLoader
             }
             catch (Exception ex)
             {
+                if (strict) throw new InvalidDataException("预判无法读取线路: " + filePath, ex);
                 Logger.LogWarning("解析路线文件失败 {File}: {Msg}", filePath, ex.Message);
             }
         }
@@ -65,11 +67,14 @@ public class RouteInfoLoader
         string filePath,
         MonsterInfoRepository monsterRepo,
         int ignoreRate,
-        List<string> allGroupTags)
+        List<string> allGroupTags, bool strict = false)
     {
         var json = File.ReadAllText(filePath);
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
+        if (strict && (!root.TryGetProperty("positions", out var positions)
+            || positions.ValueKind != JsonValueKind.Array || positions.GetArrayLength() == 0))
+            throw new InvalidDataException("预判线路缺少有效路径点: " + filePath);
 
         var info = root.TryGetProperty("info", out var infoEl) ? infoEl : default;
         var description = info.ValueKind != JsonValueKind.Undefined

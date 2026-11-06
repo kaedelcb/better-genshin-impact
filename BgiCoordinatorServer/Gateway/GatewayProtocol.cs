@@ -15,6 +15,7 @@ public static class GatewayProtocol
     public const string HoeingStartCapability = "hoeing.start.v2";
     public const string HoeingStateContinuationCapability = "hoeing.stateContinuation.v1";
     public const string HoeingPriorityRecoveryCapability = "hoeing.priorityRecovery.v1";
+    public const string WorldPlanCapability = "hoeing.worldPlan.v1";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
 
@@ -23,7 +24,7 @@ public static class GatewayProtocol
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
     public static readonly string[] ServerCapabilities =
-        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability, HoeingStateContinuationCapability, HoeingPriorityRecoveryCapability];
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability, HoeingStateContinuationCapability, HoeingPriorityRecoveryCapability, WorldPlanCapability];
 
     public static class MessageTypes
     {
@@ -56,6 +57,15 @@ public static class GatewayProtocol
     /// <summary>消息名常量（§9.2 按族）。</summary>
     public static class Names
     {
+        public const string WorldPlanBegin = "worldPlan.begin";
+        public const string WorldPlanAcquire = "worldPlan.acquire";
+        public const string WorldPlanGet = "worldPlan.get";
+        public const string WorldPlanReport = "worldPlan.report";
+        public const string WorldPlanAck = "worldPlan.ack";
+        public const string WorldPlanCreateTarget = "worldPlan.createTarget";
+        public const string WorldPlanLeaveSource = "worldPlan.leaveSource";
+        public const string WorldPlanAbort = "worldPlan.abort";
+        public const string WorldPlanValidateTarget = "worldPlan.validateTarget";
         public const string RerunUpdate = RerunProtocol.Update;
         public const string RerunState = RerunProtocol.State;
 

@@ -34,6 +34,7 @@ public class RoomConfig
     public int KazuhaSecondApproachMaxSteps { get; set; } = 6;
     public int PartyTimeoutSeconds { get; set; } = 300;
     public bool MultiWorldEnabled { get; set; } = false;
+    public bool MultiWorldResumeEnabled { get; set; } = true;
     public int MultiWorldCount { get; set; } = 2;
     public string SelectedBuiltinRoute { get; set; } = "";
     /// <summary>联机模式下的战斗超时时间（秒），由房主设定，覆盖成员本地的 AutoFightConfig.Timeout</summary>
