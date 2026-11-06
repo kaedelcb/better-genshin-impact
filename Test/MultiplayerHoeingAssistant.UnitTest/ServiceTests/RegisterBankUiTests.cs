@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -39,11 +40,21 @@ public sealed class RegisterBankUiTests
             Assert.Same(bank, strip.DataContext);
             var buttons = Descendants<Button>(strip).ToArray();
             Assert.Equal(10, buttons.Length);
-            Assert.All(buttons, b => { Assert.Equal(22, b.ActualWidth); Assert.Equal(22, b.ActualHeight); Assert.Equal("0", b.Content); });
+            Assert.All(buttons, b => { Assert.Equal(18, b.ActualWidth); Assert.Equal(18, b.ActualHeight); Assert.Equal("0", b.Content); });
             var first = buttons[0].TransformToAncestor(window).Transform(new Point());
             var last = buttons[9].TransformToAncestor(window).Transform(new Point());
             Assert.Equal(first.Y, last.Y, 1);
-            Assert.True(last.X + 22 < window.ActualWidth);
+            var title = Descendants<TextBlock>(basic).Single(t => t.Text == "计划表");
+            var titleTop = title.TransformToAncestor(window).Transform(new Point());
+            Assert.InRange(Math.Abs(titleTop.Y + title.ActualHeight / 2 - first.Y - 9), 0, 1);
+            Assert.True(strip.IsCompact);
+            var pane = (Border)basic.FindName("PlanListPane");
+            var paneOrigin = pane.TransformToAncestor(window).Transform(new Point());
+            Assert.True(first.X >= paneOrigin.X + pane.Padding.Left);
+            Assert.True(last.X + 18 <= paneOrigin.X + pane.ActualWidth - pane.Padding.Right);
+            Assert.DoesNotContain(Descendants<ComboBox>(basic), combo =>
+                BindingOperations.GetBinding(combo, System.Windows.Controls.Primitives.Selector.SelectedIndexProperty)
+                    ?.Path?.Path?.Contains("TaskCenterModeIndex") == true);
 
             var dialog = new RegisterSettingsWindow(bank, bank.Cells[0].Entry, strip) { Owner = window };
             var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

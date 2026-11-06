@@ -6,6 +6,14 @@ namespace MultiplayerHoeingAssistant.Views;
 
 public partial class RegisterStripView : UserControl
 {
+    public static readonly DependencyProperty IsCompactProperty = DependencyProperty.Register(
+        nameof(IsCompact), typeof(bool), typeof(RegisterStripView), new PropertyMetadata(false));
+    public bool IsCompact
+    {
+        get => (bool)GetValue(IsCompactProperty);
+        set => SetValue(IsCompactProperty, value);
+    }
+
     public RegisterStripView() => InitializeComponent();
 
     private void CellClick(object sender, RoutedEventArgs e)
