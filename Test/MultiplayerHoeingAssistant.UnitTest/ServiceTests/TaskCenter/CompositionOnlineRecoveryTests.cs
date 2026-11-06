@@ -87,6 +87,50 @@ public sealed class CompositionOnlineRecoveryTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task ExplicitLaneMemberEntryKeepsItsTailAcrossRealOnlineHandoff(bool legacy)
+    {
+        await using var f = new Fixture(legacy);
+        var snapshot = f.Host.Workflows.LoadSnapshot(f.Document.WorkflowId!);
+        snapshot.Document.ExtensionData ??= new();
+        snapshot.Document.ExtensionData["watermark"] = JsonSerializer.SerializeToElement(new { entryNodeId = "B1", once = true });
+        f.Host.Workflows.Save(snapshot.Document, snapshot.Revision);
+
+        await f.StartAsync(entryNodeId: "B2");
+        var original = await f.SuspendB2Async();
+        Assert.Equal("B2", original.ExplicitEntryNodeId);
+        Assert.Equal(new[] { "B2" }, f.Body.Submitted.ToArray());
+        Assert.Equal("B2", original.Cursor!.NodeId);
+        Assert.DoesNotContain(original.NodeOutcomes, o => o.NodeId == f.DecisionOwner || o.NodeId is "B1" or "C");
+
+        // 这里明确选择B2即明确选择B线；联机期间的寄存器变化及旧入口水位均不能重选路线。
+        f.Registers.Set(new() { Values = Selection(0) });
+        Assert.Equal("B1", f.Host.Workflows.LoadSnapshot(f.Document.WorkflowId!).Document.ExtensionData!["watermark"]
+            .GetProperty("entryNodeId").GetString());
+        var resume = await f.Host.PreparePlanResumeAsync(original.RunId, Fixture.Ticket);
+        Assert.NotNull(resume);
+        Assert.Equal("B2", resume!["nodeId"]);
+        Assert.Equal(original.CurrentSubmission!.JobId, resume["originalJobId"]);
+        var resumedJob = f.Port.SetResume(original, resume, missing: false);
+        Assert.True(f.Host.AcceptPlanResumeJob(original.RunId, Fixture.Ticket, resumedJob));
+        await f.Host.OpenOnlineHoeingSendAsync();
+        var finished = await f.FinishedAsync();
+
+        Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+        Assert.Equal("B2", finished.ExplicitEntryNodeId);
+        Assert.Null(finished.MigrationEntrySeedKey);
+        Assert.Equal(new[] { "B2", "B3", "D" }, f.Body.Submitted.ToArray());
+        Assert.DoesNotContain(finished.NodeOutcomes, o => o.NodeId == f.DecisionOwner || o.NodeId is "B1" or "C");
+        Assert.Single(finished.NodeOutcomes.Where(o => o.NodeId == "B2" && o.Result == "succeeded"));
+        Assert.Single(finished.NodeOutcomes.Where(o => o.NodeId == "D" && o.Result == "succeeded"));
+        Assert.Single(finished.OnlineHoeingHistory);
+        Assert.Contains(finished.SubmissionHistory, s => s.NodeId == "B2" && s.Attempt == 1 && s.JobId == original.CurrentSubmission.JobId);
+        Assert.Equal(0, f.Port.Sends); // 外部恢复作业只按原身份观察，不能再次提交B2。
+        Assert.True(f.Port.Queries >= 2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task ExplicitStopWhileInOnlineHandoffDoesNotReopenEitherLane(bool legacy)
     {
         await using var f = new Fixture(legacy);
@@ -374,9 +418,9 @@ public sealed class CompositionOnlineRecoveryTests
             Host.Workflows.Save(Document, null);
         }
 
-        internal async Task StartAsync()
+        internal async Task StartAsync(string? entryNodeId = null)
         {
-            var result = await Host.StartWorkflowAsync(Document.WorkflowId!);
+            var result = await Host.StartWorkflowAsync(Document.WorkflowId!, entryNodeId: entryNodeId);
             Assert.True(result.Ok, result.Message);
             await Body.B2Reached.Task.WaitAsync(TimeSpan.FromSeconds(8));
         }

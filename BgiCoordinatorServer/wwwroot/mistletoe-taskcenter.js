@@ -357,16 +357,17 @@ function tcNodeDialog(node, focus) {
 function tcNodeMenu(node) {
     const f = tcFlow(), editable = tcCanEdit(f), res = typeof tcCompositionSiblings === 'function' ? tcCompositionSiblings(node) : tcResourceNodes(), i = res.indexOf(node), marker = tcStartMarker();
     const block = tcBlocking(f.id), canEntry = typeof tcCanUseEntry !== 'function' || tcCanUseEntry(node.nodeId);
-    const dialog = tcDialogShell(mte(tcNodeName(node)), `第 ${i + 1} 个配置单 · ${TC_KIND[node.kind]}`, `<div class="tc-menu">
-        <button class="dd-btn" data-a="single"${!tcCanStart(f) || block || tc.starting || !canEntry ? ' disabled' : ''}>▶ 启动单任务（只执行这一项）</button>
+    const resource = String(node.kind).startsWith('resource.'), owner = typeof tcLaneOwner === 'function' ? tcLaneOwner(node.nodeId) : null;
+    const dialog = tcDialogShell(mte(tcNodeName(node)), resource ? `第 ${i + 1} 项 · ${TC_KIND[node.kind]}` : node.lanes ? '车道操作' : '流程操作', `<div class="tc-menu">
+        ${resource ? `<button class="dd-btn" data-a="single"${!tcCanStart(f) || block || tc.starting || !canEntry ? ' disabled' : ''}>▶ 启动单任务（只执行这一项）</button>` : ''}
         <button class="dd-btn" data-a="from"${!tcCanStart(f) || block || tc.starting || !canEntry ? ' disabled' : ''}>⏵⏵ 从这里开始执行到最后</button>
-        ${!canEntry ? '<p class="dodoco-hint">此任务关联流程监听或车道选路，请从计划开头执行。</p>' : ''}
+        <p class="dodoco-hint">${!canEntry ? '此起点已失效或节点身份重复，请重新选择。' : owner ? '从这里开始会沿当前路线剩余任务继续，再回到主表；之前的流程不会执行。' : '从这里开始会跳过之前的任务和流程；后续车道仍按条件选择路线。'}</p>
         ${editable ? `<button class="dd-btn" data-a="mark"${!canEntry && marker !== node.nodeId ? ' disabled' : ''}>${marker === node.nodeId ? '清除「在此执行」起点' : '设为起点（下次点「连续一条龙」从这里开始）'}</button>
-        <button class="dd-btn" data-a="up"${i === 0 ? ' disabled' : ''}>↑ 上移</button><button class="dd-btn" data-a="down"${i === res.length - 1 ? ' disabled' : ''}>↓ 下移</button>
+        ${resource ? `<button class="dd-btn" data-a="up"${i === 0 ? ' disabled' : ''}>↑ 上移</button><button class="dd-btn" data-a="down"${i === res.length - 1 ? ' disabled' : ''}>↓ 下移</button>
         <button class="dd-btn" data-a="dup">复制此配置单</button><button class="dd-btn" data-a="settings">配置单设置…</button>
         <button class="dd-btn" data-a="ref">读取刚才的修改（同步 BGI 引用修订）</button>
         <button class="dd-btn" data-a="editor" title="在执行端桌面打开 BGI 资源编辑器">在执行端打开 BGI 资源编辑器</button>
-        <button class="dd-btn dd-btn-danger" data-a="del">删除此配置单</button>` : ''}</div>`);
+        <button class="dd-btn dd-btn-danger" data-a="del">删除此配置单</button>` : ''}` : ''}</div>`);
     dialog.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
         const a = b.dataset.a; dialog.close();
         if (a === 'single') return tcStart(node.nodeId, node.nodeId);
@@ -392,7 +393,7 @@ function tcNodeMenu(node) {
     });
 }
 async function tcMark(node, on) {
-    if (on && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(node.nodeId)) return mtToast('此起点会绕过流程监听或车道选路，请从计划开头执行。', true);
+    if (on && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(node.nodeId)) return mtToast('此起点已失效或节点身份重复，请重新选择。', true);
     if (on) { tc.consumed.delete(tc.selected); tc.doc[TC_START_KEY] = node.nodeId; }
     else { tc.consumed.set(tc.selected, tc.doc[TC_START_KEY]); delete tc.doc[TC_START_KEY]; }
     tc.dirty = true; const ok = await tcSave();
@@ -611,7 +612,7 @@ async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
         if (!(await tcFlush())) { mtToast('执行端计划尚未确认保存，已取消启动', true); return; }
         const marker = !entryNodeId ? tcStartMarker() : null;
         const entry = entryNodeId || marker || null;
-        if (entry && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(entry)) return mtToast('当前起点会绕过流程监听或车道选路。本次没有启动，请先在该任务的更多操作中清除起点，再从计划开头执行。', true);
+        if (entry && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(entry)) return mtToast('当前起点已失效或节点身份重复。本次没有启动，请重新选择起点或清除旧起点。', true);
         const label = stopAfterNodeId ? '启动单任务' : fromHere ? '从此处开始执行' : '连续一条龙';
         const reply = await mtOperate('task.run.start', { workflowId:f.id, entryNodeId:entry, expectedRevision:tc.revision, stopAfterNodeId:stopAfterNodeId || null }, { label, onStage:mtStageBar, waitBudget:12000 });
         if (reply.status === 'ok' && marker) { tc.consumed.set(f.id, marker); delete tc.doc[TC_START_KEY]; tc.dirty = true; await tcSave(); }

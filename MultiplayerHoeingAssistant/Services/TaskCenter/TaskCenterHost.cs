@@ -1851,7 +1851,7 @@ public sealed partial class TaskCenterHost
             try
             {
                 runner = CreateRunner(_clientAccessor());
-                runner.PreflightStartable(snapshot);
+                runner.PreflightStartable(snapshot, target.ExplicitEntryNodeId);
             }
             catch (Exception ex)
             {

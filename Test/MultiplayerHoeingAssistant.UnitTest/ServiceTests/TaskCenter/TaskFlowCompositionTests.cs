@@ -21,13 +21,14 @@ public sealed class TaskFlowCompositionTests
     }
 
     [Fact]
-    public void ExplicitCompositionEntry_RejectsLaneAndLateMainline_WhileLegacyEntryRemainsAvailable()
+    public void ExplicitCompositionEntry_AllowsSelectedBranchAndMainline_AndResolvesLegacyLaneCondition()
     {
         var composed = new WorkflowPlan(Document());
         Assert.Equal("F", composed.ExplicitEntryCursor("F")!.NodeId);
-        Assert.Contains("关联流程", Assert.Throws<InvalidOperationException>(() => composed.ExplicitEntryCursor("B")).Message);
-        Assert.Throws<InvalidOperationException>(() => composed.ExplicitEntryCursor("L"));
-        Assert.Throws<InvalidOperationException>(() => composed.ExplicitEntryCursor("D"));
+        Assert.Equal("B", composed.ExplicitEntryCursor("B")!.NodeId);
+        Assert.Equal("F", composed.ExplicitEntryCursor("L")!.NodeId);
+        Assert.Equal("D", composed.ExplicitEntryCursor("D")!.NodeId);
+        Assert.Throws<InvalidOperationException>(() => composed.ExplicitEntryCursor("missing"));
         var legacy = new WorkflowPlan(new() { Nodes = [Resource("A"), Resource("B")] });
         Assert.Equal("B", legacy.ExplicitEntryCursor("B")!.NodeId);
     }
@@ -41,7 +42,7 @@ public sealed class TaskFlowCompositionTests
         Assert.True(plan.Preflight(true).Executable);
         Assert.Equal("F", plan.FirstOccurrence()!.NodeId);
         Assert.Equal("F", plan.ExplicitEntryCursor("F")!.NodeId);
-        Assert.Throws<InvalidOperationException>(() => plan.ExplicitEntryCursor("B"));
+        Assert.Equal("B", plan.ExplicitEntryCursor("B")!.NodeId);
     }
 
     [Theory]

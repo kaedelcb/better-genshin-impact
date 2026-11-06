@@ -102,3 +102,66 @@ test('运行触发器定位把步骤身份传入所属车道，丢失步骤不�
     assert.equal(await x.run("tcLocateFlowStep('wf-test','decision','missing')"),false);
     assert.equal(calls.length,1);
 });
+
+
+test('编排显式起点可选中间任务、两条车道内任务、车道和后续主表，失效及重复身份仍拒绝',()=>{
+    const x=setup();load(x);
+    for(const id of ['decision','lanes','weekend','weekday','tail']) {
+        x.ctx.entry=id;assert.equal(x.run('tcCanUseEntry(entry)'),true,id);
+    }
+    for(const id of ['', ' ', 'missing', null]) {
+        x.ctx.entry=id;assert.equal(x.run('tcCanUseEntry(entry)'),false,String(id));
+    }
+    x.run("tc.doc.nodes.push({...tc.doc.nodes[4]})");
+    assert.equal(x.run("tcCanUseEntry('tail')"),false);
+});
+
+test('流程和车道更多菜单提供从此开始和标记，车道任务提供单任务且解释沿本路线继续',async()=>{
+    const x=setup();load(x);const buttons=[],menus=[],subtitles=[];
+    x.ctx.tcDialogShell=(_title,_subtitle,html)=>{
+        menus.push(html);subtitles.push(_subtitle);buttons.length=0;
+        for(const match of html.matchAll(/<button[^>]*data-a="([^"]+)"([^>]*)>/g)) buttons.push({dataset:{a:match[1]},disabled:/disabled/.test(match[2])});
+        return {querySelectorAll:()=>buttons,close(){}};
+    };
+    const starts=[];x.ctx.tcStart=(...args)=>starts.push(args);
+    for(const id of ['decision','lanes']) {
+        x.ctx.entry=id;x.run('tcNodeMenu(tc.doc.nodes.find(n=>n.nodeId===entry))');
+        assert.equal(subtitles.at(-1),id==='lanes'?'车道操作':'流程操作');
+        assert.doesNotMatch(subtitles.at(-1),/第\s*0\s*项/);
+        assert.ok(buttons.find(b=>b.dataset.a==='from'&&!b.disabled));
+        assert.ok(buttons.find(b=>b.dataset.a==='mark'&&!b.disabled));
+        assert.ok(!buttons.some(b=>['single','settings','ref','editor'].includes(b.dataset.a)));
+        await buttons.find(b=>b.dataset.a==='from').onclick();
+        assert.deepEqual(starts.at(-1),[id,null,true]);
+    }
+    x.run("tcNodeMenu(tc.doc.nodes.find(n=>n.nodeId==='weekday'))");
+    assert.ok(buttons.find(b=>b.dataset.a==='single'&&!b.disabled));
+    assert.match(menus.at(-1),/沿当前路线剩余任务继续，再回到主表/);
+    await buttons.find(b=>b.dataset.a==='single').onclick();
+    assert.deepEqual(starts.at(-1),['weekday','weekday']);
+    x.run('tcRenderNodes()');assert.match(x.host.innerHTML,/data-action="more" data-id="lanes"/);
+});
+
+test('编排中途启动原样传递所选入口及单任务边界，不静默改成第一行',async()=>{
+    const x=setup(),doc=structuredClone(plan);doc.nodes.splice(1,0,resource('middle','中间任务'));load(x,doc);
+    x.run('tcFlush=async()=>true;tcLoad=async()=>{};mtStageBar=()=>{};');
+    for(const [entry,stop] of [['middle',null],['lanes',null],['weekend',null],['weekday','weekday'],['tail',null]]) {
+        x.ctx.entry=entry;x.ctx.stop=stop;await x.run('tcStart(entry,stop,true)');
+        const [op,payload]=x.calls.at(-1);assert.equal(op,'task.run.start');
+        assert.equal(payload.entryNodeId,entry);assert.equal(payload.stopAfterNodeId,stop);assert.equal(payload.expectedRevision,'r1');
+    }
+});
+
+test('中间起点标记用于一次连续启动，失效起点保留且不发执行请求',async()=>{
+    const x=setup();load(x);
+    x.run('tcRenderNodes=()=>{};tcFlush=async()=>true;tcLoad=async()=>{};mtStageBar=()=>{};');
+    await x.run("tcMark(tc.doc.nodes.find(n=>n.nodeId==='weekday'),true)");
+    assert.equal(x.run('tcStartMarker()'),'weekday');
+    await x.run('tcStart()');
+    const start=x.calls.find(c=>c[0]==='task.run.start');assert.equal(start[1].entryNodeId,'weekday');assert.equal(start[1].stopAfterNodeId,null);
+    assert.equal(x.run('tcStartMarker()'),null);
+    x.run("tc.doc[TC_START_KEY]='missing';tc.consumed.clear()");
+    const before=x.calls.length;await x.run('tcStart()');assert.equal(x.calls.length,before);
+    assert.equal(x.run('tcStartMarker()'),'missing');assert.match(x.notices.at(-1)[0],/起点已失效/);
+    x.run("tc.doc.nodes.push({...tc.doc.nodes[4]})");await x.run("tcStart('tail')");assert.equal(x.calls.length,before);
+});

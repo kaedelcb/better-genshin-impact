@@ -433,7 +433,7 @@ public sealed partial class WorkflowRunner
         var snapshot = _workflows.LoadSnapshot(workflowId); // 隔离文件在此响亮抛出；文档+修订同源（B1）
         var plan = new WorkflowPlan(snapshot.Document);
         var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-            _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
+            _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: entryNodeId is null); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
@@ -459,11 +459,11 @@ public sealed partial class WorkflowRunner
     /// 移交受理前预检（R4.9 + ASTRA 二轮 B3：权威计划预检先于受理落盘——不可执行流程响亮拒绝、不消耗 IntentKey、不留运行记录）。
     /// 无执行副作用；与 StartExistingRunAsync/ResumeAsync 内的预检同口径（驱动入口仍各自复验，防御纵深）。
     /// </summary>
-    public void PreflightStartable(WorkflowSnapshot snapshot)
+    public void PreflightStartable(WorkflowSnapshot snapshot, string? explicitEntryNodeId = null)
     {
         var plan = new WorkflowPlan(snapshot.Document);
         var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-            _boundary.SuppressConfigCompletionSupported);
+            _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: explicitEntryNodeId is null);
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
     }
@@ -498,7 +498,7 @@ public sealed partial class WorkflowRunner
         }
         var plan = new WorkflowPlan(snapshot.Document);
         var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-            _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
+            _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: run.ExplicitEntryNodeId is null); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
         if (!preflight.Executable)
             throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
@@ -553,7 +553,7 @@ public sealed partial class WorkflowRunner
             var snapshot = _workflows.LoadSnapshot(run.WorkflowId);
             var plan = new WorkflowPlan(snapshot.Document);
             var preflight = plan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-                _boundary.SuppressConfigCompletionSupported); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
+                _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: run.ExplicitEntryNodeId is null); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
             if (!preflight.Executable)
                 throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
 
@@ -2306,7 +2306,7 @@ public sealed partial class WorkflowRunner
 
         var newPlan = new WorkflowPlan(snapshot.Document);
         var preflight = newPlan.Preflight(_boundary.SingleNativeSupported, _prerequisites.SupportedKinds, _terminal.SupportedKinds,
-            _boundary.SuppressConfigCompletionSupported); // R4.6 I1：重载入口同接能力协商预检
+            _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: run.ExplicitEntryNodeId is null); // R4.6 I1：重载入口同接能力协商预检
         if (!preflight.Executable)
         {
             Log(run, "流程新修订预检未通过，沿用旧定义继续：" + string.Join("；", preflight.BlockingReasons));
@@ -2647,6 +2647,7 @@ public sealed partial class WorkflowRunner
 
     private void ApplyMigrationEntrySeed(WorkflowRunRecord run, WorkflowPlan plan)
     {
+        if (run.ExplicitEntryNodeId is not null) return; // 用户已明确选点，旧水位不再参与此运行。
         var seed = plan.EntrySeed(out var reason);
         if (reason is not null) throw new InvalidOperationException(reason);
         if (seed is { } initial) _runs.ApplyMigrationEntrySeed(run, initial.Key, initial.Entry);

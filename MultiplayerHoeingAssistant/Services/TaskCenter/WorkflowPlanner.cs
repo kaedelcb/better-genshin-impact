@@ -84,9 +84,18 @@ public sealed partial class WorkflowPlan
         if (nodeId is null) return null;
         if (string.IsNullOrWhiteSpace(nodeId) || _doc.Nodes.Count(n => n.NodeId == nodeId) != 1)
             throw new InvalidOperationException("指定起点不存在或身份有歧义，禁止从链首执行。");
-        if (WorkflowComposition.HasComposition(_doc)
-            && _doc.Nodes.FirstOrDefault(n => !WorkflowComposition.IsLaneMember(_doc, n.NodeId))?.NodeId != nodeId)
-            throw new InvalidOperationException("此起点会绕过关联流程的监听或车道选路，请从关联流程或计划开头执行。");
+        // 明确选中主表或车道内任务就是本次执行的入口，不补跑此前流程。
+        // 成员已有明确的派生 Next，只会走本路线余下任务并汇合，不会串入另一条车道。
+        var target = _doc.Nodes.Single(n => n.NodeId == nodeId);
+        // 旧配对把条件放在独立流程上；从车道开始仍须经过其原条件，不能直接越过两支。
+        if (target.Kind == "control.lanes" && target.Lanes is { Decision: null } lane)
+        {
+            var sources = _doc.Nodes.Where(n => n.NodeId == lane.SourceFlowNodeId
+                && n.Kind == "control.flow" && n.Flow?.ExitStepId is { Length: > 0 }).ToArray();
+            if (sources.Length != 1)
+                throw new InvalidOperationException("此车道的选择流程已失效，请修复车道条件后开始。");
+            nodeId = sources[0].NodeId;
+        }
         return new WorkflowNodeCursor { NodeId = nodeId, Occurrence = 0, LoopIteration = 0, Attempt = 1 };
     }
 
@@ -151,7 +160,7 @@ public sealed partial class WorkflowPlan
     /// </summary>
     public WorkflowPreflight Preflight(bool singleNativeSupported,
         IReadOnlySet<string>? prerequisiteKinds = null, IReadOnlySet<string>? terminalKinds = null,
-        bool suppressConfigCompletionSupported = true)
+        bool suppressConfigCompletionSupported = true, bool validateMigrationEntry = true)
     {
         var blocking = new List<string>();
         var warnings = new List<string>();
@@ -163,8 +172,11 @@ public sealed partial class WorkflowPlan
             foreach (var node in _doc.Nodes)
                 if (!WorkflowTimeWindowPolicy.TryValidate(node.TimeWindow, out var error))
                     blocking.Add($"任务 {node.Ref?.Config ?? node.NodeId} 的允许时间段无效：{error}");
-        EntrySeed(out var entryReason);
-        if (entryReason is not null) blocking.Add(entryReason);
+        if (validateMigrationEntry)
+        {
+            EntrySeed(out var entryReason);
+            if (entryReason is not null) blocking.Add(entryReason);
+        }
         if (UnsupportedKinds.Count > 0)
             blocking.Add("存在未支持的类型（可预览，阻止执行）：" + string.Join("、", UnsupportedKinds));
         if (_doc.Nodes.Count == 0)

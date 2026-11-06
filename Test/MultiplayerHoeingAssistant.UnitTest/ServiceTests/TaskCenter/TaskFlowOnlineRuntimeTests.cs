@@ -201,6 +201,9 @@ public sealed class TaskFlowOnlineRuntimeTests
                 await File.WriteAllTextAsync(nextPath, "");
                 // tail有5秒防抖；仅改provider不能证明实际目标已经切换。
                 File.SetLastWriteTimeUtc(first, DateTime.UtcNow.AddSeconds(-10)); selected = other;
+                // 上一轮Tick可能已读取旧provider后才接到排空屏障；先等待实际目标切换。
+                tail.Poke();
+                await Until(() => tail.CurrentFilePath == nextPath);
                 Assert.Equal(nextPath, await tail.DrainBoundaryAsync(default));
             }
             if (changeEpoch) epoch = new BgiEpoch { ProcessId = 42, StartTicksUtc = 2 };

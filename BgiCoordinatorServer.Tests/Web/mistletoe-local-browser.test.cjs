@@ -33,6 +33,10 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
       case 'registers.reset': state.registers.entries.filter(e=>req.payload.all||e.number===req.payload.number).forEach(e=>e.value=0);return reply('ok','已归零',state.registers);
       case 'task.list': return reply('ok','',{flows:[{workflowId:'wf-local',name:state.flow.name,revision:state.flowRevision,unsupportedKinds:[]}],active:[],history:[],catalog:{entries:[]},allowedTaskPrograms:[],serverTime:new Date().toISOString()});
       case 'task.flow.get': return reply('ok','',state.flow,state.flowRevision);
+      case 'task.run.start': {
+        if(req.payload.expectedRevision!==state.flowRevision) return reply('rejected','启动修订已变化');
+        const result=reply('ok','测试执行端已受理',null,null,id);state.ops.set(id,result);return result;
+      }
       case 'task.flow.save':
         if(req.expectedRevision!==state.flowRevision||req.flowEditVersion!==1) return reply('rejected','修订或编辑版本错误');
         state.flow=req.payload;state.flowRevision='flow-'+Date.now();return reply('ok','已保存',null,state.flowRevision);
@@ -152,6 +156,36 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
       if(process.argv[2]&&[375,1440].includes(width)) await page.screenshot({path:path.join(process.argv[2],`composition-${width}.png`)});
       await page.locator('#tcFlowDialog [data-cancel]').click();
     }
+    // 从真实更多菜单选择中途起点；模拟桥只确认协议，绝不调用 BGI。
+    const entryResource=(id,name)=>({nodeId:id,kind:'resource.configGroup',ref:{config:name,revision:'ref-1'},strategies:[]});
+    const laneId=state.flow.nodes[1].nodeId;
+    state.flow.nodes.splice(1,0,entryResource('entry-between','流程与车道之间的 A'));
+    state.flow.nodes[2].lanes.yesNodeIds=['entry-yes'];state.flow.nodes[2].lanes.noNodeIds=['entry-no'];
+    state.flow.nodes.push(entryResource('entry-yes','上车道 B'),entryResource('entry-no','下车道 C'));
+    state.flowRevision='flow-entry-fixture';
+    await page.evaluate(async()=>{await tcOpen('wf-local',true);tcRenderPlanHead();tcRenderNodes();});
+    const starts=()=>calls.filter(c=>c.args?.request?.operation==='task.run.start').map(c=>c.args.request.payload);
+    const settleStart=()=>page.waitForFunction(()=>!tc.starting&&!tc.saving&&!tc.dirty&&!mt.unconfirmed);
+    await page.locator('[data-resource="entry-between"] [data-action="more"]').click();
+    await page.locator('#tcDialog [data-a="mark"]').click();
+    await page.waitForFunction(()=>!tc.dirty&&!tc.saving&&tcStartMarker()==='entry-between');
+    assert.equal(state.flow.taskCenterStartNodeId,'entry-between');
+    await page.locator('#tcStart').click();await settleStart();
+    assert.equal(starts().length,1,'连续启动只发送一次，不因编排改为链首或重复请求');
+    assert.equal(starts()[0].entryNodeId,'entry-between');assert.equal(starts()[0].stopAfterNodeId,null);
+    assert.equal(state.flow.taskCenterStartNodeId,undefined,'受理后清除一次性起点标记');
+    const laneRow=page.locator(`[data-composition="${laneId}"]`);
+    if(await laneRow.getAttribute('open')===null) await laneRow.locator('summary').first().click();
+    await page.locator('[data-resource="entry-no"] [data-action="more"]').click();
+    assert.match(await page.locator('#tcDialog').textContent(),/沿当前路线剩余任务继续，再回到主表/);
+    await page.locator('#tcDialog [data-a="single"]').click();await settleStart();
+    assert.equal(starts().length,2);assert.equal(starts()[1].entryNodeId,'entry-no');assert.equal(starts()[1].stopAfterNodeId,'entry-no');
+    if(await laneRow.getAttribute('open')===null) await laneRow.locator('summary').first().click();
+    await laneRow.locator(':scope > .dd-actions [data-action="more"]').click();
+    assert.equal(await page.locator('#tcDialog [data-a="single"]').count(),0,'车道结构不显示单任务按钮');
+    await page.locator('#tcDialog [data-a="from"]').click();await settleStart();
+    assert.equal(starts().length,3);assert.equal(starts()[2].entryNodeId,laneId);assert.equal(starts()[2].stopAfterNodeId,null);
+    assert.ok(starts().every(r=>r.workflowId==='wf-local'&&r.expectedRevision),'全部入口绑定当前计划和保存修订');
     // 共用运行触发器和任务人工确认在任务页可操作。
     assert.equal(await page.locator('#mtTriggers').count(),1);
     state.prompts=[{source:'taskCenter',runtimeId:'ask-task',message:'是否继续',yesPreview:'继续',noPreview:'跳过',remainingSeconds:30}];
@@ -186,7 +220,7 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
     assert.equal(await page.evaluate(() => mt.unconfirmed), null, '确定未执行的请求不留台账');
     for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 860 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, width + 'px 横向溢出'); }
     assert.deepEqual(errors, []);
-    console.log('PASS mistletoe local direct: pairing, registers, flow/lane controls and persistence, shared triggers/prompts, 375/768/1440 layout, revisions, terminal/unknown/timeout, expired session');
+    console.log('PASS mistletoe local direct: pairing, registers, flow/lane controls and persistence, middle/branch/lane entry controls and request boundaries, shared triggers/prompts, 375/768/1440 layout, revisions, terminal/unknown/timeout, expired session');
   } catch(error) {
     console.error('BROWSER ERRORS',errors);
     if(page) {
