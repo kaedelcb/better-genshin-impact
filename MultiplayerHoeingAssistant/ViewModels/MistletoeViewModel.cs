@@ -137,10 +137,18 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         // R4.8 Batch D：任务中心面板（流程列表/保留式编辑/运行状态三卡；宿主由 MainViewModel 惰性创建，
         // 与 R4.9 启动移交共用同一实例；构造零文件副作用——目录首次写入才创建（二轮 重要2）；
         // 页面 Unloaded 时 StopAutoRefresh 停表、Loaded 恢复）
-        if (!IsRemoteMode) _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
+        if (!IsRemoteMode)
+        {
+            _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
+            _mainVm.TaskCenterHost.FlowRuntime.Registers = _localRegisterService;
+            _mainVm.TaskCenterHost.FlowRuntime.StartProgramAsync = StartConfiguredTaskProgramAsync;
+            _mainVm.TaskCenterHost.FlowRuntime.ConfirmAsync = async (step, ct) =>
+                (await Application.Current.Dispatcher.InvokeAsync(() => ConfirmStepWindow.ShowConfirm(step, Application.Current.MainWindow, ct, "taskCenter"))).passed;
+        }
         TaskCenter = remoteTarget is null
             ? new TaskCenterPanelViewModel(_mainVm.TaskCenterHost, _mainVm.AddLog)
             : new TaskCenterPanelViewModel(_mainVm, remoteTarget);
+        if (!IsRemoteMode) TaskCenter.AllowedProgramsProvider = GetAllowedTaskPrograms;
         TaskCenter.OpenSettingsAction = IsRemoteMode
             ? () => _ = ConfigureRemoteBgiPathAsync()
             : () => _mainVm.OpenSettingsCommand.Execute(null);
@@ -167,6 +175,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 RefreshBgiTaskStatus();
                 Registers.Apply(_localRegisterService!.GetSnapshot());
                 RetryPendingAutomaticSource();
+                RefreshUnifiedLocalTriggers();
             }
         };
         if (!IsRemoteMode)
@@ -179,12 +188,13 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             IsRunning = remoteSnapshot?.IsRunning == true;
             StatusText = remoteSnapshot?.StatusText ?? "尚未读取执行端状态";
             RefreshRemoteTriggerRows(remoteSnapshot?.Triggers ?? []);
-            foreach (var prompt in remoteSnapshot?.Prompts ?? []) RemotePrompts.Add(prompt);
+            foreach (var prompt in (remoteSnapshot?.Prompts ?? []).Concat(remoteSnapshot?.TaskPrompts ?? [])) RemotePrompts.Add(prompt);
             SelectedRemotePrompt = RemotePrompts.FirstOrDefault();
             ApplyRemoteNodeRunStates(remoteSnapshot?.NodeStates ?? []);
             _bgiStatusRefresh.Start();
         }
 
+        InitializeUnifiedTriggers(remoteSnapshot);
         if (IsRemoteMode) InitializeStartupSyncState();
 
         // 开机自启动两个参数直接代理 MainViewModel（与设置页同一份），
@@ -1096,7 +1106,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     private async Task<(bool passed, string desc)> ConfirmHandlerAsync(StartupStep step, CancellationToken ct)
     {
         var result = await Application.Current.Dispatcher.InvokeAsync(
-            () => ConfirmStepWindow.ShowConfirm(step, Application.Current.MainWindow));
+            () => ConfirmStepWindow.ShowConfirm(step, Application.Current.MainWindow, ct));
         ct.ThrowIfCancellationRequested();
         return result;
     }
@@ -2229,6 +2239,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsNotRunning));
                 StatusText = "执行端状态未确认：" + reply.Message;
                 Registers.Apply(new RegisterBankSnapshot { Error = StatusText });
+                RenderUnifiedTriggerRows();
             });
             return;
         }
@@ -2247,9 +2258,10 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 _remoteSupportsRegisters = snapshot.Registers is not null;
                 Registers.Apply(snapshot.Registers);
                 RefreshRemoteTriggerRows(snapshot.Triggers);
+                ApplyUnifiedTriggerSnapshot(snapshot.UnifiedTriggers, snapshot.Triggers);
                 var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
                 RemotePrompts.Clear();
-                foreach (var prompt in snapshot.Prompts) RemotePrompts.Add(prompt);
+                foreach (var prompt in snapshot.Prompts.Concat(snapshot.TaskPrompts)) RemotePrompts.Add(prompt);
                 SelectedRemotePrompt = RemotePrompts.FirstOrDefault(p => p.RuntimeId == selectedPromptId)
                     ?? RemotePrompts.FirstOrDefault();
                 if (snapshot.NodeStates is not null) ApplyRemoteNodeRunStates(snapshot.NodeStates);
@@ -2286,6 +2298,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 OnPropertyChanged(nameof(IsNotRunning));
                 StatusText = "执行端状态格式无法确认：" + ex.Message;
                 Registers.Apply(new RegisterBankSnapshot { Error = StatusText });
+                RenderUnifiedTriggerRows();
             });
         }
     }
@@ -2428,7 +2441,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     {
         if (_remoteTarget is null || SelectedRemotePrompt is not { } prompt) return;
         var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget,
-            "startup.prompt.answer", new { runtimeId = prompt.RuntimeId, yes });
+            prompt.Source == "taskCenter" ? "task.prompt.answer" : "startup.prompt.answer", new { runtimeId = prompt.RuntimeId, yes });
         StatusText = reply.Message;
         await RefreshRemoteStartupStatusAsync();
     }

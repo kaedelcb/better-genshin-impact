@@ -15,22 +15,23 @@ public partial class ConfirmStepWindow : Window
 {
     private static readonly ConcurrentDictionary<string, ConfirmStepWindow> Active = new();
     public string RuntimeId { get; } = Guid.NewGuid().ToString("N");
-    public static IReadOnlyList<RemotePromptInfo> RemotePrompts()
-        => Active.Values.Select(w => new RemotePromptInfo(w.RuntimeId, w.MessageText.Text,
-            w.TruePreview.Text, w.FalsePreview.Text, w._remaining)).ToArray();
+    public string Source { get; private set; } = "startup";
+    public static IReadOnlyList<RemotePromptInfo> RemotePrompts(string source = "startup")
+        => Active.Values.Where(w => w.Source == source).Select(w => new RemotePromptInfo(w.RuntimeId, w.MessageText.Text,
+            w.TruePreview.Text, w.FalsePreview.Text, w._remaining, w.Source)).ToArray();
 
-    public static bool TryAnswerRemote(string runtimeId, bool yes)
+    public static bool TryAnswerRemote(string runtimeId, bool yes, string source = "startup")
     {
-        if (!Active.TryGetValue(runtimeId, out var window) || !window.IsVisible) return false;
+        if (!Active.TryGetValue(runtimeId, out var window) || window.Source != source || !window.IsVisible) return false;
         window._timer.Stop();
         window._choice = yes;
         window.DialogResult = true;
         return true;
     }
 
-    public static void CloseForRemoteStop()
+    public static void CloseForRemoteStop(string source = "startup")
     {
-        foreach (var window in Active.Values.ToArray())
+        foreach (var window in Active.Values.Where(w => w.Source == source).ToArray())
             if (window.IsVisible) window.Close();
     }
     private readonly DispatcherTimer _timer;
@@ -110,17 +111,23 @@ public partial class ConfirmStepWindow : Window
     /// 弹出人工确认对话框。返回 (走向, 判断依据描述)：true=是分支，false=否分支。
     /// 超时与未做选择直接关窗都按节点配置的默认分支走（描述里注明原因）。
     /// </summary>
-    public static (bool passed, string desc) ShowConfirm(StartupStep step, Window? owner = null)
+    public static (bool passed, string desc) ShowConfirm(StartupStep step, Window? owner = null, CancellationToken cancellationToken = default, string source = "startup")
     {
         // 托盘/静默启动的助手中主窗口从未显示，不能当 Owner
         // （WPF 抛"无法将 Owner 属性设置为之前未显示的 Window"）——此时无 Owner 居中屏幕显示
         var o = owner ?? Application.Current?.MainWindow;
         if (o is not { IsLoaded: true, IsVisible: true }) o = null;
-        var dialog = new ConfirmStepWindow(step, o);
+        cancellationToken.ThrowIfCancellationRequested();
+        var dialog = new ConfirmStepWindow(step, o) { Source = source };
+        using var cancellation = cancellationToken.Register(() => dialog.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (dialog.IsVisible) dialog.Close();
+        })));
         Active[dialog.RuntimeId] = dialog;
-        try { dialog.ShowDialog(); }
+        try { cancellationToken.ThrowIfCancellationRequested(); dialog.ShowDialog(); }
         finally { Active.TryRemove(dialog.RuntimeId, out _); }
 
+        cancellationToken.ThrowIfCancellationRequested();
         var choice = dialog._choice ?? dialog._timeoutGoTrue;
         var desc = dialog._timedOut
             ? $"超时（{step.ConfirmTimeoutSeconds} 秒）未选择，自动走「{(choice ? "是" : "否")}」"

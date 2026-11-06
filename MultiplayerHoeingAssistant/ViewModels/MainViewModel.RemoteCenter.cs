@@ -124,7 +124,7 @@ public partial class MainViewModel
     private async Task<RemoteCenterReply> ExecuteRemoteCenterOperationAsync(string requestId,
         RemoteCenterRequest request, string fingerprint)
     {
-        var isStop = request.Operation is "startup.cancel" or "startup.trigger.cancel"
+        var isStop = request.Operation is "startup.cancel" or "startup.trigger.cancel" or "task.trigger.cancel"
             || request.Operation == "task.run.action"
                 && Decode<RunActionArgs>(request.PayloadJson).Action == nameof(WorkflowRunAction.Stop);
         if (!TryEnterConfigTransferOperation(isStop ? "stop" : request.Operation, out var transferOperation))
@@ -141,7 +141,7 @@ public partial class MainViewModel
                     instanceId = _config!.ClientInstanceId,
                     machineId = HostMachineIdentity.Current,
                     executorName = _config.PlayerName,
-                    capabilities = new[] { "startup", "taskCenter" }
+                    capabilities = new[] { "startup", "taskCenter", "flowEditV1", "unifiedTriggersV1" }
                 });
             case "registers.get":
                 return RemoteCenterReply.Ok(Registers.GetSnapshot());
@@ -162,7 +162,9 @@ public partial class MainViewModel
                     watchdogs = mistletoe.ArmedWatchdogs.Select(w => w.StatusLine).ToArray(),
                     logTriggers = mistletoe.ArmedLogTriggers.Select(l => l.StatusLine).ToArray(),
                     triggers = CaptureRemoteTriggers(mistletoe),
+                    unifiedTriggers = mistletoe.CaptureUnifiedTriggers(),
                     prompts = ConfirmStepWindow.RemotePrompts(),
+                    taskPrompts = ConfirmStepWindow.RemotePrompts("taskCenter"),
                     registers = Registers.GetSnapshot(),
                     nodeStates = mistletoe.CaptureNodeRunStates()
                 }, revision);
@@ -172,16 +174,19 @@ public partial class MainViewModel
                 {
                     isRunning = mistletoe.IsRunning, statusText = mistletoe.StatusText,
                     triggers = CaptureRemoteTriggers(mistletoe),
+                    unifiedTriggers = mistletoe.CaptureUnifiedTriggers(),
                     prompts = ConfirmStepWindow.RemotePrompts(),
+                    taskPrompts = ConfirmStepWindow.RemotePrompts("taskCenter"),
                     registers = Registers.GetSnapshot(),
                     nodeStates = mistletoe.CaptureNodeRunStates()
                 });
+            case "task.prompt.answer":
             case "startup.prompt.answer":
             {
                 using var json = JsonDocument.Parse(request.PayloadJson ?? "{}");
                 var id = json.RootElement.GetProperty("runtimeId").GetString() ?? "";
                 var yes = json.RootElement.GetProperty("yes").GetBoolean();
-                return ConfirmStepWindow.TryAnswerRemote(id, yes)
+                return ConfirmStepWindow.TryAnswerRemote(id, yes, request.Operation == "task.prompt.answer" ? "taskCenter" : "startup")
                     ? RemoteCenterReply.Ok(message: "执行端已接收人工确认")
                     : RemoteCenterReply.Rejected("人工确认已结束或身份已变化");
             }
@@ -196,6 +201,15 @@ public partial class MainViewModel
                     mistletoe.CancelLogTrigger(log);
                 else return RemoteCenterReply.Rejected("执行端已找不到这条触发器；请刷新状态");
                 return RemoteCenterReply.Ok(message: "执行端已取消触发器");
+            }
+            case "task.trigger.cancel":
+            {
+                var args = Decode<TaskTriggerCancelArgs>(request.PayloadJson);
+                var item = host.FlowRuntime.List().FirstOrDefault(t => t.RuntimeId == args.RuntimeId && t.RunId == args.RunId);
+                if (item is null) return RemoteCenterReply.Rejected("执行端已找不到这个任务触发实例；请刷新状态");
+                return await host.FlowRuntime.CancelAsync(item.RuntimeId)
+                    ? RemoteCenterReply.Ok(message: "执行端已撤下该任务触发实例")
+                    : RemoteCenterReply.Rejected("该任务触发实例撤销未确认");
             }
             case "startup.save":
             {
@@ -272,6 +286,7 @@ public partial class MainViewModel
                 return RemoteCenterReply.Ok(new
                 {
                     serverTime = DateTimeOffset.Now,
+                    allowedTaskPrograms = mistletoe.GetAllowedTaskPrograms(),
                     flows = host.ListFlows(), active = overview.Active, history = overview.History,
                     catalog = host.Catalog.Current,
                     storedResourceEntries = host.Catalog.Current.Entries.Count == 0
@@ -354,6 +369,14 @@ public partial class MainViewModel
             case "task.flow.save":
             {
                 var document = Decode<WorkflowDocument>(request.PayloadJson);
+                WorkflowDocument? currentDocument = null;
+                if (!string.IsNullOrWhiteSpace(document.WorkflowId))
+                {
+                    try { currentDocument = host.LoadFlowSnapshot(document.WorkflowId).Document; }
+                    catch (FileNotFoundException) { /* 新计划仍交由原保存入口校验身份和修订。 */ }
+                }
+                if (!RemoteCenterProtocol.CanSaveFlow(request, document, currentDocument))
+                    return RemoteCenterReply.Rejected("此计划包含流程/车道；当前编辑端不支持该结构，未保存以避免数据丢失");
                 string revision;
                 try { revision = host.SaveFlow(document, request.ExpectedRevision); }
                 catch (WorkflowRevisionConflictException ex) { return RemoteCenterReply.Rejected(ex.Message); }

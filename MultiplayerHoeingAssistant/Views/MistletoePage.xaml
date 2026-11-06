@@ -1572,153 +1572,63 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- ===== 卡片：定时中的触发器（有挂载时才显示；运行态不持久化） ===== -->
-                        <Grid Margin="0,0,0,14">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasArmedTimers}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                        <Border Style="{DynamicResource QuestCard}">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="定时中的触发器" Style="{DynamicResource SectionTitle}"/>
-                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="98,0,0,0"/>
-                                </Grid>
-                                <ItemsControl ItemsSource="{Binding DisplayedTimers}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="⏰" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <TextBlock Grid.Column="1" Text="{Binding StatusLine}" FontSize="11.5"
-                                                           Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
-                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这个定时器的节点"/>
-                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个定时器到点会执行的完整流程"/>
-                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
-                                                        Command="{Binding CancelCommand}" ToolTip="取消这个定时器（不影响流程里的其他节点）"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Text="定时器是运行态：助手退出后全部失效，重启后由启动流程重新挂载。"
-                                           FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0"/>
-                            </StackPanel>
+                        <!-- 一张卡投影两个宿主的实际挂载；折叠状态不随轮询重置。 -->
+                        <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
+                                Visibility="{Binding HasUnifiedTriggers, Converter={StaticResource BoolToVis}}">
+                            <Expander x:Name="UnifiedTriggerExpander" IsExpanded="{Binding TriggersExpanded, Mode=TwoWay}" Foreground="{DynamicResource White}"
+                                      HorizontalContentAlignment="Stretch">
+                                <Expander.Header>
+                                    <WrapPanel VerticalAlignment="Center">
+                                        <TextBlock Text="运行中触发器" Style="{DynamicResource SectionTitle}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding UnifiedTriggerCount}" Foreground="{DynamicResource GoldText}" FontSize="13" Margin="0,0,18,0"/>
+                                        <TextBlock Text="{Binding UnifiedTriggerSummary}" Foreground="{DynamicResource Dim}" FontSize="11" VerticalAlignment="Center"/>
+                                    </WrapPanel>
+                                </Expander.Header>
+                                <StackPanel Margin="0,8,0,0">
+                                    <ComboBox SelectedIndex="{Binding TriggerSourceFilter, Mode=TwoWay}" HorizontalAlignment="Left"
+                                              Width="128" Margin="0,0,0,6" ToolTip="只筛选显示，不改变触发器的实际运行">
+                                        <ComboBoxItem Content="全部来源"/>
+                                        <ComboBoxItem Content="启动中心"/>
+                                        <ComboBoxItem Content="任务中心"/>
+                                    </ComboBox>
+                                    <ScrollViewer x:Name="UnifiedTriggerScroll" MaxHeight="210" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <ItemsControl ItemsSource="{Binding UnifiedTriggerRows}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,4">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="68"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border BorderBrush="#887452" BorderThickness="1" CornerRadius="3"
+                                                                Padding="5,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding SourceLabel}" FontSize="10" Foreground="{DynamicResource GoldText}"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                                            <TextBlock Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}" TextTrimming="CharacterEllipsis"
+                                                                       FontSize="11.5" Foreground="{DynamicResource White}"/>
+                                                            <TextBlock Text="{Binding Note}" ToolTip="{Binding Note}" TextTrimming="CharacterEllipsis"
+                                                                       FontSize="10" Foreground="{DynamicResource Dim}"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Button Content="定位" Command="{Binding LocateCommand}" Style="{DynamicResource BtnGhost}"
+                                                                    Padding="7,3" Margin="0,0,5,0"/>
+                                                            <Button Content="流程" Command="{Binding ViewFlowCommand}" Style="{DynamicResource BtnGhost}"
+                                                                    Padding="7,3" Margin="0,0,5,0"/>
+                                                            <Button Content="{Binding ActionLabel}" Command="{Binding CancelCommand}" IsEnabled="{Binding CanOperate}"
+                                                                    Style="{DynamicResource BtnGhost}" Padding="7,3"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    <TextBlock Text="{Binding UnifiedTriggerStatus}" FontSize="10" Foreground="{DynamicResource Dim}"
+                                               Margin="0,7,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Expander>
                         </Border>
-                        </Grid>
-
-                        <!-- ===== 卡片：盯梢中的电子狗（有挂载时才显示；运行态不持久化） ===== -->
-                        <Grid Margin="0,0,0,14">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasArmedWatchdogs}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                        <Border Style="{DynamicResource QuestCard}">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="盯梢中的电子狗" Style="{DynamicResource SectionTitle}"/>
-                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="98,0,0,0"/>
-                                </Grid>
-                                <ItemsControl ItemsSource="{Binding DisplayedWatchdogs}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="🐕" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource White}"/>
-                                                    <TextBlock Text="{Binding LastCheckNote}" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,1,0,0"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这只电子狗的节点"/>
-                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这只电子狗盯到时执行的完整流程"/>
-                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
-                                                        Command="{Binding CancelCommand}" ToolTip="撤下这只电子狗（不影响流程里的其他节点）"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Text="运行态，重启后由启动流程重新挂载；新状态复核一致才翻转（防抖），快照缺失不计。"
-                                           FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                        </Grid>
-
-                        <!-- ===== 卡片：监听中的日志触发器（有挂载时才显示；运行态不持久化） ===== -->
-                        <Grid Margin="0,0,0,14">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasArmedLogTriggers}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                        <Border Style="{DynamicResource QuestCard}">
-                            <StackPanel>
-                                <Grid Margin="0,0,0,8">
-                                    <TextBlock Text="监听中的日志触发器" Style="{DynamicResource SectionTitle}"/>
-                                    <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="132,0,0,0"/>
-                                </Grid>
-                                <ItemsControl ItemsSource="{Binding DisplayedLogTriggers}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid Margin="0,2">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="📜" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding StatusLine}" FontSize="11.5" Foreground="{DynamicResource White}"/>
-                                                    <TextBlock Text="{Binding StatusNote}" FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,1,0,0"/>
-                                                </StackPanel>
-                                                <Button Grid.Column="2" Content="⌖ 定位" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding LocateCommand}" ToolTip="在下方启动流程树中定位到挂载这个日志触发器的节点"/>
-                                                <Button Grid.Column="3" Content="📄 流程" Style="{DynamicResource BtnGhost}" Padding="10,3" Margin="0,0,6,0"
-                                                        Command="{Binding ViewFlowCommand}" ToolTip="弹窗查看这个日志触发器命中时执行的完整流程"/>
-                                                <Button Grid.Column="4" Content="✕ 取消" Style="{DynamicResource BtnGhost}" Padding="10,3"
-                                                        Command="{Binding CancelCommand}" ToolTip="撤下这个日志触发器（不影响流程里的其他节点）"/>
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                                <TextBlock Text="运行态，重启后由启动流程重新挂载；只盯挂载后的本机 BGI 新日志，链执行期间的重复命中合并为一次（执行完再循环）。"
-                                           FontSize="10" Foreground="{DynamicResource Dim}" Margin="0,6,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-                        </Grid>
 
                         <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
                                 Visibility="{Binding HasRemotePrompts, Converter={StaticResource BoolToVis}}">

@@ -11,7 +11,7 @@ public sealed partial class WorkflowPlan
     private static int Lane(WorkflowNode n)=>n.ExtensionData?.TryGetValue("scheduleLane",out var lane)==true && lane.TryGetInt32(out var value) ? value : 0;
     private static int Span(WorkflowNode n)=>n.ExtensionData?.TryGetValue("scheduleSpan",out var span)==true && span.TryGetInt32(out var value) ? value : 1;
     private static bool Covers(WorkflowNode n,int lane)=>lane>=Lane(n) && lane<Lane(n)+Span(n);
-    internal string PathLayoutKey=>_doc.ExtensionData?.TryGetValue("scheduleLanes",out var lanes)==true && lanes.ValueKind==JsonValueKind.Array
+    internal string PathLayoutKey=> WorkflowComposition.HasComposition(_doc) ? WorkflowComposition.LayoutKey(_doc) : _doc.ExtensionData?.TryGetValue("scheduleLanes",out var lanes)==true && lanes.ValueKind==JsonValueKind.Array
         ? JsonSerializer.Serialize(lanes.EnumerateArray().Select(l=>l.GetString()).ToArray()) : "[\"主车道\"]";
     internal bool ValidatePathCursor(WorkflowRunRecord run,bool bindNew=false)
     {
@@ -96,7 +96,7 @@ public sealed partial class WorkflowPlan
     {
         var n=NodeAt(current);
         if(n.Kind=="control.end") return null;
-        var target=n.Kind=="control.condition"
+        var target=(n.Kind=="control.condition" || n.Kind=="control.flow" && n.Flow?.ExitStepId is {Length: > 0})
             ? result switch {"branchYes"=>n.Path?.Yes,"branchNo"=>n.Path?.No,"skippedUser" or "skippedFilter"=>n.Path?.Next ?? "$end",_=>throw new InvalidOperationException("判断结果尚未持久化，禁止猜测去向")}
             : n.Path?.Next;
         if(target=="$end") return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));

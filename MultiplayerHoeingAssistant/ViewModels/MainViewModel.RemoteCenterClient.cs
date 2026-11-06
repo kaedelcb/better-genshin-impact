@@ -136,7 +136,7 @@ public partial class MainViewModel
 
     public async Task<RemoteCenterReply> RequestRemoteCenterAsync(RemoteCenterTarget target,
         string operation, object? payload = null, string? expectedRevision = null,
-        string? requestId = null)
+        string? requestId = null, int? flowEditVersion = null)
     {
         if (!IsObserverMode || _config is null)
             return RemoteCenterReply.Rejected("远程中心仅供监控端使用");
@@ -147,6 +147,7 @@ public partial class MainViewModel
             Operation = operation,
             TargetInstanceId = target.ClientInstanceId,
             ExpectedRevision = expectedRevision,
+            FlowEditVersion = flowEditVersion,
             PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload)
         };
         var command = RemoteCenterProtocol.Request(RoomCode, _config.PlayerUid, _config.PlayerName,

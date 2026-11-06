@@ -16,8 +16,9 @@ function tcFlows() { return (mtPick(tc.list, 'flows') || []).map(f => ({ id:mtPi
     quarantined:mtPick(f, 'status') === 1 || mtPick(f, 'status') === 'Quarantined', reason:mtPick(f, 'quarantineReason'), unsupported:mtPick(f, 'unsupportedKinds') || [],
     candidate:mtPick(f, 'activationStatus') === 'candidate-ready' })); }
 function tcFlow(id = tc.selected) { return tcFlows().find(f => f.id === id) || null; }
-function tcCanEdit(f) { return f && !f.candidate && !f.quarantined; }
-function tcCanStart(f) { return tcCanEdit(f) && !f.unsupported.length; }
+function tcHasFlowRows(doc = tc.doc) { return (doc?.nodes || []).some(n => n.kind === 'control.flow' || n.kind === 'control.lanes'); }
+function tcCanEdit(f) { return f && !f.candidate && !f.quarantined && !(f.id === tc.selected && tcHasFlowRows()); }
+function tcCanStart(f) { return f && !f.candidate && !f.quarantined && !f.unsupported.length; }
 function tcActive() { return mtPick(tc.list, 'active') || []; }
 function tcDriving(id) { return (mtPick(tc.list, 'drivingWorkflowIds') || []).includes(id); }
 /** 只用于历史记录显示。运行列表（active）由执行端按完整重置证据过滤，已有效重置的运行不会出现在里面；
@@ -28,6 +29,8 @@ function tcStrat(node, kind) { return (node.strategies || []).find(s => s.kind =
 function tcResourceNodes(doc = tc.doc) { return (doc?.nodes || []).filter(n => String(n.kind).startsWith('resource.')); }
 function tcCatalog() { return mtPick(tc.list, 'catalog') || { entries:[] }; }
 function tcNodeName(n) {
+    if (n.kind === 'control.flow') return n.flow?.name || '流程';
+    if (n.kind === 'control.lanes') return n.lanes?.name || '车道';
     if (n.kind === 'resource.singleTask') {
         const e = (tcCatalog().entries || []).find(x => x.kind === 2 && x.ownerConfig === n.ref?.config && x.stableId === `single:${x.ownerConfig}:${n.ref?.taskId}`);
         return e ? e.displayName : `${n.ref?.config || '（未绑定资源）'} · ${n.ref?.taskId || ''}`;
@@ -141,6 +144,7 @@ function tcEdited(message) {
 }
 async function tcSave() {
     clearTimeout(tc.saveTimer);
+    if (tcHasFlowRows()) { mtToast('此计划包含流程和车道，请在桌面助手中编辑；网页未保存任何改动。', true); return false; }
     if (!tc.dirty || tc.saving || !tc.doc) return !tc.dirty;
     if (tc.conflict) { mtToast(tc.conflict, true); return false; }
     tc.saving = true; tcRenderPlanHead();
@@ -210,7 +214,7 @@ function tcRenderPlanHead() {
     const host = mtEl('tcPlanHead'); if (!host) return;
     const f = tcFlow(), doc = tc.doc;
     if (!f || !doc) { host.innerHTML = `<p class="dd-empty">${tcFlows().length ? (tc.loadingDoc ? '正在打开计划…' : '在左侧选择一张计划表') : '先新建一张计划表，再添加配置单。'}</p>`; return; }
-    const nodes = tcResourceNodes(), enabled = nodes.filter(tcEnabled).length, block = tcBlocking(f.id), marker = tcStartMarker();
+    const nodes = tcHasFlowRows(doc) ? doc.nodes : tcResourceNodes(), enabled = nodes.filter(tcEnabled).length, block = tcBlocking(f.id), marker = tcStartMarker();
     const unknown = tcActive().filter(r => mtPick(r, 'workflowId') === f.id && tcState(r) === 'Unknown' && !tcReleased(r));
     const lastUnknown = unknown.map(r => String(mtPick(r, 'updatedAt') || '')).sort().at(-1) || '';
     const markerNode = marker ? doc.nodes.find(n => n.nodeId === marker) : null;
@@ -225,11 +229,40 @@ function tcRenderPlanHead() {
     if (mtEl('tcActivate')) mtEl('tcActivate').onclick = () => tcMigration('task.migration.activate', f.id, `激活候选「${f.name}」`);
     mtEl('tcWindowSwitch').onchange = e => { doc.nodeTimeWindowEnabled = e.target.checked; tcEdited(e.target.checked ? '已开启按时段执行：时段外任务跳过。' : '已关闭按时段执行：保留时段设置，按原计划执行。'); };
 }
+// 含编排的计划按作者结构只读展示，不能将车道里的资源重新扁平化到主线。
+function tcRenderFlowRows(host, doc) {
+    const all = doc.nodes || [], byId = new Map(all.map(n => [n.nodeId, n]));
+    const inLane = new Set(all.flatMap(n => n.kind === 'control.lanes'
+        ? [...(n.lanes?.yesNodeIds || []), ...(n.lanes?.noNodeIds || [])] : []));
+    const resource = n => '<div class="tc-flow-resource"><b>' + mte(tcNodeName(n)) + '</b><small> · ' + mte(TC_KIND[n.kind] || n.kind) + '</small></div>';
+    const stepName = s => s.name || s.displayName || ({
+        wait:'等待', weekday:'星期判断', timeRange:'时间区间', setRegister:'设置寄存器', judgeRegister:'判断寄存器',
+        logTrigger:'日志触发器', timerTrigger:'定时触发器', watchdog:'电子狗', manualConfirm:'人工确认',
+        bgiRunning:'BGI 进程状态', gameRunning:'游戏进程状态', processRunning:'指定进程状态',
+        bgiTaskRunning:'BGI 任务状态', bgiTaskName:'BGI 当前任务名', startProgram:'启动第三方程序'
+    }[s.kind] || s.kind || '节点');
+    const steps = (list, depth = 0) => depth > 16 ? '<p>子链层级过深，请在桌面助手查看。</p>' : (list || []).map(s =>
+        '<li>' + mte(stepName(s)) + (s.enabled === false ? '（已禁用）' : '') +
+        [ ['是',s.trueSteps], ['否',s.falseSteps], ['触发时',s.fireSteps] ].filter(x => x[1]?.length)
+            .map(([label, sub]) => '<div><small>' + label + '</small><ol>' + steps(sub, depth + 1) + '</ol></div>').join('') + '</li>').join('');
+    const lane = (name, ids) => '<section class="dd-card"><h4>' + mte(name) + '</h4>' +
+        ((ids || []).length ? ids.map(id => byId.has(id) ? resource(byId.get(id)) : '<p>任务引用已失效</p>').join('') : '<p>空车道，直接汇流。</p>') + '</section>';
+    host.innerHTML = '<header class="tc-nodes-head"><div><h3>任务与流程</h3><p class="dodoco-hint">只读：请在桌面助手编辑流程与车道。展开可查看执行顺序；未选择的车道不会执行。</p></div></header>' +
+        all.filter(n => !inLane.has(n.nodeId)).map((n, i) => {
+            if (n.kind === 'control.flow') return '<details class="dd-card"><summary>' + (i + 1) + ' · 流程 · ' + mte(tcNodeName(n)) + '</summary><ol>' + steps(n.flow?.steps) + '</ol><small>' + (n.flow?.exitStepId ? '末端判断输出是 / 否，交给配对车道。' : '动作完成后继续主线。') + '</small></details>';
+            if (n.kind === 'control.lanes') return '<details class="dd-card"><summary>' + (i + 1) + ' · 车道 · ' + mte(tcNodeName(n)) + '</summary>' +
+                lane('是 · ' + (n.lanes?.yesName || '是车道'), n.lanes?.yesNodeIds) +
+                lane('否 · ' + (n.lanes?.noName || '否车道'), n.lanes?.noNodeIds) +
+                '<p class="dodoco-hint">选中的车道结束后回到主线。</p></details>';
+            return '<section class="dd-card">' + (i + 1) + ' · ' + resource(n) + '</section>';
+        }).join('');
+}
 function tcRenderNodes() {
     const host = mtEl('tcNodes'); if (!host) return;
     const f = tcFlow(), doc = tc.doc;
     if (!f || !doc) { host.innerHTML = ''; host.hidden = true; return; }
     host.hidden = false;
+    if (tcHasFlowRows(doc)) { tcRenderFlowRows(host, doc); return; }
     const editable = tcCanEdit(f), nodes = tcResourceNodes(), marker = tcStartMarker(), now = tcNow();
     const head = `<header class="tc-nodes-head"><div><h3>配置单</h3><p class="dodoco-hint">${editable ? '拖动 ⠿ 调整顺序；点日期、时段或账号直接编辑。运行中修改会在下一个任务边界生效。' : '只读：' + (f.quarantined ? '隔离计划不可编辑' : '候选计划需先激活')}</p></div>${editable ? '<button id="tcAdd" class="dd-btn dd-btn-sm dd-btn-primary">＋ 新增任务</button>' : ''}</header>`;
     if (!nodes.length) { host.innerHTML = head + `<p class="dd-empty">${editable ? '这张计划表还是空的。先添加一个配置单，修改会自动保存，之后即可启动计划。' : '没有配置单。'}</p>`; if (editable) mtEl('tcAdd').onclick = () => tcAddDialog(); return; }

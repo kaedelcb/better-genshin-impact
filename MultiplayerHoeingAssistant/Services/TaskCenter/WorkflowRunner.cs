@@ -234,6 +234,7 @@ public sealed class WorkflowRunnerOptions
     /// <summary>R5.4 IP4：灵活窗口事实提供者（可选；默认 null ⇒ 不消费 IsFlexiblyIdle）。</summary>
     public Func<FlexibleWindowFacts>? FlexibleFactsProvider { get; init; }
     public IWorkflowObservationSource? ObservationSource { get; init; }
+    public TaskFlowRuntime? FlowRuntime { get; init; }
     /// <summary>只处理与本计划原作业和联机票据精确匹配的让位；null 保持原取消语义。</summary>
     public Func<WorkflowRunRecord, WorkflowSubmission, BoundaryTerminalResult, CancellationToken,
         Task<BoundaryTerminalResult?>>? OnlineHoeingContinuation { get; init; }
@@ -856,7 +857,9 @@ public sealed partial class WorkflowRunner
                 {
                     Log(run, $"推进过滤已完成出现 {occurrence.NodeId}#{occurrence.Occurrence}"
                              + $"（轮次 {occurrence.LoopIteration}）：按稳定身份跳过，不二次提交。");
-                    occurrence = plan.Next(occurrence);
+                    var savedResult = run.NodeOutcomes.LastOrDefault(o => o.NodeId == occurrence.NodeId
+                        && o.Occurrence == occurrence.Occurrence && o.LoopIteration == occurrence.LoopIteration)?.Result;
+                    occurrence = plan.Next(occurrence, savedResult);
                     ApplyRelocation(run, occurrence);
                     _runs.Update(run);
                     continue;
@@ -882,6 +885,38 @@ public sealed partial class WorkflowRunner
                 (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
                 if (!ReferenceEquals(arrivalPlan, plan)) continue;
 
+                if (node.Kind is "control.flow" or "control.lanes")
+                {
+                    if (node.Kind == "control.lanes")
+                    {
+                        CommitOutcome(run, plan, occurrence, "succeeded", "已到达车道汇合结构");
+                        occurrence = Relocate(run, plan); continue;
+                    }
+                    var flowGate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
+                    if (flowGate.Action != NodeGateAction.Proceed)
+                    {
+                        if (node.Flow?.ExitStepId is { Length: > 0 })
+                        {
+                            run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "出口流程已禁用或跳过，不能猜测车道");
+                            _runs.Update(run); return run;
+                        }
+                        CommitOutcome(run, plan, occurrence, "skippedFilter", flowGate.Reason);
+                        occurrence = Relocate(run, plan); continue;
+                    }
+                    try
+                    {
+                        var runtime = _opt.FlowRuntime ?? throw new InvalidOperationException("通用流程宿主未接线");
+                        var result = await runtime.ExecuteAsync(run, node, occurrence.LoopIteration, () => _runs.Update(run), ct).ConfigureAwait(false);
+                        CommitOutcome(run, plan, occurrence, result is {} b ? b ? "branchYes" : "branchNo" : "succeeded", "流程节点与出口结果已确认");
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex)
+                    {
+                        run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "流程未确认：" + Sanitize(ex.Message));
+                        _runs.Update(run); return run;
+                    }
+                    occurrence = Relocate(run, plan); continue;
+                }
                 if (node.Kind == "control.condition")
                 {
                     bool answer;
@@ -1029,6 +1064,16 @@ public sealed partial class WorkflowRunner
             var hadBadOutcome = run.NodeOutcomes.Any(o =>
                 (o.Result is "failed" or "rejected" or "cancelled" or "cancelUnconfirmed" or "unknown")
                 && !RetryFailureWasSettled(run, o) && !TerminalReleaseEvidence.UncertainOutcomeWasSettled(run, o));
+            if (_opt.FlowRuntime is {} finishRuntime)
+            {
+                try { await finishRuntime.FinishRoundAsync(run.RunId, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, ex.Message);
+                    _runs.Update(run); return run;
+                }
+            }
             if (hadBadOutcome || unresolvedParkedOutcome || flowFailure)
             {
                 run.State = WorkflowRunState.Failed;
@@ -1223,6 +1268,18 @@ public sealed partial class WorkflowRunner
             _runs.Update(run);
             return run;
         }
+        finally
+        {
+            if (_opt.FlowRuntime is {} runtime)
+            {
+                await runtime.CloseRunAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
+                if (runtime.GetError(run.RunId) is {} triggerError && run.State == WorkflowRunState.Succeeded)
+                {
+                    run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "后台触发结果未确认：" + triggerError);
+                    _runs.Update(run);
+                }
+            }
+        }
     }
 
     /// <summary>提交 + 终态等待（意图先行落盘；SkipCurrent 经叶子令牌取消 + 远端确认，B4）。
@@ -1299,6 +1356,9 @@ public sealed partial class WorkflowRunner
         if (timeWindowGate.Action != NodeGateAction.Proceed)
             return (timeWindowGate.Action == NodeGateAction.Skip ? "skippedFilter" : "rejected", timeWindowGate.Reason, null);
 
+        await using var flowScope = _opt.FlowRuntime is {} runtime
+            ? await runtime.BeginTaskAsync(run, node, occurrence, attempt, () => _runs.Update(run), ct).ConfigureAwait(false)
+            : null;
         var observer=node.Strategies.SingleOrDefault(s=>s.Kind=="observer.log");
         if(observer is null)return await SubmitLeafAndAwaitAsync(run,plan,node,occurrence,control,submission).ConfigureAwait(false);
         if(_opt.ObservationSource is null)return ("unknown","伴随观察器实际日志来源未接通，未发送",null);

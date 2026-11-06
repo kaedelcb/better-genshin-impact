@@ -24,7 +24,7 @@ const MT_RUN_TEXT = { running:'执行中', success:'已执行', failed:'失败',
 const MT_WEEK = ['一','二','三','四','五','六','日'];
 
 const su = { config:null, revision:'', schemes:[], schemesRevision:'', isRunning:false, statusText:'', autoLaunch:null,
-    triggers:[], prompts:[], states:new Map(), selected:null, dirty:false, saving:false, saveError:'', saveTimer:null,
+    triggers:[], unifiedTriggers:null, triggerFilter:"all", triggersExpanded:false, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0, prompts:[], states:new Map(), selected:null, dirty:false, saving:false, saveError:'', saveTimer:null,
     loaded:false, loading:false, view:{ zoom:1, x:0, y:0, mode:'fit', follow:true }, inspectorOpen:true, mobilePane:'outline',
     flows:[], schemeSaving:false, addTarget:null };
 
@@ -172,8 +172,16 @@ async function mtLoadStartup(force) {
 }
 function mtApplyStatus(d) {
     su.isRunning = !!mtPick(d, 'isRunning'); su.statusText = mtPick(d, 'statusText') || '';
-    su.triggers = mtPick(d, 'triggers') || []; su.prompts = mtPick(d, 'prompts') || [];
+    const u = mtPick(d, 'unifiedTriggers');
+    if (u && mtPick(u, 'version') === 1) {
+        const at = Date.parse(mtPick(u, 'capturedAtUtc')) || 0, seq = mtPick(u, 'sequence') || 0, epoch = mtPick(u, 'epoch') || '';
+        if (at < su.triggerCapturedAt || epoch === su.triggerEpoch && seq < su.triggerSequence) return false;
+        su.unifiedTriggers = u; su.triggerCapturedAt = at; su.triggerSequence = seq; su.triggerEpoch = epoch;
+    } else su.unifiedTriggers = null;
+    su.triggerStale = false;
+    su.triggers = mtPick(d, 'triggers') || []; su.prompts = [...(mtPick(d, 'prompts') || []), ...(mtPick(d, 'taskPrompts') || [])];
     su.states = new Map((mtPick(d, 'nodeStates') || []).map(x => [mtPick(x, 'stepId'), { state:MT_RUN[mtPick(x, 'state')] || '', note:mtPick(x, 'note') || '' }]));
+    return true;
 }
 async function mtLoadFlowChoices() {
     try {
@@ -189,12 +197,13 @@ async function mtPollStartup() {
         const reply = await mtRead('startup.status', undefined, { timeout:12000 });
         if (mt.unconfirmed) await mtReconcile(true);
         // 状态没变就不重绘，避免每 3 秒替换大纲和画布打断点击、拖动。
-        const sig = JSON.stringify(reply.data || {});
+        const d = reply.data || {}, u = mtPick(d, 'unifiedTriggers');
+        const sig = JSON.stringify([mtPick(d, 'isRunning'), mtPick(d, 'statusText'), mtPick(d, 'triggers'), u ? mtPick(u, 'items') : null, mtPick(d, 'prompts'), mtPick(d, 'taskPrompts'), mtPick(d, 'nodeStates')]);
         if (sig === su.statusSig && mtEl('mtRunCard')) return;
         su.statusSig = sig;
-        mtApplyStatus(reply.data || {});
+        if (mtApplyStatus(reply.data || {}) === false) return;
         mtRenderStartupLive();
-    } catch (error) { mtToast('运行状态刷新失败：' + error.message, true); }
+    } catch (error) { su.triggerStale = true; mtRenderTriggers(); mtToast('运行状态刷新失败：' + error.message, true); }
 }
 async function mtSaveConfig() {
     clearTimeout(su.saveTimer);
@@ -292,13 +301,16 @@ async function mtCancelStartup() {
     setTimeout(mtPollStartup, 800);
 }
 async function mtAnswerPrompt(runtimeId, yes) {
-    const reply = await mtOperate('startup.prompt.answer', { runtimeId, yes }, { label:`人工确认选择「${yes ? '是' : '否'}」`, onStage:mtStageBar });
+    const reply = await mtOperate((su.prompts.find(p => mtPick(p, 'runtimeId') === runtimeId) && mtPick(su.prompts.find(p => mtPick(p, 'runtimeId') === runtimeId), 'source') === 'taskCenter') ? 'task.prompt.answer' : 'startup.prompt.answer', { runtimeId, yes }, { label:`人工确认选择「${yes ? '是' : '否'}」`, onStage:mtStageBar });
     if (reply.status !== 'ok') mtToast(reply.message || '人工确认未送达', true);
     mtPollStartup();
 }
-async function mtCancelTrigger(runtimeId, text) {
-    if (!confirm(`取消触发器「${text}」？不影响流程里的其他节点。`)) return;
-    const reply = await mtOperate('startup.trigger.cancel', runtimeId, { label:'取消触发器', onStage:mtStageBar });
+async function mtCancelTrigger(runtimeId, text, source = 'startup', runId = '') {
+    if (su.triggerStale) return mtToast('执行端状态未确认，请刷新后操作', true);
+    const effect = source === 'taskCenter' ? '依赖此监听的分流可能需要核对，本次取消不删除配置。' : '不影响其他触发实例。';
+    if (!confirm(`取消触发器「${text}」？${effect}`)) return;
+    const reply = await mtOperate(source === 'taskCenter' ? 'task.trigger.cancel' : 'startup.trigger.cancel',
+        source === 'taskCenter' ? { runtimeId, runId } : runtimeId, { label:'取消触发器', onStage:mtStageBar });
     if (reply.status !== 'ok') mtToast(reply.message || '取消未完成', true);
     mtPollStartup();
 }

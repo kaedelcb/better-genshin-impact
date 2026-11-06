@@ -42,6 +42,7 @@ public sealed partial class WorkflowPlan
     public WorkflowPlan(WorkflowDocument doc)
     {
         _doc = doc;
+        if (WorkflowComposition.Validate(doc).Count == 0) WorkflowComposition.Compile(doc);
         _occurrenceTotals = new int[doc.Nodes.Count];
         var seen = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < doc.Nodes.Count; i++)
@@ -70,6 +71,8 @@ public sealed partial class WorkflowPlan
         var matches = _doc.Nodes.Select((node, index) => (node, index)).Where(x => x.node.NodeId == id.GetString()).ToList();
         if (matches.Count != 1)
         { reason = "迁移入口已失效或出现身份有歧义，禁止从链首猜测执行"; return null; }
+        if (WorkflowComposition.HasComposition(_doc) && StructuralRoundEntry(0)?.NodeId != id.GetString())
+        { reason = "迁移入口会绕过流程监听或车道选择，请先在计划中明确重新选择入口"; return null; }
         var key = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes("migration-entry-v1\0" + _doc.WorkflowId + "\0" + id.GetString())));
         return (key, OccurrenceAt(matches[0].index, 0));
@@ -81,6 +84,9 @@ public sealed partial class WorkflowPlan
         if (nodeId is null) return null;
         if (string.IsNullOrWhiteSpace(nodeId) || _doc.Nodes.Count(n => n.NodeId == nodeId) != 1)
             throw new InvalidOperationException("指定起点不存在或身份有歧义，禁止从链首执行。");
+        if (WorkflowComposition.HasComposition(_doc)
+            && _doc.Nodes.FirstOrDefault(n => !WorkflowComposition.IsLaneMember(_doc, n.NodeId))?.NodeId != nodeId)
+            throw new InvalidOperationException("此起点会绕过关联流程的监听或车道选路，请从关联流程或计划开头执行。");
         return new WorkflowNodeCursor { NodeId = nodeId, Occurrence = 0, LoopIteration = 0, Attempt = 1 };
     }
 
@@ -88,9 +94,12 @@ public sealed partial class WorkflowPlan
     public WorkflowNodeOccurrence? FirstOccurrence() => StructuralRoundEntry(0);
 
     private WorkflowNodeOccurrence? StructuralRoundEntry(int loopIteration)
-        => _doc.Nodes.Count == 0 ? null : HasPaths
-            ? _doc.Nodes.FindIndex(n => Covers(n, 0)) is var first && first >= 0 ? OccurrenceAt(first, loopIteration) with { PathLane = 0 } : null
-            : OccurrenceAt(0, loopIteration);
+        => _doc.Nodes.Count == 0 ? null : WorkflowComposition.HasComposition(_doc)
+            ? _doc.Nodes.FindIndex(n => !WorkflowComposition.IsLaneMember(_doc, n.NodeId)) is var entry && entry >= 0
+                ? OccurrenceAt(entry, loopIteration) with { PathLane = 0 } : null
+            : HasPaths
+                ? _doc.Nodes.FindIndex(n => Covers(n, 0)) is var first && first >= 0 ? OccurrenceAt(first, loopIteration) with { PathLane = 0 } : null
+                : OccurrenceAt(0, loopIteration);
 
     internal bool IsStructuralRoundEntry(WorkflowNodeOccurrence occurrence)
         => StructuralRoundEntry(occurrence.LoopIteration) is { } entry
@@ -147,6 +156,7 @@ public sealed partial class WorkflowPlan
         var blocking = new List<string>();
         var warnings = new List<string>();
 
+        blocking.AddRange(WorkflowComposition.Validate(_doc));
         blocking.AddRange(ValidatePaths());
         blocking.AddRange(WorkflowFailurePolicy.Validate(_doc));
         if (_doc.NodeTimeWindowEnabled)

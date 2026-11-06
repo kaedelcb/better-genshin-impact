@@ -411,7 +411,7 @@
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                             </Grid>
                              <Grid Grid.Row="1">
-                                 <ListBox x:Name="ResourceList" ItemsSource="{Binding ResourceNodes}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
+                                 <ListBox x:Name="ResourceList" ItemsSource="{Binding PlanRows}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
                                           Background="Transparent" BorderThickness="0" AllowDrop="True" MaxHeight="360" VerticalAlignment="Top"
                                          ContextMenuOpening="ResourceContextMenuOpening"
                                          PreviewMouseLeftButtonDown="ResourceRowMouseDown"
@@ -457,10 +457,15 @@
                                     </ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
+                                             <StackPanel>
+                                            <views:CompositionPlanRow>
+                                                <views:CompositionPlanRow.Style><Style TargetType="views:CompositionPlanRow"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsComposition}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></views:CompositionPlanRow.Style>
+                                            </views:CompositionPlanRow>
                                              <Grid MinHeight="40" Background="Transparent" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期、时段或账号编辑">
                                                     <Grid.Style>
                                                         <Style TargetType="Grid">
                                                             <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsComposition}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True">
                                                                     <Setter Property="Opacity" Value="0.75" />
                                                                 </DataTrigger>
@@ -561,6 +566,7 @@
                                                                    VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                      </Grid>
                                             </Grid>
+                                            </StackPanel>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
                                     <ListBox.ContextMenu>
@@ -611,6 +617,7 @@
                         <Button x:Name="AddTaskSingleCategory" Tag="2" Click="AddTaskCategoryClick"
                                 Style="{StaticResource BasicButton}" Margin="4,0,0,0" />
                     </UniformGrid>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10"><TextBlock Text="编排" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,10,0" /><Button Content="＋ 流程" Click="AddFlowClick" Style="{StaticResource BasicButton}" Margin="0,0,8,0" /><Button Content="＋ 车道" Click="AddLanesClick" Style="{StaticResource BasicButton}" /></StackPanel>
                     <TextBlock Text="搜索当前类别" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,0,0,4" />
                     <TextBox x:Name="AddTaskSearch" Style="{StaticResource BasicInput}" Margin="0,0,0,10"
                              ToolTip="搜索当前类别的名称或所属配置" TextChanged="AddTaskSearchChanged" />

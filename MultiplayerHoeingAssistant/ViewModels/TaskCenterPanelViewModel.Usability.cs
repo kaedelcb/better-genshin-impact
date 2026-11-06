@@ -168,18 +168,20 @@ public sealed partial class TaskCenterPanelViewModel
     private IReadOnlyList<NodeEditVm> _resourceNodes = Array.Empty<NodeEditVm>();
     private bool _notifyingWorkspace;
     public IReadOnlyList<NodeEditVm> ResourceNodes => _resourceNodes;
+    private IReadOnlyList<NodeEditVm> _planRows = Array.Empty<NodeEditVm>();
+    public IReadOnlyList<NodeEditVm> PlanRows => _planRows;
     public bool HasSelectedResource => Editing?.SelectedNode?.IsResource == true
         && ResourceNodes.Contains(Editing.SelectedNode);
-    public bool IsEmptyPlan => ResourceNodes.Count == 0;
-    public bool HasStartableNodes => ResourceNodes.Any(node => node.IsEnabled);
+    public bool IsEmptyPlan => PlanRows.Count == 0;
+    public bool HasStartableNodes => PlanRows.Any(node => node.IsEnabled);
     public string CurrentPlanTitle => Editing?.NameText
         ?? Flows.FirstOrDefault(f => f.WorkflowId == SelectedWorkflowId)?.Name
         ?? "未选择计划";
-    public int EnabledNodeCount => ResourceNodes.Count(node => node.IsEnabled);
+    public int EnabledNodeCount => PlanRows.Count(node => node.IsEnabled);
     public string CurrentPlanSummary => Editing is { } draft
-        ? ResourceNodes.Count == 0
+        ? PlanRows.Count == 0
             ? "空计划 · 先新增任务"
-            : $"{ResourceNodes.Count} 个配置单 · {EnabledNodeCount} 个已启用"
+            : $"{PlanRows.Count} 个主线任务 · {EnabledNodeCount} 个已启用"
         : "选择一张计划表开始编辑";
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"
@@ -196,13 +198,17 @@ public sealed partial class TaskCenterPanelViewModel
             // Replacing it on every selection/index notification loops during deletion.
             var resourceNodes = Editing?.Nodes.Where(node => node.IsResource).ToArray()
                 ?? Array.Empty<NodeEditVm>();
+            var mainRows = Editing?.MainPlanNodes ?? Array.Empty<NodeEditVm>();
+            if (!_planRows.SequenceEqual(mainRows)) { _planRows = mainRows; OnPropertyChanged(nameof(PlanRows)); }
+            for (var row = 0; row < mainRows.Count; row++) mainRows[row].ResourceIndex = row + 1;
             var resourcesChanged = !_resourceNodes.SequenceEqual(resourceNodes);
             if (resourcesChanged) _resourceNodes = resourceNodes;
-            for (var i = 0; i < resourceNodes.Length; i++) resourceNodes[i].ResourceIndex = i + 1;
+            if (!resourceNodes.Any(n => n.IsComposition) && mainRows.Count == resourceNodes.Length)
+                for (var i = 0; i < resourceNodes.Length; i++) resourceNodes[i].ResourceIndex = i + 1;
             if (resourcesChanged) OnPropertyChanged(nameof(ResourceNodes));
             if (Editing is { } draft
-                && (draft.SelectedNode is not { IsResource: true } selected || !resourceNodes.Contains(selected)))
-                draft.SelectedNode = resourceNodes.FirstOrDefault();
+                && (draft.SelectedNode is not { } selected || !draft.Nodes.Contains(selected)))
+                draft.SelectedNode = mainRows.FirstOrDefault();
 
             OnPropertyChanged(nameof(HasFlows));
             OnPropertyChanged(nameof(BasicFlows));
@@ -266,7 +272,7 @@ public sealed partial class TaskCenterPanelViewModel
     public RelayCommand RemoveSelectedResourceCommand => new(p =>
     {
         var node = p as NodeEditVm ?? Editing?.SelectedNode;
-        if (Editing is not { } editing || node is not { IsResource: true } || !editing.Nodes.Contains(node))
+        if (Editing is not { } editing || node is null || !editing.Nodes.Contains(node))
         {
             SetStatus("请先选择一行配置单。", isError: true);
             return;

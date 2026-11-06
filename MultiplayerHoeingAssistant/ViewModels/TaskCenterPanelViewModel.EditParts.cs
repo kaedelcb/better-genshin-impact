@@ -228,6 +228,9 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     public RelayCommand RemoveNodeCommand => new(p =>
     {
         if (p is not NodeEditVm vm) return;
+        if (RemoveComposition(vm)) return;
+        foreach (var pair in Draft.Nodes.Where(n => n.Lanes is not null))
+        { pair.Lanes!.YesNodeIds.Remove(vm.NodeId); pair.Lanes.NoNodeIds.Remove(vm.NodeId); }
         Nodes.Remove(vm);
         Draft.Nodes.Remove(vm.Model); // 调序/删除保其余节点 NodeId（一轮 I4）
         if (Draft.ExtensionData?.TryGetValue(TaskCenterPanelViewModel.StartNodeExtensionKey, out var startNode) == true
@@ -241,6 +244,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     public RelayCommand DuplicateSelectedNodeCommand => new(_ =>
     {
         if (SelectedNode is not { } source) return;
+        if (DuplicateComposition(source)) return;
         var index = Nodes.IndexOf(source);
         if (index < 0) return;
 
@@ -250,6 +254,11 @@ public sealed partial class WorkflowEditVm : ViewModelBase
         // Copy the row the user sees, including its pending account/date/failure changes.
         source.ApplyToModel(clone);
         clone.NodeId = NewNodeId();
+        foreach (var laneNode in Draft.Nodes.Where(n => n.Lanes is not null))
+        {
+            foreach (var ids in new[] { laneNode.Lanes!.YesNodeIds, laneNode.Lanes.NoNodeIds })
+                if (ids.IndexOf(source.NodeId) is var at && at >= 0) ids.Insert(at + 1, clone.NodeId);
+        }
         Draft.Nodes.Insert(index + 1, clone);
         var copy = new NodeEditVm(clone);
         copy.SetResourceDisplayName(source.DisplayName);
@@ -272,6 +281,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     /// <summary>同一草稿内拖拽或插入；保留节点对象、稳定身份及全部未知字段。</summary>
     public void MoveNodeTo(NodeEditVm source, NodeEditVm target, bool after)
     {
+        if (MoveComposition(source, target, after)) return;
         var from = Nodes.IndexOf(source);
         var to = Nodes.IndexOf(target);
         if (from < 0 || to < 0 || from == to) return;
@@ -296,6 +306,7 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     private void Renumber()
     {
         for (var i = 0; i < Nodes.Count; i++) Nodes[i].Index = i + 1;
+        OnPropertyChanged(nameof(MainPlanNodes));
     }
 
     // ---- 追加节点（来源=资源目录快照；实时支持的单项可追加，缓存单项仅展示） ----

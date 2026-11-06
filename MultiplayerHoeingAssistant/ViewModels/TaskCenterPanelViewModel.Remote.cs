@@ -66,7 +66,8 @@ public sealed partial class TaskCenterPanelViewModel
 
     private Task<RemoteCenterReply> RemoteRequestAsync(string operation, object? payload = null,
         string? expectedRevision = null, string? requestId = null)
-        => _remoteMain!.RequestRemoteCenterAsync(_remoteTarget!, operation, payload, expectedRevision, requestId);
+        => _remoteMain!.RequestRemoteCenterAsync(_remoteTarget!, operation, payload, expectedRevision, requestId,
+            flowEditVersion: operation == "task.flow.save" ? 1 : null);
 
     private async Task RefreshRemoteAsync()
     {

@@ -41,11 +41,13 @@ public partial class BasicTaskCenterView : UserControl
         {
             if (e.OldValue is TaskCenterPanelViewModel oldHost)
             {
+                oldHost.CompositionLocateRequested -= LocateCompositionStep;
                 oldHost.PropertyChanged -= OnTaskCenterEditingChanged;
                 oldHost.SnapshotRefreshed -= ObserveResourceTasks;
             }
             if (e.NewValue is TaskCenterPanelViewModel newHost)
             {
+                newHost.CompositionLocateRequested += LocateCompositionStep;
                 newHost.PropertyChanged += OnTaskCenterEditingChanged;
                 newHost.SnapshotRefreshed += ObserveResourceTasks;
             }
@@ -416,6 +418,7 @@ public partial class BasicTaskCenterView : UserControl
 
     private void AddConfigClick(object sender, RoutedEventArgs e)
     {
+        _addingLane = null;
         var host = Host;
         if (host is null || host.Editing is not { } editing)
         {
@@ -538,6 +541,13 @@ public partial class BasicTaskCenterView : UserControl
             AddTaskFeedback.Visibility = Visibility.Visible;
             return;
         }
+        if (_addingLane?.Model.Lanes is { } lanes && editing.Nodes.Contains(_addingLane))
+        {
+            (_addingLaneYes ? lanes.YesNodeIds : lanes.NoNodeIds).Add(editing.Nodes[^1].NodeId);
+            editing.CompositionChanged();
+            editing.SelectedNode = _addingLane;
+            _addingLane = null;
+        }
         AddTaskPopup.IsOpen = false;
         host.ShowInlineActionFeedback($"已添加{AddTaskKindNames[_addTaskCategory]}「{selected.DisplayName}」，正在自动保存计划。", isError: false);
     }
@@ -552,8 +562,8 @@ public partial class BasicTaskCenterView : UserControl
 
     private void EnsureNodeSelection()
     {
-        if (Host?.Editing is { } editing && editing.SelectedNode is not { IsResource: true })
-            editing.SelectedNode = editing.Nodes.FirstOrDefault(node => node.IsResource);
+        if (Host?.Editing is { } editing && editing.SelectedNode is null)
+            editing.SelectedNode = editing.MainPlanNodes.FirstOrDefault();
     }
 
     private static NodeEditVm? ContextNode(object sender)

@@ -100,7 +100,7 @@ public sealed partial class WorkflowEditVm
 public sealed partial class NodeEditVm
 {
     private string? _resourceDisplayName;
-    public string DisplayName => Model.Kind == "control.condition" ? "◇ 判断" : Model.Kind == "control.end" ? "🏁 结束流程" : _resourceDisplayName ?? (Model.Ref?.TaskId is { Length: > 0 } task ? ConfigName + " · " + task : ConfigName);
+    public string DisplayName => Model.Flow?.Name ?? Model.Lanes?.Name ?? (Model.Kind == "control.condition" ? "◇ 判断" : Model.Kind == "control.end" ? "🏁 结束流程" : _resourceDisplayName ?? (Model.Ref?.TaskId is { Length: > 0 } task ? ConfigName + " · " + task : ConfigName));
     internal void SetResourceDisplayName(string? value) { _resourceDisplayName=value;OnPropertyChanged(nameof(DisplayName)); }
     /// <summary>基础计划表中的资源行号；控制节点不会占用行号。</summary>
     private int _resourceIndex;

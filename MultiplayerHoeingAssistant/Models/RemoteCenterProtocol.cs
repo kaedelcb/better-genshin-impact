@@ -13,6 +13,7 @@ public sealed class RemoteCenterRequest
     public string TargetInstanceId { get; set; } = "";
     public string? PayloadJson { get; set; }
     public string? ExpectedRevision { get; set; }
+    public int? FlowEditVersion { get; set; }
 }
 
 public sealed class RemoteCenterReply
@@ -46,12 +47,21 @@ public static class RemoteCenterProtocol
         => command.Params?.GetValueOrDefault(PayloadKey)?.ToString();
 
     internal static string RequestFingerprint(RemoteCommand command, RemoteCenterRequest request)
-        => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
+        => Convert.ToHexString(SHA256.HashData(request.FlowEditVersion is null ? JsonSerializer.SerializeToUtf8Bytes(new
         {
             command.RoomCode, command.SenderUid,
             request.Version, request.TargetInstanceId, request.Operation,
             request.ExpectedRevision, request.PayloadJson
+        }) : JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            command.RoomCode, command.SenderUid,
+            request.Version, request.TargetInstanceId, request.Operation,
+            request.ExpectedRevision, request.PayloadJson, request.FlowEditVersion
         })));
+
+    internal static bool CanSaveFlow(RemoteCenterRequest request, WorkflowDocument incoming, WorkflowDocument? current)
+        => request.FlowEditVersion == 1 || !incoming.Nodes.Any(IsComposition) && (current is null || !current.Nodes.Any(IsComposition));
+    private static bool IsComposition(WorkflowNode node) => node.Kind is "control.flow" or "control.lanes";
 
     public static RemoteCommand Request(string roomCode, string senderUid, string senderName,
         string targetUid, RemoteCenterRequest request, string? commandId = null) => new()
@@ -101,7 +111,9 @@ public sealed class RemoteStartupSnapshot
     public List<string> Watchdogs { get; set; } = [];
     public List<string> LogTriggers { get; set; } = [];
     public List<RemoteTriggerInfo> Triggers { get; set; } = [];
+    public UnifiedTriggerSnapshot? UnifiedTriggers { get; set; }
     public List<RemotePromptInfo> Prompts { get; set; } = [];
+    public List<RemotePromptInfo> TaskPrompts { get; set; } = [];
     public List<RemoteNodeRunState> NodeStates { get; set; } = [];
 }
 
@@ -109,7 +121,7 @@ public sealed record RemoteTriggerInfo(string RuntimeId, string Kind, string Tex
     StartupStep? Step = null, string? Note = null);
 public sealed record RemoteNodeRunState(string StepId, NodeRunState State, string Note);
 public sealed record RemotePromptInfo(string RuntimeId, string Message,
-    string YesPreview, string NoPreview, int RemainingSeconds);
+    string YesPreview, string NoPreview, int RemainingSeconds, string Source = "startup");
 
 public sealed class RemoteStartupStatusSnapshot
 {
@@ -117,12 +129,15 @@ public sealed class RemoteStartupStatusSnapshot
     public bool IsRunning { get; set; }
     public string StatusText { get; set; } = "";
     public List<RemoteTriggerInfo> Triggers { get; set; } = [];
+    public UnifiedTriggerSnapshot? UnifiedTriggers { get; set; }
     public List<RemotePromptInfo> Prompts { get; set; } = [];
+    public List<RemotePromptInfo> TaskPrompts { get; set; } = [];
     public List<RemoteNodeRunState>? NodeStates { get; set; }
 }
 
 public sealed class RemoteTaskListSnapshot
 {
+    public List<StartupStep> AllowedTaskPrograms { get; set; } = [];
     /// <summary>执行端当前本机时刻（含时区偏移）；旧端缺省为空，不以缓存目录时间代替。</summary>
     public DateTimeOffset? ServerTime { get; set; }
     public List<WorkflowCatalogEntry> Flows { get; set; } = [];
@@ -134,3 +149,22 @@ public sealed class RemoteTaskListSnapshot
     public Dictionary<string, WorkflowSnapshot> ActiveFlowSnapshots { get; set; } = new(StringComparer.Ordinal);
     public List<string> DrivingWorkflowIds { get; set; } = [];
 }
+
+/// <summary>真实挂载的只读投影；旧 Triggers 继续仅表示启动中心。</summary>
+public sealed class UnifiedTriggerSnapshot
+{
+    public int Version { get; init; } = 1;
+    public string Epoch { get; init; } = "";
+    public long Sequence { get; init; }
+    public DateTimeOffset CapturedAtUtc { get; init; }
+    public bool TaskCenterAvailable { get; init; } = true;
+    public List<UnifiedTriggerInfo> Items { get; init; } = [];
+}
+
+public sealed record UnifiedTriggerInfo(string RuntimeId, string Source, string Kind, string Text,
+    string? Note = null, StartupStep? Step = null, string? WorkflowId = null, string? RunId = null,
+    string? FlowNodeId = null, string? StepId = null, bool CanCancel = true, bool IsRootTimer = false)
+{
+    public string Key => Source + ":" + RuntimeId;
+}
+public sealed record TaskTriggerCancelArgs(string RuntimeId, string RunId);

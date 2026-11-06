@@ -98,6 +98,14 @@ public sealed class WorkflowNode
     [JsonPropertyName("path")]
     public WorkflowPath? Path { get; set; }
 
+    [JsonPropertyName("flow")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowFlowDefinition? Flow { get; set; }
+
+    [JsonPropertyName("lanes")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowLanesDefinition? Lanes { get; set; }
+
     /// <summary>本机每日允许开始的时间段；不设置或起止相同表示全天。</summary>
     [JsonPropertyName("timeWindow")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -279,6 +287,8 @@ public static class WorkflowKindCatalog
         "resource.oneDragonConfig",
         "resource.configGroup",
         "resource.singleTask",
+        "control.flow",
+        "control.lanes",
         "control.condition",
         "control.end",
     };

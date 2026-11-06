@@ -83,6 +83,7 @@ public partial class BasicTaskCenterView
     private void ModifySelectedResourceClick(object sender, RoutedEventArgs e)
     {
         if (Host is not { } host || (sender as FrameworkElement)?.Tag is not NodeEditVm node) return;
+        if (node.IsComposition) { if (node.Model.Flow is not null) OpenFlowEditor(node); else EditLanes(node); return; }
         if (host.IsRemoteCenter) OpenResourceTasksClick(sender, e);
         else host.OpenResourceEditorCommand.Execute(node);
     }

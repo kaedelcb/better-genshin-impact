@@ -247,6 +247,14 @@ public class StartupStep
     [JsonPropertyName("taskName")]
     public string TaskName { get; set; } = "";
 
+    /// <summary>任务中心触发范围：flow / task / round。启动中心忽略。</summary>
+    [JsonPropertyName("triggerScope")]
+    public string TriggerScope { get; set; } = "round";
+    [JsonPropertyName("targetNodeId")]
+    public string TargetNodeId { get; set; } = "";
+    [JsonPropertyName("beforeAttemptSteps")]
+    public List<StartupStep> BeforeAttemptSteps { get; set; } = [];
+
     // ===== 日志触发器参数（logTrigger 用；触发子链复用 FireSteps，循环/停止复用 WatchRepeat） =====
 
     /// <summary>日志关键字（logTrigger 用）：挂载后本机 BGI 新日志任一条目的正文/来源/异常段包含该文本即触发

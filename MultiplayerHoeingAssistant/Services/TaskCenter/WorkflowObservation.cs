@@ -17,15 +17,26 @@ public interface IWorkflowObservationSource
     Task<IWorkflowObservationSession> ArmAsync(string identity, string keyword, CancellationToken ct);
 }
 
+public interface IWorkflowLiveObservationSource : IWorkflowObservationSource
+{
+    Task<IWorkflowObservationSession> ArmLiveAsync(string identity, string keyword, Action<WorkflowObservationHit> hit, CancellationToken ct);
+}
+
 /// <summary>仅订阅现有增量日志；实例与进程纪元固定，历史回填不作为命中。等待不持有此订阅。</summary>
-public sealed class WorkflowLogObservationSource(BgiLogTailService tail, Func<BgiEpoch?> epochProvider) : IWorkflowObservationSource
+public sealed class WorkflowLogObservationSource(BgiLogTailService tail, Func<BgiEpoch?> epochProvider) : IWorkflowLiveObservationSource
 {
     public async Task<IWorkflowObservationSession> ArmAsync(string identity, string keyword, CancellationToken ct)
+        => await ArmCoreAsync(identity, keyword, null, ct).ConfigureAwait(false);
+
+    public Task<IWorkflowObservationSession> ArmLiveAsync(string identity, string keyword, Action<WorkflowObservationHit> hit, CancellationToken ct)
+        => ArmCoreAsync(identity, keyword, hit, ct);
+
+    private async Task<IWorkflowObservationSession> ArmCoreAsync(string identity, string keyword, Action<WorkflowObservationHit>? hit, CancellationToken ct)
     {
         var epoch=epochProvider() ?? throw new InvalidOperationException("观察器缺少实际BGI进程纪元");
         if(await tail.DrainBoundaryAsync(ct).ConfigureAwait(false) is not {} path)
             throw new InvalidOperationException("观察日志尚未就绪，未启动叶子");
-        return new Session(tail,epochProvider,epoch,identity,keyword,path);
+        return new Session(tail,epochProvider,epoch,identity,keyword,path,hit);
     }
 
     private sealed class Session : IWorkflowObservationSession
@@ -37,11 +48,13 @@ public sealed class WorkflowLogObservationSource(BgiLogTailService tail, Func<Bg
         private readonly DateTime _armedAt=new(DateTime.Now.Ticks/TimeSpan.TicksPerMillisecond*TimeSpan.TicksPerMillisecond,DateTimeKind.Local);
         private readonly object _gate=new();
         private readonly List<WorkflowObservationHit> _hits=[];
+        private readonly Action<WorkflowObservationHit>? _onHit;
         private string? _logInstance,_gap;
         private bool _closed;
         private WorkflowObservationFact? _frozen;
-        public Session(BgiLogTailService tail,Func<BgiEpoch?> epochProvider,BgiEpoch epoch,string id,string keyword,string path)
+        public Session(BgiLogTailService tail,Func<BgiEpoch?> epochProvider,BgiEpoch epoch,string id,string keyword,string path,Action<WorkflowObservationHit>? hit)
         {
+            _onHit=hit;
             _tail=tail;_epochProvider=epochProvider;_epoch=epoch;_id=id;_keyword=keyword;
             _tail.EntryReceived+=Entry;_tail.TargetFileChanged+=TargetChanged;
             if(_tail.CurrentFilePath!=path)_gap="观察就绪期间日志来源改变";
@@ -58,7 +71,11 @@ public sealed class WorkflowLogObservationSource(BgiLogTailService tail, Func<Bg
                 if(_logInstance is not null && _logInstance!=entry.Instance){_gap="观察期间BGI实例改变";return;}
                 _logInstance=entry.Instance;
                 if(entry.Message.Contains(_keyword,StringComparison.OrdinalIgnoreCase))
-                    _hits.Add(new(entry.Time,entry.Message,entry.SourceFile,entry.FileOffset));
+                {
+                    var hit = new WorkflowObservationHit(entry.Time,entry.Message,entry.SourceFile,entry.FileOffset);
+                    _hits.Add(hit);
+                    _onHit?.Invoke(hit);
+                }
             }
         }
         public async Task<WorkflowObservationFact> FreezeAsync(CancellationToken ct)
