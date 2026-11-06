@@ -157,6 +157,40 @@ public sealed class PickupCombatScriptExecutorTests
         Assert.False(shouldSkip);
         Assert.Null(PickupWaypointProgress.Capture());
         Assert.False(window.BeginDeparture(0, plannedResume!.Value));
+        Assert.False(pickup.TargetCompleted);
+        window.CompletePoint(segment, 0);
+        Assert.False(window.EnterPoint(1));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnlySuccessfulReachedActionCompletionCanAccelerateTheNextMove(bool commandSucceeded)
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = PickupWaypointProgress.TryBegin(1)!;
+        Waypoint[] segment =
+        [
+            new() { PickupTargetCount = new PickupTarget(1, 0) }, new(), new()
+        ];
+        window.Start(0, progress, null);
+        var result = await CombatScriptHandler.RunPickupCommandsAsync(CancellationToken.None, progress,
+            segment[0], "完成状态测试", false, NullLogger.Instance, () =>
+            {
+                for (var i = 0; i < 3; i++) progress.Observe(new PickupRowObservation(true, []));
+                var row = new PickupRowObservation(true, [new PickupVisualRow(563, 0x789CE33256DBE2AC)]);
+                progress.Observe(row);
+                progress.Observe(row);
+                // 指令报错与达到数量同时发生时，仍按指令失败处理。
+                return Task.FromResult(commandSucceeded);
+            });
+
+        Assert.True(progress.ReachedToken.IsCancellationRequested);
+        Assert.Equal(commandSucceeded, result);
+        Assert.Equal(commandSucceeded, progress.TargetCompleted);
+        window.CompletePoint(segment, 0);
+        Assert.Equal(commandSucceeded, window.EnterPoint(1));
+        Assert.False(window.EnterPoint(2));
     }
 
     [Theory]

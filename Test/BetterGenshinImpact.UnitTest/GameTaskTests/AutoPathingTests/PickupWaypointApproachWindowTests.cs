@@ -356,6 +356,101 @@ public sealed class PickupWaypointApproachWindowTests
         Assert.Null(window.GetForArrival(2));
     }
 
+    [Fact]
+    public void NormalAndUnreachedNodesKeepTheOriginalMoveStart()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        Assert.False(window.EnterPoint(0));
+        using var progress = StartWithTwoRows(window, plannedResume: null);
+        Assert.Null(window.CompletePoint([new(), new()], 0));
+        Assert.False(progress.TargetCompleted);
+        Assert.False(window.EnterPoint(1));
+        Assert.False(window.EnterPoint(2));
+    }
+
+    [Fact]
+    public void AReachedNumericTargetOnlyAcceleratesTheImmediatelyFollowingPoint()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window, plannedResume: null);
+        SampleRows(progress, 4);
+        Assert.Null(window.CompletePoint([new(), new(), new()], 0));
+
+        Assert.True(progress.TargetCompleted);
+        Assert.True(window.EnterPoint(1));
+        Assert.False(window.EnterPoint(1));
+        Assert.False(window.EnterPoint(2));
+    }
+
+    [Fact]
+    public void AReachedSkipTargetAcceleratesTheRealResumePoint()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        SampleRows(progress, 4);
+        Assert.Equal(3, window.CompletePoint([new(), new(), new(), new(), new()], 0));
+
+        Assert.True(window.EnterPoint(3));
+        Assert.False(window.EnterPoint(4));
+    }
+
+    [Fact]
+    public void ChangingTheNextPointDiscardsTheOneShotInsteadOfLeakingIt()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        SampleRows(progress, 4);
+        Assert.Equal(3, window.CompletePoint([new(), new(), new(), new()], 0));
+
+        Assert.False(window.EnterPoint(1));
+        Assert.False(window.EnterPoint(3));
+    }
+
+    [Fact]
+    public void LatePickupCompletionAcceleratesTheResumeAfterTheDetour()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window);
+        Assert.True(window.BeginDeparture(0, 3));
+        Assert.False(window.EnterPoint(1));
+        window.ObserveDeparturePosition(1, new Waypoint { X = 10, Y = 20 }, new Point2f(12, 20));
+        SampleRows(progress, 4);
+        Assert.Equal(3, window.FinishDeparture(1));
+
+        Assert.True(window.EnterPoint(3));
+        Assert.False(window.EnterPoint(4));
+    }
+
+    [Theory]
+    [InlineData("orientation")]
+    [InlineData("actionOnly")]
+    [InlineData("teleport")]
+    public void AnImmediateNonMovingPointConsumesTheOptionWithoutDeferringIt(string type)
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = StartWithTwoRows(window, plannedResume: null);
+        SampleRows(progress, 4);
+        Assert.Null(window.CompletePoint([new(), new() { Type = type }, new()], 0));
+
+        // 主流程该类型不调用MoveTo；下一迭代的选项仍必须被消费。
+        Assert.True(window.EnterPoint(1));
+        Assert.False(window.EnterPoint(2));
+    }
+
+    [Fact]
+    public void ANewAttemptOrSegmentDoesNotInheritThePreviousMoveOption()
+    {
+        using (var window = new PickupWaypointApproachWindow())
+        using (var progress = StartWithTwoRows(window, plannedResume: null))
+        {
+            SampleRows(progress, 4);
+            window.CompletePoint([new(), new()], 0);
+        }
+
+        using var retry = new PickupWaypointApproachWindow();
+        Assert.False(retry.EnterPoint(1));
+    }
+
     private static PickupWaypointProgress StartWithTwoRows(PickupWaypointApproachWindow window, int? plannedResume = 3)
     {
         var progress = PickupWaypointProgress.TryBegin(4)!;

@@ -61,6 +61,8 @@ public class CombatScriptHandler : IActionHandler
 
         pickup.Dispose();
         var reached = pickup.ReachedToken.IsCancellationRequested;
+        if (reached)
+            pickup.RecordReachedCompletion();
         logger.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",
             pointLabel, pickup.Count, waypoint.PickupTargetCount?.Count,
             reached ? "达标，已完成动作收尾和松键" : "未达标，后续点照常执行");

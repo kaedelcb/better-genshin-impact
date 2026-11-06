@@ -16,6 +16,7 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
     private int? _departureResumeIndex;
     private PickupWaypointProgress? _progress;
     private bool _disposed;
+    private int? _moveBeforeConfirmationIndex;
 
     internal static int? SelectObservationIndex(IReadOnlyList<Waypoint> segment, int currentIndex)
     {
@@ -46,10 +47,13 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         return double.IsFinite(distance) && distance <= StartDistance;
     }
 
-    internal void EnterPoint(int currentIndex)
+    internal bool EnterPoint(int currentIndex)
     {
+        var moveBeforeConfirmation = _moveBeforeConfirmationIndex == currentIndex;
+        _moveBeforeConfirmationIndex = null; // 只属于实际下一点，无移动或改走其它点也不顺延。
         if (!HasObservationFor(currentIndex) && !IsDepartureFor(currentIndex))
             Clear();
+        return moveBeforeConfirmation;
     }
 
     internal bool BeginDeparture(int ownerIndex, int resumeIndex)
@@ -111,6 +115,11 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
 
         _progress!.Dispose(); // 先封存，再读结果；此后到达的帧不能改变路线。
         var resume = _progress.ReachedToken.IsCancellationRequested ? _departureResumeIndex : null;
+        if (resume.HasValue)
+        {
+            _progress.RecordReachedCompletion();
+            _moveBeforeConfirmationIndex = resume;
+        }
         Clear();
         return resume;
     }
@@ -120,11 +129,19 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
 
     internal int? CompletePoint(IReadOnlyList<Waypoint> segment, int waypointIndex)
     {
-        if (!HasObservationFor(waypointIndex) || _progress!.IsDisposed)
+        if (!HasObservationFor(waypointIndex))
+            return null;
+
+        // 策略可能已经收尾并Dispose；只有正常达标完成记录才可加速下一点，报错不算。
+        if (_progress!.TargetCompleted)
+            _moveBeforeConfirmationIndex = _resumeIndex ?? waypointIndex + 1;
+        if (_progress.IsDisposed)
             return null;
 
         if (_progress.ReachedToken.IsCancellationRequested)
         {
+            _progress.RecordReachedCompletion();
+            _moveBeforeConfirmationIndex = _resumeIndex ?? waypointIndex + 1;
             _progress.Dispose();
             _progress.LogPointCompleted(departing: false);
             return _resumeIndex;
@@ -186,6 +203,7 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
     public void Dispose()
     {
         _disposed = true;
+        _moveBeforeConfirmationIndex = null;
         Clear();
     }
 }

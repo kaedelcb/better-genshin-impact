@@ -35,6 +35,7 @@ internal sealed class PickupWaypointProgress : IDisposable
     private bool _counting;
     private long _countingStartedAt;
     private bool _disposed;
+    private bool _targetCompleted;
 
     private PickupWaypointProgress(int target, CancellationToken routeToken, ILogger? logger, string? pointLabel, bool counting)
     {
@@ -51,6 +52,14 @@ internal sealed class PickupWaypointProgress : IDisposable
     internal int Count => Volatile.Read(ref _count);
 
     internal bool IsDisposed => Volatile.Read(ref _disposed);
+
+    internal bool TargetCompleted => Volatile.Read(ref _targetCompleted);
+
+    internal void RecordReachedCompletion()
+    {
+        if (ReachedToken.IsCancellationRequested)
+            Volatile.Write(ref _targetCompleted, true);
+    }
 
     internal bool ActivateCounting()
     {

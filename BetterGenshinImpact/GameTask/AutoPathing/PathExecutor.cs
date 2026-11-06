@@ -836,7 +836,8 @@ public partial class PathExecutor
                     using var pickupWindow = new PickupWaypointApproachWindow();
                     for (var waypointIndex = 0; waypointIndex < waypoints.Count; waypointIndex++)
                     {
-                        pickupWindow.EnterPoint(waypointIndex);
+                        var moveBeforeMainAvatarConfirmation = pickupWindow.EnterPoint(waypointIndex)
+                            && PartyConfig.EnablePickupTargetCount;
                         var waypoint = waypoints[waypointIndex];
                         int? pickupResumeIndex = null;
                         await CheckMultiplayerBoundaryAsync();
@@ -1340,7 +1341,8 @@ public partial class PathExecutor
                                     // Logger.LogWarning("战斗后节点较近222！！-2");
                                     last2Waypoints = false;
                                     await MoveToCore(observePickupPosition, waypoint, true, task, nextWaypoint, nextDdistance,
-                                        fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint);
+                                        fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint,
+                                        moveBeforeMainAvatarConfirmation: moveBeforeMainAvatarConfirmation);
                                 }
                             }
                             
@@ -3426,7 +3428,8 @@ public partial class PathExecutor
     private async Task MoveToCore(Action<Point2f>? observePickupPosition, WaypointForTrack waypoint, bool isGetOut = true,
         PathingTask? task = null, Waypoint? nextWaypoint = null, double? nextDistance = null, int retryDis = 4,
         bool isPoint = true, double? closeDistance = null, string? fastSyncId = null, WaypointForTrack? fastSyncWaypoint = null,
-        bool escapeClimbOnReturn = false, double? returnMoveBudgetSeconds = null)
+        bool escapeClimbOnReturn = false, double? returnMoveBudgetSeconds = null,
+        bool moveBeforeMainAvatarConfirmation = false)
     {
         // Logger.LogWarning("999");
         bool fastReported = false;  // 抢报一次性短路 bool（fastsync-redesign-parameter-passing spec）
@@ -3481,7 +3484,12 @@ public partial class PathExecutor
                             Math.Abs(pixelYellowValue[2] - 255) <= 10);
         if (!yellowBlood && _combatScenes?.GetAvatars().Count > 1)
         {
-            await SwitchAvatar(PartyConfig.MainAvatarIndex, false, task, true);
+            if (moveBeforeMainAvatarConfirmation && isPoint
+                && int.TryParse(PartyConfig.MainAvatarIndex, out var mainIndex) && mainIndex is >= 1 and <= 4)
+                Logger.LogInformation("【拾取达标】上一点已捡够，下一点先走：行走位 {Index} 由后台照常切换，本点不等待切人确认（目标 {X:F1},{Y:F1}）",
+                    mainIndex, waypoint.GameX, waypoint.GameY);
+            else
+                await SwitchAvatar(PartyConfig.MainAvatarIndex, false, task, true);
         }
         
         var (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint, isPoint, observePickupPosition);
