@@ -108,7 +108,7 @@ public partial class MainViewModel
         string? ResourceKind = null, string? ResourceConfig = null, string? ResourceTaskId = null);
 
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
-        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save"
+        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure"
         or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
         or "task.flow.save" or "task.flow.delete" or "task.flow.restore";
 
@@ -143,6 +143,10 @@ public partial class MainViewModel
                     executorName = _config.PlayerName,
                     capabilities = new[] { "startup", "taskCenter" }
                 });
+            case "registers.get":
+                return RemoteCenterReply.Ok(Registers.GetSnapshot());
+            case "registers.configure":
+                return RemoteCenterReply.Ok(Registers.Configure(Decode<RegisterConfigurationChange>(request.PayloadJson)));
             case "startup.get":
             {
                 var (config, revision) = mistletoe.ReadRemoteStartupConfig();
@@ -159,6 +163,7 @@ public partial class MainViewModel
                     logTriggers = mistletoe.ArmedLogTriggers.Select(l => l.StatusLine).ToArray(),
                     triggers = CaptureRemoteTriggers(mistletoe),
                     prompts = ConfirmStepWindow.RemotePrompts(),
+                    registers = Registers.GetSnapshot(),
                     nodeStates = mistletoe.CaptureNodeRunStates()
                 }, revision);
             }
@@ -168,6 +173,7 @@ public partial class MainViewModel
                     isRunning = mistletoe.IsRunning, statusText = mistletoe.StatusText,
                     triggers = CaptureRemoteTriggers(mistletoe),
                     prompts = ConfirmStepWindow.RemotePrompts(),
+                    registers = Registers.GetSnapshot(),
                     nodeStates = mistletoe.CaptureNodeRunStates()
                 });
             case "startup.prompt.answer":

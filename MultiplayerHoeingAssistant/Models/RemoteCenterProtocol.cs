@@ -87,6 +87,7 @@ public sealed class RemoteCenterTarget
 
 public sealed class RemoteStartupSnapshot
 {
+    public RegisterBankSnapshot? Registers { get; set; }
     public StartupFlowConfig Config { get; set; } = new();
     public string? Revision { get; set; }
     public List<StartupFlowScheme> Schemes { get; set; } = [];
@@ -112,6 +113,7 @@ public sealed record RemotePromptInfo(string RuntimeId, string Message,
 
 public sealed class RemoteStartupStatusSnapshot
 {
+    public RegisterBankSnapshot? Registers { get; set; }
     public bool IsRunning { get; set; }
     public string StatusText { get; set; } = "";
     public List<RemoteTriggerInfo> Triggers { get; set; } = [];

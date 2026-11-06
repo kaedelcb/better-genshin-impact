@@ -4730,6 +4730,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
         _startupBgiUpdateRequest?.Cancel();
+        DisposeRegisters();
         StopSignalRRecovery();
         // R4.10 终审复核（重要2/3）退出协议：捕获段前移——同锁内「标志置位（幂等）+捕获引用+字段脱离」原子完成，
         // 后续任何清理抛异常都不得跳过宿主收敛（finally 保证到达）；锁外有界 ShutdownAsync（不持锁等待异步关闭）；

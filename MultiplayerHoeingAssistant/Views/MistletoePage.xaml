@@ -502,6 +502,40 @@
                                              ToolTip="留空则显示类型默认名"/>
                                 </StackPanel>
 
+                                <!-- 共享寄存器节点：设置只写入，判断只读取；参数合同不依赖启动中心。 -->
+                                <StackPanel Margin="0,12,0,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers><DataTrigger Binding="{Binding IsRegisterNode}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource Dim}" TextWrapping="Wrap" Margin="0,0,0,10">
+                                        <TextBlock.Style><Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="只设置选中的位，其余保持原值；完成后继续下一节点。名称可点击标题旁的小格修改。"/>
+                                            <Style.Triggers><DataTrigger Binding="{Binding IsRegisterCondition}" Value="True"><Setter Property="Text" Value="只读取状态，忽略的位不参与判断；按是/否分支执行，不改变任何寄存器。"/></DataTrigger></Style.Triggers>
+                                        </Style></TextBlock.Style>
+                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers><DataTrigger Binding="{Binding IsRegisterCondition}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                        </Style></StackPanel.Style>
+                                        <TextBlock Text="条件关系" Style="{StaticResource FieldLabel}"/>
+                                        <ComboBox Width="155" SelectedIndex="{Binding RegisterMatchIndex,Mode=TwoWay}" Style="{StaticResource GoldComboBox}">
+                                            <ComboBoxItem Content="全部满足（且）" Style="{StaticResource GoldComboItem}"/>
+                                            <ComboBoxItem Content="任一满足（或）" Style="{StaticResource GoldComboItem}"/>
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <ItemsControl ItemsSource="{Binding RegisterRows}">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate><DataTemplate>
+                                            <StackPanel Width="112" Margin="0,0,8,8">
+                                                <TextBlock Text="{Binding Cell.Label}" ToolTip="{Binding Cell.Label}" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{DynamicResource GoldText}" Margin="0,0,0,5"/>
+                                                <ComboBox ItemsSource="{Binding Options}" SelectedIndex="{Binding SelectedIndex,Mode=TwoWay}" Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}" AutomationProperties.Name="{Binding Cell.Label}"/>
+                                            </StackPanel>
+                                        </DataTemplate></ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+
                                 <!-- timeRange -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
@@ -1710,16 +1744,10 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
+                                    <WrapPanel VerticalAlignment="Center">
                                         <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="启动中心可通过“进入任务中心执行”节点跳转到任务中心。"
-                                                   FontSize="10" Foreground="{DynamicResource GoldText}" TextWrapping="Wrap"
-                                                   VerticalAlignment="Center" Margin="12,0,8,0"/>
-                                    </Grid>
+                                        <views:RegisterStripView DataContext="{Binding Registers}" Margin="12,0,8,0" />
+                                    </WrapPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
                                                   ToolTip="执行时自动展开实际走到的分支，没走的分支灰显"/>

@@ -18,6 +18,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public sealed class StartupFlowRunner
 {
     /// <summary>BGI 命令执行入口（cmd, params）→ 结果。由 MainViewModel 注入。</summary>
+    private readonly RegisterBankService? _registers;
     private readonly Func<string, Dictionary<string, object>?, Task<CommandResult>> _bgiExecutor;
     /// <summary>进入任务中心移交入口（R4.9：携带双重身份请求 → 结构化回执；由宿主 VM 注入，路由到 TaskCenterHost.RegisterHandoffAsync）。</summary>
     private readonly Func<StartupHandoffRequest, CancellationToken, Task<StartupHandoffResult>> _enterTaskCenter;
@@ -62,8 +63,10 @@ public sealed class StartupFlowRunner
         Action<StartupStep, StartupSourceIntent>? armTimerWithSource = null,
         Action<StartupStep, StartupSourceIntent>? armWatchdogWithSource = null,
         Action<StartupStep, StartupSourceIntent>? armLogWithSource = null,
-        Func<string, string, string, CancellationToken, Task<string>>? userProgramLauncher = null)
+        Func<string, string, string, CancellationToken, Task<string>>? userProgramLauncher = null,
+        RegisterBankService? registerBank = null)
     {
+        _registers = registerBank;
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
         _armTimer = armTimer;
@@ -81,7 +84,7 @@ public sealed class StartupFlowRunner
     }
 
     /// <summary>「结束流程」节点抛出的内部控制流异常（逐层展开到顶层捕获，终止整条流程）。</summary>
-    private sealed class FlowEndException : Exception;
+    private sealed class FlowEndException(string reason = "启动流程已由「结束流程」节点终止") : Exception(reason);
 
     /// <summary>「进入任务中心执行」节点终态已定（移交成功/已受理/拒绝且须终止链）后抛出的内部控制流异常
     /// （R4.9 §7：逐层终止当前启动链及全部分支回溯，仅最外层 RunAsync 捕获）。</summary>
@@ -132,9 +135,9 @@ public sealed class StartupFlowRunner
             await RunChainAsync(steps, ct, ctx, depth: 0);
             _log($"[槲寄生] 启动流程执行完毕（执行 {ctx.ShortId}）");
         }
-        catch (FlowEndException)
+        catch (FlowEndException ex)
         {
-            _log($"[槲寄生] 启动流程已由「结束流程」节点终止（执行 {ctx.ShortId}）");
+            _log($"[槲寄生] {ex.Message}（执行 {ctx.ShortId}）");
         }
         catch (HandoffCompletedException ex)
         {
@@ -176,6 +179,12 @@ public sealed class StartupFlowRunner
                 continue;
             }
 
+            if ((step.Kind == StartupStepKinds.SetRegister && step.NodeType != "action")
+                || (step.Kind == StartupStepKinds.JudgeRegister && step.NodeType != "condition"))
+            {
+                Report(step, NodeRunState.Failed, "寄存器节点类型与参数不符");
+                throw new FlowEndException("寄存器节点类型无效，已终止本次流程");
+            }
             if (step.NodeType == "condition")
             {
                 Report(step, NodeRunState.Running);
@@ -198,7 +207,8 @@ public sealed class StartupFlowRunner
                 {
                     _log($"[槲寄生] {indent}条件「{display}」状态未知：{desc}；终止本次流程，不执行任一分支");
                     Report(step, NodeRunState.Failed, desc);
-                    throw new FlowEndException();
+                    throw new FlowEndException(step.Kind == StartupStepKinds.JudgeRegister
+                        ? "寄存器判断未确认，已终止本次流程" : "条件状态未确认，已终止本次流程");
                 }
                 _log($"[槲寄生] {indent}条件「{display}」：{desc} → {(passed.Value ? "是" : "否")}");
                 Report(step, passed.Value ? NodeRunState.CondTrue : NodeRunState.CondFalse, desc);
@@ -230,6 +240,11 @@ public sealed class StartupFlowRunner
                 // 需要严格守门时用条件节点包一层分支）；FailureNote 单次消费，不污染后续节点
                 var note = ctx.FailureNote;
                 ctx.FailureNote = null;
+                if (step.Kind == StartupStepKinds.SetRegister)
+                {
+                    Report(step, NodeRunState.Failed, note);
+                    throw new FlowEndException("设置寄存器未确认，已停止后续节点：" + note);
+                }
                 _log($"[槲寄生] {indent}节点「{display}」执行未成功{(note is null ? "" : $"：{note}")}，继续后续节点");
                 Report(step, NodeRunState.Failed, note);
             }
@@ -307,6 +322,12 @@ public sealed class StartupFlowRunner
         try
         {
             ct.ThrowIfCancellationRequested();
+            if (step.Kind == StartupStepKinds.JudgeRegister)
+            {
+                var registerResult = (_registers ?? throw new InvalidOperationException("寄存器服务不可用")).Evaluate(
+                    step.RegisterCondition ?? throw new ArgumentException("未配置寄存器判断条件"));
+                return (registerResult.Passed, registerResult.Description);
+            }
             ControlStatus? status = null;
             if (step.Kind is StartupStepKinds.BgiTaskRunning or StartupStepKinds.BgiTaskName)
             {
@@ -437,6 +458,11 @@ public sealed class StartupFlowRunner
             }
             switch (step.Kind)
             {
+                case StartupStepKinds.SetRegister:
+                    (_registers ?? throw new InvalidOperationException("寄存器服务不可用")).Set(
+                        step.RegisterWrite ?? throw new ArgumentException("未配置寄存器写入参数"), ct);
+                    _log($"[槲寄生] {indent}已设置寄存器（未选择的位保持不变）");
+                    return true;
                 case StartupStepKinds.StartBgi:
                 {
 

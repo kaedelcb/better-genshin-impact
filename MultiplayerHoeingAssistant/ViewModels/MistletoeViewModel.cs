@@ -89,13 +89,15 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         _store = new StartupFlowStore();
         _schemeStore = new StartupFlowSchemeStore();
         _config = remoteSnapshot?.Config ?? _store.Load();
+        InitializeRegisters(remoteSnapshot?.Registers);
         _runner = new StartupFlowRunner(mainVm.ExecuteLocalBgiCommandAsync, EnterTaskCenterAsync, step => ArmTimer(step, null), ConfirmHandlerAsync, mainVm.AddLog,
             () => mainVm.LatestLocalStatus, step => ArmWatchdog(step, null), (step, ct) => mainVm.QueryReadOnlyTaskStatusAsync(step, ct),
             armLogTrigger: step => ArmLogTrigger(step, null),
             sourceAuthorityProvider: RefreshStartupSourceAsync,
             armTimerWithSource: (step, source) => ArmTimer(step, source),
             armWatchdogWithSource: (step, source) => ArmWatchdog(step, source),
-            armLogWithSource: (step, source) => ArmLogTrigger(step, source));
+            armLogWithSource: (step, source) => ArmLogTrigger(step, source),
+            registerBank: _localRegisterService);
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         foreach (var s in remoteSnapshot?.Schemes ?? _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
@@ -163,6 +165,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             else
             {
                 RefreshBgiTaskStatus();
+                Registers.Apply(_localRegisterService!.GetSnapshot());
                 RetryPendingAutomaticSource();
             }
         };
@@ -2033,6 +2036,12 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     {
         if (_remoteTarget is null || _remoteAbandoned) return;
         var config = StartupFlowSchemeStore.Clone(_config);
+        if (!CanUseRegisters && ContainsRegisterNodes(config.Steps))
+        {
+            StatusText = "当前执行端不支持寄存器节点，未保存或执行；请使用支持寄存器的助手版本。";
+            MarkStartupSyncIssue("启动流程", StatusText);
+            return;
+        }
         _remoteSaveTail = SaveRemoteConfigAfterAsync(_remoteSaveTail, config);
     }
 
@@ -2075,6 +2084,11 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     private async Task RunRemoteStartupAsync()
     {
         if (_remoteTarget is null) return;
+        if (!CanUseRegisters && ContainsRegisterNodes(_config.Steps))
+        {
+            StatusText = "当前执行端不支持寄存器节点，未发送运行请求。";
+            return;
+        }
         try
         {
             await OnRemoteUiAsync(SyncRemoteStartupPending);
@@ -2214,6 +2228,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 _remoteStartupStale = true;
                 OnPropertyChanged(nameof(IsNotRunning));
                 StatusText = "执行端状态未确认：" + reply.Message;
+                Registers.Apply(new RegisterBankSnapshot { Error = StatusText });
             });
             return;
         }
@@ -2229,6 +2244,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 SyncRemoteStartupPending();
                 IsRunning = snapshot.IsRunning;
                 StatusText = snapshot.StatusText;
+                _remoteSupportsRegisters = snapshot.Registers is not null;
+                Registers.Apply(snapshot.Registers);
                 RefreshRemoteTriggerRows(snapshot.Triggers);
                 var selectedPromptId = SelectedRemotePrompt?.RuntimeId;
                 RemotePrompts.Clear();
@@ -2268,6 +2285,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 _remoteStartupStale = true;
                 OnPropertyChanged(nameof(IsNotRunning));
                 StatusText = "执行端状态格式无法确认：" + ex.Message;
+                Registers.Apply(new RegisterBankSnapshot { Error = StatusText });
             });
         }
     }
@@ -2504,6 +2522,12 @@ public sealed class StepChainViewModel : ViewModelBase
             _owner.Log($"[槲寄生] 启动流程中只能有一个「进入任务中心执行」节点（已有：「{existing.DisplayName}」），多个交接会冲突；如需调整位置，请删除后重新添加");
             return;
         }
+        if (!_owner.CanUseRegisters && kind is (StartupStepKinds.SetRegister or StartupStepKinds.JudgeRegister))
+        {
+            _owner.ReportUnsupportedRegisters();
+            _owner.Log("[槲寄生] 当前执行端不支持寄存器节点，未添加；请使用支持寄存器的助手版本。");
+            return;
+        }
         var model = StartupStepKinds.Create(kind);
         var vm = new StartupStepViewModel(model, _owner, this);
         ModelList.Add(model);
@@ -2545,7 +2569,7 @@ public sealed class TaskCenterFlowChoiceItem : ViewModelBase
     public override string ToString() => Display;
 }
 
-public sealed class StartupStepViewModel : ViewModelBase
+public sealed partial class StartupStepViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
 
@@ -2557,6 +2581,7 @@ public sealed class StartupStepViewModel : ViewModelBase
         TrueChain = new StepChainViewModel(model.TrueSteps, owner, this, $"「{DisplayName}」的是分支");
         FalseChain = new StepChainViewModel(model.FalseSteps, owner, this, $"「{DisplayName}」的否分支");
         FireChain = new StepChainViewModel(model.FireSteps, owner, this, $"「{DisplayName}」的到点执行链");
+        InitializeRegisterRows(owner.Registers);
     }
 
     public StartupStep Model { get; }
@@ -2989,6 +3014,9 @@ public sealed class StartupStepViewModel : ViewModelBase
     /// <summary>卡片摘要行文本（抽成静态方法：流程预览弹窗 FlowPreviewWindow 复用同一口径，避免两处拼接逻辑漂移）。</summary>
     internal static string BuildSummary(StartupStep model) => model.Kind switch
     {
+        StartupStepKinds.SetRegister => RegisterSummary(model.RegisterWrite?.Values, "，", false),
+        StartupStepKinds.JudgeRegister => RegisterSummary(model.RegisterCondition?.Values,
+            model.RegisterCondition?.Match == "any" ? " 或 " : " 且 ", true),
         StartupStepKinds.TimeRange => $"{model.TimeStart} ~ {model.TimeEnd}",
         StartupStepKinds.Weekday => model.Weekdays.Count == 7
             ? "每天"

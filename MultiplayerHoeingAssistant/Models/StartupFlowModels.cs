@@ -128,6 +128,16 @@ public class StartupStep
     [JsonPropertyName("fireSteps")]
     public List<StartupStep> FireSteps { get; set; } = [];
 
+    /// <summary>设置节点专用；与任务中心后续复用相同的十位写入合同。</summary>
+    [JsonPropertyName("registerWrite")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegisterWriteSettings? RegisterWrite { get; set; }
+
+    /// <summary>判断节点专用；只读取，不写入。</summary>
+    [JsonPropertyName("registerCondition")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RegisterConditionSettings? RegisterCondition { get; set; }
+
     // ===== 条件判断参数 =====
 
     /// <summary>期望处于运行状态（bgiRunning/gameRunning/processRunning/bgiTaskRunning 用）：true=正在运行（在跑任务）才通过，false=未运行（空闲）才通过。
@@ -290,7 +300,10 @@ public static class StartupStepKinds
     /// <summary>人工确认：弹窗由人点「是/否」决定走哪条分支；可设超时，超时自动走预设分支。</summary>
     public const string ManualConfirm = "manualConfirm";
 
+    public const string JudgeRegister = "judgeRegister";
+
     // ---- 动作 ----
+    public const string SetRegister = "setRegister";
     public const string StartBgi = "startBgi";
     public const string StopBgi = "stopBgi";
     public const string StartGame = "startGame";
@@ -328,8 +341,10 @@ public static class StartupStepKinds
         new(ProcessRunning, "condition", "指定进程状态", "◇", "按任意进程名是否存在分两支（可用来等第三方工具）"),
         new(BgiTaskRunning, "condition", "BGI 任务状态", "◇", "按 BGI 当前是否有任务在执行分两支（读任务状态快照，区别于「BGI 进程状态」只查进程）"),
         new(BgiTaskName, "condition", "BGI 当前任务名", "◇", "BGI 当前任务名/配置组名包含指定文本走「是」分支（读任务状态快照）"),
+        new(JudgeRegister, "condition", "判断寄存器", "◇", "只读取选中寄存器，按全部或任一条件走是/否分支"),
         new(ManualConfirm, "condition", "人工确认", "◇", "弹窗由人点「是/否」决定走哪条分支，弹窗列出两条分支的后续动作；可设超时自动走向"),
         // 动作
+        new(SetRegister, "action", "设置寄存器", "▶", "对10位寄存器分别保持、置0或置1；只设置，不判断"),
         new(StartBgi, "action", "启动 BGI", "▶", "启动本机 BGI（可带命令行参数，复用成员卡片「启动BGI」同款逻辑）"),
         new(StopBgi, "action", "关闭 BGI", "▶", "强制结束当前会话的 BGI 进程"),
         new(StartGame, "action", "启动游戏", "▶", "按路径启动原神（Yuanshen.exe / GenshinImpact.exe）"),
@@ -364,6 +379,12 @@ public static class StartupStepKinds
         };
         switch (kind)
         {
+            case SetRegister:
+                step.RegisterWrite = new();
+                break;
+            case JudgeRegister:
+                step.RegisterCondition = new();
+                break;
             case Weekday:
                 step.Weekdays = [1, 2, 3, 4, 5, 6, 7];
                 break;
