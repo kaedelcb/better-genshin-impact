@@ -26,6 +26,7 @@ public sealed class TaskFlowEditorWindow : Window
     private readonly Dictionary<string, string> _numberErrors = new(StringComparer.Ordinal);
     private Slot? _selected;
     private bool _loading;
+    private readonly bool _requireExit;
     private sealed record Slot(StartupStep Step, List<StartupStep> Chain);
     private sealed record ChainChoice(string Name, List<StartupStep> Chain, bool Background)
     { public override string ToString() => Name; }
@@ -33,13 +34,15 @@ public sealed class TaskFlowEditorWindow : Window
     public WorkflowFlowDefinition Result => _draft;
     internal TreeView StepTreeForTest => _tree;
     internal StackPanel ParameterPanelForTest => _parameters;
+    internal Func<WorkflowFlowDefinition, string?>? ApplyToPlan { get; set; }
 
-    public TaskFlowEditorWindow(WorkflowFlowDefinition source, IEnumerable<WorkflowNode> resources, string? selectedStepId = null, IReadOnlyList<StartupStep>? allowedPrograms = null)
+    public TaskFlowEditorWindow(WorkflowFlowDefinition source, IEnumerable<WorkflowNode> resources, string? selectedStepId = null, IReadOnlyList<StartupStep>? allowedPrograms = null, bool requireExit = false)
     {
         _draft = JsonSerializer.Deserialize<WorkflowFlowDefinition>(JsonSerializer.Serialize(source))!;
+        _requireExit = requireExit;
         _allowedPrograms = allowedPrograms ?? [];
         _resources = resources.Where(n => n.Kind.StartsWith("resource.", StringComparison.Ordinal)).ToArray();
-        Title = "编辑流程";
+        Title = requireExit ? "添加车道 · 配置出口流程" : "编辑流程";
         Width = 880; Height = 700; MinWidth = 700; MinHeight = 510;
         MaxHeight = SystemParameters.WorkArea.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -119,6 +122,7 @@ public sealed class TaskFlowEditorWindow : Window
         var cancel = Button("取消", () => DialogResult = false); cancel.IsCancel = true;
         DockPanel.SetDock(apply, Dock.Right); DockPanel.SetDock(cancel, Dock.Right); footer.Children.Add(apply); footer.Children.Add(cancel);
         footer.Children.Add(_error); Grid.SetRow(footer, 3); root.Children.Add(footer);
+        if (requireExit) _error.Text = "添加车道：先添加一个判断节点，选中后点击“设为出口判断”，再应用到计划。";
         RefreshTree(selectedStepId);
     }
 
@@ -426,6 +430,8 @@ public sealed class TaskFlowEditorWindow : Window
 
     private void Apply()
     {
+        if (_requireExit && string.IsNullOrWhiteSpace(_draft.ExitStepId))
+        { _error.Text = "车道需要是 / 否出口：请选择判断节点并点击“设为出口判断”。"; return; }
         var currentIds = WorkflowEditSteps().Select(p => p.Step.Id + ":").ToArray();
         var numericError = _numberErrors.FirstOrDefault(p => currentIds.Any(id => p.Key.StartsWith(id, StringComparison.Ordinal)));
         if (numericError.Value is { } message) { _error.Text = message; return; }
@@ -447,6 +453,12 @@ public sealed class TaskFlowEditorWindow : Window
         }
         var invalid = TaskFlowNodeCatalog.Validate(_draft);
         if (invalid.Count > 0) { _error.Text = string.Join("；", invalid); return; }
+        try
+        {
+            if (ApplyToPlan?.Invoke(_draft) is { } applyError)
+            { _error.Text = applyError; return; }
+        }
+        catch (Exception ex) { _error.Text = "未能应用到计划：" + ex.Message; return; }
         DialogResult = true;
     }
 }

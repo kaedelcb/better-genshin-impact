@@ -48,6 +48,7 @@ public sealed class CompositionPlanRow : UserControl
         if (e.PropertyName is nameof(NodeEditVm.DisplayName) or nameof(NodeEditVm.CompositionSummary) or nameof(NodeEditVm.ResourceIndex))
             Draw();
     }
+    internal void ExpandContents() => _expander.IsExpanded = true;
     private static SolidColorBrush B(string c) => new((Color)ColorConverter.ConvertFromString(c));
     private static TextBlock Text(string text, bool gold = false) => new() { Text = text, Foreground = B(gold ? "#EAD391" : "#EEE8F5"),
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(3, 2, 6, 2) };
