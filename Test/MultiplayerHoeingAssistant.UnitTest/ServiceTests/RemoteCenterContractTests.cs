@@ -180,6 +180,17 @@ public sealed class RemoteCenterContractTests
             Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "operation.get", rejectedSchemes.OperationId)).Status);
             var startupStatus = await monitor.RequestRemoteCenterAsync(target, "startup.status");
             Assert.Equal("ok", startupStatus.Status);
+            var resetOne = await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest(1));
+            Assert.Equal("ok", resetOne.Status);
+            var resetSnapshot = JsonSerializer.Deserialize<RegisterBankSnapshot>(resetOne.PayloadJson!)!;
+            Assert.True(resetSnapshot.Available);
+            Assert.Equal(0, resetSnapshot.Entries[0].Value);
+            Assert.False(string.IsNullOrWhiteSpace(resetOne.OperationId));
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "operation.get", resetOne.OperationId)).Status);
+            Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest())).Status);
+            var resetAll = await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest(All: true));
+            Assert.Equal("ok", resetAll.Status);
+            Assert.All(JsonSerializer.Deserialize<RegisterBankSnapshot>(resetAll.PayloadJson!)!.Entries, entry => Assert.Equal(0, entry.Value));
             using (var statusJson = JsonDocument.Parse(startupStatus.PayloadJson!))
                 Assert.Equal(JsonValueKind.Array,
                     statusJson.RootElement.GetProperty("nodeStates").ValueKind);

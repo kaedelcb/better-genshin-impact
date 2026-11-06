@@ -16,6 +16,17 @@ public partial class RegisterStripView : UserControl
 
     public RegisterStripView() => InitializeComponent();
 
+    private async void ResetAllClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not RegisterBankViewModel bank || !bank.CanReset) return;
+        e.Handled = true;
+        try { await bank.ResetAsync(); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(Window.GetWindow(this), ex.Message, "全部寄存器归零未完成", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void CellClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is not RegisterBankViewModel bank || sender is not Button { DataContext: RegisterCellViewModel cell }

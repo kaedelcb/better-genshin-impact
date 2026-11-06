@@ -38,7 +38,7 @@ public sealed class RegisterBankUiTests
             window.Show(); await Layout(window);
             var strip = Descendants<RegisterStripView>(basic).Single();
             Assert.Same(bank, strip.DataContext);
-            var buttons = Descendants<Button>(strip).ToArray();
+            var buttons = Descendants<Button>(strip).Where(b => b.DataContext is RegisterCellViewModel).ToArray();
             Assert.Equal(10, buttons.Length);
             Assert.All(buttons, b => { Assert.Equal(18, b.ActualWidth); Assert.Equal(18, b.ActualHeight); Assert.Equal("0", b.Content); });
             var first = buttons[0].TransformToAncestor(window).Transform(new Point());
@@ -52,6 +52,10 @@ public sealed class RegisterBankUiTests
             var paneOrigin = pane.TransformToAncestor(window).Transform(new Point());
             Assert.True(first.X >= paneOrigin.X + pane.Padding.Left);
             Assert.True(last.X + 18 <= paneOrigin.X + pane.ActualWidth - pane.Padding.Right);
+            var resetAll = Assert.IsType<Button>(strip.FindName("ResetAllButton"));
+            var resetOrigin = resetAll.TransformToAncestor(window).Transform(new Point());
+            Assert.True(resetOrigin.X + resetAll.ActualWidth <= paneOrigin.X + pane.ActualWidth - pane.Padding.Right);
+            Assert.Equal(first.Y, resetOrigin.Y, 1);
             Assert.DoesNotContain(Descendants<ComboBox>(basic), combo =>
                 BindingOperations.GetBinding(combo, System.Windows.Controls.Primitives.Selector.SelectedIndexProperty)
                     ?.Path?.Path?.Contains("TaskCenterModeIndex") == true);

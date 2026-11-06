@@ -55,5 +55,32 @@
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <Button x:Name="ResetAllButton" Content="全归零" IsEnabled="{Binding CanReset}" Click="ResetAllClick"
+                ToolTip="{Binding ResetStatus}" ToolTipService.ShowOnDisabled="True" AutomationProperties.Name="全部寄存器归零">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Setter Property="Width" Value="42"/><Setter Property="Height" Value="22"/>
+                    <Setter Property="Margin" Value="2,0,0,0"/><Setter Property="Padding" Value="2,0"/>
+                    <Setter Property="FontSize" Value="11"/><Setter Property="Cursor" Value="Hand"/>
+                    <Setter Property="Background" Value="#353052"/><Setter Property="Foreground" Value="#EAD391"/>
+                    <Setter Property="BorderBrush" Value="#837044"/>
+                    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="3">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#E8C96D"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#FFFFFF"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Chrome" Property="Opacity" Value="0.5"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate></Setter.Value></Setter>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCompact,RelativeSource={RelativeSource AncestorType={x:Type views:RegisterStripView}}}" Value="True">
+                            <Setter Property="Width" Value="36"/><Setter Property="Height" Value="18"/><Setter Property="FontSize" Value="10"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+        </Button>
     </StackPanel>
 </UserControl>

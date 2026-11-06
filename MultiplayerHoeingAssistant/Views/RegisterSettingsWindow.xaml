@@ -6,12 +6,14 @@
         WindowStartupLocation="CenterOwner" Background="#24203F" Foreground="#F4F2FA"
         FontFamily="pack://application:,,,/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei" FontSize="13">
     <Window.Resources><BooleanToVisibilityConverter x:Key="Visible" /></Window.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Style="{DynamicResource GoldScrollViewer}">
     <StackPanel Margin="24">
         <TextBlock Text="{Binding Title}" FontSize="19" Foreground="#F2E3B6" Margin="0,0,0,8" />
         <TextBlock Text="{Binding CurrentState}" FontSize="11" Foreground="#B2ACCD" TextWrapping="Wrap" Margin="0,0,0,20" />
         <TextBlock Text="寄存器名称" Foreground="#F2E3B6" Margin="0,0,0,8" />
         <TextBox AutomationProperties.Name="寄存器名称" MaxLength="40" Text="{Binding Name,UpdateSourceTrigger=PropertyChanged}"
-                 Style="{DynamicResource GoldInput}" ToolTip="最多40字；不填写时显示R1–R10。改名不会改变节点引用的位号。" />
+                 Style="{DynamicResource GoldInput}" Background="#211D35" Foreground="#F4F2FA" BorderBrush="#837044" Padding="8,5"
+                 ToolTip="最多40字；不填写时显示R1–R10。改名不会改变节点引用的位号。" />
         <TextBlock Text="自动重置为0" Foreground="#F2E3B6" Margin="0,22,0,8" />
         <ComboBox AutomationProperties.Name="重置规则" SelectedIndex="{Binding ModeIndex}" Style="{DynamicResource GoldComboBox}" ItemContainerStyle="{DynamicResource GoldComboItem}">
             <ComboBoxItem Content="不自动重置" Style="{DynamicResource GoldComboItem}" />
@@ -41,9 +43,17 @@
         </StackPanel>
         <TextBlock Text="名称、状态与重置规则会保存；重启助手时，已到期的位会先归零。" Foreground="#B2ACCD" FontSize="11" TextWrapping="Wrap" Margin="0,18,0,0" />
         <TextBlock Text="{Binding Error}" Foreground="#E88A6F" TextWrapping="Wrap" Margin="0,10,0,0" />
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+        <TextBlock Text="{Binding OperationStatus}" Foreground="#A9DECB" TextWrapping="Wrap" Margin="0,4,0,0" />
+        <DockPanel Margin="0,16,0,0" LastChildFill="False">
+          <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+            <Button x:Name="ResetButton" Content="本位归零" Style="{DynamicResource BtnGhost}" Padding="10,7" Margin="0,0,6,0" Click="ResetClick" ToolTip="立即将当前这一位重置为0，不保存尚未应用的名称和规则。" />
+            <Button x:Name="ResetAllButton" Content="全部归零" Style="{DynamicResource BtnGhost}" Padding="10,7" Click="ResetAllClick" ToolTip="立即将R1–R10全部重置为0，保留名称和自动重置规则。" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
             <Button x:Name="CancelButton" Content="取消" IsCancel="True" Style="{DynamicResource BtnGhost}" Padding="16,7" Margin="0,0,10,0" />
             <Button x:Name="SaveButton" Content="保存设置" IsDefault="True" Style="{DynamicResource BtnGold}" Padding="16,7" Click="SaveClick" />
-        </StackPanel>
+          </StackPanel>
+        </DockPanel>
     </StackPanel>
+    </ScrollViewer>
 </Window>

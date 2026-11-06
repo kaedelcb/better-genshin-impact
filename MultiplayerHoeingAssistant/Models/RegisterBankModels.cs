@@ -27,6 +27,9 @@ public sealed class RegisterWriteSettings
     public List<int?> Values { get; set; } = RegisterBank.EmptySelection();
 }
 
+/// <summary>归零只改状态。全部归零必须明确 All=true，空参数不能被解释为清空全部。</summary>
+public sealed record RegisterResetRequest(int? Number = null, bool All = false);
+
 public sealed class RegisterConditionSettings
 {
     [JsonPropertyName("values")]

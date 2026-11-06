@@ -108,7 +108,7 @@ public partial class MainViewModel
         string? ResourceKind = null, string? ResourceConfig = null, string? ResourceTaskId = null);
 
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
-        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure"
+        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure" or "registers.reset"
         or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
         or "task.flow.save" or "task.flow.delete" or "task.flow.restore";
 
@@ -147,6 +147,13 @@ public partial class MainViewModel
                 return RemoteCenterReply.Ok(Registers.GetSnapshot());
             case "registers.configure":
                 return RemoteCenterReply.Ok(Registers.Configure(Decode<RegisterConfigurationChange>(request.PayloadJson)));
+            case "registers.reset":
+            {
+                var args = Decode<RegisterResetRequest>(request.PayloadJson);
+                if (args.All == args.Number.HasValue)
+                    return RemoteCenterReply.Rejected("请选择一个寄存器，或明确选择全部归零。");
+                return RemoteCenterReply.Ok(Registers.Reset(args.All ? null : args.Number));
+            }
             case "startup.get":
             {
                 var (config, revision) = mistletoe.ReadRemoteStartupConfig();

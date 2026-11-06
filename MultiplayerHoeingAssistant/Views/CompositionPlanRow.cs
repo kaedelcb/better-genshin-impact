@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Markup;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.ViewModels;
 
@@ -10,7 +11,7 @@ namespace MultiplayerHoeingAssistant.Views;
 /// <summary>基础表结构行；只渲染与编辑，不安装或拥有触发器。</summary>
 public sealed class CompositionPlanRow : UserControl
 {
-    private readonly Expander _expander = new() { IsExpanded = false, Margin = new Thickness(2, 3, 2, 3), Padding = new Thickness(8, 4, 8, 4) };
+    private readonly Expander _expander = new() { IsExpanded = false, Margin = new Thickness(3, 0, 3, 0), Padding = new Thickness(0) };
     private NodeEditVm? _node;
     private TaskCenterPanelViewModel? _host;
     private BasicTaskCenterView? View
@@ -26,8 +27,36 @@ public sealed class CompositionPlanRow : UserControl
     {
         CompositionUiTheme.Apply(this);
         _expander.SetResourceReference(StyleProperty, "CompositionExpander");
+        // The shared expander has generous padding for dialogs. Plan rows use a compact
+        // single-line header while keeping the same purple/gold interaction states.
+        _expander.Template = (ControlTemplate)XamlReader.Parse("""
+            <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Expander">
+              <StackPanel>
+                <ToggleButton IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                              Foreground="{TemplateBinding Foreground}" Background="Transparent" BorderThickness="0"
+                              Padding="0" HorizontalContentAlignment="Stretch" FocusVisualStyle="{x:Null}">
+                  <ToggleButton.Template><ControlTemplate TargetType="ToggleButton">
+                    <Border x:Name="HeaderBorder" Background="Transparent" CornerRadius="4">
+                      <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                        <Path x:Name="Arrow" Data="M 2,1 L 7,6 L 2,11" Stroke="#E8C96D" StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.5"/>
+                        <ContentPresenter Grid.Column="1" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                      </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                      <Trigger Property="IsChecked" Value="True"><Setter TargetName="Arrow" Property="RenderTransform"><Setter.Value><RotateTransform Angle="90"/></Setter.Value></Setter></Trigger>
+                      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="HeaderBorder" Property="Background" Value="#29473B59"/></Trigger>
+                      <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="HeaderBorder" Property="Background" Value="#3A473B59"/></Trigger>
+                    </ControlTemplate.Triggers>
+                  </ControlTemplate></ToggleButton.Template>
+                  <ContentPresenter ContentSource="Header"/>
+                </ToggleButton>
+                <ContentPresenter x:Name="Body" ContentSource="Content" Visibility="Collapsed"/>
+              </StackPanel>
+              <ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="Body" Property="Visibility" Value="Visible"/></Trigger></ControlTemplate.Triggers>
+            </ControlTemplate>
+            """);
         Content = new Border { BorderBrush = B("#786846"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
-            Background = B("#302A46"), Child = _expander, Margin = new Thickness(0, 2, 0, 3) };
+            Background = B("#302A46"), Child = _expander, Margin = new Thickness(0, 1, 0, 2) };
         DataContextChanged += (_, e) =>
         {
             if (_node is not null) _node.PropertyChanged -= Changed;
@@ -64,13 +93,16 @@ public sealed class CompositionPlanRow : UserControl
     private void Draw()
     {
         if (_node is not { } node) return;
-        var header = new DockPanel { LastChildFill = true, MinHeight = 28, ToolTip = node.CompositionSummary };
-        header.Children.Add(Text($"{node.ResourceIndex:00}", true));
-        header.Children.Add(Text(node.Model.Flow is null ? "车道" : "流程", true));
-        var edit = ActionButton(node.Model.Flow is null ? "设置车道" : "编辑步骤", () => { if (node.Model.Flow is not null) View?.OpenFlowEditor(node); else View?.EditLanes(node); });
-        DockPanel.SetDock(edit, Dock.Right); header.Children.Add(edit);
-        var labels = new StackPanel();
-        var name = Text(node.DisplayName); name.FontWeight = FontWeights.SemiBold; labels.Children.Add(name);
+        var header = new Grid { Height = 28, ToolTip = node.CompositionSummary };
+        header.ColumnDefinitions.Add(new() { Width = new GridLength(25) });
+        header.ColumnDefinitions.Add(new() { Width = new GridLength(34) });
+        header.ColumnDefinitions.Add(new() { Width = new GridLength(1.15, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+        var number = Text($"{node.ResourceIndex:00}", true); number.FontSize = 11; header.Children.Add(number);
+        var kind = Text(node.Model.Flow is null ? "车道" : "流程", true); kind.FontSize = 11; Grid.SetColumn(kind, 1); header.Children.Add(kind);
+        var name = Text(node.DisplayName); name.FontWeight = FontWeights.SemiBold; name.ToolTip = node.DisplayName;
+        Grid.SetColumn(name, 2); header.Children.Add(name);
         var decision = node.Model.Lanes is not null && View?.CompositionHost?.Editing is { } editing
             ? MultiplayerHoeingAssistant.Services.WorkflowComposition.GetDecision(editing.Draft, node.Model) : null;
         var final = decision?.Steps.FirstOrDefault(s => s.Id == decision.ExitStepId);
@@ -78,7 +110,10 @@ public sealed class CompositionPlanRow : UserControl
             + " → " + (node.Model.Lanes!.YesName == "是" ? "路线 1" : node.Model.Lanes.YesName)
             + "；其他 → " + (node.Model.Lanes.NoName == "否" ? "路线 2" : node.Model.Lanes.NoName);
         var hint = Text(summary); hint.FontSize = 11; hint.Foreground = B("#C7BCD8"); hint.ToolTip = summary;
-        labels.Children.Add(hint); header.Children.Add(labels); _expander.Header = header;
+        hint.Margin = new Thickness(7, 0, 6, 0); Grid.SetColumn(hint, 3); header.Children.Add(hint);
+        var edit = ActionButton(node.Model.Flow is null ? "设置车道" : "编辑步骤", () => { if (node.Model.Flow is not null) View?.OpenFlowEditor(node); else View?.EditLanes(node); });
+        edit.Height = edit.MinHeight = 24; edit.Padding = new Thickness(6, 1, 6, 1); edit.Margin = new Thickness(3, 0, 0, 0);
+        Grid.SetColumn(edit, 4); header.Children.Add(edit); _expander.Header = header;
         var content = new StackPanel { Margin = new Thickness(20, 5, 4, 8) };
         if (node.Model.Flow is { } flow)
         {

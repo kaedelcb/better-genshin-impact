@@ -86,6 +86,16 @@ public sealed class RegisterBankService : IDisposable
             $"{e.Label} = {settings.Values[e.Number - 1]}（当前{e.Value}）")));
     }
 
+    public RegisterBankSnapshot Reset(int? number = null)
+    {
+        if (number is < 1 or > RegisterBank.Count) throw new ArgumentOutOfRangeException(nameof(number), "寄存器位号无效。");
+        Set(new RegisterWriteSettings
+        {
+            Values = Enumerable.Range(1, RegisterBank.Count).Select(i => number is null || number == i ? (int?)0 : null).ToList()
+        });
+        return GetSnapshot();
+    }
+
     public RegisterBankSnapshot Configure(RegisterConfigurationChange change)
     {
         ValidateConfiguration(change.Name, change.ResetMode, change.ResetHour, change.ResetMinute, change.DelaySeconds);

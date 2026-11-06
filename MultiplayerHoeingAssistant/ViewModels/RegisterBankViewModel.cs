@@ -3,13 +3,24 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
 
-public sealed class RegisterBankViewModel
+public sealed class RegisterBankViewModel : ViewModelBase
 {
     private readonly Func<RegisterConfigurationChange, Task<RegisterBankSnapshot>> _save;
+    private readonly Func<int?, Task<RegisterBankSnapshot>>? _reset;
+    private bool _isBusy;
+    public bool IsBusy
+    {
+        get => _isBusy;
+        private set { if (SetProperty(ref _isBusy, value)) OnPropertyChanged(nameof(CanReset)); }
+    }
+    public bool CanReset => _reset is not null && !IsBusy && Cells.All(c => c.Available);
+    private string _resetStatus = "立即将 R1–R10 全部归零，保留名称和自动重置规则。";
+    public string ResetStatus { get => _resetStatus; private set => SetProperty(ref _resetStatus, value); }
     public ObservableCollection<RegisterCellViewModel> Cells { get; } = new(
         Enumerable.Range(1, RegisterBank.Count).Select(i => new RegisterCellViewModel(i)));
 
-    public RegisterBankViewModel(Func<RegisterConfigurationChange, Task<RegisterBankSnapshot>> save) => _save = save;
+    public RegisterBankViewModel(Func<RegisterConfigurationChange, Task<RegisterBankSnapshot>> save,
+        Func<int?, Task<RegisterBankSnapshot>>? reset = null) { _save = save; _reset = reset; }
 
     public void Apply(RegisterBankSnapshot? snapshot)
     {
@@ -18,13 +29,42 @@ public sealed class RegisterBankViewModel
         for (var i = 0; i < Cells.Count; i++)
             Cells[i].Apply(valid ? snapshot!.Entries[i] : null,
                 snapshot?.Error is { Length: > 0 } error ? error : "执行端尚未提供寄存器状态，请检查连接或版本。");
+        OnPropertyChanged(nameof(CanReset));
     }
 
     public async Task SaveAsync(RegisterConfigurationChange change)
     {
-        var snapshot = await _save(change);
-        Apply(snapshot);
-        if (!snapshot.Available) throw new InvalidOperationException(snapshot.Error);
+        if (IsBusy) throw new InvalidOperationException("寄存器操作正在执行，请等待完成。");
+        IsBusy = true;
+        try
+        {
+            var snapshot = await _save(change);
+            Apply(snapshot);
+            if (!snapshot.Available) throw new InvalidOperationException(snapshot.Error);
+        }
+        finally { IsBusy = false; }
+    }
+
+    public async Task ResetAsync(int? number = null)
+    {
+        if (number is < 1 or > RegisterBank.Count) throw new ArgumentOutOfRangeException(nameof(number));
+        if (_reset is null) throw new InvalidOperationException("当前执行端未提供手动归零，请检查连接或版本。");
+        if (!CanReset) throw new InvalidOperationException(IsBusy ? "寄存器操作正在执行，请等待完成。" : "寄存器状态尚未确认，不能归零。");
+        IsBusy = true;
+        try
+        {
+            ResetStatus = "正在执行归零，请等待执行端确认。";
+            var snapshot = await _reset(number);
+            Apply(snapshot);
+            if (!snapshot.Available || Cells.Any(c => !c.Available))
+                throw new InvalidOperationException(snapshot.Error is { Length: > 0 } error ? error : "重置结果未确认，请读取执行端最新状态。");
+            var targets = Cells.Where(c => number is null || c.Entry.Number == number).ToArray();
+            ResetStatus = targets.All(c => c.Entry.Value == 0)
+                ? number is null ? "R1–R10 已全部归零。" : $"R{number} 已归零。"
+                : "手动归零已确认，随后状态发生更新；以最新状态为准。";
+        }
+        catch (Exception ex) { ResetStatus = "归零未确认：" + ex.Message; throw; }
+        finally { IsBusy = false; }
     }
 }
 

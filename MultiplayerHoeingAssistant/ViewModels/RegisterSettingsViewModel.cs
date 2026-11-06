@@ -8,6 +8,7 @@ public sealed class RegisterSettingsViewModel : ViewModelBase
     public RegisterSettingsViewModel(RegisterEntry entry)
     {
         _original = entry;
+        _value = entry.Value;
         Name = entry.Name;
         _modeIndex = entry.ResetMode == RegisterBank.Daily ? 1 : entry.ResetMode == RegisterBank.AfterChange ? 2 : 0;
         Hour = entry.ResetHour;
@@ -16,7 +17,12 @@ public sealed class RegisterSettingsViewModel : ViewModelBase
         Days = delay.Days; DelayHours = delay.Hours; DelayMinutes = delay.Minutes; DelaySeconds = delay.Seconds;
     }
     public string Title => $"R{_original.Number} · 寄存器设置";
-    public string CurrentState => $"打开时状态：{_original.Value}　两个中心共用此位的名称和重置规则";
+    public int Number => _original.Number;
+    private int? _value;
+    public string CurrentState => $"当前状态：{(_value is { } value ? value.ToString() : "未确认")}　两个中心共用此位的名称和重置规则";
+    public void UpdateValue(int? value) { _value = value; OnPropertyChanged(nameof(CurrentState)); }
+    private string _operationStatus = "";
+    public string OperationStatus { get => _operationStatus; set => SetProperty(ref _operationStatus, value); }
     public string Name { get; set; }
     public static IReadOnlyList<int> DayChoices { get; } = Enumerable.Range(0, 31).ToArray();
     public static IReadOnlyList<int> HourChoices { get; } = Enumerable.Range(0, 24).ToArray();

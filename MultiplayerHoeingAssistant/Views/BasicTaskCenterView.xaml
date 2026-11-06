@@ -410,9 +410,10 @@
                                 <TextBlock Text="启用" Grid.Column="5" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                             </Grid>
-                             <Grid Grid.Row="1">
+                             <Grid x:Name="ResourceListViewport" Grid.Row="1">
                                  <ListBox x:Name="ResourceList" ItemsSource="{Binding PlanRows}" SelectedItem="{Binding Editing.SelectedNode, Mode=TwoWay}"
-                                          Background="Transparent" BorderThickness="0" AllowDrop="True" MaxHeight="360" VerticalAlignment="Top"
+                                          Background="Transparent" BorderThickness="0" AllowDrop="True" VerticalAlignment="Stretch"
+                                          ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Pixel"
                                          ContextMenuOpening="ResourceContextMenuOpening"
                                          PreviewMouseLeftButtonDown="ResourceRowMouseDown"
                                          PreviewMouseMove="ResourceRowMouseMove"
