@@ -467,11 +467,13 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// 未知事件名忽略（前向兼容：服务器可能发来本客户端未订阅的锄地房间事件）。
     /// internal：供单测直驱分发逻辑（映射表机器化核对），生产路径仅由 BgiGatewayClient evt 回调调用。
     /// </summary>
-    internal void DispatchEvt(GatewayEnvelope env)
+    internal void DispatchEvt(GatewayEnvelope env) => DispatchRoomEvent(env, replaying: false);
+
+    private void DispatchRoomEvent(GatewayEnvelope env, bool replaying)
     {
         try
         {
-            if (!AcceptRoomEvent(env)) return;
+            if (!AcceptRoomEvent(env, replaying)) return;
             switch (env.Name)
             {
                 case GatewayProtocol.Events.RoomPlayerListChanged:

@@ -31,11 +31,11 @@ public sealed class WorldPlanClientTests
         Snapshot = new MultiWorldStartPlan { PlanId = "plan-1", Stage = "Committed" },
     };
 
-    private static async Task Join(CoordinatorClient client, string room = "A")
+    private static async Task Join(CoordinatorClient client, string room = "A", string uid = "C")
     {
         client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
             Task.FromResult(Response(request, new { success = true }));
-        Assert.True(await client.JoinRoomAsync(room, "C", "C"));
+        Assert.True(await client.JoinRoomAsync(room, uid, uid));
     }
 
     [Fact]
@@ -140,6 +140,74 @@ public sealed class WorldPlanClientTests
         stop.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.CreateWorldPlanTargetAsync(Admission(), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RosterArrivingDuringReplayIsAlwaysAppliedLast(bool worldPlan, bool createRoom)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        var myUid = createRoom ? "C" : "B";
+        if (worldPlan) await Join(client, uid: myUid);
+        using var transfer = worldPlan ? client.EnterWorldPlanTransfer("plan-1", "A") : null;
+        using var resumeReplay = new ManualResetEventSlim();
+        var firstReplay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applied = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        bool replayTimedOut = false;
+        int readyNotifications = 0;
+        client.HostReadyChanged += _ => Interlocked.Increment(ref readyNotifications);
+        void Roster(params string[] members) => Event(client, "C", GatewayProtocol.Events.RoomPlayerListChanged,
+            new { players = Array.ConvertAll(members, uid => new PlayerInfo { PlayerUid = uid }) });
+
+        client.PlayerListUpdated += players =>
+        {
+            applied.Enqueue(string.Join(",", players.ConvertAll(p => p.PlayerUid)));
+            if (firstReplay.TrySetResult())
+                replayTimedOut = !resumeReplay.Wait(TimeSpan.FromSeconds(10));
+        };
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            Roster("C");
+            Roster("C", "B");
+            return Task.FromResult(Response(request, request.Name switch
+            {
+                GatewayProtocol.Names.RoomJoin => (object)new { success = true },
+                GatewayProtocol.Names.RoomCreate => new { roomCode = "C" },
+                GatewayProtocol.Names.WorldPlanCreateTarget => new { snapshot = new MultiWorldStartPlan
+                {
+                    PlanId = "plan-1", Stage = "Committed", RemainingHostUids = new() { "C" },
+                    TargetRoomCode = "C", TargetRoomSessionId = "target-C",
+                } },
+                _ => throw new InvalidOperationException(request.Name),
+            }));
+        };
+
+        var admission = Task.Run(async () =>
+        {
+            if (!createRoom) Assert.True(await client.JoinRoomAsync("C", myUid, myUid));
+            else if (worldPlan) await client.CreateWorldPlanTargetAsync(Admission(), CancellationToken.None);
+            else Assert.Equal("C", await client.CreateRoomAsync("C", null, "C", 3));
+        });
+        try
+        {
+            await firstReplay.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Roster("C", "B", "D"); // 收到入房回执后，第一份旧名单的回调仍未返回。
+            Event(client, "C", GatewayProtocol.Events.RoomHostReadyChanged, new { ready = true });
+            Assert.Equal(1, Volatile.Read(ref readyNotifications)); // 非名单通知不被回放阻塞。
+        }
+        finally { resumeReplay.Set(); }
+        await admission.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(replayTimedOut);
+        Assert.Equal(new[] { "C", "C,B", "C,B,D" }, applied.ToArray());
+        Assert.Equal(3, client.CurrentRoomPlayerCount);
+        Assert.Equal(new[] { "C", "B", "D" }, client.CurrentPlayerList.ConvertAll(p => p.PlayerUid));
+        Assert.Equal(createRoom, client.IsHost);
+        Roster("C", "B"); // 真实减员也必须立即生效，不可按“只保留最大人数”处理。
+        Assert.Equal(2, client.CurrentRoomPlayerCount);
+        Assert.Equal(new[] { "C", "B" }, client.CurrentPlayerList.ConvertAll(p => p.PlayerUid));
     }
 
     [Fact]

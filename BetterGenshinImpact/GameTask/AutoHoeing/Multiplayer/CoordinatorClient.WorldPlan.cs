@@ -18,6 +18,7 @@ public partial class CoordinatorClient
     private string? _worldPlanOriginRoom;
     private readonly HashSet<string> _retiredWorldPlanRooms = new(StringComparer.Ordinal);
     private bool _explicitRoomEventPending;
+    private bool _replayingRoomRosters;
     private bool _strictWorldPlanEvents;
     private string? _explicitRoomEventCode;
     private readonly List<GatewayEnvelope> _explicitRoomEvents = new();
@@ -270,6 +271,7 @@ public partial class CoordinatorClient
         lock (_roomLock)
         {
             _explicitRoomEventPending = false;
+            _replayingRoomRosters = false;
             _explicitRoomEventCode = null;
             _explicitRoomEvents.Clear();
         }
@@ -277,18 +279,28 @@ public partial class CoordinatorClient
 
     private void CompleteExplicitRoomEvents()
     {
-        GatewayEnvelope[] events;
-        lock (_roomLock)
+        // 回执后的新名单排在旧名单之后。其他实时事件仍直接分发，不等待名单回调。
+        // 回调必须在锁外执行，否则订阅方可能阻塞接收线程。
+        while (true)
         {
-            events = _explicitRoomEvents.ToArray();
-            _explicitRoomEvents.Clear();
-            _explicitRoomEventPending = false;
-            _explicitRoomEventCode = null;
+            GatewayEnvelope[] events;
+            lock (_roomLock)
+            {
+                _explicitRoomEventPending = false;
+                _explicitRoomEventCode = null;
+                _replayingRoomRosters = _explicitRoomEvents.Count != 0;
+                if (!_replayingRoomRosters)
+                {
+                    return;
+                }
+                events = _explicitRoomEvents.ToArray();
+                _explicitRoomEvents.Clear();
+            }
+            foreach (var message in events) DispatchRoomEvent(message, replaying: true);
         }
-        foreach (var message in events) DispatchEvt(message);
     }
 
-    private bool AcceptRoomEvent(GatewayEnvelope env)
+    private bool AcceptRoomEvent(GatewayEnvelope env, bool replaying)
     {
         // 原流程保留旧事件兼容；新计划关键状态只接受带房间身份的通知。
         if (string.IsNullOrEmpty(env.RoomCode))
@@ -305,6 +317,14 @@ public partial class CoordinatorClient
         lock (_roomLock)
         {
             if (_retiredWorldPlanRooms.Contains(env.RoomCode)) return false;
+            if (!replaying && _replayingRoomRosters && env.Name == GatewayProtocol.Events.RoomPlayerListChanged
+                && env.RoomCode == _roomSession?.RoomCode)
+            {
+                // 此时缓冲只收同房的完整名单。沿用容量上限，满时仍保留最新快照。
+                if (_explicitRoomEvents.Count < 128) _explicitRoomEvents.Add(env);
+                else _explicitRoomEvents[^1] = env;
+                return false;
+            }
             if (_explicitRoomEventPending && (_explicitRoomEventCode == null || env.RoomCode == _explicitRoomEventCode))
             {
                 // 入房响应可能晚于名单/就绪广播；只缓存在途显式入房事件，确认成功后再消费。
