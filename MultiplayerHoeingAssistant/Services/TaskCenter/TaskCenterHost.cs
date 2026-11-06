@@ -843,6 +843,9 @@ public sealed partial class TaskCenterHost
         }
         DriveEntry? stopEntry;
         lock (_gate) _drives.TryGetValue(run.WorkflowId, out stopEntry);
+        if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking
+            && run.OnlineHoeingGateParked && run.LocalWaitDecision?.Binding is null)
+            return await StopOnlineGateParkedRunAsync(runId).ConfigureAwait(false);
         if (action == WorkflowRunAction.Stop && run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.LocalWaitParking)
             && stopEntry?.Runner.HasActiveControl(runId) != true)
         {
@@ -953,6 +956,46 @@ public sealed partial class TaskCenterHost
             WorkflowRunAction.ReloadDefinition => "重载修订已登记（下一节点边界生效）",
             _ => "动作已登记",
         });
+    }
+
+    /// <summary>联机门停驻不是本地等待队列裁定。先耐久停止意图，再撤销本运行的流程作用域。</summary>
+    private async Task<HostActionResult> StopOnlineGateParkedRunAsync(string runId)
+    {
+        WorkflowRunRecord? stopped;
+        DriveEntry? entry;
+        lock (_gate)
+        {
+            var current = _runs.Load(runId);
+            if (current is not { State: WorkflowRunState.LocalWaitParking, OnlineHoeingGateParked: true }
+                || current.LocalWaitDecision?.Binding is not null)
+                return HostActionResult.Unavailable("联机停驻状态已变化，请刷新后重试。");
+            _drives.TryGetValue(current.WorkflowId, out entry);
+            if (!_runs.UpdateMergingIf(runId, latest =>
+            {
+                if (latest.State != WorkflowRunState.LocalWaitParking || !latest.OnlineHoeingGateParked) return false;
+                latest.StopRequested = true;
+                latest.OnlineHoeingGateParked = false;
+                latest.State = entry is not null || _reservedWorkflows.Contains(latest.WorkflowId)
+                    || RunStore.HasUnresolvedTerminalResponsibility(latest)
+                    ? WorkflowRunState.Unknown : WorkflowRunState.Cancelled;
+                latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                    + "联机停驻期间已明确请求停止，禁止自动唤醒；未结的作业/票据责任保留，不触发后继或收尾。";
+                return true;
+            }, out stopped) || stopped is null)
+                return HostActionResult.Unavailable("停止意图未能落盘，未宣告停止完成。");
+        }
+        try { entry?.Runner.RequestAction(runId, WorkflowRunAction.Stop); }
+        catch (Exception ex) { TryLog("联机停驻停止意图已保存，驱动取消通知待核对：" + ex.Message); }
+        try { await FlowRuntime.CloseRunAsync(runId, CancellationToken.None).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            NotifyStateChanged();
+            return HostActionResult.Unavailable("停止意图已保存，作用域撤销仍未确认：" + ex.Message);
+        }
+        NotifyStateChanged();
+        return stopped.State == WorkflowRunState.Cancelled
+            ? await ReconcileAdmissionTerminalForExplicitStopAsync(runId, "联机门停驻已停止，不自动恢复。").ConfigureAwait(false)
+            : HostActionResult.Registered("停止意图已保存且流程作用域已撤下；联机票据或作业责任仍待结清，不会自动恢复。");
     }
 
     /// <summary>停驻运行的显式放弃：先按完整队列绑定取消等待项，再把同一运行记为终态；绝不收尾或发送。</summary>
@@ -1882,7 +1925,15 @@ public sealed partial class TaskCenterHost
         var cancellations = drives.Select(d => CancelIsolatedAsync(d.Cts)).Append(CancelIsolatedAsync(_shutdownCts));
         Task[] waitWorkers;
         lock (_gate) waitWorkers = new[] { _localWaitMonitorTask, _localWaitReevaluationTask, _priorityWaiterWakeTask }.OfType<Task>().ToArray();
-        var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)).Concat(waitWorkers));
+        var retainedFlowCleanup = Task.Run(async () =>
+        {
+            foreach (var runId in FlowRuntime.List().Select(t => t.RunId).Distinct(StringComparer.Ordinal).ToArray())
+            {
+                try { await FlowRuntime.CloseRunAsync(runId, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception ex) { TryLog("宿主关闭时撤销保留流程作用域未确认：" + ex.GetType().Name); }
+            }
+        });
+        var complete = Task.WhenAll(cancellations.Concat(drives.Select(d => d.Completion.Task)).Concat(waitWorkers).Append(retainedFlowCleanup));
         await Task.WhenAny(complete, Task.Delay(ShutdownConvergeBudget)).ConfigureAwait(false);
         // Both cancellation callbacks and terminal writeback consume the original 10s budget.
         // Late observers retain their original owner and cannot borrow a successor capability.
@@ -1970,6 +2021,7 @@ public sealed partial class TaskCenterHost
             var snapshot = _statusSnapshotProvider?.Invoke();
             return IsCurrentTaskSnapshotUsable(snapshot) ? snapshot : null;
         };
+        FlowRuntime.OnlineGateClosed = () => _onlineSendGate.IsClosed;
         FlowRuntime.ObservationSource = ObservationLogTail is {} flowTail
             ? new WorkflowLogObservationSource(flowTail, () => c.ServerEpoch) : null;
         var boundary = CreateProductionBoundary(c);

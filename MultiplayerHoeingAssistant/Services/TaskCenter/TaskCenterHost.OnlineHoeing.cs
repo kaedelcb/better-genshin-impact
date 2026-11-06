@@ -199,14 +199,15 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>先封住全部任务中心发送，再读取 BGI 的同纪元执行根。</summary>
-    internal Task CloseOnlineHoeingSendAsync(CancellationToken ct = default, bool priority = false)
+    internal async Task CloseOnlineHoeingSendAsync(CancellationToken ct = default, bool priority = false)
     {
         ct.ThrowIfCancellationRequested();
-        if (!priority) return _onlineSendGate.CloseAsync(ct);
+        if (!priority) await _onlineSendGate.CloseAsync(ct).ConfigureAwait(false);
         // BGI's retained takeover excludes already-sent ordinary work at execution admission.
         // A lost reply on that old send must not delay claiming the physical execution slot.
-        _onlineSendGate.CloseForPriority();
-        return Task.CompletedTask;
+        else _onlineSendGate.CloseForPriority();
+        // 联机任务开始前结束当前观察片段；仅关闭资源发送门不足以停止流程中的寄存器动作。
+        await FlowRuntime.SuspendForOnlineAsync(ct).ConfigureAwait(false);
     }
 
     internal async Task BeginManualResetAsync(CancellationToken ct)
@@ -283,7 +284,8 @@ public sealed partial class TaskCenterHost
             // 两个任务之间 BGI 无活体根；必须从本宿主仍在驱动的唯一计划判断，而非把 no_task 当计划结束。
             lock (_gate)
             {
-                var driving = runs.Where(r => _drives.ContainsKey(r.WorkflowId)
+                var driving = runs.Where(r => !r.StopRequested && (_drives.ContainsKey(r.WorkflowId)
+                        || r.OnlineHoeingGateParked && r.State == WorkflowRunState.LocalWaitParking)
                     && r.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking)
                     .ToList();
                 if (driving.Count > 1)
@@ -609,7 +611,10 @@ public sealed partial class TaskCenterHost
     internal async Task OpenOnlineHoeingSendAsync(string? skipAutoRunId = null, bool priorityRecovery = false)
     {
         if (Volatile.Read(ref _manualResetActive) != 0) return;
+        await FlowRuntime.ResumeAfterOnlineAsync(_shutdownCts.Token).ConfigureAwait(false);
+        if (Volatile.Read(ref _manualResetActive) != 0 || _shutdownCts.IsCancellationRequested) return;
         await _onlineSendGate.OpenAsync().ConfigureAwait(false);
+        FlowRuntime.OnlineSendOpened();
         try { await WakeOnlineHoeingWaitersAsync(skipAutoRunId).ConfigureAwait(false); }
         catch (Exception ex) when (priorityRecovery && OnlineRecordTemporarilyUnavailable(ex))
         {
@@ -1178,6 +1183,15 @@ public sealed partial class TaskCenterHost
     internal async Task<IReadOnlyDictionary<string, object?>?> PreparePlanResumeAsync(string runId, string ticket,
         CancellationToken ct = default)
     {
+        bool StillPrepared(string key, string epoch)
+        {
+            var current = _runs.Load(runId);
+            var actualEpoch = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
+            return current is { StopRequested: false, State: WorkflowRunState.OnlineHoeingParking }
+                && current.OnlineHoeingHandoff is { Phase: "resumeRequested" } live
+                && live.Ticket == ticket && live.ResumeKey == key && live.Epoch == epoch
+                && actualEpoch is not null && epoch == $"{actualEpoch.ProcessId}:{actualEpoch.StartTicksUtc}";
+        }
         // A successful prepare can outlive a lost caller receipt. Reconstruct its immutable
         // continuation instead of asking the same handoff to become parked a second time.
         var prior = _runs.Load(runId);
@@ -1191,6 +1205,10 @@ public sealed partial class TaskCenterHost
             ct.ThrowIfCancellationRequested();
             var originalEpoch = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
             if (originalEpoch is not null && requested.Epoch == $"{originalEpoch.ProcessId}:{originalEpoch.StartTicksUtc}")
+            {
+                await FlowRuntime.PrepareOnlineResumeAsync(runId, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                if (!StillPrepared(requested.ResumeKey, requested.Epoch)) return null;
                 return new Dictionary<string, object?>
                 {
                     ["workflowRunId"] = prior.WireRunId, ["nodeId"] = requested.NodeId,
@@ -1198,6 +1216,7 @@ public sealed partial class TaskCenterHost
                     ["originalJobId"] = requested.OriginalJobId, ["resumeAttempt"] = requested.ResumeAttempt.Value,
                     ["idempotencyKey"] = requested.ResumeKey
                 };
+            }
             return null;
         }
         for (var i = 0; i < 150; i++)
@@ -1273,6 +1292,10 @@ public sealed partial class TaskCenterHost
                 current.Phase = "resumeRequested";
                 return true;
             }, out _)) return null;
+        // 恢复命令可能在回执到达前就产生日志，必须在派发命令之前重布本计划的观察片段。
+        await FlowRuntime.PrepareOnlineResumeAsync(runId, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        if (!StillPrepared(key, handoff.Epoch)) return null;
         return continuation;
     }
 

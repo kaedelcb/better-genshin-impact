@@ -253,7 +253,13 @@ public sealed class TaskFlowCompositionTests
         state.Runtime.DelayAsync = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; };
         state.Runtime.StatusProvider = () => new() { TaskRunning = true, TaskStatusAvailable = true,
             TaskStatusBgiEpoch = "epoch", TaskStatusObservedAtUtc = DateTimeOffset.UtcNow };
+        var fired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        state.Runtime.Changed += () =>
+        {
+            if (state.Runtime.List().Any(t => t.Note?.Contains("已触发 1 次") == true)) fired.TrySetResult();
+        };
         await state.Runtime.ExecuteAsync(state.Run, new() { NodeId = "timer", Kind = "control.flow", Flow = new() { Steps = [trigger] } }, 0, () => { }, default);
+        await fired.Task.WaitAsync(TimeSpan.FromSeconds(3));
         var mounted = Assert.Single(state.Runtime.List());
         Assert.Equal(state.Run.RunId, mounted.RunId);
         Assert.Equal(kind == StartupStepKinds.TimerTrigger ? "timer" : "watchdog", mounted.Kind);

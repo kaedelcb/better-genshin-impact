@@ -910,8 +910,14 @@ public sealed partial class WorkflowRunner
                         var executable = WorkflowComposition.HasInlineDecision(node)
                             ? new WorkflowNode { NodeId = node.NodeId, Kind = "control.flow", Flow = node.Lanes!.Decision }
                             : node;
-                        var result = await runtime.ExecuteAsync(run, executable, occurrence.LoopIteration, () => _runs.Update(run), ct).ConfigureAwait(false);
-                        CommitOutcome(run, plan, occurrence, result is {} b ? b ? "branchYes" : "branchNo" : "succeeded", "流程节点与出口结果已确认");
+                        var result = await runtime.ExecuteAsync(run, executable, occurrence.LoopIteration, () => SaveTaskFlowProgress(run), ct).ConfigureAwait(false);
+                        await CommitTaskFlowOutcomeAsync(run, plan, occurrence,
+                            result is {} b ? b ? "branchYes" : "branchNo" : "succeeded", ct).ConfigureAwait(false);
+                    }
+                    catch (TaskFlowOnlineParkException)
+                    {
+                        if (_opt.OnlineHoeingSendClosed?.Invoke() != true && _opt.FlowRuntime?.IsOnlinePaused != true) continue;
+                        ParkTaskFlowForOnline(run); return run;
                     }
                     catch (OperationCanceledException) { throw; }
                     catch (Exception ex)
@@ -1071,6 +1077,7 @@ public sealed partial class WorkflowRunner
             if (_opt.FlowRuntime is {} finishRuntime)
             {
                 try { await finishRuntime.FinishRoundAsync(run.RunId, ct).ConfigureAwait(false); }
+                catch (TaskFlowOnlineParkException) { ParkTaskFlowForOnline(run); return run; }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
@@ -1160,6 +1167,10 @@ public sealed partial class WorkflowRunner
             run.State = WorkflowRunState.Succeeded;
             _runs.Update(run);
             return run;
+        }
+        catch (TaskFlowOnlineParkException)
+        {
+            ParkTaskFlowForOnline(run); return run;
         }
         catch (StopAuthorityUnknownException ex)
         {
@@ -1276,7 +1287,8 @@ public sealed partial class WorkflowRunner
         {
             if (_opt.FlowRuntime is {} runtime)
             {
-                await runtime.CloseRunAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
+                if (!(run.OnlineHoeingGateParked && run.State == WorkflowRunState.LocalWaitParking && !run.StopRequested))
+                    await runtime.CloseRunAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
                 if (runtime.GetError(run.RunId) is {} triggerError && run.State == WorkflowRunState.Succeeded)
                 {
                     run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "后台触发结果未确认：" + triggerError);
@@ -1284,6 +1296,73 @@ public sealed partial class WorkflowRunner
                 }
             }
         }
+    }
+
+    private void ParkTaskFlowForOnline(WorkflowRunRecord run)
+    {
+        if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                if (latest.StopRequested) return false;
+                if (latest.OnlineHoeingHandoff is null
+                    || latest.OnlineHoeingHandoff is { OriginalJobId: null, Phase: "preparedGap" or "gap" })
+                    latest.State = WorkflowRunState.LocalWaitParking;
+                latest.OnlineHoeingGateParked = true;
+                latest.Note = AppendNote(latest.Note, "联机锄地接管期间保留流程步骤进度，结束后接续。");
+                return true;
+            }, out var parked) || parked is null)
+            throw new OperationCanceledException("原计划已停止或联机停驻身份变化");
+        RunStore.RebaseOnto(run, parked);
+    }
+
+    private async Task CommitTaskFlowOutcomeAsync(WorkflowRunRecord run, WorkflowPlan plan,
+        WorkflowNodeOccurrence occurrence, string result, CancellationToken ct)
+    {
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var latest = _runs.Load(run.RunId) ?? throw new WorkflowObservationUnknownException("流程运行记录丢失，不能推进");
+            if (latest.StopRequested) throw new OperationCanceledException("原计划已停止", ct);
+            var completed = latest.NodeOutcomes.LastOrDefault(o => o.NodeId == occurrence.NodeId
+                && o.Occurrence == occurrence.Occurrence && o.LoopIteration == occurrence.LoopIteration);
+            if (completed is not null)
+            {
+                if (completed.Result != result) throw new WorkflowObservationUnknownException("流程结果已经由另一操作改变，不能覆盖");
+                RunStore.RebaseOnto(run, latest); return;
+            }
+            try
+            {
+                CommitOutcome(latest, plan, occurrence, result, "流程节点与选路结果已确认");
+                RunStore.RebaseOnto(run, latest); return;
+            }
+            catch (RunRecordConflictException) { await Task.Delay(25, ct).ConfigureAwait(false); }
+        }
+    }
+
+    private void SaveTaskFlowProgress(WorkflowRunRecord run)
+    {
+        var values = run.ExtensionData?.Where(p => p.Key.StartsWith("taskFlow", StringComparison.Ordinal))
+            .ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.Ordinal) ?? new();
+        var producing = run.CurrentSubmission;
+        var pendingWait = run.LocalWaitDecision;
+        if (!_runs.UpdateMergingIf(run.RunId, latest =>
+            {
+                latest.ExtensionData ??= new();
+                foreach (var key in latest.ExtensionData.Keys.Where(k => k.StartsWith("taskFlow", StringComparison.Ordinal)).ToArray())
+                    latest.ExtensionData.Remove(key);
+                foreach (var pair in values) latest.ExtensionData[pair.Key] = pair.Value;
+                return true;
+            }, out var saved) || saved is null)
+            throw new WorkflowObservationUnknownException("流程进度写入未确认，保留原运行且不重复动作");
+        RunStore.RebaseOnto(run, saved);
+        // 叶子刚收到的退出证据尚未由 CommitOutcome 发布；合并观察元数据不能吞掉它。
+        if (producing is { ExecutionExitConfirmed: true } && run.CurrentSubmission is { } held && held.Key == producing.Key)
+        {
+            held.ExecutionExitConfirmed = true; held.ExecutionExitDisposition = producing.ExecutionExitDisposition;
+            held.EffectState = producing.EffectState;
+        }
+        if (pendingWait is not null && run.CurrentSubmission?.Key == producing?.Key && producing?.SendAttempted == false)
+            run.LocalWaitDecision = pendingWait;
+        if (run.StopRequested) throw new OperationCanceledException("原计划已明确停止");
     }
 
     /// <summary>提交 + 终态等待（意图先行落盘；SkipCurrent 经叶子令牌取消 + 远端确认，B4）。
@@ -1361,7 +1440,7 @@ public sealed partial class WorkflowRunner
             return (timeWindowGate.Action == NodeGateAction.Skip ? "skippedFilter" : "rejected", timeWindowGate.Reason, null);
 
         await using var flowScope = _opt.FlowRuntime is {} runtime
-            ? await runtime.BeginTaskAsync(run, node, occurrence, attempt, () => _runs.Update(run), ct).ConfigureAwait(false)
+            ? await runtime.BeginTaskAsync(run, node, occurrence, attempt, () => SaveTaskFlowProgress(run), ct).ConfigureAwait(false)
             : null;
         var observer=node.Strategies.SingleOrDefault(s=>s.Kind=="observer.log");
         if(observer is null)return await SubmitLeafAndAwaitAsync(run,plan,node,occurrence,control,submission).ConfigureAwait(false);
