@@ -158,6 +158,10 @@ internal sealed class PickupWaypointApproachWindow : IDisposable
         _progress = progress;
     }
 
+    internal PickupWaypointProgress? GetForArrival(int waypointIndex)
+        => (HasObservationFor(waypointIndex) || IsDepartureFor(waypointIndex)) && !_progress!.IsDisposed
+            ? _progress : null;
+
     internal PickupWaypointProgress? GetForPoint(int waypointIndex, out int? resumeIndex)
     {
         if (!HasObservationFor(waypointIndex))

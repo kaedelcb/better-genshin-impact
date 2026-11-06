@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.Threading;
+using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Input;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
 using BetterGenshinImpact.GameTask.Model.Area;
 using Microsoft.Extensions.Logging;
@@ -67,6 +69,35 @@ internal sealed class PickupWaypointProgress : IDisposable
         CancellationToken routeToken)
         => !routeToken.IsCancellationRequested && ReachedToken.IsCancellationRequested
            && (error.CancellationToken == operationToken || error.CancellationToken == ReachedToken);
+
+    internal async Task WaitForArrivalTailAsync(int milliseconds, CancellationToken routeToken,
+        Func<int, CancellationToken, Task> delay)
+    {
+        routeToken.ThrowIfCancellationRequested();
+        if (milliseconds <= 0)
+            return;
+        if (ReachedToken.IsCancellationRequested)
+        {
+            _logger?.LogDebug("【拾取达标】{Point} 已达标，跳过到点后 {Delay}ms 等待", _pointLabel, milliseconds);
+            return;
+        }
+
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(routeToken, ReachedToken);
+        // 仅尾等待使用节点取消；避免 TaskControl 将拾取达标当成整条任务的正常结束。
+        using var operation = InputHub.BeginOperation(stop.Token);
+        try
+        {
+            await delay(milliseconds, stop.Token);
+            routeToken.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException error)
+        {
+            routeToken.ThrowIfCancellationRequested();
+            if (!IsOwnCancellation(error, stop.Token, routeToken))
+                throw;
+            _logger?.LogDebug("【拾取达标】{Point} 达标，结束到点等待（原定 {Delay}ms）", _pointLabel, milliseconds);
+        }
+    }
 
     internal void LogPointCompleted(bool departing)
         => _logger?.LogInformation("【拾取达标】{Point} 计数 {Count}/{Target}：{Result}",

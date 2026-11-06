@@ -1349,7 +1349,8 @@ public partial class PathExecutor
                             if (IsTargetPoint(waypoint))
                             {
                                 await MoveCloseToCore(observePickupPosition, waypoint,
-                                    fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint);
+                                    fastSyncId: __nextPendingSyncId, fastSyncWaypoint: __nextPendingSyncWaypoint,
+                                    arrivalPickup: PartyConfig.EnablePickupTargetCount ? pickupWindow.GetForArrival(waypointIndex) : null);
                             }
 
                             await CheckMultiplayerBoundaryAsync();
@@ -4321,7 +4322,8 @@ public partial class PathExecutor
 
     private async Task MoveCloseToCore(Action<Point2f>? observePickupPosition, WaypointForTrack waypoint,
         double closeDistance = 2.0, int? tailDelayMs = null, int maxSteps = 25, string? fastSyncId = null,
-        WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false)
+        WaypointForTrack? fastSyncWaypoint = null, bool escapeClimbOnReturn = false, bool guardJumpOnReturn = false,
+        PickupWaypointProgress? arrivalPickup = null)
     {
         Point2f position;
         int targetOrientation;
@@ -4457,7 +4459,10 @@ public partial class PathExecutor
         var tail = MoveCloseToDecisions.ComputeTailDelayMs(tailDelayMs, string.IsNullOrEmpty(_hurryOnAvatar));
         if (tail > 0)
         {
-            await Delay(tail, ct);
+            if (arrivalPickup == null)
+                await Delay(tail, ct);
+            else
+                await arrivalPickup.WaitForArrivalTailAsync(tail, ct, Delay);
         }
     }
 

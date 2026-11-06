@@ -335,6 +335,27 @@ public sealed class PickupWaypointApproachWindowTests
         Assert.False(progress.IsOwnCancellation(new OperationCanceledException(operation.Token), operation.Token, route.Token));
     }
 
+    [Fact]
+    public void ArrivalWaitOnlyUsesItsOwnNodeOrItsDeclaredPickupDetour()
+    {
+        using var window = new PickupWaypointApproachWindow();
+        using var progress = PickupWaypointProgress.TryBegin(2)!;
+        window.Start(1, progress, 4);
+
+        // 下一点的预备观察不能提前结束当前普通点的停顿。
+        Assert.Null(window.GetForArrival(0));
+        Assert.Same(progress, window.GetForArrival(1));
+        Assert.Null(window.GetForArrival(2));
+
+        Assert.True(window.BeginDeparture(1, 4));
+        window.EnterPoint(2);
+        Assert.Same(progress, window.GetForArrival(2));
+        Assert.Null(window.GetForArrival(3));
+
+        progress.Dispose();
+        Assert.Null(window.GetForArrival(2));
+    }
+
     private static PickupWaypointProgress StartWithTwoRows(PickupWaypointApproachWindow window, int? plannedResume = 3)
     {
         var progress = PickupWaypointProgress.TryBegin(4)!;
