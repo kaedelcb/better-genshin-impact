@@ -7,7 +7,7 @@ namespace BgiCoordinatorServer.Services;
 /// <summary>进游戏世界前的一次计划。源房销毁后仍可凭各自票据查询；不继承上次开队状态。</summary>
 public sealed class WorldPlanState
 {
-    public const string Capability = "hoeing.worldPlan.v1";
+    public const string Capability = "hoeing.worldPlan.v2";
     public object Sync { get; } = new();
     public SemaphoreSlim TransferGate { get; } = new(1, 1);
     public string Id { get; } = Guid.NewGuid().ToString("N");
@@ -28,9 +28,12 @@ public sealed class WorldPlanState
     private string? _targetCode;
     private string? _targetSession;
     private bool _sourceReleased;
+    private bool _startupRetired;
+    private readonly bool _currentPartyFrozen;
 
-    public WorldPlanState(Room room, bool capable, DateTime now)
+    public WorldPlanState(Room room, bool capable, DateTime now, bool currentPartyFrozen = false)
     {
+        _currentPartyFrozen = currentPartyFrozen;
         InitialRoomCode = room.Code;
         InitialRoomSessionId = room.SessionId;
         Config = Clone(room.HostConfig ?? throw new InvalidOperationException("world_plan_config_missing"));
@@ -78,7 +81,7 @@ public sealed class WorldPlanState
 
     private void Expire(DateTime now)
     {
-        if (now >= ExpiresAtUtc) _stage = "Aborted";
+        if (!_startupRetired && now >= ExpiresAtUtc) _stage = "Aborted";
     }
 
     public WorldPlanSnapshot Report(string ticket, bool known, int count, DateTime now)
@@ -126,6 +129,8 @@ public sealed class WorldPlanState
         lock (Sync)
         {
             Authenticate(ticket);
+            if (now >= ExpiresAtUtc) throw new InvalidOperationException("world_plan_ticket_expired");
+            if (_startupRetired) throw new InvalidOperationException("world_plan_startup_retired");
             _stage = "Aborted";
             return Snapshot(now);
         }
@@ -136,6 +141,7 @@ public sealed class WorldPlanState
         lock (Sync)
         {
             var uid = Authenticate(ticket);
+            if (_startupRetired) throw new InvalidOperationException("world_plan_startup_retired");
             Expire(now);
             if (_stage != "Committed" || Remaining().FirstOrDefault() != uid)
                 throw new InvalidOperationException("world_plan_target_not_committed");
@@ -172,6 +178,19 @@ public sealed class WorldPlanState
 
     public void ReleaseSource() { lock (Sync) _sourceReleased = true; }
 
+    /// <summary>与房间正式开锄在同一交接窄门内执行；旧启动票据从此不能停止执行中的世界。</summary>
+    public void RetireStartup(string roomCode, string sessionId, DateTime now)
+    {
+        lock (Sync)
+        {
+            if (_startupRetired) return;
+            Expire(now);
+            if (_stage != "Committed" || _targetCode != roomCode || _targetSession != sessionId)
+                throw new InvalidOperationException("world_plan_target_not_committed");
+            _startupRetired = true;
+        }
+    }
+
     private List<string> Remaining() => Candidates.Where(uid => _reports.TryGetValue(uid, out var report)
         && report.Known && report.Count > 0).ToList();
 
@@ -188,6 +207,7 @@ public sealed class WorldPlanState
                 RemainingHostUids = Remaining(), HostConfig = Clone(Config), Players = Clone(Players),
                 TargetRoomCode = _targetCode, TargetRoomSessionId = _targetSession,
                 SourceReleased = _sourceReleased,
+                CurrentPartyFrozen = _currentPartyFrozen,
             };
         }
     }

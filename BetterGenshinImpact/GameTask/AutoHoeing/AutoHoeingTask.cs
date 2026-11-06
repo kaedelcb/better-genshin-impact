@@ -68,9 +68,6 @@ public partial class AutoHoeingTask : ISoloTask
     private readonly MonsterInfoRepository _monsterRepo = new();
     private readonly CdManager _cdManager = new();
     private readonly MultiWorldProgressStore _multiWorldProgressStore = new();
-    // 只在同一次守护重开间传递实际确认的进度，不拿其他任务/日期的旧磁盘记录裁剪世界。
-    private MultiWorldGuardResumeProgress? _guardResumeProgress;
-    private bool _worldCompletedForGuardResume;
     private bool _isInitialHost; // 初始组队时固定：本机是否为本场发起房主（hoeing-multiworld-host-restart-resume-round）
     private readonly RouteSelector _routeSelector = new();
     private readonly TimeRestrictionChecker _timeChecker = new();
@@ -808,6 +805,13 @@ public partial class AutoHoeingTask : ISoloTask
             }
         }
 
+        // 更新器是否仍在写线路不明时，禁止守护重开或把本次执行当成功。
+        if (_routeUpdateCleanupFailure != null)
+        {
+            ct.ThrowIfCancellationRequested();
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(_routeUpdateCleanupFailure).Throw();
+        }
+
         // 团队批次保留原 Incomplete 路径；单机只对明确缺资源异常补齐失败传播。
         if (!teamManaged)
             HoeingMissingResourceBoundary.RethrowAfterCleanup(executionFailure, ct,
@@ -869,8 +873,7 @@ public partial class AutoHoeingTask : ISoloTask
 
                 var restart = new AutoHoeingTask(_partyConfig, _settingsOverride, _groupName)
                 {
-                    _isGuardRestartRun = true,
-                    _guardResumeProgress = _guardResumeProgress
+                    _isGuardRestartRun = true
                 };
                 await restart.Start(ct);   // 复用原始外部 ct；重开的运行 isGuardRestartRun=true → 结束时不再重开（R3）
                 executionFailure = null; // 有限重开已经实际成功，原启动失败已恢复。
@@ -1458,7 +1461,16 @@ public partial class AutoHoeingTask : ISoloTask
                     ? null
                     : _config.RoomWhitelist.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 var actualCount = await autoParty.WaitForMembersAsync(
-                    _config.ExpectedPlayerCount, partyWhitelist, client, _config.PartyTimeoutSeconds, _ct);
+                    InitialPartySize(), partyWhitelist, client, RemainingPartyWaitSeconds(), _ct,
+                    allowSkipWait: RequiredWorldParticipants == null,
+                    remainingSeconds: _legacyPartySize.HasValue ? RemainingPartyWaitSeconds : null);
+
+                if (RequiredWorldParticipants is { } requiredParty && actualCount != requiredParty.Count)
+                {
+                    _worldStateMonitor.IsPartyPhase = false;
+                    MarkPartyFailed("已确认的开队成员尚未全部进入世界");
+                    return;
+                }
 
                 if (actualCount < 0)
                 {
@@ -1508,10 +1520,10 @@ public partial class AutoHoeingTask : ISoloTask
                 {
                     await HoeingStartupBoundary.WaitForWorldReadyAsync(hostAllJoinedTcs,
                         token => client.ReportWorldJoinedAsync(token),
-                        TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                        TimeSpan.FromSeconds(RemainingPartyWaitSeconds()), _ct);
                     _logger.LogInformation("[联机] 所有成员已就绪，开始锄地");
                 }
-                catch (HoeingStartupException ex) when (allowCurrentParty && client.IsConnected
+                catch (HoeingStartupException ex) when (RequiredWorldParticipants == null && _legacyPartySize == null && allowCurrentParty && client.IsConnected
                     && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive
                     && ex.Stage == "全员进入世界")
                 {
@@ -1575,7 +1587,7 @@ public partial class AutoHoeingTask : ISoloTask
                     try
                     {
                         // 先查一次当前状态
-                        if (await client.IsHostReadyAsync())
+                        if (await client.IsHostReadyAsync(_ct))
                         {
                             _logger.LogInformation("[联机] 房主已就绪");
                         }
@@ -1593,7 +1605,7 @@ public partial class AutoHoeingTask : ISoloTask
                                     try
                                     {
                                         await Task.Delay(3000, linkedCts.Token);
-                                        if (await client.IsHostReadyAsync())
+                                        if (await client.IsHostReadyAsync(_ct))
                                             hostReadyTcs.TrySetResult(true);
                                     }
                                     catch { break; }
@@ -1620,7 +1632,7 @@ public partial class AutoHoeingTask : ISoloTask
                     RoomConfig? hostConfig = null;
                     for (int retry = 1; retry <= 3; retry++)
                     {
-                        hostConfig = await client.GetRoomConfigAsync();
+                        hostConfig = await client.GetRoomConfigAsync(_ct);
                         if (hostConfig != null)
                         {
                             _logger.LogInformation("[联机] 成功拉取房主配置（第{N}次尝试）", retry);
@@ -1715,9 +1727,7 @@ public partial class AutoHoeingTask : ISoloTask
             // 成员路径不调（成员无房主权限，调了服务端也会拒）
             if (client.IsHost)
             {
-                // 重开续跑：算出已完成房主 UID 上报，服务端裁剪权威序列，全组跳过已完成世界。
-                var completed = ComputeCompletedHostUidsForReport(client);
-                await client.MarkRoomStartedAsync(completed);
+                await LockCurrentHoeingRoomAsync(client);
             }
 
             // 只有走到这里（所有组队/加入/等待环节均未提前 return）才算组队成功，允许后续开锄。
@@ -1737,6 +1747,7 @@ public partial class AutoHoeingTask : ISoloTask
         }
         catch (Exception ex)
         {
+            if (ex is RouteUpdateProcessCleanupException) throw;
             _logger.LogError(ex, "[联机] 初始化失败");
             if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
             // 手动停止（OperationCanceledException）不标记组队失败——Start 尾部 userCancelled 会兜底不重开。
@@ -2181,19 +2192,9 @@ public partial class AutoHoeingTask : ISoloTask
             }
         }
 
-        List<PlayerInfo> playerOrder = RoundHostOrderClientMapping.BuildPlayerOrder(snapshot, authoritativeUids);
-        if (_worldStartPlan == null && _isGuardRestartRun && _config.MultiWorldResumeEnabled
-            && _guardResumeProgress?.Matches(resumeOrderSignature, _config.MultiWorldCount) == true)
-        {
-            // 原来只计划两轮时，裁剪掉已完成世界不能把第三、四个世界补进来。
-            var planned = _guardResumeProgress.PlannedHostUids;
-            playerOrder = playerOrder.Where(p => planned.Contains(p.PlayerUid)).ToList();
-        }
-        else
-        {
-            _guardResumeProgress = MultiWorldGuardResumeProgress.Create(
-                resumeOrderSignature, _config.MultiWorldCount, playerOrder.Select(p => p.PlayerUid));
-        }
+        var playerOrder = client.UsesV1WorldPlanServer
+            ? RoundHostOrderClientMapping.BuildV1PlayerOrder(snapshot, authoritativeUids, initialHostUid, _config.MultiWorldCount)
+            : RoundHostOrderClientMapping.BuildPlayerOrder(snapshot, authoritativeUids);
         if (RoundHostOrderClientMapping.UsedAuthoritative(authoritativeUids))
         {
             _logger.LogInformation("[多世界] 采用服务端权威轮换序列（{N} 项）: {Order}",
@@ -2355,8 +2356,6 @@ public partial class AutoHoeingTask : ISoloTask
                 HostPlayerName = roundHostPlayer.PlayerName,
             };
             await RunSingleWorldCoreAsync(accountName, groupTags, roundContext);
-            if (_worldCompletedForGuardResume)
-                _guardResumeProgress = _guardResumeProgress?.ConfirmCompleted(roundHostPlayer.PlayerUid);
 
             // 重开续跑：本轮锄地核心已完成，发起房主记录该轮房主 UID 并落盘（绝不预写）。
             // 放在 if (round < totalRounds-1) 之前，确保最后一轮也被标记。
@@ -2441,36 +2440,11 @@ public partial class AutoHoeingTask : ISoloTask
         _executionEngine?.SetWorldStateMonitor(null);
     }
 
-    /// <summary>
-    /// 房主守护重开上报 Completed_Host_Uids：继承同次任务已确认进度，保留开关与名册校验。
-    /// 开关关 / 数据不可信 / 无进度 → 空集合（全量序列，回退现状）。
-    /// hoeing-multiworld-host-restart-resume-round Req 1.4 / 2.4 / 5.1。
-    /// </summary>
-    private IReadOnlySet<string> ComputeCompletedHostUidsForReport(CoordinatorClient client)
-    {
-        try
-        {
-            // 上报点 A 早于 RunMultiWorldAsync，playerOrder 尚未构造，用 CurrentPlayerList 快照算签名。
-            // ComputeOrderSignature 对集合无序签名，只要全员集合一致即与写入时签名一致。
-            var hostUids = client.CurrentPlayerList.Select(p => p.PlayerUid);
-            var signature = MultiWorldResumeDecisions.ComputeOrderSignature(hostUids);
-            var completed = _guardResumeProgress?.CompletedForReport(
-                signature, _config.MultiWorldCount, _isGuardRestartRun && _config.MultiWorldResumeEnabled)
-                ?? new HashSet<string>();
-            _logger.LogInformation(
-                "[多世界续跑] 上报已完成房主：{N} 个 [{Uids}]（开关={On}，签名匹配={Match}）",
-                completed.Count, string.Join(",", completed),
-                _config.MultiWorldResumeEnabled,
-                _guardResumeProgress?.Matches(signature, _config.MultiWorldCount) == true);
-            return completed;
-        }
-        catch (Exception ex)
-        {
-            // 计算失败按空集合处理：上报空 → 全量序列（安全降级，Req 2.4）。不静默吞。
-            _logger.LogWarning(ex, "[多世界续跑] 计算 Completed_Host_Uids 失败，降级上报空集合");
-            return new HashSet<string>();
-        }
-    }
+    // A negotiated Legacy decision (including guard restart) always probes the full order.
+    // Old on-disk progress is retained for compatibility, never sent as a skip instruction.
+    private Task LockCurrentHoeingRoomAsync(CoordinatorClient client)
+        => RequiredWorldParticipants == null ? client.MarkRoomStartedAsync()
+            : client.MarkFrozenRoomStartedAsync(_ct);
 
     /// <summary>SetupNextRoundAsync 的结果：决定多世界主循环后续走向。</summary>
     private enum RoundSetupOutcome
@@ -2522,7 +2496,7 @@ public partial class AutoHoeingTask : ISoloTask
                         newCode = targetPlan.TargetRoomCode;
                     }
                     else
-                        newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount, _ct);
+                        newCode = await client.CreateRoomAsync(_config.PlayerName, multiWorldWhitelist, _config.PlayerUid, playerCount, _ct, RequiredWorldParticipants);
                     if (newCode != null)
                     {
                         _logger.LogInformation("[多世界] 第 {Round} 轮创建房间成功（第{N}次尝试）: {Code}", round + 1, retry, newCode);
@@ -2604,9 +2578,9 @@ public partial class AutoHoeingTask : ISoloTask
                 await client.ReportHostReadyAsync();
 
                 var actualCount = await autoParty.WaitForMembersAsync(
-                    playerCount, multiWorldWhitelist.ToArray(), client, _config.PartyTimeoutSeconds, _ct);
+                    playerCount, multiWorldWhitelist.ToArray(), client, _config.PartyTimeoutSeconds, _ct, allowSkipWait: RequiredWorldParticipants == null);
 
-                if (actualCount <= 0)
+                if (actualCount <= 0 || (RequiredWorldParticipants != null && actualCount != playerCount))
                 {
                     _logger.LogError("[多世界] 第 {Round} 轮等待成员超时", round + 1);
                     MarkPartyFailed("等待成员超时");
@@ -2619,25 +2593,9 @@ public partial class AutoHoeingTask : ISoloTask
                 client.AllWorldJoined += hostAllJoinedHandler;
                 try
                 {
-                    await client.ReportWorldJoinedAsync();
-                    _logger.LogInformation("[多世界] 第 {Round} 轮房主已上报就绪，等待所有成员就绪...", round + 1);
-
-                    using var allJoinedCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.PartyTimeoutSeconds));
-                    using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_ct, allJoinedCts.Token);
-                    using var reg = linkedCts.Token.Register(() => hostAllJoinedTcs.TrySetResult(false));
-                    var allJoined = await hostAllJoinedTcs.Task;
-                    if (allJoined)
-                    {
-                        _logger.LogInformation("[多世界] 第 {Round} 轮所有成员已就绪", round + 1);
-                    }
-                    else
-                    {
-                        // 组队守卫（方案A）：本轮未达全员就绪，不开锄，终止多世界。
-                        // （事件反注册由下方 finally 统一处理，此处不重复 -=）
-                        _logger.LogError("[多世界] 第 {Round} 轮等待所有成员就绪超时，未满员，终止本轮不开锄", round + 1);
-                        MarkPartyFailed("等待全员就绪超时");
-                        return RoundSetupOutcome.Abort;
-                    }
+                    await HoeingStartupBoundary.WaitForWorldReadyAsync(hostAllJoinedTcs,
+                        token => client.ReportWorldJoinedAsync(token), TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                    _logger.LogInformation("[多世界] 第 {Round} 轮所有成员已就绪", round + 1);
                 }
                 finally
                 {
@@ -2673,7 +2631,7 @@ public partial class AutoHoeingTask : ISoloTask
                     var rooms = await client.GetOnlineRoomsAsync();
                     var target = rooms.FirstOrDefault(r =>
                         (!string.IsNullOrEmpty(roundHostPlayer.PlayerUid) && r.HostUid == roundHostPlayer.PlayerUid) ||
-                        r.HostName.Equals(roundHostPlayer.PlayerName, StringComparison.OrdinalIgnoreCase));
+                        (RequiredWorldParticipants == null && r.HostName.Equals(roundHostPlayer.PlayerName, StringComparison.OrdinalIgnoreCase)));
                     if (target != null)
                     {
                         _logger.LogInformation("[多世界] 找到新房主 [{Host}] 的房间: {Code}", roundHostPlayer.PlayerName, target.Code);
@@ -2711,7 +2669,7 @@ public partial class AutoHoeingTask : ISoloTask
                 client.HostReadyChanged += readyHandler;
                 try
                 {
-                    if (!await client.IsHostReadyAsync())
+                    if (!await client.IsHostReadyAsync(_ct))
                     {
                         using var readyCts = new CancellationTokenSource(TimeSpan.FromSeconds(_config.PartyTimeoutSeconds));
                         using var linked = CancellationTokenSource.CreateLinkedTokenSource(_ct, readyCts.Token);
@@ -2730,7 +2688,7 @@ public partial class AutoHoeingTask : ISoloTask
                 RoomConfig? hostConfig = null;
                 for (int retry = 1; retry <= 3; retry++)
                 {
-                    hostConfig = await client.GetRoomConfigAsync();
+                    hostConfig = await client.GetRoomConfigAsync(_ct);
                     if (hostConfig != null)
                     {
                         _logger.LogInformation("[多世界] 第 {Round} 轮成功拉取房主配置（第{N}次尝试）", round + 1, retry);
@@ -2903,7 +2861,7 @@ public partial class AutoHoeingTask : ISoloTask
             {
                 // 重开续跑边界：第 N 轮新房主重建房间的序列无人再查询（死数据），不裁剪。
                 // 全组跳过的唯一入口是首轮 InitializeMultiplayerAsync 的上报点 A。保持无参（全量序列）。
-                await client.MarkRoomStartedAsync();
+                await LockCurrentHoeingRoomAsync(client);
             }
 
             return RoundSetupOutcome.Proceed;
@@ -3120,7 +3078,6 @@ public partial class AutoHoeingTask : ISoloTask
     /// <summary>单世界锄地核心（从 RunTask 提取，供多世界循环复用）</summary>
     private async Task RunSingleWorldCoreAsync(string accountName, List<List<string>>? groupTags = null, MultiWorldRoundContext? roundContext = null)
     {
-        _worldCompletedForGuardResume = false;
         groupTags ??= BuildGroupTags();
         await RunSingleWorldAsync(accountName, groupTags, roundContext);
     }
@@ -3291,11 +3248,7 @@ public partial class AutoHoeingTask : ISoloTask
             if (!cooperative.Downgraded && cooperative.FlowReachedEnd
                 && cooperative.Session?.Snapshot.Stage != RerunStage.Completed)
                 throw new InvalidOperationException("共同重跑未完成确认，禁止记录本世界完成");
-            // 提前返回、降级、Incomplete 和神像门禁取消均不能成为下次跳过整个世界的依据。
-            _worldCompletedForGuardResume = !cooperative.Downgraded
-                && (cooperative.EmptyRound || cooperative.FlowReachedEnd)
-                && cooperative.Session?.Snapshot.Stage == RerunStage.Completed
-                && cooperative.Plans.All(p => cooperative.NormalCompleted.Contains(p.Manifest.RouteId));
+
         }
         catch (Exception ex)
         {
@@ -4791,22 +4744,32 @@ public partial class AutoHoeingTask : ISoloTask
     /// 如果 waitMs > 0，则在更新完成后额外等待指定毫秒数（用于校验失败重试时等待更新落盘生效）。
     /// 更新失败不影响调用方继续执行（仅记日志）。
     /// </summary>
-    private async Task RunAutoUpdateRoutesAsync(int waitMs = 0)
+    private async Task RunAutoUpdateRoutesAsync(int waitMs = 0, CancellationToken? operationToken = null)
     {
+        var token = operationToken ?? _ct;
         _logger.LogInformation("[自动更新线路] 开始执行更新联机锄地线路...");
         try
         {
-            var updateTask = new ShellTask(ShellTaskParam.BuildFromConfig(
-                @"Tools\AutoHoeingUpdater\AutoHoeingUpdater.exe --silent --target ""%CD%"" --force-download",
-                new ShellConfig { Timeout = 120, NoWindow = true, Output = true }));
-            await updateTask.Start(_ct);
+            _worldRoutesUpdateSucceeded = false;
+            await UpdateHoeingRoutes(AppContext.BaseDirectory, token);
             _worldRoutesUpdateSucceeded = true;
             _logger.LogInformation("[自动更新线路] 更新完成");
             if (waitMs > 0)
             {
                 _logger.LogInformation("[自动更新线路] 等待 {WaitMs}ms 让更新落盘生效...", waitMs);
-                await Task.Delay(waitMs, _ct);
+                await Task.Delay(waitMs, token);
             }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            _worldRoutesUpdateSucceeded = false;
+            throw;
+        }
+        catch (RouteUpdateProcessCleanupException failure)
+        {
+            _routeUpdateCleanupFailure = failure;
+            _worldRoutesUpdateSucceeded = false;
+            throw;
         }
         catch (Exception ex)
         {

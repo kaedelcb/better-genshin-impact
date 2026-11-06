@@ -15,7 +15,7 @@ public sealed partial class GatewayDispatcher
                 GetString(env, "playerUid"),
                 GetInt(env, "expectedPlayerCount", 4),
                 GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"),
-                GetStringList(env, "expectedParticipantUids"));
+                GetStringList(env, "expectedParticipantUids"), GetStringList(env, "worldPlanParticipantUids"));
             return new { roomCode = code, roomProtocol = protocol };
         };
 
@@ -46,7 +46,8 @@ public sealed partial class GatewayDispatcher
         // MarkRoomStarted / MarkRoomStartedWithProgress 聚合：completedHostUids 收进 payload
         _commands[GatewayProtocol.Names.RoomMarkStarted] = async (env, ctx) =>
         {
-            await _ops.MarkRoomStartedAsync(ctx, GetStringList(env, "completedHostUids"));
+            await _ops.MarkRoomStartedAsync(ctx, GetStringList(env, "completedHostUids"),
+                GetBool(env, "requireWorldPlanRoster"), env.RoomCode);
             return new { ack = true };
         };
     }

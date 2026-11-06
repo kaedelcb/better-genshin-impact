@@ -30,6 +30,25 @@ public static class RoundHostOrderClientMapping
                 : new PlayerInfo { PlayerUid = uid, PlayerName = uid }).ToList();
     }
 
+    // A v1 server can return the whole roster minus completed UIDs before applying its
+    // round limit. Intersect that reply with the original candidate worlds; do not re-read
+    // completion history or fill vacated rounds with later players.
+    internal static List<PlayerInfo> BuildV1PlayerOrder(List<PlayerInfo> snapshot, List<string>? authoritativeUids,
+        string initialHostUid, int roundLimit)
+    {
+        var order = BuildPlayerOrder(snapshot, authoritativeUids);
+        if (authoritativeUids is not { Count: > 0 } || authoritativeUids.Count >= snapshot.Count)
+            return order;
+        var original = snapshot.Select(p => p.PlayerUid).ToHashSet(System.StringComparer.Ordinal);
+        if (!original.Contains(initialHostUid) || string.IsNullOrEmpty(initialHostUid)
+            || original.Any(string.IsNullOrEmpty) || original.Count != snapshot.Count
+            || authoritativeUids.Any(uid => !original.Contains(uid)))
+            throw new System.InvalidOperationException("旧协调器返回了裁剪轮次，但无法确认原候选世界");
+        var candidates = new[] { initialHostUid }.Concat(original.Where(u => u != initialHostUid)
+            .OrderBy(u => u, System.StringComparer.Ordinal)).Take(roundLimit).ToHashSet(System.StringComparer.Ordinal);
+        return order.Where(p => candidates.Contains(p.PlayerUid)).ToList();
+    }
+
     /// <summary>是否采用了服务端权威序列（true）还是降级本地快照（false）。仅用于日志区分。</summary>
     public static bool UsedAuthoritative(List<string>? authoritativeUids)
         => authoritativeUids != null && authoritativeUids.Count > 0;

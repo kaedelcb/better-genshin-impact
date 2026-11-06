@@ -6,6 +6,10 @@ public class Room
     public IReadOnlyList<string> ExpectedParticipantUids { get; init; } = [];
     /// <summary>开队预判冻结的参队名册；不代表已经进世界或已开锄。旧流程保持 null。</summary>
     public IReadOnlyList<string>? WorldPlanParticipantUids { get; set; }
+    /// <summary>仅关联开队预判首世界的启动期权限，正式开锄后该权限退休。</summary>
+    public string? WorldPlanId { get; set; }
+    /// <summary>本房已统一回退逐家探测；不能再应用旧客户端的已完成 UID 裁剪。</summary>
+    public bool UseLegacyWorldPlanOrder { get; set; }
     public string Code { get; set; } = "";
     public string HostConnectionId { get; set; } = "";
 

@@ -5,7 +5,7 @@ public sealed partial class GatewayDispatcher
     partial void RegisterWorldPlan()
     {
         _commands[GatewayProtocol.Names.WorldPlanBegin] = async (env, ctx)
-            => await _ops.BeginWorldPlanAsync(ctx, GetBool(env, "forceLegacy"));
+            => await _ops.BeginWorldPlanAsync(ctx, GetBool(env, "forceLegacy"), GetBool(env, "freezeCurrentParty"));
         _queries[GatewayProtocol.Names.WorldPlanAcquire] = async (env, ctx)
             => await _ops.AcquireWorldPlanAsync(ctx);
         _queries[GatewayProtocol.Names.WorldPlanGet] = async (env, ctx)

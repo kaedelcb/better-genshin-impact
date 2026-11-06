@@ -15,7 +15,7 @@ public static class GatewayProtocol
     public const string HoeingStartCapability = "hoeing.start.v2";
     public const string HoeingStateContinuationCapability = "hoeing.stateContinuation.v1";
     public const string HoeingPriorityRecoveryCapability = "hoeing.priorityRecovery.v1";
-    public const string WorldPlanCapability = "hoeing.worldPlan.v1";
+    public const string WorldPlanCapability = "hoeing.worldPlan.v2";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
 

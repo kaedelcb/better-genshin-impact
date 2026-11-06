@@ -133,12 +133,56 @@ public partial class AutoHoeingTask
     private WorldPlanAdmission? _worldPlanAdmission;
     private bool _worldPlanNoWorkConfirmed;
     private bool _worldRoutesUpdateSucceeded = true;
+    private RouteUpdateProcessCleanupException? _routeUpdateCleanupFailure;
+    internal Func<string, CancellationToken, Task> UpdateHoeingRoutes { get; set; } = AutoHoeingRouteUpdater.RunAsync;
+
+    // Only set after the server confirmed a partial-party Legacy decision. Network and F2
+    // assembly spend the same budget; the latter waits for the actual selected party.
+    private int? _legacyPartySize;
+    private IReadOnlyList<string>? _manualFrozenParty;
+    private IReadOnlyList<string>? RequiredWorldParticipants => _worldStartPlan?.ParticipantUids ?? _manualFrozenParty;
+
+    private void AdoptManualParty(MultiWorldStartPlan decision)
+    {
+        if (!decision.CurrentPartyFrozen) return;
+        var uids = decision.ParticipantUids;
+        if (decision.Stage != "Legacy" || uids.Count is < 1 or > 4 || uids.Any(string.IsNullOrWhiteSpace)
+            || uids.Distinct(StringComparer.Ordinal).Count() != uids.Count || !uids.Contains(_config.PlayerUid))
+            throw new InvalidOperationException("按当前人数开始的成员身份不完整");
+        _manualFrozenParty = uids.ToArray();
+    }
+
+    private bool _keepWaitingForLateMember;
+    private long _partyWaitStarted;
+    private int InitialPartySize() => _keepWaitingForLateMember ? _config.ExpectedPlayerCount :
+        _legacyPartySize ?? _config.ExpectedPlayerCount;
+    private int RemainingPartyWaitSeconds()
+        => _legacyPartySize == null ? _config.PartyTimeoutSeconds :
+            Math.Max(1, (int)Math.Ceiling(_config.PartyTimeoutSeconds -
+                System.Diagnostics.Stopwatch.GetElapsedTime(_partyWaitStarted).TotalSeconds));
+
+    private async Task PublishPartialPartyAsync(CoordinatorClient client, bool manual, CancellationToken ct)
+    {
+        var admission = await client.BeginWorldPlanAsync(ct, forceLegacy: true, freezeCurrentParty: manual);
+        var snapshot = admission?.Snapshot;
+        if (snapshot?.Stage != "Legacy" || snapshot.ParticipantUids.Count is < 1 or > 4)
+            throw new InvalidOperationException("未获得全队按当前人数开始的决定");
+        AdoptManualParty(snapshot);
+        _legacyPartySize = snapshot.ParticipantUids.Count;
+        // Only a manual skip selects a smaller party early. Automatic fallback still admits
+        // the missing member until the original deadline, while the others assemble in game.
+        _keepWaitingForLateMember = !manual;
+        SkipPartyWait = false; // “立即开始”已用于确定实际名册，不可再跳过游戏入队。
+        _logger.LogInformation("[续开重跑] 按当前 {Count} 人逐家检查，剩余组队时间 {Seconds} 秒",
+            _legacyPartySize, RemainingPartyWaitSeconds());
+    }
+
 
     // Preview and real upload share keywords/CD rules; neither writes progress.
     private List<RouteInfo> SelectHostWorldRoutes(List<RouteInfo> routes, bool preview)
     {
         var keywords = RouteKeywordFilterDecisions.ParseKeywords(_config.RouteFilterKeywords);
-        var cutoff = preview ? DateTime.Now.AddSeconds(Math.Max(300, _config.PartyTimeoutSeconds * 3.0 + 120)) : DateTime.Now;
+        var cutoff = DateTime.Now; // 本次选线共用同一时刻；未来解冻的线路不计入本次开队。
         return routes.Where(route =>
         {
             if (RouteKeywordFilterDecisions.ShouldSkip(Path.GetFileNameWithoutExtension(route.FileName), keywords))
@@ -161,7 +205,7 @@ public partial class AutoHoeingTask
         try
         {
             var account = string.IsNullOrEmpty(_config.AccountName) ? "默认账户" : _config.AccountName;
-            if (_config.AutoUpdateRoutes && !_worldRoutesUpdateSucceeded) return (false, 0);
+            if (!_worldRoutesUpdateSucceeded) return (false, 0);
             _cdManager.Load(_dataDir, account);
             if (!_cdManager.LoadSucceeded) return (false, 0);
             if (!_config.UseFixedDebugRoutes)
@@ -186,6 +230,9 @@ public partial class AutoHoeingTask
             {
                 if (!string.IsNullOrEmpty(_config.FixedDebugRoutePath) && !Directory.Exists(_config.FixedDebugRoutePath))
                     return (false, 0);
+                if (string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath) && !string.IsNullOrWhiteSpace(_config.SelectedBuiltinRoute)
+                    && !Directory.Exists(Path.Combine(AppContext.BaseDirectory, "GameTask", "AutoHoeing", "Assets", _config.SelectedBuiltinRoute)))
+                    return (false, 0); // 正式旧流程可尝试默认包，但不能据默认包的 CD 跳过用户指定的世界。
                 routes = LoadRoutesBasedOnConfig();
                 if (routes.Count == 0) return (false, 0); // Missing package is not a completed world.
             }
@@ -221,54 +268,39 @@ public partial class AutoHoeingTask
         budget.CancelAfter(timeout);
         var ct = budget.Token;
         WorldPlanAdmission? admission = null;
-        bool beginAttempted = false;
         try
         {
             if (isHost)
             {
                 if (!_config.MultiWorldEnabled || !_config.MultiWorldResumeEnabled) return false;
-                if (!BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive) IsWaitingForParty = true;
+                bool ordinary = !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive;
+                _partyWaitStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                var limit = Math.Max(1, _config.PartyTimeoutSeconds);
+                // Leave the final half (at most 30 seconds) of the original timeout to physically join.
+                var rosterSeconds = ordinary && _config.PartyTimeoutAction == 1
+                    ? limit - Math.Min(30.0, limit / 2.0) : limit;
+                if (ordinary) IsWaitingForParty = true;
                 while (client.CurrentPlayerList.Count < _config.ExpectedPlayerCount)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (SkipPartyWait && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
+                    if (ordinary && (SkipPartyWait || (_config.PartyTimeoutAction == 1 &&
+                        System.Diagnostics.Stopwatch.GetElapsedTime(_partyWaitStarted).TotalSeconds >= rosterSeconds)))
                     {
-                        beginAttempted = true;
-                        admission = await client.BeginWorldPlanAsync(ct, forceLegacy: true);
+                        await PublishPartialPartyAsync(client, SkipPartyWait, ct);
                         return false;
                     }
-                    // Leave enough of the ordinary party timeout for the old current-members choice.
-                    if (budget.IsCancellationRequested) break;
                     await Task.Delay(250, ct);
                 }
-                beginAttempted = true;
+                IsWaitingForParty = false;
                 admission = await client.BeginWorldPlanAsync(ct);
             }
             else
             {
-                // Config exchange precedes HostReady: no game-world request may start here.
-                RoomConfig? hostConfig;
-                do
-                {
-                    ct.ThrowIfCancellationRequested();
-                    hostConfig = await client.GetRoomConfigAsync();
-                    if (hostConfig == null) await Task.Delay(250, ct);
-                } while (hostConfig == null);
-                if (!hostConfig.MultiWorldEnabled || !hostConfig.MultiWorldResumeEnabled) return false;
-                budget.CancelAfter(TimeSpan.FromSeconds(Math.Max(30, hostConfig.PartyTimeoutSeconds)));
-                RequireMatchingRoomBatch(hostConfig);
-                var needsUpdate = hostConfig.AutoUpdateRoutes && !_config.AutoUpdateRoutes;
-                ApplyWorldHostConfig(hostConfig);
-                if (needsUpdate) await RunAutoUpdateRoutesAsync();
-                _firstHostConfig = hostConfig;
-                while (admission == null)
-                {
-                    admission = await client.AcquireWorldPlanAsync(ct);
-                    if (admission == null) await Task.Delay(250, ct);
-                }
+                admission = await NegotiateMemberWorldPlanAsync(client, budget);
+                if (admission == null) return false;
             }
             if (admission == null) throw new InvalidOperationException("开队预判未获得服务端身份");
-            if (admission.Snapshot.Stage == "Legacy") return false;
+            if (admission.Snapshot.Stage == "Legacy") { AdoptManualParty(admission.Snapshot); return false; }
             _worldPlanAdmission = admission;
             _isInitialHost = isHost;
             _firstHostConfig = admission.Snapshot.HostConfig;
@@ -330,15 +362,6 @@ public partial class AutoHoeingTask
             _multiplayerPartyReady = true;
             lock (AutoHoeingProgress.Sync) AutoHoeingProgress.IsRunning = true;
             return true;
-        }
-        catch (OperationCanceledException) when (!_ct.IsCancellationRequested && admission == null && !beginAttempted && isHost
-            && _config.PartyTimeoutAction == 1
-            && !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
-        {
-            using var fallback = CancellationTokenSource.CreateLinkedTokenSource(_ct);
-            fallback.CancelAfter(TimeSpan.FromSeconds(10));
-            await client.BeginWorldPlanAsync(fallback.Token, forceLegacy: true);
-            return false;
         }
         catch
         {

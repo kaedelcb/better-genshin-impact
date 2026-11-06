@@ -13,8 +13,21 @@ public sealed partial class RoomOperations
     /// <summary>创建房间，返回房间码与房间协议（§4.7 锁定）。</summary>
     public async Task<(string Code, string Protocol)> CreateRoomAsync(GatewayHandlerContext ctx,
         string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
-        string? hoeingBatchId = null, List<string>? expectedParticipantUids = null)
+        string? hoeingBatchId = null, List<string>? expectedParticipantUids = null,
+        List<string>? worldPlanParticipantUids = null)
     {
+        if (worldPlanParticipantUids != null)
+        {
+            if (_capabilityLookup?.Supports(ctx.ConnectionId, WorldPlanState.Capability) != true)
+                throw new InvalidOperationException("world_plan_capability_required");
+            if (worldPlanParticipantUids.Count is < 1 or > 4 || worldPlanParticipantUids.Any(string.IsNullOrWhiteSpace)
+                || worldPlanParticipantUids.Distinct(StringComparer.Ordinal).Count() != worldPlanParticipantUids.Count
+                || !worldPlanParticipantUids.Contains(playerUid, StringComparer.Ordinal)
+                || expectedPlayerCount != worldPlanParticipantUids.Count
+                || !string.IsNullOrWhiteSpace(hoeingBatchId) && !(expectedParticipantUids ?? []).Order(StringComparer.Ordinal)
+                    .SequenceEqual(worldPlanParticipantUids.Order(StringComparer.Ordinal)))
+                throw new InvalidOperationException("world_plan_roster_invalid");
+        }
         if (!string.IsNullOrWhiteSpace(hoeingBatchId) || expectedParticipantUids is { Count: > 0 })
         {
             if (_capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
@@ -27,7 +40,8 @@ public sealed partial class RoomOperations
         await LeaveAllGroupsAsync(ctx);
         // version-compatibility-check 改动 5：透传房主上报版本作为房间基准版本
         var code = _roomManager.CreateRoom(ctx.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion,
-            hoeingBatchId, expectedParticipantUids);
+            hoeingBatchId, expectedParticipantUids, worldPlanParticipantUids,
+            protocol: ctx.IsV3 ? GatewayProtocol.RoomProtocols.V3 : GatewayProtocol.RoomProtocols.Legacy);
         await _broadcaster.AddToGroupAsync(ctx, code);
         TrackGroup(ctx, code);
         _logger.LogInformation("连接 {ConnId}({Name}) 创建房间 {Code}", ctx.ConnectionId, playerName, code);
@@ -36,7 +50,6 @@ public sealed partial class RoomOperations
         // §4.7 房间协议锁定：按建房者客户端协议锁定，同一房间不允许新旧协议混用
         if (ctx.IsV3)
         {
-            room.Protocol = GatewayProtocol.RoomProtocols.V3;
             _logger.LogInformation("[Gateway] 房间 {Code} 协议锁定为 v3（房主为网关客户端）", code);
         }
         ObservePhase(room, code, "room.create");
@@ -189,51 +202,80 @@ public sealed partial class RoomOperations
     /// 非房主调用：LogWarning + return，不抛异常、不修改状态。
     /// hoeing-multiworld-host-restart-resume-round：completedHostUids 非空时排除已完成房主世界（裁剪）。
     /// </summary>
-    public Task MarkRoomStartedAsync(GatewayHandlerContext ctx, List<string>? completedHostUids)
+    public async Task MarkRoomStartedAsync(GatewayHandlerContext ctx, List<string>? completedHostUids,
+        bool requireWorldPlanRoster = false, string? expectedRoomCode = null)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null)
         {
+            if (requireWorldPlanRoster) throw new InvalidOperationException("world_plan_target_missing");
             _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 未在任何房间中，忽略", ctx.ConnectionId);
-            return Task.CompletedTask;
+            return;
         }
         if (room.HostConnectionId != ctx.ConnectionId)
         {
+            if (requireWorldPlanRoster) throw new InvalidOperationException("world_plan_host_required");
             _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 不是房主，忽略（房间 {Code}）",
                 ctx.ConnectionId, roomCode);
-            return Task.CompletedTask;
+            return;
         }
+        if (requireWorldPlanRoster && (roomCode != expectedRoomCode || room.WorldPlanParticipantUids == null))
+            throw new InvalidOperationException("world_plan_target_identity");
         lock (room)
+            if (room.IsStarted) return; // Ordinary reconnect/idempotent locking no longer needs a startup ticket.
+        WorldPlanState? startupPlan = null;
+        if (room.WorldPlanId is { } planId && !_worldPlans.TryGetValue(planId, out startupPlan))
+            throw new InvalidOperationException("world_plan_not_found");
+        if (startupPlan != null) await startupPlan.TransferGate.WaitAsync();
+        try
         {
-            if (room.IsStarted)
+            lock (room)
             {
-                _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
-                return Task.CompletedTask;
+                if (!ReferenceEquals(_roomManager.GetRoomByConnectionId(ctx.ConnectionId).Room, room)
+                    || room.HostConnectionId != ctx.ConnectionId)
+                    throw new InvalidOperationException("world_plan_target_identity");
+                if (room.IsStarted)
+                {
+                    _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
+                    return;
+                }
+                if (room.WorldPlanParticipantUids != null)
+                {
+                    if (!room.HostReady || !_roomManager.GetHoeingStartupReadyLocked(room).Ready)
+                        throw new InvalidOperationException("world_plan_roster_not_ready");
+                    startupPlan?.RetireStartup(room.Code, room.SessionId, _worldPlanTime.GetUtcNow().UtcDateTime);
+                }
+                room.IsStarted = true;
+                room.StartedAtUtc = DateTime.UtcNow;
             }
-            room.IsStarted = true;
-            room.StartedAtUtc = DateTime.UtcNow;
-        }
-        _logger.LogInformation("[MarkRoomStarted] 房间 {Code} 已锁定，IsStarted=true", roomCode);
-        ObservePhase(room, roomCode, "room.markStarted");
+            _logger.LogInformation("[MarkRoomStarted] 房间 {Code} 已锁定，IsStarted=true", roomCode);
+            ObservePhase(room, roomCode, "room.markStarted");
 
         // multiplayer-server-authoritative-round-order：首轮锁房时全员已在房间
         // （客户端 MarkRoomStarted 在 AllWorldJoined 之后），此刻 Players 是全集，
         // 生成权威轮换序列（首项=首任房主，其余 UID 升序）。整场只生成一次（幂等）。
         // hoeing-multiworld-host-restart-resume-round：completedHostUids 非空时排除已完成房主世界（裁剪）。
-        lock (room)
-        {
-            if (room.RoundHostOrder.Count == 0)
+            lock (room)
             {
-                var hostUid = room.Players.Count > 0 ? room.Players[0].PlayerUid : "";
-                IReadOnlySet<string>? exclude =
-                    (completedHostUids != null && completedHostUids.Count > 0)
-                        ? new HashSet<string>(completedHostUids)
-                        : null;
-                room.RoundHostOrder = RoundHostOrderDecisions.Build(room.Players, hostUid, exclude);
-                _logger.LogInformation("[RoundOrder] 房间 {Code} 生成权威轮换序列（排除 {N} 已完成）：{Order}",
-                    roomCode, exclude?.Count ?? 0, string.Join(" -> ", room.RoundHostOrder));
+                if (room.RoundHostOrder.Count == 0)
+                {
+                    var hostUid = room.Players.Count > 0 ? room.Players[0].PlayerUid : "";
+                    // A v1 host can still send completed UIDs after a v2 peer selected the legacy path.
+                    // Keep one full order for that room; clipping first would turn an A/B two-world plan into B/C.
+                    var keepFullOrder = room.UseLegacyWorldPlanOrder
+                        || room.WorldPlanParticipantUids == null && room.Players.Any(p =>
+                            _capabilityLookup?.Supports(p.ConnectionId, WorldPlanState.Capability) == true);
+                    if (keepFullOrder) room.UseLegacyWorldPlanOrder = true;
+                    IReadOnlySet<string>? exclude =
+                        (!keepFullOrder && completedHostUids != null && completedHostUids.Count > 0)
+                            ? new HashSet<string>(completedHostUids)
+                            : null;
+                    room.RoundHostOrder = RoundHostOrderDecisions.Build(room.Players, hostUid, exclude);
+                    _logger.LogInformation("[RoundOrder] 房间 {Code} 生成权威轮换序列（排除 {N} 已完成）：{Order}",
+                        roomCode, exclude?.Count ?? 0, string.Join(" -> ", room.RoundHostOrder));
+                }
             }
         }
-        return Task.CompletedTask;
+        finally { startupPlan?.TransferGate.Release(); }
     }
 }

@@ -93,11 +93,25 @@ public sealed class WorldPlanPreviewTests : IDisposable
     }
 
     [Fact]
-    public void CdExpiringDuringPartyAssemblyDoesNotAuthorizeSkippingTheWorld()
+    public void OnlyRoutesOffCooldownNowCountAtPartyStart()
+    {
+        AddRoutes("01.json", "02.json");
+        WriteCd(("01.json", DateTime.Now.AddMinutes(10)), ("02.json", DateTime.Now.AddMinutes(1)));
+        Assert.Equal((true, 0), Preview());
+        WriteCd(("01.json", DateTime.Now.AddMinutes(10)), ("02.json", DateTime.Now.AddSeconds(-1)));
+        Assert.Equal((true, 1), Preview());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FailedAttemptCannotAuthorizeAnEmptyWorldEvenAfterHostConfigSync(bool hostUpdatesEnabled)
     {
         AddRoutes("01.json");
-        WriteCd(("01.json", DateTime.Now.AddSeconds(60)));
-        Assert.Equal((true, 1), Preview());
+        WriteCd(("01.json", DateTime.Now.AddDays(2)));
+        _config.AutoUpdateRoutes = hostUpdatesEnabled;
+        SetField(_task, "_worldRoutesUpdateSucceeded", false);
+        Assert.Equal((false, 0), Preview());
     }
 
     [Fact]

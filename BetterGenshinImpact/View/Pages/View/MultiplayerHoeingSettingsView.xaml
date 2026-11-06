@@ -649,7 +649,7 @@
                                          Content="启用续开重跑"
                                          IsChecked="{Binding MultiWorldResumeEnabled, Mode=TwoWay}" />
                         <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="开启后，每次开队先预判各家待执行线路，全组直接进入首个有线路的世界；无线可跑的成员仍参队。关闭则从第 1 轮逐家进入并检查。预判无法确认时，全组回到逐家检查；仅房主设置生效。"
+                                      Text="开启后，每次开队只计算各家当前可打的线路，仍在 CD 中的线路不计入。全组直接进入第一个有线路的世界，被跳过的房主仍然参队。关闭则从第 1 轮逐家进入并检查。预判无法确认时，全组回到逐家检查；仅房主设置生效。"
                                       TextWrapping="Wrap" />
                     </StackPanel>
                 </ui:Card>

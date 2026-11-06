@@ -361,7 +361,7 @@ public class AutoPartyTask
         string[]? whitelist,
         CoordinatorClient client,
         int timeoutSeconds,
-        CancellationToken ct)
+        CancellationToken ct, bool allowSkipWait = true, Func<int>? remainingSeconds = null)
     {
         _logger.LogInformation("[自动组队-房主] 开始，期望人数: {N}", expectedCount);
 
@@ -388,7 +388,8 @@ public class AutoPartyTask
         }
 
         // 设置等待状态为 true
-        AutoHoeingTask.IsWaitingForParty = true;
+        AutoHoeingTask.IsWaitingForParty = allowSkipWait;
+        if (!allowSkipWait) AutoHoeingTask.SkipPartyWait = false;
 
         // 用 UID 集合做"自己人"判定（成员加入 BGI 房间时上报 UID 和 PlayerName）
         // 名字也准备一份用于 OCR 容错匹配
@@ -401,7 +402,7 @@ public class AutoPartyTask
 
         try
         {
-            var deadline = DateTime.Now.AddSeconds(timeoutSeconds);
+            var deadline = DateTime.Now.AddSeconds(remainingSeconds?.Invoke() ?? timeoutSeconds);
             bool isInF2Screen = true; // 追踪当前是否在 F2 界面
             while (DateTime.Now < deadline)
             {
@@ -414,7 +415,7 @@ public class AutoPartyTask
                 int lastF2Count = 0;
 
                 // 检测"立即开始"标志（房主在 BGI UI 点击了立即开始按钮）
-                if (AutoHoeingTask.SkipPartyWait)
+                if (allowSkipWait && AutoHoeingTask.SkipPartyWait)
                 {
                     AutoHoeingTask.SkipPartyWait = false;
                     var currentCount = client.CurrentRoomPlayerCount;

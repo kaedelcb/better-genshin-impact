@@ -17,6 +17,7 @@ public sealed class WorldPlanSnapshot
     public string? TargetRoomCode { get; init; }
     public string? TargetRoomSessionId { get; init; }
     public bool SourceReleased { get; init; }
+    public bool CurrentPartyFrozen { get; init; }
 }
 
 /// <summary>票据只发给对应源房成员，不通过房间广播共享。</summary>

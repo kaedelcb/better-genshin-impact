@@ -11,7 +11,7 @@ public static class GatewayProtocol
 {
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
-    public const string WorldPlanCapability = "hoeing.worldPlan.v1";
+    public const string WorldPlanCapability = "hoeing.worldPlan.v2";
 
     public static class MessageTypes
     {

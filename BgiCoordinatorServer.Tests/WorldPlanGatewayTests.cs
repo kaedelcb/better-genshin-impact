@@ -12,17 +12,22 @@ public sealed class WorldPlanGatewayTests
     private const string Version = "1.0.0";
     private static GatewayHandlerContext C(string uid) => GatewayHandlerContext.V3(uid);
 
-    private static async Task<(GatewayTestHarness H, string Code, WorldPlanAdmission[] Admissions)> Start(int rounds = 4, bool mixed = false)
+    private static async Task<(GatewayTestHarness H, string Code, WorldPlanAdmission[] Admissions)> Start(
+        int rounds = 4, bool mixed = false, TimeProvider? clock = null, bool fixedRoster = false)
     {
-        var h = new GatewayTestHarness();
-        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4, reportedVersion: Version);
+        var h = new GatewayTestHarness(clock);
+        var batch = fixedRoster ? "world-plan-test-batch" : null;
+        var participants = fixedRoster ? new List<string> { "A", "B", "C", "D" } : null;
+        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4,
+            reportedVersion: Version, hoeingBatchId: batch, expectedParticipantUids: participants);
         await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig
         {
+            HoeingBatchId = batch, ExpectedParticipantUids = participants ?? [],
             MultiWorldEnabled = true, MultiWorldResumeEnabled = true, MultiWorldCount = rounds,
             SelectedBuiltinRoute = "原房主线路", RouteFilterKeywords = "排除", PartyTimeoutSeconds = 60,
         });
         foreach (var uid in new[] { "B", "C", "D" })
-            Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, reportedVersion: Version)).Success);
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, reportedVersion: Version, hoeingBatchId: batch)).Success);
         if (mixed) h.Capabilities.UnsupportedCapabilities.Add(("D", WorldPlanState.Capability));
         var admissions = new List<WorldPlanAdmission> { await h.Ops.BeginWorldPlanAsync(C("A")) };
         foreach (var uid in new[] { "B", "C", "D" }) admissions.Add((await h.Ops.AcquireWorldPlanAsync(C(uid)))!);
@@ -320,5 +325,410 @@ public sealed class WorldPlanGatewayTests
         // The fallback removes the new freeze but preserves the original room-capacity rule.
         room.ExpectedPlayerCount = 3;
         Assert.True((await h.Ops.JoinRoomAsync(C("C"), code, "C", "C", reportedVersion: Version)).Success);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task FrozenRosterCannotStartWithOnlyABC_AndDRejoinStillMustReportActualWorldArrival(bool fixedRoster, bool grace)
+    {
+        var (h, _, a) = await Start(fixedRoster: fixedRoster);
+        await Commit(h, a, 0, 0, 2, 5);
+        await Release(h, a);
+        var target = await h.Ops.CreateWorldPlanTargetAsync(C("C"), a[2].PlanId, a[2].Ticket);
+        var room = h.RoomManager.GetRoom(target.TargetRoomCode!)!;
+        foreach (var uid in new[] { "A", "B" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), room.Code, uid, uid, Version, room.HoeingBatchId)).Success);
+        if (grace)
+        {
+            Assert.True((await h.Ops.JoinRoomAsync(C("D"), room.Code, "D", "D", Version, room.HoeingBatchId)).Success);
+            room.GracePendingMembers["D"] = DateTime.UtcNow.AddSeconds(30);
+        }
+        await h.Ops.ReportHostReadyAsync(C("C"));
+        foreach (var uid in new[] { "A", "B", "C" })
+            Assert.False(h.RoomManager.RecordWorldJoined(room.Code, uid));
+        Assert.Equal(3, h.RoomManager.GetWorldJoinedCount(room.Code));
+        var incomplete = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(C("C"), null));
+        Assert.Equal("world_plan_roster_not_ready", incomplete.Message);
+        Assert.False(room.IsStarted);
+        Assert.Empty(room.RoundHostOrder);
+        var dConnection = grace ? "reconnected-D" : "D";
+        Assert.True((await h.Ops.JoinRoomAsync(C(dConnection), room.Code, "D", "D", Version, room.HoeingBatchId)).Success);
+        Assert.Equal(3, h.RoomManager.GetWorldJoinedCount(room.Code));
+        Assert.False(room.WorldJoinedSet.Contains(dConnection));
+        Assert.True(h.RoomManager.RecordWorldJoined(room.Code, dConnection));
+        await h.Ops.MarkRoomStartedAsync(C("C"), null);
+        Assert.True(room.IsStarted);
+    }
+
+    [Fact]
+    public async Task FrozenRosterNetworkReconnectPreservesOnlyPriorConfirmedWorldAdmission()
+    {
+        var (h, _, a) = await Start();
+        await Commit(h, a, 0, 0, 2, 5);
+        await Release(h, a);
+        var target = await h.Ops.CreateWorldPlanTargetAsync(C("C"), a[2].PlanId, a[2].Ticket);
+        var room = h.RoomManager.GetRoom(target.TargetRoomCode!)!;
+        foreach (var uid in new[] { "A", "B", "D" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), room.Code, uid, uid, Version)).Success);
+        foreach (var uid in new[] { "A", "B", "C", "D" }) h.RoomManager.RecordWorldJoined(room.Code, uid);
+        room.GracePendingMembers["D"] = DateTime.UtcNow.AddSeconds(30);
+        Assert.False(h.RoomManager.RecordWorldJoined(room.Code, "C"));
+        Assert.True((await h.Ops.JoinRoomAsync(C("D-returned"), room.Code, "D", "D", Version)).Success);
+        Assert.DoesNotContain("D", room.WorldJoinedSet);
+        Assert.Contains("D-returned", room.WorldJoinedSet);
+        Assert.Equal(4, h.RoomManager.GetWorldJoinedCount(room.Code));
+        Assert.True(h.RoomManager.RecordWorldJoined(room.Code, "C"));
+        var notReady = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(C("C"), null));
+        Assert.Equal("world_plan_roster_not_ready", notReady.Message); // HostReady is independent of world admission.
+        Assert.False(room.IsStarted);
+        await h.Ops.ReportHostReadyAsync(C("C"));
+        await h.Ops.MarkRoomStartedAsync(C("C"), null);
+        Assert.True(room.IsStarted);
+    }
+
+    private sealed class PlanClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan elapsed) => _now += elapsed;
+    }
+
+    [Fact]
+    public async Task ExpiredStartupTicketCannotAbortAnUnstartedRegisteredTarget()
+    {
+        var clock = new PlanClock();
+        var (h, _, a) = await Start(clock: clock);
+        await Commit(h, a, 0, 0, 2, 5);
+        await Release(h, a);
+        var target = await h.Ops.CreateWorldPlanTargetAsync(C("C"), a[2].PlanId, a[2].Ticket);
+        var room = h.RoomManager.GetRoom(target.TargetRoomCode!)!;
+        clock.Advance(TimeSpan.FromMinutes(20));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.AbortWorldPlanAsync(a[1].PlanId, a[1].Ticket));
+        Assert.Equal("world_plan_ticket_expired", error.Message);
+        Assert.Same(room, h.RoomManager.GetRoom(room.Code));
+        Assert.False(room.IsStarted);
+        await h.Ops.CloseRoomAsync(C("C"));
+        Assert.Null(h.RoomManager.GetRoom(room.Code));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RealStartRetiresTicketAbort_ForDirectAAndTransferredC_OrdinaryStopStillWorks(bool directA)
+    {
+        var clock = new PlanClock();
+        var (h, source, a) = await Start(clock: clock);
+        await Commit(h, a, directA ? 1 : 0, 0, 2, 5);
+        var host = directA ? "A" : "C";
+        var code = source;
+        if (!directA)
+        {
+            await Release(h, a);
+            code = (await h.Ops.CreateWorldPlanTargetAsync(C("C"), a[2].PlanId, a[2].Ticket)).TargetRoomCode!;
+            foreach (var uid in new[] { "A", "B", "D" })
+                Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, Version)).Success);
+        }
+        var room = h.RoomManager.GetRoom(code)!;
+        await h.Ops.ReportHostReadyAsync(C(host));
+        foreach (var uid in new[] { "A", "B", "C", "D" }) h.RoomManager.RecordWorldJoined(code, uid);
+        await h.Ops.MarkRoomStartedAsync(C(host), null);
+        Assert.True(room.IsStarted);
+        var retired = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.AbortWorldPlanAsync(a[1].PlanId, a[1].Ticket));
+        Assert.Equal("world_plan_startup_retired", retired.Message);
+        Assert.Same(room, h.RoomManager.GetRoom(code));
+        clock.Advance(TimeSpan.FromMinutes(20));
+        var expired = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.AbortWorldPlanAsync(a[1].PlanId, a[1].Ticket));
+        Assert.Equal("world_plan_ticket_expired", expired.Message);
+        Assert.Equal("Committed", (await h.Ops.GetWorldPlanAsync(a[1].PlanId, a[1].Ticket)).Stage);
+        await h.Ops.MarkRoomStartedAsync(C(host), null); // Reconnect locking remains idempotent after retirement/expiry.
+        await h.Ops.CloseRoomAsync(C(host));
+        Assert.Null(h.RoomManager.GetRoom(code));
+    }
+
+    [Fact]
+    public async Task LaterWorldCreateInheritsFrozenRoster_WithoutExtendingFirstWorldStartupTicket()
+    {
+        var h = new GatewayTestHarness();
+        var uids = new List<string> { "A", "B", "C", "D" };
+        var (code, _) = await h.Ops.CreateRoomAsync(C("D"), "D", playerUid: "D", expectedPlayerCount: 4,
+            reportedVersion: Version, worldPlanParticipantUids: uids);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.Null(room.HoeingBatchId);
+        Assert.Null(room.WorldPlanId);
+        Assert.Equal(uids, room.WorldPlanParticipantUids);
+        Assert.False((await h.Ops.JoinRoomAsync(C("stranger"), code, "stranger", "stranger", Version)).Success);
+        foreach (var uid in new[] { "A", "B" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, Version)).Success);
+        foreach (var uid in new[] { "A", "B", "D" }) Assert.False(h.RoomManager.RecordWorldJoined(code, uid));
+        await h.Ops.ReportHostReadyAsync(C("D"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(C("D"), null));
+        Assert.True((await h.Ops.JoinRoomAsync(C("C"), code, "C", "C", Version)).Success);
+        Assert.True(h.RoomManager.RecordWorldJoined(code, "C"));
+        await h.Ops.MarkRoomStartedAsync(C("D"), null);
+        Assert.True(room.IsStarted);
+    }
+
+    [Fact]
+    public async Task StrictStartGatewayOnlyAcknowledgesTheFrozenHostRoomAfterRealArrival()
+    {
+        var (h, _, a) = await Start();
+        await Commit(h, a, 0, 0, 2, 5);
+        await Release(h, a);
+        var target = await h.Ops.CreateWorldPlanTargetAsync(C("C"), a[2].PlanId, a[2].Ticket);
+        var room = h.RoomManager.GetRoom(target.TargetRoomCode!)!;
+        foreach (var uid in new[] { "A", "B", "D" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), room.Code, uid, uid, Version)).Success);
+        await h.Dispatcher.DispatchAsync(C("C"), GatewayTestHarness.HelloEnvelope());
+        await h.Dispatcher.DispatchAsync(C("B"), GatewayTestHarness.HelloEnvelope());
+        GatewayEnvelope Mark(string code) => new()
+        {
+            Type = GatewayProtocol.MessageTypes.Command, Name = GatewayProtocol.Names.RoomMarkStarted,
+            RoomCode = code, Payload = GatewayEnvelope.ToPayload(new { requireWorldPlanRoster = true }),
+        };
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(C("C"), Mark(room.Code))));
+        Assert.False(room.IsStarted);
+        await h.Ops.ReportHostReadyAsync(C("C"));
+        foreach (var uid in new[] { "A", "B", "C", "D" }) h.RoomManager.RecordWorldJoined(room.Code, uid);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(C("B"), Mark(room.Code))));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(C("C"), Mark("wrong-old-room"))));
+        Assert.False(room.IsStarted);
+        var success = await h.Dispatcher.DispatchAsync(C("C"), Mark(room.Code));
+        Assert.Null(GatewayTestHarness.ErrorCode(success));
+        Assert.True(success.Payload!["ack"]!.GetValue<bool>());
+        Assert.True(room.IsStarted);
+    }
+
+    [Fact]
+    public async Task StrictStartCannotClaimLegacyRoomOrMissingRoom_OldMarkRemainsCompatible()
+    {
+        var h = new GatewayTestHarness();
+        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4, reportedVersion: Version);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(C("A"), null, true, code));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(C("absent"), null, true, code));
+        Assert.False(h.RoomManager.GetRoom(code)!.IsStarted);
+        await h.Ops.MarkRoomStartedAsync(C("A"), null);
+        Assert.True(h.RoomManager.GetRoom(code)!.IsStarted);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FrozenRoomIsPublishedWithProtocolRosterAndFirstPlanBeforeGroupSubscription(bool firstTarget)
+    {
+        GatewayTestHarness h;
+        WorldPlanAdmission[]? admissions = null;
+        if (firstTarget)
+        {
+            var started = await Start();
+            h = started.H;
+            admissions = started.Admissions;
+            await Commit(h, admissions, 0, 0, 2, 5);
+            await Release(h, admissions);
+        }
+        else h = new GatewayTestHarness();
+        var host = firstTarget ? "C" : "D";
+        var entered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        h.GatewayGroups.Setup(g => g.AddToGroupAsync(host, It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(async () => { entered.TrySetResult(true); await release.Task; });
+        Task creating = firstTarget
+            ? h.Ops.CreateWorldPlanTargetAsync(C(host), admissions![2].PlanId, admissions[2].Ticket)
+            : h.Ops.CreateRoomAsync(C(host), host, playerUid: host, expectedPlayerCount: 4,
+                reportedVersion: Version, worldPlanParticipantUids: ["A", "B", "C", "D"]);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            var summary = Assert.Single(h.RoomManager.GetOnlineRooms());
+            var room = h.RoomManager.GetRoom(summary.Code)!;
+            Assert.Equal(GatewayProtocol.RoomProtocols.V3, room.Protocol);
+            Assert.Equal(new[] { "A", "B", "C", "D" }, room.WorldPlanParticipantUids);
+            Assert.Equal(firstTarget ? admissions![0].PlanId : null, room.WorldPlanId);
+            if (firstTarget) Assert.Equal("原房主线路", room.HostConfig!.SelectedBuiltinRoute);
+            Assert.False((await h.Ops.JoinRoomAsync(C("stranger"), room.Code, "stranger", "stranger", Version)).Success);
+        }
+        finally { release.TrySetResult(true); }
+        await creating;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FrozenReconnectUsesUidInsteadOfCrossUidName_AndKeepsTheHostFirst(bool fixedRoster)
+    {
+        var h = new GatewayTestHarness();
+        var uids = new List<string> { "A", "B", "C", "D" };
+        var batch = fixedRoster ? "fixed-reconnect-test" : null;
+        var (code, _) = await h.Ops.CreateRoomAsync(C("C"), "C", playerUid: "C", expectedPlayerCount: 4,
+            reportedVersion: Version, hoeingBatchId: batch, expectedParticipantUids: fixedRoster ? uids : null,
+            worldPlanParticipantUids: uids);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.True((await h.Ops.JoinRoomAsync(C("B"), code, "B", "B", Version, batch)).Success);
+        room.GracePendingMembers["C"] = DateTime.UtcNow.AddMinutes(1);
+        Assert.True((await h.Ops.JoinRoomAsync(C("A"), code, "C", "A", Version, batch)).Success);
+        Assert.Equal("C", room.HostConnectionId);
+        Assert.True(room.GracePendingMembers.ContainsKey("C"));
+        Assert.Equal(3, room.Players.Count);
+        Assert.Equal("A", Assert.Single(room.Players.Where(p => p.ConnectionId == "A")).PlayerUid);
+        Assert.True((await h.Ops.JoinRoomAsync(C("C-returned"), code, "B", "C", Version, batch)).Success);
+        Assert.Equal("C-returned", room.HostConnectionId);
+        Assert.Equal("C", room.Players[0].PlayerUid);
+        Assert.Equal("C-returned", room.Players[0].ConnectionId);
+        room.Players.Single(p => p.PlayerUid == "B").LastHeartbeat = DateTime.UtcNow.AddMinutes(-3);
+        Assert.True((await h.Ops.JoinRoomAsync(C("B-returned"), code, "C", "B", Version, batch)).Success);
+        Assert.Equal("C-returned", room.HostConnectionId);
+        Assert.Equal("B-returned", room.Players.Single(p => p.PlayerUid == "B").ConnectionId);
+        Assert.Equal("C", Assert.Single(h.RoomManager.GetOnlineRooms()).HostUid);
+        Assert.True((await h.Ops.JoinRoomAsync(C("D"), code, "D", "D", Version, batch)).Success);
+        room.Players[0].LastHeartbeat = DateTime.UtcNow.AddMinutes(-3);
+        Assert.True((await h.Ops.JoinRoomAsync(C("C-returned-again"), code, "A", "C", Version, batch)).Success);
+        Assert.Equal("C-returned-again", room.HostConnectionId);
+        Assert.Equal("C", room.Players[0].PlayerUid);
+        Assert.Equal(room.HostConnectionId, room.Players[0].ConnectionId);
+        Assert.Empty(h.RoomManager.GetOnlineRooms()); // Still a full four-member room after replacing its host.
+        Assert.Equal(4, room.Players.Select(p => p.PlayerUid).Distinct().Count());
+    }
+
+    private static async Task<(GatewayTestHarness H, string Code)> UnplannedFourPersonTwoWorldRoom()
+    {
+        var h = new GatewayTestHarness();
+        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4, reportedVersion: Version);
+        await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig { MultiWorldEnabled = true, MultiWorldCount = 2 });
+        foreach (var uid in new[] { "B", "C", "D" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, Version)).Success);
+        return (h, code);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task V1HostCompletedPayloadCannotClipTwoWorldBoundaryForV2Peer(bool acquiredLegacy)
+    {
+        var (h, code) = await UnplannedFourPersonTwoWorldRoom();
+        foreach (var uid in new[] { "A", "C", "D" })
+            h.Capabilities.UnsupportedCapabilities.Add((uid, WorldPlanState.Capability));
+        if (acquiredLegacy)
+            Assert.Equal("Legacy", (await h.Ops.AcquireWorldPlanAsync(C("B")))!.Snapshot.Stage);
+        var v1Hello = GatewayTestHarness.HelloEnvelope() with
+        {
+            Payload = GatewayEnvelope.ToPayload(new ClientHello { ClientKind = "bgi", ClientVersion = Version,
+                ProtocolVersion = 3, Capabilities = ["hoeing.worldPlan.v1"] }),
+        };
+        await h.Dispatcher.DispatchAsync(C("A"), v1Hello);
+        await h.Dispatcher.DispatchAsync(C("B"), GatewayTestHarness.HelloEnvelope() with
+        {
+            Payload = GatewayEnvelope.ToPayload(new ClientHello { ClientKind = "bgi", ClientVersion = Version,
+                ProtocolVersion = 3, Capabilities = [WorldPlanState.Capability] }),
+        });
+        await h.Ops.ReportHostReadyAsync(C("A"));
+        foreach (var uid in new[] { "A", "B", "C", "D" }) await h.Ops.ReportWorldJoinedAsync(C(uid));
+        var mark = await h.Dispatcher.DispatchAsync(C("A"), new GatewayEnvelope
+        {
+            Type = GatewayProtocol.MessageTypes.Command, Name = GatewayProtocol.Names.RoomMarkStarted, RoomCode = code,
+            Payload = GatewayEnvelope.ToPayload(new { completedHostUids = new[] { "A" } }),
+        });
+        Assert.Null(GatewayTestHarness.ErrorCode(mark));
+        var queried = await h.Dispatcher.QueryAsync(C("B"), new GatewayEnvelope
+        {
+            Type = GatewayProtocol.MessageTypes.Query, Name = GatewayProtocol.Names.RoomGetRoundHostOrder, RoomCode = code,
+        });
+        Assert.Null(GatewayTestHarness.ErrorCode(queried));
+        var order = queried.Payload!["order"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "A", "B", "C", "D" }, order);
+        Assert.Equal(new[] { "A", "B" }, order.Take(h.RoomManager.GetRoom(code)!.HostConfig!.MultiWorldCount));
+        Assert.DoesNotContain("C", order.Take(2));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExplicitLegacyDecisionKeepsFullOrderEvenAfterCapabilityLookupNoLongerHasV2(bool unknownReport)
+    {
+        GatewayTestHarness h;
+        string code;
+        if (unknownReport)
+        {
+            var started = await Start(rounds: 2);
+            h = started.H;
+            code = started.Code;
+            Assert.Equal("Legacy", (await Commit(h, started.Admissions, 0, -1, 20, 20)).Stage);
+        }
+        else
+        {
+            (h, code) = await UnplannedFourPersonTwoWorldRoom();
+            Assert.Equal("Legacy", (await h.Ops.BeginWorldPlanAsync(C("A"), forceLegacy: true)).Snapshot.Stage);
+        }
+        foreach (var uid in new[] { "A", "B", "C", "D" })
+            h.Capabilities.UnsupportedCapabilities.Add((uid, WorldPlanState.Capability));
+        await h.Ops.MarkRoomStartedAsync(C("A"), ["A"]);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.True(room.UseLegacyWorldPlanOrder);
+        Assert.Equal(new[] { "A", "B", "C", "D" }, room.RoundHostOrder);
+        Assert.Equal(new[] { "A", "B" }, room.RoundHostOrder.Take(room.HostConfig!.MultiWorldCount));
+    }
+
+    [Fact]
+    public async Task UninvolvedAllOldRoomStillAcceptsItsOriginalCompletedHostPayload()
+    {
+        var (h, code) = await UnplannedFourPersonTwoWorldRoom();
+        foreach (var uid in new[] { "A", "B", "C", "D" })
+            h.Capabilities.UnsupportedCapabilities.Add((uid, WorldPlanState.Capability));
+        await h.Ops.MarkRoomStartedAsync(C("A"), ["A"]);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.False(room.UseLegacyWorldPlanOrder);
+        Assert.Equal(new[] { "B", "C", "D" }, room.RoundHostOrder);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ManualCurrentPartyFreezesABC_WhileAutomaticLegacyFallbackKeepsDAdmissionOpen(bool manual)
+    {
+        var h = new GatewayTestHarness();
+        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4, reportedVersion: Version);
+        await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig { MultiWorldEnabled = true, MultiWorldCount = 2 });
+        foreach (var uid in new[] { "B", "C" })
+            Assert.True((await h.Ops.JoinRoomAsync(C(uid), code, uid, uid, Version)).Success);
+        var a = await h.Ops.BeginWorldPlanAsync(C("A"), forceLegacy: true, freezeCurrentParty: manual);
+        Assert.Equal("Legacy", a.Snapshot.Stage);
+        Assert.Equal(manual, a.Snapshot.CurrentPartyFrozen);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.Equal(manual ? 3 : 4, room.ExpectedPlayerCount);
+        Assert.Null(room.WorldPlanId);
+        if (manual) Assert.Equal(new[] { "A", "B", "C" }, room.WorldPlanParticipantUids);
+        else Assert.Null(room.WorldPlanParticipantUids);
+        var b = (await h.Ops.AcquireWorldPlanAsync(C("B")))!;
+        Assert.Equal(manual, b.Snapshot.CurrentPartyFrozen);
+        await h.Ops.AckWorldPlanAsync(b.PlanId, b.Ticket);
+        if (manual) Assert.NotNull(room.WorldPlanParticipantUids); // A legacy ACK cannot unfreeze this explicit manual choice.
+        Assert.Equal(!manual, (await h.Ops.JoinRoomAsync(C("D"), code, "D", "D", Version)).Success);
+        await h.Ops.ReportHostReadyAsync(C("A"));
+        var allJoined = false;
+        foreach (var uid in new[] { "A", "B", "C" }) allJoined = h.RoomManager.RecordWorldJoined(code, uid);
+        Assert.Equal(manual, allJoined);
+        if (!manual) Assert.True(h.RoomManager.RecordWorldJoined(code, "D"));
+        await h.Ops.MarkRoomStartedAsync(C("A"), ["A"], requireWorldPlanRoster: manual, expectedRoomCode: code);
+        Assert.True(room.IsStarted);
+        Assert.Equal(new[] { "A", "B" }, room.RoundHostOrder.Take(2));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("A")]
+    public async Task ManualPartyWithoutReliableUidRestrictsCapacityWithoutInventingAFrozenRoster(string uid)
+    {
+        var h = new GatewayTestHarness();
+        var (code, _) = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 4, reportedVersion: Version);
+        await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig { MultiWorldEnabled = true });
+        Assert.True((await h.Ops.JoinRoomAsync(C("B"), code, "B", uid, Version)).Success);
+        var plan = await h.Ops.BeginWorldPlanAsync(C("A"), forceLegacy: true, freezeCurrentParty: true);
+        Assert.Equal("Legacy", plan.Snapshot.Stage);
+        Assert.False(plan.Snapshot.CurrentPartyFrozen);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.Equal(2, room.ExpectedPlayerCount);
+        Assert.Null(room.WorldPlanParticipantUids);
+        Assert.False((await h.Ops.JoinRoomAsync(C("D"), code, "D", "D", Version)).Success);
     }
 }

@@ -24,6 +24,7 @@ public sealed partial class RoomOperations
     private readonly RoomPhaseObserver _phaseObserver;
     private readonly RoomLogContext? _roomLogContext;
     private readonly RoomHoeingHistory? _hoeingHistory;
+    private readonly TimeProvider _worldPlanTime;
 
     /// <summary>客户端能力查询（route-anchor 门控用）。为 null 时按"不支持"处理：
     /// 宁可拒绝激活，也不允许"忘记接线导致静默半启用"。</summary>
@@ -36,7 +37,8 @@ public sealed partial class RoomOperations
         RoomPhaseObserver phaseObserver,
         IClientCapabilityLookup? capabilityLookup = null,
         RoomLogContext? roomLogContext = null,
-        RoomHoeingHistory? hoeingHistory = null)
+        RoomHoeingHistory? hoeingHistory = null,
+        TimeProvider? worldPlanTimeProvider = null)
     {
         _roomManager = roomManager;
         _logger = logger;
@@ -45,6 +47,7 @@ public sealed partial class RoomOperations
         _capabilityLookup = capabilityLookup;
         _roomLogContext = roomLogContext;
         _hoeingHistory = hoeingHistory;
+        _worldPlanTime = worldPlanTimeProvider ?? TimeProvider.System;
     }
 
     private void ObserveRoomLog(Action<RoomLogContext> observation)

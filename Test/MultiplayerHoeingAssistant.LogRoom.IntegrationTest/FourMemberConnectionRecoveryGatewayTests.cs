@@ -206,6 +206,165 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
         }
     }
 
+    [Fact]
+    public async Task V2WorldPlanSkipsAB_RequiresReconnectedDWorldArrival_AndRetiresStartupAbort()
+    {
+        await using var server = await Server.StartAsync();
+        var connections = new HubConnection[4];
+        var uids = new[] { "loopback-A", "loopback-B", "loopback-C", "loopback-D" };
+        var tickets = new (string PlanId, string Ticket)[4];
+        var arrived = Enumerable.Range(0, 4)
+            .Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+        var closed = Enumerable.Range(0, 4)
+            .Select(_ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)).ToArray();
+        string? targetCode = null;
+        const string version = "0.1.0+isolated-world-plan-v2";
+        try
+        {
+            for (var i = 0; i < 4; i++) connections[i] = await ConnectV2Async(i);
+            var source = await SendAsync(connections[0], Protocol.Names.RoomCreate,
+                new { playerName = uids[0], playerUid = uids[0], expectedPlayerCount = 4, reportedVersion = version });
+            var sourceCode = source.Payload!["roomCode"]!.GetValue<string>();
+            await SendAsync(connections[0], Protocol.Names.RoomSetConfig,
+                new { config = new { multiWorldEnabled = true, multiWorldResumeEnabled = true, multiWorldCount = 4, partyTimeoutSeconds = 60 } },
+                sourceCode);
+            for (var i = 1; i < 4; i++)
+                Assert.True((await SendAsync(connections[i], Protocol.Names.RoomJoin,
+                    new { playerName = uids[i], playerUid = uids[i], reportedVersion = version }, sourceCode))
+                    .Payload!["success"]!.GetValue<bool>());
+            var begin = await SendAsync(connections[0], Protocol.Names.WorldPlanBegin, new { forceLegacy = false }, sourceCode);
+            tickets[0] = ReadAdmission(begin);
+            for (var i = 1; i < 4; i++)
+            {
+                tickets[i] = ReadAdmission(await SendAsync(connections[i], Protocol.Names.WorldPlanAcquire, null, sourceCode, query: true));
+                Assert.Equal(tickets[0].PlanId, tickets[i].PlanId);
+            }
+            var counts = new[] { 0, 0, 2, 1 };
+            for (var i = 0; i < 4; i++)
+            {
+                var report = await SendAsync(connections[i], Protocol.Names.WorldPlanReport,
+                    new { planId = tickets[i].PlanId, ticket = tickets[i].Ticket, known = true, remainingCount = counts[i] });
+                Assert.Equal(i == 3 ? "Prepared" : "Planning", Stage(report));
+            }
+            for (var i = 0; i < 4; i++)
+            {
+                var ack = await SendAsync(connections[i], Protocol.Names.WorldPlanAck, Credential(i));
+                Assert.Equal(i == 3 ? "Committed" : "Prepared", Stage(ack));
+                if (i == 3)
+                {
+                    var remaining = ack.Payload!["snapshot"]!["remainingHostUids"]!.AsArray()
+                        .Select(n => n!.GetValue<string>()).ToArray();
+                    Assert.Equal(new[] { uids[2], uids[3] }, remaining);
+                    Assert.Equal(4, ack.Payload["snapshot"]!["participantUids"]!.AsArray().Count);
+                }
+            }
+            for (var i = 0; i < 4; i++)
+            {
+                var released = await SendAsync(connections[i], Protocol.Names.WorldPlanLeaveSource, Credential(i));
+                Assert.Equal(i == 3, released.Payload!["snapshot"]!["sourceReleased"]!.GetValue<bool>());
+            }
+            Assert.Null(server.Manager.GetRoom(sourceCode));
+            var target = await SendAsync(connections[2], Protocol.Names.WorldPlanCreateTarget, Credential(2));
+            targetCode = target.Payload!["snapshot"]!["targetRoomCode"]!.GetValue<string>();
+            Assert.NotEqual(sourceCode, targetCode);
+            var targetSession = target.Payload["snapshot"]!["targetRoomSessionId"]!.GetValue<string>();
+            Assert.Equal(targetSession, server.Manager.GetRoom(targetCode)!.SessionId);
+            for (var i = 0; i < 2; i++)
+                Assert.True((await SendAsync(connections[i], Protocol.Names.RoomJoin,
+                    new { playerName = uids[i], playerUid = uids[i], reportedVersion = version }, targetCode))
+                    .Payload!["success"]!.GetValue<bool>());
+            await SendAsync(connections[2], Protocol.Names.RoomReportHostReady, null, targetCode);
+            for (var i = 0; i < 3; i++)
+            {
+                Assert.Equal("Committed", Stage(await SendAsync(connections[i], Protocol.Names.WorldPlanValidateTarget,
+                    Credential(i), targetCode, query: true)));
+                Assert.True((await SendAsync(connections[i], Protocol.Names.WorldReportJoined, null, targetCode))
+                    .Payload!["ack"]!.GetValue<bool>());
+            }
+            var count = await SendAsync(connections[2], Protocol.Names.RoomGetState,
+                new { section = "worldJoinedCount" }, targetCode, query: true);
+            Assert.Equal(3, count.Payload!["value"]!.GetValue<int>());
+            await ExpectErrorAsync(connections[2], Protocol.Names.RoomMarkStarted,
+                new { requireWorldPlanRoster = true }, "world_plan_roster_not_ready", targetCode);
+            await Task.Delay(150); // Let real local evt delivery drain before asserting that no all-worlds signal was sent.
+            Assert.All(arrived, signal => Assert.False(signal.Task.IsCompleted));
+            Assert.False(server.Manager.GetRoom(targetCode)!.IsStarted);
+
+            // D loses the source connection after obtaining its private ticket. A new connection must recover this same plan.
+            await connections[3].DisposeAsync();
+            connections[3] = await ConnectV2Async(3);
+            var recovered = await SendAsync(connections[3], Protocol.Names.WorldPlanGet, Credential(3), query: true);
+            Assert.Equal("Committed", Stage(recovered));
+            Assert.Equal(targetCode, recovered.Payload!["snapshot"]!["targetRoomCode"]!.GetValue<string>());
+            Assert.True((await SendAsync(connections[3], Protocol.Names.RoomJoin,
+                new { playerName = uids[3], playerUid = uids[3], reportedVersion = version }, targetCode))
+                .Payload!["success"]!.GetValue<bool>());
+            Assert.Equal("Committed", Stage(await SendAsync(connections[3], Protocol.Names.WorldPlanValidateTarget,
+                Credential(3), targetCode, query: true)));
+            await ExpectErrorAsync(connections[2], Protocol.Names.RoomMarkStarted,
+                new { requireWorldPlanRoster = true }, "world_plan_roster_not_ready", targetCode);
+            Assert.All(arrived, signal => Assert.False(signal.Task.IsCompleted));
+            await SendAsync(connections[3], Protocol.Names.WorldReportJoined, null, targetCode);
+            await Task.WhenAll(arrived.Select(a => a.Task)).WaitAsync(TimeSpan.FromSeconds(10));
+            var marked = await SendAsync(connections[2], Protocol.Names.RoomMarkStarted,
+                new { requireWorldPlanRoster = true }, targetCode);
+            Assert.True(marked.Payload!["ack"]!.GetValue<bool>());
+            Assert.True(server.Manager.GetRoom(targetCode)!.IsStarted);
+            await ExpectErrorAsync(connections[0], Protocol.Names.WorldPlanAbort, Credential(0), "world_plan_startup_retired");
+            Assert.NotNull(server.Manager.GetRoom(targetCode));
+            Assert.All(closed, signal => Assert.False(signal.Task.IsCompleted));
+            await SendAsync(connections[2], Protocol.Names.RoomClose, null, targetCode);
+            await Task.WhenAll(closed.Select(a => a.Task)).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Null(server.Manager.GetRoom(targetCode));
+        }
+        finally
+        {
+            foreach (var i in new[] { 0, 1, 3, 2 })
+                if (connections[i] is not null) await connections[i].DisposeAsync();
+        }
+
+        object Credential(int i) => new { planId = tickets[i].PlanId, ticket = tickets[i].Ticket };
+        static string Stage(Envelope response) => response.Payload!["snapshot"]!["stage"]!.GetValue<string>();
+        static (string PlanId, string Ticket) ReadAdmission(Envelope response)
+        {
+            Assert.Equal("Planning", Stage(response));
+            return (response.Payload!["planId"]!.GetValue<string>(), response.Payload["ticket"]!.GetValue<string>());
+        }
+
+        async Task<HubConnection> ConnectV2Async(int index)
+        {
+            var connection = new HubConnectionBuilder().WithUrl(server.Url + "/gateway").Build();
+            connection.On<Envelope>("evt", envelope =>
+            {
+                if (targetCode == null || envelope.RoomCode != targetCode) return;
+                if (envelope.Name == "world.allJoined") arrived[index].TrySetResult();
+                if (envelope.Name == "room.closed") closed[index].TrySetResult();
+            });
+            try
+            {
+                await connection.StartAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                var hello = await SendAsync(connection, Protocol.Names.SessionHello,
+                    new { clientKind = "bgi", protocolVersion = Protocol.ProtocolVersion,
+                        capabilities = new[] { Protocol.WorldPlanCapability } }, query: true);
+                Assert.Contains(Protocol.WorldPlanCapability, hello.Payload!["capabilities"]!.AsArray().Select(n => n!.GetValue<string>()));
+                return connection;
+            }
+            catch { await connection.DisposeAsync(); throw; }
+        }
+
+        static async Task ExpectErrorAsync(HubConnection connection, string name, object payload, string message, string? room = null)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await connection.InvokeAsync<Envelope>("Dispatch", new Envelope
+            {
+                Type = "command", Name = name, RequestId = Guid.NewGuid().ToString("N"), RoomCode = room,
+                Payload = Envelope.ToPayload(payload), SentAtUtc = DateTime.UtcNow,
+            }, timeout.Token);
+            Assert.Equal(Protocol.ErrorCodes.InternalError, response.Payload!["error"]!["code"]!.GetValue<string>());
+            Assert.Equal(message, response.Payload["error"]!["message"]!.GetValue<string>());
+        }
+    }
+
     private static async Task<Envelope> SendAsync(HubConnection connection, string name, object? payload,
         string? room = null, bool query = false)
     {

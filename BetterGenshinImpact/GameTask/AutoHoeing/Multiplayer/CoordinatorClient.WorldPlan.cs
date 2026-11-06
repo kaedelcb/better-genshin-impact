@@ -23,6 +23,7 @@ public partial class CoordinatorClient
     private readonly List<GatewayEnvelope> _explicitRoomEvents = new();
 
     public bool SupportsWorldPlan => _gateway?.SupportsCapability(GatewayProtocol.WorldPlanCapability) == true;
+    internal bool UsesV1WorldPlanServer => !SupportsWorldPlan && _gateway?.SupportsCapability("hoeing.worldPlan.v1") == true;
     private bool IsWorldPlanTransferring
     {
         get
@@ -32,16 +33,19 @@ public partial class CoordinatorClient
         }
     }
 
-    public async Task<WorldPlanAdmission?> BeginWorldPlanAsync(CancellationToken ct, bool forceLegacy = false)
-        => ReadAdmission(await WorldPlanRpcAsync(GatewayProtocol.Names.WorldPlanBegin, new { forceLegacy }, false, ct));
+    public async Task<WorldPlanAdmission?> BeginWorldPlanAsync(CancellationToken ct, bool forceLegacy = false, bool freezeCurrentParty = false)
+        => ReadAdmission(await WorldPlanRpcAsync(GatewayProtocol.Names.WorldPlanBegin, new { forceLegacy, freezeCurrentParty }, false, ct));
 
     public async Task<WorldPlanAdmission?> AcquireWorldPlanAsync(CancellationToken ct)
         => ReadAdmission(await WorldPlanRpcAsync(GatewayProtocol.Names.WorldPlanAcquire, null, true, ct));
 
     private WorldPlanAdmission? ReadAdmission(GatewayEnvelope response)
     {
-        var snapshot = response.Get<MultiWorldStartPlan>("snapshot");
-        if (snapshot == null) return null;
+        // The gateway serializes the successful null Acquire result as payload:null.
+        // A non-null object without a snapshot is a malformed response, not proof of no plan.
+        if (response.Payload == null) return null;
+        var snapshot = response.Get<MultiWorldStartPlan>("snapshot")
+            ?? throw new MultiplayerSessionFailedException("开队预判返回了无效的准入响应");
         var admission = new WorldPlanAdmission
         {
             PlanId = response.GetString("planId"), Ticket = response.GetString("ticket"), Snapshot = snapshot,

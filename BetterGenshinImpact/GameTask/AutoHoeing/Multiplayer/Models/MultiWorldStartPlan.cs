@@ -18,6 +18,7 @@ public sealed class MultiWorldStartPlan
     public List<string> RemainingHostUids { get; set; } = new();
     public RoomConfig? HostConfig { get; set; }
     public List<PlayerInfo> Players { get; set; } = new();
+    public bool CurrentPartyFrozen { get; set; }
     public bool SourceReleased { get; set; }
     public string? TargetRoomCode { get; set; }
     public string? TargetRoomSessionId { get; set; }

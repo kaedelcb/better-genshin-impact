@@ -92,7 +92,7 @@ public sealed class WorldPlanStartBoundaryTests
     }
 
     [Fact]
-    public async Task ImmediateStartWithPartialOrdinaryRosterPublishesLegacyAndPreservesTheOldPartySignal()
+    public async Task ImmediateStartChoosesTheCurrentPartyWithoutSkippingTheirGameAdmission()
     {
         await using var client = await ClientInSourceRoom();
         client.CurrentPlayerList = new() { new PlayerInfo { PlayerUid = "A", PlayerName = "A" } };
@@ -109,11 +109,12 @@ public sealed class WorldPlanStartBoundaryTests
                 sent.Add(request.Name);
                 Assert.Equal(GatewayProtocol.Names.WorldPlanBegin, request.Name);
                 Assert.True(request.GetBool("forceLegacy"));
+                Assert.True(request.GetBool("freezeCurrentParty"));
                 Assert.True(AutoHoeingTask.IsWaitingForParty);
                 return Task.FromResult(Response(request, new
                 {
                     planId = "partial-roster-legacy", ticket = "owned-test-ticket",
-                    snapshot = new MultiWorldStartPlan { PlanId = "partial-roster-legacy", Stage = "Legacy" }
+                    snapshot = new MultiWorldStartPlan { PlanId = "partial-roster-legacy", Stage = "Legacy", CurrentPartyFrozen = true, ParticipantUids = new() { "A" } }
                 }));
             };
 
@@ -121,7 +122,9 @@ public sealed class WorldPlanStartBoundaryTests
 
             Assert.Equal(new[] { GatewayProtocol.Names.WorldPlanBegin }, sent);
             Assert.False(AutoHoeingTask.IsWaitingForParty);
-            Assert.True(AutoHoeingTask.SkipPartyWait); // The original AutoPartyTask must consume it later.
+            Assert.False(AutoHoeingTask.SkipPartyWait); // The request selects this roster; physical arrival is separate.
+            Assert.Equal(1, Field<int?>(task, "_legacyPartySize"));
+            Assert.Equal(new[] { "A" }, Field<IReadOnlyList<string>>(task, "_manualFrozenParty"));
             Assert.False(Field<bool>(task, "_worldPlanNoWorkConfirmed"));
             Assert.False(Field<bool>(task, "_completedNormally"));
             Assert.True(client.IsInRoom);
@@ -131,6 +134,110 @@ public sealed class WorldPlanStartBoundaryTests
             AutoHoeingTask.SkipPartyWait = previousSkip;
             AutoHoeingTask.IsWaitingForParty = previousWaiting;
         }
+    }
+
+    [Fact]
+    public async Task PartialRosterTimeoutSharesItsDeadlineWithGameAssembly()
+    {
+        await using var client = await ClientInSourceRoom();
+        client.CurrentPlayerList.RemoveAll(p => p.PlayerUid == "D");
+        var task = CreateTask();
+        var config = Field<AutoHoeingConfig>(task, "_config");
+        config.PartyTimeoutSeconds = 2;
+        config.PartyTimeoutAction = 1;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal(GatewayProtocol.Names.WorldPlanBegin, request.Name);
+            Assert.True(request.GetBool("forceLegacy"));
+            Assert.False(request.GetBool("freezeCurrentParty"));
+            return Task.FromResult(Response(request, new
+            {
+                planId = "partial", ticket = "owned-ticket",
+                snapshot = new MultiWorldStartPlan { PlanId = "partial", Stage = "Legacy", ParticipantUids = new() { "A", "B", "C" } }
+            }));
+        };
+        Assert.False(await Start(task, client).WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(3, Field<int?>(task, "_legacyPartySize"));
+        Assert.Equal(4, (int)typeof(AutoHoeingTask).GetMethod("InitialPartySize", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(task, null)!);
+        var seconds = (int)typeof(AutoHoeingTask).GetMethod("RemainingPartyWaitSeconds", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(task, null)!;
+        Assert.Equal(1, seconds);
+        Assert.False(AutoHoeingTask.SkipPartyWait);
+    }
+
+    [Fact]
+    public async Task GuardRestartWithUnknownReportLocksFullLegacyOrder()
+    {
+        await using var client = await ClientInSourceRoom();
+        var task = CreateTask();
+        SetField(task, "_isGuardRestartRun", true);
+        var sent = new List<string>();
+        IReadOnlyList<string>? exclusions = new[] { "not-observed" };
+        var dir = Directory.CreateTempSubdirectory("worldplan-fallback-");
+        try
+        {
+            var store = Field<BetterGenshinImpact.GameTask.AutoHoeing.Services.MultiWorldProgressStore>(task, "_multiWorldProgressStore");
+            store.Load(dir.FullName, "A");
+            store.MarkHostCompleted("A", "A|B|C|D");
+            client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+            {
+                sent.Add(request.Name);
+                if (request.Name == GatewayProtocol.Names.RoomMarkStarted)
+                {
+                    exclusions = request.Get<List<string>>("completedHostUids");
+                    return Task.FromResult(Response(request, new { ack = true }));
+                }
+                var stage = request.Name switch
+                {
+                    GatewayProtocol.Names.WorldPlanBegin => "Planning",
+                    GatewayProtocol.Names.WorldPlanReport => "Prepared",
+                    GatewayProtocol.Names.WorldPlanAck => "Legacy",
+                    _ => throw new InvalidOperationException(request.Name)
+                };
+                var snapshot = new MultiWorldStartPlan { PlanId = "guard", Stage = stage,
+                    HostConfig = new() { MultiWorldEnabled = true, MultiWorldResumeEnabled = true, AutoUpdateRoutes = false } };
+                return Task.FromResult(Response(request, new { planId = "guard", ticket = "guard-ticket", snapshot }));
+            };
+            Assert.False(await Start(task, client));
+            await (Task)typeof(AutoHoeingTask).GetMethod("LockCurrentHoeingRoomAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(task, new object[] { client })!;
+            Assert.Equal(GatewayProtocol.Names.RoomMarkStarted, sent.Last());
+            Assert.True(exclusions == null || exclusions.Count == 0);
+            Assert.Null(Field<MultiWorldStartPlan?>(task, "_worldStartPlan"));
+        }
+        finally { dir.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public async Task FrozenStartRetriesLostReplyUsingOnlyTheOriginalRoom()
+    {
+        await using var client = await ClientInSourceRoom();
+        var requests = new List<GatewayEnvelope>();
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            requests.Add(request);
+            if (requests.Count == 1) throw new IOException("lost response after server locked the room");
+            return Task.FromResult(Response(request, new { ack = true }));
+        };
+        await client.MarkFrozenRoomStartedAsync(CancellationToken.None);
+        Assert.Equal(2, requests.Count);
+        Assert.All(requests, r =>
+        {
+            Assert.Equal(GatewayProtocol.Names.RoomMarkStarted, r.Name);
+            Assert.Equal("source-A", r.RoomCode);
+            Assert.True(r.GetBool("requireWorldPlanRoster"));
+        });
+    }
+
+    [Theory]
+    [InlineData("B,C,D", "B")]
+    [InlineData("C,D", "")]
+    [InlineData("A,B,C,D", "A,B")]
+    public void OldServerCroppingDoesNotBackfillWorldsOutsideTwoRoundPlan(string reply, string expected)
+    {
+        var players = new[] { "A", "D", "C", "B" }.Select(u => new PlayerInfo { PlayerUid = u }).ToList();
+        var order = BetterGenshinImpact.GameTask.AutoHoeing.Services.RoundHostOrderClientMapping.BuildV1PlayerOrder(
+            players, reply.Split(',').ToList(), "A", 2);
+        Assert.Equal(expected, string.Join(",", order.Take(2).Select(p => p.PlayerUid)));
     }
 
     private static AutoHoeingTask CreateTask()

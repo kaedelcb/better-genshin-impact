@@ -49,7 +49,7 @@ internal sealed class GatewayTestHarness
     public FakeCapabilityLookup Capabilities { get; } = new();
     public GatewayDispatcher Dispatcher { get; }
 
-    public GatewayTestHarness()
+    public GatewayTestHarness(TimeProvider? worldPlanTimeProvider = null)
     {
         RoomManager = new RoomManager(50, new Mock<ILogger<RoomManager>>().Object);
 
@@ -79,7 +79,8 @@ internal sealed class GatewayTestHarness
         var broadcaster = new GatewayBroadcaster(LegacyHub.Object, GatewayHub.Object, Tracker,
             new Mock<ILogger<GatewayBroadcaster>>().Object);
         var phaseObserver = new RoomPhaseObserver(new Mock<ILogger<RoomPhaseObserver>>().Object);
-        Ops = new RoomOperations(RoomManager, new Mock<ILogger<RoomOperations>>().Object, broadcaster, phaseObserver, Capabilities);
+        Ops = new RoomOperations(RoomManager, new Mock<ILogger<RoomOperations>>().Object, broadcaster, phaseObserver, Capabilities,
+            worldPlanTimeProvider: worldPlanTimeProvider);
         Dispatcher = new GatewayDispatcher(Tracker, new Mock<ILogger<GatewayDispatcher>>().Object, Ops);
     }
 

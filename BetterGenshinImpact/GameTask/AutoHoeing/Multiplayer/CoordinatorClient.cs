@@ -1238,7 +1238,7 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 创建房间
     /// </summary>
-    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount, CancellationToken ct = default)
+    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount, CancellationToken ct = default, IReadOnlyList<string>? worldPlanParticipantUids = null)
     {
         ct.ThrowIfCancellationRequested();
         if (_gateway == null) return null;
@@ -1256,7 +1256,7 @@ public partial class CoordinatorClient : IAsyncDisposable
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
             {
                 playerName, whitelist = whitelist ?? new List<string>(), playerUid, expectedPlayerCount,
-                hoeingBatchId = batchId, expectedParticipantUids = participants,
+                hoeingBatchId = batchId, expectedParticipantUids = participants, worldPlanParticipantUids,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
             }, null, budget.Token);
             ct.ThrowIfCancellationRequested();
@@ -1504,14 +1504,17 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 获取房间配置
     /// </summary>
-    public async Task<Models.RoomConfig?> GetRoomConfigAsync()
+    public async Task<Models.RoomConfig?> GetRoomConfigAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return null;
         try
         {
-            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetConfig, null);
+            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetConfig, null, null, ct);
+            ct.ThrowIfCancellationRequested();
             return resp.Get<Models.RoomConfig>("config");
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "GetRoomConfigAsync 失败");
@@ -1561,6 +1564,34 @@ public partial class CoordinatorClient : IAsyncDisposable
         }
         _logger.LogInformation("[变体校验] 已上报 {Count} 条 schema（含非空 LogicalRouteId {NonEmpty} 条）",
             items?.Count ?? 0, items?.Count(i => !string.IsNullOrEmpty(i.LogicalRouteId)) ?? 0);
+    }
+
+    internal async Task MarkFrozenRoomStartedAsync(CancellationToken ct)
+    {
+        await WaitForBusinessReadyAsync(ct);
+        RoomSession session;
+        lock (_roomLock)
+            session = _roomSession ?? throw new MultiplayerSessionFailedException("开锄房间不存在");
+        for (var attempt = 0; ; attempt++)
+        {
+            using var budget = CreateRpcBudget(ct);
+            try
+            {
+                var result = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomMarkStarted,
+                    new { requireWorldPlanRoster = true }, session.RoomCode, budget.Token);
+                if (!result.GetBool("ack") || !IsCurrent(session))
+                    throw new MultiplayerSessionFailedException("冻结名册的开锄确认失败");
+                ct.ThrowIfCancellationRequested();
+                return;
+            }
+            catch (Exception ex) when (attempt == 0 && !ct.IsCancellationRequested && IsCurrent(session)
+                && ex is System.IO.IOException or TimeoutException or OperationCanceledException)
+            {
+                // The room may already be started. Retry the same room once; never create or switch rooms.
+                await WaitForBusinessReadyAsync(ct);
+                if (!IsCurrent(session)) throw new MultiplayerSessionFailedException("开锄确认已失去原房间");
+            }
+        }
     }
 
     /// <summary>
@@ -1683,15 +1714,18 @@ public partial class CoordinatorClient : IAsyncDisposable
         public bool Ready { get; set; }
     }
 
-    public async Task<bool> IsHostReadyAsync()
+    public async Task<bool> IsHostReadyAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_gateway == null || !IsConnected) return false;
         try
         {
             var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomGetState,
-                new { section = GatewayProtocol.StateSections.HostReady });
+                new { section = GatewayProtocol.StateSections.HostReady }, null, ct);
+            ct.ThrowIfCancellationRequested();
             return resp.GetBool("value");
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "IsHostReadyAsync 失败");

@@ -22,7 +22,7 @@ public sealed partial class RoomOperations
                 || participantUids.Count != room.ExpectedParticipantUids.Count
                 || !participantUids.Order(StringComparer.Ordinal).SequenceEqual(room.ExpectedParticipantUids.Order(StringComparer.Ordinal)))
                 throw new InvalidOperationException("hoeing_start_identity_mismatch");
-            var snapshot = RoomManager.GetHoeingStartupReadyLocked(room);
+            var snapshot = _roomManager.GetHoeingStartupReadyLocked(room);
             return Task.FromResult(snapshot);
         }
     }
