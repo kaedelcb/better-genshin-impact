@@ -132,6 +132,8 @@ public sealed partial class RoomOperations
         {
             try
             {
+                // 离开旧控制组即撤销恢复资格，防止旧状态包重新取得已离开的房间身份。
+                if (g.StartsWith("CTRL_")) _roomManager.ForgetControlRoomRecovery(g, ctx.ConnectionId);
                 await _broadcaster.RemoveFromGroupAsync(ctx, g);
                 lock (groups) { groups.Remove(g); }
                 _logger.LogInformation("[GroupCleanup] 连接 {ConnId} 从旧 Group {Group} 移除",

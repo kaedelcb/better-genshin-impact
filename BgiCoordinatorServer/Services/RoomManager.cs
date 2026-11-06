@@ -45,6 +45,10 @@ public class RoomManager
 
     // 控制房间相关（multiplayer-hoeing-assistant）
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
+    // 仅成功入房的执行端可恢复原登记；不能信任状态包自报的 UID。
+    // 被同身份新连接替换后仍保留，断开/退组/转遥控端时撤销。所有访问与对应 players 共锁。
+    private sealed record ControlRoomConnection(string PlayerUid, string ClientInstanceId, string MachineId, ControlRoomPlayer Player);
+    private readonly ConcurrentDictionary<(string Group, string ConnectionId), ControlRoomConnection> _controlRoomConnections = new();
     // 控制房间广播快照（带宽优化）：group → (uid → 上次广播时该成员的规范化 JSON 串)。
     // 用于 ControlRoomPlayersUpdated 增量比对：序列化串不变即视为无变化，不再全量广播（N² 放大止血）。
     // 快照随房间存在即可（maxRooms=50 上限，量小），不做复杂回收；组内成员快照随 removed 同步剔除。
@@ -1260,12 +1264,15 @@ public class RoomManager
                     BgiStatus = "unknown"
                 });
             }
+            _controlRoomConnections[(group, connectionId)] = new(playerUid, clientInstanceId ?? "", machineId ?? "",
+                players.First(p => p.ConnectionId == connectionId));
         }
     }
 
     /// <summary>登记/更新遥控端连接（group 下可能多个遥控端，connectionId → playerUid）。</summary>
     public void RegisterRemoteConnection(string group, string connectionId, string playerUid)
     {
+        ForgetControlRoomRecovery(group, connectionId);
         var dict = _remoteControlConnections.GetOrAdd(group, _ => []);
         dict[connectionId] = playerUid;
     }
@@ -1539,6 +1546,38 @@ public class RoomManager
         }
     }
 
+    /// <summary>撤销已退组或转为遥控端连接的恢复资格，不改变既有成员状态。</summary>
+    internal void ForgetControlRoomRecovery(string group, string connectionId)
+    {
+        if (_controlRooms.TryGetValue(group, out var players))
+            lock (players) { _controlRoomConnections.TryRemove((group, connectionId), out _); }
+    }
+
+    // 在 players 锁内调用：只恢复同一已验证身份的离线登记，不抢在线连接，不触发重新入房副作用。
+    private ControlRoomPlayer? RecoverControlRoomConnection(string group, string connectionId,
+        ControlStatus status, List<ControlRoomPlayer> players)
+    {
+        if (!_controlRoomConnections.TryGetValue((group, connectionId), out var identity)
+            || string.IsNullOrEmpty(identity.ClientInstanceId) || string.IsNullOrEmpty(identity.MachineId)
+            || identity.PlayerUid != status.PlayerUid)
+            return null;
+        var matches = players.Where(p => p.PlayerUid == identity.PlayerUid
+            && p.ClientInstanceId == identity.ClientInstanceId).ToArray();
+        if (matches.Length != 1 || matches[0].Online || !string.IsNullOrEmpty(matches[0].ConnectionId)
+            || matches[0].MachineId != identity.MachineId || !ReferenceEquals(matches[0], identity.Player))
+            return null;
+        // 多个旧副本仍在时归属不唯一，保持离线，不能由上报先后决定接管者。
+        if (_controlRoomConnections.Count(entry => entry.Key.Group == group
+            && ReferenceEquals(entry.Value.Player, identity.Player)) != 1)
+            return null;
+        var player = matches[0];
+        player.ConnectionId = connectionId;
+        player.Online = true;
+        _logger?.LogInformation("[ControlRoomRecovery] 控制房间 {Group} 原连接 {ConnectionId} 恢复成员 {Uid}，未重新入房或下发任务",
+            group, connectionId, identity.PlayerUid);
+        return player;
+    }
+
     /// <summary>从控制房间移除玩家（设为离线）</summary>
     public void RemoveFromControlRoom(string group, string connectionId)
     {
@@ -1546,6 +1585,8 @@ public class RoomManager
         {
             lock (players)
             {
+                // 即使已被替换，断开的旧连接也不能再凭迟到上报恢复身份。
+                _controlRoomConnections.TryRemove((group, connectionId), out _);
                 var player = players.Find(p => p.ConnectionId == connectionId);
                 if (player != null)
                 {
@@ -1579,7 +1620,8 @@ public class RoomManager
         {
             lock (players)
             {
-                var player = players.Find(p => p.ConnectionId == connectionId);
+                var player = players.Find(p => p.ConnectionId == connectionId)
+                    ?? RecoverControlRoomConnection(group, connectionId, status, players);
                 if (player != null)
                 {
                     player.BgiStatus = status.BgiStatus;
