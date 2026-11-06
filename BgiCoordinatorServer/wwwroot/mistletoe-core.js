@@ -17,7 +17,7 @@ const MT_READ_OPS = new Set(['web.identity','startup.get','startup.status','regi
  * 只有这些操作进入「未确认台账」：结果未知时阻断再次发起，核对后才解除。
  * 人工确认、取消触发器、清除路径显示按运行身份天然幂等，与 PC 一样不登记、不受台账阻挡。
  */
-const MT_DURABLE_OPS = new Set(['registers.configure','registers.reset','startup.save','startup.schemes.save','startup.autoLaunch.save','startup.run',
+const MT_DURABLE_OPS = new Set(['registers.configure','registers.reset','registers.set','startup.save','startup.schemes.save','startup.autoLaunch.save','startup.run',
     'task.resource.layout.save','task.resource.editor.open','task.bgiPath.save','task.flow.save','task.flow.delete','task.flow.restore',
     'task.catalog.connect','task.flow.import','task.schedule.import','task.migration.prepare','task.migration.activate',
     'task.migration.rollback','task.migration.rehearsal','task.run.start','task.run.resume','task.flow.resetExecutionState']);

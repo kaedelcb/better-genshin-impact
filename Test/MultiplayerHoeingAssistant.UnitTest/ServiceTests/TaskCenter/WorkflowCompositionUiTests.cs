@@ -70,6 +70,8 @@ public sealed class WorkflowCompositionUiTests
                 await Layout(window);
                 var addAction = Descendants<Button>(window).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "日志出现时添加动作");
                 addAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                await Layout(window);
+                Assert.True(Button(window, "＋ 设置寄存器").IsVisible);
                 Button(window, "＋ 设置寄存器").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 await Layout(window);
                 var registers = Descendants<ComboBox>(window.ParameterPanelForTest).Where(c => c.Items.Count == 3 && c.Items[0] as string == "保持").ToArray();
@@ -81,7 +83,7 @@ public sealed class WorkflowCompositionUiTests
             }
             catch (Exception ex) { done.TrySetException(ex); window.Close(); }
         };
-        Assert.True(window.ShowDialog()); await done.Task;
+        var applied = window.ShowDialog(); await done.Task; Assert.True(applied);
         var trigger = Assert.Single(window.Result.Steps);
         Assert.Equal("a", trigger.TargetNodeId);
         Assert.Equal(1, Assert.Single(trigger.FireSteps).RegisterWrite!.Values[0]);

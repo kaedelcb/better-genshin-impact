@@ -37,6 +37,7 @@ public partial class RegisterSettingsWindow : Window
         var cell = _bank.Cells[vm.Number - 1];
         vm.UpdateValue(cell.Available ? cell.Entry.Value : null);
         ResetButton.IsEnabled = ResetAllButton.IsEnabled = !_saving && _bank.CanReset;
+        SetOneButton.IsEnabled = !_saving && _bank.CanSetOne;
         SaveButton.IsEnabled = CancelButton.IsEnabled = !_saving && !_bank.IsBusy;
     }
 
@@ -45,11 +46,25 @@ public partial class RegisterSettingsWindow : Window
     private async void Reset(bool all)
     {
         if (_saving || DataContext is not RegisterSettingsViewModel vm || !_bank.CanReset) return;
+        if (all && !RegisterResetConfirmation.Show(this)) return;
         _saving = true; vm.Error = ""; vm.OperationStatus = ""; RefreshState();
         try
         {
             await _bank.ResetAsync(all ? null : vm.Number);
             vm.OperationStatus = _bank.ResetStatus;
+        }
+        catch (Exception ex) { vm.Error = ex.Message; }
+        finally { _saving = false; RefreshState(); }
+    }
+
+    private async void SetOneClick(object sender, RoutedEventArgs e)
+    {
+        if (_saving || DataContext is not RegisterSettingsViewModel vm || !_bank.CanSetOne) return;
+        _saving = true; vm.Error = ""; vm.OperationStatus = ""; RefreshState();
+        try
+        {
+            await _bank.SetOneAsync(vm.Number);
+            vm.OperationStatus = _bank.SetOneStatus;
         }
         catch (Exception ex) { vm.Error = ex.Message; }
         finally { _saving = false; RefreshState(); }

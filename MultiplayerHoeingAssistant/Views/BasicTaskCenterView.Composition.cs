@@ -11,6 +11,24 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class BasicTaskCenterView
 {
     internal TaskCenterPanelViewModel? CompositionHost => Host;
+    // Disclosure is transient view state, scoped to the selected executor and plan.
+    private TaskCenterPanelViewModel? _expansionHost;
+    private string? _expansionPlan;
+    private readonly HashSet<string> _expandedRows = new(StringComparer.Ordinal);
+    private HashSet<string> CurrentExpandedRows()
+    {
+        var plan = Host?.Editing?.Draft.WorkflowId;
+        if (!ReferenceEquals(Host, _expansionHost) || _expansionPlan != plan)
+        { _expandedRows.Clear(); _expansionHost = Host; _expansionPlan = plan; }
+        return _expandedRows;
+    }
+    internal bool IsRowExpanded(string id) => CurrentExpandedRows().Contains(id);
+    internal void RememberRowExpansion(string id, bool expanded)
+    {
+        var rows = CurrentExpandedRows();
+        if (expanded) rows.Add(id); else rows.Remove(id);
+    }
+
     private NodeEditVm? _addingLane;
     private bool _addingLaneYes;
 
@@ -51,7 +69,7 @@ public partial class BasicTaskCenterView
                     return "这条车道或它的条件已被修改，未覆盖新内容；你的草稿仍保留在窗口中。";
                 editing.ReplaceLaneDecision(current, result); node = current;
             }
-            ExpandLaneRow(node.NodeId);
+            RevealCompositionRow(node.NodeId);
             owner.ShowInlineActionFeedback("车道已保存。在条件满足和其他情况两条路线中分别添加任务即可。", false);
             return null;
         };
@@ -86,23 +104,27 @@ public partial class BasicTaskCenterView
                 editing.ReplaceFlow(current, result); node = current;
             }
             else node = editing.AddFlow(result);
-            var lanes = editing.Nodes.FirstOrDefault(n => n.Model.Lanes?.SourceFlowNodeId == node.NodeId);
-
-            if (lanes is not null) ExpandLaneRow(lanes.NodeId);
+            RevealCompositionRow((editing.Nodes.FirstOrDefault(n => n.Model.Lanes?.SourceFlowNodeId == node.NodeId) ?? node).NodeId);
             owner.ShowInlineActionFeedback("流程已保存，按顺序执行这些步骤。需要分两路时请单独添加车道。", false);
             return null;
         };
         window.ShowDialog();
     }
 
-    private void ExpandLaneRow(string nodeId) => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+    private void RevealCompositionRow(string nodeId, bool expand = false)
     {
-        if (Host?.Editing?.Nodes.FirstOrDefault(n => n.NodeId == nodeId) is not { } node) return;
-        Host.Editing.SelectedNode = node;
-        ResourceList.ScrollIntoView(node); ResourceList.UpdateLayout();
-        if (ResourceList.ItemContainerGenerator.ContainerFromItem(node) is DependencyObject item)
-            FindVisualChild<CompositionPlanRow>(item)?.ExpandContents();
-    }));
+        var host = Host;
+        var plan = host?.Editing?.Draft.WorkflowId;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (!ReferenceEquals(Host, host) || host?.Editing is not { } editing || editing.Draft.WorkflowId != plan
+                || editing.Nodes.FirstOrDefault(n => n.NodeId == nodeId) is not { } node) return;
+            editing.SelectedNode = node;
+            ResourceList.ScrollIntoView(node); ResourceList.UpdateLayout();
+            if (expand && ResourceList.ItemContainerGenerator.ContainerFromItem(node) is DependencyObject item)
+                FindVisualChild<CompositionPlanRow>(item)?.ExpandContents();
+        }));
+    }
 
     internal void AddLaneTask(NodeEditVm node, bool yes)
     {
@@ -132,7 +154,7 @@ public partial class BasicTaskCenterView
     {
         if (Host?.Editing?.Nodes.FirstOrDefault(n => n.NodeId == nodeId) is not { } node) return;
         var lane = node.Model.Lanes is not null ? node : Host.Editing.Nodes.FirstOrDefault(n => n.Model.Lanes?.SourceFlowNodeId == nodeId);
-        if (lane is not null) { ExpandLaneRow(lane.NodeId); ShowLaneEditor(lane); return; }
+        if (lane is not null) { RevealCompositionRow(lane.NodeId, expand: true); ShowLaneEditor(lane); return; }
         ResourceList.ScrollIntoView(node);
         if (node.Model.Flow is not null) OpenFlowEditor(node, stepId);
     }

@@ -199,6 +199,15 @@ public partial class BasicTaskCenterView : UserControl
         return null;
     }
 
+    private void OpenPlanActionsClick(object sender, RoutedEventArgs e)
+    {
+        var menu = PlanMoreActionsButton.ContextMenu;
+        menu.PlacementTarget = PlanMoreActionsButton; menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
+    }
+
+    private void ModifyFromPlanMenu(object sender, RoutedEventArgs e) => ModifySelectedResourceClick(PlanMoreActionsButton, e);
+
     private void StartSingleClick(object sender, RoutedEventArgs e)
     {
         if (Host is not { } host) return;

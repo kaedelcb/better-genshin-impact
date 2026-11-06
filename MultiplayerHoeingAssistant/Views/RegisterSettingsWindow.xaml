@@ -46,8 +46,9 @@
         <TextBlock Text="{Binding OperationStatus}" Foreground="#A9DECB" TextWrapping="Wrap" Margin="0,4,0,0" />
         <DockPanel Margin="0,16,0,0" LastChildFill="False">
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
+            <Button x:Name="SetOneButton" Content="本位归一" Style="{DynamicResource BtnGhost}" Padding="10,7" Margin="0,0,6,0" Click="SetOneClick" ToolTip="立即将当前这一位置为1，沿用已保存的重置规则，不保存尚未应用的名称和规则。" />
             <Button x:Name="ResetButton" Content="本位归零" Style="{DynamicResource BtnGhost}" Padding="10,7" Margin="0,0,6,0" Click="ResetClick" ToolTip="立即将当前这一位重置为0，不保存尚未应用的名称和规则。" />
-            <Button x:Name="ResetAllButton" Content="全部归零" Style="{DynamicResource BtnGhost}" Padding="10,7" Click="ResetAllClick" ToolTip="立即将R1–R10全部重置为0，保留名称和自动重置规则。" />
+            <Button x:Name="ResetAllButton" Content="全部归零" Style="{DynamicResource BtnGhost}" Padding="10,7" Click="ResetAllClick" ToolTip="确认后将R1–R10全部重置为0，保留名称和自动重置规则。" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
             <Button x:Name="CancelButton" Content="取消" IsCancel="True" Style="{DynamicResource BtnGhost}" Padding="16,7" Margin="0,0,10,0" />

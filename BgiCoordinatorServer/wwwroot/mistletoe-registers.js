@@ -1,4 +1,4 @@
-// 两个中心共用执行端的 R1–R10；网页只编辑规则和节点参数，状态由执行端确认。
+// 两个中心共用执行端的 R1–R10；网页的规则与状态操作均由执行端确认。
 const mtRegisters = { supported:false, available:false, entries:[], error:'尚未读取寄存器状态', busy:false, version:0, loading:false, targetKey:'', status:'', dialog:null };
 function mtRegistersSupported() { return mtRegisters.supported && mtRegisters.targetKey === mt.target?.key; }
 function mtRegistersVersion() { return mtRegisters.version; }
@@ -59,7 +59,7 @@ function mtRenderRegisterStrip(host) {
         const entry = mtRegisters.entries[i] || {number:i + 1}, value = available ? entry.value : '?';
         const title = available ? `${mtRegisterLabel(entry)}\n当前状态：${value}\n${mtRegisterResetDescription(entry)}\n点击设置名称与重置规则` : `R${i + 1}\n${mtRegisters.error}`;
         return `<button class="mt-register-cell${value === 1 ? ' is-one' : ''}${available ? '' : ' is-unknown'}" data-register-number="${i + 1}" title="${mte(title)}" aria-label="${mte(mtRegisterLabel(entry))}，状态${value}，设置"${disabled ? ' disabled' : ''}><small>R${i + 1}</small><strong>${value}</strong></button>`;
-    }).join('')}</div><button class="dd-btn dd-btn-sm" data-register-reset-all${disabled ? ' disabled' : ''} title="立即将 R1–R10 全部归零，保留名称和自动重置规则">${busy ? '处理中…' : '全归零'}</button>
+    }).join('')}</div><button class="dd-btn dd-btn-sm" data-register-reset-all${disabled ? ' disabled' : ''} title="确认后将 R1–R10 全部归零，保留名称和自动重置规则">${busy ? '处理中…' : '全归零'}</button>
       <span class="mt-register-feedback" role="status">${mte(mtRegisters.status || (available ? '' : mtRegisters.error))}</span>`;
     // 相同轮询保留原按钮；在按下与抬起之间替换节点会丢失真实 click。
     if (host._mtRegisterHtml === html && host.querySelector('[data-register-reset-all]')) return;
@@ -79,7 +79,7 @@ function mtRegistersRefresh() {
     const n = Number(dialog.dataset.registerNumber), entry = mtRegisters.entries[n - 1];
     dialog.querySelector('[data-register-state]').textContent = `当前状态：${mtRegisters.available && entry ? entry.value : '未确认'}；启动中心与任务中心共用此位的名称和重置规则。`;
     dialog.querySelectorAll('input,select,[data-register-save],[data-register-close]').forEach(el => el.disabled = mtRegisters.busy);
-    dialog.querySelectorAll('[data-register-reset]').forEach(el => el.disabled = !mtRegisterCanWrite());
+    dialog.querySelectorAll('[data-register-reset],[data-register-set-one]').forEach(el => el.disabled = !mtRegisterCanWrite());
 }
 async function mtRegisterOperation(operation, payload, label) {
     if (!mtRegisterCanWrite()) return mtToast(mtRegisters.busy ? '寄存器操作正在执行，请等待完成。' : '寄存器状态尚未确认，不能修改。', true);
@@ -93,11 +93,12 @@ async function mtRegisterOperation(operation, payload, label) {
         mtRegisters.busy = false;
         if (reply.status === 'ok' && mtRegistersNormalize(reply.data)) {
             mtRegistersApply(reply.data);
-            mtRegisters.status = operation === 'registers.reset'
-                ? mtRegisters.entries.filter(e => payload.all || e.number === payload.number).every(e => e.value === 0)
-                    ? payload.all ? 'R1–R10 已全部归零。' : `R${payload.number} 已归零。`
-                    : '手动归零已确认，随后状态发生更新；以最新状态为准。'
-                : `R${payload.number} 设置已保存。`;
+            if (operation === 'registers.reset' || operation === 'registers.set') {
+                const value = operation === 'registers.set' ? payload.value : 0, action = value === 1 ? '归一' : '归零';
+                mtRegisters.status = mtRegisters.entries.filter(e => payload.all || e.number === payload.number).every(e => e.value === value)
+                    ? payload.all ? 'R1–R10 已全部归零。' : `R${payload.number} 已${action}。`
+                    : `手动${action}已确认，随后状态发生更新；以最新状态为准。`;
+            } else mtRegisters.status = `R${payload.number} 设置已保存。`;
             mtToast(mtRegisters.status);
         } else {
             mtRegisters.status = `${label}${reply.status === 'unknown' ? '结果未确认' : '未完成'}：${reply.message || '执行端未提供有效的最新状态'}`;
@@ -119,7 +120,12 @@ async function mtRegisterOperation(operation, payload, label) {
     } finally { if (mt.target?.key === key && version === mtRegisters.version) { mtRegisters.busy = false; mtRegistersRefresh(); } }
 }
 async function mtResetRegisters(number) {
+    if (!mtRegisterCanWrite()) return;
+    if (number == null && !confirm('确定将当前执行端的 R1–R10 全部归零？名称和自动重置规则会保留。')) return;
     return mtRegisterOperation('registers.reset', number == null ? {all:true} : {number}, number == null ? '全部寄存器归零' : `R${number} 归零`);
+}
+async function mtSetRegisterOne(number) {
+    return mtRegisterOperation('registers.set', {number,value:1}, `R${number} 归一`);
 }
 function mtOpenRegisterSettings(number) {
     if (!mtRegisterCanWrite()) return;
@@ -133,8 +139,8 @@ function mtOpenRegisterSettings(number) {
       ${field('自动重置为0', `<select data-register-setting="resetMode"><option value="none">不自动重置</option><option value="daily">每天固定时间重置</option><option value="afterChange">状态变化后自动重置</option></select>`)}
       <div class="mt-register-time" data-register-daily>${field('重置时刻（执行端本地时间）', input('resetTime', `${String(original.resetHour || 0).padStart(2,'0')}:${String(original.resetMinute || 0).padStart(2,'0')}`, 'type="time" required'))}</div>
       <div data-register-after><div class="mt-register-delay">${[['天','days',Math.floor(delay / 86400),31],['时','hours',Math.floor(delay / 3600) % 24,23],['分','minutes',Math.floor(delay / 60) % 60,59],['秒','seconds',delay % 60,59]].map(([label,key,value,max]) => field(label, input(key, value, `type="number" min="0" max="${max}" step="1" required`))).join('')}</div><p class="dodoco-hint">从0变为1时开始计时；重复写入1和改名不会延长计时。延时须大于0且不超过31天。</p></div>
-      <p class="dodoco-hint">名称、状态和重置规则会保存；重启助手时先兑现已到期的归零。手动归零只改状态，保留此处尚未保存的设置。</p>
-      <p class="mt-register-feedback" role="status" data-register-feedback></p><div class="dd-actions"><button class="dd-btn dd-btn-sm" data-register-reset="one">本位归零</button><button class="dd-btn dd-btn-sm" data-register-reset="all">全部归零</button><button class="dd-btn dd-btn-primary" data-register-save>保存设置</button></div></div>`;
+      <p class="dodoco-hint">名称、状态和重置规则会保存；重启助手时先兑现已到期的归零。手动归一、归零沿用已保存的规则，保留此处尚未保存的设置。</p>
+      <p class="mt-register-feedback" role="status" data-register-feedback></p><div class="dd-actions"><button class="dd-btn dd-btn-sm" data-register-set-one title="立即将当前位置为1，沿用已保存的重置规则">本位归一</button><button class="dd-btn dd-btn-sm" data-register-reset="one">本位归零</button><button class="dd-btn dd-btn-sm" data-register-reset="all">全部归零</button><button class="dd-btn dd-btn-primary" data-register-save>保存设置</button></div></div>`;
     const get = key => dialog.querySelector(`[data-register-setting="${key}"]`);
     get('resetMode').value = original.resetMode;
     const renderMode = () => { dialog.querySelector('[data-register-daily]').hidden = get('resetMode').value !== 'daily'; dialog.querySelector('[data-register-after]').hidden = get('resetMode').value !== 'afterChange'; };
@@ -143,6 +149,7 @@ function mtOpenRegisterSettings(number) {
     dialog.oncancel = event => { if (mtRegisters.busy) event.preventDefault(); };
     dialog.onclose = () => { if (mtRegisters.dialog === dialog) mtRegisters.dialog = null; };
     dialog.querySelectorAll('[data-register-reset]').forEach(b => b.onclick = () => mtResetRegisters(b.dataset.registerReset === 'all' ? undefined : number));
+    dialog.querySelector('[data-register-set-one]').onclick = () => mtSetRegisterOne(number);
     dialog.querySelector('[data-register-save]').onclick = async () => {
         const fail = message => { dialog.querySelector('[data-register-feedback]').textContent = message; };
         const name = get('name').value.trim(), resetMode = get('resetMode').value;

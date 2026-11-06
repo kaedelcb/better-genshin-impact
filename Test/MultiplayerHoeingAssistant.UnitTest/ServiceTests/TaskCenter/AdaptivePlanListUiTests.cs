@@ -44,7 +44,7 @@ public sealed class AdaptivePlanListUiTests
             var list = (ListBox)view.FindName("ResourceList");
             var viewport = (FrameworkElement)view.FindName("ResourceListViewport");
             Assert.Equal(ordinaryCount + 2, list.Items.Count);
-            Assert.Equal(440, ((FrameworkElement)view.FindName("PlanListPane")).ActualWidth, 1);
+            Assert.InRange(((FrameworkElement)view.FindName("PlanListPane")).ActualWidth, 180, 220);
             Assert.Equal(ScrollUnit.Pixel, VirtualizingPanel.GetScrollUnit(list));
             AssertWorkspaceFilled(list, viewport);
             Assert.True(list.ActualHeight > 360, $"列表仍被限在 {list.ActualHeight:F1} DIP；工作区 {viewport.ActualHeight:F1} DIP。");
@@ -68,7 +68,15 @@ public sealed class AdaptivePlanListUiTests
             AssertWorkspaceFilled(list, viewport);
 
             compact = await CompositionRowsAtTop(list, window);
-            foreach (var row in compact) row.ExpandContents();
+            foreach (var row in compact)
+            {
+                var expander = Assert.Single(Descendants<Expander>(row));
+                var toggle = Assert.Single(Descendants<System.Windows.Controls.Primitives.ToggleButton>(expander));
+                var peer = new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(toggle);
+                ((System.Windows.Automation.Provider.IToggleProvider)peer).Toggle();
+                await Layout(window);
+                Assert.True(expander.IsExpanded);
+            }
             await Layout(window);
             AssertWorkspaceFilled(list, viewport);
             var lane = compact.Single(r => ((NodeEditVm)r.DataContext).Model.Lanes is not null);
@@ -77,6 +85,17 @@ public sealed class AdaptivePlanListUiTests
             Assert.Contains(Descendants<TextBlock>(lane), t => t.Text.Contains("下车道采集"));
             Capture(window, $"adaptive-plan-{width}-{ordinaryCount}-expanded");
             await AssertLastTaskVisible(list, window);
+
+            var restored = await CompositionRowsAtTop(list, window);
+            foreach (var row in restored)
+            {
+                var expander = Assert.Single(Descendants<Expander>(row));
+                Assert.True(expander.IsExpanded);
+                var toggle = Descendants<System.Windows.Controls.Primitives.ToggleButton>(row).First();
+                ((System.Windows.Automation.Provider.IToggleProvider)new System.Windows.Automation.Peers.ToggleButtonAutomationPeer(toggle)).Toggle();
+            }
+            await Layout(window);
+            Assert.All(restored, row => Assert.InRange(row.ActualHeight, 29, 32.5));
 
             var oldHeight = list.ActualHeight;
             window.Width = width == 980 ? 1180 : 980;
@@ -148,6 +167,7 @@ public sealed class AdaptivePlanListUiTests
         var container = Assert.IsType<ListBoxItem>(list.ItemContainerGenerator.ContainerFromItem(last));
         var bounds = container.TransformToAncestor(list).TransformBounds(new Rect(container.RenderSize));
         Assert.True(container.IsVisible);
+        Assert.InRange(container.ActualHeight, 26, 32.5);
         Assert.True(bounds.Top >= -1, $"最后任务上沿在视口外：{bounds.Top:F1}。");
         Assert.True(bounds.Bottom <= list.ActualHeight + 1,
             $"最后任务仍在列表底部以外：{bounds.Bottom:F1} > {list.ActualHeight:F1}。");

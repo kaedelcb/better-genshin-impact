@@ -10,7 +10,7 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
 (async () => {
   const calls = [];
   const state = { mode: 'ok', startup: { enabled: false, delaySeconds: 5, autoExpandBranch: true, steps: [] }, revision: 'r1', expired: false, ops: new Map() };
-  state.registers = {available:true,entries:Array.from({length:10},(_,i)=>({number:i+1,name:'',value:i===0?1:0,resetMode:'none',resetHour:4,resetMinute:0,delaySeconds:1800,settingsRevision:'settings-1'}))};
+  state.registers = {available:true,entries:Array.from({length:10},(_,i)=>({number:i+1,name:'',value:i<2?1:0,resetMode:'none',resetHour:4,resetMinute:0,delaySeconds:1800,settingsRevision:'settings-1'}))};
   state.flow = {schema:'mistletoe.workflow',schemaVersion:1,workflowId:'wf-local',name:'今日计划',nodes:[],future:{keep:true}};
   state.flowRevision = 'flow-1';
   const unified = () => ({version:1,taskCenterAvailable:true,sequence:1,epoch:'local',capturedAtUtc:new Date().toISOString(),items:[{runtimeId:'trigger',source:'taskCenter',kind:'log',text:'今日监听',workflowId:'wf-local',flowNodeId:'flow-node',stepId:'log-node',runId:'run',canCancel:true}]});
@@ -31,6 +31,11 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
         Object.assign(e,req.payload,{settingsRevision:'settings-2'});return reply('ok','规则已保存',state.registers);
       }
       case 'registers.reset': state.registers.entries.filter(e=>req.payload.all||e.number===req.payload.number).forEach(e=>e.value=0);return reply('ok','已归零',state.registers);
+      case 'registers.set': {
+        const {number,value}=req.payload||{};
+        if(!Number.isInteger(number)||number<1||number>10||![0,1].includes(value)) return reply('rejected','位号或设置值无效');
+        state.registers.entries[number-1].value=value;return reply('ok','已设置',state.registers);
+      }
       case 'task.list': return reply('ok','',{flows:[{workflowId:'wf-local',name:state.flow.name,revision:state.flowRevision,unsupportedKinds:[]}],active:[],history:[],catalog:{entries:[]},allowedTaskPrograms:[],serverTime:new Date().toISOString()});
       case 'task.flow.get': return reply('ok','',state.flow,state.flowRevision);
       case 'task.run.start': {
@@ -90,28 +95,119 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
     await page.locator('#mtSaveState').getByText('已与执行端同步').waitFor({ timeout: 8000 });
     const save = calls.find(c => c.operation === 'mistletoe.request' && c.args.request.operation === 'startup.save');
     assert.ok(save && save.args.request.expectedRevision === 'r1' && state.startup.delaySeconds === 11);
-    // 寄存器真实控件：归零保留正在输入的规则，保存后另一个中心读同一份状态。
+    // 寄存器真实控件：归一/归零保留草稿，全部归零经原生确认；保存后另一个中心读同一份状态。
+    const registerWrites=operation=>calls.filter(c=>c.operation==='mistletoe.request'&&c.args?.request?.operation===operation);
+    const clickWithoutConfirm=async(selector,label)=>{
+      const unexpected=[];
+      const dismiss=dialog=>{unexpected.push(dialog.type()+':'+dialog.message());void dialog.dismiss();};
+      page.on('dialog',dismiss);
+      try {await page.locator(selector).click();await page.waitForFunction(()=>!mtRegisters.busy);assert.deepEqual(unexpected,[],label+'不应出现确认框');}
+      finally {page.off('dialog',dismiss);}
+    };
+    const clickWithConfirm=async(selector,accept,label)=>{
+      const nativeDialog=new Promise((resolve,reject)=>{
+        const handler=dialog=>{
+          clearTimeout(timer);
+          const observed={type:dialog.type(),message:dialog.message()};
+          (accept?dialog.accept():dialog.dismiss()).then(()=>resolve(observed),reject);
+        };
+        const timer=setTimeout(()=>{page.off('dialog',handler);reject(new Error(label+'未出现原生确认框'));},4000);
+        page.once('dialog',handler);
+      });
+      const [dialog]=await Promise.all([nativeDialog,page.locator(selector).click()]);
+      assert.equal(dialog.type,'confirm',label+'使用原生 confirm');assert.match(dialog.message,/R1–R10.*全部归零/);
+      await page.waitForFunction(()=>!mtRegisters.busy);
+    };
+    const verifyAllResetConfirmation=async(selector,label)=>{
+      const before=registerWrites('registers.reset').length,values=state.registers.entries.map(e=>e.value);
+      await clickWithConfirm(selector,false,label+'取消');
+      assert.equal(registerWrites('registers.reset').length,before,label+'取消不发送归零请求');
+      assert.deepEqual(state.registers.entries.map(e=>e.value),values,label+'取消保留原状态');
+      await clickWithConfirm(selector,true,label+'确认');
+      assert.equal(registerWrites('registers.reset').length,before+1,label+'确认只发送一次归零请求');
+      assert.deepEqual(registerWrites('registers.reset').at(-1).args.request.payload,{all:true});
+      assert.ok(state.registers.entries.every(e=>e.value===0),label+'确认后全部归零');
+    };
     await page.evaluate(()=>{
       window.registerTrace=[];const open=mtOpenRegisterSettings;
       mtOpenRegisterSettings=n=>{registerTrace.push({number:n,canWrite:mtRegisterCanWrite(),ready:mtTargetReady(),owner:mtOwner()});return open(n);};
       for(const type of ['pointerdown','pointerup','click'])document.addEventListener(type,e=>registerTrace.push({type,target:e.target.outerHTML.slice(0,130),x:e.clientX,y:e.clientY}),true);
       new MutationObserver(()=>registerTrace.push({mutation:true})).observe(mtEl('mtStartupRegisters'),{childList:true,subtree:true});
     });
+    for(const width of [375,1440]) {
+      await page.setViewportSize({width,height:900});
+      const cells=await page.locator('#mtStartupRegisters [data-register-number]').evaluateAll(buttons=>buttons.map(button=>{
+        const b=button.getBoundingClientRect();return {x:b.x,y:b.y,right:b.right,width:b.width,height:b.height,label:button.getAttribute('aria-label')};
+      }));
+      assert.equal(cells.length,10);
+      assert.ok(cells.every(b=>b.x>=0&&b.right<=width&&b.width>0&&b.height>0&&b.label.includes('状态')),width+'px 十位完整可见且保留位号说明');
+      assert.ok(cells.every(b=>Math.abs(b.y-cells[0].y)<1),width+'px 十格保持同一行');
+      if(width>700) assert.ok(cells.every(b=>b.width<=30&&b.height<=30),'桌面启动寄存器使用紧凑小格');
+      else assert.ok(cells.every(b=>b.height>=44),'手机保持点击高度');
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,width+'px 启动中心无横向溢出');
+      if(process.argv[2]) await page.locator('#mtStartupRegisters').screenshot({path:path.join(process.argv[2],`startup-registers-${width}.png`)});
+    }
+    await page.setViewportSize({width:1280,height:860});
     await page.locator('[data-register-number="1"]').click();
     await page.locator('[data-register-setting="name"]').waitFor({timeout:4000});
     await page.locator('[data-register-setting="name"]').fill('今日采集');
     await page.locator('[data-register-setting="resetMode"]').selectOption('daily');
     await page.locator('[data-register-setting="resetTime"]').fill('05:30');
-    await page.locator('[data-register-reset="one"]').click();
-    await page.waitForFunction(()=>!mtRegisters.busy);
-    assert.equal(await page.locator('[data-register-setting="name"]').inputValue(),'今日采集');
+    const otherRegisters=structuredClone(state.registers.entries.slice(1)),savedSettings=structuredClone(state.registers.entries[0]);
+    const resetsBefore=registerWrites('registers.reset').length;
+    await clickWithoutConfirm('#mtRegisterDialog [data-register-reset="one"]','本位归零');
+    assert.equal(registerWrites('registers.reset').length,resetsBefore+1);
+    assert.deepEqual(registerWrites('registers.reset').at(-1).args.request.payload,{number:1});
     assert.equal(state.registers.entries[0].value,0);
+    const setsBefore=registerWrites('registers.set').length;
+    await clickWithoutConfirm('#mtRegisterDialog [data-register-set-one]','本位归一');
+    assert.equal(registerWrites('registers.set').length,setsBefore+1);
+    assert.deepEqual(registerWrites('registers.set').at(-1).args.request.payload,{number:1,value:1});
+    assert.equal(state.registers.entries[0].value,1);
+    assert.deepEqual(state.registers.entries.slice(1),otherRegisters,'本位归一保留其他位');
+    assert.deepEqual(state.registers.entries[0],savedSettings,'归一和归零不保存草稿中的名称和规则');
+    assert.equal(await page.locator('#mtRegisterDialog').evaluate(dialog=>dialog.open),true,'本位操作不关闭设置窗');
+    assert.equal(await page.locator('[data-register-setting="name"]').inputValue(),'今日采集');
+    assert.equal(await page.locator('[data-register-setting="resetMode"]').inputValue(),'daily');
+    assert.equal(await page.locator('[data-register-setting="resetTime"]').inputValue(),'05:30');
+    for(const width of [375,1440]) {
+      await page.setViewportSize({width,height:900});
+      const layout=await page.locator('#mtRegisterDialog').evaluate(dialog=>{
+        const bounds=dialog.getBoundingClientRect();
+        const buttons=[...dialog.querySelectorAll('.mt-register-settings .dd-actions button')].map(button=>{
+          const b=button.getBoundingClientRect();return {text:button.textContent,x:b.x,y:b.y,right:b.right,bottom:b.bottom,width:b.width,height:b.height};
+        });
+        return {x:bounds.x,right:bounds.right,clientWidth:dialog.clientWidth,scrollWidth:dialog.scrollWidth,pageFits:document.documentElement.scrollWidth<=innerWidth,buttons};
+      });
+      assert.equal(layout.pageFits,true,width+'px 寄存器设置页横向溢出');
+      assert.ok(layout.x>=-1&&layout.right<=width+1,width+'px 寄存器设置窗位于视口内');
+      assert.ok(layout.scrollWidth<=layout.clientWidth+1,width+'px 寄存器设置窗内容横向溢出');
+      assert.deepEqual(layout.buttons.map(b=>b.text),['本位归一','本位归零','全部归零','保存设置']);
+      for(let i=0;i<layout.buttons.length;i++) {
+        const a=layout.buttons[i];
+        assert.ok(a.width>0&&a.height>0&&a.x>=layout.x-1&&a.right<=layout.right+1,width+'px 操作按钮位于设置窗内');
+        for(const b of layout.buttons.slice(i+1)) assert.ok(a.right<=b.x+1||b.right<=a.x+1||a.bottom<=b.y+1||b.bottom<=a.y+1,width+'px '+a.text+'与'+b.text+'重叠');
+      }
+      if(process.argv[2]) await page.screenshot({path:path.join(process.argv[2],`register-settings-${width}.png`)});
+    }
+    await page.setViewportSize({width:1280,height:860});
+    await verifyAllResetConfirmation('#mtRegisterDialog [data-register-reset="all"]','设置窗全部归零');
+    assert.equal(await page.locator('#mtRegisterDialog').evaluate(dialog=>dialog.open),true);
+    assert.equal(await page.locator('[data-register-setting="name"]').inputValue(),'今日采集');
+    assert.equal(await page.locator('[data-register-setting="resetMode"]').inputValue(),'daily');
+    await clickWithoutConfirm('#mtRegisterDialog [data-register-set-one]','全部归零后本位归一');
     await page.locator('[data-register-save]').click();
     await page.locator('#mtRegisterDialog').waitFor({state:'hidden'});
     assert.equal(state.registers.entries[0].resetHour,5);
     assert.equal(state.registers.entries[0].resetMinute,30);
+    await verifyAllResetConfirmation('#mtStartupRegisters [data-register-reset-all]','启动中心状态条全归零');
     // 独立流程、寄存器设置和日志触发器，全部通过正式编辑控件往返。
     await page.locator('[data-mt-tab="taskcenter"]').click();
+    await page.locator('#tcRegisters [data-register-number="2"]').click();
+    await clickWithoutConfirm('#mtRegisterDialog [data-register-set-one]','任务中心本位归一');
+    await page.locator('#mtRegisterDialog [data-register-close]').click();
+    await page.locator('#mtRegisterDialog').waitFor({state:'hidden'});
+    await verifyAllResetConfirmation('#tcRegisters [data-register-reset-all]','任务中心状态条全归零');
     await page.locator('#tcAdd').click();await page.locator('[data-kind="flow"]').click();
     await page.locator('#tcFlowDialog [data-flow-name]').fill('采集前准备');
     await page.locator('#tcFlowDialog [data-add="setRegister"]').click();
@@ -220,7 +316,7 @@ function body(req) { return new Promise((resolve, reject) => { let v = ''; req.o
     assert.equal(await page.evaluate(() => mt.unconfirmed), null, '确定未执行的请求不留台账');
     for (const width of [390, 1280]) { await page.setViewportSize({ width, height: 860 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, width + 'px 横向溢出'); }
     assert.deepEqual(errors, []);
-    console.log('PASS mistletoe local direct: pairing, registers, flow/lane controls and persistence, middle/branch/lane entry controls and request boundaries, shared triggers/prompts, 375/768/1440 layout, revisions, terminal/unknown/timeout, expired session');
+    console.log('PASS mistletoe local direct: pairing, register set/reset controls and native confirmations, register settings 375/1440 layout, flow/lane controls and persistence, middle/branch/lane entry controls and request boundaries, shared triggers/prompts, 375/768/1440 layout, revisions, terminal/unknown/timeout, expired session');
   } catch(error) {
     console.error('BROWSER ERRORS',errors);
     if(page) {

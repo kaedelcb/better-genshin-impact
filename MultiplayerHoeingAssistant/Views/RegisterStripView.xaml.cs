@@ -20,6 +20,7 @@ public partial class RegisterStripView : UserControl
     {
         if (DataContext is not RegisterBankViewModel bank || !bank.CanReset) return;
         e.Handled = true;
+        if (!RegisterResetConfirmation.Show(Window.GetWindow(this))) return;
         try { await bank.ResetAsync(); }
         catch (Exception ex)
         {

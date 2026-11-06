@@ -29,7 +29,9 @@ function dialogDouble() {
             return match ? fields[match[1]] : nodes[selector] ||= {textContent:''};
         },
         querySelectorAll(selector) {
-            return selector === '[data-register-reset]' ? resets : [...Object.values(fields), this.querySelector('[data-register-save]'), this.querySelector('[data-register-close]')];
+            if (selector === '[data-register-reset]') return resets;
+            if (selector === '[data-register-reset],[data-register-set-one]') return [...resets,this.querySelector('[data-register-set-one]')];
+            return [...Object.values(fields), this.querySelector('[data-register-save]'), this.querySelector('[data-register-close]')];
         },
         showModal() { this.open = true; },
         close() { this.open = false; this.onclose?.(); }
@@ -37,7 +39,7 @@ function dialogDouble() {
     return {dialog,fields};
 }
 function setup(options = {}) {
-    const calls = [], notices = [], {dialog,fields} = dialogDouble();
+    const calls = [], notices = [], confirmations = [], {dialog,fields} = dialogDouble();
     const ctx = vm.createContext({console, setTimeout, clearTimeout, Map, Set,
         mt:{target:{key:'executor-a'},active:true,tab:'startup'},
         document:{querySelectorAll:() => []},
@@ -46,6 +48,7 @@ function setup(options = {}) {
         mtClone:structuredClone, mtNewId:() => 'new-step', mtDialog:() => dialog,
         mte:value => String(value ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])),
         mtToast:(...args) => notices.push(args),
+        confirm:message => { confirmations.push(message); return options.confirm ? options.confirm(message) : true; },
         mtOperate:async (...args) => { calls.push(args); return options.operate ? options.operate(...args) : {status:'ok',data:snapshot(0)}; },
         mtRead:async (...args) => options.read ? options.read(...args) : {status:'ok',data:snapshot()}
     });
@@ -53,7 +56,7 @@ function setup(options = {}) {
         vm.runInContext(fs.readFileSync(path.join(__dirname,'../../BgiCoordinatorServer/wwwroot',file),'utf8'),ctx);
     const run = source => vm.runInContext(source,ctx);
     const apply = data => { ctx.incoming = structuredClone(data); return run('mtRegistersApply(incoming)'); };
-    return {ctx,run,apply,calls,notices,dialog,fields};
+    return {ctx,run,apply,calls,notices,confirmations,dialog,fields};
 }
 
 test('快照必须确认全部十位；损坏或缺能力不冒充全零且阻断归零', async () => {
@@ -134,6 +137,59 @@ test('单位置零与全部归零发送明确且互斥的参数，只采用执�
     assert.deepEqual(plain(x.calls[1][1]),{all:true});
     assert.equal(x.run('mtRegisters.entries.every(entry=>entry.value===0)'),true);
     assert.match(x.run('mtRegisters.status'),/已全部归零/);
+});
+
+test('本位归一使用明确位号和1，不保存草稿、不改其他位且不关闭窗口', async () => {
+    const initial = snapshot(0); initial.entries[8].value = 1;
+    const x = setup({operate:(operation,payload) => {
+        const data = structuredClone(initial); data.entries[payload.number - 1].value = payload.value;
+        return {status:'ok',data};
+    }});
+    x.apply(initial); x.run('mtOpenRegisterSettings(3)');
+    x.fields.name.value = '未保存名称'; x.fields.resetMode.value = 'daily';
+    x.fields.resetTime.value = '06:25';
+    assert.match(x.dialog.innerHTML,/本位归一/);
+    await x.dialog.querySelector('[data-register-set-one]').onclick();
+    assert.equal(x.calls[0][0],'registers.set');
+    assert.deepEqual(plain(x.calls[0][1]),{number:3,value:1});
+    assert.deepEqual(plain(x.run('mtRegisters.entries.filter(e=>e.number!==3)')),initial.entries.filter(e=>e.number!==3));
+    assert.equal(x.fields.name.value,'未保存名称'); assert.equal(x.fields.resetMode.value,'daily');
+    assert.equal(x.fields.resetTime.value,'06:25'); assert.equal(x.dialog.open,true);
+    assert.match(x.dialog.querySelector('[data-register-state]').textContent,/当前状态：1/);
+    assert.equal(x.run('mtRegisters.status'),'R3 已归一。');
+    assert.equal(x.confirmations.length,0);
+});
+
+test('全部归零必须确认，取消不发请求且保留当前值和设置草稿', async () => {
+    let approved = false;
+    const x = setup({confirm:() => approved}); x.apply(snapshot()); x.run('mtOpenRegisterSettings(3)');
+    x.fields.name.value = '保留草稿';
+    const all = x.dialog.querySelectorAll('[data-register-reset]').find(b => b.dataset.registerReset === 'all');
+    await all.onclick();
+    assert.equal(x.calls.length,0); assert.equal(x.run('mtRegisters.entries[2].value'),1);
+    assert.equal(x.fields.name.value,'保留草稿'); assert.equal(x.dialog.open,true);
+    assert.match(x.confirmations[0],/R1–R10 全部归零/);
+    approved = true; await all.onclick();
+    assert.equal(x.calls.length,1); assert.deepEqual(plain(x.calls[0][1]),{all:true});
+    assert.equal(x.confirmations.length,2);
+    await x.run('mtResetRegisters(3)');
+    assert.equal(x.confirmations.length,2);
+});
+
+test('归一等待执行端时禁止重复操作，未知回执不虚构1', async () => {
+    let finish;
+    const x = setup({operate:() => new Promise(resolve => finish = resolve)});
+    x.apply(snapshot(0)); x.run('mtOpenRegisterSettings(1)');
+    const one = x.dialog.querySelector('[data-register-set-one]');
+    const pending = one.onclick();
+    assert.equal(one.disabled,true);
+    await one.onclick(); await x.run('mtResetRegisters(1)');
+    assert.equal(x.calls.length,1); assert.equal(x.run('mtRegisters.entries[0].value'),0);
+    finish({status:'unknown',message:'终态查询超时'}); await pending;
+    assert.equal(x.run('mtRegisters.available'),false);
+    assert.equal(x.run('mtRegisters.entries[0].value'),0);
+    assert.match(x.run('mtRegisters.status'),/归一结果未确认/);
+    assert.equal(one.disabled,true);
 });
 
 test('手动归零不覆盖窗口草稿，保存仍携带打开时的设置修订及完整规则', async () => {

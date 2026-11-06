@@ -104,7 +104,7 @@
                                 <Setter TargetName="ItemBorder" Property="Background" Value="#2E6E6EB4" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#3A315F" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#383047" />
                                 <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#80D4AF37" />
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -187,11 +187,11 @@
         <Border Grid.Row="1" Style="{DynamicResource QuestCard}" Padding="0">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="440" />
+                    <ColumnDefinition Width="204" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
                 <!-- 左侧选择计划表，底部说明独立于右侧任务区。 -->
-                <Border x:Name="PlanListPane" Grid.Column="0" BorderBrush="#40D4AF37" BorderThickness="0,0,1,0" Padding="14,16">
+                <Border x:Name="PlanListPane" Grid.Column="0" Background="#211C32" BorderBrush="#483C56" BorderThickness="0,0,1,0" Padding="12,16">
                     <DockPanel LastChildFill="True">
                         <StackPanel x:Name="PlanListHeader" DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
                             <Button Content="＋" Style="{DynamicResource BtnGold}" Width="28" Height="28"
@@ -201,8 +201,7 @@
                                     Click="ManageClick" />
                             <TextBlock Text="计划表" FontSize="16" FontWeight="SemiBold" Margin="0,0,10,0"
                                        Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
-                            <views:RegisterStripView IsCompact="True" HorizontalAlignment="Left"
-                                DataContext="{Binding DataContext.Registers, RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}}}" />
+
                         </StackPanel>
 
                         <StackPanel x:Name="TaskCenterUsage" DockPanel.Dock="Bottom" Margin="0,12,0,0">
@@ -287,49 +286,47 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
-                            <Grid Grid.Row="0" Margin="0,0,0,7">
+                            <Grid x:Name="CurrentPlanHeader" Grid.Row="0" Margin="0,0,0,7">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CurrentPlanTitle}" FontSize="19" FontWeight="SemiBold"
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="CurrentPlanTitleText" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentPlanTitle}" Text="{Binding CurrentPlanTitle}" FontSize="19" FontWeight="SemiBold"
                                                Foreground="{DynamicResource GoldText}" />
-                                    <TextBlock Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="12,5,0,0" />
+                                    <TextBlock Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,1,0,0" />
                                 </StackPanel>
-                                <Button Grid.Column="1" Style="{StaticResource SummaryLinkButton}" Click="OpenPlanSettingsClick"
-                                        IsEnabled="{Binding IsEditing}" HorizontalAlignment="Right" Padding="7,3" Margin="12,0,0,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="计划设置" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding Editing.PlanSettingsSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="10,2,0,0" />
-                                    </StackPanel>
-                                </Button>
+                            <views:RegisterStripView IsCompact="True" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                DataContext="{Binding DataContext.Registers, RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}}}" />
                             </Grid>
                             <ScrollViewer x:Name="PlanActionsScrollViewer" Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                                           Margin="0" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="+任务" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Click="AddConfigClick" ToolTip="从当前 BGI 资源目录添加 resource 配置单" />
-                                    <Button Content="复制" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Command="{Binding Editing.DuplicateSelectedNodeCommand}"
-                                            CommandParameter="{Binding Editing.SelectedNode}"
-                                            IsEnabled="{Binding Editing.HasSelectedNode}" />
-                                    <Button Content="修改" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Click="ModifySelectedResourceClick"
-                                            Tag="{Binding Editing.SelectedNode}"
-                                            IsEnabled="{Binding Editing.HasSelectedNode}"
-                                            ToolTip="在 BGI 中修改当前配置单" />
-                                    <Button Content="删除" ToolTip="删除当前选中的配置单（左侧计划表右键菜单用于删除整张计划表）" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Command="{Binding RemoveSelectedResourceCommand}"
-                                            CommandParameter="{Binding Editing.SelectedNode}"
-                                            IsEnabled="{Binding Editing.HasSelectedNode}" />
-                                    <Button Content="导入配置" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Command="{Binding ImportAllFlowsCommand}" ToolTip="导入多张任务中心计划表" />
-                                    <Button Content="导出配置" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
-                                            Command="{Binding ExportAllFlowsCommand}" ToolTip="导出当前任务中心的全部计划表" />
+                                    <Button x:Name="PlanMoreActionsButton" Content="更多操作" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
+                                            Tag="{Binding Editing.SelectedNode}" Click="OpenPlanActionsClick">
+                                        <Button.ContextMenu>
+                                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                <MenuItem Header="复制" Command="{Binding Editing.DuplicateSelectedNodeCommand}" CommandParameter="{Binding Editing.SelectedNode}" IsEnabled="{Binding Editing.HasSelectedNode}" />
+                                                <MenuItem Header="修改" Click="ModifyFromPlanMenu" IsEnabled="{Binding Editing.HasSelectedNode}" />
+                                                <MenuItem Header="删除" Command="{Binding RemoveSelectedResourceCommand}" CommandParameter="{Binding Editing.SelectedNode}" IsEnabled="{Binding Editing.HasSelectedNode}" />
+                                                <Separator />
+                                                <MenuItem Header="导入配置" Command="{Binding ImportAllFlowsCommand}" />
+                                                <MenuItem Header="导出配置" Command="{Binding ExportAllFlowsCommand}" />
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
                                     <Button x:Name="ResetExecutionStateButton" Content="重置状态" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding ResetExecutionStateCommand}" IsEnabled="{Binding CanResetExecutionState}"
                                             ToolTip="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动" />
+                                <Button Style="{StaticResource SummaryLinkButton}" Click="OpenPlanSettingsClick" ToolTip="{Binding Editing.PlanSettingsSummary}"
+                                        IsEnabled="{Binding IsEditing}" HorizontalAlignment="Right" Padding="7,3" Margin="3,0,6,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="计划设置" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
+
+                                    </StackPanel>
+                                </Button>
                                     <Button Content="启动单任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的任务" />
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Padding="9,3" Margin="0" Click="StartContinuousClick"
@@ -433,7 +430,7 @@
                                             <Setter Property="Template"><Setter.Value>
                                                 <ControlTemplate TargetType="ListBoxItem">
                                                     <Border x:Name="Row" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                                                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="0" Padding="0,0,4,0"><ContentPresenter /></Border>
+                                                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="0,0,4,0"><ContentPresenter /></Border>
                                                     <ControlTemplate.Triggers>
                                                         <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True">
                                                             <Setter TargetName="Row" Property="BorderBrush" Value="#555662" />
@@ -441,7 +438,7 @@
                                                         </DataTrigger>
                                                         <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Row" Property="Background" Value="#2E6E6EB4" /></Trigger>
                                                         <Trigger Property="IsSelected" Value="True">
-                                                            <Setter TargetName="Row" Property="Background" Value="#3A315F" /><Setter TargetName="Row" Property="BorderBrush" Value="#D4AF37" />
+                                                            <Setter TargetName="Row" Property="Background" Value="#383047" /><Setter TargetName="Row" Property="BorderBrush" Value="#9A855B" />
                                                             <Setter TargetName="Row" Property="BorderThickness" Value="1" />
                                                         </Trigger>
                                                         <DataTrigger Binding="{Binding IsStartNode}" Value="True">
@@ -462,7 +459,7 @@
                                             <views:CompositionPlanRow>
                                                 <views:CompositionPlanRow.Style><Style TargetType="views:CompositionPlanRow"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsComposition}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></views:CompositionPlanRow.Style>
                                             </views:CompositionPlanRow>
-                                             <Grid MinHeight="40" Background="Transparent" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期、时段或账号编辑">
+                                             <Grid MinHeight="30" Background="Transparent" Tag="{Binding}" ToolTip="拖动左侧把手调整顺序；点击日期、时段或账号编辑">
                                                     <Grid.Style>
                                                         <Style TargetType="Grid">
                                                             <Style.Triggers>
@@ -494,17 +491,17 @@
                                                                 ToolTip="设置此配置单内部任务的启用、顺序和执行起点" />
                                                     </Grid>
                                                     <Button Grid.Column="2" Style="{StaticResource TimeWindowMutedCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="26" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="点击编辑执行日期">
-                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
-                                                             <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
+                                                         <Border Background="#29233A" BorderBrush="#53475F" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
+                                                             <TextBlock Text="{Binding WeekdaysDisplay}" Foreground="{DynamicResource White}" FontSize="11"
                                                                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
                                                                         TextAlignment="Center" VerticalAlignment="Center" />
                                                         </Border>
                                                     </Button>
                                                     <Button x:Name="NodeTimeWindowButton" Grid.Column="3" Style="{DynamicResource BasicCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="3,0,3,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="26" Margin="3,0,3,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeTimeWindowClick" Tag="{Binding}">
                                                         <Button.ToolTip>
                                                             <StackPanel>
@@ -541,7 +538,7 @@
                                                                         </Style>
                                                                     </Ellipse.Style>
                                                                 </Ellipse>
-                                                                <TextBlock Text="{Binding TimeWindowDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
+                                                                <TextBlock Text="{Binding TimeWindowDisplay}" Foreground="{DynamicResource White}" FontSize="11"
                                                                            FontWeight="SemiBold" VerticalAlignment="Center">
                                                                     <TextBlock.Style>
                                                                         <Style TargetType="TextBlock"><Style.Triggers>
@@ -553,11 +550,11 @@
                                                         </Border>
                                                     </Button>
                                                     <Button Grid.Column="4" Style="{StaticResource TimeWindowMutedCellButton}"
-                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="32" Margin="2,0,2,0"
+                                                            Background="Transparent" BorderBrush="Transparent" BorderThickness="0" Height="26" Margin="2,0,2,0"
                                                             Padding="0" HorizontalContentAlignment="Stretch" Click="OpenNodeSettingsClick" Tag="{Binding}"
                                                             ToolTip="{Binding AccountDisplay}">
-                                                         <Border Background="#241D43" BorderBrush="#55D4AF37" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
-                                                             <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="10.5"
+                                                         <Border Background="#29233A" BorderBrush="#53475F" BorderThickness="1" CornerRadius="7" Padding="6,2" Margin="0">
+                                                             <TextBlock Text="{Binding AccountDisplay}" Foreground="{DynamicResource White}" FontSize="11"
                                                                         FontWeight="SemiBold" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
                                                                         TextAlignment="Center" VerticalAlignment="Center" />
                                                         </Border>

@@ -25,6 +25,19 @@ public sealed class WorkflowLaneEntryUiTests
             Click(Button(editor, "保存车道"));
             Assert.True(editor.IsVisible);
             Assert.DoesNotContain(f.Panel.Editing!.Nodes, n => n.IsComposition);
+            var chooser = Descendants<ComboBox>(editor).Single(c => Equals(c.Items[0], "请选择判断方式"));
+            chooser.SelectedItem = "判断寄存器"; await Layout(editor);
+            var registers = Descendants<ComboBox>(editor).Where(c => c.Items.Count == 3 && Equals(c.Items[0], "不参与")).ToArray();
+            Assert.Equal(10, registers.Length);
+            foreach (var index in new[] { 0, 8, 9 }) registers[index].SelectedIndex = 2;
+            await Layout(editor);
+            Assert.Contains(Descendants<TextBlock>(editor), b => b.IsVisible && b.Text.Replace('\u00a0', ' ') == "R1 = 1 且 R9 = 1 且 R10 = 1");
+            Capture(editor, "gold-lane-register-preview");
+            editor.Width = editor.MinWidth; editor.Height = editor.MinHeight; await Layout(editor);
+            var save = Button(editor, "保存车道");
+            var saveBounds = save.TransformToAncestor(editor).TransformBounds(new Rect(save.RenderSize));
+            Assert.True(save.IsVisible && saveBounds.Bottom <= editor.ActualHeight && saveBounds.Right <= editor.ActualWidth);
+            editor.Width = 860; editor.Height = 720;
             SelectWeekday(editor);
             await Layout(editor); Capture(editor, "lane-built-in-condition");
             var kind = Descendants<ComboBox>(editor).Single(c => c.Items.Count > 0 && c.Items[0] as string == "请选择判断方式");
@@ -46,8 +59,13 @@ public sealed class WorkflowLaneEntryUiTests
         f.Panel.SaveFlowCommand.Execute(null); await Layout(f.Window);
         var row = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).Model.Lanes is not null);
         Assert.Single(Descendants<Expander>(row)).IsExpanded = true; await Layout(f.Window);
-        var up = Button(row, "上移"); Assert.False(up.IsEnabled);
-        Assert.Equal((Color)ColorConverter.ConvertFromString("#29253A"), Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(up.Template.FindName("Chrome", up)).Background).Color);
+        var more = Button(row, "⋯");
+        Click(more); await Layout(f.Window);
+        Assert.True(more.ContextMenu.IsOpen);
+        var actions = more.ContextMenu.Items.OfType<MenuItem>().ToArray();
+        Assert.Equal(new[] { "详情", "上移", "下移", "移除" }, actions.Select(m => m.Header));
+        Assert.False(actions.Single(m => Equals(m.Header, "上移")).IsEnabled);
+        more.ContextMenu.IsOpen = false;
         Capture(f.Window, "standalone-lane-main-table");
     }));
 

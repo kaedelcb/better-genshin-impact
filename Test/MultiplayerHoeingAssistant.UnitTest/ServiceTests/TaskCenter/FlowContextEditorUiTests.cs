@@ -28,9 +28,12 @@ public sealed class FlowContextEditorUiTests
             Assert.DoesNotContain(Descendants<Button>(editor), b => (b.Content as string)?.Contains("出口") == true);
             Assert.Contains(Descendants<TextBlock>(editor), x => x.Text.Contains("今天执行B线"));
 
+            Assert.False(Button(editor, "返回流程步骤").IsVisible);
             Click(NamedButton(editor, "日志出现时添加动作")); await Layout(editor);
             Assert.Contains(Descendants<TextBlock>(editor), x => x.Text.Contains("添加到：日志触发器 → 日志出现时"));
             Click(Button(editor, "＋ 等待")); await Layout(editor);
+            Assert.True(editor.ParameterPanelForTest.IsVisible);
+            Click(Button(editor, "＋ 添加步骤")); await Layout(editor);
             Click(Button(editor, "＋ 设置寄存器")); await Layout(editor);
             Register(editor, 2); await Layout(editor);
             var savedLog = Assert.Single(editor.Result.Steps);
@@ -62,9 +65,11 @@ public sealed class FlowContextEditorUiTests
             editor.Show(); await Layout(editor);
             Click(NamedButton(editor, "条件满足时添加动作")); await Layout(editor);
             Click(Button(editor, "＋ 等待")); await Layout(editor);
+            Click(Button(editor, "＋ 添加步骤")); await Layout(editor);
             Click(Button(editor, "＋ 等待")); await Layout(editor);
             var saved = Assert.Single(editor.Result.Steps);
             Assert.Equal(2, saved.TrueSteps.Count); Assert.Empty(saved.FalseSteps);
+            Click(Button(editor, "＋ 添加步骤")); await Layout(editor);
             Click(Button(editor, "返回流程步骤")); await Layout(editor);
             Click(Button(editor, "＋ 日志触发器")); await Layout(editor);
             Assert.Equal(2, editor.Result.Steps.Count);
@@ -139,7 +144,7 @@ public sealed class FlowContextEditorUiTests
     }
     private static Button Button(DependencyObject root, string text) => Descendants<Button>(root).Single(b => b.Content as string == text);
     private static Button NamedButton(DependencyObject root, string name) => Descendants<Button>(root).Single(b => AutomationProperties.GetName(b) == name);
-    private static void Click(Button button) => button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+    private static void Click(Button button) { Assert.True(button.IsVisible && button.IsEnabled); button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent)); }
     private static async Task Layout(Window window) { await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout(); }
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
     {

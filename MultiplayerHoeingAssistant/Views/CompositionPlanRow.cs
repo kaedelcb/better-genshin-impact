@@ -14,6 +14,18 @@ public sealed class CompositionPlanRow : UserControl
     private readonly Expander _expander = new() { IsExpanded = false, Margin = new Thickness(3, 0, 3, 0), Padding = new Thickness(0) };
     private NodeEditVm? _node;
     private TaskCenterPanelViewModel? _host;
+    private ContextMenu? _activeLaneMenu;
+    private bool _restoring;
+    private void RestoreExpansion()
+    {
+        _restoring = true;
+        try { _expander.IsExpanded = _node is { IsComposition: true } node && View?.IsRowExpanded(node.NodeId) == true; }
+        finally { _restoring = false; }
+    }
+    private void SnapshotChanged()
+    {
+        if (_expander.IsExpanded && _node?.Model.Lanes is not null && _activeLaneMenu?.IsOpen != true) Draw();
+    }
     private BasicTaskCenterView? View
     {
         get
@@ -55,24 +67,37 @@ public sealed class CompositionPlanRow : UserControl
               <ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="Body" Property="Visibility" Value="Visible"/></Trigger></ControlTemplate.Triggers>
             </ControlTemplate>
             """);
-        Content = new Border { BorderBrush = B("#786846"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
-            Background = B("#302A46"), Child = _expander, Margin = new Thickness(0, 1, 0, 2) };
+        Content = new Border { BorderBrush = B("#51455D"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+            Background = B("#2B253F"), Child = _expander, Margin = new Thickness(0, 0, 0, 1) };
         DataContextChanged += (_, e) =>
         {
             if (_node is not null) _node.PropertyChanged -= Changed;
             _node = e.NewValue as NodeEditVm;
+            RestoreExpansion();
             if (_node is not null) _node.PropertyChanged += Changed;
             Draw();
         };
+        _expander.Expanded += (_, _) =>
+        {
+            if (_restoring) return;
+            if (_node is { } node) View?.RememberRowExpansion(node.NodeId, true);
+            Draw();
+        };
+        _expander.Collapsed += (_, _) =>
+        {
+            _expander.Content = null;
+            if (!_restoring && _node is { } node) View?.RememberRowExpansion(node.NodeId, false);
+        };
         Loaded += (_, _) =>
         {
-            if (_host is not null) _host.SnapshotRefreshed -= Draw;
+            if (_host is not null) _host.SnapshotRefreshed -= SnapshotChanged;
+            RestoreExpansion();
             _host = View?.CompositionHost;
-            if (_host is not null) _host.SnapshotRefreshed += Draw;
+            if (_host is not null) _host.SnapshotRefreshed += SnapshotChanged;
             if (_node is not null) { _node.PropertyChanged -= Changed; _node.PropertyChanged += Changed; }
             Draw();
         };
-        Unloaded += (_, _) => { if (_node is not null) _node.PropertyChanged -= Changed; if (_host is not null) _host.SnapshotRefreshed -= Draw; };
+        Unloaded += (_, _) => { if (_node is not null) _node.PropertyChanged -= Changed; if (_host is not null) _host.SnapshotRefreshed -= SnapshotChanged; };
     }
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
@@ -92,15 +117,22 @@ public sealed class CompositionPlanRow : UserControl
     }
     private void Draw()
     {
-        if (_node is not { } node) return;
-        var header = new Grid { Height = 28, ToolTip = node.CompositionSummary };
+        if (_node is not { IsComposition: true } node)
+        {
+            _expander.Header = null; _expander.Content = null; return;
+        }
+        var header = new Grid { Height = 27, ToolTip = node.CompositionSummary };
         header.ColumnDefinitions.Add(new() { Width = new GridLength(25) });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(34) });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1.15, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var number = Text($"{node.ResourceIndex:00}", true); number.FontSize = 11; header.Children.Add(number);
-        var kind = Text(node.Model.Flow is null ? "车道" : "流程", true); kind.FontSize = 11; Grid.SetColumn(kind, 1); header.Children.Add(kind);
+        var kind = Text(node.Model.Flow is null ? "车道" : "流程", true);
+        kind.FontSize = 11; kind.Margin = new Thickness(0); kind.HorizontalAlignment = HorizontalAlignment.Center;
+        var badge = new Border { Child = kind, Background = B("#403547"), CornerRadius = new CornerRadius(4),
+            VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(3, 1, 3, 1), Margin = new Thickness(0, 0, 5, 0) };
+        Grid.SetColumn(badge, 1); header.Children.Add(badge);
         var name = Text(node.DisplayName); name.FontWeight = FontWeights.SemiBold; name.ToolTip = node.DisplayName;
         Grid.SetColumn(name, 2); header.Children.Add(name);
         var decision = node.Model.Lanes is not null && View?.CompositionHost?.Editing is { } editing
@@ -114,7 +146,8 @@ public sealed class CompositionPlanRow : UserControl
         var edit = ActionButton(node.Model.Flow is null ? "设置车道" : "编辑步骤", () => { if (node.Model.Flow is not null) View?.OpenFlowEditor(node); else View?.EditLanes(node); });
         edit.Height = edit.MinHeight = 24; edit.Padding = new Thickness(6, 1, 6, 1); edit.Margin = new Thickness(3, 0, 0, 0);
         Grid.SetColumn(edit, 4); header.Children.Add(edit); _expander.Header = header;
-        var content = new StackPanel { Margin = new Thickness(20, 5, 4, 8) };
+        if (!_expander.IsExpanded) return;
+        var content = new StackPanel { Margin = new Thickness(20, 2, 5, 5) };
         if (node.Model.Flow is { } flow)
         {
             foreach (var (s, i) in flow.Steps.Select((s, i) => (s, i)))
@@ -134,13 +167,25 @@ public sealed class CompositionPlanRow : UserControl
                 Explain("任务每次开始前", s.BeforeAttemptSteps);
                 Explain("条件满足时", s.TrueSteps); Explain("不满足时", s.FalseSteps);
             }
-            content.Children.Add(Text(node.CompositionSummary, true));
+            if (flow.Steps.Count == 0) content.Children.Add(Text("暂无步骤"));
         }
         if (node.Model.Lanes is { } lanes)
         {
             content.Children.Add(Text(final is null ? "设置选择条件后，只执行下面的一条路线" : "先判断：" + LanesEditorWindow.Describe(final), true));
-            AddLane(content, node, true, lanes.YesName, lanes.YesNodeIds);
-            AddLane(content, node, false, lanes.NoName, lanes.NoNodeIds);
+            var routes = new Grid();
+            routes.ColumnDefinitions.Add(new()); routes.ColumnDefinitions.Add(new());
+            routes.RowDefinitions.Add(new() { Height = GridLength.Auto }); routes.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            AddLane(routes, node, true, lanes.YesName, lanes.YesNodeIds);
+            AddLane(routes, node, false, lanes.NoName, lanes.NoNodeIds);
+            void Arrange(double width)
+            {
+                bool wide = width >= 540;
+                Grid.SetColumnSpan(routes.Children[0], wide ? 1 : 2);
+                Grid.SetColumnSpan(routes.Children[1], wide ? 1 : 2);
+                Grid.SetColumn(routes.Children[1], wide ? 1 : 0); Grid.SetRow(routes.Children[1], wide ? 0 : 1);
+            }
+            Arrange(ActualWidth - 35); routes.SizeChanged += (_, e) => { if (e.WidthChanged) Arrange(e.NewSize.Width); };
+            content.Children.Add(routes);
             content.Children.Add(Text("车道中的任务执行完，继续下一项任务", true));
         }
         _expander.Content = content;
@@ -148,8 +193,8 @@ public sealed class CompositionPlanRow : UserControl
     private void AddLane(Panel parent, NodeEditVm owner, bool yes, string title, List<string> ids)
     {
         var body = new StackPanel { Margin = new Thickness(8, 3, 8, 5) };
-        parent.Children.Add(new Border { Child = body, Background = B("#28233A"), BorderBrush = B("#5A5068"),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 3, 0, 3) });
+        parent.Children.Add(new Border { Child = body, Background = B("#28233A"), BorderBrush = B("#463B52"),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 2, 3, 2) });
         var header = new DockPanel();
         var add = ActionButton("＋任务", () => View?.AddLaneTask(owner, yes)); DockPanel.SetDock(add, Dock.Right); header.Children.Add(add);
         var decisionOwner = editingOwner();
@@ -158,21 +203,43 @@ public sealed class CompositionPlanRow : UserControl
         var status = View?.CompositionHost?.LaneRunStatus(decisionOwner, yes);
         var display = title is "是" or "否" ? (yes ? "路线 1" : "路线 2") : title;
         header.Children.Add(Text((yes ? "满足条件 → " : "其他情况 → ") + display + (string.IsNullOrEmpty(status) ? "" : "　·　" + status), true)); body.Children.Add(header);
-        var editing = View?.CompositionHost?.Editing;
+        var boundHost = View?.CompositionHost;
+        var editing = boundHost?.Editing;
         if (ids.Count == 0) body.Children.Add(Text("还没有任务，点击右侧“＋任务”添加；留空则直接继续。"));
         for (var i = 0; i < ids.Count; i++)
         {
             var id = ids[i]; var vm = editing?.Nodes.FirstOrDefault(n => n.NodeId == id);
             if (vm is null) { body.Children.Add(Text("任务引用缺失，请重新绑定")); continue; }
             var row = new DockPanel { Margin = new Thickness(4, 1, 1, 1) };
-            void Move(int d) { editing!.MoveLaneTask(owner, yes, id, d); Draw(); }
-            var up = ActionButton("上移", () => Move(-1)); var down = ActionButton("下移", () => Move(1));
-            up.IsEnabled = i > 0; down.IsEnabled = i + 1 < ids.Count;
-            var remove = ActionButton("移除", () => { editing!.RemoveNodeCommand.Execute(vm); editing.CompositionChanged(); Draw(); });
-            var settings = ActionButton("详情", () => View?.OpenLaneTask(vm, this));
-            foreach (var button in new[] { remove, settings, down, up }) { DockPanel.SetDock(button, Dock.Right); row.Children.Add(button); }
+            var workflowId = editing!.Draft.WorkflowId;
+            void WithMember(Action<WorkflowEditVm, NodeEditVm, NodeEditVm> action)
+            {
+                if (!ReferenceEquals(View?.CompositionHost, boundHost) || boundHost?.Editing is not { } live || live.Draft.WorkflowId != workflowId) return;
+                var current = live.Nodes.FirstOrDefault(n => n.NodeId == owner.NodeId);
+                if (current?.Model.Lanes is not { } group || !(yes ? group.YesNodeIds : group.NoNodeIds).Contains(id)) return;
+                var member = live.Nodes.FirstOrDefault(n => n.NodeId == id);
+                if (member is not null) action(live, current, member);
+            }
+            void Move(int d) => WithMember((live, current, member) => { live.MoveLaneTask(current, yes, member.NodeId, d); Draw(); });
+            var more = new Button { Content = "⋯", ToolTip = "任务操作", MinHeight = 22, Height = 22, Padding = new Thickness(6, 0, 6, 0) };
+            CompositionUiTheme.StyleButton(more);
+            var menu = new ContextMenu { PlacementTarget = more, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            void Item(string title, Action run, bool enabled = true)
+            {
+                var item = new MenuItem { Header = title, IsEnabled = enabled };
+                item.Click += (_, _) => run(); menu.Items.Add(item);
+            }
+            Item("详情", () => WithMember((_, _, member) => View?.OpenLaneTask(member, this)));
+            Item("上移", () => Move(-1), i > 0);
+            Item("下移", () => Move(1), i + 1 < ids.Count);
+            Item("移除", () => WithMember((live, _, member) => { live.RemoveNodeCommand.Execute(member); live.CompositionChanged(); Draw(); }));
+            menu.Opened += (_, _) => _activeLaneMenu = menu;
+            menu.Closed += (_, _) => { if (ReferenceEquals(_activeLaneMenu, menu)) _activeLaneMenu = null; };
+            more.ContextMenu = menu; more.Click += (_, e) => { e.Handled = true; menu.IsOpen = true; };
+            DockPanel.SetDock(more, Dock.Right); row.Children.Add(more);
             var name = ActionButton($"{i + 1:00}　{vm.DisplayName}", () => View?.OpenLaneResourceTasks(vm, this));
             name.Content = new TextBlock { Text = $"{i + 1:00}　{vm.DisplayName}", TextTrimming = TextTrimming.CharacterEllipsis, Foreground = B("#EEE8F5") };
+            name.MinHeight = 24; name.Padding = new Thickness(3, 0, 3, 0); name.Margin = new Thickness(0);
             name.ToolTip = vm.DisplayName;
             name.HorizontalContentAlignment = HorizontalAlignment.Stretch; name.BorderThickness = new Thickness(0); name.Background = Brushes.Transparent;
             row.Children.Add(name); body.Children.Add(row);

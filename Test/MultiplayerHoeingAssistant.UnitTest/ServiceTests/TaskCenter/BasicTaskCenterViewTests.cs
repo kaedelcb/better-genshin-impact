@@ -56,11 +56,10 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 Assert.Contains("启动单任务", texts);
                 Assert.Contains("⏵⏵ 连续一条龙", texts);
                 Assert.Contains("+任务", texts);
-                Assert.Contains("复制", texts);
-                Assert.Contains("修改", texts);
-                Assert.Contains("删除", texts);
-                Assert.Contains("导入配置", texts);
-                Assert.Contains("导出配置", texts);
+                Assert.Contains("更多操作", texts);
+                var more = Assert.IsType<Button>(view.FindName("PlanMoreActionsButton"));
+                Assert.Equal(new[] { "复制", "修改", "删除", "导入配置", "导出配置" },
+                    more.ContextMenu.Items.OfType<MenuItem>().Select(item => item.Header));
                 Assert.DoesNotContain("设置", texts);
                 Assert.DoesNotContain("更多计划操作", texts);
                 Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
@@ -713,10 +712,14 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                 PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes
                     .Count(node => node.Kind.StartsWith("resource.", StringComparison.Ordinal)) == 1);
 
-                var deleteButton = Descendants(view).OfType<Button>().Single(button => Equals(button.Content, "删除"));
+                var more = Assert.IsType<Button>(view.FindName("PlanMoreActionsButton"));
+                more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(more.ContextMenu.IsOpen);
+                var deleteButton = more.ContextMenu.Items.OfType<MenuItem>().Single(item => Equals(item.Header, "删除"));
                 Assert.True(deleteButton.IsEnabled);
                 Assert.NotNull(deleteButton.Command);
                 deleteButton.Command.Execute(deleteButton.CommandParameter);
+                more.ContextMenu.IsOpen = false;
                 Assert.Empty(vm.ResourceNodes);
                 PumpUntil(view, () => host.LoadFlowSnapshot(vm.Flows.Single().WorkflowId).Document.Nodes
                     .All(node => !node.Kind.StartsWith("resource.", StringComparison.Ordinal)));

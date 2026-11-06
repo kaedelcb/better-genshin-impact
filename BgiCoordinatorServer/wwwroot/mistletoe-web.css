@@ -357,6 +357,16 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .mt-register-cell:hover:not(:disabled){border-color:#7a6a49;background:var(--dd-soft)}
 .mt-register-cell.is-one{border-color:#7a6a49;background:#302d45}.mt-register-cell.is-one strong{color:var(--gold)}
 .mt-register-cell.is-unknown{border-style:dashed}.mt-register-cell:disabled{cursor:default;opacity:.65}
+/* 启动标题旁使用紧凑状态格；触屏仍保留原有大点击区域与位号。 */
+@media(min-width:701px){
+  #mtStartupRegisters{gap:6px 8px}
+  #mtStartupRegisters .mt-register-head{font-size:12px}
+  #mtStartupRegisters .mt-register-cells{flex:0 0 auto;max-width:none;grid-template-columns:repeat(10,26px);gap:4px}
+  #mtStartupRegisters .mt-register-cell{height:26px;min-height:26px;padding:0;border-radius:5px}
+  #mtStartupRegisters .mt-register-cell small{display:none}
+  #mtStartupRegisters .mt-register-cell strong{font-size:13px;line-height:18px}
+  #mtStartupRegisters [data-register-reset-all]{min-height:26px;padding:3px 8px;font-size:11px;border-radius:5px}
+}
 .mt-register-feedback{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.mt-register-feedback:empty{display:none}
 .mt-register-settings{padding:16px;display:grid;gap:14px}
 .mt-register-settings .dd-field{min-width:0}.mt-register-settings .dd-field input,.mt-register-settings .dd-field select{width:100%}

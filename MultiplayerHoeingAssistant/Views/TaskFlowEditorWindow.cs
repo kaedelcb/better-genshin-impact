@@ -17,6 +17,8 @@ public sealed class TaskFlowEditorWindow : Window
     private readonly IReadOnlyList<StartupStep> _allowedPrograms;
     private readonly TreeView _tree = new();
     private readonly StackPanel _parameters = new();
+    private readonly DockPanel _picker = new();
+    private readonly Border _inspector = new();
     private readonly StackPanel _catalog = new();
     private readonly TextBlock _addContext = new() { TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _emptyHint = new();
@@ -32,6 +34,7 @@ public sealed class TaskFlowEditorWindow : Window
     private readonly Dictionary<string, string> _numberTexts = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _numberErrors = new(StringComparer.Ordinal);
     private Slot? _selected;
+    private TextBlock? _stepPreview;
     private bool _loading;
     private readonly bool _requireExit;
     private sealed record Slot(StartupStep Step, List<StartupStep> Chain);
@@ -53,16 +56,9 @@ public sealed class TaskFlowEditorWindow : Window
         Width = 880; Height = 700; MinWidth = 700; MinHeight = 510;
         MaxHeight = SystemParameters.WorkArea.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = Brush("#29243F"); Foreground = Brush("#F4F2FA");
+        Background = Brush("#24203B"); Foreground = Brush("#F4F2FA");
         FontFamily = new FontFamily("Microsoft YaHei UI"); FontSize = 13;
-        CompositionUiTheme.Apply(this);
-        Resources[typeof(TextBox)] = (Style)XamlReader.Parse("""
-            <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="TextBox">
-                <Setter Property="Background" Value="#211D35"/><Setter Property="Foreground" Value="#F4F2FA"/>
-                <Setter Property="BorderBrush" Value="#756781"/><Setter Property="Padding" Value="5,3"/>
-                <Setter Property="MinHeight" Value="26"/>
-            </Style>
-            """);
+        CompositionUiTheme.ApplyEditor(this);
         _tree.ItemContainerStyle = (Style)XamlReader.Parse("""
             <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="TreeViewItem">
               <Setter Property="Foreground" Value="#F4F2FA"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -88,20 +84,23 @@ public sealed class TaskFlowEditorWindow : Window
         var root = new Grid { Margin = new Thickness(18), Background = Background };
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new() { Height = new GridLength(200) });
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         Content = root;
-        var heading = new DockPanel { Margin = new Thickness(0, 0, 0, 12) };
-        _name.Text = _draft.Name; _name.Width = 230; _name.Margin = new Thickness(10, 0, 0, 0);
+        var heading = new DockPanel { Margin = new Thickness(0, 0, 0, 16) };
+        _name.Text = _draft.Name; _name.Width = 204;
+        AutomationProperties.SetName(_name, "流程名称");
         _name.TextChanged += (_, _) => _draft.Name = _name.Text.Trim();
-        heading.Children.Add(new TextBlock { Text = "流程名称", VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#E8C96D"), FontSize = 17 });
-        heading.Children.Add(_name); root.Children.Add(heading);
+        DockPanel.SetDock(_name, Dock.Right); heading.Children.Add(_name);
+        var nameLabel = new TextBlock { Text = "流程名称", Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#C6BAD5") };
+        DockPanel.SetDock(nameLabel, Dock.Right); heading.Children.Add(nameLabel);
+        heading.Children.Add(new TextBlock { Text = Title, FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        root.Children.Add(heading);
         var columns = new Grid();
-        columns.ColumnDefinitions.Add(new() { Width = new GridLength(1.25, GridUnitType.Star) });
-        columns.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+        columns.ColumnDefinitions.Add(new() { Width = new GridLength(0.82, GridUnitType.Star) });
+        columns.ColumnDefinitions.Add(new() { Width = new GridLength(1.18, GridUnitType.Star) });
         Grid.SetRow(columns, 1); root.Children.Add(columns);
-        var left = new DockPanel { Margin = new Thickness(0, 0, 16, 10) };
-        var ops = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var left = new DockPanel();
+        var ops = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         _moveUp = Button("上移", () => Move(-1)); _moveDown = Button("下移", () => Move(1));
         _copyStep = Button("复制", Copy); _removeStep = Button("移除", Remove);
         ops.Children.Add(_moveUp); ops.Children.Add(_moveDown); ops.Children.Add(_copyStep); ops.Children.Add(_removeStep);
@@ -112,12 +111,16 @@ public sealed class TaskFlowEditorWindow : Window
         }
         DockPanel.SetDock(ops, Dock.Bottom); left.Children.Add(ops);
         var sequenceHeading = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var addMain = Button("＋ 添加步骤", () => SetAddTarget(new("流程步骤", _draft.Steps, false)));
+        var addMain = Button("＋ 添加步骤", () =>
+        {
+            if (_selected is { } selected) OpenCatalog(ContextFor(selected.Chain), selected.Step);
+            else OpenCatalog(new("流程步骤", _draft.Steps, false));
+        });
         DockPanel.SetDock(addMain, Dock.Right); sequenceHeading.Children.Add(addMain);
         sequenceHeading.Children.Add(new TextBlock { Text = "按顺序执行", Foreground = Brush("#E8C96D"), VerticalAlignment = VerticalAlignment.Center, FontSize = 14 });
         left.Children.Add(sequenceHeading);
         DockPanel.SetDock(left.Children[^1], Dock.Top);
-        _tree.Background = Brush("#211D35"); _tree.Foreground = Foreground; _tree.BorderBrush = Brush("#625572");
+        _tree.Background = Brush("#211D35"); _tree.Foreground = Foreground; _tree.BorderBrush = Brushes.Transparent;
         ScrollViewer.SetHorizontalScrollBarVisibility(_tree, ScrollBarVisibility.Disabled);
         _tree.Loaded += (_, _) =>
         {
@@ -128,33 +131,44 @@ public sealed class TaskFlowEditorWindow : Window
         {
             var tag = (_tree.SelectedItem as TreeViewItem)?.Tag;
             if (tag is Slot slot) Select(slot);
-            else if (tag is ChainChoice choice) SetAddTarget(choice);
+            else if (!_loading && tag is ChainChoice choice) OpenCatalog(choice);
         };
         var treeArea = new Grid();
         _emptyHint.Text = "还没有步骤\n\n点击“添加步骤”，再从右侧选择要做的事情。";
         _emptyHint.Foreground = Brush("#C9BED5"); _emptyHint.TextWrapping = TextWrapping.Wrap; _emptyHint.Margin = new Thickness(18, 22, 18, 0); _emptyHint.IsHitTestVisible = false;
         treeArea.Children.Add(_tree); treeArea.Children.Add(_emptyHint);
-        left.Children.Add(treeArea); columns.Children.Add(left);
-        var right = new DockPanel();
-        Grid.SetColumn(right, 1); columns.Children.Add(right);
+        left.Children.Add(treeArea);
+        var outline = CompositionUiTheme.Panel(left, inset: true);
+        outline.Margin = new Thickness(0, 0, 10, 0); columns.Children.Add(outline);
+        var detail = new Grid(); Grid.SetColumn(detail, 1); columns.Children.Add(detail);
+        var right = _picker;
         var title = new StackPanel();
         title.Children.Add(new TextBlock { Text = "选择要做的事情", Foreground = Brush("#E8C96D"), FontWeight = FontWeights.SemiBold, FontSize = 14 });
         _addContext.Foreground = Brush("#D4C5DC"); _addContext.Margin = new Thickness(0, 8, 0, 5); title.Children.Add(_addContext);
-        title.Children.Add(Button("返回流程步骤", () => SetAddTarget(new("流程步骤", _draft.Steps, false))));
+        var navigation = new WrapPanel();
+        navigation.Children.Add(Button("返回流程步骤", () => OpenCatalog(new("流程步骤", _draft.Steps, false))));
+        navigation.Children.Add(Button("关闭节点库", CloseCatalog));
+        title.Children.Add(navigation);
         DockPanel.SetDock(title, Dock.Top); right.Children.Add(title);
         var catalogScroll = new ScrollViewer { Content = _catalog, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         CompositionUiTheme.StyleScroll(catalogScroll); right.Children.Add(catalogScroll);
-        var parameterFrame = new Border { BorderBrush = Brush("#665872"), BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 10, 0, 0) };
-        var parameterScroll = new ScrollViewer { Content = _parameters, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        CompositionUiTheme.StyleScroll(parameterScroll); parameterFrame.Child = parameterScroll;
-        Grid.SetRow(parameterFrame, 2); root.Children.Add(parameterFrame);
+        var parameterScroll = new ScrollViewer { Content = _parameters, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
+        CompositionUiTheme.StyleScroll(parameterScroll); _inspector.Child = parameterScroll;
+        detail.Children.Add(CompositionUiTheme.Panel(_inspector));
+        detail.Children.Add(_picker);
+        _picker.Background = Brush("#2B253E"); _picker.Margin = new Thickness(1);
+        var padding = new Thickness(14); title.Margin = padding; catalogScroll.Margin = new Thickness(14, 0, 14, 12);
         var footer = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
         var apply = Button("应用到计划", Apply); apply.MinWidth = 105; CompositionUiTheme.StyleButton(apply, primary: true);
         var cancel = Button("取消", () => DialogResult = false); cancel.IsCancel = true;
         DockPanel.SetDock(apply, Dock.Right); DockPanel.SetDock(cancel, Dock.Right); footer.Children.Add(apply); footer.Children.Add(cancel);
-        footer.Children.Add(_error); Grid.SetRow(footer, 3); root.Children.Add(footer);
+        footer.Children.Add(_error); Grid.SetRow(footer, 2); root.Children.Add(footer);
         if (requireExit) _error.Text = "选择决定车道的条件；上方车道在条件满足时执行，下方车道在不满足时执行。";
-        SetAddTarget(new("流程步骤", _draft.Steps, false));
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Escape || _picker.Visibility != Visibility.Visible) return;
+            e.Handled = true; CloseCatalog();
+        };
         RefreshTree(selectedStepId);
     }
 
@@ -199,25 +213,32 @@ public sealed class TaskFlowEditorWindow : Window
         }
         return new("当前步骤中的动作", chain, false);
     }
+    private void CloseCatalog()
+    {
+        RefreshTree(_selected?.Step.Id);
+        _tree.Focus();
+    }
+
+    private void OpenCatalog(ChainChoice choice, StartupStep? after = null)
+    {
+        SetAddTarget(choice, after);
+        RefreshCatalog();
+        _picker.Visibility = Visibility.Visible; _inspector.Visibility = Visibility.Hidden;
+        UpdateOperations();
+    }
+
     private void SetAddTarget(ChainChoice choice, StartupStep? after = null)
     {
         _addTarget = choice; _insertAfter = after;
-        if (after is null)
-        {
-            _selected = null; _parameters.Children.Clear();
-            _parameters.Children.Add(new TextBlock { Text = "从右侧选择要添加的动作。添加位置：" + choice.Name, Foreground = Brush("#C9BED5"), TextWrapping = TextWrapping.Wrap });
-        }
         _addContext.Text = "添加到：" + choice.Name + (after is null ? "" : "（在所选步骤后）");
-        UpdateOperations();
-        RefreshCatalog();
     }
     private void UpdateOperations()
     {
-        var index = _selected is { } p ? p.Chain.IndexOf(p.Step) : -1;
+        var index = _picker.Visibility != Visibility.Visible && _selected is { } p ? p.Chain.IndexOf(p.Step) : -1;
         var chain = _selected?.Chain;
         _moveUp.IsEnabled = index > 0 && _selected!.Step.Id != _draft.ExitStepId && chain![index - 1].Id != _draft.ExitStepId;
         _moveDown.IsEnabled = index >= 0 && index + 1 < chain!.Count && _selected!.Step.Id != _draft.ExitStepId && chain[index + 1].Id != _draft.ExitStepId;
-        _copyStep.IsEnabled = _selected is not null; _removeStep.IsEnabled = _selected is not null;
+        _copyStep.IsEnabled = _removeStep.IsEnabled = index >= 0;
     }
     private static string RegisterText(IReadOnlyList<int?>? values, string operation)
         => values is null ? "尚未设置"
@@ -266,9 +287,20 @@ public sealed class TaskFlowEditorWindow : Window
             }
         }
         Walk(_tree);
+        if (_stepPreview != null && _selected is { } slot) _stepPreview.Text = PreviewText(slot.Step);
     }
+    private static string PreviewText(StartupStep step)
+    {
+        if (!IsTrigger(step) || step.FireSteps.Count == 0) return DescribeStep(step);
+        var trigger = step.Kind == StartupStepKinds.LogTrigger && !string.IsNullOrWhiteSpace(step.LogKeyword)
+            ? $"出现「{step.LogKeyword}」" : DescribeStep(step);
+        return trigger + " → " + string.Join("；", step.FireSteps.Take(2).Select(DescribeStep))
+            + (step.FireSteps.Count > 2 ? $" 等 {step.FireSteps.Count} 个动作" : "");
+    }
+
     private void RefreshTree(string? select = null)
     {
+        select ??= _draft.Steps.FirstOrDefault()?.Id;
         _loading = true; _tree.Items.Clear();
         void Add(ItemsControl container, List<StartupStep> chain)
         {
@@ -294,7 +326,7 @@ public sealed class TaskFlowEditorWindow : Window
         {
             var choice = new ChainChoice(stepName + " → " + title, steps, background);
             var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 4, 0, 2) };
-            var add = Button("＋ 添加动作", () => SetAddTarget(choice));
+            var add = Button("＋ 添加动作", () => OpenCatalog(choice));
             add.FontSize = 11; add.Padding = new Thickness(7, 3, 7, 3); add.MinHeight = 26;
             AutomationProperties.SetName(add, title + "添加动作");
             add.Click += (_, e) => e.Handled = true;
@@ -332,15 +364,27 @@ public sealed class TaskFlowEditorWindow : Window
     private void Select(Slot? slot)
     {
         if (_loading) return;
-        _selected = slot; _parameters.Children.Clear(); _checks.Clear();
-        if (slot is null) { SetAddTarget(new("流程步骤", _draft.Steps, false)); return; }
+        _selected = slot; _stepPreview = null; _parameters.Children.Clear(); _checks.Clear();
+        _picker.Visibility = Visibility.Collapsed; _inspector.Visibility = Visibility.Visible;
+        UpdateOperations();
+        if (slot is null)
+        {
+            _parameters.Children.Add(new TextBlock { Text = "添加步骤后，在这里编辑参数。", Foreground = Brush("#C6BAD5"), TextWrapping = TextWrapping.Wrap });
+            return;
+        }
         SetAddTarget(ContextFor(slot.Chain), slot.Step);
         var s = slot.Step;
-        _parameters.Children.Add(new TextBlock { Text = Label(s), FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = Brush("#E8C96D") });
+        _parameters.Children.Add(new TextBlock { Text = Label(s), FontSize = 17, FontWeight = FontWeights.SemiBold, Foreground = Foreground, Margin = new Thickness(0, 0, 0, 9) });
         Text("步骤名称（可选）", s.Name, v => s.Name = v);
         Check("启用这一步", s.Enabled, v => s.Enabled = v);
         if (IsTrigger(s)) TriggerParameters(s);
         else ConditionOrAction(s, s.Kind);
+        var preview = new StackPanel();
+        preview.Children.Add(new TextBlock { Text = "执行预览", FontSize = 12, Foreground = Brush("#C6BAD5") });
+        _stepPreview = new TextBlock { Text = PreviewText(s), Foreground = Brush("#EAD391"), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
+        preview.Children.Add(_stepPreview);
+        var previewFrame = CompositionUiTheme.Panel(preview, inset: true);
+        previewFrame.Margin = new Thickness(0, 12, 0, 0); _parameters.Children.Add(previewFrame);
     }
     private static bool Contains(IEnumerable<StartupStep> chain, StartupStep target)
         => chain.Any(s => ReferenceEquals(s, target) || Contains(s.TrueSteps.Concat(s.FalseSteps).Concat(s.FireSteps).Concat(s.BeforeAttemptSteps), target));
@@ -428,8 +472,8 @@ public sealed class TaskFlowEditorWindow : Window
     }
     private StackPanel Row(string label)
     {
-        var line = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-        line.Children.Add(new TextBlock { Text = label, MinWidth = 104, Foreground = Brush("#D0C7DB"), VerticalAlignment = VerticalAlignment.Center });
+        var line = new StackPanel { Margin = new Thickness(0, 4, 0, 6) };
+        line.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4), FontSize = 12, Foreground = Brush("#D0C7DB"), VerticalAlignment = VerticalAlignment.Center });
         _parameters.Children.Add(line); return line;
     }
     private void Number(string label, int value, int min, int max, Action<int> change)
@@ -463,7 +507,7 @@ public sealed class TaskFlowEditorWindow : Window
     private void Time(string label, string value, Action<string> change)
     {
         TimeOnly.TryParse(value, out var at);
-        var line = Row(label);
+        var field = Row(label); var line = new StackPanel { Orientation = Orientation.Horizontal }; field.Children.Add(line);
         var hour = new ComboBox { ItemsSource = Enumerable.Range(0, 24).Select(n => n.ToString("00")).ToArray(), SelectedIndex = at.Hour, Width = 55 };
         var minute = new ComboBox { ItemsSource = Enumerable.Range(0, 60).Select(n => n.ToString("00")).ToArray(), SelectedIndex = at.Minute, Width = 55 };
         ThemeCombo(hour); ThemeCombo(minute);
@@ -477,14 +521,19 @@ public sealed class TaskFlowEditorWindow : Window
         if (condition) s.RegisterCondition ??= new(); else s.RegisterWrite ??= new();
         var values = condition ? s.RegisterCondition!.Values : s.RegisterWrite!.Values;
         while (values.Count < RegisterBank.Count) values.Add(null);
-        var wrap = new WrapPanel(); _parameters.Children.Add(wrap);
+        var wrap = new System.Windows.Controls.Primitives.UniformGrid { Columns = 5 };
+        wrap.SizeChanged += (_, e) =>
+        {
+            if (e.WidthChanged) wrap.Columns = Math.Clamp((int)(e.NewSize.Width / 76), 1, 5);
+        };
+        _parameters.Children.Add(wrap);
         for (var i = 0; i < RegisterBank.Count; i++)
         {
             var index = i; var box = new StackPanel { Margin = new Thickness(0, 4, 8, 4) };
             box.Children.Add(new TextBlock { Text = $"R{i + 1}", Foreground = Foreground });
             var choices = new[] { condition ? "忽略" : "保持", "0", "1" };
-            var combo = new ComboBox { ItemsSource = choices, SelectedIndex = values[i] is { } v ? v + 1 : 0, Width = 58 };
-            ThemeCombo(combo);
+            var combo = new ComboBox { ItemsSource = choices, SelectedIndex = values[i] is { } v ? v + 1 : 0 };
+            ThemeCombo(combo); combo.SetResourceReference(StyleProperty, "CompositionRegisterChoice");
             AutomationProperties.SetName(combo, $"R{i + 1} " + (condition ? "判断" : "设置"));
             combo.SelectionChanged += (_, _) => { values[index] = combo.SelectedIndex == 0 ? null : combo.SelectedIndex - 1; RefreshStepHeaders(); };
             box.Children.Add(combo); wrap.Children.Add(box);

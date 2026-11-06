@@ -40,6 +40,23 @@ public sealed partial class MistletoeViewModel
             return JsonSerializer.Deserialize<RegisterBankSnapshot>(reply.PayloadJson,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                 ?? throw new InvalidOperationException("执行端未提供归零后的状态，结果未确认。");
+        }, async number =>
+        {
+            if (_remoteTarget is null)
+            {
+                var settings = new RegisterWriteSettings();
+                settings.Values[number - 1] = 1;
+                _localRegisterService!.Set(settings);
+                return _localRegisterService.GetSnapshot();
+            }
+            var reply = await _mainVm.RequestRemoteCenterAsync(_remoteTarget, "registers.set",
+                new RegisterSetRequest(number, 1));
+            if (reply.Status != "ok" || string.IsNullOrEmpty(reply.PayloadJson))
+                throw new InvalidOperationException(reply.Status == "unknown"
+                    ? "本位归一结果未确认，请读取执行端最新状态后再操作。" + reply.Message : reply.Message);
+            return JsonSerializer.Deserialize<RegisterBankSnapshot>(reply.PayloadJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("执行端未提供归一后的状态，结果未确认。");
         });
         Registers.Apply(IsRemoteMode ? remoteSnapshot : _localRegisterService!.GetSnapshot());
     }

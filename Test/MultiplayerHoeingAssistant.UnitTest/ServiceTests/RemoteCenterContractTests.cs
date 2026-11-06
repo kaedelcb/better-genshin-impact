@@ -180,6 +180,33 @@ public sealed class RemoteCenterContractTests
             Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "operation.get", rejectedSchemes.OperationId)).Status);
             var startupStatus = await monitor.RequestRemoteCenterAsync(target, "startup.status");
             Assert.Equal("ok", startupStatus.Status);
+            var configuredRegister = await monitor.RequestRemoteCenterAsync(target, "registers.configure",
+                new RegisterConfigurationChange { Number = 1, Name = "归一保留设置", ResetMode = RegisterBank.AfterChange,
+                    DelaySeconds = 3600, ExpectedSettingsRevision = "initial" });
+            Assert.Equal("ok", configuredRegister.Status);
+            var configuredEntry = JsonSerializer.Deserialize<RegisterBankSnapshot>(configuredRegister.PayloadJson!)!.Entries[0];
+            var setOther = await monitor.RequestRemoteCenterAsync(target, "registers.set", new RegisterSetRequest(2, 1));
+            Assert.Equal("ok", setOther.Status);
+            var otherEntries = JsonSerializer.Deserialize<RegisterBankSnapshot>(setOther.PayloadJson!)!.Entries.Skip(1).ToArray();
+            var setRequestId = Guid.NewGuid().ToString("N");
+            var setOne = await monitor.RequestRemoteCenterAsync(target, "registers.set", new RegisterSetRequest(1, 1), requestId: setRequestId);
+            Assert.Equal("ok", setOne.Status);
+            Assert.Equal(setRequestId, setOne.OperationId);
+            var setSnapshot = JsonSerializer.Deserialize<RegisterBankSnapshot>(setOne.PayloadJson!)!;
+            Assert.True(setSnapshot.Available);
+            Assert.Equal(1, setSnapshot.Entries[0].Value);
+            Assert.Equal(configuredEntry.Name, setSnapshot.Entries[0].Name);
+            Assert.Equal(configuredEntry.ResetMode, setSnapshot.Entries[0].ResetMode);
+            Assert.Equal(configuredEntry.SettingsRevision, setSnapshot.Entries[0].SettingsRevision);
+            Assert.Equal(setSnapshot.Entries[0].ChangedAtUtc!.Value.AddSeconds(3600), setSnapshot.Entries[0].NextResetAtUtc);
+            Assert.Equal(JsonSerializer.Serialize(otherEntries), JsonSerializer.Serialize(setSnapshot.Entries.Skip(1)));
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "operation.get", setRequestId)).Status);
+            foreach (var invalid in new object[] { new { }, new { number = 1 }, new { value = 1 },
+                new RegisterSetRequest(0, 1), new RegisterSetRequest(11, 1), new RegisterSetRequest(1, 2) })
+                Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "registers.set", invalid)).Status);
+            var afterInvalidSet = await monitor.RequestRemoteCenterAsync(target, "registers.get");
+            Assert.Equal(JsonSerializer.Serialize(setSnapshot), JsonSerializer.Serialize(
+                JsonSerializer.Deserialize<RegisterBankSnapshot>(afterInvalidSet.PayloadJson!)));
             var resetOne = await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest(1));
             Assert.Equal("ok", resetOne.Status);
             var resetSnapshot = JsonSerializer.Deserialize<RegisterBankSnapshot>(resetOne.PayloadJson!)!;
@@ -187,6 +214,10 @@ public sealed class RemoteCenterContractTests
             Assert.Equal(0, resetSnapshot.Entries[0].Value);
             Assert.False(string.IsNullOrWhiteSpace(resetOne.OperationId));
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "operation.get", resetOne.OperationId)).Status);
+            var replayedSet = await monitor.RequestRemoteCenterAsync(target, "registers.set", new RegisterSetRequest(1, 1), requestId: setRequestId);
+            Assert.Equal("ok", replayedSet.Status);
+            Assert.Equal(setOne.PayloadJson, replayedSet.PayloadJson);
+            Assert.Equal(0, JsonSerializer.Deserialize<RegisterBankSnapshot>((await monitor.RequestRemoteCenterAsync(target, "registers.get")).PayloadJson!)!.Entries[0].Value);
             Assert.Equal("rejected", (await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest())).Status);
             var resetAll = await monitor.RequestRemoteCenterAsync(target, "registers.reset", new RegisterResetRequest(All: true));
             Assert.Equal("ok", resetAll.Status);
@@ -313,6 +344,8 @@ public sealed class RemoteCenterContractTests
             Assert.Equal(deleteId, conflict.OperationId);
             Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target,
                 "operation.get", deleteId)).Status);
+            var persistentSet = await monitor.RequestRemoteCenterAsync(target, "registers.set", new RegisterSetRequest(3, 1));
+            Assert.Equal("ok", persistentSet.Status);
             child.Kill();
             child.WaitForExit(10000);
             restarted = Process.Start(start) ?? throw new InvalidOperationException("隔离执行端未能重启");
@@ -324,6 +357,10 @@ public sealed class RemoteCenterContractTests
                 await Task.Delay(250);
             }
             Assert.Equal("ok", afterRestart?.Status);
+            var registersAfterRestart = await monitor.RequestRemoteCenterAsync(target, "registers.get");
+            Assert.Equal("ok", registersAfterRestart.Status);
+            Assert.Equal(1, JsonSerializer.Deserialize<RegisterBankSnapshot>(registersAfterRestart.PayloadJson!)!.Entries[2].Value);
+            Assert.Equal("ok", (await monitor.RequestRemoteCenterAsync(target, "operation.get", persistentSet.OperationId)).Status);
             var recoveredDelete = await monitor.RequestRemoteCenterAsync(target, "task.flow.delete",
                 new { workflowId = doc.WorkflowId, acknowledgeUnknownRuns = false },
                 saved.Revision, deleteId);

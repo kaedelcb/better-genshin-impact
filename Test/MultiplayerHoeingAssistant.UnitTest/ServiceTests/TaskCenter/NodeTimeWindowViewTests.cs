@@ -422,7 +422,12 @@ public sealed class NodeTimeWindowViewTests
         Assert.True(actions.ScrollableWidth <= 0.5,
             $"上方操作按钮不应横向溢出或需要滚动：{actions.ScrollableWidth:F1}px。");
         Assert.NotEqual(Visibility.Visible, actions.ComputedHorizontalScrollBarVisibility);
-        string[] labels = ["+任务", "复制", "修改", "删除", "导入配置", "导出配置", "重置状态", "启动单任务", "⏵⏵ 连续一条龙"];
+        var more = Assert.IsType<Button>(view.FindName("PlanMoreActionsButton"));
+        more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(more.ContextMenu.IsOpen);
+        Assert.Equal(new[] { "复制", "修改", "删除", "导入配置", "导出配置" }, more.ContextMenu.Items.OfType<MenuItem>().Select(m => m.Header));
+        more.ContextMenu.IsOpen = false;
+        string[] labels = ["+任务", "更多操作", "重置状态", "启动单任务", "⏵⏵ 连续一条龙"];
         var buttons = Descendants<Button>(actions).Where(button => labels.Contains(button.Content as string)).ToArray();
         Assert.Equal(labels, buttons.Select(button => button.Content as string));
         foreach (var button in buttons)

@@ -46,7 +46,7 @@ public class MistletoeWebGateTests
     public async Task RemoteRequestWithoutOwnerCredentialIsDeniedBeforeAnyExecution()
     {
         var (vm, seen) = NewVm();
-        foreach (var op in new[] { "startup.get", "startup.run", "startup.cancel", "task.run.start", "task.flow.save", "operation.get", "registers.get", "registers.configure", "registers.reset", "task.trigger.cancel", "task.prompt.answer" })
+        foreach (var op in new[] { "startup.get", "startup.run", "startup.cancel", "task.run.start", "task.flow.save", "operation.get", "registers.get", "registers.configure", "registers.reset", "registers.set", "task.trigger.cancel", "task.prompt.answer" })
         {
             var reply = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request(op), "r", local: false, Recorder(seen)));
             Assert.Equal("denied", reply["status"]!.GetValue<string>());

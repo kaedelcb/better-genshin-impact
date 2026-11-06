@@ -30,6 +30,9 @@ public sealed class RegisterWriteSettings
 /// <summary>归零只改状态。全部归零必须明确 All=true，空参数不能被解释为清空全部。</summary>
 public sealed record RegisterResetRequest(int? Number = null, bool All = false);
 
+/// <summary>明确设置单个位。缺失值使用非法默认值，不能被解释为归零。</summary>
+public sealed record RegisterSetRequest(int Number, int Value = -1);
+
 public sealed class RegisterConditionSettings
 {
     [JsonPropertyName("values")]

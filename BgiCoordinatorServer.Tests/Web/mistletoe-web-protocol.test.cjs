@@ -38,11 +38,11 @@ for (const local of [true,false]) test(`${local?'本机':'远程'}保存计划�
     assert.equal(!!request.browserSecret,!local);
 });
 
-test('寄存器读取走只读桥，配置和归零均有持久回执保护',async()=>{
+test('寄存器读取走只读桥，配置、归零和归一均有持久回执保护',async()=>{
     const x=setup(true);
     await x.run("mtSend('registers.get')");
     assert.equal(x.calls[0].op,'mistletoe.read');
-    for(const op of ['registers.configure','registers.reset']) {
+    for(const op of ['registers.configure','registers.reset','registers.set']) {
         assert.equal(x.run(`mtDurable('${op}')`),true);
         await x.run(`mtSend('${op}',{number:1})`);
         assert.equal(x.calls.at(-1).op,'mistletoe.request');

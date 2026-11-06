@@ -108,7 +108,7 @@ public partial class MainViewModel
         string? ResourceKind = null, string? ResourceConfig = null, string? ResourceTaskId = null);
 
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
-        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure" or "registers.reset"
+        "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure" or "registers.reset" or "registers.set"
         or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
         or "task.flow.save" or "task.flow.delete" or "task.flow.restore";
 
@@ -147,6 +147,16 @@ public partial class MainViewModel
                 return RemoteCenterReply.Ok(Registers.GetSnapshot());
             case "registers.configure":
                 return RemoteCenterReply.Ok(Registers.Configure(Decode<RegisterConfigurationChange>(request.PayloadJson)));
+            case "registers.set":
+            {
+                var args = Decode<RegisterSetRequest>(request.PayloadJson);
+                if (args.Number is < 1 or > RegisterBank.Count || args.Value is not (0 or 1))
+                    return RemoteCenterReply.Rejected("请选择有效寄存器位号（1–10），并明确设置为0或1。");
+                var settings = new RegisterWriteSettings();
+                settings.Values[args.Number - 1] = args.Value;
+                Registers.Set(settings);
+                return RemoteCenterReply.Ok(Registers.GetSnapshot());
+            }
             case "registers.reset":
             {
                 var args = Decode<RegisterResetRequest>(request.PayloadJson);

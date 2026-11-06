@@ -29,7 +29,7 @@
                                 <Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,0,4,0"/>
                                 <Setter Property="Foreground" Value="#BDB6D2" />
                                 <Setter Property="Background" Value="#211E3C" />
-                                <Setter Property="BorderBrush" Value="#837044" />
+                                <Setter Property="BorderBrush" Value="#514B69" />
                                 <Setter Property="BorderThickness" Value="1" />
                                 <Setter Property="Cursor" Value="Hand" />
                                 <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">

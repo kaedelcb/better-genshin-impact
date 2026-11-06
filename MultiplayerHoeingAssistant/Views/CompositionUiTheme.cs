@@ -1,4 +1,7 @@
 using System.Windows;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Markup;
 
@@ -12,6 +15,31 @@ public static class CompositionUiTheme
         if (scope.Resources.Contains("CompositionButton")) return;
         scope.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(Resources));
     }
+
+    // Use the native caption so dragging, snapping and window buttons stay system-owned.
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, in uint value, int size);
+
+    internal static void ApplyEditor(Window window)
+    {
+        Apply(window);
+        window.Resources[typeof(TextBox)] = (Style)window.FindResource("CompositionInput");
+        window.SourceInitialized += (_, _) =>
+        {
+            if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) || SystemParameters.HighContrast) return;
+            var hwnd = new WindowInteropHelper(window).Handle;
+            uint caption = 0x00321C21, text = 0x00F7EEF4;
+            if (DwmSetWindowAttribute(hwnd, 35, in caption, sizeof(uint)) == 0)
+                _ = DwmSetWindowAttribute(hwnd, 36, in text, sizeof(uint));
+        };
+    }
+
+    internal static Border Panel(UIElement child, bool inset = false) => new()
+    {
+        Child = child, Padding = new Thickness(13), CornerRadius = new CornerRadius(8),
+        BorderThickness = new Thickness(1), BorderBrush = new SolidColorBrush(Color.FromRgb(72, 61, 86)),
+        Background = new SolidColorBrush(inset ? Color.FromRgb(33, 28, 49) : Color.FromRgb(43, 37, 62))
+    };
 
     public static void StyleButton(Button button, bool primary = false)
         => button.SetResourceReference(FrameworkElement.StyleProperty, primary ? "CompositionPrimaryButton" : "CompositionButton");
@@ -27,6 +55,21 @@ public static class CompositionUiTheme
 
     private const string Resources = """
     <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+      <Style x:Key="CompositionInput" TargetType="TextBox">
+        <Setter Property="Background" Value="#221D31"/><Setter Property="Foreground" Value="#F4EFF8"/>
+        <Setter Property="BorderBrush" Value="#594B66"/><Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,4"/><Setter Property="MinHeight" Value="30"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="CaretBrush" Value="#E8C96D"/>
+        <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+          <Border x:Name="Input" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
+            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="Input" Property="BorderBrush" Value="#D7BB78"/></Trigger>
+            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Input" Property="Opacity" Value="0.65"/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate></Setter.Value></Setter>
+      </Style>
       <Style x:Key="CompositionExpander" TargetType="Expander">
         <Setter Property="Foreground" Value="#F4F0F8"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Expander">
@@ -54,8 +97,8 @@ public static class CompositionUiTheme
         </ControlTemplate></Setter.Value></Setter>
       </Style>
       <Style x:Key="CompositionButton" TargetType="Button">
-        <Setter Property="Foreground" Value="#F4F0F8"/><Setter Property="Background" Value="#3B3351"/>
-        <Setter Property="BorderBrush" Value="#796A88"/><Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="#F4F0F8"/><Setter Property="Background" Value="#373047"/>
+        <Setter Property="BorderBrush" Value="#5F526D"/><Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="10,5"/><Setter Property="MinHeight" Value="30"/><Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
@@ -86,7 +129,7 @@ public static class CompositionUiTheme
         </ControlTemplate></Setter.Value></Setter>
       </Style>
       <Style x:Key="CompositionComboBox" TargetType="ComboBox">
-        <Setter Property="Foreground" Value="#F1EBF7"/><Setter Property="Background" Value="#211D35"/><Setter Property="BorderBrush" Value="#A88F55"/><Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Foreground" Value="#F1EBF7"/><Setter Property="Background" Value="#211D35"/><Setter Property="BorderBrush" Value="#62536F"/><Setter Property="BorderThickness" Value="1"/>
         <Setter Property="MinHeight" Value="32"/><Setter Property="Padding" Value="9,5"/><Setter Property="ScrollViewer.CanContentScroll" Value="True"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/><Setter Property="ItemContainerStyle" Value="{StaticResource CompositionComboItem}"/>
         <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
@@ -113,6 +156,12 @@ public static class CompositionUiTheme
             <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="#8D849F"/><Setter Property="Background" Value="#29253A"/><Setter Property="BorderBrush" Value="#51495E"/></Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate></Setter.Value></Setter>
+      </Style>
+      <Style x:Key="CompositionRegisterChoice" TargetType="ComboBox" BasedOn="{StaticResource CompositionComboBox}">
+        <Style.Triggers>
+          <Trigger Property="SelectedIndex" Value="1"><Setter Property="Background" Value="#3B3232"/><Setter Property="Foreground" Value="#F0D798"/></Trigger>
+          <Trigger Property="SelectedIndex" Value="2"><Setter Property="Background" Value="#3B3232"/><Setter Property="Foreground" Value="#F0D798"/></Trigger>
+        </Style.Triggers>
       </Style>
       <Style x:Key="CompositionCheckBox" TargetType="CheckBox">
         <Setter Property="Foreground" Value="#F1EBF7"/><Setter Property="Cursor" Value="Hand"/><Setter Property="MinHeight" Value="25"/>

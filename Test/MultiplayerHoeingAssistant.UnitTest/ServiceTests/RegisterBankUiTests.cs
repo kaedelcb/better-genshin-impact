@@ -3,9 +3,11 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 using MultiplayerHoeingAssistant.ViewModels;
 using MultiplayerHoeingAssistant.Views;
 using Xunit;
@@ -18,6 +20,43 @@ public sealed class RegisterBankWpfCollection;
 [Collection("RegisterBankWpf")]
 public sealed class RegisterBankUiTests
 {
+    [Fact]
+    public Task StartupCenterUsesCompactTenCellsAlignedWithTitle() => OnSta(async () =>
+    {
+        var bank = new RegisterBankViewModel(_ => throw new InvalidOperationException());
+        bank.Apply(new() { Available = true, Entries = Enumerable.Range(1, RegisterBank.Count)
+            .Select(n => new RegisterEntry { Number = n, Value = n is 1 or 10 ? 1 : 0 }).ToList() });
+        var page = new MistletoePage { DataContext = new RegisterContext(bank) };
+        var window = new Window { Content = page, Width = 980, Height = 760, ShowInTaskbar = false,
+            ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000 };
+        FormalWpfTheme.Apply(window);
+        try
+        {
+            window.Show(); await Layout(window);
+            var strip = Descendants<RegisterStripView>(page).Single(s => s.IsVisible);
+            Assert.Same(bank, strip.DataContext); Assert.True(strip.IsCompact);
+            var cells = Descendants<Button>(strip).Where(b => b.DataContext is RegisterCellViewModel).ToArray();
+            Assert.Equal(10, cells.Length);
+            foreach (var width in new[] { 980, 1180 })
+            {
+                window.Width = width; await Layout(window);
+                Assert.All(cells, b => { Assert.Equal(18, b.ActualWidth); Assert.Equal(18, b.ActualHeight); });
+                Assert.Equal(Color.FromRgb(232, 201, 109), Assert.IsType<SolidColorBrush>(cells[0].BorderBrush).Color);
+                Assert.Equal(Color.FromRgb(81, 75, 105), Assert.IsType<SolidColorBrush>(cells[1].BorderBrush).Color);
+                var title = Descendants<TextBlock>(page).Single(t => t.Text == "启动流程");
+                var titleCenter = title.TransformToAncestor(window).Transform(new Point(0, title.ActualHeight / 2));
+                var firstCell = cells[0].TransformToAncestor(window).Transform(new Point(0, 9));
+                var lastCell = cells[9].TransformToAncestor(window).Transform(new Point(0, 9));
+                Assert.Equal(firstCell.Y, lastCell.Y, 1); Assert.InRange(Math.Abs(titleCenter.Y - firstCell.Y), 0, 1);
+                Assert.True(cells[9].TransformToAncestor(window).Transform(new Point(18, 0)).X < window.ActualWidth);
+                strip.BringIntoView(); await Layout(window);
+                Capture(page, "register-compact-startup-" + width);
+                Capture((FrameworkElement)VisualTreeHelper.GetParent(strip), "register-compact-startup-header-" + width);
+            }
+        }
+        finally { window.Close(); }
+    });
+
     [Fact]
     public Task BasicPlanUsesTheSameTenCellsAndClickSettingsPersistNameAndSelectedTime() => OnSta(async () =>
     {
@@ -33,6 +72,7 @@ public sealed class RegisterBankUiTests
         var page = new MistletoePage { DataContext = new RegisterContext(bank), Content = basic };
         var window = new Window { Content = page, Width = 980, Height = 760, ShowInTaskbar = false,
             ShowActivated = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -20000, Top = -20000 };
+        FormalWpfTheme.Apply(window);
         try
         {
             window.Show(); await Layout(window);
@@ -44,17 +84,15 @@ public sealed class RegisterBankUiTests
             var first = buttons[0].TransformToAncestor(window).Transform(new Point());
             var last = buttons[9].TransformToAncestor(window).Transform(new Point());
             Assert.Equal(first.Y, last.Y, 1);
-            var title = Descendants<TextBlock>(basic).Single(t => t.Text == "计划表");
-            var titleTop = title.TransformToAncestor(window).Transform(new Point());
-            Assert.InRange(Math.Abs(titleTop.Y + title.ActualHeight / 2 - first.Y - 9), 0, 1);
-            Assert.True(strip.IsCompact);
-            var pane = (Border)basic.FindName("PlanListPane");
-            var paneOrigin = pane.TransformToAncestor(window).Transform(new Point());
-            Assert.True(first.X >= paneOrigin.X + pane.Padding.Left);
-            Assert.True(last.X + 18 <= paneOrigin.X + pane.ActualWidth - pane.Padding.Right);
+            var header = (Grid)basic.FindName("CurrentPlanHeader");
+            var bounds = header.TransformToAncestor(window).TransformBounds(new Rect(header.RenderSize));
+            var title = (TextBlock)basic.FindName("CurrentPlanTitleText");
+            var titleBounds = title.TransformToAncestor(window).TransformBounds(new Rect(title.RenderSize));
+            Assert.True(strip.IsCompact); Assert.True(first.X >= titleBounds.Right);
+            Assert.InRange(first.Y, bounds.Top, bounds.Bottom - 18);
             var resetAll = Assert.IsType<Button>(strip.FindName("ResetAllButton"));
             var resetOrigin = resetAll.TransformToAncestor(window).Transform(new Point());
-            Assert.True(resetOrigin.X + resetAll.ActualWidth <= paneOrigin.X + pane.ActualWidth - pane.Padding.Right);
+            Assert.True(resetOrigin.X + resetAll.ActualWidth <= bounds.Right + 1);
             Assert.Equal(first.Y, resetOrigin.Y, 1);
             Assert.DoesNotContain(Descendants<ComboBox>(basic), combo =>
                 BindingOperations.GetBinding(combo, System.Windows.Controls.Primitives.Selector.SelectedIndexProperty)
@@ -97,6 +135,8 @@ public sealed class RegisterBankUiTests
             bank.Apply(service.GetSnapshot()); await Layout(window);
             Assert.Equal("1", buttons[0].Content); Assert.Equal("1", buttons[9].Content);
             Assert.Contains("日志命中标记", AutomationProperties.GetName(buttons[0]));
+            Assert.All(buttons, b => { Assert.Equal(18, b.ActualWidth); Assert.Equal(18, b.ActualHeight); });
+            Capture(page, "register-compact-basic-980");
         }
         finally
         {
@@ -120,6 +160,23 @@ public sealed class RegisterBankUiTests
         bank.Apply(null);
         Assert.False(row.Cell.Available); Assert.Equal("?", row.Cell.ValueText);
         Assert.Equal(1, settings.Values[9]);
+    }
+
+    private static void Capture(FrameworkElement visual, string name)
+    {
+        var folder = Environment.GetEnvironmentVariable("BGI_COMPOSITION_UI_SCREENSHOTS");
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        Directory.CreateDirectory(folder);
+        var bitmap = new RenderTargetBitmap((int)visual.ActualWidth, (int)visual.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        var drawing = new DrawingVisual();
+        using (var context = drawing.RenderOpen())
+        {
+            var bounds = new Rect(0, 0, visual.ActualWidth, visual.ActualHeight);
+            context.DrawRectangle(new SolidColorBrush(Color.FromRgb(36, 32, 63)), null, bounds);
+            context.DrawRectangle(new VisualBrush(visual) { Stretch = Stretch.Fill }, null, bounds);
+        }
+        bitmap.Render(drawing); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+        using var output = File.Create(Path.Combine(folder, name + ".png")); png.Save(output);
     }
 
     private static ComboBox Combo(DependencyObject root, string name)
@@ -153,6 +210,7 @@ public sealed class RegisterBankUiTests
     public sealed class RegisterContext(RegisterBankViewModel bank)
     {
         public RegisterBankViewModel Registers => bank;
+        public int SelectedTabIndex => 0;
         public int TaskCenterModeIndex { get; set; }
     }
 }

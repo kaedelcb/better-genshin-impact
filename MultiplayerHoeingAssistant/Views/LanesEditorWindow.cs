@@ -20,6 +20,8 @@ public sealed class LanesEditorWindow : Window
     private readonly StackPanel _parameters = new();
     private readonly TextBlock _error = new() { Foreground = new SolidColorBrush(Color.FromRgb(245, 166, 151)), TextWrapping = TextWrapping.Wrap };
     private readonly TextBlock _preview = new() { TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(235, 214, 157)) };
+    private readonly TextBlock _yesPreview = Heading("");
+    private readonly TextBlock _noPreview = Heading("");
     private readonly TextBlock _beforeSummary = new() { TextWrapping = TextWrapping.Wrap };
     private readonly Dictionary<string, StartupStep> _conditions = new(StringComparer.Ordinal);
     private readonly List<Func<string?>> _checks = [];
@@ -40,25 +42,35 @@ public sealed class LanesEditorWindow : Window
         _condition = local?.Steps.FirstOrDefault(s => s.Id == local.ExitStepId);
         _before = local?.Steps.Where(s => s.Id != local.ExitStepId).ToList() ?? [];
         if (_condition is not null) _conditions[_condition.Kind] = _condition;
-        Title = "设置车道"; Width = 780; Height = 720; MinWidth = 680; MinHeight = 540;
+        Title = "设置车道"; Width = 860; Height = 720; MinWidth = 680; MinHeight = 540;
         MaxHeight = SystemParameters.WorkArea.Height; WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        CompositionUiTheme.Apply(this);
-        Background = B("#29243F"); Foreground = B("#F4F2FA"); FontSize = 13;
+        CompositionUiTheme.ApplyEditor(this);
+        Background = B("#24203B"); Foreground = B("#F4F2FA"); FontSize = 13;
         FontFamily = new FontFamily("Microsoft YaHei UI");
         var root = new Grid { Margin = new Thickness(20), Background = Background };
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new() { Height = GridLength.Auto });
         Content = root;
-        var header = new StackPanel { Margin = new Thickness(0, 0, 0, 12) };
-        header.Children.Add(Heading("只选择一条车道执行", 21));
-        header.Children.Add(Note("到这一步时判断一次：满足条件走上面的车道，其他情况走下面的车道；完成后继续下一项任务。"));
-        root.Children.Add(header);
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
+        var identity = new StackPanel { Width = 180 };
+        _name = TextField(identity, "车道名称", _draft.Name);
+        DockPanel.SetDock(identity, Dock.Right); header.Children.Add(identity);
+        var intro = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        intro.Children.Add(Heading("设置车道", 20));
+        intro.Children.Add(Note("执行到这里时判断一次，只执行选中的路线。"));
+        header.Children.Add(intro); root.Children.Add(header);
         var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
         CompositionUiTheme.StyleScroll(scroll); Grid.SetRow(scroll, 1); root.Children.Add(scroll);
-        var body = new StackPanel(); scroll.Content = body;
-        _name = TextField(body, "车道名称", _draft.Name);
-        body.Children.Add(Heading("1. 两条车道叫什么"));
+        var workspace = new Grid();
+        workspace.ColumnDefinitions.Add(new());
+        workspace.ColumnDefinitions.Add(new() { Width = new GridLength(210) });
+        workspace.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        workspace.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        scroll.Content = workspace;
+        var body = new StackPanel();
+        workspace.Children.Add(CompositionUiTheme.Panel(body));
+        body.Children.Add(Heading("两条路线"));
         var names = new Grid { Margin = new Thickness(0, 5, 0, 12) };
         names.ColumnDefinitions.Add(new()); names.ColumnDefinitions.Add(new());
         var left = new StackPanel { Margin = new Thickness(0, 0, 9, 0) };
@@ -66,17 +78,38 @@ public sealed class LanesEditorWindow : Window
         names.Children.Add(left); Grid.SetColumn(right, 1); names.Children.Add(right); body.Children.Add(names);
         _yes = TextField(left, "条件满足时走", source.YesName is "是" or "" ? "路线 1" : source.YesName);
         _no = TextField(right, "其他情况走", source.NoName is "否" or "" ? "路线 2" : source.NoName);
-        body.Children.Add(Heading("2. 怎样选择车道"));
-        body.Children.Add(Note("这里是车道自己的判断。配置后，在计划表的两条车道中分别添加配置组、一条龙或单项任务。"));
+        body.Children.Add(Heading("选择条件"));
         var kinds = TaskFlowNodeCatalog.All.Where(k => k.NodeType == "condition").ToArray();
         var choices = new[] { "请选择判断方式" }.Concat(kinds.Select(k => k.DisplayName)).ToArray();
         var choose = Combo(choices, _condition is null ? 0 : Array.FindIndex(kinds, k => k.Key == _condition.Kind) + 1);
         choose.MinWidth = 280; choose.HorizontalAlignment = HorizontalAlignment.Left;
         choose.Margin = new Thickness(0, 7, 0, 8); body.Children.Add(choose);
         body.Children.Add(_parameters);
-        var preview = new Border { Padding = new Thickness(12), Margin = new Thickness(0, 12, 0, 8),
-            Background = B("#211D35"), BorderBrush = B("#665673"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(5), Child = _preview };
-        body.Children.Add(preview);
+        var summary = new StackPanel();
+        summary.Children.Add(Heading("执行预览"));
+        _preview.Margin = new Thickness(0, 7, 0, 13); summary.Children.Add(_preview);
+        void Route(string when, TextBlock title, List<string> ids)
+        {
+            var route = new StackPanel();
+            route.Children.Add(Note(when)); route.Children.Add(title);
+            var names = ids.Select(id => _resources.FirstOrDefault(n => n.NodeId == id)?.Ref?.Config ?? "引用的任务不可用").ToList();
+            var tasks = Note(names.Count == 0 ? "未添加任务" : string.Join("、", names.Take(3)) + (names.Count > 3 ? $" 等 {names.Count} 项" : ""));
+            tasks.ToolTip = string.Join("\n", names); route.Children.Add(tasks);
+            var tile = CompositionUiTheme.Panel(route); tile.Margin = new Thickness(0, 0, 0, 8); summary.Children.Add(tile);
+        }
+        Route("满足条件", _yesPreview, _draft.YesNodeIds); Route("其他情况", _noPreview, _draft.NoNodeIds);
+        summary.Children.Add(Note("选中的路线结束后，继续下一项任务。"));
+        var preview = CompositionUiTheme.Panel(summary, inset: true);
+        preview.VerticalAlignment = VerticalAlignment.Top;
+        workspace.Children.Add(preview);
+        void ArrangePreview(bool stacked)
+        {
+            workspace.ColumnDefinitions[1].Width = new GridLength(stacked ? 0 : 210);
+            Grid.SetColumn(preview, stacked ? 0 : 1); Grid.SetRow(preview, stacked ? 1 : 0);
+            preview.Margin = stacked ? new Thickness(0, 10, 0, 0) : new Thickness(10, 0, 0, 0);
+        }
+        ArrangePreview(false);
+        workspace.SizeChanged += (_, e) => { if (e.WidthChanged) ArrangePreview(e.NewSize.Width < 690); };
         var advanced = new Expander { Header = "可选：判断之前先做几件事", Margin = new Thickness(0, 8, 0, 8), Foreground = Foreground };
         advanced.SetResourceReference(StyleProperty, "CompositionExpander");
         var before = new StackPanel { Margin = new Thickness(12, 6, 0, 0) };
@@ -114,7 +147,7 @@ public sealed class LanesEditorWindow : Window
     }
     private static T Copy<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
     private static SolidColorBrush B(string color) => new((Color)ColorConverter.ConvertFromString(color));
-    private static TextBlock Heading(string text, double size = 15) => new() { Text = text, FontSize = size, FontWeight = FontWeights.SemiBold, Foreground = B("#EED595"), Margin = new Thickness(0, 7, 0, 4) };
+    private static TextBlock Heading(string text, double size = 15) => new() { Text = text, FontSize = size, FontWeight = FontWeights.SemiBold, Foreground = B("#F2EAF7"), Margin = new Thickness(0, 7, 0, 4) };
     private static TextBlock Note(string text) => new() { Text = text, Foreground = B("#C6BDD7"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 5) };
     private static Button Action(string label, Action run)
     {
@@ -162,9 +195,11 @@ public sealed class LanesEditorWindow : Window
                 var registers = new WrapPanel();
                 for (var i = 0; i < RegisterBank.Count; i++)
                 {
-                    var index = i; var slot = new StackPanel { Width = 128, Margin = new Thickness(0, 4, 8, 4) };
+                    var index = i; var slot = new StackPanel { Width = 96, Margin = new Thickness(0, 3, 5, 3) };
                     slot.Children.Add(Note("R" + (i + 1)));
-                    var box = Combo(["不参与判断", "等于 0", "等于 1"], settings.Values[i] is { } v ? v + 1 : 0);
+                    var box = Combo(["不参与", "等于 0", "等于 1"], settings.Values[i] is { } v ? v + 1 : 0);
+                    box.SetResourceReference(StyleProperty, "CompositionRegisterChoice");
+                    box.MinWidth = 0; box.ToolTip = "不参与判断、等于 0 或等于 1";
                     box.SelectionChanged += (_, _) => { settings.Values[index] = box.SelectedIndex == 0 ? null : box.SelectedIndex - 1; UpdatePreview(); };
                     slot.Children.Add(box); registers.Children.Add(slot);
                 }
@@ -216,7 +251,8 @@ public sealed class LanesEditorWindow : Window
         if (_yes is null || _no is null) return;
         _beforeSummary.Text = _before.Count == 0 ? "未设置额外步骤" : string.Join(" → ", _before.Select(s => string.IsNullOrWhiteSpace(s.Name) ? StartupStepKinds.Find(s.Kind)?.DisplayName ?? s.Kind : s.Name));
         var condition = _condition is null ? "尚未设置条件" : Describe(_condition);
-        _preview.Text = $"满足「{condition}」 → {_yes.Text}\n其他情况 → {_no.Text}\n选中的车道执行完 → 继续下一项任务";
+        // Keep each comparison together when the preview column wraps.
+        _preview.Text = _condition?.Kind == StartupStepKinds.JudgeRegister ? condition.Replace(" = ", "\u00a0=\u00a0") : condition; _yesPreview.Text = _yes.Text; _noPreview.Text = _no.Text;
     }
     internal static string Describe(StartupStep step) => step.Kind switch
     {

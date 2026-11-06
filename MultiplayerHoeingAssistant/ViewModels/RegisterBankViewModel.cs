@@ -7,20 +7,30 @@ public sealed class RegisterBankViewModel : ViewModelBase
 {
     private readonly Func<RegisterConfigurationChange, Task<RegisterBankSnapshot>> _save;
     private readonly Func<int?, Task<RegisterBankSnapshot>>? _reset;
+    private readonly Func<int, Task<RegisterBankSnapshot>>? _setOne;
     private bool _isBusy;
     public bool IsBusy
     {
         get => _isBusy;
-        private set { if (SetProperty(ref _isBusy, value)) OnPropertyChanged(nameof(CanReset)); }
+        private set
+        {
+            if (!SetProperty(ref _isBusy, value)) return;
+            OnPropertyChanged(nameof(CanReset));
+            OnPropertyChanged(nameof(CanSetOne));
+        }
     }
     public bool CanReset => _reset is not null && !IsBusy && Cells.All(c => c.Available);
-    private string _resetStatus = "立即将 R1–R10 全部归零，保留名称和自动重置规则。";
+    public bool CanSetOne => _setOne is not null && !IsBusy && Cells.All(c => c.Available);
+    private string _setOneStatus = "";
+    public string SetOneStatus { get => _setOneStatus; private set => SetProperty(ref _setOneStatus, value); }
+    private string _resetStatus = "确认后将 R1–R10 全部归零，保留名称和自动重置规则。";
     public string ResetStatus { get => _resetStatus; private set => SetProperty(ref _resetStatus, value); }
     public ObservableCollection<RegisterCellViewModel> Cells { get; } = new(
         Enumerable.Range(1, RegisterBank.Count).Select(i => new RegisterCellViewModel(i)));
 
     public RegisterBankViewModel(Func<RegisterConfigurationChange, Task<RegisterBankSnapshot>> save,
-        Func<int?, Task<RegisterBankSnapshot>>? reset = null) { _save = save; _reset = reset; }
+        Func<int?, Task<RegisterBankSnapshot>>? reset = null,
+        Func<int, Task<RegisterBankSnapshot>>? setOne = null) { _save = save; _reset = reset; _setOne = setOne; }
 
     public void Apply(RegisterBankSnapshot? snapshot)
     {
@@ -30,6 +40,7 @@ public sealed class RegisterBankViewModel : ViewModelBase
             Cells[i].Apply(valid ? snapshot!.Entries[i] : null,
                 snapshot?.Error is { Length: > 0 } error ? error : "执行端尚未提供寄存器状态，请检查连接或版本。");
         OnPropertyChanged(nameof(CanReset));
+        OnPropertyChanged(nameof(CanSetOne));
     }
 
     public async Task SaveAsync(RegisterConfigurationChange change)
@@ -64,6 +75,26 @@ public sealed class RegisterBankViewModel : ViewModelBase
                 : "手动归零已确认，随后状态发生更新；以最新状态为准。";
         }
         catch (Exception ex) { ResetStatus = "归零未确认：" + ex.Message; throw; }
+        finally { IsBusy = false; }
+    }
+
+    public async Task SetOneAsync(int number)
+    {
+        if (number is < 1 or > RegisterBank.Count) throw new ArgumentOutOfRangeException(nameof(number));
+        if (_setOne is null) throw new InvalidOperationException("当前执行端未提供手动归一，请检查连接或版本。");
+        if (!CanSetOne) throw new InvalidOperationException(IsBusy ? "寄存器操作正在执行，请等待完成。" : "寄存器状态尚未确认，不能归一。");
+        IsBusy = true;
+        try
+        {
+            SetOneStatus = "正在执行归一，请等待执行端确认。";
+            var snapshot = await _setOne(number);
+            Apply(snapshot);
+            if (!snapshot.Available || Cells.Any(c => !c.Available))
+                throw new InvalidOperationException(snapshot.Error is { Length: > 0 } error ? error : "归一结果未确认，请读取执行端最新状态。");
+            SetOneStatus = Cells[number - 1].Entry.Value == 1 ? $"R{number} 已归一。"
+                : "手动归一已确认，随后状态发生更新；以最新状态为准。";
+        }
+        catch (Exception ex) { SetOneStatus = "归一未确认：" + ex.Message; throw; }
         finally { IsBusy = false; }
     }
 }

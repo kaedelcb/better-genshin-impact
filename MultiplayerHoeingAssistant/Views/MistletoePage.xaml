@@ -1657,7 +1657,7 @@
                                     </Grid.ColumnDefinitions>
                                     <WrapPanel VerticalAlignment="Center">
                                         <TextBlock Text="启动流程" Style="{DynamicResource SectionTitle}" VerticalAlignment="Center"/>
-                                        <views:RegisterStripView DataContext="{Binding Registers}" Margin="12,0,8,0" />
+                                        <views:RegisterStripView DataContext="{Binding Registers}" IsCompact="True" Margin="10,0,6,0" />
                                     </WrapPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                         <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}"
