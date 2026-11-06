@@ -96,7 +96,8 @@ public sealed partial class WorkflowPlan
     {
         var n=NodeAt(current);
         if(n.Kind=="control.end") return null;
-        var target=(n.Kind=="control.condition" || n.Kind=="control.flow" && n.Flow?.ExitStepId is {Length: > 0})
+        var target=(n.Kind=="control.condition" || n.Kind=="control.flow" && n.Flow?.ExitStepId is {Length: > 0}
+            || WorkflowComposition.HasInlineDecision(n))
             ? result switch {"branchYes"=>n.Path?.Yes,"branchNo"=>n.Path?.No,"skippedUser" or "skippedFilter"=>n.Path?.Next ?? "$end",_=>throw new InvalidOperationException("判断结果尚未持久化，禁止猜测去向")}
             : n.Path?.Next;
         if(target=="$end") return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));

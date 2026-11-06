@@ -607,7 +607,7 @@
             <Border Style="{StaticResource BasicPopupCard}" Width="540" Padding="16">
                 <StackPanel>
                     <TextBlock Text="添加任务" Foreground="{DynamicResource GoldText}" FontSize="17" FontWeight="SemiBold" />
-                    <TextBlock Text="先选类别和任务，选中后点击“添加到计划”。" Foreground="{DynamicResource Dim}"
+                    <TextBlock Text="配置组、一条龙或单项：选中后添加。流程和车道：点击按钮直接设置。" Foreground="{DynamicResource Dim}"
                                FontSize="11" Margin="0,5,0,13" />
                     <UniformGrid Columns="3" Margin="0,0,0,12">
                         <Button x:Name="AddTaskGroupCategory" Tag="0" Click="AddTaskCategoryClick"
@@ -617,7 +617,13 @@
                         <Button x:Name="AddTaskSingleCategory" Tag="2" Click="AddTaskCategoryClick"
                                 Style="{StaticResource BasicButton}" Margin="4,0,0,0" />
                     </UniformGrid>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10"><TextBlock Text="编排" Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" Margin="0,0,10,0" /><Button Content="＋ 流程" Click="AddFlowClick" Style="{StaticResource BasicButton}" Margin="0,0,8,0" /><Button Content="＋ 车道" Click="AddLanesClick" Style="{StaticResource BasicButton}" /></StackPanel>
+                    <StackPanel Margin="0,0,0,10">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="＋ 流程" Click="AddFlowClick" Style="{StaticResource BasicButton}" Margin="0,0,8,0" ToolTip="按顺序执行操作，例如监听日志、设置寄存器和等待。" />
+                            <Button Content="＋ 车道" Click="AddLanesClick" Style="{StaticResource BasicButton}" ToolTip="车道内设置条件，只执行上下两条路线之一。" />
+                        </StackPanel>
+                        <TextBlock Text="流程：依次做几件事　　车道：根据条件选一条路线" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,5,0,0" />
+                    </StackPanel>
                     <TextBlock Text="搜索当前类别" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,0,0,4" />
                     <TextBox x:Name="AddTaskSearch" Style="{StaticResource BasicInput}" Margin="0,0,0,10"
                              ToolTip="搜索当前类别的名称或所属配置" TextChanged="AddTaskSearchChanged" />

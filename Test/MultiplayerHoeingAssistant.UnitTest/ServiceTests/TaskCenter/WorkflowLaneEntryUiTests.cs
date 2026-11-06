@@ -16,77 +16,81 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public sealed class WorkflowLaneEntryUiTests
 {
     [Fact]
-    public Task AddLanesButtonOpensEditorRequiresExitAndSavesExactlyOnePair() => OnSta(() => WithView(null, async f =>
+    public Task AddLaneIsOneIndependentTaskWithItsOwnCondition() => OnSta(() => WithView(null, async f =>
     {
         await OpenPicker(f);
-        await InEditor(f, () => Click(PickerButton(f, "＋ 车道")), async editor =>
+        await InLaneEditor(f, () => Click(PickerButton(f, "＋ 车道")), async editor =>
         {
-            Assert.Empty(editor.Result.Steps);
-            // A valid ordinary action still cannot satisfy the lane entry without an exit.
-            Click(Button(editor, "＋ 等待"));
-            Click(Button(editor, "应用到计划"));
+            Assert.Equal("设置车道", editor.Title);
+            Click(Button(editor, "保存车道"));
             Assert.True(editor.IsVisible);
-            Assert.Null(editor.Result.ExitStepId);
             Assert.DoesNotContain(f.Panel.Editing!.Nodes, n => n.IsComposition);
-            AddWeekdayExit(editor);
-            Capture(editor, "lane-entry-required-exit");
-            Click(Button(editor, "应用到计划"));
-            await Layout(f.Window);
+            SelectWeekday(editor);
+            await Layout(editor); Capture(editor, "lane-built-in-condition");
+            var kind = Descendants<ComboBox>(editor).Single(c => c.Items.Count > 0 && c.Items[0] as string == "请选择判断方式");
+            kind.IsDropDownOpen = true; await Layout(editor);
+            var popup = Assert.IsType<Popup>(kind.Template.FindName("PART_Popup", kind));
+            Assert.Equal((Color)ColorConverter.ConvertFromString("#28223E"), Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(popup.Child).Background).Color);
+            Capture(editor, "lane-condition-picker-open");
+            CapturePopup(popup, "lane-condition-popup");
+            kind.IsDropDownOpen = false;
+            Click(Button(editor, "保存车道"));
         });
-        await SaveAndCheckPair(f, expectedFlowCount: 1);
+        await SaveAndCheckPair(f, expectedFlowCount: 0);
+        var lane = Assert.Single(f.Host.LoadFlowSnapshot("wf-lane-entry").Document.Nodes.Where(n => n.Lanes is not null));
+        Assert.NotNull(lane.Lanes!.Decision);
+        Assert.Equal("", lane.Lanes.SourceFlowNodeId);
+        var editing = f.Panel.Editing!;
+        var visible = editing.Nodes.Single(n => n.Model.Lanes is not null);
+        visible.Model.Lanes!.YesNodeIds.Add("A"); editing.CompositionChanged();
+        f.Panel.SaveFlowCommand.Execute(null); await Layout(f.Window);
+        var row = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).Model.Lanes is not null);
+        Assert.Single(Descendants<Expander>(row)).IsExpanded = true; await Layout(f.Window);
+        var up = Button(row, "上移"); Assert.False(up.IsEnabled);
+        Assert.Equal((Color)ColorConverter.ConvertFromString("#29253A"), Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(up.Template.FindName("Chrome", up)).Background).Color);
+        Capture(f.Window, "standalone-lane-main-table");
     }));
 
     [Fact]
-    public Task AddLanesOnOrdinaryFlowCompletesItsExitWithoutAddingAnotherFlow() => OnSta(() => WithView(OrdinaryFlow(), async f =>
+    public Task AddingLaneDoesNotTurnTheSelectedActionFlowIntoAnExtraSelector() => OnSta(() => WithView(OrdinaryFlow(), async f =>
     {
         f.Panel.Editing!.SelectedNode = f.Panel.Editing.Nodes.Single(n => n.NodeId == "flow");
         await OpenPicker(f);
-        await InEditor(f, () => Click(PickerButton(f, "＋ 车道")), editor =>
-        {
-            Assert.Equal("收集准备", editor.Result.Name);
-            Assert.Single(editor.Result.Steps);
-            AddWeekdayExit(editor);
-            Click(Button(editor, "应用到计划"));
-            return Task.CompletedTask;
-        });
+        await InLaneEditor(f, () => Click(PickerButton(f, "＋ 车道")), editor =>
+        { SelectWeekday(editor); Click(Button(editor, "保存车道")); return Task.CompletedTask; });
         await SaveAndCheckPair(f, expectedFlowCount: 1);
-        Assert.Contains(f.Panel.PlanRows, n => n.NodeId == "flow");
+        var flow = f.Host.LoadFlowSnapshot("wf-lane-entry").Document.Nodes.Single(n => n.NodeId == "flow").Flow!;
+        Assert.Equal("收集准备", flow.Name); Assert.Null(flow.ExitStepId);
     }));
 
     [Fact]
-    public Task AddLanesOnExistingPairExpandsTheSameRowRatherThanAddingAnotherPair() => OnSta(() => WithView(PairedFlow(), async f =>
+    public Task LegacyPairedFlowIsDisplayedAndEditedInsideOneLaneTask() => OnSta(() => WithView(PairedFlow(), async f =>
     {
-        var editing = f.Panel.Editing!;
-        var lane = editing.Nodes.Single(n => n.Model.Lanes is not null);
-        editing.SelectedNode = lane;
-        var row = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).NodeId == lane.NodeId);
-        Assert.False(Assert.Single(Descendants<Expander>(row)).IsExpanded);
-        await OpenPicker(f);
-        Click(PickerButton(f, "＋ 车道"));
-        await Layout(f.Window);
-        Assert.Empty(f.Window.OwnedWindows.OfType<TaskFlowEditorWindow>());
-        Assert.Single(f.Panel.Editing!.Nodes.Where(n => n.Model.Flow is not null));
-        Assert.Single(f.Panel.Editing.Nodes.Where(n => n.Model.Lanes is not null));
-        var existing = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).NodeId == lane.NodeId);
-        Assert.True(Assert.Single(Descendants<Expander>(existing)).IsExpanded);
-        Capture(f.Window, "lane-entry-existing-pair");
+        Assert.DoesNotContain(f.Panel.PlanRows, n => n.NodeId == "flow");
+        var row = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).Model.Lanes is not null);
+        await InLaneEditor(f, () => Click(Button(row, "设置车道")), editor =>
+        {
+            Assert.Contains(Descendants<ComboBox>(editor), c => c.SelectedItem as string == "星期判断");
+            Click(Button(editor, "保存车道")); return Task.CompletedTask;
+        });
+        var saved = f.Host.LoadFlowSnapshot("wf-lane-entry").Document;
+        Assert.Equal("flow", saved.Nodes.Single(n => n.Lanes is not null).Lanes!.SourceFlowNodeId);
+        Assert.Single(saved.Nodes.Where(n => n.Flow is not null));
+        Assert.Single(saved.Nodes.Where(n => n.Lanes is not null));
+        Assert.DoesNotContain(f.Panel.PlanRows, n => n.NodeId == "flow");
     }));
 
     [Fact]
     public Task PendingAutoSaveMayReplaceDraftButLaneEditorAppliesToSamePlan() => OnSta(() => WithView(null, async f =>
     {
-        await OpenPicker(f);
-        var oldDraft = f.Panel.Editing!;
-        oldDraft.NameText = "自动保存后的计划";
-        await InEditor(f, () => Click(PickerButton(f, "＋ 车道")), async editor =>
+        await OpenPicker(f); var oldDraft = f.Panel.Editing!; oldDraft.NameText = "自动保存后的计划";
+        await InLaneEditor(f, () => Click(PickerButton(f, "＋ 车道")), async editor =>
         {
             await Task.Delay(900); await Layout(editor);
             Assert.NotSame(oldDraft, f.Panel.Editing);
-            Assert.Equal("wf-lane-entry", f.Panel.SelectedWorkflowId);
-            AddWeekdayExit(editor);
-            Click(Button(editor, "应用到计划"));
+            SelectWeekday(editor); Click(Button(editor, "保存车道"));
         });
-        await SaveAndCheckPair(f, expectedFlowCount: 1);
+        await SaveAndCheckPair(f, expectedFlowCount: 0);
         Assert.Equal("自动保存后的计划", f.Host.LoadFlowSnapshot("wf-lane-entry").Document.Name);
     }));
 
@@ -94,25 +98,24 @@ public sealed class WorkflowLaneEntryUiTests
     public Task ChangedTargetShowsConflictAndRetainsEditorDraftWithoutOverwriting() => OnSta(() => WithView(OrdinaryFlow(), async f =>
     {
         var row = Descendants<CompositionPlanRow>(f.View).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).NodeId == "flow");
-        await InEditor(f, () => Click(Button(row, "编辑")), async editor =>
+        await InEditor(f, () => Click(Button(row, "编辑步骤")), async editor =>
         {
             Descendants<TextBox>(editor).Single(b => b.Text == "收集准备").Text = "用户窗口中的修改";
             var live = f.Panel.Editing!;
-            var target = live.Nodes.Single(n => n.NodeId == "flow");
-            var originalStep = StartupStepKinds.Create(StartupStepKinds.Wait);
-            live.ReplaceFlow(target, new WorkflowFlowDefinition { Name = "另一操作已经修改", Steps = [originalStep] });
-            f.Panel.SaveFlowCommand.Execute(null);
-            await Layout(editor);
-            Assert.Equal("另一操作已经修改", f.Panel.Editing!.Nodes.Single(n => n.NodeId == "flow").Model.Flow!.Name);
+            live.ReplaceFlow(live.Nodes.Single(n => n.NodeId == "flow"), new WorkflowFlowDefinition { Name = "另一操作已经修改", Steps = [StartupStepKinds.Create(StartupStepKinds.Wait)] });
+            f.Panel.SaveFlowCommand.Execute(null); await Layout(editor);
             Click(Button(editor, "应用到计划"));
-            Assert.True(editor.IsVisible);
-            Assert.Equal("用户窗口中的修改", editor.Result.Name);
+            Assert.True(editor.IsVisible); Assert.Equal("用户窗口中的修改", editor.Result.Name);
             Assert.Equal("另一操作已经修改", f.Host.LoadFlowSnapshot("wf-lane-entry").Document.Nodes.Single(n => n.NodeId == "flow").Flow!.Name);
-            Capture(editor, "lane-entry-conflict-keeps-editor");
-            Click(Button(editor, "取消"));
+            await Layout(editor); Capture(editor, "lane-entry-conflict-keeps-editor"); Click(Button(editor, "取消"));
         });
-        Assert.Equal("另一操作已经修改", f.Panel.Editing!.Nodes.Single(n => n.NodeId == "flow").Model.Flow!.Name);
     }));
+
+    private static void SelectWeekday(LanesEditorWindow editor)
+    {
+        var kind = Descendants<ComboBox>(editor).Single(c => c.Items.Count > 0 && c.Items[0] as string == "请选择判断方式");
+        kind.SelectedItem = "星期判断";
+    }
 
     private static WorkflowNode OrdinaryFlow() => new()
     {
@@ -168,8 +171,7 @@ public sealed class WorkflowLaneEntryUiTests
         Assert.Empty(WorkflowComposition.Validate(saved));
         Assert.Equal(expectedFlowCount, saved.Nodes.Count(n => n.Flow is not null));
         var lane = Assert.Single(saved.Nodes.Where(n => n.Lanes is not null));
-        var source = saved.Nodes.Single(n => n.NodeId == lane.Lanes!.SourceFlowNodeId);
-        Assert.NotNull(source.Flow!.ExitStepId);
+        Assert.NotNull(WorkflowComposition.GetDecision(saved, lane)?.ExitStepId);
         Assert.Single(f.Panel.PlanRows.Where(n => n.Model.Lanes is not null));
     }
 
@@ -180,6 +182,23 @@ public sealed class WorkflowLaneEntryUiTests
     }
     private static Button PickerButton(Fixture f, string content)
         => Button(((Popup)f.View.FindName("AddTaskPopup")).Child, content);
+    private static async Task InLaneEditor(Fixture f, Action open, Func<LanesEditorWindow, Task> edit)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(async () =>
+        {
+            LanesEditorWindow? editor = null;
+            try
+            {
+                editor = Assert.Single(f.Window.OwnedWindows.OfType<LanesEditorWindow>());
+                FormalWpfTheme.Apply(editor); await Layout(editor); await edit(editor); done.TrySetResult();
+            }
+            catch (Exception ex) { done.TrySetException(ex); }
+            finally { if (editor?.IsVisible == true) editor.Close(); }
+        }));
+        open(); await done.Task.WaitAsync(TimeSpan.FromSeconds(12));
+    }
+
     private static async Task InEditor(Fixture f, Action open, Func<TaskFlowEditorWindow, Task> edit)
     {
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -223,6 +242,15 @@ public sealed class WorkflowLaneEntryUiTests
             context.DrawRectangle(new VisualBrush(visual) { Stretch = Stretch.Fill }, null, rect);
         }
         bmp.Render(drawing); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bmp));
+        using var stream = File.Create(Path.Combine(folder, name + ".png")); png.Save(stream);
+    }
+    private static void CapturePopup(Popup popup, string name)
+    {
+        var folder = Environment.GetEnvironmentVariable("BGI_COMPOSITION_UI_SCREENSHOTS");
+        if (string.IsNullOrWhiteSpace(folder) || popup.Child is not FrameworkElement visual) return;
+        Directory.CreateDirectory(folder);
+        var bmp = new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth), (int)Math.Ceiling(visual.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bmp.Render(visual); var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bmp));
         using var stream = File.Create(Path.Combine(folder, name + ".png")); png.Save(stream);
     }
     private static Task OnSta(Func<Task> action)

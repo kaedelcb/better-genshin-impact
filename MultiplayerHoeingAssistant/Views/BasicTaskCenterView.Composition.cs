@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Text.Json;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
+using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
 
 namespace MultiplayerHoeingAssistant.Views;
@@ -22,27 +23,39 @@ public partial class BasicTaskCenterView
     private void AddLanesClick(object sender, RoutedEventArgs e)
     {
         AddTaskPopup.IsOpen = false;
-        if (Host?.Editing is not { } editing) return;
-        var selected = editing.SelectedNode;
-        var existing = selected?.Model.Lanes is not null ? selected
-            : editing.Nodes.FirstOrDefault(n => n.Model.Lanes is { } paired && paired.SourceFlowNodeId == selected?.NodeId);
-        if (existing is not null)
+        ShowLaneEditor(null);
+    }
+
+    private void ShowLaneEditor(NodeEditVm? source)
+    {
+        var owner = Host;
+        if (owner?.Editing is not { } initial) return;
+        var workflowId = initial.Draft.WorkflowId;
+        var nodeId = source?.NodeId;
+        var originalLane = source is null ? null : JsonSerializer.Serialize(source.Model.Lanes);
+        var decision = source is null ? null : WorkflowComposition.GetDecision(initial.Draft, source.Model);
+        var originalDecision = decision is null ? null : JsonSerializer.Serialize(decision);
+        var lanes = source?.Model.Lanes ?? new WorkflowLanesDefinition { Name = "选择路线", YesName = "路线 1", NoName = "路线 2" };
+        var window = new LanesEditorWindow(lanes, decision, initial.Draft.Nodes, owner.AllowedTaskPrograms) { Owner = Window.GetWindow(this) };
+        window.ApplyToPlan = result =>
         {
-            ExpandLaneRow(existing.NodeId);
-            Host.ShowInlineActionFeedback("这个流程已有车道，已展开；可在是 / 否车道中添加任务。", false);
-            return;
-        }
-        var flow = selected?.Model.Flow is not null ? selected : editing.MainPlanNodes.LastOrDefault(n => n.Model.Flow?.ExitStepId is not null
-            && !editing.Nodes.Any(l => l.Model.Lanes?.SourceFlowNodeId == n.NodeId));
-        if (string.IsNullOrWhiteSpace(flow?.Model.Flow?.ExitStepId))
-        { ShowFlowEditor(flow, requireExit: true); return; }
-        try
-        {
-            var lanes = editing.AddPairedLanes(flow);
-            ExpandLaneRow(lanes.NodeId);
-            Host.ShowInlineActionFeedback("已添加配对车道，可在两条车道中分别添加任务。", false);
-        }
-        catch (Exception ex) { Host.ShowInlineActionFeedback(ex.Message, true); }
+            if (!ReferenceEquals(Host, owner) || owner.Editing is not { } editing || editing.Draft.WorkflowId != workflowId)
+                return "当前计划已切换，车道草稿仍保留在此窗口。";
+            NodeEditVm node;
+            if (nodeId is null) node = editing.AddStandaloneLanes(result);
+            else
+            {
+                var current = editing.Nodes.FirstOrDefault(n => n.NodeId == nodeId);
+                if (current?.Model.Lanes is null || JsonSerializer.Serialize(current.Model.Lanes) != originalLane
+                    || JsonSerializer.Serialize(WorkflowComposition.GetDecision(editing.Draft, current.Model)) != originalDecision)
+                    return "这条车道或它的条件已被修改，未覆盖新内容；你的草稿仍保留在窗口中。";
+                editing.ReplaceLaneDecision(current, result); node = current;
+            }
+            ExpandLaneRow(node.NodeId);
+            owner.ShowInlineActionFeedback("车道已保存。在条件满足和其他情况两条路线中分别添加任务即可。", false);
+            return null;
+        };
+        window.ShowDialog();
     }
 
     internal void OpenFlowEditor(NodeEditVm node, string? stepId = null)
@@ -74,9 +87,9 @@ public partial class BasicTaskCenterView
             }
             else node = editing.AddFlow(result);
             var lanes = editing.Nodes.FirstOrDefault(n => n.Model.Lanes?.SourceFlowNodeId == node.NodeId);
-            if (result.ExitStepId is not null && lanes is null) lanes = editing.AddPairedLanes(node);
+
             if (lanes is not null) ExpandLaneRow(lanes.NodeId);
-            owner.ShowInlineActionFeedback(lanes is null ? "流程已应用，正在保存计划。" : "流程和两条车道已应用，可分别添加任务。", false);
+            owner.ShowInlineActionFeedback("流程已保存，按顺序执行这些步骤。需要分两路时请单独添加车道。", false);
             return null;
         };
         window.ShowDialog();
@@ -118,43 +131,11 @@ public partial class BasicTaskCenterView
     private void LocateCompositionStep(string nodeId, string? stepId)
     {
         if (Host?.Editing?.Nodes.FirstOrDefault(n => n.NodeId == nodeId) is not { } node) return;
+        var lane = node.Model.Lanes is not null ? node : Host.Editing.Nodes.FirstOrDefault(n => n.Model.Lanes?.SourceFlowNodeId == nodeId);
+        if (lane is not null) { ExpandLaneRow(lane.NodeId); ShowLaneEditor(lane); return; }
         ResourceList.ScrollIntoView(node);
         if (node.Model.Flow is not null) OpenFlowEditor(node, stepId);
     }
 
-    internal void EditLanes(NodeEditVm node)
-    {
-        var owner = Host;
-        if (owner?.Editing is not { } editing || node.Model.Lanes is not { } lanes) return;
-        var workflowId = editing.Draft.WorkflowId;
-        var original = JsonSerializer.Serialize(lanes);
-        var dialog = new Window { Title = "车道名称", Width = 410, Height = 265, Owner = Window.GetWindow(this),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
-            Background = System.Windows.Media.Brushes.MidnightBlue, Foreground = System.Windows.Media.Brushes.White };
-        var panel = new StackPanel { Margin = new Thickness(18) };
-        TextBox Field(string title, string value)
-        {
-            panel.Children.Add(new TextBlock { Text = title, Margin = new Thickness(0, 3, 0, 3) });
-            var box = new TextBox { Text = value }; panel.Children.Add(box); return box;
-        }
-        var name = Field("车道行名称", lanes.Name);
-        var yes = Field("是出口的车道名称", lanes.YesName);
-        var no = Field("否出口的车道名称", lanes.NoName);
-        var error = new TextBlock { Foreground = System.Windows.Media.Brushes.Salmon, TextWrapping = TextWrapping.Wrap };
-        var apply = new Button { Content = "应用", Margin = new Thickness(0, 10, 0, 0), HorizontalAlignment = HorizontalAlignment.Right, Padding = new Thickness(12, 3, 12, 3) };
-        apply.Click += (_, _) =>
-        {
-            if (string.IsNullOrWhiteSpace(name.Text) || string.IsNullOrWhiteSpace(yes.Text) || string.IsNullOrWhiteSpace(no.Text))
-            { error.Text = "请填写车道行和两个出口的名称。"; return; }
-            if (!ReferenceEquals(Host, owner) || owner.Editing is not { } current || current.Draft.WorkflowId != workflowId)
-            { error.Text = "当前计划已切换，窗口中的名称尚未应用。"; return; }
-            var target = current.Nodes.FirstOrDefault(n => n.NodeId == node.NodeId);
-            if (target?.Model.Lanes is null || JsonSerializer.Serialize(target.Model.Lanes) != original)
-            { error.Text = "原车道已被修改或删除，未覆盖新内容。"; return; }
-            current.RenameLanes(target, name.Text, yes.Text, no.Text);
-            dialog.DialogResult = true;
-        };
-        panel.Children.Add(error); panel.Children.Add(apply); dialog.Content = panel;
-        dialog.ShowDialog();
-    }
+    internal void EditLanes(NodeEditVm node) => ShowLaneEditor(node);
 }

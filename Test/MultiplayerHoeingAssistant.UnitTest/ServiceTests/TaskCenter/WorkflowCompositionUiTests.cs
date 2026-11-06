@@ -33,7 +33,7 @@ public sealed class WorkflowCompositionUiTests
             {
                 await Layout(window);
                 Assert.Equal(2, window.StepTreeForTest.Items.Count);
-                Button(window, "设为出口判断").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                Assert.DoesNotContain(Descendants<Button>(window), b => b.Content as string == "设为出口判断");
                 await Layout(window);
                 var monday = Descendants<CheckBox>(window.ParameterPanelForTest).Single(c => c.Content as string == "周一");
                 monday.IsChecked = true;
@@ -47,7 +47,7 @@ public sealed class WorkflowCompositionUiTests
         await completed.Task;
         Assert.Null(source.ExitStepId);
         Assert.DoesNotContain(1, source.Steps[1].Weekdays);
-        Assert.Equal(weekday.Id, window.Result.ExitStepId);
+        Assert.Null(window.Result.ExitStepId);
         Assert.Contains(1, window.Result.Steps[1].Weekdays);
         Assert.Empty(TaskFlowNodeCatalog.Validate(window.Result));
     });
@@ -68,8 +68,8 @@ public sealed class WorkflowCompositionUiTests
             try
             {
                 await Layout(window);
-                var insertion = Descendants<ComboBox>(window).Single(c => c.Items.Count > 0 && c.Items[0]?.ToString() == "主链");
-                insertion.SelectedIndex = 1;
+                var addAction = Descendants<Button>(window).Single(b => System.Windows.Automation.AutomationProperties.GetName(b) == "日志出现时添加动作");
+                addAction.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 Button(window, "＋ 设置寄存器").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
                 await Layout(window);
                 var registers = Descendants<ComboBox>(window.ParameterPanelForTest).Where(c => c.Items.Count == 3 && c.Items[0] as string == "保持").ToArray();
@@ -112,18 +112,18 @@ public sealed class WorkflowCompositionUiTests
             lanes.Model.Lanes.YesNodeIds.Add("B"); lanes.Model.Lanes.NoNodeIds.Add("C");
             editing.CompositionChanged();
             window.Show(); await Layout(window);
-            Assert.Equal(3, panel.PlanRows.Count);
-            Assert.Equal(new[] { flow.NodeId, lanes.NodeId, "收尾" }, panel.PlanRows.Select(n => n.NodeId));
+            Assert.Equal(2, panel.PlanRows.Count);
+            Assert.Equal(new[] { lanes.NodeId, "收尾" }, panel.PlanRows.Select(n => n.NodeId));
             var rows = Descendants<CompositionPlanRow>(view).Where(x => x.IsVisible).ToArray();
-            Assert.Equal(2, rows.Length);
+            Assert.Single(rows);
             Assert.All(rows, row => Assert.False(Assert.Single(Descendants<Expander>(row)).IsExpanded));
             var laneExpander = Assert.Single(Descendants<Expander>(rows.Single(x => ReferenceEquals(x.DataContext, lanes))));
             laneExpander.IsExpanded = true; await Layout(window);
-            Assert.Contains(Descendants<TextBlock>(rows[1]), t => t.Text.Contains("是 → B 线"));
-            Assert.Contains(Descendants<TextBlock>(rows[1]), t => t.Text.Contains("否 → C 线"));
+            Assert.Contains(Descendants<TextBlock>(rows[0]), t => t.Text.Contains("满足条件 → B 线"));
+            Assert.Contains(Descendants<TextBlock>(rows[0]), t => t.Text.Contains("其他情况 → C 线"));
             Capture(window, "composition-basic-lanes");
             var branchTask = panel.Editing!.Nodes.Single(n => n.NodeId == "B");
-            view.OpenLaneTask(branchTask, rows[1]); await Layout(window);
+            view.OpenLaneTask(branchTask, rows[0]); await Layout(window);
             // Opening the popup can allow an already queued auto-save to reload the draft.
             // Identity is stable; the live editor and popup must use the new B instance.
             editing = panel.Editing!;
@@ -146,7 +146,7 @@ public sealed class WorkflowCompositionUiTests
             Assert.Equal(new[] { "B" }, storedLanes.YesNodeIds); Assert.Equal(new[] { "C" }, storedLanes.NoNodeIds);
             Assert.DoesNotContain("周一", saved.Nodes.Single(n => n.NodeId == "B").Strategies.Single(s => s.Kind == "condition.weekdays").GetStringArray("days")!);
             Assert.DoesNotContain(saved.Nodes.Single(n => n.NodeId == "C").Strategies, s => s.Kind == "condition.weekdays");
-            Assert.Equal("采集分流", panel.PlanRows[1].DisplayName);
+            Assert.Equal("采集分流", panel.PlanRows[0].DisplayName);
             await Layout(window);
             var reopened = Descendants<CompositionPlanRow>(view).Single(r => r.IsVisible && ((NodeEditVm)r.DataContext).Model.Lanes is not null);
             Assert.Single(Descendants<Expander>(reopened)).IsExpanded = true;

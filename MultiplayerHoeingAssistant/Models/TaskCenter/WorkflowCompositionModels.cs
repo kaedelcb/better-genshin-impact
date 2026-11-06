@@ -14,6 +14,10 @@ public sealed class WorkflowFlowDefinition
 public sealed class WorkflowLanesDefinition
 {
     [JsonPropertyName("name")] public string Name { get; set; } = "车道";
+    /// <summary>车道自己的选择步骤；最后一个判断决定上/下车道。旧版独立流程配对保留 sourceFlowNodeId。</summary>
+    [JsonPropertyName("decision")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WorkflowFlowDefinition? Decision { get; set; }
     [JsonPropertyName("sourceFlowNodeId")] public string SourceFlowNodeId { get; set; } = "";
     [JsonPropertyName("yesName")] public string YesName { get; set; } = "是";
     [JsonPropertyName("noName")] public string NoName { get; set; } = "否";

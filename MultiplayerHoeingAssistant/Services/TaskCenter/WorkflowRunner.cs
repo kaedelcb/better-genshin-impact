@@ -887,7 +887,7 @@ public sealed partial class WorkflowRunner
 
                 if (node.Kind is "control.flow" or "control.lanes")
                 {
-                    if (node.Kind == "control.lanes")
+                    if (node.Kind == "control.lanes" && !WorkflowComposition.HasInlineDecision(node))
                     {
                         CommitOutcome(run, plan, occurrence, "succeeded", "已到达车道汇合结构");
                         occurrence = Relocate(run, plan); continue;
@@ -895,7 +895,7 @@ public sealed partial class WorkflowRunner
                     var flowGate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
                     if (flowGate.Action != NodeGateAction.Proceed)
                     {
-                        if (node.Flow?.ExitStepId is { Length: > 0 })
+                        if (node.Flow?.ExitStepId is { Length: > 0 } || WorkflowComposition.HasInlineDecision(node))
                         {
                             run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "出口流程已禁用或跳过，不能猜测车道");
                             _runs.Update(run); return run;
@@ -906,7 +906,11 @@ public sealed partial class WorkflowRunner
                     try
                     {
                         var runtime = _opt.FlowRuntime ?? throw new InvalidOperationException("通用流程宿主未接线");
-                        var result = await runtime.ExecuteAsync(run, node, occurrence.LoopIteration, () => _runs.Update(run), ct).ConfigureAwait(false);
+                        // 独立车道拥有自己的判断与运行身份，不再借用另一行流程。
+                        var executable = WorkflowComposition.HasInlineDecision(node)
+                            ? new WorkflowNode { NodeId = node.NodeId, Kind = "control.flow", Flow = node.Lanes!.Decision }
+                            : node;
+                        var result = await runtime.ExecuteAsync(run, executable, occurrence.LoopIteration, () => _runs.Update(run), ct).ConfigureAwait(false);
                         CommitOutcome(run, plan, occurrence, result is {} b ? b ? "branchYes" : "branchNo" : "succeeded", "流程节点与出口结果已确认");
                     }
                     catch (OperationCanceledException) { throw; }

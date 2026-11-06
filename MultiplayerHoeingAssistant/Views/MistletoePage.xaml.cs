@@ -26,6 +26,7 @@ public partial class MistletoePage : UserControl
     public MistletoePage()
     {
         InitializeComponent();
+        CompositionUiTheme.Apply(this);
         DataContextChanged += OnDataContextChanged;
         // R4.8 Batch D：页面常驻可视树（仅 Visibility 切换），Unloaded 只在窗口拆除时触发——此时停任务中心刷新表
         Unloaded += (_, _) => { if (Vm?.IsRemoteMode != true) Vm?.TaskCenter.StopAutoRefresh(); };

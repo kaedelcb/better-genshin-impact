@@ -232,6 +232,7 @@ function tcRenderPlanHead() {
 // 含编排的计划按作者结构只读展示，不能将车道里的资源重新扁平化到主线。
 function tcRenderFlowRows(host, doc) {
     const all = doc.nodes || [], byId = new Map(all.map(n => [n.nodeId, n]));
+    const integrated = new Set(all.filter(n => n.kind === 'control.lanes' && !n.lanes?.decision && n.lanes?.sourceFlowNodeId).map(n => n.lanes.sourceFlowNodeId));
     const inLane = new Set(all.flatMap(n => n.kind === 'control.lanes'
         ? [...(n.lanes?.yesNodeIds || []), ...(n.lanes?.noNodeIds || [])] : []));
     const resource = n => '<div class="tc-flow-resource"><b>' + mte(tcNodeName(n)) + '</b><small> · ' + mte(TC_KIND[n.kind] || n.kind) + '</small></div>';
@@ -248,12 +249,12 @@ function tcRenderFlowRows(host, doc) {
     const lane = (name, ids) => '<section class="dd-card"><h4>' + mte(name) + '</h4>' +
         ((ids || []).length ? ids.map(id => byId.has(id) ? resource(byId.get(id)) : '<p>任务引用已失效</p>').join('') : '<p>空车道，直接汇流。</p>') + '</section>';
     host.innerHTML = '<header class="tc-nodes-head"><div><h3>任务与流程</h3><p class="dodoco-hint">只读：请在桌面助手编辑流程与车道。展开可查看执行顺序；未选择的车道不会执行。</p></div></header>' +
-        all.filter(n => !inLane.has(n.nodeId)).map((n, i) => {
+        all.filter(n => !inLane.has(n.nodeId) && !integrated.has(n.nodeId)).map((n, i) => {
             if (n.kind === 'control.flow') return '<details class="dd-card"><summary>' + (i + 1) + ' · 流程 · ' + mte(tcNodeName(n)) + '</summary><ol>' + steps(n.flow?.steps) + '</ol><small>' + (n.flow?.exitStepId ? '末端判断输出是 / 否，交给配对车道。' : '动作完成后继续主线。') + '</small></details>';
-            if (n.kind === 'control.lanes') return '<details class="dd-card"><summary>' + (i + 1) + ' · 车道 · ' + mte(tcNodeName(n)) + '</summary>' +
-                lane('是 · ' + (n.lanes?.yesName || '是车道'), n.lanes?.yesNodeIds) +
-                lane('否 · ' + (n.lanes?.noName || '否车道'), n.lanes?.noNodeIds) +
-                '<p class="dodoco-hint">选中的车道结束后回到主线。</p></details>';
+            if (n.kind === 'control.lanes') { const decision = n.lanes?.decision || byId.get(n.lanes?.sourceFlowNodeId)?.flow; return '<details class="dd-card"><summary>' + (i + 1) + ' · 车道 · ' + mte(tcNodeName(n)) + '</summary><p>先判断：</p><ol>' + steps(decision?.steps) + '</ol>' +
+                lane('满足条件 · ' + (n.lanes?.yesName || '是车道'), n.lanes?.yesNodeIds) +
+                lane('其他情况 · ' + (n.lanes?.noName || '否车道'), n.lanes?.noNodeIds) +
+                '<p class="dodoco-hint">只走一条路线，完成后继续下一项任务。</p></details>'; }
             return '<section class="dd-card">' + (i + 1) + ' · ' + resource(n) + '</section>';
         }).join('');
 }

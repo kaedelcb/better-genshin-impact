@@ -181,7 +181,7 @@ public sealed partial class TaskCenterPanelViewModel
     public string CurrentPlanSummary => Editing is { } draft
         ? PlanRows.Count == 0
             ? "空计划 · 先新增任务"
-            : $"{PlanRows.Count} 个主线任务 · {EnabledNodeCount} 个已启用"
+            : $"{PlanRows.Count} 项任务 · {EnabledNodeCount} 项已启用"
         : "选择一张计划表开始编辑";
     public string WorkspaceHint => !HasFlows ? "先新建一个计划，再添加任务和安排时间。"
         : IsPreviewing ? "正在查看计划。选择可编辑计划后即可安排任务。"

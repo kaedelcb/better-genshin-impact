@@ -10,6 +10,20 @@ public static class WorkflowComposition
     public static bool IsLaneMember(WorkflowDocument doc, string nodeId) => doc.Nodes.Any(n => n.Lanes is { } l
         && (l.YesNodeIds.Contains(nodeId) || l.NoNodeIds.Contains(nodeId)));
 
+    public static bool HasInlineDecision(WorkflowNode node) => node.Kind == "control.lanes" && node.Lanes?.Decision is not null;
+
+    /// <summary>新车道内置选择步骤；旧计划只读解析原流程，绝不移动、复制或重建其稳定身份。</summary>
+    public static WorkflowFlowDefinition? GetDecision(WorkflowDocument doc, WorkflowNode lane)
+    {
+        if (lane.Lanes is not { } definition) return null;
+        if (definition.Decision is not null) return definition.Decision;
+        var sources = doc.Nodes.Where(n => n.NodeId == definition.SourceFlowNodeId && n.Kind == "control.flow").Take(2).ToArray();
+        return sources.Length == 1 ? sources[0].Flow : null;
+    }
+
+    public static string GetDecisionOwnerId(WorkflowDocument doc, WorkflowNode lane)
+        => HasInlineDecision(lane) ? lane.NodeId : lane.Lanes?.SourceFlowNodeId ?? lane.NodeId;
+
     public static IReadOnlyList<string> Validate(WorkflowDocument doc)
     {
         if (!HasComposition(doc)) return [];
@@ -30,9 +44,17 @@ public static class WorkflowComposition
             }
             if (n.Kind != "control.lanes") continue;
             if (n.Lanes is not { } lane) { errors.Add($"车道 {n.NodeId} 缺少定义"); continue; }
-            if (!nodes.TryGetValue(lane.SourceFlowNodeId, out var source) || source.Length != 1
+            if (lane.Decision is { } decision)
+            {
+                if (!string.IsNullOrWhiteSpace(lane.SourceFlowNodeId))
+                    errors.Add($"车道 {n.NodeId} 不能同时使用内置条件和旧流程来源");
+                if (string.IsNullOrWhiteSpace(decision.ExitStepId))
+                    errors.Add($"车道 {n.NodeId} 需要选择决定上/下车道的条件");
+                errors.AddRange(TaskFlowNodeCatalog.Validate(decision));
+            }
+            else if (!nodes.TryGetValue(lane.SourceFlowNodeId, out var source) || source.Length != 1
                 || source[0].Kind != "control.flow" || string.IsNullOrEmpty(source[0].Flow?.ExitStepId))
-                errors.Add($"车道 {n.NodeId} 须绑定一个有出口的流程");
+                errors.Add($"车道 {n.NodeId} 需要内置的选择条件；旧配对则须保留原流程");
             foreach (var id in lane.YesNodeIds.Concat(lane.NoNodeIds))
             {
                 if (!owned.Add(id)) errors.Add($"任务 {id} 被多个车道重复引用");
@@ -44,11 +66,12 @@ public static class WorkflowComposition
         foreach (var flow in main.Where(n => n.Flow?.ExitStepId is { Length: > 0 }))
         {
             var index = main.IndexOf(flow);
-            var matches = main.Where(n => n.Lanes?.SourceFlowNodeId == flow.NodeId).ToArray();
+            var matches = main.Where(n => n.Lanes is { Decision: null } l && l.SourceFlowNodeId == flow.NodeId).ToArray();
             if (matches.Length != 1 || index + 1 >= main.Count || main[index + 1] != matches[0])
                 errors.Add($"流程 {flow.NodeId} 的两个出口须与紧随其后的唯一车道配对");
         }
-        foreach (var step in doc.Nodes.Where(n => n.Flow is not null).SelectMany(n => TaskFlowNodeCatalog.Flatten(n.Flow!.Steps)))
+        foreach (var step in doc.Nodes.SelectMany(n => new[] { n.Flow, n.Lanes?.Decision }).OfType<WorkflowFlowDefinition>()
+            .SelectMany(f => TaskFlowNodeCatalog.Flatten(f.Steps)))
             if (TaskFlowNodeCatalog.IsTrigger(step.Kind) && step.TriggerScope == "task"
                 && (!nodes.TryGetValue(step.TargetNodeId, out var t) || t.Length != 1 || !t[0].Kind.StartsWith("resource.", StringComparison.Ordinal)))
                 errors.Add("触发器绑定的目标任务不存在，请重新绑定");
@@ -77,7 +100,7 @@ public static class WorkflowComposition
             n.Path!.Next = next;
             if (n.Lanes is not { } l) continue;
             var after = next;
-            var source = byId[l.SourceFlowNodeId];
+            var source = l.Decision is not null ? n : byId[l.SourceFlowNodeId];
             source.Path!.Yes = l.YesNodeIds.FirstOrDefault() ?? after;
             source.Path.No = l.NoNodeIds.FirstOrDefault() ?? after;
             source.Path.Next = after; // 明确跳过整个配对结构时不泄漏任一分支。
@@ -86,9 +109,22 @@ public static class WorkflowComposition
         }
     }
 
-    internal static string LayoutKey(WorkflowDocument doc) => JsonSerializer.Serialize(doc.Nodes
-        .Where(n => n.Flow is not null || n.Lanes is not null)
-        .Select(n => new { n.NodeId, Exit = n.Flow?.ExitStepId, n.Lanes }));
+    internal static string LayoutKey(WorkflowDocument doc)
+    {
+        // 旧配对的运行键逐字保持；新车道只绑定结构，不因改名或条件参数调整而丢掉已落盘的选路。
+        if (!doc.Nodes.Any(HasInlineDecision)) return JsonSerializer.Serialize(doc.Nodes
+            .Where(n => n.Flow is not null || n.Lanes is not null)
+            .Select(n => new { n.NodeId, Exit = n.Flow?.ExitStepId, n.Lanes }));
+        return JsonSerializer.Serialize(new
+        {
+            Kind = "inline-lanes-v1",
+            Rows = doc.Nodes.Where(n => n.Flow is not null || n.Lanes is not null).Select(n => new
+            {
+                n.NodeId, Exit = n.Flow?.ExitStepId, Source = n.Lanes?.SourceFlowNodeId,
+                DecisionExit = n.Lanes?.Decision?.ExitStepId, Yes = n.Lanes?.YesNodeIds, No = n.Lanes?.NoNodeIds
+            })
+        });
+    }
 }
 
 public static class TaskFlowNodeCatalog

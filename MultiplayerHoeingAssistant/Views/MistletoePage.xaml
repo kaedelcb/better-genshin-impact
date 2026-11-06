@@ -1575,7 +1575,7 @@
                         <!-- 一张卡投影两个宿主的实际挂载；折叠状态不随轮询重置。 -->
                         <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,14"
                                 Visibility="{Binding HasUnifiedTriggers, Converter={StaticResource BoolToVis}}">
-                            <Expander x:Name="UnifiedTriggerExpander" IsExpanded="{Binding TriggersExpanded, Mode=TwoWay}" Foreground="{DynamicResource White}"
+                            <Expander x:Name="UnifiedTriggerExpander" Style="{DynamicResource CompositionExpander}" IsExpanded="{Binding TriggersExpanded, Mode=TwoWay}" Foreground="{DynamicResource White}"
                                       HorizontalContentAlignment="Stretch">
                                 <Expander.Header>
                                     <WrapPanel VerticalAlignment="Center">
@@ -1586,12 +1586,13 @@
                                 </Expander.Header>
                                 <StackPanel Margin="0,8,0,0">
                                     <ComboBox SelectedIndex="{Binding TriggerSourceFilter, Mode=TwoWay}" HorizontalAlignment="Left"
-                                              Width="128" Margin="0,0,0,6" ToolTip="只筛选显示，不改变触发器的实际运行">
+                                              Style="{DynamicResource CompositionComboBox}" ItemContainerStyle="{DynamicResource CompositionComboItem}"
+                                              Width="150" Margin="0,0,0,6" ToolTip="只筛选显示，不改变触发器的实际运行">
                                         <ComboBoxItem Content="全部来源"/>
                                         <ComboBoxItem Content="启动中心"/>
                                         <ComboBoxItem Content="任务中心"/>
                                     </ComboBox>
-                                    <ScrollViewer x:Name="UnifiedTriggerScroll" MaxHeight="210" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                    <ScrollViewer x:Name="UnifiedTriggerScroll" Style="{DynamicResource CompositionScrollViewer}" MaxHeight="210" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                         <ItemsControl ItemsSource="{Binding UnifiedTriggerRows}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>

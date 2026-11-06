@@ -12,8 +12,37 @@ public sealed partial class WorkflowEditVm
         {
             var members = Draft.Nodes.Where(n => n.Lanes is not null)
                 .SelectMany(n => n.Lanes!.YesNodeIds.Concat(n.Lanes.NoNodeIds)).ToHashSet(StringComparer.Ordinal);
-            return Nodes.Where(n => (n.IsResource || n.IsComposition) && !members.Contains(n.NodeId)).ToArray();
+            var integrated = Draft.Nodes.Where(n => n.Lanes is { Decision: null } && !string.IsNullOrEmpty(n.Lanes.SourceFlowNodeId))
+                .Select(n => n.Lanes!.SourceFlowNodeId).ToHashSet(StringComparer.Ordinal);
+            return Nodes.Where(n => (n.IsResource || n.IsComposition) && !members.Contains(n.NodeId) && !integrated.Contains(n.NodeId)).ToArray();
         }
+    }
+
+    internal NodeEditVm AddStandaloneLanes(WorkflowLanesDefinition definition)
+    {
+        if (definition.Decision is null) throw new InvalidOperationException("请先设置车道的选择条件。");
+        RememberSchedule();
+        definition.SourceFlowNodeId = "";
+        var model = new WorkflowNode { NodeId = NewNodeId(), Kind = "control.lanes", Lanes = definition };
+        Draft.Nodes.Add(model); var vm = new NodeEditVm(model); Nodes.Add(vm);
+        Renumber(); SelectedNode = vm; CompositionChanged(); return vm;
+    }
+
+    internal void ReplaceLaneDecision(NodeEditVm node, WorkflowLanesDefinition definition)
+    {
+        if (!Nodes.Contains(node) || node.Model.Lanes is null || definition.Decision is null)
+            throw new InvalidOperationException("车道或条件已经变化，请重新打开。");
+        RememberSchedule();
+        // 旧版相邻流程仍按原稳定身份执行，在界面上作为车道的内部条件，不重写已有运行。
+        if (node.Model.Lanes.Decision is null && !string.IsNullOrEmpty(node.Model.Lanes.SourceFlowNodeId))
+        {
+            var source = Nodes.FirstOrDefault(n => n.NodeId == node.Model.Lanes.SourceFlowNodeId);
+            if (source?.Model.Flow is null) throw new InvalidOperationException("原车道条件不存在，请核对计划。");
+            source.Model.Flow = definition.Decision; source.NotifyCompositionChanged();
+            definition.SourceFlowNodeId = source.NodeId; definition.Decision = null;
+        }
+        else definition.SourceFlowNodeId = "";
+        node.Model.Lanes = definition; node.NotifyCompositionChanged(); CompositionChanged();
     }
 
     internal NodeEditVm AddFlow(WorkflowFlowDefinition definition)
@@ -87,6 +116,8 @@ public sealed partial class WorkflowEditVm
         var root = node.Model.Lanes is { } lane
             ? Nodes.FirstOrDefault(n => n.NodeId == lane.SourceFlowNodeId) ?? node : node;
         var ids = new HashSet<string>(StringComparer.Ordinal) { root.NodeId };
+        if (root.Model.Lanes is { } own)
+            ids.UnionWith(own.YesNodeIds.Concat(own.NoNodeIds));
         if (root.Model.Flow is not null)
             foreach (var pair in Draft.Nodes.Where(n => n.Lanes?.SourceFlowNodeId == root.NodeId))
             {
@@ -100,12 +131,7 @@ public sealed partial class WorkflowEditVm
     {
         if (!node.IsComposition) return false;
         RememberSchedule();
-        // Deleting just the lane row removes its branch resources and clears the source exit.
-        var ids = node.Model.Lanes is { } lane
-            ? lane.YesNodeIds.Concat(lane.NoNodeIds).Append(node.NodeId).ToHashSet(StringComparer.Ordinal)
-            : CompositionGroup(node);
-        if (node.Model.Lanes is { } deleted && Nodes.FirstOrDefault(n => n.NodeId == deleted.SourceFlowNodeId)?.Model.Flow is { } flow)
-            flow.ExitStepId = null;
+        var ids = CompositionGroup(node);
         if (Draft.ExtensionData?.TryGetValue(TaskCenterPanelViewModel.StartNodeExtensionKey, out var marker) == true
             && marker.ValueKind == JsonValueKind.String && marker.GetString() is { } start && ids.Contains(start))
             Draft.ExtensionData.Remove(TaskCenterPanelViewModel.StartNodeExtensionKey);
@@ -135,7 +161,7 @@ public sealed partial class WorkflowEditVm
                 lanes.YesNodeIds = lanes.YesNodeIds.Select(id => mapping[id]).ToList();
                 lanes.NoNodeIds = lanes.NoNodeIds.Select(id => mapping[id]).ToList();
             }
-            if (copy.Flow is { } flow)
+            if ((copy.Flow ?? copy.Lanes?.Decision) is { } flow)
             {
                 var steps = EnumerateSteps(flow.Steps).ToArray();
                 var stepIds = steps.ToDictionary(s => s.Id, _ => Guid.NewGuid().ToString("N"));
@@ -194,8 +220,8 @@ public sealed partial class NodeEditVm
 {
     public bool IsComposition => Model.Kind is "control.flow" or "control.lanes";
     public string CompositionSummary => Model.Flow is { } f
-        ? f.ExitStepId is null ? $"{f.Steps.Count} 个节点 · 完成后继续主线" : $"{f.Steps.Count} 个节点 · 是 / 否出口"
-        : Model.Lanes is { } l ? $"是 → {l.YesName}（{l.YesNodeIds.Count}）　否 → {l.NoName}（{l.NoNodeIds.Count}）" : "";
+        ? $"{f.Steps.Count} 个步骤，按顺序执行"
+        : Model.Lanes is { } l ? $"满足条件 → {l.YesName}（{l.YesNodeIds.Count}项）　其他情况 → {l.NoName}（{l.NoNodeIds.Count}项）" : "";
     internal void NotifyCompositionChanged()
     { OnPropertyChanged(nameof(DisplayName)); OnPropertyChanged(nameof(CompositionSummary)); }
 }
@@ -213,7 +239,7 @@ public sealed partial class TaskCenterPanelViewModel
         if (run is null) return "";
         var round = run.Cursor?.LoopIteration ?? run.NodeOutcomes.Select(o => o.LoopIteration).DefaultIfEmpty(0).Max();
         var decision = run.NodeOutcomes.LastOrDefault(o => o.NodeId == sourceFlowId && o.LoopIteration == round);
-        if (decision?.Result is not ("branchYes" or "branchNo")) return "等待出口判断";
+        if (decision?.Result is not ("branchYes" or "branchNo")) return "执行到这里时选择";
         var chosen = decision.Result == "branchYes";
         return chosen == yes ? "已选中此车道" : "本轮未选择";
     }

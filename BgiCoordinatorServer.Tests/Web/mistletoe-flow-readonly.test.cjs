@@ -17,7 +17,7 @@ function setup() {
 const plan = {
     workflowId:'wf-test', nodes:[
         {nodeId:'j',kind:'control.flow',flow:{name:'周末 <分流>',steps:[{kind:'weekday'}],exitStepId:'w'}},
-        {nodeId:'l',kind:'control.lanes',lanes:{name:'本日安排',sourceFlowNodeId:'j',yesName:'周末',noName:'工作日',yesNodeIds:['b'],noNodeIds:['c']}},
+        {nodeId:'l',kind:'control.lanes',lanes:{name:'本日 <安排>',sourceFlowNodeId:'j',yesName:'周末',noName:'工作日',yesNodeIds:['b'],noNodeIds:['c']}},
         {nodeId:'b',kind:'resource.configGroup',ref:{config:'周末采集'}},
         {nodeId:'c',kind:'resource.oneDragonConfig',ref:{config:'工作日一条龙'}},
         {nodeId:'d',kind:'resource.singleTask',ref:{config:'日常收尾',taskId:'finish'}}
@@ -31,9 +31,10 @@ test('网页能看见通用流程与两条独立车道，避免把车道任务�
     const x = setup(); load(x); x.run('tcRenderNodes()');
     assert.match(x.host.innerHTML, /只读/);
     assert.match(x.host.innerHTML, /星期判断/);
-    assert.match(x.host.innerHTML, /是 · 周末/);
-    assert.match(x.host.innerHTML, /否 · 工作日/);
-    assert.match(x.host.innerHTML, /周末 &lt;分流&gt;/);
+    assert.match(x.host.innerHTML, /满足条件 · 周末/);
+    assert.match(x.host.innerHTML, /其他情况 · 工作日/);
+    assert.match(x.host.innerHTML, /本日 &lt;安排&gt;/);
+    assert.ok(!x.host.innerHTML.includes('流程 · 周末'), '旧选择流程整合在车道内部展示');
     assert.equal((x.host.innerHTML.match(/周末采集/g)||[]).length, 1);
     assert.equal((x.host.innerHTML.match(/工作日一条龙/g)||[]).length, 1);
     assert.ok(!x.host.innerHTML.includes('data-enable'));
