@@ -1,5 +1,6 @@
 using BetterGenshinImpact.Core.Input;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
@@ -52,6 +53,36 @@ public partial class PathExecutor
     }
 
     /// <summary>
+    /// 茶包版赶路后台任务（fire-and-forget）里切人/技能检测到复苏界面时，Avatar.TpForRecover 会在后台
+    /// 完成去七天神像并抛 RetryException。后台任务无人等待，该异常原先被吞掉，主寻路不知道已去过神像，
+    /// 继续按原目标寻路。这里暂存该异常，由主循环在下一帧/下一路点重新抛出，走原有重跑本线路流程。
+    /// </summary>
+    private RetryException? _pendingBackgroundRetry;
+
+    /// <summary>后台任务暂存 RetryException（含被 .Result 包成 AggregateException 的情况）。返回是否已暂存。</summary>
+    private bool TryStashBackgroundRetry(Exception ex)
+    {
+        var retry = ex as RetryException
+                    ?? (ex as AggregateException)?.Flatten().InnerExceptions.OfType<RetryException>().FirstOrDefault();
+        if (retry == null) return false;
+        if (Interlocked.CompareExchange(ref _pendingBackgroundRetry, retry, null) == null)
+        {
+            Logger.LogWarning("自动赶路后台任务触发重试（{Msg}），交回主流程重跑本线路", retry.Message);
+        }
+        return true;
+    }
+
+    /// <summary>主流程调用：若后台赶路任务已暂存 RetryException，在主线程重新抛出。</summary>
+    private void ThrowIfBackgroundRetryPending()
+    {
+        var retry = Interlocked.Exchange(ref _pendingBackgroundRetry, null);
+        if (retry != null)
+        {
+            throw retry;
+        }
+    }
+
+    /// <summary>
     /// 执行茶包版赶路一帧逻辑。返回 true 表示 MoveTo 主循环应 break（原 else 块内的"赶路靠近超时-2"）。
     /// position / additionalTimeInMs 按值传入：块内 fire-and-forget 后台任务对它们（及 distance）的写为死写，
     /// 方法返回后即丢弃，与选项1约定一致，对赶路行为无影响。
@@ -100,6 +131,8 @@ public partial class PathExecutor
                                     {
                                         Task.Run(async () =>
                                         {
+                                          try
+                                          {
                                             var switchedAvatar = await SwitchAvatar2(nextAvatarIndexStop);
                                            if( switchedAvatar == null)
                                            {
@@ -113,6 +146,11 @@ public partial class PathExecutor
                                            {
                                                st.Relifed = false;
                                            }
+                                          }
+                                          catch (Exception ex) when (TryStashBackgroundRetry(ex))
+                                          {
+                                              // 已暂存，由主循环重新抛出
+                                          }
                                         }, ct);
                                     }   
                                 }
@@ -269,6 +307,8 @@ public partial class PathExecutor
                         {
                             Task.Run(async () =>
                             {
+                              try
+                              {
                                 if (!isOnMoto)
                                 {
                                     if ((DateTime.UtcNow - st.LastElementalSkillTime).TotalMilliseconds > 600  && notflying)
@@ -522,10 +562,14 @@ public partial class PathExecutor
                                         else
                                         {
                                             st.HurryOnLogo = false;
-                                        } 
+                                        }
                                     }
                                 }
-                                
+                              }
+                              catch (Exception ex) when (TryStashBackgroundRetry(ex))
+                              {
+                                  // 已暂存，由主循环重新抛出
+                              }
                             },ct);
                         }
                         else

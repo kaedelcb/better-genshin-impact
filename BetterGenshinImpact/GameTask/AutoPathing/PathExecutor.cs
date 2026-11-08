@@ -2065,6 +2065,8 @@ public partial class PathExecutor
                 }
                 catch (RetryException retryException)
                 {
+                    // 本次重试已开始处理，丢弃后台赶路任务暂存的同类重试，避免同一次复苏重跑两次
+                    Interlocked.Exchange(ref _pendingBackgroundRetry, null);
                     await CheckMultiplayerBoundaryAsync();
                     if (!TaskContext.Instance().Config.TpConfig.UseOfficialTeleport
                         && NetworkRecoveryVersion != networkRecoveryVersion
@@ -3555,6 +3557,13 @@ public partial class PathExecutor
                 if (!flyDelay) InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
             }
             flyDelay = false;
+
+            // 茶包版赶路后台任务已在后台去过七天神像（复苏界面）时，交回主流程按 RetryException 重跑本线路
+            if (Volatile.Read(ref _pendingBackgroundRetry) != null)
+            {
+                InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                ThrowIfBackgroundRetryPending();
+            }
 
             // === 联机模式：走路途中检测到复苏信号（来自 AnomalyDetector 模板/色块路径）===
             // isPoint==true 仅在普通寻路段触发，战斗 / 聚物 / 回点等 isPoint==false 路径短路。
