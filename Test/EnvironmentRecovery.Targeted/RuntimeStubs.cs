@@ -59,6 +59,8 @@ namespace BetterGenshinImpact.GameTask.Common
         public static Screen CaptureToRectArea() => new();
         public static Task Delay(int ms, CancellationToken ct) => Task.Delay(ms, ct);
         public static Func<CancellationToken, Task> Monitor = _ => Task.CompletedTask;
+        public static Func<CancellationToken, Task<bool>> ReachableForTest = _ => Task.FromResult(false);
+        private static Task<bool> IsEnvironmentNetworkReachableAsync(CancellationToken ct) => ReachableForTest(ct);
         private static Task CheckNetworkStatusAsync(CancellationToken ct) => Monitor(ct);
         public static void TriggerMonitor() => ScheduleNetworkCheck();
         public static async Task RunNetworkRecoveryForTest(CancellationToken ct)
@@ -79,7 +81,8 @@ namespace BetterGenshinImpact.GameTask.Common.Job
     public static class NetworkRecovery
     {
         public static bool RecoveryNetworkDone;
-        public static Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true)
+        public static Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true,
+            int mainUiAttempts = 60)
             => Task.CompletedTask;
     }
 }

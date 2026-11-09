@@ -31,7 +31,8 @@ public class NetworkRecovery
     //完成任务标志
     public static bool RecoveryNetworkDone = false;
     
-    public static async Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true)
+    public static async Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true,
+        int mainUiAttempts = 60)
     {
         ct.ThrowIfCancellationRequested();
         RecoveryNetworkDone = false;
@@ -128,7 +129,7 @@ public class NetworkRecovery
                 }
             },
             ct,
-            60,
+            mainUiAttempts,
             1000
         );
         

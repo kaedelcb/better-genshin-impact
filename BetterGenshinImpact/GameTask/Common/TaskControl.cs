@@ -273,6 +273,24 @@ public partial class TaskControl
         }
     }
 
+    // 超时等待期间的网络可达判定：任一检测地址 ping 通即可，只读不发键鼠。
+    private static async Task<bool> IsEnvironmentNetworkReachableAsync(CancellationToken ct)
+    {
+        foreach (var host in new[] { TaskContext.Instance().Config.OtherConfig.NetworkDetectionUrl, "www.qq.com" })
+        {
+            ct.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(host)) continue;
+            try
+            {
+                using var ping = new Ping();
+                var reply = await ping.SendPingAsync(host, 1000).WaitAsync(ct);
+                if (reply.Status == IPStatus.Success) return true;
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { }
+        }
+        return false;
+    }
+
     public static void CheckAndSleep(int millisecondsTimeout)
     {
         InputHub.ThrowIfOperationCancelled();

@@ -53,6 +53,7 @@ public partial class TaskControl
             _networkFailureCount = 0;
             NetworkRecovery.RecoveryNetworkDone = false;
             Interlocked.Exchange(ref _lastVerifiedInputTick, 0);
+            Interlocked.Exchange(ref _environmentAutoResumes, 0);
         }
     }
 
@@ -109,14 +110,42 @@ public partial class TaskControl
         return ct.CanBeCanceled ? ct : _environmentLifetime?.Token ?? CancellationToken.None;
     }
 
+    // 受保护恢复每轮找派蒙的次数（约1秒/次）。60秒预算内要能跑完多轮“找派蒙→开图→关图”，
+    // 不能让一次找派蒙吃完整个预算；没找到时由预算窗口发起下一轮。
+    internal const int RecoveryMainUiAttempts = 15;
+
+    // 超时后等待期间的自动续轮：断网期间预算耗尽后，网络恢复也要能自己重新开始恢复，
+    // 不能只等快捷键。等待期间只做 ping，不发任何键鼠；ping 通后开一轮新预算，
+    // 仍须真实开图、关图确认才放行原任务。次数有上限，持续失败时回到只等用户。
+    internal static TimeSpan EnvironmentAutoResumeInterval = TimeSpan.FromSeconds(30);
+    internal const int MaxEnvironmentAutoResumes = 5;
+    private static int _environmentAutoResumes;
+
     private static async Task WaitForEnvironmentUserAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         InputHub.ReleaseAll();
         RunnerContext.Instance.IsSuspend = true;
-        Logger.LogWarning("环境恢复超过60秒，当前任务和路线保留，未消耗重试次数。请检查游戏后使用暂停/继续快捷键继续，或停止任务；不会自动跳到下一项。");
+        var autoAllowed = Volatile.Read(ref _environmentAutoResumes) < MaxEnvironmentAutoResumes;
+        Logger.LogWarning(autoAllowed
+            ? "环境恢复超过60秒，当前任务和路线保留，未消耗重试次数。网络可达后会自动再试一轮；也可检查游戏后使用暂停/继续快捷键继续，或停止任务；不会自动跳到下一项。"
+            : "环境恢复超过60秒，自动重试已达上限，当前任务和路线保留，未消耗重试次数。请检查游戏后使用暂停/继续快捷键继续，或停止任务；不会自动跳到下一项。");
+        var nextCheck = Environment.TickCount64 + (long)EnvironmentAutoResumeInterval.TotalMilliseconds;
         while (RunnerContext.Instance.IsSuspend)
+        {
             await Task.Delay(100, ct);
+            if (!autoAllowed || Environment.TickCount64 < nextCheck) continue;
+            nextCheck = Environment.TickCount64 + (long)EnvironmentAutoResumeInterval.TotalMilliseconds;
+            bool reachable;
+            try { reachable = await IsEnvironmentNetworkReachableAsync(ct); }
+            catch (Exception) when (!ct.IsCancellationRequested) { reachable = false; }
+            ct.ThrowIfCancellationRequested();
+            if (!reachable || !RunnerContext.Instance.IsSuspend) continue;
+            var round = Interlocked.Increment(ref _environmentAutoResumes);
+            Logger.LogWarning("网络已可达，自动开始第 {Round}/{Max} 轮环境恢复；仍需确认游戏可操作后才继续原任务",
+                round, MaxEnvironmentAutoResumes);
+            RunnerContext.Instance.IsSuspend = false;
+        }
         ct.ThrowIfCancellationRequested();
     }
 
@@ -151,7 +180,8 @@ public partial class TaskControl
                     _inNetworkRecovery.Value = true;
                     RecoveryProbeToken.Value = token;
                     if (IsSuspendedByWindow || IsSuspendedByNetwork)
-                        await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false);
+                        await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false,
+                            mainUiAttempts: RecoveryMainUiAttempts);
                     token.ThrowIfCancellationRequested();
                     if (!await probe(token)) return false;
                     token.ThrowIfCancellationRequested();
@@ -189,6 +219,7 @@ public partial class TaskControl
     {
         // 网站/ICMP 持续不可达时，不反复打断已经证明可操作的游戏；断线弹窗和操作失败仍立即保护。
         Interlocked.Exchange(ref _lastVerifiedInputTick, Environment.TickCount64);
+        Interlocked.Exchange(ref _environmentAutoResumes, 0);
         IsSuspendedByNetwork = false;
         IsSuspendedByWindow = false;
         NetworkRecovery.RecoveryNetworkDone = true;
@@ -207,7 +238,8 @@ public partial class TaskControl
                 RecoveryProbeToken.Value = token;
                 // 等主任务进入暂停点，避免恢复线程与正在移动/传送的任务同时发输入。
                 if (Volatile.Read(ref _environmentPauseDepth) == 0) return false;
-                await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false);
+                await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false,
+                    mainUiAttempts: RecoveryMainUiAttempts);
                 using (var screen = CaptureToRectArea())
                     if (!Bv.IsInMainUi(screen)) return false;
                 var tp = new TpTaskFastDrag(token);

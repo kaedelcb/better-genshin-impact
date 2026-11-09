@@ -989,15 +989,30 @@ public class TpTaskFastDrag
             }
         }
         if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
-            && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
+            && !SystemControl.IsGenshinImpactActiveByProcess())
+        {
+            // 网络暂停期间常规焦点恢复被跳过，这里在按键前补一次，避免 M 发到别的窗口。
+            Logger.LogWarning("[环境恢复-开图] 前台窗口不是原神（{Fg}），先恢复焦点，本轮不按 M",
+                SystemControl.GetActiveByProcess());
+            SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+            return false;
+        }
         InputHub.Foreground.SimulateAction(GIActions.OpenMap);
         // 恢复探测每轮仅按一次，给游戏响应和截图留足时间；过渡页交给下一轮观察。
-        for (var i = 0; i < 12; i++)
+        // 与普通开图的渲染容忍一致，避免慢机器上地图还没出来就判失败。
+        var renderWaitMs = Math.Max(1500, ApplyExtraDelay(1500)) + GetExtraBigMapRenderMs(mapName);
+        var deadline = Environment.TickCount64 + renderWaitMs;
+        var leftMainUi = false;
+        while (Environment.TickCount64 < deadline)
         {
             await Delay(100, ct);
             using var screen = CaptureToRectArea();
             if (IsInBigMapUiViaAssets(screen)) return true;
+            if (!leftMainUi && !Bv.IsInMainUi(screen)) leftMainUi = true;
         }
+        Logger.LogWarning("[环境恢复-开图] 按 M 后 {Ms}ms 未识别到大地图：{State}，前台是原神={Fg}",
+            renderWaitMs, leftMainUi ? "曾离开主界面" : "一直停在主界面（按键可能未生效）",
+            SystemControl.IsGenshinImpactActiveByProcess());
         return false;
     }
 

@@ -108,6 +108,84 @@ public class EnvironmentRecoveryIntegrationTests
     }
 
     [Fact]
+    public async Task TimeoutAutoResumesWhenNetworkBecomesReachable()
+    {
+        // 用户日志 2026-11-09 04:08：断网期间 60 秒预算耗尽后只等快捷键，网络恢复后仍卡 2.5 小时。
+        var time = new FakeTimeProvider();
+        using var stop = new CancellationTokenSource();
+        var original = TaskControl.EnvironmentAutoResumeInterval;
+        TaskControl.EnvironmentAutoResumeInterval = TimeSpan.FromMilliseconds(50);
+        TaskControl.BeginEnvironmentRecovery(stop.Token);
+        var reachable = false;
+        TaskControl.ReachableForTest = _ => Task.FromResult(reachable);
+        try
+        {
+            bool responsive = false;
+            var task = TaskControl.WaitForEnvironmentRecoveryAsync(async ct =>
+            {
+                if (responsive) return true;
+                await Task.Delay(Timeout.Infinite, ct);
+                return false;
+            }, stop.Token, new EnvironmentRecoveryWindow(time));
+            time.Advance(TimeSpan.FromSeconds(60));
+            await WaitUntil(() => RunnerContext.Instance.IsSuspend);
+            await Task.Delay(200);
+            Assert.True(RunnerContext.Instance.IsSuspend); // 网络不通时不自动续轮。
+            Assert.False(task.IsCompleted);
+            responsive = true;
+            reachable = true;
+            await task.WaitAsync(TimeSpan.FromSeconds(5)); // 无需按快捷键。
+            Assert.False(RunnerContext.Instance.IsSuspend);
+        }
+        finally
+        {
+            TaskControl.ReachableForTest = _ => Task.FromResult(false);
+            TaskControl.EnvironmentAutoResumeInterval = original;
+            RunnerContext.Instance.IsSuspend = false;
+            await TaskControl.EndEnvironmentRecoveryAsync();
+        }
+    }
+
+    [Fact]
+    public async Task AutoResumeStopsAfterLimitAndWaitsForUser()
+    {
+        var time = new FakeTimeProvider();
+        using var stop = new CancellationTokenSource();
+        var original = TaskControl.EnvironmentAutoResumeInterval;
+        TaskControl.EnvironmentAutoResumeInterval = TimeSpan.FromMilliseconds(20);
+        TaskControl.BeginEnvironmentRecovery(stop.Token);
+        int pings = 0;
+        TaskControl.ReachableForTest = _ => { Interlocked.Increment(ref pings); return Task.FromResult(true); };
+        try
+        {
+            int probes = 0;
+            var task = TaskControl.WaitForEnvironmentRecoveryAsync(_ =>
+            {
+                Interlocked.Increment(ref probes);
+                time.Advance(TimeSpan.FromSeconds(61)); // 每轮都在预算外才返回，始终未恢复。
+                return Task.FromResult(false);
+            }, stop.Token, new EnvironmentRecoveryWindow(time));
+            await WaitUntil(() => Volatile.Read(ref probes) >= TaskControl.MaxEnvironmentAutoResumes + 1
+                                  && RunnerContext.Instance.IsSuspend);
+            var settledPings = Volatile.Read(ref pings);
+            await Task.Delay(200);
+            Assert.True(RunnerContext.Instance.IsSuspend);
+            Assert.Equal(TaskControl.MaxEnvironmentAutoResumes + 1, Volatile.Read(ref probes));
+            Assert.Equal(settledPings, Volatile.Read(ref pings)); // 达上限后不再后台 ping。
+            Assert.False(task.IsCompleted);
+            stop.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        }
+        finally
+        {
+            TaskControl.ReachableForTest = _ => Task.FromResult(false);
+            TaskControl.EnvironmentAutoResumeInterval = original;
+            RunnerContext.Instance.IsSuspend = false;
+            await TaskControl.EndEnvironmentRecoveryAsync();
+        }
+    }
+
+    [Fact]
     public async Task SecondRecoveryCannotIssueInputsWhileFirstOwnsGate()
     {
         var response = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
