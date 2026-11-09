@@ -3775,7 +3775,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         };
         bindingRuleHint.Child = new System.Windows.Controls.TextBlock
         {
-            Text = "每个人绑定的任务数量和顺序必须一致，名称可以不同；不符合时无法保存或开始。",
+            Text = "每个人绑定的任务数量和顺序必须一致，名称可以不同；不一致时无法开始。统一调整数量时可强制保存，再逐个修改其他成员。",
             FontSize = 10.5,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xDC, 0xA0)),
             TextWrapping = System.Windows.TextWrapping.Wrap
@@ -4272,8 +4272,18 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
             if (layoutConflict != null)
             {
-                MessageBox.Show(layoutConflict, "绑定结构不一致", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
+                // 调整全体绑定数量（例如 2 项改 3 项）时，逐个修改必然有一段时间不一致。
+                // 允许用户确认后强制保存；服务端开批时仍按 batch_layout_mismatch 校验，结构未统一前该轮不会开始。
+                var force = MessageBox.Show(
+                    layoutConflict + "\n\n" +
+                    "如果你正在统一调整所有成员的绑定数量或结构（例如大家从 2 项改为 3 项），可以选择「是」强制保存当前成员，然后逐个修改其他成员。\n\n" +
+                    "注意：\n" +
+                    "• 强制保存后，在所有参加本轮的在线成员结构一致之前，联机锄地无法开始（服务端会拒绝该批次）。\n" +
+                    "• 请务必把其他所有成员都改成相同的数量和类型/顺序。\n\n" +
+                    "是否强制保存？\n「是」= 强制保存　「否」= 返回修改",
+                    "绑定结构不一致", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+                if (force != MessageBoxResult.Yes) return;
+                AddLog($"已强制保存结构不一致的绑定（{targetMember?.PlayerName ?? _config?.PlayerName ?? "本机"}：{OnlineHoeingBindingValidator.DescribeLayout(bindingValidation.Types)}）；所有成员结构统一前无法开始联机锄地");
             }
 
             // 「完成后动作」取值（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）
