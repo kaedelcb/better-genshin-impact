@@ -20,9 +20,9 @@ public class MistletoeGatewayRelayTests
     private static async Task<(GatewayTestHarness H, string Room)> RoomWithTwoInstancesAsync()
     {
         var h = new GatewayTestHarness(); var room = Room();
-        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "网页");
         // 同一 UID 的执行端与监控端并存：必须按实例区分。
         await h.Ops.JoinControlRoomAsync(Ctx("executor"), room, "pw", "owner", "执行端", clientInstanceId: "inst-a", machineId: "m1");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "执行端");
         await h.Ops.JoinControlRoomAsync(Ctx("second"), room, "pw", "owner", "第二实例", clientInstanceId: "inst-b", machineId: "m2");
         await h.Ops.JoinControlRoomAsync(Ctx("other"), room, "pw", "other", "他人", clientInstanceId: "inst-c", machineId: "m3");
         h.GatewayClientProxy.Invocations.Clear(); h.GatewayHub.Invocations.Clear();

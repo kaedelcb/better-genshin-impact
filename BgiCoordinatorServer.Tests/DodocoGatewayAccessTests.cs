@@ -21,8 +21,8 @@ public class DodocoGatewayAccessTests
     public async Task Request_RequiresJoinedRoomOnlineTargetAndBoundedWhitelistedOperation()
     {
         var h = new GatewayTestHarness(); var room = Room();
-        await Join(h, room, "viewer", "web_viewer");
         await Join(h, room, "target", "targetUid");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "targetUid");
         Assert.Equal("not_in_room", Error(await h.Ops.RequestDodocoAsync(Ctx("outsider"), room, "targetUid", "r1", "watch.read", Empty())));
         Assert.Equal("target_offline", Error(await h.Ops.RequestDodocoAsync(Ctx("viewer"), room, "missing", "r2", "watch.read", Empty())));
         Assert.Equal("invalid_args", Error(await h.Ops.RequestDodocoAsync(Ctx("viewer"), room, "targetUid", "r3", "watch.run_shell", Empty())));
@@ -36,8 +36,8 @@ public class DodocoGatewayAccessTests
     public async Task Response_IsOnlyFromTargetForSameRoom_AndDeliveredOnceToRequester()
     {
         var h = new GatewayTestHarness(); var room = Room(); var otherRoom = Room();
-        await Join(h, room, "viewer", "web_viewer");
         await Join(h, room, "target", "targetUid");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "targetUid");
         await Join(h, room, "other", "otherUid");
         await Join(h, otherRoom, "outsider", "outsideUid");
         Assert.True(Accepted(await h.Ops.RequestDodocoAsync(Ctx("viewer"), room, "targetUid", "request", "watch.read", Empty())));
@@ -64,8 +64,8 @@ public class DodocoGatewayAccessTests
     public async Task ExpiredRequest_RejectsEvenCorrectTarget()
     {
         var h = new GatewayTestHarness(); var room = Room();
-        await Join(h, room, "viewer", "web_viewer");
         await Join(h, room, "target", "targetUid");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "targetUid");
         Assert.True(Accepted(await h.Ops.RequestDodocoAsync(Ctx("viewer"), room, "targetUid", "expired", "watch.read", Empty())));
         // Force the stored deadline into the past, avoiding a slow wall-clock wait.
         var pending = h.Ops.GetType().GetField("_dodocoPending", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(h.Ops)!;
@@ -81,8 +81,8 @@ public class DodocoGatewayAccessTests
     public async Task DiagnosticOperations_ForwardAuthenticatedRequesterConnection(string operation)
     {
         var h = new GatewayTestHarness(); var room = Room();
-        await Join(h, room, "viewer", "web_viewer");
         await Join(h, room, "target", "targetUid");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, "pw", "web_viewer", "targetUid");
         Assert.True(Accepted(await h.Ops.RequestDodocoAsync(Ctx("viewer"), room, "targetUid", "diagnostic", operation, Empty())));
         h.GatewayHub.Verify(x => x.Clients.Client("target"), Times.Once);
         h.GatewayClientProxy.Verify(p => p.SendCoreAsync(GatewayProtocol.Callbacks.Event,

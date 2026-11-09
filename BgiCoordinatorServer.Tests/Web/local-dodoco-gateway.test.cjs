@@ -41,7 +41,7 @@ async function firstLine(stream){return await new Promise((resolve,reject)=>{let
    const crossOrigin=await sim.evaluate(async({bridgeOrigin,session})=>{try{await fetch(bridgeOrigin+'/api/execute',{method:'POST',headers:{'Content-Type':'application/json','X-BGI-Session':session},body:JSON.stringify({requestId:'bad',operation:'watch.read',args:{}})});return 'unexpected';}catch{return 'blocked';}},{bridgeOrigin,session});
    assert.equal(crossOrigin,'blocked','其他来源页面不得调用本机桥');
    const replay=await page.evaluate(async token=>{const r=await fetch('/api/pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});return r.status;},token);assert.equal(replay,403,'一次性配对令牌不能重放');
-   await page.getByRole('button',{name:'连接远程房间'}).click();assert.equal(await page.locator('#localServerUrl').inputValue(),remoteBase,'使用映射回隔离网关的非 localhost HTTP 域名');await page.locator('#password').fill(secret);await page.getByRole('button',{name:'进入控制房间'}).click();
+   await page.getByRole('button',{name:'连接远程房间'}).click();assert.equal(await page.locator('#localServerUrl').inputValue(),remoteBase,'使用映射回隔离网关的非 localhost HTTP 域名');await page.locator('#password').fill(secret);await page.locator('#nickname').fill('另一台电脑');await page.getByRole('button',{name:'进入控制房间'}).click();
    await page.waitForFunction(()=>roomReady===true,{timeout:12000});await page.locator('#dodocoMember option[value="mock-owner"]').waitFor({state:'attached'});
    await page.locator('#dodocoMember').selectOption('mock-owner');await page.getByText('真实网关远程日志').first().waitFor({timeout:10000});
    assert.match(await page.locator('#dodocoStatus').textContent(),/服务器中转/,'同 UID 但不同机器和实例必须走服务器');

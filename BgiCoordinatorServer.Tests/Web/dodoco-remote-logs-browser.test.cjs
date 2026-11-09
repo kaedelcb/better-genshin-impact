@@ -72,7 +72,7 @@ async function addMember(page, { room, secret, uid, name, files }) {
     await addMember(simB, { room: other, secret: 'other-secret', uid: 'other_member', name: '协助成员',
       files: ['better-genshin-impact20261030.log', 'assistant_runtime.2026-10-30.log'] });
     const errors = []; page.on('pageerror', e => errors.push(String(e)));
-    await page.goto(base); await page.locator('#roomCode').fill(own); await page.locator('#password').fill('own-secret');
+    await page.goto(base); await page.locator('#roomCode').fill(own); await page.locator('#password').fill('own-secret'); await page.locator('#nickname').fill('本房成员');
     await page.locator('#joinButton').click(); await page.locator('#dodocoProduct').click();
     await page.locator('[data-tab="files"]').click();
 

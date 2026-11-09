@@ -100,7 +100,7 @@ async function freePort() {
       await send('control.joinRoom',{password:secret,playerUid:uid,playerName:'模拟成员',allowedUids:[],isRemote:false,clientInstanceId:'sim-instance'});
     },{room,uid,secret,chunks,jpeg,diagnosticBase64});
     await page.addInitScript(() => { const NativeWebSocket=window.WebSocket; window.testSockets=[]; window.WebSocket=class extends NativeWebSocket { constructor(...args) { super(...args); window.testSockets.push(this); } }; });
-    await page.goto(base); await page.locator('#roomCode').fill(room); await page.locator('#password').fill(secret);
+    await page.goto(base); await page.locator('#roomCode').fill(room); await page.locator('#password').fill(secret); await page.locator('#nickname').fill('模拟成员');
     await page.locator('#joinButton').click(); await page.locator('#dodocoProduct').waitFor({state:'visible'});
     await page.locator('#dodocoProduct').click();
     await page.locator('#dodocoMember option[value="sim_member"]').waitFor({state:'attached'});
@@ -164,7 +164,7 @@ async function freePort() {
     assert.deepEqual(diagnosticEvents.filter(e=>e.operation==='watch.diagnostic.chunk').map(e=>e.offset),[0,192*1024]);
     assert.ok(diagnosticEvents.every(e=>e.requester===expectedViewerConnection));
     const secondViewer=await context.newPage();
-    await secondViewer.goto(base); await secondViewer.locator('#roomCode').fill(room); await secondViewer.locator('#password').fill(secret);
+    await secondViewer.goto(base); await secondViewer.locator('#roomCode').fill(room); await secondViewer.locator('#password').fill(secret); await secondViewer.locator('#nickname').fill('模拟成员');
     await secondViewer.locator('#joinButton').click(); await secondViewer.locator('#dodocoProduct').waitFor({state:'visible'});
     await secondViewer.locator('#dodocoProduct').click();
     await secondViewer.locator('#dodocoMember option[value="sim_member"]').waitFor({state:'attached'});

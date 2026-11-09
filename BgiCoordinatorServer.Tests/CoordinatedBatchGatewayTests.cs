@@ -525,7 +525,7 @@ public class CoordinatedBatchGatewayTests
         Assert.Equal(0, Events(h, "control.remoteCommand"));
         Assert.Null(h.Ops.CurrentCoordinatedBatch(clients[0]));
 
-        await h.Ops.JoinControlRoomAsync(web, room, "pw", "web_user", "web");
+        await h.Ops.JoinControlRoomAsync(web, room, "pw", "web_user", "name0");
         var accepted = Snapshot(await Begin(h, web));
         Assert.Equal("manual", accepted.Source);
         Assert.Equal(new[] { "u0" }, accepted.ParticipantUids);

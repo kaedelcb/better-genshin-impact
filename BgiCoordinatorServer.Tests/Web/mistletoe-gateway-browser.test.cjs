@@ -95,7 +95,7 @@ async function layoutAudit(page, name) {
       { nodeId: 'n-b', kind: 'resource.configGroup', ref: { config: '锄地' + '超长配置组名称'.repeat(5), revision: 'cfg-g1' }, strategies: [{ kind: 'prerequisite.account', uid: '123456789', bindingCode: 'secret-code' }], timeWindow: { start: '22:00', end: '06:00' } },
       { nodeId: 'ctl-1', kind: 'control.condition', flow: { route: 'keep' } }], triggers: [{ kind: 'trigger.time', time: '04:00', missPolicy: 'nextDay' }], terminal: [], unknownField: { keep: true } }, revision: 'wf-r1' }); });
 
-    await page.goto(base); await page.locator('#roomCode').fill(room); await page.locator('#password').fill(secret);
+    await page.goto(base); await page.locator('#roomCode').fill(room); await page.locator('#password').fill(secret); await page.locator('#nickname').fill('我的执行端');
     await page.locator('#joinButton').click(); await page.locator('#mistletoeProduct').waitFor({ state: 'visible' });
     await page.locator('#mistletoeProduct').click();
 

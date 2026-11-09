@@ -63,16 +63,27 @@ public sealed partial class RoomOperations
         try
         {
             var uidWhitelist = allowedUids ?? [];
-            if (!ControlRoomAuth.Authenticate(roomCode, password, playerUid, uidWhitelist))
+            var isWebClient = playerUid.StartsWith("web_");
+            var group = $"CTRL_{roomCode}";
+            // 只有 PC 助手能建房（首次设置房间密码）；网页端只能加入已建好的房间。
+            var auth = ControlRoomAuth.Authenticate(roomCode, password, playerUid, uidWhitelist, allowCreate: !isWebClient);
+            string? rejection = auth switch
             {
-                await _broadcaster.SendToCallerAsync(ctx, "JoinRejected", new { reason = "密码错误或UID不在白名单中" }, "密码错误或UID不在白名单中");
+                ControlRoomAuthResult.RoomNotFound => "房间不存在：请先在助手中用该房间号建房",
+                ControlRoomAuthResult.Rejected => "密码错误或UID不在白名单中",
+                _ => null,
+            };
+            // 网页控制端的昵称必须是房间内某个助手成员的昵称（网页日志协助等 isRemote 入口不受此限）。
+            if (rejection is null && isWebClient && !isRemote && !IsControlRoomMemberName(group, playerName))
+                rejection = "控制端昵称必须与房间内某个成员的昵称一致";
+            if (rejection is not null)
+            {
+                await _broadcaster.SendToCallerAsync(ctx, "JoinRejected", new { reason = rejection }, rejection);
                 return;
             }
 
-            var group = $"CTRL_{roomCode}";
             await _broadcaster.AddToGroupAsync(ctx, group);
             TrackGroup(ctx, group);
-            var isWebClient = playerUid.StartsWith("web_");
             // 遥控端（observerMode 标记，isRemote=true）与 WEB 端类似：不加入 _controlRooms 成员列表，
             // 只加 SignalR Group 收广播。这样遥控端不建独立条目、不被 ResolveTargets 匹配（不接收命令）、
             // 且同 UID 执行端的 ControlRoomPlayer 不被覆盖（解决"同 UID 双端互挤占"）。
@@ -114,6 +125,13 @@ public sealed partial class RoomOperations
                 // 客户端可能已断开，忽略二次异常，避免 "Failed to invoke" 模糊错误
             }
         }
+    }
+
+    private bool IsControlRoomMemberName(string group, string playerName)
+    {
+        var name = playerName?.Trim() ?? "";
+        return name.Length > 0 && _roomManager.GetControlRoomPlayers(group)
+            .Any(p => string.Equals(p.PlayerName?.Trim(), name, StringComparison.Ordinal));
     }
 
     /// <summary>
