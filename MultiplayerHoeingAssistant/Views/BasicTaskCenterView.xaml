@@ -205,12 +205,16 @@
                         </StackPanel>
 
                         <StackPanel x:Name="TaskCenterUsage" DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                            <TextBlock Text="运行中可增删、修改、拖动调序；任务执行完会按实时任务列表接着执行。"
-                                       Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" />
-                            <TextBlock Text="两端均可编辑、同步计划；监控端远程控制，执行端保存并连接 BGI 执行。"
-                                       Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
-                            <TextBlock Text="本轮已完成的任务，移到后面也不会再次执行。"
-                                       Foreground="{DynamicResource GoldText}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0" />
+                            <!-- 按语义手动断行，每行不超过 15 个汉字，避免一两个字单独换行。 -->
+                            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap">
+                                <Run Text="运行中可增删、修改、拖动调序；" /><LineBreak /><Run Text="任务完成后按实时列表接着执行。" />
+                            </TextBlock>
+                            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0">
+                                <Run Text="两端均可编辑、同步计划；" /><LineBreak /><Run Text="监控端远程控制，" /><LineBreak /><Run Text="执行端保存并连接 BGI 执行。" />
+                            </TextBlock>
+                            <TextBlock Foreground="{DynamicResource GoldText}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0">
+                                <Run Text="本轮已完成的任务，" /><LineBreak /><Run Text="移到后面也不会再次执行。" />
+                            </TextBlock>
                         </StackPanel>
 
                         <Grid>
@@ -291,17 +295,38 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
-                                    <TextBlock x:Name="CurrentPlanTitleText" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentPlanTitle}" Text="{Binding CurrentPlanTitle}" FontSize="19" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource GoldText}" />
-                                    <TextBlock Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="0,1,0,0" />
-                                </StackPanel>
+                                <!-- 标题、计划设置图标和摘要同排，节省纵向空间。 -->
+                                <Grid Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="CurrentPlanTitleText" Grid.Column="0" MaxWidth="320" TextTrimming="CharacterEllipsis" ToolTip="{Binding CurrentPlanTitle}" Text="{Binding CurrentPlanTitle}" FontSize="19" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource GoldText}" VerticalAlignment="Center" />
+                                    <Button x:Name="PlanSettingsButton" Grid.Column="1" Style="{StaticResource SummaryLinkButton}" Click="OpenPlanSettingsClick"
+                                            AutomationProperties.Name="计划设置" IsEnabled="{Binding IsEditing}"
+                                            Padding="5,4" Margin="6,0,0,0" VerticalAlignment="Center">
+                                        <Button.ToolTip>
+                                            <StackPanel MaxWidth="360">
+                                                <TextBlock Text="计划设置" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Editing.PlanSettingsSummary}" TextWrapping="Wrap" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button.ToolTip>
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" FontSize="14"
+                                                   Foreground="{DynamicResource GoldText}" />
+                                    </Button>
+                                    <TextBlock Grid.Column="2" Text="{Binding CurrentPlanSummary}" Foreground="{DynamicResource Dim}" FontSize="11"
+                                               Margin="8,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </Grid>
                             <views:RegisterStripView IsCompact="True" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
                                 DataContext="{Binding DataContext.Registers, RelativeSource={RelativeSource AncestorType={x:Type views:MistletoePage}}}" />
                             </Grid>
                             <ScrollViewer x:Name="PlanActionsScrollViewer" Grid.Row="1" Style="{DynamicResource GoldScrollViewer}" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled"
                                           Margin="0" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal">
+                                <!-- 编辑类按钮靠左、启动类按钮靠右；窄窗口时仍可横向滚动。 -->
+                                <DockPanel LastChildFill="False">
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                                     <Button Content="+任务" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Click="AddConfigClick" ToolTip="从当前 BGI 资源目录添加 resource 配置单" />
                                     <Button x:Name="PlanMoreActionsButton" Content="更多操作" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
@@ -320,18 +345,14 @@
                                     <Button x:Name="ResetExecutionStateButton" Content="重置状态" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding ResetExecutionStateCommand}" IsEnabled="{Binding CanResetExecutionState}"
                                             ToolTip="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动" />
-                                <Button Style="{StaticResource SummaryLinkButton}" Click="OpenPlanSettingsClick" ToolTip="{Binding Editing.PlanSettingsSummary}"
-                                        IsEnabled="{Binding IsEditing}" HorizontalAlignment="Right" Padding="7,3" Margin="3,0,6,0">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="计划设置" Foreground="{DynamicResource GoldText}" FontWeight="SemiBold" />
-
-                                    </StackPanel>
-                                </Button>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="12,0,0,0">
                                     <Button Content="启动单任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"
                                             IsEnabled="{Binding Editing.HasSelectedNode}" ToolTip="启动当前选中的任务" />
                                     <Button Content="⏵⏵ 连续一条龙" Style="{DynamicResource BtnGold}" Padding="9,3" Margin="0" Click="StartContinuousClick"
                                             IsEnabled="{Binding IsEditing}" ToolTip="按当前计划顺序运行已启用的配置单；不可启动时点击后显示原因" />
                                 </StackPanel>
+                                </DockPanel>
                             </ScrollViewer>
                         </Grid>
 

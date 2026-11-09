@@ -44,8 +44,7 @@ public sealed class PlanSettingsTimePickerTests
         {
             window.Show();
             await Layout(window);
-            var open = Descendants<Button>(basic).Single(button =>
-                Descendants<TextBlock>(button).Any(text => text.Text == "计划设置"));
+            var open = (Button)basic.FindName("PlanSettingsButton");
             Click(open);
             var parentPopup = (Popup)basic.FindName("PlanSettingsPopup");
             await Until(window, () => parentPopup.IsOpen);

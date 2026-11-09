@@ -62,7 +62,7 @@ public sealed class BasicTaskCenterViewTests : IDisposable
                     more.ContextMenu.Items.OfType<MenuItem>().Select(item => item.Header));
                 Assert.DoesNotContain("设置", texts);
                 Assert.DoesNotContain("更多计划操作", texts);
-                Assert.Contains(Descendants(view).OfType<TextBlock>(), text => text.Text == "计划设置");
+                Assert.Equal("计划设置", System.Windows.Automation.AutomationProperties.GetName(Assert.IsType<Button>(view.FindName("PlanSettingsButton"))));
                 Assert.DoesNotContain("切换到配置单", texts);
                 Assert.DoesNotContain("从此处开始执行 ›", texts);
                 Assert.DoesNotContain("上移", texts);
