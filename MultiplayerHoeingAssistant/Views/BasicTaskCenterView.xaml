@@ -204,17 +204,28 @@
 
                         </StackPanel>
 
+                        <!-- 每条一行、长度相近；完整说明放在悬停提示里。 -->
                         <StackPanel x:Name="TaskCenterUsage" DockPanel.Dock="Bottom" Margin="0,12,0,0">
-                            <!-- 按语义手动断行，每行不超过 15 个汉字，避免一两个字单独换行。 -->
-                            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap">
-                                <Run Text="运行中可增删、修改、拖动调序；" /><LineBreak /><Run Text="任务完成后按实时列表接着执行。" />
-                            </TextBlock>
-                            <TextBlock Foreground="{DynamicResource Dim}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0">
-                                <Run Text="两端均可编辑、同步计划；" /><LineBreak /><Run Text="监控端远程控制，" /><LineBreak /><Run Text="执行端保存并连接 BGI 执行。" />
-                            </TextBlock>
-                            <TextBlock Foreground="{DynamicResource GoldText}" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0">
-                                <Run Text="本轮已完成的任务，" /><LineBreak /><Run Text="移到后面也不会再次执行。" />
-                            </TextBlock>
+                            <StackPanel.ToolTip>
+                                <TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                           Text="运行中可增删、修改、拖动调序；任务执行完会按实时任务列表接着执行。&#x0a;两端均可编辑、同步计划；监控端远程控制，执行端保存并连接 BGI 执行。&#x0a;本轮已完成的任务，移到后面也不会再次执行。" />
+                            </StackPanel.ToolTip>
+                            <Border BorderBrush="#3A3352" BorderThickness="0,1,0,0" Padding="0,6,0,0">
+                                <StackPanel>
+                                    <DockPanel Margin="0,4,0,0">
+                                        <Ellipse DockPanel.Dock="Left" Width="4" Height="4" Fill="#6B6394" VerticalAlignment="Top" Margin="0,7,6,0" />
+                                        <TextBlock Text="运行中可增删、调序，实时生效" Foreground="{DynamicResource Dim}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,5,0,0">
+                                        <Ellipse DockPanel.Dock="Left" Width="4" Height="4" Fill="#6B6394" VerticalAlignment="Top" Margin="0,7,6,0" />
+                                        <TextBlock Text="两端同步编辑，执行端连 BGI" Foreground="{DynamicResource Dim}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                    <DockPanel Margin="0,5,0,0">
+                                        <Ellipse DockPanel.Dock="Left" Width="4" Height="4" Fill="{DynamicResource Gold}" VerticalAlignment="Top" Margin="0,7,6,0" />
+                                        <TextBlock Text="已完成的任务移到后面也不重跑" Foreground="{DynamicResource GoldText}" FontSize="11" TextTrimming="CharacterEllipsis" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
 
                         <Grid>
