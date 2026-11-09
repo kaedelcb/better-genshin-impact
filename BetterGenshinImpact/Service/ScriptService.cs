@@ -188,12 +188,26 @@ public partial class ScriptService : IScriptService
         //     hasTimer = HasTimerOperation(codeList);
         // }
 
+        // 纯 Shell 配置组不依赖游戏：跳过游戏启动等待，截图器未启动也照常执行。
+        // 开启了优先执行配置组时可能插入地图追踪等项目，仍按原流程等待游戏。
+        var enabledProjects = list.Where(p => p.Status == "Enabled").ToList();
+        var shellOnly = enabledProjects.Count > 0 && enabledProjects.All(p => p.Type == "Shell"
+            && !((p.GroupInfo?.Config.PathingConfig.Enabled ?? false)
+                 && p.GroupInfo.Config.PathingConfig.PreExecutionPriorityConfig.Enabled));
+
         // 没启动时候，启动截图器
-        var startupResult = await StartGameTask();
-        if (startupResult != TaskRunResult.Ran)
+        if (shellOnly)
         {
-            scope.Observe(startupResult);
-            return startupResult;
+            _logger.LogInformation("配置组 {Name} 仅包含 Shell 任务，不等待游戏启动", groupName);
+        }
+        else
+        {
+            var startupResult = await StartGameTask();
+            if (startupResult != TaskRunResult.Ran)
+            {
+                scope.Observe(startupResult);
+                return startupResult;
+            }
         }
         
         
@@ -363,8 +377,11 @@ public partial class ScriptService : IScriptService
                         if (enabledProject)
                             onlyCycleSkipped = false;
 
-                        //月卡检测
-                        await _blessingOfTheWelkinMoonTask.Start(CancellationContext.Instance.Cts.Token);
+                        //月卡检测（截图器未启动的纯 Shell 组无画面可查）
+                        if (TaskContext.Instance().IsInitialized)
+                        {
+                            await _blessingOfTheWelkinMoonTask.Start(CancellationContext.Instance.Cts.Token);
+                        }
                         if (exeProject.Status != "Enabled")
                         {
                             _logger.LogInformation("脚本 {Name} 状态为禁用，跳过执行", exeProject.Name);
@@ -539,7 +556,7 @@ public partial class ScriptService : IScriptService
 
                     _logger.LogInformation("配置组 {Name} 的 {Cnt} 个项目全部按执行周期跳过，本组正常结束", groupName, cycleSkippedProjects);
                 }
-            }, job: job);
+            }, job: job, requireGame: !shellOnly);
         
 
         // 还原定时器

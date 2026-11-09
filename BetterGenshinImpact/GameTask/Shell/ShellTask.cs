@@ -79,7 +79,11 @@ public class ShellTask(ShellTaskParam param) : ISoloTask
             TaskControl.Logger.LogInformation("shell {End} 运行结束", param.Command);
         }
 
-        SystemControl.ActivateWindow();
+        // 截图器未启动（纯 Shell 配置组不等游戏）时没有游戏窗口可激活
+        if (TaskContext.Instance().IsInitialized)
+        {
+            SystemControl.ActivateWindow();
+        }
     }
 
     /// <summary>

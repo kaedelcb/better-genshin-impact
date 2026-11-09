@@ -44,7 +44,8 @@ public class TaskRunner
     /// <param name="clearCancellationContextOnLockFailure">获取信号量锁失败时是否清理 CancellationContext。</param>
     /// <param name="job">[A2] 作业描述符：非空时登记进 JobRegistry 并随执行推进状态；null = 不登记（旧行为）。</param>
     /// <returns>[A1.1] 显式执行结果：RejectedSlotBusy = 槽位被占本次未执行（旧行为仅 ERR 日志静默返回）。</returns>
-    public async Task<TaskRunResult> RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null, JobDescriptor? job = null)
+    /// <param name="requireGame">false = 不依赖游戏的任务（如纯 Shell 配置组）：截图器未启动时不报错、不激活游戏窗口。</param>
+    public async Task<TaskRunResult> RunCurrentAsync(Func<Task> action, bool resetCancellationContext = true, bool clearCancellationContextOnLockFailure = false, string? soloTaskName = null, JobDescriptor? job = null, bool requireGame = true)
     {
         if (job?.ParentJobId is { } parent && ExecutionScope.Current?.Descriptor.JobId != parent)
             return TaskRunResult.RejectedSlotBusy;
@@ -152,7 +153,10 @@ public class TaskRunner
             _logger.LogInformation("→ {Text}", string.IsNullOrEmpty(soloTaskName) ? "任务启动！" : soloTaskName + "，任务启动！");
             
             // 初始化
-            Init();
+            if (requireGame || TaskContext.Instance().IsInitialized)
+            {
+                Init();
+            }
             if (resetCancellationContext)
             {
                 CancellationContext.Instance.Set();
@@ -267,9 +271,9 @@ public class TaskRunner
         Task.Run(() => RunCurrentAsync(action));
     }
 
-    public async Task<TaskRunResult> RunThreadAsync(Func<Task> action, string? soloTaskName = null, JobDescriptor? job = null)
+    public async Task<TaskRunResult> RunThreadAsync(Func<Task> action, string? soloTaskName = null, JobDescriptor? job = null, bool requireGame = true)
     {
-        return await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName, job: job));
+        return await Task.Run(() => RunCurrentAsync(action, soloTaskName: soloTaskName, job: job, requireGame: requireGame));
     }
 
     public async Task RunSoloTaskAsync(ISoloTask soloTask, JobSource source = JobSource.Ui, JobDescriptor? job = null)
