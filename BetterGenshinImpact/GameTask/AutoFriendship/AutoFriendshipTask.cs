@@ -125,6 +125,12 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
 
         try
         {
+            if (FriendshipDailyCounter.GetTodayCount(_config.EnemyType) >= _config.RunTimes)
+            {
+                _logger.LogInformation("今日（凌晨4点起）{EnemyType}已完成 {Total} 次，达到设定值，跳过执行", _config.EnemyType, _config.RunTimes);
+                return;
+            }
+
             // 加载资源
             LoadResources();
 
@@ -417,8 +423,18 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
         int failureCount = 0;
 
         // 进度载体初始化（IPC task.status 的 friendshipProgress 数据源）
+        // 按游戏日（凌晨 4 点分界）、按敌人类型分别累计次数：中途停止后再次执行，从当日已完成次数继续
+        var doneBefore = FriendshipDailyCounter.GetTodayCount(_config.EnemyType);
+        var totalTarget = _config.RunTimes;
+        _logger.LogInformation("今日（凌晨4点起）{EnemyType}已完成 {Done}/{Total} 次", _config.EnemyType, doneBefore, totalTarget);
+        if (doneBefore >= totalTarget)
+        {
+            _logger.LogInformation("今日次数已达到设定值，跳过执行");
+            return;
+        }
+
         FriendshipProgress.IsRunning = true;
-        FriendshipProgress.TotalRounds = _config.RunTimes;
+        FriendshipProgress.TotalRounds = totalTarget;
         FriendshipProgress.CurrentRound = 0;
         FriendshipProgress.EstimatedRemainingSeconds = 0;
         FriendshipProgress.EstimatedFinishTime = DateTime.MinValue;
@@ -430,20 +446,22 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
 
         try
         {
-            var times = _config.RunTimes;
+            var times = totalTarget - doneBefore;
             for (var i = 0; i < times && _running; i++)
             {
                 try
                 {
                     // 轮次开始即更新当前轮（LogProgress 在轮成功后才补剩余时间估算）
-                    FriendshipProgress.CurrentRound = Math.Min(i + 1, times);
-                    FriendshipProgress.TotalRounds = times;
+                    FriendshipProgress.CurrentRound = Math.Min(doneBefore + successCount + 1, totalTarget);
+                    FriendshipProgress.TotalRounds = totalTarget;
                     var success = await ExecuteSingleFriendshipRoundAsync(i);
                     if (!success)
                         break;
 
                     successCount++;
-                    LogProgress(_startTime, i, _config.RunTimes);
+                    try { FriendshipDailyCounter.Increment(_config.EnemyType); }
+                    catch (Exception ex) { _logger.LogWarning(ex, "保存今日累计次数失败: {Message}", ex.Message); }
+                    LogProgress(_startTime, successCount, doneBefore, totalTarget);
                 }
                 catch (Exception ex)
                 {
@@ -478,10 +496,11 @@ public partial class AutoFriendshipTask : ISoloTask, IDisposable
     /// <summary>
     /// 打印进度信息（对应 JS logProgress）
     /// </summary>
-    private void LogProgress(DateTime startTime, int currentRound, int totalRounds)
+    private void LogProgress(DateTime startTime, int sessionCompleted, int doneBefore, int totalRounds)
     {
+        var currentRound = doneBefore + sessionCompleted - 1;
         var elapsed = DateTime.Now - startTime;
-        var timePerTask = elapsed.TotalMilliseconds / (currentRound + 1);
+        var timePerTask = elapsed.TotalMilliseconds / Math.Max(1, sessionCompleted);
         var remainingTasks = totalRounds - currentRound - 1;
         var remainingTimeMs = timePerTask * Math.Max(0, remainingTasks);
         var estimatedCompletion = DateTime.Now + TimeSpan.FromMilliseconds(remainingTimeMs);
