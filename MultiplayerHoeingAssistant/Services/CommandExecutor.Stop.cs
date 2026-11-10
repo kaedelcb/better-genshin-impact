@@ -88,6 +88,23 @@ public partial class CommandExecutor
                 Message = "已请求全停止，但无法确认 BGI 退出；进程终止失败，未标记停止成功" };
     }
 
+    // 用户在停止弹窗勾选“同时关闭 BGI”：任务停止后再受控结束本会话 BGI（抑制守护自动拉起）。
+    private async Task<CommandResult> CloseBgiAfterStopAsync(CommandResult stopResult)
+    {
+        if (_monitor == null)
+            return new() { Status = "failed", ErrorCode = "close_bgi_unavailable",
+                Message = stopResult.Message + "；未配置 BGI 路径，无法关闭 BGI" };
+        if (!_monitor.IsBgiRunning)
+            return new() { Status = stopResult.Status, ErrorCode = stopResult.ErrorCode,
+                ResponsibilityState = stopResult.ResponsibilityState, Message = stopResult.Message + "；BGI 本就未运行" };
+        var killed = await (StopProcessOverrideForTest?.Invoke("停止并关闭 BGI")
+            ?? _monitor.KillBgiControlledAsync("停止并关闭 BGI"));
+        return killed
+            ? new() { Status = "success", Message = stopResult.Message + "；已关闭 BGI" }
+            : new() { Status = "failed", ErrorCode = "close_bgi_failed",
+                Message = stopResult.Message + "；无法关闭 BGI（可能提权运行），请手动关闭" };
+    }
+
     internal static bool IsAllStopConfirmed(string? json)
     {
         if (string.IsNullOrWhiteSpace(json)) return false;

@@ -2092,23 +2092,23 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void OnStop(object? parameter)
     {
         // 停止前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
-        var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认全部停止", "停止当前执行、待执行任务和自动续跑？");
+        var (confirmed, broadcastAll, closeBgi) = ShowStopStartConfirmDialogCore("确认全部停止", "停止当前执行、待执行任务和自动续跑？", showCloseBgi: true);
         if (!confirmed) return; // 用户取消
 
         if (broadcastAll)
         {
             // 本机先执行；远端投递与本机停止并行，不以房间在线快照决定能否停止自己。
-            _ = ExecuteUserStopAsync(null, broadcastAll: true);
+            _ = ExecuteUserStopAsync(null, broadcastAll: true, closeBgi: closeBgi);
             return;
         }
 
         if (parameter is MemberViewModel member)
         {
-            _ = ExecuteLocalCommandAsync("stop", null, [member.PlayerUid]);
+            _ = ExecuteUserStopAsync([member.PlayerUid], closeBgi: closeBgi);
         }
         else
         {
-            _ = ExecuteUserStopAsync(GetSelectedTargets().Append(_config?.PlayerUid ?? "").ToList());
+            _ = ExecuteUserStopAsync(GetSelectedTargets().Append(_config?.PlayerUid ?? "").ToList(), closeBgi: closeBgi);
         }
     }
 
@@ -2116,11 +2116,17 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 返回值：confirmed=是否确认，broadcastAll=是否发送给所有人执行。</summary>
     private (bool confirmed, bool broadcastAll) ShowStopStartConfirmDialog(string title, string message)
     {
-        bool confirmed = false, broadcastAll = false;
+        var (confirmed, broadcastAll, _) = ShowStopStartConfirmDialogCore(title, message, showCloseBgi: false);
+        return (confirmed, broadcastAll);
+    }
+
+    private (bool confirmed, bool broadcastAll, bool closeBgi) ShowStopStartConfirmDialogCore(string title, string message, bool showCloseBgi)
+    {
+        bool confirmed = false, broadcastAll = false, closeBgi = false;
         var window = new Window
         {
             Title = title,
-            Width = 330, Height = 190,
+            Width = 330, Height = showCloseBgi ? 215 : 190,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -2179,8 +2185,26 @@ public partial class MainViewModel : INotifyPropertyChanged
         };
         syncCheckBox.Checked += (_, _) => broadcastAll = true;
         syncCheckBox.Unchecked += (_, _) => broadcastAll = false;
-        Grid.SetRow(syncCheckBox, 4);
-        panel.Children.Add(syncCheckBox);
+        var checkPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
+        checkPanel.Children.Add(syncCheckBox);
+        if (showCloseBgi)
+        {
+            var closeBgiCheckBox = new System.Windows.Controls.CheckBox
+            {
+                Content = "同时关闭 BGI",
+                ToolTip = "停止任务后结束对应执行端的 BGI 进程（默认不勾选）",
+                FontSize = 12,
+                Margin = new Thickness(0, 6, 0, 0),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                IsChecked = false
+            };
+            closeBgiCheckBox.Checked += (_, _) => closeBgi = true;
+            closeBgiCheckBox.Unchecked += (_, _) => closeBgi = false;
+            checkPanel.Children.Add(closeBgiCheckBox);
+        }
+        Grid.SetRow(checkPanel, 4);
+        panel.Children.Add(checkPanel);
 
         var btnPanel = new StackPanel
         {
@@ -2231,7 +2255,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         window.Content = panel;
         window.ShowDialog();
-        return (confirmed, broadcastAll);
+        return (confirmed, broadcastAll, closeBgi);
     }
 
     /// <summary>统计不在线成员并弹窗提醒（缓存问题：离线成员收不到命令，可能使用过时数据）。

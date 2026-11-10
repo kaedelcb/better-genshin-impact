@@ -687,7 +687,11 @@ public partial class CommandExecutor
             switch (command.Cmd)
             {
                 case "stop":
-                    return await StopWithKeyPolicyAsync();
+                {
+                    var stopResult = await StopWithKeyPolicyAsync();
+                    return GetStringParam(command.Params, "closeBgi") is "true" or "True"
+                        ? await CloseBgiAfterStopAsync(stopResult) : stopResult;
+                }
                 case "start_bgi":
                     return await StartBgiWithKeyPolicyAsync(GetStringParam(command.Params, "args"));
                 case "start_group":

@@ -15,7 +15,7 @@ public partial class MainViewModel
     private static bool IsAllStop(RemoteCommand command) => command.Cmd == "stop"
         && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all";
 
-    private async Task ExecuteUserStopAsync(List<string>? targets, bool broadcastAll = false)
+    private async Task ExecuteUserStopAsync(List<string>? targets, bool broadcastAll = false, bool closeBgi = false)
     {
         CancelPendingCoordinatedBegin();
         var self = _config?.PlayerUid ?? "";
@@ -27,6 +27,7 @@ public partial class MainViewModel
             ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(2),
             Params = new() { ["stopScope"] = "all" }
         };
+        if (closeBgi) stop.Params["closeBgi"] = "true";
         // Start locally before the first network await. The broadcast echo shares this command ID.
         var local = IsExecutorMode && (broadcastAll || selected.Count == 0 || selected.Contains("*") || selected.Contains(self))
             ? StopLocalAsync() : Task.CompletedTask;

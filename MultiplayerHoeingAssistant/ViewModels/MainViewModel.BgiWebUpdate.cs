@@ -20,6 +20,7 @@ public partial class MainViewModel
         public string Owner { get; } = owner;
         public string TicketId { get; } = ticketId;
         public bool Install { get; } = install;
+        public bool CloseBgi { get; init; }
         public string State { get; set; } = "downloading";
         public string Message { get; set; } = "正在准备安装包…";
         public string? SavedPath { get; set; }
@@ -128,6 +129,7 @@ public partial class MainViewModel
                 var id = payload?["id"]?.GetValue<string>() ?? "";
                 var ticketId = payload?["ticket"]?.GetValue<string>() ?? "";
                 var install = payload?["install"]?.GetValue<bool>() == true;
+                var closeBgi = install && payload?["closeBgi"]?.GetValue<bool>() == true;
                 if (!Guid.TryParseExact(id, "N", out _)) return Reply("rejected", "操作编号无效。");
                 if (_webBgiJobs.TryGetValue(id, out var existing))
                     return existing.Owner == owner && existing.TicketId == ticketId && existing.Install == install
@@ -137,8 +139,10 @@ public partial class MainViewModel
                     return Reply("rejected", "安装包选择已过期，请刷新列表后重新选择。");
                 if (!install && (ticket.Package.Remote == null || ticket.DownloadRoot.Length == 0))
                     return Reply("rejected", "请选择网络安装包，并在助手中设置安装包目录。");
-                if (install && (!MatchesBgiTarget(ticket.Executable) || !IsWebBgiTargetStopped(ticket.Executable)))
-                    return Reply("rejected", "请确认助手配置了 BGI 路径，且执行端的 BGI 已退出。可先仅下载安装包。");
+                if (install && !MatchesBgiTarget(ticket.Executable))
+                    return Reply("rejected", "请确认助手配置了 BGI 路径。可先仅下载安装包。");
+                if (install && !closeBgi && !IsWebBgiTargetStopped(ticket.Executable))
+                    return Reply("rejected", "执行端的 BGI 尚未退出。请先退出 BGI，或勾选“更新前自动关闭 BGI”。");
                 if (_webBgiJobs.Count >= 64) return Reply("rejected", "更新操作过于频繁，请稍后再试。");
                 if (!TryEnterConfigTransferOperation("bgi.update", out var configLease))
                     return Reply("rejected", ConfigTransferBlockedMessage);
@@ -150,7 +154,7 @@ public partial class MainViewModel
                 }
 
                 _webBgiTickets.Remove(ticketId);
-                var job = new WebBgiUpdateJob(id, owner, ticketId, install);
+                var job = new WebBgiUpdateJob(id, owner, ticketId, install) { CloseBgi = closeBgi };
                 _webBgiJobs.Add(id, job);
                 string[] backupDirs = install && config.BgiUpdateBackupBeforeUpdate
                     ? (config.BgiUpdateBackupDirs ?? AssistConfig.DefaultBgiUpdateBackupDirs()).ToArray() : [];
@@ -199,6 +203,15 @@ public partial class MainViewModel
             }
             if (job.Install)
             {
+                if (job.CloseBgi && !IsWebBgiTargetStopped(ticket.Executable))
+                {
+                    job.State = "installing";
+                    job.Message = "正在自动关闭执行端的 BGI…";
+                    var closed = _processMonitor != null
+                        && await _processMonitor.KillBgiControlledAsync("网页更新 BGI：自动关闭");
+                    if (!closed || !IsWebBgiTargetStopped(ticket.Executable))
+                        throw new IOException("无法自动关闭 BGI（可能提权运行）。已保留下载包，请手动退出 BGI 后重新更新。");
+                }
                 using var reservation = MatchesBgiTarget(ticket.Executable)
                     ? BgiPackageUpdateService.TryReserveStoppedWebInstall(ticket.Executable) : null;
                 if (reservation == null)

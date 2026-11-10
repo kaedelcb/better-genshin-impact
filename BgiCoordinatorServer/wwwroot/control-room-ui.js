@@ -248,15 +248,16 @@ function showMemberOperation(targets, operation, parameters = {}) {
     const frozen = [...targets];
     const names = frozen.map(uid => currentMember(uid)?.playerName || uid);
     const stopBatches = new Map(frozen.map(uid => [uid, currentMember(uid)?.hoeingBatchId || '']));
-    const overlay = createModal(commandTitles[operation] || '确认操作', `<p>对以下 ${frozen.length} 名成员${webEscapeHtml(commandTitles[operation] || '执行操作')}：</p><p class="note">${names.map(webEscapeHtml).join('、')}</p>${operation === 'stop' ? '<p class="note">停止联机中的成员可能中止共享批次。</p>' : ''}<div class="form-result" role="status"></div>`, '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="operationConfirm">确认</button>');
+    const overlay = createModal(commandTitles[operation] || '确认操作', `<p>对以下 ${frozen.length} 名成员${webEscapeHtml(commandTitles[operation] || '执行操作')}：</p><p class="note">${names.map(webEscapeHtml).join('、')}</p>${operation === 'stop' ? '<p class="note">停止联机中的成员可能中止共享批次。</p><label class="field"><input type="checkbox" id="stopCloseBgi"> 同时关闭 BGI（默认不勾选；停止任务后结束执行端的 BGI 进程）</label>' : ''}<div class="form-result" role="status"></div>`, '<button class="btn btn-secondary" data-close>取消</button><button class="btn btn-primary" id="operationConfirm">确认</button>');
     overlay.querySelector('#operationConfirm').onclick = async event => {
         const button = event.currentTarget, cancel = overlay.querySelector('[data-close]');
         if (button.disabled) return;
+        const closeBgi = operation === 'stop' && overlay.querySelector('#stopCloseBgi')?.checked === true;
         button.disabled = true; cancel.disabled = true;
         try {
             requireOnlineTargets(frozen);
             const results = await Promise.all(frozen.map(async uid => {
-                try { return { uid, ...(await sendMemberOperation(uid, operation, operation === 'stop' ? { ...parameters, hoeingBatchId: stopBatches.get(uid) } : parameters)) }; }
+                try { return { uid, ...(await sendMemberOperation(uid, operation, operation === 'stop' ? { ...parameters, hoeingBatchId: stopBatches.get(uid), ...(closeBgi ? { closeBgi: 'true' } : {}) } : parameters)) }; }
                 catch (err) { return { uid, status: 'failed', message: err.message }; }
             }));
             overlay.querySelector('.form-result').textContent = results.map(r => `${currentMember(r.uid)?.playerName || r.uid}：${formatResult(r)}`).join('\n');

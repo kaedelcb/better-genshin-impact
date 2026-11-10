@@ -75,7 +75,8 @@
             '<p data-notice class="note"></p><div data-fields><div class="bgi-update-fields">' +
             '<label>执行端<select data-target></select></label><label>下载来源<select data-source></select></label></div>' +
             '<p class="note" data-version></p><label>安装包<select data-package size="4"></select></label><p class="note" data-package-note></p>' +
-            '<p class="note">网页更新须先退出执行端的 BGI；会保留 User 和运行中的助手，其他排除项和备份沿用助手设置。</p>' +
+            '<p class="note">网页更新需要先退出执行端的 BGI；会保留 User 和运行中的助手，其他排除项和备份沿用助手设置。</p>' +
+            '<label class="note"><input type="checkbox" data-close-bgi checked> 更新前自动关闭执行端的 BGI（会强制结束 BGI 进程，正在运行的任务将中断；取消勾选则需自行先退出 BGI）</label>' +
             '<p class="bgi-update-status note" data-status role="status" aria-live="polite"></p>' +
             '<div class="bgi-update-actions"><button type="button" class="btn btn-secondary" data-refresh>刷新</button>' +
             '<button type="button" class="btn btn-secondary" data-download>仅下载</button>' +
@@ -166,14 +167,17 @@
         async function start(install) {
             const pack = data?.packages?.find(p => p.id === packages.value);
             if (!pack || working || pending || (!install && !pack.canDownload) || (install && !data.canInstall)) return;
+            const closeBgi = install && el('close-bgi').checked;
             if (install && !confirm('安装 ' + pack.fileName + '？\n执行端：' + target.name +
-                '\n目标目录：' + data.targetDirectory + '\n请先退出执行端 BGI。安装会覆盖程序文件，保留 User 目录。')) return;
+                '\n目标目录：' + data.targetDirectory + (closeBgi
+                    ? '\n将先自动关闭执行端的 BGI（强制结束进程，正在运行的任务会中断），再覆盖程序文件，保留 User 目录。'
+                    : '\n请先退出执行端 BGI。安装会覆盖程序文件，保留 User 目录。'))) return;
 
             const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('');
             pending = id; remember(target, id); job = null;
             working = true; status.textContent = '正在向执行端发送…'; controls();
             try {
-                const reply = await mtSend('bgi.update.start', { id, ticket: pack.id, install }, { target });
+                const reply = await mtSend('bgi.update.start', { id, ticket: pack.id, install, closeBgi }, { target });
                 if (stopped) return;
                 if (reply.status === 'ok' && reply.data?.id === id) showJob(reply.data);
                 else {
