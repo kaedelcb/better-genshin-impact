@@ -465,8 +465,8 @@ public class TpTaskFastDrag
         bool skipStep4DueToSpecial = false;
         try
         {
-            var (hitSpecialEarly, specialZoomEarly) = SpecialAdjacentTpPointDecisions.IsSpecialAdjacentPoint(
-                GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tolerance: 50.0, defaultZoom: 1.9);
+            var (hitSpecialEarly, specialZoomEarly) = SpecialAdjacentTpPointDecisions.IsSpecialAdjacentPointForTp(
+                GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tpX, tpY, force, tolerance: 50.0, defaultZoom: 1.9);
             if (hitSpecialEarly)
             {
                 skipStep4DueToSpecial = true;
@@ -630,8 +630,8 @@ public class TpTaskFastDrag
         //     详见 .kiro/specs/teleport-adjacent-point-misclick-zoom-whitelist-fix/design.md §组件 4。
         try
         {
-            var (hitSpecial, specialZoom) = SpecialAdjacentTpPointDecisions.IsSpecialAdjacentPoint(
-                GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tolerance: 50.0, defaultZoom: 1.5);
+            var (hitSpecial, specialZoom) = SpecialAdjacentTpPointDecisions.IsSpecialAdjacentPointForTp(
+                GetSpecialAdjacentTpPointList(), adjBaseX, adjBaseY, tpX, tpY, force, tolerance: 50.0, defaultZoom: 1.5);
             if (hitSpecial)
             {
                 // 整合步骤 4 的安全缩放：取 minZoomLevel 和 specialZoom 中更小值（更放大 = 更安全）

@@ -11,6 +11,34 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath;
 public static class SpecialAdjacentTpPointDecisions
 {
     /// <summary>
+    /// 传送场景的命中判定：先按最近真实传送点 (baseX,baseY) 判定（与旧行为一致）；
+    /// 仅当强制传送(force)且路线坐标 (tpX,tpY) 离最近真实传送点超过 tolerance
+    /// （即目标不是 tp.json 里的点，如至冬罐子）且旧判定未命中时，才改用路线坐标再判定一次。
+    /// 普通传送、以及强制传送到 tp.json 点附近时，行为与旧判定完全相同。
+    /// </summary>
+    public static (bool hit, double zoom) IsSpecialAdjacentPointForTp(
+        IReadOnlyList<SpecialAdjacentTpPoint>? list,
+        double baseX, double baseY,
+        double tpX, double tpY,
+        bool force,
+        double tolerance,
+        double defaultZoom)
+    {
+        var result = IsSpecialAdjacentPoint(list, baseX, baseY, tolerance, defaultZoom);
+        if (result.hit || !force)
+        {
+            return result;
+        }
+        double dx = tpX - baseX;
+        double dy = tpY - baseY;
+        if (Math.Sqrt(dx * dx + dy * dy) <= tolerance)
+        {
+            return result;
+        }
+        return IsSpecialAdjacentPoint(list, tpX, tpY, tolerance, defaultZoom);
+    }
+
+    /// <summary>
     /// 命中判定。存在某条目与 (x,y) 欧氏距离 &lt;= tolerance 即命中；
     /// 命中时返回该条目 Zoom（缺省用 defaultZoom）。多条命中取第一条（清单极小、实际不重叠）。
     /// </summary>
