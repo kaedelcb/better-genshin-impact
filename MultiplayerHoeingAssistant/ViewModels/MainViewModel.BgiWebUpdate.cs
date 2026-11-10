@@ -203,35 +203,35 @@ public partial class MainViewModel
             }
             if (job.Install)
             {
-                var bgiWasRunning = !IsWebBgiTargetStopped(ticket.Executable);
-                if (job.CloseBgi && bgiWasRunning)
-                {
-                    job.State = "installing";
-                    job.Message = "正在自动关闭执行端的 BGI…";
-                    var closed = _processMonitor != null
-                        && await _processMonitor.KillBgiControlledAsync("网页更新 BGI：自动关闭");
-                    if (!closed || !IsWebBgiTargetStopped(ticket.Executable))
-                        throw new IOException("无法自动关闭 BGI（可能提权运行）。已保留下载包，请手动退出 BGI 后重新更新。");
-                }
-                using var reservation = MatchesBgiTarget(ticket.Executable)
-                    ? BgiPackageUpdateService.TryReserveStoppedWebInstall(ticket.Executable) : null;
-                if (reservation == null)
-                    throw new IOException("BGI 正在运行、路径已变化或无法确认进程状态。已保留下载包，请在执行端退出 BGI 后重新更新。");
-                job.State = "installing";
-                job.Message = "正在更新执行端 BGI…";
                 var target = Path.GetDirectoryName(ticket.Executable)!;
-                var result = await BgiPackageUpdateService.ApplyAsync(path, target, ticket.Excludes, backupDirs,
-                    new Progress<string>(message => { if (job.State == "installing") job.Message = message; }));
-                NotifyRemoteUpdateStateChanged();
-                if (!result.Success || result.SkippedFiles.Count > 0)
-                    throw new IOException((result.Error ?? $"有 {result.SkippedFiles.Count} 个文件未覆盖。") +
-                        (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}"));
-                job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。" +
-                    (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
-                    (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}") +
-                    (bgiWasRunning ? " 约 6 秒后助手将自动重启并重新启动 BGI，网页会短暂断线后自动重连。"
-                        : " 约 6 秒后助手将自动重启以应用新版本（更新前 BGI 未运行，不会自动启动 BGI），网页会短暂断线后自动重连。");
-                RelaunchAfterBgiUpdate(bgiWasRunning, TimeSpan.FromSeconds(6));
+                job.State = "installing";
+                job.Message = "正在通知本机所有助手关闭 BGI…";
+                // 同机协作：所有使用这个 BGI 目录的助手（执行端、监控端、任何 Windows 账户）各自关闭自己的 BGI。
+                var coordination = await BgiUpdateCoordination.BeginAsync(target, job.CloseBgi,
+                    message => { if (job.State == "installing") job.Message = message; });
+                var completed = false;
+                try
+                {
+                    using var reservation = MatchesBgiTarget(ticket.Executable)
+                        ? BgiPackageUpdateService.TryReserveStoppedWebInstall(ticket.Executable) : null;
+                    if (reservation == null)
+                        throw new IOException("BGI 正在运行、路径已变化或无法确认进程状态。已保留下载包，已恢复原来运行的 BGI。");
+                    job.Message = "正在更新 BGI…";
+                    var result = await BgiPackageUpdateService.ApplyAsync(path, target, ticket.Excludes, backupDirs,
+                        new Progress<string>(message => { if (job.State == "installing") job.Message = message; }));
+                    NotifyRemoteUpdateStateChanged();
+                    if (!result.Success || result.SkippedFiles.Count > 0)
+                        throw new IOException((result.Error ?? $"有 {result.SkippedFiles.Count} 个文件未覆盖。") +
+                            (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") + " 已恢复原来运行的 BGI，未重启助手。");
+                    job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。" +
+                        (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
+                        (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}") +
+                        " 约 6 秒后本机所有助手（执行端和监控端）将自动重启，原来在运行的 BGI 也会重新启动；网页会短暂断线后自动重连。";
+                    // 给网页留时间读到“完成”，再让所有助手（包括本助手）一起重启。
+                    coordination.Complete(TimeSpan.FromSeconds(6));
+                    completed = true;
+                }
+                finally { if (!completed) coordination.Fail(); }
             }
             else job.Message = "安装包已保存，可稍后更新。";
             job.State = "done";
@@ -286,7 +286,7 @@ public partial class MainViewModel
                 if (startBgi)
                 {
                     AddLog("[更新BGI] 更新完成，正在重新启动 BGI");
-                    if (_processMonitor is null || !_processMonitor.RestartBgi())
+                    if (!StartCoordinatedBgi())
                         AddLog("[更新BGI] BGI 未能自动启动，请稍后手动启动");
                     await Task.Delay(1500);
                 }

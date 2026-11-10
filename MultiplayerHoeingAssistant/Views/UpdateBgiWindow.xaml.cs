@@ -426,7 +426,8 @@ public partial class UpdateBgiWindow : Window
             + (_excludeDirs.Count == 0 ? "" : "\n请确认排除列表不含 BGI 需要更新的目录，否则部分功能可能无法使用。")
             + $"\n更新前备份：{backupSummary}"
             + (remoteInfo != null ? $"\n下载来源：{source!.Label}（{source.Endpoint!.Host}）\n将复用已校验的安装包，或下载到 {downloadDirectory}（{remoteInfo.SizeText}）。安装包就绪后才关闭目标目录中正在运行的 BGI。" : "")
-            + (remoteInfo == null && running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行，点击「确定」将自动关闭后继续。" : "")
+            + (remoteInfo == null && running.Count > 0 ? $"\n\n检测到 {running.Count} 个 BGI 正在运行（含本机其他账户），点击「确定」将通知本机所有助手关闭 BGI 后继续。" : "")
+            + "\n更新完成后，本机所有助手（执行端和监控端）会自动重启，原来在运行的 BGI 也会重新启动。"
             + "\n\n确定继续更新？";
         if (MessageBox.Show(this, confirmText, "更新BGI", MessageBoxButton.YesNo,
                 MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
@@ -449,17 +450,34 @@ public partial class UpdateBgiWindow : Window
                 if (prepared == null) return;
                 archivePath = prepared;
             }
-            var running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
-            var bgiWasRunning = running.Count > 0;
-            if (running.Count > 0 && !TryKillBgiProcesses(running))
+            // 同机协作：通知本机所有使用这个 BGI 目录的助手（执行端、监控端、任何 Windows 账户）各自关闭 BGI。
+            StatusText.Text = "正在通知本机所有助手关闭 BGI…";
+            BgiUpdateCoordinationSession coordination;
+            try
             {
-                MessageBox.Show(this, "BGI 进程关闭失败，已中止更新（请手动关闭后重试）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
+                coordination = await BgiUpdateCoordination.BeginAsync(targetDir, closeBgi: true,
+                    message => Dispatcher.Invoke(() => StatusText.Text = message));
+            }
+            catch (IOException ex)
+            {
+                MessageBox.Show(this, ex.Message, "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
                 return;
             }
 
             var progress = new Progress<string>(s => StatusText.Text = $"正在更新… {s}");
-            var result = await BgiPackageUpdateService.ApplyAsync(archivePath, targetDir,
-                _excludeDirs.ToList(), BackupCheckBox.IsChecked == true ? _backupDirs.ToList() : [], progress);
+            BgiUpdateApplyResult result;
+            try
+            {
+                result = await BgiPackageUpdateService.ApplyAsync(archivePath, targetDir,
+                    _excludeDirs.ToList(), BackupCheckBox.IsChecked == true ? _backupDirs.ToList() : [], progress);
+            }
+            catch
+            {
+                coordination.Fail();
+                throw;
+            }
+            var autoRelaunch = result.Success && result.SkippedFiles.Count == 0;
+            if (!autoRelaunch) coordination.Fail(); // 恢复原来运行的 BGI，不重启助手
 
             if (result.Success)
             {
@@ -469,17 +487,15 @@ public partial class UpdateBgiWindow : Window
                 if (result.SkippedFiles.Count > 0) lines.Add($"{result.SkippedFiles.Count} 个文件被跳过：\n{string.Join("\n", result.SkippedFiles)}");
                 if (result.BackupDir != null) lines.Add($"备份已保存到：{result.BackupDir}");
                 if (result.BackupCleanupWarning != null) lines.Add(result.BackupCleanupWarning);
-                var autoRelaunch = result.SkippedFiles.Count == 0;
                 lines.Add(autoRelaunch
-                    ? (bgiWasRunning ? "点击确定后助手将自动重启，并重新启动 BGI，使新版本生效。"
-                        : "点击确定后助手将自动重启使新版本生效（更新前 BGI 未运行，不会自动启动 BGI）。")
-                    : "有文件被跳过，未自动重启。请手动重启助手和 BGI 使新版本生效。");
+                    ? "点击确定后，本机所有助手（执行端和监控端）将自动重启，原来在运行的 BGI 也会重新启动。"
+                    : "有文件被跳过，未自动重启。已恢复原来运行的 BGI，请手动重启助手和 BGI 使新版本生效。");
                 MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
                 // 本机版本已变，重算启动检查提示点。
                 _vm.NotifyRemoteUpdateStateChanged();
                 StatusText.Text = $"更新完成（{result.ExtractedFiles} 个文件）。";
-                if (autoRelaunch) _vm.RelaunchAfterBgiUpdate(bgiWasRunning, TimeSpan.FromSeconds(1));
+                if (autoRelaunch) coordination.Complete(TimeSpan.FromSeconds(1));
             }
             else
             {
@@ -496,32 +512,6 @@ public partial class UpdateBgiWindow : Window
         finally { EndOperation(); }
     }
 
-    private bool TryKillBgiProcesses(List<Process> processes)
-    {
-        foreach (var proc in processes)
-        {
-            try
-            {
-                proc.Kill(entireProcessTree: true);
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = $"关闭 BGI 进程（PID {proc.Id}）失败：{ex.Message}";
-            }
-        }
-        foreach (var proc in processes)
-        {
-            try
-            {
-                proc.WaitForExit(10_000);
-            }
-            catch
-            {
-                // 已退出后再等会抛 InvalidOperationException：视为已关闭
-            }
-        }
-        return processes.All(p => p.HasExited);
-    }
 
     private void SetBusy(bool busy, bool installing = false)
     {

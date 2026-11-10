@@ -22,6 +22,7 @@ public class BgiProcessMonitor : IDisposable
     private long _userStopVersion;
 
     internal void ResumeAutomaticRestartForUserStart() => _userStopHeld = false;
+    internal bool IsAutomaticRestartHeld => _userStopHeld;
 
     internal void HoldAutomaticRestartForUserStop()
     {

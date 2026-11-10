@@ -364,6 +364,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // 根据配置应用模式运行时（启动/跳过 BGI 进程监控）。与 SwitchModeAsync 共享同一逻辑。
         ApplyModeRuntime(_config.ObserverMode);
+        StartBgiUpdateCoordinationWatcher();
         StartLocalConfigChannel();
         StartLocalCenterChannel();
 
@@ -4764,6 +4765,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
         _startupBgiUpdateRequest?.Cancel();
+        StopBgiUpdateCoordinationWatcher();
         DisposeRegisters();
         StopSignalRRecovery();
         // R4.10 终审复核（重要2/3）退出协议：捕获段前移——同锁内「标志置位（幂等）+捕获引用+字段脱离」原子完成，

@@ -75,8 +75,8 @@
             '<p data-notice class="note"></p><div data-fields><div class="bgi-update-fields">' +
             '<label>执行端<select data-target></select></label><label>下载来源<select data-source></select></label></div>' +
             '<p class="note" data-version></p><label>安装包<select data-package size="4"></select></label><p class="note" data-package-note></p>' +
-            '<p class="note">网页更新需要先退出执行端的 BGI；会保留 User，其他排除项和备份沿用助手设置。更新完成后助手会自动重启（更新前 BGI 在运行的话也会自动重新启动 BGI），网页会短暂断线后自动重连。</p>' +
-            '<label class="note"><input type="checkbox" data-close-bgi checked> 更新前自动关闭执行端的 BGI（会强制结束 BGI 进程，正在运行的任务将中断；取消勾选则需自行先退出 BGI）</label>' +
+            '<p class="note">更新会保留 User，其他排除项和备份沿用助手设置。更新完成后，执行端电脑上的所有助手（执行端和监控端，所有 Windows 账户）都会自动重启，原来在运行的 BGI 也会重新启动；网页会短暂断线后自动重连。</p>' +
+            '<label class="note"><input type="checkbox" data-close-bgi checked> 更新前自动关闭执行端电脑上的所有 BGI（会结束 BGI 进程，正在运行的任务将中断；取消勾选则需自行先退出所有 BGI）</label>' +
             '<p class="bgi-update-status note" data-status role="status" aria-live="polite"></p>' +
             '<div class="bgi-update-actions"><button type="button" class="btn btn-secondary" data-refresh>刷新</button>' +
             '<button type="button" class="btn btn-secondary" data-download>仅下载</button>' +
@@ -170,8 +170,8 @@
             const closeBgi = install && el('close-bgi').checked;
             if (install && !confirm('安装 ' + pack.fileName + '？\n执行端：' + target.name +
                 '\n目标目录：' + data.targetDirectory + (closeBgi
-                    ? '\n将先自动关闭执行端的 BGI（强制结束进程，正在运行的任务会中断），再覆盖程序文件，保留 User 目录。'
-                    : '\n请先退出执行端 BGI。安装会覆盖程序文件，保留 User 目录。'))) return;
+                    ? '\n将先关闭执行端电脑上的所有 BGI（正在运行的任务会中断），再覆盖程序文件，保留 User 目录。\n完成后该电脑上的所有助手和原来运行的 BGI 会自动重启。'
+                    : '\n请先退出执行端电脑上的所有 BGI。安装会覆盖程序文件，保留 User 目录。\n完成后该电脑上的所有助手和原来运行的 BGI 会自动重启。'))) return;
 
             const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('');
             pending = id; remember(target, id); job = null;
