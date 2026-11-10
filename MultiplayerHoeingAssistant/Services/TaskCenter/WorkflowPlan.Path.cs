@@ -123,6 +123,9 @@ public sealed partial class WorkflowPlan
         if(index<0) throw new InvalidOperationException("流程去向已失效，禁止降级顺序执行");
         if(index>=_doc.Nodes.Count) return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));
         // 回边产生新的路径轮次，前向同轮不重复。与旧提交/前置/停驻身份同构，恢复仍用已落盘轮次。
-        return OccurrenceAt(index,index<=current.SequenceIndex ? checked(current.LoopIteration+1) : current.LoopIteration) with {PathLane=outputLane};
+        // 编排（流程/车道）计划的去向全部由 Compile 按显示顺序向后派生，新一轮只经 $end 进入；车道任务在存储中常排在
+        // 后续主计划行之后，按存储位置比较会把「车道任务 → 下一行」误判为回边、轮次 +1。编排计划因此不按存储位置判轮次。
+        var backEdge=!WorkflowComposition.HasComposition(_doc) && index<=current.SequenceIndex;
+        return OccurrenceAt(index,backEdge ? checked(current.LoopIteration+1) : current.LoopIteration) with {PathLane=outputLane};
     }
 }
