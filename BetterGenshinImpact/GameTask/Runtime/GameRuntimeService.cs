@@ -126,32 +126,38 @@ public sealed class GameRuntimeService
     /// <summary>
     /// 等待启动完成后停止截图器：取消任务、停止调度、释放运行环境。不关闭游戏
     /// </summary>
-    public Task StopAsync()
+    public Task StopAsync() => StopAsync(cancelRunningTasks: true);
+
+    /// <summary>
+    /// 解绑运行环境。<paramref name="cancelRunningTasks"/> 为 false 时不取消当前任务的令牌，
+    /// 仅供启动等待阶段重启游戏使用（调用方自己就是那个等待中的任务）。
+    /// </summary>
+    public Task StopAsync(bool cancelRunningTasks)
     {
         Interlocked.Increment(ref _stopVersion);
         var uiDispatcher = Application.Current.Dispatcher;
         return uiDispatcher.CheckAccess()
-            ? QueueStopAsync()
-            : uiDispatcher.InvokeAsync(QueueStopAsync).Task.Unwrap();
+            ? QueueStopAsync(cancelRunningTasks)
+            : uiDispatcher.InvokeAsync(() => QueueStopAsync(cancelRunningTasks)).Task.Unwrap();
     }
 
-    private Task QueueStopAsync()
+    private Task QueueStopAsync(bool cancelRunningTasks)
     {
         // 同一轮停止只排队一次；后续启动必须等这次解绑完成。
         if (_stopTask.IsCompleted)
         {
-            _stopTask = StopCoreAsync();
+            _stopTask = StopCoreAsync(cancelRunningTasks);
         }
 
         return _stopTask;
     }
 
-    private async Task StopCoreAsync()
+    private async Task StopCoreAsync(bool cancelRunningTasks)
     {
         await _startLock.WaitAsync();
         try
         {
-            StopCurrent();
+            StopCurrent(cancelRunningTasks);
         }
         finally
         {
@@ -159,7 +165,7 @@ public sealed class GameRuntimeService
         }
     }
 
-    private void StopCurrent()
+    private void StopCurrent(bool cancelRunningTasks = true)
     {
         var runtime = Current;
         if (runtime is null)
@@ -168,7 +174,10 @@ public sealed class GameRuntimeService
         }
 
         Current = null;
-        CancellationContext.Instance.Cancel(); // 取消独立任务的运行
+        if (cancelRunningTasks)
+        {
+            CancellationContext.Instance.Cancel(); // 取消独立任务的运行
+        }
         _dispatcher.Stop();
         ReleaseInputBeforeDetach();
         InputHub.Attach(new Win32InputBackend(IntPtr.Zero));

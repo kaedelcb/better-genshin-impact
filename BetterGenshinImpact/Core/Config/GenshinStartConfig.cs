@@ -53,4 +53,16 @@ public partial class GenshinStartConfig : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _autoDisableGenshinHdrEnabled = true;
+
+    /// <summary>
+    ///     联机锄地组队阶段：游戏长时间进不了主界面时，自动关闭并按 1920x1080 窗口化参数重启一次
+    /// </summary>
+    [ObservableProperty]
+    private bool _restartGameWhenNotReadyInMultiplayer = true;
+
+    /// <summary>
+    ///     上述自动重启前的等待秒数
+    /// </summary>
+    [ObservableProperty]
+    private int _multiplayerRestartGameAfterSeconds = 150;
 }

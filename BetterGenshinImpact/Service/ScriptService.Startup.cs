@@ -16,6 +16,58 @@ namespace BetterGenshinImpact.Service;
 
 public partial class ScriptService
 {
+    /// <summary>
+    /// 联机组队阶段游戏长时间进不了主界面：关闭游戏并按 1920x1080 窗口化参数重启一次。
+    /// 返回 false 表示没有重启（取不到启动路径等），游戏保持原状。
+    /// </summary>
+    private static async Task<bool> RestartGameForStartupAsync(GameRuntimeService runtime,
+        BetterGenshinImpact.Core.Config.GenshinStartConfig cfg, CancellationToken ct, Action verifyOwnership)
+    {
+        // 先取启动路径，取不到就不关游戏，避免关了拉不起来。
+        string? exePath = null;
+        try
+        {
+            if (runtime.Current?.Window is BetterGenshinImpact.GameTask.Runtime.Win32.Win32GameWindow w)
+            {
+                using var p = System.Diagnostics.Process.GetProcessById(w.ProcessId);
+                exePath = p.MainModule?.FileName;
+            }
+        }
+        catch (Exception ex)
+        {
+            TaskControl.Logger.LogDebug(ex, "读取游戏进程路径失败，改用配置的安装路径");
+        }
+        if (string.IsNullOrEmpty(exePath) || !System.IO.File.Exists(exePath)) exePath = cfg.InstallPath;
+        if (string.IsNullOrEmpty(exePath) || !System.IO.File.Exists(exePath))
+        {
+            TaskControl.Logger.LogWarning("联机组队阶段游戏长时间未就绪，但无法确定游戏启动路径，未重启游戏");
+            return false;
+        }
+
+        TaskControl.Logger.LogWarning("联机组队阶段游戏 {Seconds} 秒仍未进入主界面，按 1920x1080 窗口化参数重启游戏一次（原因：卡在登录/弹窗页面或分辨率不符）",
+            cfg.MultiplayerRestartGameAfterSeconds);
+        // 不取消当前任务令牌：调用者自己就是等待中的启动任务。
+        await runtime.StopAsync(cancelRunningTasks: false);
+        verifyOwnership();
+        runtime.CloseGame();
+        // 等旧进程完全退出再拉起新的，避免二次拉起。
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (SystemControl.FindGenshinImpactHandle() != IntPtr.Zero && sw.Elapsed < TimeSpan.FromSeconds(20))
+        {
+            await Task.Delay(500, ct);
+        }
+        if (SystemControl.FindGenshinImpactHandle() != IntPtr.Zero)
+        {
+            TaskControl.Logger.LogWarning("旧游戏进程未能退出，放弃重启");
+            return false;
+        }
+        verifyOwnership();
+        var hWnd = await SystemControl.StartFromLocalAsync(exePath, forceStandardResolution: true);
+        if (hWnd == IntPtr.Zero) return false;
+        verifyOwnership();
+        return await runtime.StartAsync(ct);
+    }
+
     public static async Task<TaskRunResult> StartGameTask(bool waitForMainUi = true)
     {
         var scope = ExecutionScope.Current;
@@ -38,6 +90,10 @@ public partial class ScriptService
         {
             var runtime = App.GetService<GameRuntimeService>()!;
             var waitingLogged = false;
+            // 只在联机锄地批次（组队阶段）启用；单人任务和手动任务保持原行为。
+            var restartCfg = waitForMainUi && BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive
+                             && TaskContext.Instance().Config.GenshinStartConfig is { RestartGameWhenNotReadyInMultiplayer: true } cfg
+                ? cfg : null;
             await GameTaskStartupGate.PrepareAsync(waitForMainUi,
                 token => runtime.IsRunning ? Task.FromResult(true) : runtime.StartAsync(token),
                 token =>
@@ -55,7 +111,9 @@ public partial class ScriptService
                         TaskControl.Logger.LogInformation("游戏尚未就绪，等待登录、加载和领奖完成后执行任务（最长5分钟，可随时停止）");
                     }
                     return ready;
-                }, ct, VerifyOwnership);
+                }, ct, VerifyOwnership,
+                restartGame: restartCfg == null ? null : token => RestartGameForStartupAsync(runtime, restartCfg, token, VerifyOwnership),
+                restartAfter: restartCfg == null ? null : TimeSpan.FromSeconds(Math.Max(30, restartCfg.MultiplayerRestartGameAfterSeconds)));
             VerifyOwnership();
             return TaskRunResult.Ran;
         }

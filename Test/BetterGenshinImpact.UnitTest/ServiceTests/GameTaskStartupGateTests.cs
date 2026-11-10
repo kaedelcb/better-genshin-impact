@@ -190,6 +190,47 @@ public class GameTaskStartupGateTests
     }
 
     [Fact]
+    public async Task NotReadyAtRestartThreshold_RestartsOnceThenWaitsFullTimeoutAgain()
+    {
+        var clock = new Clock();
+        var restarts = 0;
+        var reads = 0;
+        var error = await Assert.ThrowsAsync<TimeoutException>(() => GameTaskStartupGate.PrepareAsync(true,
+            _ => Task.FromResult(true), _ => { reads++; return false; }, CancellationToken.None,
+            delay: clock.Delay, timeProvider: clock, timeout: TimeSpan.FromSeconds(10),
+            restartGame: _ => { restarts++; return Task.FromResult(true); }, restartAfter: TimeSpan.FromSeconds(4)));
+        Assert.Equal(1, restarts);
+        // 4 秒触发重启并重新计时，之后再等满 10 秒才超时。
+        Assert.Equal(14, reads);
+        Assert.Contains("未开始执行任务", error.Message);
+    }
+
+    [Fact]
+    public async Task RestartDeclined_KeepsOriginalTimeoutWindow()
+    {
+        var clock = new Clock();
+        var reads = 0;
+        await Assert.ThrowsAsync<TimeoutException>(() => GameTaskStartupGate.PrepareAsync(true,
+            _ => Task.FromResult(true), _ => { reads++; return false; }, CancellationToken.None,
+            delay: clock.Delay, timeProvider: clock, timeout: TimeSpan.FromSeconds(10),
+            restartGame: _ => Task.FromResult(false), restartAfter: TimeSpan.FromSeconds(4)));
+        Assert.Equal(10, reads);
+    }
+
+    [Fact]
+    public async Task ReadyBeforeThreshold_NeverRestarts()
+    {
+        var clock = new Clock();
+        var restarts = 0;
+        var reads = 0;
+        await GameTaskStartupGate.PrepareAsync(true,
+            _ => Task.FromResult(true), _ => ++reads >= 3, CancellationToken.None,
+            delay: clock.Delay, timeProvider: clock,
+            restartGame: _ => { restarts++; return Task.FromResult(true); }, restartAfter: TimeSpan.FromSeconds(4));
+        Assert.Equal(0, restarts);
+    }
+
+    [Fact]
     public async Task RecognitionFailure_PropagatesInsteadOfTreatingUnknownScreenAsReady()
     {
         await Assert.ThrowsAsync<InvalidOperationException>(() => GameTaskStartupGate.PrepareAsync(true,

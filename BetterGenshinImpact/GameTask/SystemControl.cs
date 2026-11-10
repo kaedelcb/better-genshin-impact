@@ -237,7 +237,11 @@ public class SystemControl
         return sb.ToString();
     }
 
-    public static async Task<nint> StartFromLocalAsync(string path)
+    /// <param name="forceStandardResolution">
+    /// true 时强制按 1920x1080 窗口化参数启动（先剔除用户参数里已有的同类项再追加，不会重复）。
+    /// 用于启动等待超时后的自动重启。
+    /// </param>
+    public static async Task<nint> StartFromLocalAsync(string path, bool forceStandardResolution = false)
     {
         if (!File.Exists(path))
         {
@@ -249,7 +253,8 @@ public class SystemControl
         var workdir = Path.GetDirectoryName(path) ?? "";
         var arg = BuildGenshinStartArguments(
             cfg.GenshinStartArgs,
-            InstanceBootstrap.Current.Context.InstanceType == BetterGiInstanceType.ChildSession);
+            forceStandardResolution
+            || InstanceBootstrap.Current.Context.InstanceType == BetterGiInstanceType.ChildSession);
 
         // [DUPLAUNCH_PROBE] 探针日志：抓到"原神进程被实际启动"的每一次现场
         // 目的：确认远程一键锄地/上线人齐触发时，原神是否被 BGI 二次拉起（Error 3,0,0 的根因）

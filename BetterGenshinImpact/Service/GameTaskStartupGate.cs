@@ -14,7 +14,9 @@ internal static class GameTaskStartupGate
         Action? verifyOwnership = null,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
         TimeProvider? timeProvider = null,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        Func<CancellationToken, Task<bool>>? restartGame = null,
+        TimeSpan? restartAfter = null)
     {
         void Verify()
         {
@@ -42,13 +44,30 @@ internal static class GameTaskStartupGate
         timeProvider ??= TimeProvider.System;
         var limit = timeout ?? TimeSpan.FromMinutes(5);
         var start = timeProvider.GetTimestamp();
+        // 到点仍未就绪时只重启一次；重启后重新计时，给新游戏完整的就绪等待时间。
+        var restartPending = restartGame != null && restartAfter is { } after && after > TimeSpan.Zero;
         await Task.Run(async () =>
         {
             while (true)
             {
                 Verify();
+                if (restartPending && timeProvider.GetElapsedTime(start) >= restartAfter!.Value)
+                {
+                    restartPending = false;
+                    bool restarted;
+                    try { restarted = await restartGame!(ct); }
+                    catch
+                    {
+                        Verify();
+                        throw;
+                    }
+                    Verify();
+                    // 无法重启（取不到启动路径等）时不动游戏，按原超时规则继续等。
+                    if (restarted) start = timeProvider.GetTimestamp();
+                }
+
                 if (timeProvider.GetElapsedTime(start) >= limit)
-                    throw new TimeoutException("等待游戏就绪超时，登录、加载或领奖尚未完成，未开始执行任务");
+                    throw new TimeoutException("等待游戏就绪超时，登录、加载或领奖尚未完成（也请检查游戏分辨率是否为 1920x1080），未开始执行任务");
 
                 bool ready;
                 try { ready = checkReady(ct); }
