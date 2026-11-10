@@ -702,10 +702,10 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         var idx = chain.Steps.IndexOf(vm);
         var target = idx + delta;
         if (idx < 0 || target < 0 || target >= chain.Steps.Count) return;
-        // 「结束流程」必须保持在链尾：它自己不能上移，其他节点也不能下移越过它
-        if (vm.Kind == StartupStepKinds.EndFlow || chain.Steps[target].Kind == StartupStepKinds.EndFlow)
+        // 链尾节点（结束流程 / 跳转）必须保持在链尾：它自己不能上移，其他节点也不能下移越过它
+        if (StartupStepKinds.IsChainTerminal(vm.Kind) || StartupStepKinds.IsChainTerminal(chain.Steps[target].Kind))
         {
-            _mainVm.AddLog("[槲寄生] 「结束流程」必须是链的最后一个节点，不能这样移动");
+            _mainVm.AddLog("[槲寄生] 「结束流程」「跳转」必须是链的最后一个节点，不能这样移动");
             return;
         }
         chain.Steps.Move(idx, target);
@@ -738,9 +738,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         sourceChain.Steps.RemoveAt(oldIndex);
         sourceChain.ModelList.RemoveAt(oldIndex);
 
-        if (dragged.Kind == StartupStepKinds.EndFlow)
+        if (StartupStepKinds.IsChainTerminal(dragged.Kind))
         {
-            // 结束流程只能落在目标链尾部
+            // 链尾节点只能落在目标链尾部；目标链已有链尾节点时拒绝（一条链只能有一个终点）
+            if (targetChain.HasTerminal)
+            {
+                sourceChain.Steps.Insert(oldIndex, dragged);
+                sourceChain.ModelList.Insert(oldIndex, dragged.Model);
+                _mainVm.AddLog($"[槲寄生] 「{targetChain.BranchName}」已以「{targetChain.Steps.First(s => StartupStepKinds.IsChainTerminal(s.Kind)).TypeName}」收尾，不能再放入「{dragged.TypeName}」");
+                return;
+            }
             insertIndex = targetChain.Steps.Count;
         }
         else
@@ -748,16 +755,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             // 同链内移动且原位置在插入点之前：删除后插入点前移一位
             if (ReferenceEquals(sourceChain, targetChain) && oldIndex < insertIndex) insertIndex--;
             insertIndex = Math.Clamp(insertIndex, 0, targetChain.Steps.Count);
-            // 目标链已有结束流程：普通节点不能插到它后面（它后面的节点永远不会执行）
+            // 目标链已有链尾节点：普通节点不能插到它后面（它后面的节点永远不会执行）
             var endIdx = -1;
             for (var i = 0; i < targetChain.Steps.Count; i++)
             {
-                if (targetChain.Steps[i].Kind == StartupStepKinds.EndFlow) { endIdx = i; break; }
+                if (StartupStepKinds.IsChainTerminal(targetChain.Steps[i].Kind)) { endIdx = i; break; }
             }
             if (endIdx >= 0 && insertIndex > endIdx)
             {
                 insertIndex = endIdx;
-                _mainVm.AddLog($"[槲寄生] 「{targetChain.BranchName}」以「结束流程」收尾，节点已自动放到它前面");
+                _mainVm.AddLog($"[槲寄生] 「{targetChain.BranchName}」以「{targetChain.Steps[endIdx].TypeName}」收尾，节点已自动放到它前面");
             }
         }
 
@@ -2600,8 +2607,12 @@ public sealed class StepChainViewModel : ViewModelBase
 
     public bool HasSteps => Steps.Count > 0;
 
-    /// <summary>链中已有「结束流程」节点（它必须是链尾终点：之后不能再加任何节点，也不能拖节点到它后面）。</summary>
-    public bool HasEndFlow => Steps.Any(s => s.Kind == StartupStepKinds.EndFlow);
+    /// <summary>链中已有链尾节点（结束流程 / 跳转：之后不能再加任何节点，也不能拖节点到它后面）。
+    /// 名称沿用旧绑定，含义已扩到全部链尾节点。</summary>
+    public bool HasEndFlow => HasTerminal;
+
+    /// <summary>链中已有链尾节点（结束流程 / 跳转）。</summary>
+    public bool HasTerminal => Steps.Any(s => StartupStepKinds.IsChainTerminal(s.Kind));
 
     /// <summary>「＋ 添加节点」按钮可用性绑定用（HasEndFlow 的反相，WPF 无内置反转转换器）。</summary>
     public bool HasNoEndFlow => !HasEndFlow;
@@ -2634,10 +2645,11 @@ public sealed class StepChainViewModel : ViewModelBase
     {
         if (p is not string kind) return;
         IsAddPopupOpen = false;
-        // 「结束流程」是链尾终点：链里已有它时不能再添加任何节点（新节点永远追加在尾，必然落在它后面成为死节点）
-        if (HasEndFlow)
+        // 链尾节点（结束流程 / 跳转）：链里已有它时不能再添加任何节点（新节点永远追加在尾，必然落在它后面成为死节点）
+        if (HasTerminal)
         {
-            _owner.Log($"[槲寄生] 「{BranchName}」已有「结束流程」节点，它是终点，之后不能再添加节点");
+            var terminal = Steps.First(s => StartupStepKinds.IsChainTerminal(s.Kind));
+            _owner.Log($"[槲寄生] 「{BranchName}」已以「{terminal.TypeName}」收尾，它是这条链的终点，之后不能再添加节点");
             return;
         }
         // 「进入任务中心执行」全树只能有一个：多个交接点会把任务序列的推进权搞冲突
@@ -2764,7 +2776,8 @@ public sealed partial class StartupStepViewModel : ViewModelBase
     internal void RefreshNumber()
     {
         OnPropertyChanged(nameof(NumberText));
-        if (IsJump) OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(IsAfterTerminal));
+        OnPropertyChanged(nameof(Summary));
     }
 
     /// <summary>跳转目标（jumpTo 用；存目标节点 Id）。</summary>
@@ -3191,9 +3204,21 @@ public sealed partial class StartupStepViewModel : ViewModelBase
 
     // ---- 卡片摘要行 ----
 
-    public string Summary => IsJump
-        ? JumpSummary(Model, _owner.StepNumbers, _owner.FindStepVmById(Model.JumpTargetId)?.DisplayName)
-        : BuildSummary(Model);
+    public string Summary => (IsAfterTerminal ? "【位于链尾节点之后，不会执行，请移走或删除】" : "")
+        + (IsJump ? JumpSummary(Model, _owner.StepNumbers, _owner.FindStepVmById(Model.JumpTargetId)?.DisplayName) : BuildSummary(Model));
+
+    /// <summary>旧配置里位于「跳转 / 结束流程」之后的节点（执行时不会走到；编辑器不再允许新放到这里）。</summary>
+    public bool IsAfterTerminal
+    {
+        get
+        {
+            var steps = OwnerChain.Steps;
+            var idx = steps.IndexOf(this);
+            for (var i = 0; i < idx; i++)
+                if (StartupStepKinds.IsChainTerminal(steps[i].Kind)) return true;
+            return false;
+        }
+    }
 
     /// <summary>跳转节点摘要：「跳到 #N 名称，执行完回到这里继续」；目标未选/已删除时如实提示。</summary>
     internal static string JumpSummary(StartupStep model, IReadOnlyDictionary<string, int>? numbers, string? targetName)
@@ -3201,7 +3226,7 @@ public sealed partial class StartupStepViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(model.JumpTargetId)) return "（未选择跳转目标）";
         if (numbers is null || !numbers.TryGetValue(model.JumpTargetId, out var n) || targetName is null)
             return "（跳转目标已删除，请重新选择）";
-        return $"跳到 #{n} {targetName}，执行完回到这里继续";
+        return $"接到 #{n} {targetName}，本分支到此结束";
     }
 
     /// <summary>卡片摘要行文本（抽成静态方法：流程预览弹窗 FlowPreviewWindow 复用同一口径，避免两处拼接逻辑漂移）。</summary>
@@ -3248,7 +3273,7 @@ public sealed partial class StartupStepViewModel : ViewModelBase
                 : $"移交任务中心（未配置目标流程；未知语义「{model.TaskCenterHandoffMode}」——运行时按未知语义优先响亮拒绝）"
             : $"移交任务中心：{model.TaskCenterFlowId}（{model.TaskCenterHandoffMode switch { StartupHandoffModes.Start => "立即执行", StartupHandoffModes.Resume => "恢复既有运行", StartupHandoffModes.ArmTrigger => "挂载触发器", _ => $"未知语义「{model.TaskCenterHandoffMode}」（运行时将响亮拒绝）" }}）",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
-        StartupStepKinds.JumpTo => string.IsNullOrWhiteSpace(model.JumpTargetId) ? "（未选择跳转目标）" : "跳到指定节点，执行完回到这里继续",
+        StartupStepKinds.JumpTo => string.IsNullOrWhiteSpace(model.JumpTargetId) ? "（未选择跳转目标）" : "接到指定节点，本分支到此结束",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
         StartupStepKinds.StartOneClick => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写一条龙名）" : $"（旧版节点）一条龙「{model.TaskName}」",
         _ => "",

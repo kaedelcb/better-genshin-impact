@@ -328,7 +328,25 @@ public partial class FlowChartWindow : Window
         return new Rect(x, y, NodeW, NodeH);
     }
 
-    /// <summary>跳转连线：跳转卡 → 目标卡，紫色虚线三段折线 + 箭头 + 「↪ #N」标注；画在最上层。目标缺失时不画线（卡片摘要已提示）。</summary>
+    /// <summary>跳转连线走卡片上方的空隙，避免横穿中间的卡片：从跳转卡顶边（偏右，避开来路箭头）向上，
+    /// 沿卡片上方横走到目标列，再竖直接到目标卡顶边（目标在上方时接到底边）。</summary>
+    private static List<Point> JumpRoute(Rect j, Rect t)
+    {
+        const double Lift = 12;           // 横线距卡片顶边的高度（落在分支分叉线与卡片之间）
+        var jx = j.Left + NodeW * 0.78;   // 偏离卡片中心，避开中间的来路箭头
+        var tx = t.Left + NodeW * (t.Left < j.Left ? 0.78 : 0.22);
+        var laneY = j.Top - Lift;
+        if (Math.Abs(t.Top - j.Top) < 1 || t.Top > j.Top)
+        {
+            // 同一行或目标在下方：横线走在两者中较高的卡片上方，再下到目标顶边
+            laneY = Math.Min(j.Top, t.Top) - Lift;
+            return [new Point(jx, j.Top), new Point(jx, laneY), new Point(tx, laneY), new Point(tx, t.Top)];
+        }
+        // 目标在上方：横线走在跳转卡上方，再上到目标底边
+        return [new Point(jx, j.Top), new Point(jx, laneY), new Point(tx, laneY), new Point(tx, t.Bottom)];
+    }
+
+    /// <summary>跳转连线：跳转卡 → 目标卡，紫色虚线 + 箭头 + 「↪ #N」标注；画在最上层。目标缺失时不画线（卡片摘要已提示）。</summary>
     private void DrawJumpLinks()
     {
         foreach (var jump in _jumpVms)
@@ -338,38 +356,22 @@ public partial class FlowChartWindow : Window
             if (targetVm is null || !_nodeByVm.TryGetValue(targetVm, out var to)) continue;
             var j = CardRect(from);
             var t = CardRect(to);
-            Point start, end;
-            double midX;
-            if (t.Right < j.Left)
-            {
-                start = new Point(j.Left, j.Top + NodeH / 2);
-                end = new Point(t.Right, t.Top + NodeH / 2);
-                midX = (t.Right + j.Left) / 2;
-            }
-            else if (t.Left > j.Right)
-            {
-                start = new Point(j.Right, j.Top + NodeH / 2);
-                end = new Point(t.Left, t.Top + NodeH / 2);
-                midX = (j.Right + t.Left) / 2;
-            }
-            else
-            {
-                // 同一列（上下关系）：从左侧绕出
-                start = new Point(j.Left, j.Top + NodeH / 2 + 8);
-                end = new Point(t.Left, t.Top + NodeH / 2 + 8);
-                midX = Math.Max(4, Math.Min(j.Left, t.Left) - 22);
-            }
+            var pts = JumpRoute(j, t);
             var layer = new Canvas { IsHitTestVisible = false };
             layer.SetBinding(UIElement.OpacityProperty,
                 new Binding(nameof(StartupStepViewModel.Enabled)) { Source = jump, Converter = EnabledOpacityConv.Instance });
-            DrawEdge(layer, [start, new Point(midX, start.Y), new Point(midX, end.Y), end], JumpEdge, 1.6, true, true);
-            var label = new TextBlock
+            DrawEdge(layer, pts, JumpEdge, 1.6, true, true);
+            // 标签贴在跳转卡片上方的横线起点旁（带底色，不压其他文字）
+            var label = new Border
             {
-                Text = $"↪ {targetVm.NumberText}", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = JumpEdge,
+                Background = Frozen("#14122a"), CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0),
+                Child = new TextBlock { Text = $"↪ {targetVm.NumberText}", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = JumpEdge },
             };
             label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Canvas.SetLeft(label, Math.Min(start.X, midX) + Math.Abs(midX - start.X) / 2 - label.DesiredSize.Width / 2);
-            Canvas.SetTop(label, start.Y - label.DesiredSize.Height - 1);
+            var lane = pts[1];
+            var towardLeft = pts[2].X < lane.X;
+            Canvas.SetLeft(label, towardLeft ? lane.X - label.DesiredSize.Width - 4 : lane.X + 4);
+            Canvas.SetTop(label, lane.Y - label.DesiredSize.Height / 2);
             layer.Children.Add(label);
             ChartCanvas.Children.Add(layer);
         }
@@ -527,8 +529,8 @@ public partial class FlowChartWindow : Window
         }
         canvas.Width = w2;
         canvas.Height = h2;
-        // 「结束流程」是终点：下方不再出现任何连线（包括父链的汇合线/后继连线）
-        return new Block(canvas, w2, h2, NodeW / 2, NodeW / 2, null, vm.Kind == StartupStepKinds.EndFlow);
+        // 「结束流程」「跳转」是链尾终点：下方不再出现任何连线（包括父链的汇合线/后继连线）
+        return new Block(canvas, w2, h2, NodeW / 2, NodeW / 2, null, StartupStepKinds.IsChainTerminal(vm.Kind));
     }
 
     /// <summary>条件的一条分支：非空则布局子链，空则放个「（空）」占位；子链整体绑定未走灰显。</summary>

@@ -1,6 +1,6 @@
 // 槲寄生 · 启动中心（方向 B：左侧大纲负责编辑与排序，右侧画布显示与 PC 流程图同构的整图）。
 // 结构规则与 PC 一致：条件节点分「是/否」两条子链，跑完回到父链；定时/电子狗/日志触发器挂「触发执行」链；
-// 「结束流程」必须是所在链的最后一个节点；全树只能有一个「进入任务中心执行」；节点不能移进自己的分支。
+// 「结束流程」「跳转」必须是所在链的最后一个节点；全树只能有一个「进入任务中心执行」；节点不能移进自己的分支。
 const MT_KINDS = [
     ['timeRange','condition','时间区间','◷','#E8C96D'], ['weekday','condition','星期判断','▦','#E8C96D'],
     ['bgiRunning','condition','BGI 进程状态','◇','#6FD8CE'], ['gameRunning','condition','游戏进程状态','◇','#6FD8CE'],
@@ -70,7 +70,7 @@ function mtJumpLoops(jumpId, targetId) {
 function mtJumpSummary(s) {
     if (!(s.jumpTargetId || '').trim()) return '（未选择跳转目标）';
     const hit = mtFind(s.jumpTargetId); if (!hit) return '（跳转目标已删除，请重新选择）';
-    return `跳到 ${mtNo(s.jumpTargetId)} ${mtDisplayName(hit.step)}，执行完回到这里继续`;
+    return `接到 ${mtNo(s.jumpTargetId)} ${mtDisplayName(hit.step)}，本分支到此结束`;
 }
 function mtDisplayName(s) { return (s.name || '').trim() || MT_KIND[s.kind]?.name || s.kind || '未知节点'; }
 function mtWatchDesc(s) {
@@ -79,7 +79,8 @@ function mtWatchDesc(s) {
         bgiTaskRunning:on?'BGI 有任务在跑':'BGI 空闲', bgiTaskName:`当前任务名${on?'包含':'不包含'}「${s.taskName}」` })[s.watchKind] || s.watchKind;
 }
 /** 与 PC StartupStepViewModel.BuildSummary 同一口径。 */
-function mtSummary(s) {
+function mtSummary(s) { return (s.id && mtAfterTerminal(s.id) ? '【位于链尾节点之后，不会执行，请移走或删除】' : '') + mtBaseSummary(s); }
+function mtBaseSummary(s) {
     const clamp = (v, a, b) => Math.min(b, Math.max(a, Number(v) || 0));
     switch (s.kind) {
         case 'setRegister': case 'judgeRegister': return mtRegisterSummary(s);
@@ -118,11 +119,16 @@ function mtNodeState(s) { return su.states.get(s.id)?.state || ''; }
 function mtTaken(s) { const st = mtNodeState(s); return st === 'condTrue' ? 'trueSteps' : st === 'condFalse' ? 'falseSteps' : ''; }
 
 // ---------- 编辑操作（规则同 PC） ----------
-function mtChainHasEnd(chain) { return (chain || []).some(s => s.kind === 'endFlow'); }
+/** 链尾节点（结束流程 / 跳转）：之后不能再有节点。与 PC StartupStepKinds.IsChainTerminal 同口径。 */
+function mtIsTerminal(kind) { return kind === 'endFlow' || kind === 'jumpTo'; }
+function mtChainTerminal(chain) { return (chain || []).find(s => mtIsTerminal(s.kind)); }
+function mtChainHasEnd(chain) { return !!mtChainTerminal(chain); }
+/** 旧配置里位于链尾节点之后的节点（执行时不会走到）。 */
+function mtAfterTerminal(id) { const hit = mtFind(id); return !!hit && hit.chain.slice(0, hit.index).some(s => mtIsTerminal(s.kind)); }
 function mtCountKind(kind) { let n = 0; mtWalk(su.config.steps, s => { if (s.kind === kind) n++; }); return n; }
 function mtAddStep(kind, chain, label) {
     if (['setRegister','judgeRegister'].includes(kind) && !mtRegistersSupported()) return mtToast('当前执行端未提供寄存器能力，未添加；请检查连接或版本。', true);
-    if (mtChainHasEnd(chain)) return mtToast(`「${label}」已有「结束流程」节点，它是终点，之后不能再添加节点`, true);
+    if (mtChainHasEnd(chain)) return mtToast(`「${label}」已以「${mtDisplayName(mtChainTerminal(chain))}」收尾，它是这条链的终点，之后不能再添加节点`, true);
     if (kind === 'enterTaskCenter' && mtCountKind('enterTaskCenter')) return mtToast('启动流程中只能有一个「进入任务中心执行」节点；如需调整位置，请删除后重新添加', true);
     const step = mtNewStep(kind);
     chain.push(step); su.selected = step.id; su.inspectorOpen = true;
@@ -143,7 +149,7 @@ function mtMoveStep(id, delta) {
     const hit = mtFind(id); if (!hit) return;
     const target = hit.index + delta;
     if (target < 0 || target >= hit.chain.length) return;
-    if (hit.step.kind === 'endFlow' || hit.chain[target].kind === 'endFlow') return mtToast('「结束流程」必须是链的最后一个节点，不能这样移动', true);
+    if (mtIsTerminal(hit.step.kind) || mtIsTerminal(hit.chain[target].kind)) return mtToast('「结束流程」「跳转」必须是链的最后一个节点，不能这样移动', true);
     hit.chain.splice(hit.index, 1); hit.chain.splice(target, 0, hit.step);
     mtEdited();
 }
@@ -152,13 +158,15 @@ function mtMoveStepTo(id, targetChain, insertIndex, targetLabel) {
     const hit = mtFind(id); if (!hit) return;
     const contains = step => mtChains(step).some(([k]) => step[k] === targetChain || (step[k] || []).some(contains));
     if (contains(hit.step)) return mtToast(`不能把「${mtDisplayName(hit.step)}」拖进它自己的分支里`, true);
+    if (mtIsTerminal(hit.step.kind) && targetChain !== hit.chain && mtChainHasEnd(targetChain))
+        return mtToast(`「${targetLabel}」已以「${mtDisplayName(mtChainTerminal(targetChain))}」收尾，不能再放入「${mtDisplayName(hit.step)}」`, true);
     hit.chain.splice(hit.index, 1);
     if (hit.chain === targetChain && hit.index < insertIndex) insertIndex--;
-    if (hit.step.kind === 'endFlow') insertIndex = targetChain.length;
+    if (mtIsTerminal(hit.step.kind)) insertIndex = targetChain.length;
     else {
         insertIndex = Math.max(0, Math.min(insertIndex, targetChain.length));
-        const end = targetChain.findIndex(s => s.kind === 'endFlow');
-        if (end >= 0 && insertIndex > end) { insertIndex = end; mtToast(`「${targetLabel}」以「结束流程」收尾，节点已自动放到它前面`); }
+        const end = targetChain.findIndex(s => mtIsTerminal(s.kind));
+        if (end >= 0 && insertIndex > end) { insertIndex = end; mtToast(`「${targetLabel}」以「${mtDisplayName(targetChain[end])}」收尾，节点已自动放到它前面`); }
     }
     targetChain.splice(insertIndex, 0, hit.step);
     mtEdited(`节点「${mtDisplayName(hit.step)}」已移动到「${targetLabel}」第 ${insertIndex + 1} 位`);

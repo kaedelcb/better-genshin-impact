@@ -247,7 +247,12 @@ public sealed class StartupFlowRunner
             if (step.Kind == StartupStepKinds.JumpTo)
             {
                 await RunJumpAsync(step, display, indent, ct, ctx, depth);
-                continue;
+                // 跳转是链尾节点：本链到此结束；旧配置里跳转后面残留的节点不执行，如实标为跳过
+                for (var k = i + 1; k < steps.Count; k++)
+                    Report(steps[k], NodeRunState.Skipped, "位于跳转之后，不执行");
+                if (i + 1 < steps.Count)
+                    _log($"[槲寄生] {indent}跳转「{display}」之后还有 {steps.Count - i - 1} 个节点，跳转是链尾节点，这些节点不执行");
+                return;
             }
 
             // 动作节点
@@ -281,7 +286,7 @@ public sealed class StartupFlowRunner
         }
     }
 
-    /// <summary>跳转：从目标节点开始执行它所在链的剩余节点，执行完回到跳转节点之后继续。
+    /// <summary>跳转：从目标节点开始执行它所在链的剩余节点；返回后由调用方结束跳转所在的链。
     /// 目标未选/已删除 → 节点失败、链继续；嵌套超过 <see cref="MaxJumpDepth"/> 层 → 终止本次流程（防循环）。</summary>
     private async Task RunJumpAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx, int depth)
     {
@@ -333,7 +338,7 @@ public sealed class StartupFlowRunner
             Report(step, NodeRunState.Failed, "跳转会形成循环，未执行");
             return;
         }
-        _log($"[槲寄生] {indent}跳转「{display}」→「{targetText}」，执行 {tail.Count} 个节点后回到这里继续");
+        _log($"[槲寄生] {indent}跳转「{display}」→「{targetText}」，执行 {tail.Count} 个节点，本分支到此结束");
         Report(step, NodeRunState.Success, $"跳到「{targetText}」");
         ctx.JumpDepth++;
         ctx.ActiveJumpIds.Add(step.Id);

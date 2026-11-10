@@ -183,7 +183,7 @@ function mtRenderOutline() {
 function mtAddRow(parent, key) {
     const chain = parent ? parent[key] : su.config.steps, label = mtChainLabel(parent, key), locked = mtChainHasEnd(chain);
     const text = !parent ? '添加节点' : key === 'trueSteps' ? '添加到「是」分支' : key === 'falseSteps' ? '添加到「否」分支' : parent.kind === 'timerTrigger' ? '添加到「到点执行」链' : '添加到「触发执行」链';
-    return `<button class="mt-add-row" data-add-parent="${parent ? mte(parent.id) : ''}" data-add-key="${key}" title="${locked ? '此链以「结束流程」收尾，之后不能再添加节点' : '添加到' + mte(label) + '末尾'}"${locked ? ' disabled' : ''}>＋ ${text}</button>`;
+    return `<button class="mt-add-row" data-add-parent="${parent ? mte(parent.id) : ''}" data-add-key="${key}" title="${locked ? '此链以「结束流程」或「跳转」收尾，之后不能再添加节点' : '添加到' + mte(label) + '末尾'}"${locked ? ' disabled' : ''}>＋ ${text}</button>`;
 }
 function mtOutlineChain(chain, parent, key) {
     return chain.map((s, index) => {
@@ -282,7 +282,7 @@ function mtLayout(steps) {
             out.labels.push({ x:NW + 8, y:NH / 2 - 22, t:s.kind === 'timerTrigger' ? '到点执行' : '触发执行', c:'fire' });
             w = fxo + fb.w; h = Math.max(NH, fb.h);
         }
-        return { ...out, w, h, exitY:NH, topX:NW / 2, botX:NW / 2, loose:null, term:s.kind === 'endFlow' };
+        return { ...out, w, h, exitY:NH, topX:NW / 2, botX:NW / 2, loose:null, term:mtIsTerminal(s.kind) };
     }
     function chain(list) {
         const items = list.map(node), w = Math.max(...items.map(b => b.w)), out = empty();
@@ -303,18 +303,16 @@ function mtLayout(steps) {
     return steps.length ? chain(steps) : null;
 }
 const MT_EDGE = { n:'#7f7aa2', yes:'#6fd8ce', no:'#e88a6f', fire:'#ffc857', jump:'#b39ddb' };
-/** 跳转连线（与 PC 流程图同口径）：跳转卡 → 目标卡，紫色虚线三段折线；目标缺失不画。 */
+/** 跳转连线（与 PC 流程图同口径）：走卡片上方的空隙，不横穿中间卡片；目标缺失不画。 */
 function mtJumpEdges(g) {
     const { nw:NW, nh:NH } = MT_GEO, pos = new Map(g.nodes.map(n => [n.s.id, n]));
     for (const n of g.nodes) {
         if (n.s.kind !== 'jumpTo') continue;
         const t = pos.get(n.s.jumpTargetId); if (!t) continue;
-        let a, b, mx;
-        if (t.x + NW < n.x) { a = [n.x, n.y + NH / 2]; b = [t.x + NW, t.y + NH / 2]; mx = (t.x + NW + n.x) / 2; }
-        else if (t.x > n.x + NW) { a = [n.x + NW, n.y + NH / 2]; b = [t.x, t.y + NH / 2]; mx = (n.x + NW + t.x) / 2; }
-        else { a = [n.x, n.y + NH / 2 + 8]; b = [t.x, t.y + NH / 2 + 8]; mx = Math.min(n.x, t.x) - 22; }
-        g.edges.push({ pts:[a, [mx, a[1]], [mx, b[1]], b], c:'jump', dash:true, arrow:true, dim:n.dim || n.s.enabled === false });
-        g.labels.push({ x:Math.min(a[0], mx) + Math.abs(mx - a[0]) / 2 - 14, y:a[1] - 20, t:'↪ ' + mtNo(t.s.id), c:'jump', dim:n.dim });
+        const lift = 12, jx = n.x + NW * .78, tx = t.x + NW * (t.x < n.x ? .78 : .22);
+        const below = t.y >= n.y - .5, lane = (below ? Math.min(n.y, t.y) : n.y) - lift;
+        g.edges.push({ pts:[[jx, n.y], [jx, lane], [tx, lane], [tx, below ? t.y : t.y + NH]], c:'jump', dash:true, arrow:true, dim:n.dim || n.s.enabled === false });
+        g.labels.push({ x:tx < jx ? jx - 44 : jx + 4, y:lane - 9, t:'↪ ' + mtNo(t.s.id), c:'jump', dim:n.dim });
     }
 }
 function mtRenderCanvas() {
@@ -494,7 +492,7 @@ function mtKindFields(s) {
             const nums = mtNumbers(), options = [['', '选择要跳到的节点']];
             mtWalk(su.config.steps, t => { if (t.id !== s.id) options.push([t.id, `#${nums.get(t.id)} ${mtDisplayName(t)}（${MT_KIND[t.kind]?.name || t.kind}）${mtJumpLoops(s.id, t.id) ? ' · 会形成循环，不会执行' : ''}`]); });
             if (s.jumpTargetId && !nums.has(s.jumpTargetId)) options.push([s.jumpTargetId, '（目标节点已删除）']);
-            return mtField('跳转到', mtSel('jumpTargetId', s.jumpTargetId || '', options)) + '<p class="dodoco-hint">执行目标节点及它后面的节点，执行完回到这里继续。保存的是节点身份，增删其他节点后编号变化不影响跳转；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行。</p>';
+            return mtField('跳转到', mtSel('jumpTargetId', s.jumpTargetId || '', options)) + '<p class="dodoco-hint">执行目标节点及它后面的节点，本分支到此结束，外层流程照常继续；跳转必须是链的最后一个节点。保存的是节点身份，增删其他节点后编号变化不影响跳转；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行。</p>';
         }
         case 'endFlow': return '<p class="dodoco-hint">执行到此节点立即终止整条启动流程（含外层链）。它必须是所在链的最后一个节点，常用于「否」分支：环境不满足时直接放弃本次启动。</p>';
         default: return '<p class="dodoco-hint">执行端返回了网页不认识的节点类型；保留原样，不在网页修改。</p>';
@@ -518,7 +516,7 @@ function mtRenderInspector() {
       ${mtKindFields(s)}
       <label class="dd-check"><input type="checkbox" data-f="enabled"${s.enabled !== false ? ' checked' : ''}>启用此节点（停用后执行时跳过）</label>
       ${mtNodeState(s) ? `<p class="mt-insp-state st-${mtNodeState(s)}">本次执行：${MT_RUN_TEXT[mtNodeState(s)]}${su.states.get(s.id)?.note ? ' · ' + mte(su.states.get(s.id).note) : ''}</p>` : ''}</div>
-      <footer class="mt-insp-foot"><button class="dd-btn dd-btn-sm" data-move="-1"${hit.index === 0 || s.kind === 'endFlow' ? ' disabled' : ''}>↑ 上移</button><button class="dd-btn dd-btn-sm" data-move="1"${hit.index >= hit.chain.length - 1 || s.kind === 'endFlow' ? ' disabled' : ''}>↓ 下移</button><button class="dd-btn dd-btn-sm" data-locate>在图中定位</button><button class="dd-btn dd-btn-sm dd-btn-danger" data-remove>删除</button></footer>`;
+      <footer class="mt-insp-foot"><button class="dd-btn dd-btn-sm" data-move="-1"${hit.index === 0 || mtIsTerminal(s.kind) ? ' disabled' : ''}>↑ 上移</button><button class="dd-btn dd-btn-sm" data-move="1"${hit.index >= hit.chain.length - 1 || mtIsTerminal(s.kind) ? ' disabled' : ''}>↓ 下移</button><button class="dd-btn dd-btn-sm" data-locate>在图中定位</button><button class="dd-btn dd-btn-sm dd-btn-danger" data-remove>删除</button></footer>`;
     host.querySelector('[data-close]').onclick = () => { su.inspectorOpen = false; mtRenderInspector(); };
     host.querySelectorAll('[data-move]').forEach(b => b.onclick = () => mtMoveStep(s.id, +b.dataset.move));
     host.querySelector('[data-remove]').onclick = () => mtRemoveStep(s.id);

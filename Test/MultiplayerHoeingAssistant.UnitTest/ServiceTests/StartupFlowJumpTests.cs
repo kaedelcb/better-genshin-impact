@@ -7,7 +7,8 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 /// <summary>
 /// 启动流程「跳转」节点：把空分支接到别处已有的节点（典型场景：右侧「是」分支跳到左侧定时触发器）。
-/// 验证约定行为：按调用执行目标及其所在链的剩余节点后回到跳转处继续；目标未选/已删除时节点失败、链继续；
+/// 验证约定行为：跳转是链尾节点——执行目标及其所在链的剩余节点后，跳转所在的链结束，外层链继续；
+/// 旧配置里跳转后面残留的节点不执行并标为跳过；目标未选/已删除时节点失败、外层链继续；
 /// 会再次走到本跳转的目标拒绝执行；同一次执行里同一触发器不重复挂载；触发链单独执行时可跳到整棵树里的节点；
 /// 编号按先序且与网页同口径；新字段序列化往返不丢、旧配置缺字段默认空。假执行器与假挂载委托，无真实进程。
 /// </summary>
@@ -53,7 +54,7 @@ public class StartupFlowJumpTests
     [Fact]
     public async Task Jump_RunsTargetTail_ThenReturnsAndContinues()
     {
-        // 左支 [a, b]，右支 [跳转→a]，条件后有 tail；走右支：跳转 → a → b → 回来 → tail
+        // 左支 [a, b]，右支 [跳转→a]，条件后有 tail；走右支：跳转 → a → b → 右支结束 → 外层 tail
         var steps = new List<StartupStep>
         {
             Cond("c", pass: false, yes: [Wait0("a"), Wait0("b")], no: [Jump("j", "a")]),
@@ -64,6 +65,33 @@ public class StartupFlowJumpTests
         Assert.Equal(["c", "j", "a", "b", "tail"], _ran);
         Assert.Equal(NodeRunState.Success, Last("j"));
         Assert.Equal(NodeRunState.Success, Last("tail"));
+    }
+
+    [Fact]
+    public async Task StaleNodesAfterJump_AreSkipped_ButOuterChainContinues()
+    {
+        // 截图场景：右支 [跳转→定时器, 电子狗]（旧配置，电子狗在跳转之后），主链末尾结束流程
+        var timer = new StartupStep { Id = "t", Kind = StartupStepKinds.TimerTrigger, TriggerTime = "04:01", FireSteps = [Wait0("f")] };
+        var dog = new StartupStep { Id = "d", Kind = StartupStepKinds.Watchdog, WatchKind = StartupStepKinds.BgiTaskRunning };
+        var steps = new List<StartupStep>
+        {
+            Cond("c", pass: false, yes: [timer], no: [Jump("j", "t"), dog]),
+            Wait0("tail"),
+        };
+        await MakeRunner().RunAsync(steps, CancellationToken.None);
+
+        Assert.Single(_armedTimers);
+        Assert.Empty(_armedDogs);
+        Assert.Equal(NodeRunState.Skipped, Last("d"));
+        Assert.Equal(NodeRunState.Success, Last("tail"));
+    }
+
+    [Fact]
+    public void JumpAndEndFlow_AreChainTerminals()
+    {
+        Assert.True(StartupStepKinds.IsChainTerminal(StartupStepKinds.JumpTo));
+        Assert.True(StartupStepKinds.IsChainTerminal(StartupStepKinds.EndFlow));
+        Assert.False(StartupStepKinds.IsChainTerminal(StartupStepKinds.TimerTrigger));
     }
 
     [Fact]
@@ -107,18 +135,18 @@ public class StartupFlowJumpTests
     public async Task Jump_FromFireChain_FindsTargetInWholeTree()
     {
         var tree = new List<StartupStep> { Wait0("main1"), Wait0("main2") };
-        var fire = new List<StartupStep> { Jump("j", "main2"), Wait0("after") };
+        var fire = new List<StartupStep> { Jump("j", "main2") };
         await MakeRunner(root: () => tree).RunAsync(fire, CancellationToken.None);
 
-        Assert.Equal(["j", "main2", "after"], _ran);
+        Assert.Equal(["j", "main2"], _ran);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("missing")]
-    public async Task Jump_WithoutValidTarget_FailsNodeAndContinues(string target)
+    public async Task Jump_WithoutValidTarget_FailsNodeAndOuterChainContinues(string target)
     {
-        var steps = new List<StartupStep> { Jump("j", target), Wait0("tail") };
+        var steps = new List<StartupStep> { Cond("c", pass: true, yes: [Jump("j", target)], no: []), Wait0("tail") };
         await MakeRunner().RunAsync(steps, CancellationToken.None);
 
         Assert.Equal(NodeRunState.Failed, Last("j"));
@@ -128,8 +156,8 @@ public class StartupFlowJumpTests
     [Fact]
     public async Task Jump_BackwardsIntoOwnChain_IsRefusedAsLoop()
     {
-        // a → 跳转→a 会无限重复 a；拒绝执行，链继续
-        var steps = new List<StartupStep> { Wait0("a"), Jump("j", "a"), Wait0("tail") };
+        // a → 跳转→a 会无限重复 a；拒绝执行，外层链继续
+        var steps = new List<StartupStep> { Cond("c", pass: true, yes: [Wait0("a"), Jump("j", "a")], no: []), Wait0("tail") };
         await MakeRunner().RunAsync(steps, CancellationToken.None);
 
         Assert.Equal(NodeRunState.Failed, Last("j"));

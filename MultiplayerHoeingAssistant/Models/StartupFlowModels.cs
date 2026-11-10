@@ -390,8 +390,12 @@ public static class StartupStepKinds
     /// <summary>日志触发器：流程跑到此节点时挂载日志监听，本机 BGI 新日志命中关键字时执行 FireSteps 子链；
     /// 默认循环触发（执行完触发链后继续盯），可改为触发一次后停止；监听中页面显示状态、可查看流程、可取消。</summary>
     public const string LogTrigger = "logTrigger";
-    /// <summary>跳转：执行目标节点及其所在链的后续节点，执行完回到跳转节点之后继续（按调用处理，带嵌套层数上限）。</summary>
+    /// <summary>跳转：链尾节点。执行目标节点及其所在链的后续节点，然后结束跳转所在的这条链
+    /// （外层链照常继续）；带循环检测与嵌套层数上限。</summary>
     public const string JumpTo = "jumpTo";
+
+    /// <summary>链尾节点：之后不能再有节点（结束流程 / 跳转）。</summary>
+    public static bool IsChainTerminal(string kind) => kind is EndFlow or JumpTo;
 
     // ---- 旧版遗留（不在目录中，Runner 保留执行分支兼容旧配置） ----
     public const string StartGroup = "startGroup";
@@ -425,7 +429,7 @@ public static class StartupStepKinds
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),
         new(LogTrigger, "action", "日志触发器", "📜", "盯本机 BGI 新日志：日志中出现关键字时执行「触发执行」子链；默认循环触发（执行完触发链后继续盯，命中再次触发），可改为触发一次后停止；只盯挂载后的新日志"),
-        new(JumpTo, "action", "跳转", "↪", "执行指定编号的节点及其所在链的后续节点，执行完回到这里继续；用于把空分支接到别处已有的节点（如定时触发器）"),
+        new(JumpTo, "action", "跳转", "↪", "接到指定编号的节点：执行它及它后面的节点，本分支到此结束（必须是链的最后一个节点）；用于把空分支接到别处已有的节点（如定时触发器）"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
 

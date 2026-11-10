@@ -255,7 +255,7 @@
         <DataTemplate x:Key="ChainAddButton">
             <Grid HorizontalAlignment="Center" Margin="0,2,0,0">
                 <Button x:Name="AddNodeBtn" Content="＋" Style="{DynamicResource BtnGhost}" Padding="12,2" FontSize="13"
-                        ToolTip="在此链末尾添加节点（链以「结束流程」收尾时不可再添加）" Command="{Binding OpenAddPopupCommand}"
+                        ToolTip="在此链末尾添加节点（链以「结束流程」或「跳转」收尾时不可再添加）" Command="{Binding OpenAddPopupCommand}"
                         IsEnabled="{Binding HasNoEndFlow}"/>
                 <Popup IsOpen="{Binding IsAddPopupOpen, Mode=TwoWay}" StaysOpen="False"
                        Placement="Top" PlacementTarget="{Binding ElementName=AddNodeBtn}"
@@ -1155,7 +1155,7 @@
                                               DisplayMemberPath="Display" SelectedValuePath="StepId"
                                               SelectedValue="{Binding JumpTargetId, Mode=TwoWay}"
                                               ToolTip="按节点编号选择目标；保存的是节点身份，增删其他节点后编号变化也不影响跳转"/>
-                                    <TextBlock Text="（执行目标节点及它后面的节点，执行完回到这里继续；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行）"
+                                    <TextBlock Text="（执行目标节点及它后面的节点，本分支到此结束，外层流程照常继续；跳转必须是链的最后一个节点；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行）"
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="320" TextWrapping="Wrap"/>
                                 </WrapPanel>
 
