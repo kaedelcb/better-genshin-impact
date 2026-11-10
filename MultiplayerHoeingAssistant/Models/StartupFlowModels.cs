@@ -276,6 +276,65 @@ public class StartupStep
     /// <summary>明确受理后继续辅助启动步骤；旧配置默认终止，保留既有行为。</summary>
     [JsonPropertyName("continueAfterTaskCenterHandoff")]
     public bool ContinueAfterTaskCenterHandoff { get; set; }
+
+    /// <summary>跳转目标节点的稳定身份（jumpTo 用，指向 <see cref="Id"/>）。空或目标已删除 = 运行时节点失败、链继续。</summary>
+    [JsonPropertyName("jumpTargetId")]
+    public string JumpTargetId { get; set; } = "";
+}
+
+/// <summary>启动流程节点编号：按「节点 → 是分支 → 否分支 → 触发链」先序遍历从 1 编号。
+/// 编号只用于显示，增删节点后会重排；跳转关系保存的是节点 Id，不受编号变化影响。</summary>
+public static class StartupStepNumbering
+{
+    /// <summary>节点实际生效的子链（与执行器、流程图、网页 mtChains 同口径：条件看是/否，三种触发器看触发链）。</summary>
+    public static IEnumerable<List<StartupStep>> ChildChains(StartupStep s)
+    {
+        if (s.NodeType == "condition")
+        {
+            yield return s.TrueSteps;
+            yield return s.FalseSteps;
+        }
+        else if (s.Kind is StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger)
+        {
+            yield return s.FireSteps;
+        }
+    }
+
+    public static Dictionary<string, int> Build(IEnumerable<StartupStep> root)
+    {
+        var map = new Dictionary<string, int>();
+        void Walk(IEnumerable<StartupStep> chain)
+        {
+            foreach (var s in chain)
+            {
+                map.TryAdd(s.Id, map.Count + 1);
+                foreach (var c in ChildChains(s)) Walk(c);
+            }
+        }
+        Walk(root);
+        return map;
+    }
+
+    /// <summary>链（含各层子链）里是否有指定 Id 的节点。</summary>
+    public static bool Contains(IEnumerable<StartupStep> chain, string id)
+        => chain.Any(s => s.Id == id || ChildChains(s).Any(c => Contains(c, id)));
+
+    /// <summary>跳转到 targetId 是否会再次走到 jumpId 自己（目标所在链从目标起的剩余部分含跳转节点）。</summary>
+    public static bool JumpWouldLoop(IReadOnlyList<StartupStep> root, string jumpId, string targetId)
+        => Locate(root, targetId) is { } hit && Contains(hit.Chain.Skip(hit.Index), jumpId);
+
+    /// <summary>在整棵树里按 Id 找节点所在链与下标；找不到返回 null。</summary>
+    public static (IReadOnlyList<StartupStep> Chain, int Index)? Locate(IReadOnlyList<StartupStep> chain, string id)
+    {
+        for (var i = 0; i < chain.Count; i++)
+        {
+            var s = chain[i];
+            if (s.Id == id) return (chain, i);
+            foreach (var c in ChildChains(s))
+                if (Locate(c, id) is { } hit) return hit;
+        }
+        return null;
+    }
 }
 
 /// <summary>
@@ -331,6 +390,8 @@ public static class StartupStepKinds
     /// <summary>日志触发器：流程跑到此节点时挂载日志监听，本机 BGI 新日志命中关键字时执行 FireSteps 子链；
     /// 默认循环触发（执行完触发链后继续盯），可改为触发一次后停止；监听中页面显示状态、可查看流程、可取消。</summary>
     public const string LogTrigger = "logTrigger";
+    /// <summary>跳转：执行目标节点及其所在链的后续节点，执行完回到跳转节点之后继续（按调用处理，带嵌套层数上限）。</summary>
+    public const string JumpTo = "jumpTo";
 
     // ---- 旧版遗留（不在目录中，Runner 保留执行分支兼容旧配置） ----
     public const string StartGroup = "startGroup";
@@ -364,6 +425,7 @@ public static class StartupStepKinds
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),
         new(LogTrigger, "action", "日志触发器", "📜", "盯本机 BGI 新日志：日志中出现关键字时执行「触发执行」子链；默认循环触发（执行完触发链后继续盯，命中再次触发），可改为触发一次后停止；只盯挂载后的新日志"),
+        new(JumpTo, "action", "跳转", "↪", "执行指定编号的节点及其所在链的后续节点，执行完回到这里继续；用于把空分支接到别处已有的节点（如定时触发器）"),
         new(EndFlow, "action", "结束流程", "■", "立即终止整条启动流程（常用于「否」分支收尾）"),
     ];
 

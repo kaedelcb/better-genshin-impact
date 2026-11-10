@@ -11,7 +11,7 @@ const MT_KINDS = [
     ['killProgram','action','关闭程序','■','#EF5350'], ['runCmd','action','执行 CMD 命令','›_','#9575CD'],
     ['wait','action','等待','⧗','#9C97C0'], ['enterTaskCenter','action','进入任务中心执行','➤','#E8C96D'],
     ['timerTrigger','trigger','定时触发器','⏰','#FFC857'], ['watchdog','trigger','电子狗','🐕','#E88A6F'],
-    ['logTrigger','trigger','日志触发器','📜','#4FC3F7'], ['endFlow','action','结束流程','■','#EF5350'],
+    ['logTrigger','trigger','日志触发器','📜','#4FC3F7'], ['jumpTo','action','跳转','↪','#B39DDB'], ['endFlow','action','结束流程','■','#EF5350'],
     ['startGroup','legacy','旧版 · 启动配置组','▶','#90A4AE'], ['startOneClick','legacy','旧版 · 启动一条龙','▶','#90A4AE']
 ];
 const MT_KIND = Object.fromEntries(MT_KINDS.map(([key,type,name,icon,color]) => [key,{key,type,name,icon,color}]));
@@ -36,7 +36,7 @@ function mtNewStep(kind) {
         confirmMessage:'', confirmTimeoutSeconds:60, confirmTimeoutGoTrue:false, path:'', arguments:'', windowsUserName:'', waitSeconds:10,
         triggerTime:'08:00', repeatDaily:false, watchKind:'bgiTaskRunning', watchIntervalSeconds:30, watchRepeat:true,
         watchConfirmSeconds:1, watchConfirmTimes:1, killBeforeStart:false, statusSource:'currentSession', statusTargetOrder:1,
-        statusTargetUser:'', taskName:'', logKeyword:'', taskCenterFlowId:'', taskCenterHandoffMode:'start', continueAfterTaskCenterHandoff:false };
+        statusTargetUser:'', taskName:'', logKeyword:'', taskCenterFlowId:'', taskCenterHandoffMode:'start', continueAfterTaskCenterHandoff:false, jumpTargetId:'' };
     if (kind === 'setRegister') s.registerWrite = { values:Array(10).fill(null) };
     if (kind === 'judgeRegister') s.registerCondition = { values:Array(10).fill(null), match:'all' };
     if (kind === 'weekday') s.weekdays = [1,2,3,4,5,6,7];
@@ -54,6 +54,23 @@ function mtChainLabel(parent, key) {
     if (!parent) return '主流程';
     // 与 PC StepChainViewModel.BranchName 同一口径。
     return `「${mtDisplayName(parent)}」的${key === 'trueSteps' ? '是分支' : key === 'falseSteps' ? '否分支' : parent.kind === 'timerTrigger' ? '到点执行链' : '触发执行链'}`;
+}
+/** 节点编号：与 PC StartupStepNumbering 同口径（先序：节点 → 是 → 否 → 触发链），只用于显示。 */
+function mtNumbers() {
+    const map = new Map(); mtWalk(su.config?.steps, s => { if (!map.has(s.id)) map.set(s.id, map.size + 1); });
+    return map;
+}
+function mtNo(id) { const n = mtNumbers().get(id); return n ? '#' + n : '#?'; }
+/** 跳转到 targetId 会不会再次走到 jumpId（目标链从目标起的剩余部分含跳转节点）。与 PC JumpWouldLoop 同口径。 */
+function mtJumpLoops(jumpId, targetId) {
+    const hit = mtFind(targetId); if (!hit) return false;
+    let found = false; mtWalk(hit.chain.slice(hit.index), s => { if (s.id === jumpId) found = true; });
+    return found;
+}
+function mtJumpSummary(s) {
+    if (!(s.jumpTargetId || '').trim()) return '（未选择跳转目标）';
+    const hit = mtFind(s.jumpTargetId); if (!hit) return '（跳转目标已删除，请重新选择）';
+    return `跳到 ${mtNo(s.jumpTargetId)} ${mtDisplayName(hit.step)}，执行完回到这里继续`;
 }
 function mtDisplayName(s) { return (s.name || '').trim() || MT_KIND[s.kind]?.name || s.kind || '未知节点'; }
 function mtWatchDesc(s) {
@@ -91,6 +108,7 @@ function mtSummary(s) {
             return `移交任务中心：${flow ? flow.name : s.taskCenterFlowId}（${mode}）`;
         }
         case 'endFlow': return '立即终止整条启动流程';
+        case 'jumpTo': return mtJumpSummary(s);
         case 'startGroup': return (s.taskName || '').trim() ? `（旧版节点）配置组「${s.taskName}」` : '（旧版节点 · 未填写配置组名）';
         case 'startOneClick': return (s.taskName || '').trim() ? `（旧版节点）一条龙「${s.taskName}」` : '（旧版节点 · 未填写一条龙名）';
         default: return '';
@@ -114,7 +132,10 @@ function mtCountDeep(chain) { let n = 0; mtWalk(chain, () => n++); return n; }
 function mtRemoveStep(id) {
     const hit = mtFind(id); if (!hit) return;
     const nested = mtChains(hit.step).reduce((n, [k]) => n + mtCountDeep(hit.step[k]), 0);
-    if (nested && !confirm(`删除「${mtDisplayName(hit.step)}」会同时删除它下面的 ${nested} 个节点，是否继续？`)) return;
+    const removed = new Set(); mtWalk([hit.step], s => removed.add(s.id));
+    let jumps = 0; mtWalk(su.config.steps, s => { if (s.kind === 'jumpTo' && !removed.has(s.id) && removed.has(s.jumpTargetId)) jumps++; });
+    const warn = [nested ? `会同时删除它下面的 ${nested} 个节点` : '', jumps ? `有 ${jumps} 个跳转节点指向它，删除后这些跳转会失效` : ''].filter(Boolean).join('；');
+    if (warn && !confirm(`删除「${mtDisplayName(hit.step)}」${warn}，是否继续？`)) return;
     hit.chain.splice(hit.index, 1); su.selected = null;
     mtEdited(`已删除节点「${mtDisplayName(hit.step)}」`);
 }

@@ -190,7 +190,7 @@ function mtOutlineChain(chain, parent, key) {
         const info = MT_KIND[s.kind] || { icon:'?', color:'#90A4AE', name:s.kind }, st = mtNodeState(s), note = su.states.get(s.id)?.note;
         let html = `<div class="mt-row${s.id === su.selected ? ' selected' : ''}${s.enabled === false ? ' disabled' : ''}${st ? ' st-' + st : ''}" draggable="true" data-id="${mte(s.id)}" title="${mte(mtSummary(s))}">
             <span class="mt-grip" aria-hidden="true">⠿</span><span class="mt-ic" style="--c:${info.color}">${info.icon}</span>
-            <span class="mt-row-text"><b>${mte(mtDisplayName(s))}</b><small>${mte(mtSummary(s))}${note ? ' · ' + mte(note) : ''}</small></span>
+            <span class="mt-row-text"><b><span class="mt-no">${mtNo(s.id)}</span> ${mte(mtDisplayName(s))}</b><small>${mte(mtSummary(s))}${note ? ' · ' + mte(note) : ''}</small></span>
             ${st ? `<span class="mt-state st-${st}">${MT_RUN_TEXT[st]}</span>` : s.enabled === false ? '<span class="mt-state">已停用</span>' : ''}</div>`;
         const chains = mtChains(s);
         if (chains.length) {
@@ -302,10 +302,25 @@ function mtLayout(steps) {
     }
     return steps.length ? chain(steps) : null;
 }
-const MT_EDGE = { n:'#7f7aa2', yes:'#6fd8ce', no:'#e88a6f', fire:'#ffc857' };
+const MT_EDGE = { n:'#7f7aa2', yes:'#6fd8ce', no:'#e88a6f', fire:'#ffc857', jump:'#b39ddb' };
+/** 跳转连线（与 PC 流程图同口径）：跳转卡 → 目标卡，紫色虚线三段折线；目标缺失不画。 */
+function mtJumpEdges(g) {
+    const { nw:NW, nh:NH } = MT_GEO, pos = new Map(g.nodes.map(n => [n.s.id, n]));
+    for (const n of g.nodes) {
+        if (n.s.kind !== 'jumpTo') continue;
+        const t = pos.get(n.s.jumpTargetId); if (!t) continue;
+        let a, b, mx;
+        if (t.x + NW < n.x) { a = [n.x, n.y + NH / 2]; b = [t.x + NW, t.y + NH / 2]; mx = (t.x + NW + n.x) / 2; }
+        else if (t.x > n.x + NW) { a = [n.x + NW, n.y + NH / 2]; b = [t.x, t.y + NH / 2]; mx = (n.x + NW + t.x) / 2; }
+        else { a = [n.x, n.y + NH / 2 + 8]; b = [t.x, t.y + NH / 2 + 8]; mx = Math.min(n.x, t.x) - 22; }
+        g.edges.push({ pts:[a, [mx, a[1]], [mx, b[1]], b], c:'jump', dash:true, arrow:true, dim:n.dim || n.s.enabled === false });
+        g.labels.push({ x:Math.min(a[0], mx) + Math.abs(mx - a[0]) / 2 - 14, y:a[1] - 20, t:'↪ ' + mtNo(t.s.id), c:'jump', dim:n.dim });
+    }
+}
 function mtRenderCanvas() {
     const stage = mtEl('mtStage'), world = mtEl('mtWorld'); if (!stage || !world) return;
     const g = mtLayout(su.config.steps || []);
+    if (g) mtJumpEdges(g);
     if (!g) { world.innerHTML = '<div class="mt-canvas-empty">流程为空。在左侧大纲添加节点后，这里会画出整张流程图。</div>'; world.style.cssText = ''; su.view.w = 0; return; }
     const { pad, nw, nh } = MT_GEO, top = pad + 46, W = g.w + pad * 2, H = g.h + top + pad;
     const path = e => e.pts.map((p, i) => (i ? 'L' : 'M') + (p[0] + pad) + ',' + (p[1] + top)).join(' ');
@@ -330,7 +345,7 @@ function mtNodeHtml(s, x, y, w, h, dim) {
     const cls = ['mt-node', st ? 'st-' + st : '', dim ? 'dim' : '', s.id === su.selected ? 'sel' : '', s.enabled === false ? 'off' : '', MT_EMPH.has(s.kind) ? 'emph' : ''].filter(Boolean).join(' ');
     return `<button type="button" class="${cls}" data-node="${mte(s.id)}" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;--c:${info.color}" title="${mte(mtDisplayName(s) + '\n' + mtSummary(s))}">`
         + `${st && !dim ? `<span class="mt-node-st">${MT_RUN_TEXT[st]}</span>` : s.enabled === false ? '<span class="mt-node-st">已停用</span>' : ''}`
-        + `<span class="mt-ic">${info.icon}</span><span class="mt-node-tx"><b>${mte(mtDisplayName(s))}</b><small>${mte(info.name)} · ${mte(mtSummary(s))}</small></span></button>`;
+        + `<span class="mt-ic">${info.icon}</span><span class="mt-node-tx"><b><span class="mt-no">${mtNo(s.id)}</span> ${mte(mtDisplayName(s))}</b><small>${mte(info.name)} · ${mte(mtSummary(s))}</small></span></button>`;
 }
 function mtApplyView() {
     const world = mtEl('mtWorld'); if (!world) return;
@@ -475,6 +490,12 @@ function mtKindFields(s) {
             return mtField('目标流程', mtSel('taskCenterFlowId', s.taskCenterFlowId, options)) + mtField('移交语义', mtSel('taskCenterHandoffMode', mode, modes))
                 + `<label class="dd-check"><input type="checkbox" data-f="continueAfterTaskCenterHandoff"${s.continueAfterTaskCenterHandoff ? ' checked' : ''}>移交成功后继续后续启动步骤</label><p class="dodoco-hint">默认受理后结束启动流程。目标缺失或隔离保留原身份显示「不可用」，执行时由任务中心权威校验。</p>`;
         }
+        case 'jumpTo': {
+            const nums = mtNumbers(), options = [['', '选择要跳到的节点']];
+            mtWalk(su.config.steps, t => { if (t.id !== s.id) options.push([t.id, `#${nums.get(t.id)} ${mtDisplayName(t)}（${MT_KIND[t.kind]?.name || t.kind}）${mtJumpLoops(s.id, t.id) ? ' · 会形成循环，不会执行' : ''}`]); });
+            if (s.jumpTargetId && !nums.has(s.jumpTargetId)) options.push([s.jumpTargetId, '（目标节点已删除）']);
+            return mtField('跳转到', mtSel('jumpTargetId', s.jumpTargetId || '', options)) + '<p class="dodoco-hint">执行目标节点及它后面的节点，执行完回到这里继续。保存的是节点身份，增删其他节点后编号变化不影响跳转；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行。</p>';
+        }
         case 'endFlow': return '<p class="dodoco-hint">执行到此节点立即终止整条启动流程（含外层链）。它必须是所在链的最后一个节点，常用于「否」分支：环境不满足时直接放弃本次启动。</p>';
         default: return '<p class="dodoco-hint">执行端返回了网页不认识的节点类型；保留原样，不在网页修改。</p>';
     }
@@ -511,7 +532,7 @@ function mtRenderInspector() {
         else v = el.value;
         if (s[f] === v) return;
         s[f] = v;
-        const structural = el.tagName === 'SELECT' && ['statusSource', 'watchKind'].includes(f);
+        const structural = el.tagName === 'SELECT' && ['statusSource', 'watchKind', 'jumpTargetId'].includes(f);
         mtEdited(null, true);
         if (structural || el.type === 'checkbox' && f === 'enabled') mtRenderInspector();
     };

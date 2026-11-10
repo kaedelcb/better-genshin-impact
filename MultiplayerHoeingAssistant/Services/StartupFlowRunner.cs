@@ -39,6 +39,14 @@ public sealed class StartupFlowRunner
     private readonly Func<StartupStep, CancellationToken, Task<ControlStatus?>> _targetStatusProvider;
     private readonly Action<string> _log;
     private readonly Func<string, string, string, CancellationToken, Task<string>> _userProgramLauncher;
+    /// <summary>跳转节点查找目标用的整棵启动流程树（宿主注入当前配置）。触发器的触发链单独执行时也要能跳到树里其他节点；
+    /// 未注入时只在本次执行传入的节点链里查找。</summary>
+    private readonly Func<IReadOnlyList<StartupStep>>? _jumpRoot;
+    /// <summary>宿主查询某触发器节点（按 Id）当前是否已有挂载实例。只在跳转路径上使用，普通执行的挂载行为保持原样。</summary>
+    private readonly Func<string, bool>? _isTriggerArmed;
+
+    /// <summary>跳转嵌套层数上限：A 跳 B、B 又跳回 A 这类循环最多展开这么多层，超出即终止本次流程。</summary>
+    internal const int MaxJumpDepth = 16;
 
     /// <summary>
     /// 节点运行态回报（可选，由宿主 VM 设置）：每个节点 执行前→Running、执行后→终态，
@@ -64,8 +72,12 @@ public sealed class StartupFlowRunner
         Action<StartupStep, StartupSourceIntent>? armWatchdogWithSource = null,
         Action<StartupStep, StartupSourceIntent>? armLogWithSource = null,
         Func<string, string, string, CancellationToken, Task<string>>? userProgramLauncher = null,
-        RegisterBankService? registerBank = null)
+        RegisterBankService? registerBank = null,
+        Func<IReadOnlyList<StartupStep>>? jumpRoot = null,
+        Func<string, bool>? isTriggerArmed = null)
     {
+        _jumpRoot = jumpRoot;
+        _isTriggerArmed = isTriggerArmed;
         _registers = registerBank;
         _bgiExecutor = bgiExecutor;
         _enterTaskCenter = enterTaskCenter;
@@ -103,6 +115,14 @@ public sealed class StartupFlowRunner
         public StartupSourceIntent? SourceIntent { get; set; }
         public bool PassiveTriggerMounted { get; set; }
         public bool TaskCenterAccepted { get; set; }
+        /// <summary>本次执行传入的节点链（跳转目标的后备查找范围）。</summary>
+        public IReadOnlyList<StartupStep> RootSteps { get; init; } = [];
+        /// <summary>当前跳转嵌套层数。</summary>
+        public int JumpDepth { get; set; }
+        /// <summary>正在展开的跳转节点 Id（防循环：目标链会再次走到其中任一跳转时拒绝执行）。</summary>
+        public HashSet<string> ActiveJumpIds { get; } = [];
+        /// <summary>本次执行已挂载的触发器节点 Id：跳转让同一触发器第二次被走到时不重复挂载。</summary>
+        public HashSet<string> MountedTriggerIds { get; } = [];
         public List<string> BgiTaskCommitFacts { get; } = [];
         public string? FailureNote { get; set; }
         /// <summary>执行身份短码（日志/回报用，并发执行可区分，R4.9 §7）。</summary>
@@ -128,7 +148,7 @@ public sealed class StartupFlowRunner
             throw new OperationCanceledException("自动启动/回调缺少原来源授权；请手动运行或重新挂载，不能刷新当前版本", ct);
         using var lifetime = source is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct, source.LifetimeToken);
         ct = lifetime?.Token ?? ct;
-        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source, TaskCenterAccepted = source?.AuxiliaryOnly == true };
+        var ctx = new RunContext { ExecutionId = Guid.NewGuid().ToString("N"), Trigger = trigger, SourceIntent = source, TaskCenterAccepted = source?.AuxiliaryOnly == true, RootSteps = steps };
         _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
         {
@@ -224,6 +244,12 @@ public sealed class StartupFlowRunner
                 continue;
             }
 
+            if (step.Kind == StartupStepKinds.JumpTo)
+            {
+                await RunJumpAsync(step, display, indent, ct, ctx, depth);
+                continue;
+            }
+
             // 动作节点
             Report(step, NodeRunState.Running);
             bool ok;
@@ -255,12 +281,102 @@ public sealed class StartupFlowRunner
         }
     }
 
+    /// <summary>跳转：从目标节点开始执行它所在链的剩余节点，执行完回到跳转节点之后继续。
+    /// 目标未选/已删除 → 节点失败、链继续；嵌套超过 <see cref="MaxJumpDepth"/> 层 → 终止本次流程（防循环）。</summary>
+    private async Task RunJumpAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx, int depth)
+    {
+        Report(step, NodeRunState.Running);
+        var targetId = (step.JumpTargetId ?? "").Trim();
+        if (targetId.Length == 0)
+        {
+            _log($"[槲寄生] {indent}跳转「{display}」未选择目标节点，继续后续节点");
+            Report(step, NodeRunState.Failed, "未选择跳转目标");
+            return;
+        }
+        if (ctx.JumpDepth >= MaxJumpDepth)
+        {
+            _log($"[槲寄生] {indent}跳转「{display}」嵌套已达 {MaxJumpDepth} 层，可能形成了循环；终止本次流程");
+            Report(step, NodeRunState.Failed, $"跳转嵌套超过 {MaxJumpDepth} 层");
+            throw new FlowEndException($"跳转嵌套超过 {MaxJumpDepth} 层（可能形成了循环），已终止本次流程");
+        }
+
+        List<StartupStep>? tail = null;
+        int? number = null;
+        foreach (var root in JumpSearchRoots(ctx))
+        {
+            try
+            {
+                if (StartupStepNumbering.Locate(root, targetId) is not { } hit) continue;
+                // 取快照再执行：执行中编辑器改动链结构不影响本次跳转
+                tail = hit.Chain.Skip(hit.Index).ToList();
+                number = StartupStepNumbering.Build(root).TryGetValue(targetId, out var n) ? n : null;
+                break;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentOutOfRangeException)
+            {
+                // 编辑器恰好在改这棵树（集合已修改）：换下一个查找范围
+            }
+        }
+        if (tail is not { Count: > 0 })
+        {
+            _log($"[槲寄生] {indent}跳转「{display}」的目标节点已不存在，继续后续节点");
+            Report(step, NodeRunState.Failed, "跳转目标已不存在");
+            return;
+        }
+
+        var target = tail[0];
+        var targetText = $"{(number is { } no ? $"#{no} " : "")}{DisplayName(target, 0)}";
+        // 防循环：目标之后的节点会再次走到本跳转（或外层正在展开的跳转）→ 不执行，避免程序被反复启动
+        if (StartupStepNumbering.Contains(tail, step.Id) || ctx.ActiveJumpIds.Any(id => StartupStepNumbering.Contains(tail, id)))
+        {
+            _log($"[槲寄生] {indent}跳转「{display}」→「{targetText}」会再次走到跳转节点本身，形成循环；未执行，继续后续节点");
+            Report(step, NodeRunState.Failed, "跳转会形成循环，未执行");
+            return;
+        }
+        _log($"[槲寄生] {indent}跳转「{display}」→「{targetText}」，执行 {tail.Count} 个节点后回到这里继续");
+        Report(step, NodeRunState.Success, $"跳到「{targetText}」");
+        ctx.JumpDepth++;
+        ctx.ActiveJumpIds.Add(step.Id);
+        try { await RunChainAsync(tail, ct, ctx, depth + 1); }
+        finally
+        {
+            ctx.ActiveJumpIds.Remove(step.Id);
+            ctx.JumpDepth--;
+        }
+    }
+
+    private IEnumerable<IReadOnlyList<StartupStep>> JumpSearchRoots(RunContext ctx)
+    {
+        IReadOnlyList<StartupStep>? root = null;
+        try { root = _jumpRoot?.Invoke(); }
+        catch (Exception ex) { _log($"[槲寄生] 读取启动流程树失败：{ex.Message}"); }
+        if (root is not null) yield return root;
+        yield return ctx.RootSteps;
+    }
+
+    /// <summary>同一次执行里同一触发器节点只挂载一次（跳转可能让流程第二次走到它）。返回 false = 已挂载过，跳过。</summary>
+    private bool TryMarkTriggerMounted(StartupStep step, string display, string indent, RunContext ctx)
+    {
+        if (!ctx.MountedTriggerIds.Add(step.Id))
+        {
+            _log($"[槲寄生] {indent}「{display}」本次执行已挂载过，跳过重复挂载");
+            return false;
+        }
+        // 经跳转走到的触发器（例如触发链里跳回挂载它的节点）：已有挂载实例就不再叠加第二份
+        if (ctx.JumpDepth > 0 && _isTriggerArmed?.Invoke(step.Id) == true)
+        {
+            _log($"[槲寄生] {indent}「{display}」已在挂载中，经跳转再次走到时不重复挂载");
+            return false;
+        }
+        return true;
+    }
+
     private static bool IsBackgroundTrigger(string kind) => kind is
         StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger;
 
     private static bool NeedsSourceBeforeAction(StartupStep step) => step.Enabled
         && step.NodeType != "condition"
-        && step.Kind is not (StartupStepKinds.Wait or StartupStepKinds.EndFlow or StartupStepKinds.EnterTaskCenter);
+        && step.Kind is not (StartupStepKinds.Wait or StartupStepKinds.EndFlow or StartupStepKinds.EnterTaskCenter or StartupStepKinds.JumpTo);
 
     /// <summary>向宿主回报节点运行态（未设置接收方时为空操作）。</summary>
     private void Report(StartupStep step, NodeRunState state, string? note = null)
@@ -532,6 +648,7 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}定时触发器「{display}」的「到点执行」链为空，不挂载");
                         return false;
                     }
+                    if (!TryMarkTriggerMounted(step, display, indent, ctx)) return true;
                     if (_armTimerWithSource is not null) _armTimerWithSource(step, ctx.SourceIntent!);
                     else _armTimer(step);
                     ctx.PassiveTriggerMounted = true;
@@ -545,6 +662,7 @@ public sealed class StartupFlowRunner
                         return false;
                     }
                     // 空链也是合法的状态监控器：显示盯梢状态，不提交任何触发动作。
+                    if (!TryMarkTriggerMounted(step, display, indent, ctx)) return true;
                     if (_armWatchdogWithSource is not null) _armWatchdogWithSource(step, ctx.SourceIntent!);
                     else _armWatchdog(step);
                     ctx.PassiveTriggerMounted = true;
@@ -567,6 +685,7 @@ public sealed class StartupFlowRunner
                         _log($"[槲寄生] {indent}日志触发器「{display}」的日志源不可用（宿主未接入日志流），跳过");
                         return false;
                     }
+                    if (!TryMarkTriggerMounted(step, display, indent, ctx)) return true;
                     if (_armLogWithSource is not null) _armLogWithSource(step, ctx.SourceIntent!);
                     else _armLogTrigger(step);
                     ctx.PassiveTriggerMounted = true;

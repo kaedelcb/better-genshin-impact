@@ -17,7 +17,8 @@ namespace MultiplayerHoeingAssistant.Views;
 /// - 定时触发器 / 电子狗的「到点·触发执行」链挂在节点右侧，虚线引出（异步触发，不属于顺序流）；
 /// - 节点/分支直接绑定 <see cref="StartupStepViewModel"/> 的运行态，执行中打开会实时点亮走过的路径；
 /// - 点击节点通过回调跳回启动中心编辑器定位；缩放（Ctrl+滚轮/按钮）与拖动平移支持大图浏览。
-/// 图为打开时的结构快照：增删节点/拖拽改序后需重新打开刷新（运行态与参数摘要仍实时联动）。
+/// - 「跳转」节点用紫色虚线箭头连到目标节点，节点卡显示编号 #N；
+/// 增删节点/拖拽改序/改跳转目标后自动重画（运行态与参数摘要实时联动）。
 /// </summary>
 public partial class FlowChartWindow : Window
 {
@@ -47,6 +48,8 @@ public partial class FlowChartWindow : Window
     private static readonly Brush CardEdge = Frozen("#40D4AF37");
     private static readonly Brush BadgeBgDefault = Frozen("#336FD8CE");
     private static readonly Brush ChipBg = Frozen("#299C97C0");
+    /// <summary>跳转连线色（紫，区别于是/否/触发链）。</summary>
+    private static readonly Brush JumpEdge = Frozen("#CCB39DDB");
 
     private readonly Action<StartupStepViewModel> _onActivate;
     private readonly StepChainViewModel _root;
@@ -69,6 +72,7 @@ public partial class FlowChartWindow : Window
         StartupStepKinds.LogTrigger => "#4FC3F7",                             // 日志触发器：浅蓝
         StartupStepKinds.EnterTaskCenter => "#E8C96D",                        // 交接任务中心：金（重点节点）
         StartupStepKinds.EndFlow => "#EF5350",                                // 结束流程：红（重点节点）
+        StartupStepKinds.JumpTo => "#B39DDB",                                 // 跳转：浅紫（与跳转连线同色）
         _ => "#90A4AE",                                                       // 旧版遗留等：灰蓝
     };
 
@@ -78,6 +82,8 @@ public partial class FlowChartWindow : Window
         or StartupStepKinds.LogTrigger;
     private readonly List<StepChainViewModel> _subscribedChains = [];
     private bool _rebuildPending;
+    /// <summary>本次画图中的跳转节点（画完全部卡片后统一补连线）。</summary>
+    private readonly List<StartupStepViewModel> _jumpVms = [];
 
     private FlowChartWindow(StepChainViewModel root, Action<StartupStepViewModel> onActivate, Window? owner,
         System.Collections.IEnumerable armedTimers,
@@ -98,6 +104,13 @@ public partial class FlowChartWindow : Window
         LogTriggerList.ItemsSource = armedLogTriggers;
         BuildChart(root);
         SubscribeStructureChanges();
+        // 改跳转目标不改树结构：单独订阅，关窗即退订
+        root.Owner.JumpLinksChanged += OnJumpLinksChanged;
+        Closed += (_, _) =>
+        {
+            root.Owner.JumpLinksChanged -= OnJumpLinksChanged;
+            UnsubscribeStructureChanges();
+        };
         // 打开时按流程图实际宽度定窗口宽（不强制整图缩放可见；高度保留默认，纵向图一般更长，交给滚动）
         Width = Math.Clamp(ChartCanvas.Width + 60, MinWidth, 1500);
         Loaded += (_, _) => Scroller.ScrollToHome();
@@ -238,7 +251,9 @@ public partial class FlowChartWindow : Window
         }
     }
 
-    private void OnStructureChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    private void OnJumpLinksChanged() => OnStructureChanged(null, null);
+
+    private void OnStructureChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs? e)
     {
         // 连续改动（如恢复方案整树替换）合并成一次重建
         if (_rebuildPending) return;
@@ -262,6 +277,7 @@ public partial class FlowChartWindow : Window
     {
         ChartCanvas.Children.Clear();
         _nodeByVm.Clear();
+        _jumpVms.Clear();
         var body = BuildChain(root);
 
         // 顶部「开始」标记
@@ -293,6 +309,70 @@ public partial class FlowChartWindow : Window
         Canvas.SetTop(canvas, Pad);
         ChartCanvas.Width = w + Pad * 2;
         ChartCanvas.Height = canvas.Height + Pad * 2;
+        DrawJumpLinks();
+    }
+
+    /// <summary>节点卡在 ChartCanvas 上的矩形：沿视觉树累加各层 Canvas 偏移（不依赖布局完成）。</summary>
+    private Rect CardRect(FrameworkElement card)
+    {
+        double x = 0, y = 0;
+        DependencyObject? d = card;
+        while (d is UIElement el && !ReferenceEquals(d, ChartCanvas))
+        {
+            var l = Canvas.GetLeft(el);
+            var t = Canvas.GetTop(el);
+            if (!double.IsNaN(l)) x += l;
+            if (!double.IsNaN(t)) y += t;
+            d = VisualTreeHelper.GetParent(d);
+        }
+        return new Rect(x, y, NodeW, NodeH);
+    }
+
+    /// <summary>跳转连线：跳转卡 → 目标卡，紫色虚线三段折线 + 箭头 + 「↪ #N」标注；画在最上层。目标缺失时不画线（卡片摘要已提示）。</summary>
+    private void DrawJumpLinks()
+    {
+        foreach (var jump in _jumpVms)
+        {
+            if (!_nodeByVm.TryGetValue(jump, out var from)) continue;
+            var targetVm = _nodeByVm.Keys.FirstOrDefault(v => v.Model.Id == jump.Model.JumpTargetId);
+            if (targetVm is null || !_nodeByVm.TryGetValue(targetVm, out var to)) continue;
+            var j = CardRect(from);
+            var t = CardRect(to);
+            Point start, end;
+            double midX;
+            if (t.Right < j.Left)
+            {
+                start = new Point(j.Left, j.Top + NodeH / 2);
+                end = new Point(t.Right, t.Top + NodeH / 2);
+                midX = (t.Right + j.Left) / 2;
+            }
+            else if (t.Left > j.Right)
+            {
+                start = new Point(j.Right, j.Top + NodeH / 2);
+                end = new Point(t.Left, t.Top + NodeH / 2);
+                midX = (j.Right + t.Left) / 2;
+            }
+            else
+            {
+                // 同一列（上下关系）：从左侧绕出
+                start = new Point(j.Left, j.Top + NodeH / 2 + 8);
+                end = new Point(t.Left, t.Top + NodeH / 2 + 8);
+                midX = Math.Max(4, Math.Min(j.Left, t.Left) - 22);
+            }
+            var layer = new Canvas { IsHitTestVisible = false };
+            layer.SetBinding(UIElement.OpacityProperty,
+                new Binding(nameof(StartupStepViewModel.Enabled)) { Source = jump, Converter = EnabledOpacityConv.Instance });
+            DrawEdge(layer, [start, new Point(midX, start.Y), new Point(midX, end.Y), end], JumpEdge, 1.6, true, true);
+            var label = new TextBlock
+            {
+                Text = $"↪ {targetVm.NumberText}", FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = JumpEdge,
+            };
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(label, Math.Min(start.X, midX) + Math.Abs(midX - start.X) / 2 - label.DesiredSize.Width / 2);
+            Canvas.SetTop(label, start.Y - label.DesiredSize.Height - 1);
+            layer.Children.Add(label);
+            ChartCanvas.Children.Add(layer);
+        }
     }
 
     /// <summary>布局一条链：节点自上而下，条件块之间画连线；条件块的 LooseEnds 在非末尾时画汇合线到下一个节点。</summary>
@@ -578,6 +658,9 @@ public partial class FlowChartWindow : Window
             TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 120,
         };
         name.SetBinding(TextBlock.TextProperty, new Binding(nameof(StartupStepViewModel.DisplayName)) { Source = vm });
+        var number = new TextBlock { FontSize = 10, Foreground = DimText, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        number.SetBinding(TextBlock.TextProperty, new Binding(nameof(StartupStepViewModel.NumberText)) { Source = vm });
+        row1.Children.Add(number);
         row1.Children.Add(name);
         var chip = new Border
         {
@@ -627,6 +710,7 @@ public partial class FlowChartWindow : Window
         grid.Children.Add(right);
         card.Child = grid;
         _nodeByVm[vm] = card; // 底部武装面板点击定位用
+        if (vm.IsJump) _jumpVms.Add(vm);
         return card;
     }
 

@@ -97,9 +97,12 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             armTimerWithSource: (step, source) => ArmTimer(step, source),
             armWatchdogWithSource: (step, source) => ArmWatchdog(step, source),
             armLogWithSource: (step, source) => ArmLogTrigger(step, source),
-            registerBank: _localRegisterService);
+            registerBank: _localRegisterService,
+            jumpRoot: () => _config.Steps,
+            isTriggerArmed: IsTriggerArmed);
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
+        Renumber();
         foreach (var s in remoteSnapshot?.Schemes ?? _schemeStore.Load()) Schemes.Add(new SchemeItemViewModel(s));
         // R5.5／§2④a-1：统一触发器台账是**已挂载集合的投影**——集合变更（含 Replace/Reset/Move）由同步器按
         // `NotifyCollectionChangedAction` 正确处理；**实际撤销仍走各列表的「取消」按钮**（或 RevokeAllArmedTriggers），
@@ -515,6 +518,94 @@ public sealed partial class MistletoeViewModel : ViewModelBase
 
     public bool HasSteps => RootChain.Steps.Count > 0;
 
+    // ================= 节点编号与跳转目标 =================
+
+    private bool _renumberPending;
+    private Dictionary<string, int> _stepNumbers = new();
+
+    /// <summary>当前节点编号（Id → #N，先序遍历；只用于显示）。</summary>
+    internal IReadOnlyDictionary<string, int> StepNumbers => _stepNumbers;
+
+    /// <summary>树结构变化后合并刷新一次编号（恢复方案等整树替换只算一次）。</summary>
+    internal void RequestRenumber()
+    {
+        if (_renumberPending) return;
+        _renumberPending = true;
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || RootChain is null) { _renumberPending = false; Renumber(); return; }
+        dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { _renumberPending = false; Renumber(); }));
+    }
+
+    internal void Renumber()
+    {
+        if (RootChain is null) return;
+        _stepNumbers = StartupStepNumbering.Build(_config.Steps);
+        foreach (var vm in AllStepVms(RootChain)) vm.RefreshNumber();
+        if (_selectedStep?.Kind == StartupStepKinds.JumpTo) RefreshJumpTargetChoices(_selectedStep);
+    }
+
+    /// <summary>跳转目标改动后：刷新所有跳转卡片摘要与流程图（流程图按结构订阅，跳转连线需要单独通知）。</summary>
+    internal void JumpTargetChanged()
+    {
+        if (RootChain is null) return;
+        foreach (var vm in AllStepVms(RootChain)) if (vm.IsJump) vm.RefreshNumber();
+        JumpLinksChanged?.Invoke();
+    }
+
+    /// <summary>跳转连线变化通知（流程图窗口订阅后重画）。</summary>
+    internal event Action? JumpLinksChanged;
+
+    internal static IEnumerable<StartupStepViewModel> AllStepVms(StepChainViewModel chain)
+    {
+        foreach (var vm in chain.Steps)
+        {
+            yield return vm;
+            foreach (var c in vm.ActiveChildChains)
+                foreach (var d in AllStepVms(c)) yield return d;
+        }
+    }
+
+    /// <summary>「跳转」节点编辑器的目标候选（全树除跳转节点自身外的所有节点，按编号排序）。</summary>
+    public ObservableCollection<JumpTargetChoiceItem> JumpTargetChoices { get; } = [];
+
+    /// <summary>增量刷新跳转目标候选：同 Id 原位改显示，当前已选目标（含已删除的）始终保留匹配项，避免下拉框失配把空值写回配置。</summary>
+    internal void RefreshJumpTargetChoices(StartupStepViewModel jump)
+    {
+        var target = new List<JumpTargetChoiceItem>();
+        foreach (var vm in AllStepVms(RootChain))
+        {
+            if (ReferenceEquals(vm, jump)) continue;
+            var loop = StartupStepNumbering.JumpWouldLoop(_config.Steps, jump.Model.Id, vm.Model.Id);
+            target.Add(new JumpTargetChoiceItem(vm.Model.Id,
+                $"{vm.NumberText} {vm.DisplayName}（{vm.TypeName}）{(loop ? " · 会形成循环，不会执行" : "")}"));
+        }
+        var current = jump.Model.JumpTargetId;
+        if (!string.IsNullOrWhiteSpace(current) && target.All(t => t.StepId != current))
+            target.Add(new JumpTargetChoiceItem(current, "（目标节点已删除）"));
+        // 先补缺失项（当前选中身份全程有匹配项），再按目标顺序排位，最后移除失效项
+        foreach (var item in target)
+        {
+            var existing = JumpTargetChoices.FirstOrDefault(c => c.StepId == item.StepId);
+            if (existing is null) JumpTargetChoices.Add(item);
+            else if (existing.Display != item.Display) existing.Display = item.Display;
+        }
+        for (var i = 0; i < target.Count; i++)
+        {
+            var at = -1;
+            for (var j = 0; j < JumpTargetChoices.Count; j++)
+                if (JumpTargetChoices[j].StepId == target[i].StepId) { at = j; break; }
+            if (at >= 0 && at != i) JumpTargetChoices.Move(at, i);
+        }
+        for (var i = JumpTargetChoices.Count - 1; i >= 0; i--)
+            if (target.All(t => t.StepId != JumpTargetChoices[i].StepId)) JumpTargetChoices.RemoveAt(i);
+        // 候选列表多个跳转节点共用：刷新后让当前节点的下拉重新对上已保存的目标（失配时控件只会回写被忽略的 null）
+        jump.NotifyJumpTargetSync();
+    }
+
+    /// <summary>按 Id 找节点 VM（跳转摘要、流程图定位用）。</summary>
+    internal StartupStepViewModel? FindStepVmById(string id)
+        => string.IsNullOrEmpty(id) || RootChain is null ? null : AllStepVms(RootChain).FirstOrDefault(v => v.Model.Id == id);
+
     /// <summary>整棵树里查找第一个指定类型的节点（「进入任务中心执行」全树唯一约束等用）。</summary>
     internal StartupStepViewModel? FindFirstByKind(string kind) => FindFirstByKind(RootChain, kind);
 
@@ -547,6 +638,8 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 // R4.9 §5：选中移交节点时刷新目标流程候选（宿主 ListFlows 的 Ready 条目，仅选择体验，执行时宿主权威校验）
                 if (_selectedStep.Kind == StartupStepKinds.EnterTaskCenter)
                     RefreshTaskCenterFlowChoices(_selectedStep.Model.TaskCenterFlowId);
+                if (_selectedStep.Kind == StartupStepKinds.JumpTo)
+                    RefreshJumpTargetChoices(_selectedStep);
             }
             OnPropertyChanged();
         }
@@ -588,11 +681,15 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         var chain = vm.OwnerChain;
         var idx = chain.Steps.IndexOf(vm);
         if (idx < 0) return;
+        var removedIds = new HashSet<string>(StartupStepNumbering.Build([vm.Model]).Keys);
         chain.Steps.RemoveAt(idx);
         chain.ModelList.RemoveAt(idx);
         OnPropertyChanged(nameof(HasSteps));
         SaveNow();
         _mainVm.AddLog($"[槲寄生] 已删除节点「{vm.DisplayName}」（{chain.BranchName}）");
+        var brokenJumps = AllStepVms(RootChain).Count(s => s.IsJump && removedIds.Contains(s.Model.JumpTargetId));
+        if (brokenJumps > 0)
+            _mainVm.AddLog($"[槲寄生] 有 {brokenJumps} 个跳转节点指向被删除的节点，这些跳转已失效，请重新选择目标");
     });
 
     public RelayCommand MoveUpCommand => new(p => MoveStep(p as StartupStepViewModel, -1));
@@ -1207,6 +1304,16 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         RunOnUi(() => ArmedTimersMutable.Add(timer));
         _mainVm.AddLog($"[槲寄生] 定时触发器「{StartupFlowRunner.DisplayName(step, 0)}」已挂载：{fireAt:MM-dd HH:mm} 触发「到点执行」链（{step.FireSteps.Count} 个节点{(step.RepeatDaily ? "，每天重复" : "" )}）");
         _ = RunTimerAsync(timer);
+    }
+
+    /// <summary>某触发器节点当前是否有挂载实例（跳转防重复挂载用；在 UI 线程读集合）。</summary>
+    private bool IsTriggerArmed(string stepId)
+    {
+        var armed = false;
+        RunOnUi(() => armed = ArmedTimersMutable.Any(t => t.Step.Id == stepId)
+            || ArmedWatchdogsMutable.Any(d => d.Step.Id == stepId)
+            || ArmedLogTriggersMutable.Any(l => l.Step.Id == stepId));
+        return armed;
     }
 
     /// <summary>今天的该时刻未到则今天，否则明天。</summary>
@@ -2473,11 +2580,15 @@ public sealed class StepChainViewModel : ViewModelBase
             OnPropertyChanged(nameof(HasSteps));
             OnPropertyChanged(nameof(HasEndFlow));
             OnPropertyChanged(nameof(HasNoEndFlow));
+            owner.RequestRenumber();
         };
     }
 
     /// <summary>对应的模型列表（与 Steps 一一同步）。</summary>
     public List<StartupStep> ModelList { get; }
+
+    /// <summary>宿主 VM（流程图订阅跳转连线变化用）。</summary>
+    internal MistletoeViewModel Owner => _owner;
 
     public ObservableCollection<StartupStepViewModel> Steps { get; }
 
@@ -2582,6 +2693,27 @@ public sealed class TaskCenterFlowChoiceItem : ViewModelBase
     public override string ToString() => Display;
 }
 
+/// <summary>「跳转」节点目标下拉的候选项（StepId=目标节点稳定身份；Display=「#N 名称（类型）」，编号变化时原位更新）。</summary>
+public sealed class JumpTargetChoiceItem : ViewModelBase
+{
+    public JumpTargetChoiceItem(string stepId, string display)
+    {
+        StepId = stepId;
+        _display = display;
+    }
+
+    public string StepId { get; }
+
+    private string _display;
+    public string Display
+    {
+        get => _display;
+        set => SetProperty(ref _display, value);
+    }
+
+    public override string ToString() => Display;
+}
+
 public sealed partial class StartupStepViewModel : ViewModelBase
 {
     private readonly MistletoeViewModel _owner;
@@ -2612,6 +2744,43 @@ public sealed partial class StartupStepViewModel : ViewModelBase
     public StepChainViewModel FireChain { get; }
 
     public string Kind => Model.Kind;
+    public bool IsJump => Model.Kind == StartupStepKinds.JumpTo;
+
+    /// <summary>实际生效的子链（与执行器、编号同口径）。</summary>
+    internal IEnumerable<StepChainViewModel> ActiveChildChains
+    {
+        get
+        {
+            if (IsCondition) { yield return TrueChain; yield return FalseChain; }
+            else if (IsTimerTrigger || IsWatchdog || IsLogTrigger) yield return FireChain;
+        }
+    }
+
+    /// <summary>节点编号文字「#N」（先序遍历；只用于显示，增删节点后重排）。</summary>
+    public string NumberText => _owner.StepNumbers.TryGetValue(Model.Id, out var n) ? $"#{n}" : "#?";
+
+    internal void NotifyJumpTargetSync() => OnPropertyChanged(nameof(JumpTargetId));
+
+    internal void RefreshNumber()
+    {
+        OnPropertyChanged(nameof(NumberText));
+        if (IsJump) OnPropertyChanged(nameof(Summary));
+    }
+
+    /// <summary>跳转目标（jumpTo 用；存目标节点 Id）。</summary>
+    public string JumpTargetId
+    {
+        get => Model.JumpTargetId;
+        set
+        {
+            if (value is null) return; // 下拉候选刷新瞬间失配产生的 null 不写配置
+            if (Model.JumpTargetId == value) return;
+            Model.JumpTargetId = value;
+            Changed();
+            _owner.JumpTargetChanged();
+        }
+    }
+
     public bool IsCondition => Model.NodeType == "condition";
     public bool IsTimerTrigger => Model.Kind == StartupStepKinds.TimerTrigger;
     public bool IsWatchdog => Model.Kind == StartupStepKinds.Watchdog;
@@ -3022,7 +3191,18 @@ public sealed partial class StartupStepViewModel : ViewModelBase
 
     // ---- 卡片摘要行 ----
 
-    public string Summary => BuildSummary(Model);
+    public string Summary => IsJump
+        ? JumpSummary(Model, _owner.StepNumbers, _owner.FindStepVmById(Model.JumpTargetId)?.DisplayName)
+        : BuildSummary(Model);
+
+    /// <summary>跳转节点摘要：「跳到 #N 名称，执行完回到这里继续」；目标未选/已删除时如实提示。</summary>
+    internal static string JumpSummary(StartupStep model, IReadOnlyDictionary<string, int>? numbers, string? targetName)
+    {
+        if (string.IsNullOrWhiteSpace(model.JumpTargetId)) return "（未选择跳转目标）";
+        if (numbers is null || !numbers.TryGetValue(model.JumpTargetId, out var n) || targetName is null)
+            return "（跳转目标已删除，请重新选择）";
+        return $"跳到 #{n} {targetName}，执行完回到这里继续";
+    }
 
     /// <summary>卡片摘要行文本（抽成静态方法：流程预览弹窗 FlowPreviewWindow 复用同一口径，避免两处拼接逻辑漂移）。</summary>
     internal static string BuildSummary(StartupStep model) => model.Kind switch
@@ -3068,6 +3248,7 @@ public sealed partial class StartupStepViewModel : ViewModelBase
                 : $"移交任务中心（未配置目标流程；未知语义「{model.TaskCenterHandoffMode}」——运行时按未知语义优先响亮拒绝）"
             : $"移交任务中心：{model.TaskCenterFlowId}（{model.TaskCenterHandoffMode switch { StartupHandoffModes.Start => "立即执行", StartupHandoffModes.Resume => "恢复既有运行", StartupHandoffModes.ArmTrigger => "挂载触发器", _ => $"未知语义「{model.TaskCenterHandoffMode}」（运行时将响亮拒绝）" }}）",
         StartupStepKinds.EndFlow => "立即终止整条启动流程",
+        StartupStepKinds.JumpTo => string.IsNullOrWhiteSpace(model.JumpTargetId) ? "（未选择跳转目标）" : "跳到指定节点，执行完回到这里继续",
         StartupStepKinds.StartGroup => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写配置组名）" : $"（旧版节点）配置组「{model.TaskName}」",
         StartupStepKinds.StartOneClick => string.IsNullOrWhiteSpace(model.TaskName) ? "（旧版节点 · 未填写一条龙名）" : $"（旧版节点）一条龙「{model.TaskName}」",
         _ => "",

@@ -353,6 +353,9 @@
                             <!-- 名称 + 摘要 -->
                             <StackPanel Grid.Column="2" VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding NumberText}" FontSize="11" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="0,0,6,0"
+                                               ToolTip="节点编号（跳转节点按编号选择目标；增删节点后编号会重排，已设置的跳转不受影响）"/>
                                     <TextBlock Text="{Binding DisplayName}" FontSize="13" FontWeight="Medium"
                                                Foreground="{DynamicResource White}" VerticalAlignment="Center"/>
                                     <Border CornerRadius="5" Padding="6,1" Margin="8,0,0,0"
@@ -1133,6 +1136,27 @@
                                     </ComboBox>
                                     <TextBlock Text="（流程跑到此节点时挂载监听，只盯挂载后的本机 BGI 新日志；命中执行下方「触发执行」链，执行完再循环）"
                                                FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="280" TextWrapping="Wrap"/>
+                                </WrapPanel>
+
+                                <!-- jumpTo：跳转目标节点 -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="jumpTo">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="跳转到" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Width="300" Style="{StaticResource GoldComboBox}"
+                                              ItemsSource="{Binding DataContext.JumpTargetChoices, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                              DisplayMemberPath="Display" SelectedValuePath="StepId"
+                                              SelectedValue="{Binding JumpTargetId, Mode=TwoWay}"
+                                              ToolTip="按节点编号选择目标；保存的是节点身份，增删其他节点后编号变化也不影响跳转"/>
+                                    <TextBlock Text="（执行目标节点及它后面的节点，执行完回到这里继续；同一次执行里已挂载的触发器不会重复挂载；会再次走到本跳转的目标不会执行）"
+                                               FontSize="10" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="10,0,0,0" MaxWidth="320" TextWrapping="Wrap"/>
                                 </WrapPanel>
 
                                 <!-- enterTaskCenter：目标任务中心流程 + 移交语义（R4.9 §5） -->
