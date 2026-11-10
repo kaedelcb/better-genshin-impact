@@ -75,7 +75,7 @@
             '<p data-notice class="note"></p><div data-fields><div class="bgi-update-fields">' +
             '<label>执行端<select data-target></select></label><label>下载来源<select data-source></select></label></div>' +
             '<p class="note" data-version></p><label>安装包<select data-package size="4"></select></label><p class="note" data-package-note></p>' +
-            '<p class="note">网页更新需要先退出执行端的 BGI；会保留 User 和运行中的助手，其他排除项和备份沿用助手设置。</p>' +
+            '<p class="note">网页更新需要先退出执行端的 BGI；会保留 User，其他排除项和备份沿用助手设置。更新完成后助手会自动重启（更新前 BGI 在运行的话也会自动重新启动 BGI），网页会短暂断线后自动重连。</p>' +
             '<label class="note"><input type="checkbox" data-close-bgi checked> 更新前自动关闭执行端的 BGI（会强制结束 BGI 进程，正在运行的任务将中断；取消勾选则需自行先退出 BGI）</label>' +
             '<p class="bgi-update-status note" data-status role="status" aria-live="polite"></p>' +
             '<div class="bgi-update-actions"><button type="button" class="btn btn-secondary" data-refresh>刷新</button>' +

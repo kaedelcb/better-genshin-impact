@@ -450,6 +450,7 @@ public partial class UpdateBgiWindow : Window
                 archivePath = prepared;
             }
             var running = BgiPackageUpdateService.FindBgiProcessesUnder(targetDir);
+            var bgiWasRunning = running.Count > 0;
             if (running.Count > 0 && !TryKillBgiProcesses(running))
             {
                 MessageBox.Show(this, "BGI 进程关闭失败，已中止更新（请手动关闭后重试）。", "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -468,12 +469,17 @@ public partial class UpdateBgiWindow : Window
                 if (result.SkippedFiles.Count > 0) lines.Add($"{result.SkippedFiles.Count} 个文件被跳过：\n{string.Join("\n", result.SkippedFiles)}");
                 if (result.BackupDir != null) lines.Add($"备份已保存到：{result.BackupDir}");
                 if (result.BackupCleanupWarning != null) lines.Add(result.BackupCleanupWarning);
-                lines.Add("请重启 BGI 使新版本生效。");
+                var autoRelaunch = result.SkippedFiles.Count == 0;
+                lines.Add(autoRelaunch
+                    ? (bgiWasRunning ? "点击确定后助手将自动重启，并重新启动 BGI，使新版本生效。"
+                        : "点击确定后助手将自动重启使新版本生效（更新前 BGI 未运行，不会自动启动 BGI）。")
+                    : "有文件被跳过，未自动重启。请手动重启助手和 BGI 使新版本生效。");
                 MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
                 // 本机版本已变，重算启动检查提示点。
                 _vm.NotifyRemoteUpdateStateChanged();
                 StatusText.Text = $"更新完成（{result.ExtractedFiles} 个文件）。";
+                if (autoRelaunch) _vm.RelaunchAfterBgiUpdate(bgiWasRunning, TimeSpan.FromSeconds(1));
             }
             else
             {

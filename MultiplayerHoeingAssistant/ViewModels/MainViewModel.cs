@@ -6326,6 +6326,14 @@ public partial class MainViewModel : INotifyPropertyChanged
             MessageBox.Show("无法定位助手程序，请手动重新打开。");
             return;
         }
+        // 更新 BGI 时被占用的助手文件会被改名为 “xxx.exe.old-时间戳”，运行中的进程路径可能随之变化；
+        // 重启必须启动更新后的新文件，所以还原成原始文件名。
+        var renamedAside = System.Text.RegularExpressions.Regex.Match(exe, @"\.old-\d{17}$");
+        if (renamedAside.Success)
+        {
+            var original = exe[..renamedAside.Index];
+            if (File.Exists(original)) exe = original;
+        }
         try
         {
             // cmd 延时约 1 秒再启动，等旧进程退出释放单实例互斥体

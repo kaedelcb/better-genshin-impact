@@ -203,7 +203,8 @@ public partial class MainViewModel
             }
             if (job.Install)
             {
-                if (job.CloseBgi && !IsWebBgiTargetStopped(ticket.Executable))
+                var bgiWasRunning = !IsWebBgiTargetStopped(ticket.Executable);
+                if (job.CloseBgi && bgiWasRunning)
                 {
                     job.State = "installing";
                     job.Message = "正在自动关闭执行端的 BGI…";
@@ -227,7 +228,10 @@ public partial class MainViewModel
                         (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}"));
                 job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。" +
                     (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
-                    (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}");
+                    (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}") +
+                    (bgiWasRunning ? " 约 6 秒后助手将自动重启并重新启动 BGI，网页会短暂断线后自动重连。"
+                        : " 约 6 秒后助手将自动重启以应用新版本（更新前 BGI 未运行，不会自动启动 BGI），网页会短暂断线后自动重连。");
+                RelaunchAfterBgiUpdate(bgiWasRunning, TimeSpan.FromSeconds(6));
             }
             else job.Message = "安装包已保存，可稍后更新。";
             job.State = "done";
@@ -262,16 +266,36 @@ public partial class MainViewModel
         return Path.GetFileName(path).Equals("BetterGI.exe", StringComparison.OrdinalIgnoreCase) && File.Exists(path) ? path : null;
     }
 
+    // 与 PC 端更新窗口一致：不再排除助手所在目录，包内的助手文件也会被更新（被占用的先改名腾位），
+    // 更新完成后由 RelaunchAfterBgiUpdate 自动重启助手使新文件生效。
     private static string[] WebBgiExcludes(AssistConfig config, string? executable)
     {
         var paths = new HashSet<string>(config.BgiUpdateExcludeDirs ?? [], StringComparer.OrdinalIgnoreCase) { "User" };
-        if (executable != null)
-        {
-            var relative = Path.GetRelativePath(Path.GetDirectoryName(executable)!, AppContext.BaseDirectory);
-            if (!Path.IsPathRooted(relative) && relative != "." && relative != ".."
-                && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)) paths.Add(relative);
-        }
         return paths.ToArray();
+    }
+
+    /// <summary>BGI 更新完成后的统一收尾（PC 端与网页端共用）：先按需重新启动 BGI，再退出并重启助手，使新文件生效。
+    /// 延时给网页留出读取"更新完成"状态的时间；重启后网页会自动重连。</summary>
+    internal void RelaunchAfterBgiUpdate(bool startBgi, TimeSpan delay)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(delay);
+                if (startBgi)
+                {
+                    AddLog("[更新BGI] 更新完成，正在重新启动 BGI");
+                    if (_processMonitor is null || !_processMonitor.RestartBgi())
+                        AddLog("[更新BGI] BGI 未能自动启动，请稍后手动启动");
+                    await Task.Delay(1500);
+                }
+                AddLog("[更新BGI] 正在重启助手以应用新版本");
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null) await dispatcher.InvokeAsync(RestartAssistant);
+            }
+            catch (Exception ex) { AddLog("[更新BGI] 自动重启失败，请手动重启助手：" + ex.Message); }
+        });
     }
 
     private bool MatchesBgiTarget(string executable) => executable.Length > 0 &&
