@@ -113,6 +113,7 @@ async function tcPoll() {
     if (tc.listSig === before && docBefore === tc.revision + tc.selected) { if (mt.tab === 'taskcenter') tcRenderNodesClock(); return; }
     if (mt.tab === 'history') { tcRenderHistory(mtEl('mtContent')); return; }
     tcRenderRuns(); tcRenderPlans(); tcRenderPlanHead(); if (!tc.dragging && !mtDialog('tcDialog').open) tcRenderNodes();
+    tcRenderFlowChart();
 }
 /** 「时段外」标记按执行端时钟推算；数据没变时每分钟刷新一次即可。 */
 function tcRenderNodesClock() {
@@ -140,7 +141,7 @@ function tcEdited(message) {
     if (!tcCanEdit(tcFlow())) return;
     tc.dirty = true; if (message) mtToast(message);
     clearTimeout(tc.saveTimer); tc.saveTimer = setTimeout(tcSave, 1200);
-    tcRenderPlanHead(); tcRenderNodes();
+    tcRenderPlanHead(); tcRenderNodes(); tcRenderFlowChart();
 }
 async function tcSave() {
     clearTimeout(tc.saveTimer);
@@ -223,8 +224,10 @@ function tcRenderPlanHead() {
     const save = tc.conflict ? `<span class="mt-save-state is-error">${mte(tc.conflict)}</span>` : `<span class="mt-save-state${tc.dirty || tc.saving ? ' is-dirty' : ''}">${tc.saving ? '正在保存到执行端…' : tc.dirty ? '有修改，稍后自动保存' : '已与执行端同步'}</span>`;
     host.innerHTML = `<div class="tc-head-row"><div class="tc-head-title"><h2 class="mt-break">${mte(doc.name || f.name)}</h2><p class="dodoco-hint">${nodes.length ? `${nodes.length} 个配置单 · ${enabled} 个已启用` : '空计划 · 先新增任务'} · ${mte(tcPlanSummary(doc))}${markerNode ? ` · 从「${mte(tcNodeName(markerNode))}」开始` : ''}</p></div>
         <div class="dd-actions"><button id="tcReset" class="dd-btn dd-btn-sm${unknown.length ? ' dd-btn-primary' : ''}" title="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动。执行端 BGI 未运行时会先启动 BGI 再核对"${f.quarantined || tc.resetting ? ' disabled' : ''}>${tc.resetting ? '正在重置…' : '重置状态'}</button><button id="tcSettings" class="dd-btn dd-btn-sm"${tcCanEdit(f) ? '' : ' disabled'}>计划设置</button><button id="tcStart" class="dd-btn dd-btn-primary"${!tcCanStart(f) || block || !enabled || tc.starting || tc.conflict ? ' disabled' : ''}>⏵⏵ 连续一条龙</button></div></div>
-      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}<label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
+      <div class="tc-head-row tc-head-sub">${save}${reason ? `<span class="tc-reason">${mte(reason)}</span>` : ''}<div class="dd-actions">${tc.conflict ? '<button id="tcReloadPlan" class="dd-btn dd-btn-sm">读取最新计划</button>' : ''}${f.candidate ? '<button id="tcActivate" class="dd-btn dd-btn-sm">激活此候选</button>' : ''}<button id="tcFlowChartBtn" class="dd-btn dd-btn-sm" title="把当前计划表画成一张流程图（只读；点亮本轮走过的路径，点击图上的节点可回到计划表定位）">🗺 流程图</button><label class="dd-check" title="执行时自动展开实际走到的车道，没走的路线灰显"><input id="tcAutoExpand" type="checkbox"${tcAutoExpand() ? ' checked' : ''}>执行时展开走过的分支</label><label class="dd-check" title="开启后时段外任务跳过；关闭后保留设置，按原计划执行"><input id="tcWindowSwitch" type="checkbox"${doc.nodeTimeWindowEnabled ? ' checked' : ''}${tcCanEdit(f) ? '' : ' disabled'}>按时段执行</label></div></div>`;
     mtEl('tcSettings').onclick = tcPlanSettings; mtEl('tcStart').onclick = () => tcStart(null);
+    mtEl('tcFlowChartBtn').onclick = tcFlowChart;
+    mtEl('tcAutoExpand').onchange = e => { tcSetAutoExpand(e.target.checked); if (e.target.checked) { tcfc.laneSeen.clear(); tcRenderNodes(); } };
     if (mtEl('tcReloadPlan')) mtEl('tcReloadPlan').onclick = async () => { if (!confirm('读取最新计划会放弃本端未保存的草稿，是否继续？')) return; tc.dirty = false; tc.conflict = ''; await tcOpen(tc.selected, true); tcRenderPlanHead(); tcRenderNodes(); };
     mtEl('tcReset').onclick = () => tcManageAction('reset');
     if (mtEl('tcActivate')) mtEl('tcActivate').onclick = () => tcMigration('task.migration.activate', f.id, `激活候选「${f.name}」`);

@@ -205,7 +205,8 @@ public sealed class TaskCenterFlowChartWindow : Window
     private static string TaskSummary(WorkflowEditVm editing, NodeEditVm vm)
     {
         if (!vm.IsEnabled) return "已停用，执行时跳过";
-        var summary = vm.SettingsSummary;
+        // 与计划表「UID/账号」列同口径：未绑定也写明，避免误以为漏显示；UID 按计划表同样掩码。
+        var summary = vm.SettingsSummary + (vm.HasAccount ? "" : " · 未绑定账号");
         if (vm.HasTimeWindow)
             summary += " · 时段 " + WorkflowTimeWindowPolicy.Display(vm.TimeWindow) + (editing.NodeTimeWindowEnabled ? "" : "（总开关关闭，不生效）");
         return summary;

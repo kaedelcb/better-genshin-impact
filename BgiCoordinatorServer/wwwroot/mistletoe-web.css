@@ -441,3 +441,17 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
   .tc-composition-dialog{width:100vw;max-width:100vw}.tc-composition-dialog .tc-dialog-body{padding:12px}
   .tc-composition-dialog .dd-btn{min-height:40px}.tc-composition-dialog .tc-dialog-foot .dd-btn{flex:1}
 }
+/* 任务中心流程图（只读）与走过的路径 */
+.tc-fc-dialog{width:min(1280px,96vw);height:min(880px,92vh);max-height:92vh;flex-direction:column;overflow:hidden}
+.tc-fc-dialog[open]{display:flex}
+.tc-fc-stage{flex:1;margin:10px 14px 14px}
+.tc-fc-frame{position:absolute;border:1px solid color-mix(in srgb,var(--c) 45%,#3f3c5c);border-radius:13px;background:#1c1833cc}
+.tc-fc-frame.st-success,.tc-fc-frame.st-condTrue,.tc-fc-frame.st-condFalse{border:2px solid #3f6a60}
+.tc-fc-frame.st-running{border:2px solid var(--gold)}.tc-fc-frame.st-failed{border:2px solid #7a4545}
+.tc-fc-frame.dim{opacity:.4}.tc-fc-frame.off{opacity:.55;border-style:dashed}
+.tc-fc-frame-title{position:absolute;left:12px;top:5px;right:12px;padding:0;border:0;background:none;color:var(--c);font-size:12.5px;font-weight:700;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.tc-fc-pill{line-height:20px}
+.tc-lane.is-taken.yes{border-color:var(--mt-yes)}.tc-lane.is-taken.no{border-color:var(--mt-no)}
+.tc-lane.is-skipped{opacity:.45}
+.tc-cell.is-walked b{color:var(--green)}
+.tc-fc-flash{outline:2px solid var(--gold);outline-offset:2px}
