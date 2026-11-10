@@ -93,6 +93,11 @@ internal static class ExternalInterfaceConfigurationPlane
                 commandId = request.Data?["commandId"]?.ToString(), taskId = id,
                 bgiEpoch = new { processId = JobRegistry.CurrentEpoch.ProcessId, startTicksUtc = JobRegistry.CurrentEpoch.StartTicksUtc } });
         }
+        catch (InvalidDataException ex)
+        {
+            // 坏配置文件只拒绝本次请求；异常若逃出请求处理会关闭整条 ext 管道，助手重连后又会读到它，形成断线循环。
+            return InstanceIpcEnvelope.Failure(request, "configuration_failed", DescribeInvalidConfiguration(request, ex));
+        }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or Newtonsoft.Json.JsonException)
         {
             var code = ex.Message is "configuration_changed" or "takeover_conflict" or "task_not_found"
@@ -100,5 +105,23 @@ internal static class ExternalInterfaceConfigurationPlane
                 ? ex.Message : "configuration_failed";
             return InstanceIpcEnvelope.Failure(request, code, ex.Message);
         }
+    }
+
+    /// <summary>把内部校验码译成带配置名和处理办法的说明；已是中文说明的原文保留。</summary>
+    private static string DescribeInvalidConfiguration(InstanceIpcEnvelope request, InvalidDataException ex)
+    {
+        var group = InstanceIpcProtocol.GetStringOrNull(request.Data, "groupName");
+        var config = InstanceIpcProtocol.GetStringOrNull(request.Data, "configName");
+        var label = config != null ? $"一条龙配置「{config}」" : $"配置组「{group}」";
+        var folder = config != null ? "User\\OneDragon" : "User\\ScriptGroup";
+        var reason = ex.Message switch
+        {
+            "invalid_project_list" => "缺少 projects 列表，不是有效的配置组文件",
+            "invalid_project" => "projects 列表中含有无效条目",
+            "invalid_task_list" => "缺少任务列表",
+            "unsupported_task_schema" => "任务格式不受支持",
+            var other => other,
+        };
+        return $"{label}无法读取：{reason}。请在 BGI 的 {folder} 目录中修复该文件，或先移走备份后再重试。";
     }
 }

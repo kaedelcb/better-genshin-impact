@@ -21,4 +21,22 @@ public sealed class NativeSingleCatalogTests:IDisposable
         Assert.True(task["singleExecutionSupported"]!.Value<bool>());
         Assert.Equal("native",task["schema"]!.Value<string>());
     }
+
+    [Theory]
+    [InlineData("ScriptGroup","groupName","{\"name\":\"broken\"}","配置组「broken」","User\\ScriptGroup","缺少 projects 列表")]
+    [InlineData("OneDragon","configName","{\"unrelated\":1}","一条龙配置「broken」","User\\OneDragon",null)]
+    public async Task DescribeInvalidConfigurationReturnsReadableFailureInsteadOfThrowing(
+        string folder,string key,string content,string label,string where,string? reason)
+    {
+        // 坏文件若让 InvalidDataException 逃出请求处理，整条 ext 管道会被关闭，助手重连后循环断线。
+        Directory.CreateDirectory(Path.Combine(_root,folder));
+        File.WriteAllText(Path.Combine(_root,folder,"broken.json"),content);
+        var response=await ExternalInterfaceConfigurationPlane.DispatchAsync(new InstanceIpcEnvelope{
+            Operation=ExternalInterfaceOperations.ConfigDescribe,RequestId=Guid.NewGuid(),Data=new JObject{[key]="broken"}},new TaskConfigurationContract(_root));
+        Assert.False(response.Success);
+        Assert.Equal("configuration_failed",response.ErrorCode);
+        Assert.Contains(label,response.ErrorMessage);
+        Assert.Contains(where,response.ErrorMessage);
+        if(reason!=null)Assert.Contains(reason,response.ErrorMessage);
+    }
 }

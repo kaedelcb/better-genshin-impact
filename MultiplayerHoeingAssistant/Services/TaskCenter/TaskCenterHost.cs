@@ -129,7 +129,7 @@ public sealed partial class TaskCenterHost
         _runs = new RunStore(runsDir, requireOwnership: admissionWired);
         LocalWaitQueue = new LocalWaitQueueStore(runsDir);
         _catalog = new ResourceCatalogService(
-            () => clientAccessor() is { } c ? new BgiExternalCatalogTransport(c) : null, catalogCacheFile);
+            () => clientAccessor() is { } c ? new BgiExternalCatalogTransport(c, log) : null, catalogCacheFile);
         _clientAccessor = clientAccessor ?? throw new ArgumentNullException(nameof(clientAccessor));
         _log = log;
         _runnerFactory = runnerFactory;

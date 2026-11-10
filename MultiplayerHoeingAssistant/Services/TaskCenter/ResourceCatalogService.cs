@@ -29,8 +29,15 @@ public sealed class BgiExternalCatalogTransport : IResourceCatalogTransport
     public const string CapabilityConfigRevision = "config.revision";
 
     private readonly BgiExternalClient _client;
+    private readonly Action<string>? _log;
+    // 目录会在每次重连和手动刷新时重读；同一配置同一原因只记一次，避免刷屏。
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> LoggedDescribeFailures = new(StringComparer.Ordinal);
 
-    public BgiExternalCatalogTransport(BgiExternalClient client) => _client = client;
+    public BgiExternalCatalogTransport(BgiExternalClient client, Action<string>? log = null)
+    {
+        _client = client;
+        _log = log;
+    }
 
     public bool IsReady => _client.State == BgiExternalLinkState.Ready;
 
@@ -41,6 +48,8 @@ public sealed class BgiExternalCatalogTransport : IResourceCatalogTransport
         try
         {
             var response = await _client.SendCommandAsync(operation, payload, null, ct).ConfigureAwait(false);
+            if (!response.Success && operation == OpConfigDescribe && !string.IsNullOrWhiteSpace(response.ErrorMessage))
+                LogDescribeFailure(payload, response.ErrorMessage);
             return response.Success ? response.Data : null;
         }
         catch (InvalidOperationException)
@@ -51,6 +60,19 @@ public sealed class BgiExternalCatalogTransport : IResourceCatalogTransport
         {
             return null;
         }
+    }
+
+    private void LogDescribeFailure(object payload, string message)
+    {
+        if (_log is null) return;
+        try
+        {
+            var key = payload.ToString() ?? string.Empty;
+            if (LoggedDescribeFailures.TryGetValue(key, out var previous) && previous == message) return;
+            LoggedDescribeFailures[key] = message;
+            _log("[任务中心] 资源读取失败，已跳过该项：" + message);
+        }
+        catch { /* 日志异常不得影响目录刷新 */ }
     }
 }
 
