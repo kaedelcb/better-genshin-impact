@@ -17,6 +17,23 @@ namespace BetterGenshinImpact.Service;
 public partial class ScriptService
 {
     /// <summary>
+    /// 未就绪一段时间后先尝试一次"返回主界面"（Esc 关闭设置、地图、弹窗等页面），再继续检测。
+    /// </summary>
+    private static async Task SoftRecoverToMainUiAsync(CancellationToken ct, Action verifyOwnership)
+    {
+        verifyOwnership();
+        if (!SystemControl.IsGenshinImpactActive())
+        {
+            SystemControl.ActivateWindow();
+            await Task.Delay(500, ct);
+        }
+        TaskControl.Logger.LogInformation("联机组队阶段游戏仍未就绪，尝试返回主界面一次");
+        using var pause = TaskTriggerDispatcher.Instance().PauseForInference();
+        verifyOwnership();
+        await new BetterGenshinImpact.GameTask.Common.Job.ReturnMainUiTask().Start(ct);
+    }
+
+    /// <summary>
     /// 联机组队阶段游戏长时间进不了主界面：关闭游戏并按 1920x1080 窗口化参数重启一次。
     /// 返回 false 表示没有重启（取不到启动路径等），游戏保持原状。
     /// </summary>
@@ -113,7 +130,9 @@ public partial class ScriptService
                     return ready;
                 }, ct, VerifyOwnership,
                 restartGame: restartCfg == null ? null : token => RestartGameForStartupAsync(runtime, restartCfg, token, VerifyOwnership),
-                restartAfter: restartCfg == null ? null : TimeSpan.FromSeconds(Math.Max(30, restartCfg.MultiplayerRestartGameAfterSeconds)));
+                restartAfter: restartCfg == null ? null : TimeSpan.FromSeconds(Math.Max(30, restartCfg.MultiplayerRestartGameAfterSeconds)),
+                softRecover: restartCfg == null ? null : token => SoftRecoverToMainUiAsync(token, VerifyOwnership),
+                softRecoverAfter: restartCfg == null ? null : TimeSpan.FromSeconds(Math.Min(60, Math.Max(30, restartCfg.MultiplayerRestartGameAfterSeconds) / 2)));
             VerifyOwnership();
             return TaskRunResult.Ran;
         }

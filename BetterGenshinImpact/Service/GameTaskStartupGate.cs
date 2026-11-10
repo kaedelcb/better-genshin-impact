@@ -16,7 +16,9 @@ internal static class GameTaskStartupGate
         TimeProvider? timeProvider = null,
         TimeSpan? timeout = null,
         Func<CancellationToken, Task<bool>>? restartGame = null,
-        TimeSpan? restartAfter = null)
+        TimeSpan? restartAfter = null,
+        Func<CancellationToken, Task>? softRecover = null,
+        TimeSpan? softRecoverAfter = null)
     {
         void Verify()
         {
@@ -45,12 +47,24 @@ internal static class GameTaskStartupGate
         var limit = timeout ?? TimeSpan.FromMinutes(5);
         var start = timeProvider.GetTimestamp();
         // 到点仍未就绪时只重启一次；重启后重新计时，给新游戏完整的就绪等待时间。
+        // 软恢复（回到主界面）早于重启，只做一次；失败不影响后续重启。
+        var softRecoverPending = softRecover != null && softRecoverAfter is { } soft && soft > TimeSpan.Zero;
         var restartPending = restartGame != null && restartAfter is { } after && after > TimeSpan.Zero;
         await Task.Run(async () =>
         {
             while (true)
             {
                 Verify();
+                if (softRecoverPending && timeProvider.GetElapsedTime(start) >= softRecoverAfter!.Value)
+                {
+                    softRecoverPending = false;
+                    try { await softRecover!(ct); }
+                    catch (OperationCanceledException) { throw; }
+                    catch { Verify(); }
+                    Verify();
+                    continue;
+                }
+
                 if (restartPending && timeProvider.GetElapsedTime(start) >= restartAfter!.Value)
                 {
                     restartPending = false;

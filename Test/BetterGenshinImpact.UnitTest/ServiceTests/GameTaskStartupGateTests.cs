@@ -206,6 +206,34 @@ public class GameTaskStartupGateTests
     }
 
     [Fact]
+    public async Task SoftRecover_RunsOnceBeforeRestart_AndFailureDoesNotBlockRestart()
+    {
+        var clock = new Clock();
+        var order = new List<string>();
+        await Assert.ThrowsAsync<TimeoutException>(() => GameTaskStartupGate.PrepareAsync(true,
+            _ => Task.FromResult(true), _ => false, CancellationToken.None,
+            delay: clock.Delay, timeProvider: clock, timeout: TimeSpan.FromSeconds(10),
+            softRecover: _ => { order.Add("soft"); throw new InvalidOperationException("esc failed"); },
+            softRecoverAfter: TimeSpan.FromSeconds(2),
+            restartGame: _ => { order.Add("restart"); return Task.FromResult(true); },
+            restartAfter: TimeSpan.FromSeconds(4)));
+        Assert.Equal(["soft", "restart"], order);
+    }
+
+    [Fact]
+    public async Task SoftRecover_ReadyBeforeThreshold_NeverRuns()
+    {
+        var clock = new Clock();
+        var runs = 0;
+        var reads = 0;
+        await GameTaskStartupGate.PrepareAsync(true,
+            _ => Task.FromResult(true), _ => ++reads >= 2, CancellationToken.None,
+            delay: clock.Delay, timeProvider: clock,
+            softRecover: _ => { runs++; return Task.CompletedTask; }, softRecoverAfter: TimeSpan.FromSeconds(5));
+        Assert.Equal(0, runs);
+    }
+
+    [Fact]
     public async Task RestartDeclined_KeepsOriginalTimeoutWindow()
     {
         var clock = new Clock();
