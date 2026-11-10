@@ -136,6 +136,7 @@ public sealed partial class TaskCenterPanelViewModel
                 else if (first is not null) await PreviewRemoteFlowAsync(first.WorkflowId);
             }
             NotifyWorkspace();
+            UpdateRunTrace(data.Active.Concat(data.History));
             SnapshotRefreshed?.Invoke();
             OnPropertyChanged(nameof(SelectedWorkflowId));
             if (StatusMessage?.StartsWith("执行端任务中心不可用", StringComparison.Ordinal) == true)

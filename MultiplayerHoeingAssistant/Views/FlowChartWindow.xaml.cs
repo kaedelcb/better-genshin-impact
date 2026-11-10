@@ -56,7 +56,7 @@ public partial class FlowChartWindow : Window
     /// <summary>图上节点卡索引（节点 VM → 卡片元素）：底部武装面板点击定位用；每次重建图时重建。</summary>
     private readonly Dictionary<StartupStepViewModel, FrameworkElement> _nodeByVm = new();
     /// <summary>节点类型强调色（卡片左侧色条 + 图标底色）：条件/动作各大类一眼可辨，色系沿用页面现有配色。</summary>
-    private static string KindAccentHex(string kind) => kind switch
+    internal static string KindAccentHex(string kind) => kind switch
     {
         StartupStepKinds.TimeRange or StartupStepKinds.Weekday => "#E8C96D", // 时间类条件：金
         StartupStepKinds.BgiRunning or StartupStepKinds.GameRunning or StartupStepKinds.ProcessRunning

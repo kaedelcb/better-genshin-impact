@@ -356,6 +356,13 @@
                                     <Button x:Name="ResetExecutionStateButton" Content="重置状态" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
                                             Command="{Binding ResetExecutionStateCommand}" IsEnabled="{Binding CanResetExecutionState}"
                                             ToolTip="停止或放弃当前计划的旧执行，保留计划内容和原失败历史；不会自动启动" />
+                                    <CheckBox IsChecked="{Binding AutoExpandTakenBranch, Mode=TwoWay}" Style="{DynamicResource GuildCheckBox}" Margin="6,0,0,0"
+                                              VerticalAlignment="Center" ToolTip="执行时自动展开实际走到的车道，没走的路线灰显" />
+                                    <TextBlock Text="执行时展开走过的分支" FontSize="11" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <Button Content="🗺 流程图" Style="{DynamicResource BtnGhost}" Padding="8,3" FontSize="11" Margin="0,0,5,0"
+                                            Command="{Binding ShowFlowChartCommand}" IsEnabled="{Binding IsEditing}"
+                                            ToolTip="把当前计划表画成一张流程图（只读；点亮本轮走过的路径，点击图上的节点可回到这里定位）" />
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="12,0,0,0">
                                     <Button Content="启动单任务" Style="{DynamicResource BtnGhost}" Padding="8,3" Margin="0,0,5,0" Click="StartSingleClick"

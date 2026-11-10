@@ -26,6 +26,10 @@ public sealed class CompositionPlanRow : UserControl
     {
         if (_expander.IsExpanded && _node?.Model.Lanes is not null && _activeLaneMenu?.IsOpen != true) Draw();
     }
+    private void TraceChanged()
+    {
+        if (_expander.IsExpanded && _node?.Model.Flow is not null) Draw();
+    }
     private BasicTaskCenterView? View
     {
         get
@@ -90,14 +94,14 @@ public sealed class CompositionPlanRow : UserControl
         };
         Loaded += (_, _) =>
         {
-            if (_host is not null) _host.SnapshotRefreshed -= SnapshotChanged;
+            if (_host is not null) { _host.SnapshotRefreshed -= SnapshotChanged; _host.RunTraceChanged -= TraceChanged; }
             RestoreExpansion();
             _host = View?.CompositionHost;
-            if (_host is not null) _host.SnapshotRefreshed += SnapshotChanged;
+            if (_host is not null) { _host.SnapshotRefreshed += SnapshotChanged; _host.RunTraceChanged += TraceChanged; }
             if (_node is not null) { _node.PropertyChanged -= Changed; _node.PropertyChanged += Changed; }
             Draw();
         };
-        Unloaded += (_, _) => { if (_node is not null) _node.PropertyChanged -= Changed; if (_host is not null) _host.SnapshotRefreshed -= SnapshotChanged; };
+        Unloaded += (_, _) => { if (_node is not null) _node.PropertyChanged -= Changed; if (_host is not null) { _host.SnapshotRefreshed -= SnapshotChanged; _host.RunTraceChanged -= TraceChanged; } };
     }
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
@@ -154,7 +158,10 @@ public sealed class CompositionPlanRow : UserControl
             {
                 var text = $"{i + 1:00}　{TaskFlowEditorWindow.DescribeStep(s)}";
                 if (s.Id == flow.ExitStepId) text += "　[路线选择条件]";
-                content.Children.Add(Text(text));
+                var walked = StepTraceText(View?.CompositionHost?.RunTrace.Step(node.NodeId, s.Id));
+                var line = Text(text + walked);
+                if (walked.Length > 0) line.Foreground = B("#6FD8CE");
+                content.Children.Add(line);
                 void Explain(string when, List<StartupStep> children)
                 {
                     if (children.Count == 0) return;
@@ -190,11 +197,21 @@ public sealed class CompositionPlanRow : UserControl
         }
         _expander.Content = content;
     }
+    private static string StepTraceText(NodeRunState? state) => state switch
+    {
+        NodeRunState.Running => "　· 执行中",
+        NodeRunState.Success => "　· ✓ 本轮已完成",
+        NodeRunState.CondTrue => "　· 本轮 → 是",
+        NodeRunState.CondFalse => "　· 本轮 → 否",
+        NodeRunState.Failed => "　· 未完成",
+        _ => "",
+    };
     private void AddLane(Panel parent, NodeEditVm owner, bool yes, string title, List<string> ids)
     {
         var body = new StackPanel { Margin = new Thickness(8, 3, 8, 5) };
-        parent.Children.Add(new Border { Child = body, Background = B("#28233A"), BorderBrush = B("#463B52"),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 2, 3, 2) });
+        var frame = new Border { Child = body, Background = B("#28233A"), BorderBrush = B("#463B52"),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(4), Margin = new Thickness(1, 2, 3, 2) };
+        parent.Children.Add(frame);
         var header = new DockPanel();
         var add = ActionButton("＋任务", () => View?.AddLaneTask(owner, yes)); DockPanel.SetDock(add, Dock.Right); header.Children.Add(add);
         var decisionOwner = editingOwner();
@@ -203,6 +220,9 @@ public sealed class CompositionPlanRow : UserControl
         var status = View?.CompositionHost?.LaneRunStatus(decisionOwner, yes);
         var display = title is "是" or "否" ? (yes ? "路线 1" : "路线 2") : title;
         header.Children.Add(Text((yes ? "满足条件 → " : "其他情况 → ") + display + (string.IsNullOrEmpty(status) ? "" : "　·　" + status), true)); body.Children.Add(header);
+        // 走过的路线描边点亮，本轮没走的路线灰显（与启动中心分支灰显同口径）。
+        if (status == "已选中此车道") frame.BorderBrush = B(yes ? "#6FD8CE" : "#E88A6F");
+        else if (status == "本轮未选择") frame.Opacity = 0.45;
         var boundHost = View?.CompositionHost;
         var editing = boundHost?.Editing;
         if (ids.Count == 0) body.Children.Add(Text("还没有任务，点击右侧“＋任务”添加；留空则直接继续。"));

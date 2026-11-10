@@ -45,6 +45,7 @@ public partial class BasicTaskCenterView : UserControl
                 oldHost.PropertyChanged -= OnTaskCenterEditingChanged;
                 oldHost.SnapshotRefreshed -= ObserveResourceTasks;
             }
+            BindFlowChartHost(e.NewValue as TaskCenterPanelViewModel);
             if (e.NewValue is TaskCenterPanelViewModel newHost)
             {
                 newHost.CompositionLocateRequested += LocateCompositionStep;
@@ -62,9 +63,9 @@ public partial class BasicTaskCenterView : UserControl
         Unloaded += (_, _) => { Host?.StopAutoRefresh(); CloseTransientEditors(); };
     }
 
-    /// <summary>本机展示刷新只在有人看时走表：页面可见或资源任务弹层打开。</summary>
+    /// <summary>本机展示刷新只在有人看时走表：页面可见、资源任务弹层或流程图窗口打开。</summary>
     private void SyncLocalRefreshVisibility()
-        => Host?.SetLocalRefreshVisible(IsVisible || ResourceTasksPopup.IsOpen);
+        => Host?.SetLocalRefreshVisible(IsVisible || ResourceTasksPopup.IsOpen || _flowChart is not null);
 
     private async void OnTaskCenterEditingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
