@@ -9,13 +9,9 @@ public enum BgiUpdateSourceKind { Local, Coordinator, GitHubReleases, GitHubActi
 
 public sealed record BgiUpdateSource(string Id, string Label, BgiUpdateSourceKind Kind, Uri? Endpoint = null)
 {
-    public string DownloadDirectory(string root, long? actionsRunId = null)
-    {
-        // 地址也参与分隔：更换协调服务器后，即使安装包同名，也不会覆盖原服务器的副本。
-        var identity = BgiUpdateSources.Hash(Endpoint!.AbsoluteUri);
-        var directory = Path.Combine(root, "网络安装包", $"{Kind}-{identity[..16]}");
-        return actionsRunId.HasValue ? Path.Combine(directory, actionsRunId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)) : directory;
-    }
+    // 网络安装包直接保存在安装包目录顶层，便于在本地目录看到并复用。
+    // 同名但内容不同的包由 .download-info 校验记录识别，不匹配时重新下载覆盖，不会误用旧内容。
+    public string DownloadDirectory(string root, long? actionsRunId = null) => root;
 }
 
 public static class BgiUpdateSources

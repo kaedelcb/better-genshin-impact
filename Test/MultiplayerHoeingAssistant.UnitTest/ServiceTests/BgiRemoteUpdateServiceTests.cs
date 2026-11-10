@@ -149,18 +149,15 @@ public class BgiRemoteUpdateServiceTests
     }
 
     [Fact]
-    public void DownloadDirectories_SeparateLocalSameNames_Sources_AndActionsRuns()
+    public void DownloadDirectory_IsPackageDirectoryItself_ForAllSources()
     {
         var config = new AssistConfig { ServerUrl = "http://server.example" };
         var sources = BgiUpdateSources.List(config);
-        var dirs = sources.Where(s => s.Kind != BgiUpdateSourceKind.Local).Select(s => s.DownloadDirectory(@"D:\DOWN")).ToList();
-        Assert.Equal(dirs.Count, dirs.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.DoesNotContain(@"D:\DOWN", dirs);
-        var actions = sources.Single(s => s.Kind == BgiUpdateSourceKind.GitHubActions);
-        Assert.NotEqual(actions.DownloadDirectory(@"D:\DOWN", 8), actions.DownloadDirectory(@"D:\DOWN", 9));
-        Assert.NotEqual(sources.Single(s => s.Kind == BgiUpdateSourceKind.Coordinator).DownloadDirectory(@"D:\DOWN"),
-            BgiUpdateSources.List(new AssistConfig { ServerUrl = "http://other.example" }).Single(s => s.Kind == BgiUpdateSourceKind.Coordinator)
-                .DownloadDirectory(@"D:\DOWN"));
+        foreach (var source in sources.Where(s => s.Kind != BgiUpdateSourceKind.Local))
+        {
+            Assert.Equal(@"D:\DOWN", source.DownloadDirectory(@"D:\DOWN"));
+            Assert.Equal(@"D:\DOWN", source.DownloadDirectory(@"D:\DOWN", 8));
+        }
     }
 
     [Fact]
