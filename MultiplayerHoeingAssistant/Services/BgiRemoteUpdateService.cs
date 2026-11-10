@@ -50,6 +50,9 @@ public static class BgiRemoteUpdateService
                 case BgiUpdateSourceKind.Cnb:
                     return await FetchCnbAsync(CatalogClient, endpoint, ct).ConfigureAwait(false);
 
+                case BgiUpdateSourceKind.CnbMirror:
+                    return await FetchCnbMirrorAsync(CatalogClient, endpoint, ct).ConfigureAwait(false);
+
                 case BgiUpdateSourceKind.GitHubActions:
                     var runs = FetchJsonAsync(endpoint, ct);
                     var artifacts = FetchJsonAsync(new Uri(BgiUpdateSources.ActionsArtifacts), ct);
@@ -113,6 +116,37 @@ public static class BgiRemoteUpdateService
 
         return new([new(name!.FileName, packageUrl.AbsoluteUri, range.Length,
             response.Content.Headers.LastModified?.UtcDateTime, name, CnbArtifactTag: tag.Tag)]);
+    }
+
+    /// <summary>
+    /// 第三方镜像仓库：/releases/latest 会跳转到 /releases/tag/&lt;标签&gt;，标签即版本号；
+    /// 附件固定为 releases/download/&lt;标签&gt;/BetterGI_v&lt;标签&gt;.7z。镜像不提供哈希，靠 7z 签名与大小校验。
+    /// </summary>
+    internal static async Task<BgiUpdateSourceResult> FetchCnbMirrorAsync(HttpClient client, Uri latestUrl, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(12));
+        var cancel = timeout.Token;
+
+        using var latest = await client.GetAsync(latestUrl, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        latest.EnsureSuccessStatusCode();
+        const string marker = "/releases/tag/";
+        var finalPath = latest.RequestMessage?.RequestUri?.AbsolutePath ?? "";
+        var at = finalPath.IndexOf(marker, StringComparison.Ordinal);
+        if (at < 0) return new([], "CNB 镜像没有返回最新发布，可刷新重试或切换来源。");
+        var tag = Uri.UnescapeDataString(finalPath[(at + marker.Length)..].Trim('/'));
+        if (tag.Length > 160 || !TryParseName($"BetterGI_v{tag}.7z", out var name))
+            return new([], "CNB 镜像的最新发布不是有效的茶包版版本。");
+
+        var packageUrl = new Uri($"{BgiUpdateSources.CnbMirrorRepository}/-/releases/download/{tag}/{name!.FileName}");
+        using var head = new HttpRequestMessage(HttpMethod.Head, packageUrl);
+        using var response = await client.SendAsync(head, HttpCompletionOption.ResponseHeadersRead, cancel).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength is not { } length || length <= 0)
+            return new([], "CNB 镜像的安装包大小未知，无法下载校验。");
+
+        return new([new(name.FileName, packageUrl.AbsoluteUri, length,
+            response.Content.Headers.LastModified?.UtcDateTime, name)]);
     }
 
     public static BgiRemoteUpdateInfo? ParseManifest(string json, string serverBaseUrl)

@@ -5,7 +5,7 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
-public enum BgiUpdateSourceKind { Local, Coordinator, GitHubReleases, GitHubActions, Custom, Cnb }
+public enum BgiUpdateSourceKind { Local, Coordinator, GitHubReleases, GitHubActions, Custom, Cnb, CnbMirror }
 
 public sealed record BgiUpdateSource(string Id, string Label, BgiUpdateSourceKind Kind, Uri? Endpoint = null)
 {
@@ -28,7 +28,10 @@ public static class BgiUpdateSources
     internal const string ActionsArtifacts = GitHubApi + "/actions/artifacts?name=BetterGI_7z&per_page=30";
     internal const string ActionsRuns = GitHubApi + "/actions/workflows/161175465/runs?status=success&per_page=10";
     private static readonly Uri GitHubEndpoint = new(GitHubApi + "/releases?per_page=15");
-    private static readonly Uri CnbEndpoint = new("https://cnb.cool/wjdsg/wjdsg-bgi/-/releases/download/wjdsg-bgi/runForVersion.txt");
+    public const string CnbMirrorId = "cnb-mirror";
+    internal const string CnbMirrorRepository = "https://cnb.cool/asdbr/BetterGI_LCB";
+    private static readonly Uri CnbMirrorEndpoint = new(CnbMirrorRepository + "/-/releases/latest");
+    private static readonly Uri CnbEndpoint =new("https://cnb.cool/wjdsg/wjdsg-bgi/-/releases/download/wjdsg-bgi/runForVersion.txt");
 
     public static List<BgiUpdateSource> List(AssistConfig? config, IEnumerable<BgiCustomUpdateSource>? custom = null)
     {
@@ -41,6 +44,7 @@ public static class BgiUpdateSources
         sources.Add(new("github-releases", "GitHub Releases", BgiUpdateSourceKind.GitHubReleases, GitHubEndpoint));
         sources.Add(new("github-actions", "GitHub Actions 构建", BgiUpdateSourceKind.GitHubActions, new Uri(ActionsRuns)));
         sources.Add(new(CnbId, "autoBGI源", BgiUpdateSourceKind.Cnb, CnbEndpoint));
+        sources.Add(new(CnbMirrorId, "CNB 茶包镜像（H工源）", BgiUpdateSourceKind.CnbMirror, CnbMirrorEndpoint));
 
         foreach (var configured in custom ?? config?.BgiCustomUpdateSources ?? [])
         {
