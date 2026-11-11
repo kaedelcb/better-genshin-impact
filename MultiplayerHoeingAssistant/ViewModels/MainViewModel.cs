@@ -7123,11 +7123,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             MessageBox.Show("没有在线且被选中的成员可下发，请勾选要下发的在线成员");
             return;
         }
-        foreach (var member in onlineMembers.Where(m => m.IsSelected && m.Online))
+        await DispatchQuickCommandMembersAsync(onlineMembers, async member =>
         {
             // 自己优先从持久化配置读（_config 不会因服务端广播覆盖而丢失），别人从 MemberViewModel 读
             var binding = ParseQuickCommandBinding(QuickCommandBinding(key, member));
-            if (binding == null) continue;
+            if (binding == null) return;
             var isOneClick = binding.Type == "onedragon";
             var value = binding.Name;
             if (member.PlayerUid == _config?.PlayerUid)
@@ -7155,9 +7155,19 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 await SendQuickStartAsync(key, isOneClick, value, [member.PlayerUid]);
             }
-        }
+        });
 
         AddLog("分成员绑定指令已下发");
+    }
+
+    internal static Task DispatchQuickCommandMembersAsync(IReadOnlyList<MemberViewModel> members,
+        Func<MemberViewModel, Task> dispatch)
+    {
+        // 本机 ExecuteAsync 等待的是任务终态，不能在逐成员循环中等待它，
+        // 否则排在本机之后的队员直到本机任务结束或停止才会收到启动指令。
+        // 先固定本次目标，再发起所有操作；保留统一等待，观察完成和异常而不丢弃任务。
+        var selected = members.Where(m => m.IsSelected && m.Online).ToArray();
+        return Task.WhenAll(selected.Select(async member => await dispatch(member)));
     }
 
     /// <summary>给选定的在线成员下发执行本机绑定的配置组/一条龙。</summary>
