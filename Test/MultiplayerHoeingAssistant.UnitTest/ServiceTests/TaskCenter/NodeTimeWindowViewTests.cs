@@ -235,9 +235,9 @@ public sealed class NodeTimeWindowViewTests
         string[] names = ["清体", "狗粮", "单机-小怪-锄地", "好感任务", "采集", "至冬材料"];
         WorkflowTimeWindow?[] windows =
         [
-            new() { Start = "08:00", End = "11:00" },
+            new() { Start = "05:00", End = "00:00", WaitForStart = true, StopAtEnd = true },
             new() { Start = "12:00", End = "18:00" },
-            new() { Start = "22:00", End = "06:00" },
+            new() { Start = "22:00", End = "06:00", WaitForStart = true, StopAtEnd = true },
             null,
             new() { Start = "09:00", End = "10:00" },
             new() { Start = "08:00", End = "20:00" },
@@ -298,6 +298,19 @@ public sealed class NodeTimeWindowViewTests
                     Assert.Equal(TextWrapping.NoWrap, rangeText.TextWrapping);
                     Assert.True(rangeText.DesiredSize.Width <= rangeText.ActualWidth + 0.5,
                         "时间段范围应在同一行完整显示。");
+                    // 横向 StackPanel 会给子元素足够宽度；还必须核对整个组合未被按钮裁切。
+                    var timeChrome = Assert.IsType<Border>(timeButton.Content);
+                    var timeContent = Assert.IsType<StackPanel>(timeChrome.Child);
+                    var contentLeft = timeChrome.BorderThickness.Left + timeChrome.Padding.Left;
+                    var contentRight = timeChrome.ActualWidth - timeChrome.BorderThickness.Right - timeChrome.Padding.Right;
+                    foreach (var element in timeContent.Children.OfType<FrameworkElement>().Where(element => element.IsVisible))
+                    {
+                        var elementBounds = Bounds(element, timeChrome);
+                        Assert.True(elementBounds.Left >= contentLeft - 0.5 && elementBounds.Right <= contentRight + 0.5,
+                            $"{width}px 下 {node.DisplayName} 的时段文字、状态标记和选项图标应完整留在按钮内：{elementBounds}；内容区={contentLeft:F1}..{contentRight:F1}。");
+                    }
+                    var header = (Grid)view.FindName("ResourceTableHeader");
+                    Assert.InRange(row.ColumnDefinitions[3].ActualWidth - header.ColumnDefinitions[3].ActualWidth, -0.5, 0.5);
                     Assert.DoesNotContain(Descendants<TextBlock>(timeButton), text =>
                         BindingOperations.GetBindingExpression(text, TextBlock.TextProperty)?.ParentBinding.Path?.Path
                             == nameof(NodeEditVm.TimeWindowStatusText));

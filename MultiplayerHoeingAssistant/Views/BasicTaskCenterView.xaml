@@ -412,15 +412,16 @@
                                 </TextBlock>
                             </DockPanel>
                         </Border>
-                        <Grid Grid.Row="2">
+                        <Grid Grid.Row="2" Grid.IsSharedSizeScope="True">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <!-- 列表右侧保留滚动条槽位；表头必须使用与行内容相同的可视宽度，
-                                 否则“启用”表头会比行内勾选框向右偏移。 -->
+                                 否则“启用”表头会比行内勾选框向右偏移。
+                                 时段列按完整内容共享宽度，容纳跨日文字、时段外标记和等待/结束图标。 -->
                             <Grid x:Name="ResourceTableHeader" Grid.Row="0" Margin="0,0,20,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="148" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="Auto" MinWidth="148" SharedSizeGroup="NodeTimeWindowColumn" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                 <TextBlock Text="顺序" Grid.Column="0" Foreground="{DynamicResource Dim}" FontSize="10"
                                            HorizontalAlignment="Center" TextAlignment="Center" />
                                 <TextBlock Text="配置单" Grid.Column="1" Foreground="{DynamicResource Dim}" FontSize="10" />
@@ -513,7 +514,7 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Grid.Style>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="148" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="Auto" MinWidth="148" SharedSizeGroup="NodeTimeWindowColumn" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
                                                         <!-- 编号与跳转目标同口径（#N）；没有编号时退回原顺序号。 -->
