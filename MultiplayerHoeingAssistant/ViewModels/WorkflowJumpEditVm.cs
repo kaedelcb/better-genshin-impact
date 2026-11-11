@@ -100,12 +100,35 @@ public sealed partial class WorkflowEditVm
     {
         IReadOnlyDictionary<string, string> numbers, problems;
         IReadOnlySet<string> unreachable;
-        try { numbers = RowNumbers(); problems = JumpProblems(); unreachable = UnreachableRows(); }
+        IReadOnlyList<(string SourceNodeId, string? Route, string TargetNodeId, IReadOnlyList<string> Skipped)> spans;
+        try { numbers = RowNumbers(); problems = JumpProblems(); unreachable = UnreachableRows(); spans = WorkflowComposition.JumpSpans(Draft); }
         catch { return; } // 编辑中途结构暂时不完整时保持上一次的显示
+        string Route(string? route) => route switch { "yes" => "满足条件", "no" => "其他情况", _ => "" };
+        // 被跳过的行：正常顺序走到它的路线会被跳过，只有从别处跳进来（或来源被停用/过滤）才执行。
+        var entered = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var s in spans)
+        {
+            var target = JumpTarget(s.TargetNodeId);
+            if (target is null) continue;
+            if (!entered.TryGetValue(target, out var list)) entered[target] = list = [];
+            list.Add(numbers.GetValueOrDefault(s.SourceNodeId, "") + (s.Route is null ? "" : " " + Route(s.Route)));
+        }
         foreach (var node in Nodes)
-            node.SetJumpLabels(numbers.GetValueOrDefault(node.NodeId, ""), node.JumpSummary(this),
-                problems.GetValueOrDefault(node.NodeId, ""), unreachable.Contains(node.NodeId));
+        {
+            var jump = node.JumpSummary(this);
+            var mySpans = spans.Where(s => s.SourceNodeId == node.NodeId && s.Skipped.Count > 0).ToArray();
+            if (mySpans.Length > 0)
+                jump += "（跳过 " + string.Join("、", mySpans.SelectMany(s => s.Skipped).Distinct().Select(id => numbers.GetValueOrDefault(id, ""))) + "）";
+            // 只靠跳转进入：前一行设了跳转，正常顺序不会走到这里。
+            var from = entered.TryGetValue(node.NodeId, out var sources) && spans.Any(s => s.Skipped.Contains(node.NodeId))
+                ? "从 " + string.Join("、", sources) + " 跳到这里" : "";
+            node.SetJumpLabels(numbers.GetValueOrDefault(node.NodeId, ""), jump,
+                problems.GetValueOrDefault(node.NodeId, ""), unreachable.Contains(node.NodeId), from);
+        }
     }
+
+    private string? JumpTarget(string target) => WorkflowComposition.JumpTarget(Draft, target) is { } resolved
+        ? Nodes.FirstOrDefault(n => n.NodeId == resolved || n.Model.Lanes?.SourceFlowNodeId == resolved)?.NodeId : null;
 }
 
 public sealed partial class NodeEditVm
@@ -123,18 +146,23 @@ public sealed partial class NodeEditVm
     public bool HasJumpProblem => _jumpProblem.Length > 0;
     /// <summary>没有路径会走到这一行（只提示，不阻止启动）。</summary>
     public bool IsUnreachable => _isUnreachable;
-    /// <summary>行下方的提示：跳转问题优先，其次是不可达。</summary>
+    /// <summary>行下方的提示：跳转问题优先，其次是不可达，再次是「从哪里跳进来」。</summary>
     public string RowNotice => HasJumpProblem ? "⚠ " + JumpProblem
-        : IsUnreachable ? "没有路径会走到这一行：前面的流程会无条件跳过它，执行时不会执行。" : "";
+        : IsUnreachable ? "没有路径会走到这一行：前面的流程会无条件跳过它，执行时不会执行。"
+        : _jumpedFrom.Length > 0 ? "↪ " + _jumpedFrom + "（按顺序经过前一行时会被跳过）" : "";
     public bool HasRowNotice => RowNotice.Length > 0;
+    private string _jumpedFrom = "";
+    /// <summary>只靠跳转进入这一行时，写明从哪里跳进来，例如「从 #1 其他情况 跳到这里」。</summary>
+    public string JumpedFrom => _jumpedFrom;
 
-    internal void SetJumpLabels(string number, string jump, string problem, bool unreachable)
+    internal void SetJumpLabels(string number, string jump, string problem, bool unreachable, string jumpedFrom = "")
     {
         var changed = new List<string>();
         if (_rowNumber != number) { _rowNumber = number; changed.Add(nameof(RowNumber)); }
         if (_jumpText != jump) { _jumpText = jump; changed.AddRange([nameof(JumpText), nameof(HasJump)]); }
         if (_jumpProblem != problem) { _jumpProblem = problem; changed.AddRange([nameof(JumpProblem), nameof(HasJumpProblem), nameof(RowNotice), nameof(HasRowNotice)]); }
         if (_isUnreachable != unreachable) { _isUnreachable = unreachable; changed.AddRange([nameof(IsUnreachable), nameof(RowNotice), nameof(HasRowNotice)]); }
+        if (_jumpedFrom != jumpedFrom) { _jumpedFrom = jumpedFrom; changed.AddRange([nameof(JumpedFrom), nameof(RowNotice), nameof(HasRowNotice)]); }
         foreach (var name in changed.Distinct()) OnPropertyChanged(name);
     }
 

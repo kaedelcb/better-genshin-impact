@@ -69,7 +69,7 @@ public sealed class CompositionJumpUiTests
         edit.RefreshJumpLabels();
         var rows = edit.Nodes.ToDictionary(n => n.NodeId);
         Assert.Equal("#1", rows["F"].RowNumber);
-        Assert.Equal("执行完后 → #3 配置D", rows["F"].JumpText);
+        Assert.Equal("执行完后 → #3 配置D（跳过 #2）", rows["F"].JumpText);
         Assert.True(rows["G"].HasJumpProblem);
         Assert.Contains("只能往后跳", rows["G"].RowNotice);
         // 计划有跳转问题时不计算不可达（避免和标红同时出两种提示）。
@@ -260,6 +260,50 @@ public sealed class CompositionJumpUiTests
             Assert.Equal(2, texts.Count(t => t == "本轮跳过（跳转）"));
             Assert.Contains(Descendants<System.Windows.Shapes.Polyline>(chart), l => l.StrokeDashArray.Count > 0 && l.Points.Count == 4);
             Capture(chart, "jump-flowchart");
+            chart.Close(); window.Close();
+        }
+        finally { try { Directory.Delete(root, true); } catch { } }
+    });
+
+    // ---------------- 显示改进：路线绕开另一条路线专用的行 ----------------
+
+    /// <summary>
+    /// 周末/工作日例子：车道「周末」路线走完继续下一行，「工作日」空路线跳到 #3；#2 周末收尾执行完跳到 #4，跳过 #3。
+    /// 计划表写明跳过哪些行、#3 从哪里跳进来；流程图上 #2→#3 只画灰虚线（停用/跳过时），工作日路线不画汇合到 #2 的线。
+    /// </summary>
+    [Fact]
+    public Task RouteBypassExampleShowsSkipsEntriesAndFallthroughClearly() => OnSta(async () =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "jump-bypass-ui-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var host = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"), () => null, () => true, () => null);
+            host.SaveFlow(new WorkflowDocument { Name = "周末工作日", Nodes = [
+                Lane("L", ["Y"], [], noJump: "W"), Flow("S", jumpTo: "E"), Flow("W"), R("E"), R("Y")] }, null);
+            var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+            var rows = vm.Editing!.Nodes.ToDictionary(n => n.NodeId);
+            Assert.Equal("执行完后 → #4 配置E（跳过 #3）", rows["S"].JumpText);
+            Assert.Contains("跳过 #2", rows["L"].JumpText);
+            Assert.Equal("从 #1 其他情况 跳到这里", rows["W"].JumpedFrom);
+            Assert.StartsWith("↪ 从 #1 其他情况 跳到这里", rows["W"].RowNotice);
+            Assert.False(rows["W"].IsUnreachable);
+            Assert.False(vm.Editing.HasUnsavedChanges);
+
+            var view = new BasicTaskCenterView { DataContext = vm };
+            var window = new Window { Content = view, Width = 1200, Height = 800 };
+            window.Show();
+            await Layout(window);
+            Assert.Contains(Descendants<TextBlock>(view), t => t.IsVisible && t.Text.Contains("跳到这里"));
+            Capture(window, "jump-bypass-plan");
+
+            var chart = new TaskCenterFlowChartWindow(vm, (_, _) => { });
+            chart.Show();
+            await Layout(chart);
+            var texts = Descendants<TextBlock>(chart).Select(t => t.Text).ToArray();
+            Assert.Contains("停用/跳过时", texts);
+            Assert.Contains("↪ #4", texts);
+            Assert.Contains("其他 ↪ #3", texts);
+            Capture(chart, "jump-bypass-chart");
             chart.Close(); window.Close();
         }
         finally { try { Directory.Delete(root, true); } catch { } }

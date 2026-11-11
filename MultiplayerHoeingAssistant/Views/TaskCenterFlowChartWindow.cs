@@ -113,7 +113,12 @@ public sealed class TaskCenterFlowChartWindow : Window
 
     // ================= 构建 =================
 
-    private sealed record Block(Canvas Panel, double Width, double Height, double TopX, double BottomX, List<Point>? LooseEnds);
+    /// <summary>
+    /// 一块已布局的子图。FallthroughOnly：这块正常执行时不会走到下一行（流程设了跳转），到下一行的连线画成灰虚线并注明「停用/跳过时」。
+    /// JumpingEnds：LooseEnds 中哪些出口另有跳转去向（车道路线设了跳转），这些出口不画汇合到下一行的线。
+    /// </summary>
+    private sealed record Block(Canvas Panel, double Width, double Height, double TopX, double BottomX, List<Point>? LooseEnds,
+        bool FallthroughOnly = false, bool[]? JumpingEnds = null);
 
     private void Build(WorkflowEditVm? editing, TaskCenterRunTrace trace)
     {
@@ -167,25 +172,26 @@ public sealed class TaskCenterFlowChartWindow : Window
             return new Rect(Pad + Canvas.GetLeft(panel), Pad + Canvas.GetTop(panel), blocks[i].Width, blocks[i].Height);
         }
         var rowList = rows.ToList();
-        var jumps = new List<(int From, int To, string Label, bool Lit)>();
+        // Route：车道路线编号（0=满足，1=其他）；流程为 -1。车道路线的跳转从该路线末尾出发，不从车道头部出发。
+        var jumps = new List<(int From, int To, string Label, bool Lit, int Route)>();
         for (var i = 0; i < rowList.Count; i++)
         {
             var n = rowList[i].Model;
             var index = i;
-            void Add(string? target, string label, bool lit)
+            void Add(string? target, string label, bool lit, int route)
             {
                 if (WorkflowComposition.JumpTarget(doc, target) is not { } resolved) return;
                 var to = rowList.FindIndex(r => r.NodeId == resolved || r.Model.Lanes?.SourceFlowNodeId == resolved);
                 if (to <= index) return; // 往回或无效：计划表已标红，图上不画
-                jumps.Add((index, to, label, lit));
+                jumps.Add((index, to, label, lit, route));
             }
             if (n.Kind == "control.flow")
-                Add(n.Flow?.JumpTo, "↪ " + No(n.Flow?.JumpTo), trace.Node(n.NodeId) == NodeRunState.Success);
+                Add(n.Flow?.JumpTo, "↪ " + No(n.Flow?.JumpTo), trace.Node(n.NodeId) == NodeRunState.Success, -1);
             if (n.Lanes is { Decision: not null } lane)
             {
                 var chose = trace.LaneChoice(doc, n);
-                Add(lane.YesJumpTo, "满足 ↪ " + No(lane.YesJumpTo), chose == true);
-                Add(lane.NoJumpTo, "其他 ↪ " + No(lane.NoJumpTo), chose == false);
+                Add(lane.YesJumpTo, "满足 ↪ " + No(lane.YesJumpTo), chose == true, 0);
+                Add(lane.NoJumpTo, "其他 ↪ " + No(lane.NoJumpTo), chose == false, 1);
             }
         }
         if (jumps.Count == 0) return 0;
@@ -194,19 +200,34 @@ public sealed class TaskCenterFlowChartWindow : Window
         var layer = new Canvas { IsHitTestVisible = false };
         for (var k = 0; k < jumps.Count; k++)
         {
-            var (fromIndex, toIndex, label, lit) = jumps[k];
+            var (fromIndex, toIndex, label, lit, route) = jumps[k];
             var a = RowRect(fromIndex); var b = RowRect(toIndex);
             var laneX = right + Stub + k * LaneGap;
-            var y1 = a.Top + Math.Min(a.Height, NodeH) / 2;
             var y2 = b.Top + Math.Min(b.Height, NodeH) / 2;
             var brush = lit ? JumpEdgeLit : JumpEdge;
-            Edge(layer, [new(a.Right + 4, y1), new(laneX, y1), new(laneX, y2), new(b.Right + 4, y2)], brush, lit ? 2.4 : 1.6, true, true);
+            List<Point> pts;
+            Point labelAt;
+            if (route >= 0 && blocks[fromIndex].LooseEnds is { } ends && route < ends.Count)
+            {
+                // 从路线末尾向下一小段，再横向走到右侧竖道。
+                var end = new Point(a.Left + ends[route].X, a.Top + ends[route].Y);
+                var outY = end.Y + VGap * 0.35;
+                pts = [end, new(end.X, outY), new(laneX, outY), new(laneX, y2), new(b.Right + 4, y2)];
+                labelAt = new Point(end.X + 6, outY - 15);
+            }
+            else
+            {
+                var y1 = a.Top + Math.Min(a.Height, NodeH) / 2;
+                pts = [new(a.Right + 4, y1), new(laneX, y1), new(laneX, y2), new(b.Right + 4, y2)];
+                labelAt = new Point(a.Right + 6, y1 - 15);
+            }
+            Edge(layer, pts, brush, lit ? 2.4 : 1.6, true, true);
             var text = new Border
             {
                 Background = Frozen("#14122a"), CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0),
                 Child = new TextBlock { Text = label, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = brush },
             };
-            Canvas.SetLeft(text, a.Right + 6); Canvas.SetTop(text, y1 - 15);
+            Canvas.SetLeft(text, labelAt.X); Canvas.SetTop(text, labelAt.Y);
             layer.Children.Add(text);
         }
         _chart.Children.Add(layer);
@@ -225,7 +246,9 @@ public sealed class TaskCenterFlowChartWindow : Window
             var inner = flow.Steps.Count == 0 ? Pill("暂无步骤", DimText) : Steps(node.NodeId, flow.Steps, flow.ExitStepId, trace);
             var f = Frame($"{RowNo(row)}  流程 · {row.DisplayName}" + (jumped ? "  本轮跳过（跳转）" : Badge(nodeState, " ")), inner, "#B39DDB", nodeState, () => _locate(node.NodeId, null));
             f.Panel.Opacity = opacity;
-            return f;
+            // 设了跳转的流程正常执行完不会走到下一行：到下一行的连线只在停用/过滤/跳过时才走。
+            return string.IsNullOrEmpty(flow.ExitStepId) && WorkflowComposition.JumpTarget(doc, flow.JumpTo) is not null
+                ? f with { FallthroughOnly = true } : f;
         }
         if (node.Lanes is { } lanes)
         {
@@ -243,6 +266,10 @@ public sealed class TaskCenterFlowChartWindow : Window
             var no = LaneBranch(editing, lanes.NoNodeIds, trace);
             var split = Split(head, yes, no, "满足 → " + yesName, "其他 → " + noName, choice);
             split.Panel.Opacity = opacity;
+            // 设了跳转的路线走完后直接去目标行，不汇合到下一行（跳转线由 DrawJumps 从路线末尾画出）。
+            if (lanes.Decision is not null)
+                split = split with { JumpingEnds = [WorkflowComposition.JumpTarget(doc, lanes.YesJumpTo) is not null,
+                    WorkflowComposition.JumpTarget(doc, lanes.NoJumpTo) is not null] };
             var before = decision?.Steps.Where(s => s.Id != decision.ExitStepId).ToList() ?? [];
             if (before.Count == 0) return split;
             var pre = Frame("判断前的步骤", Steps(owner, before, null, trace), "#9C97C0", NodeRunState.None,
@@ -319,6 +346,7 @@ public sealed class TaskCenterFlowChartWindow : Window
         var width = items.Max(b => b.Width);
         var canvas = new Canvas();
         double y = 0, prevX = 0, prevY = 0;
+        var prevFallthrough = false;
         for (var i = 0; i < items.Count; i++)
         {
             var b = items[i];
@@ -327,18 +355,33 @@ public sealed class TaskCenterFlowChartWindow : Window
             if (i > 0)
             {
                 var topX = x + b.TopX;
-                if (Math.Abs(prevX - topX) < 0.5) Edge(canvas, [new(prevX, prevY), new(topX, y)], EdgeNormal, 1.4, false, true);
+                // 上一块设了跳转：正常不会走到这里，连线改为灰虚线并注明，避免看成依次执行。
+                var brush = prevFallthrough ? EdgeDim : EdgeNormal;
+                if (Math.Abs(prevX - topX) < 0.5) Edge(canvas, [new(prevX, prevY), new(topX, y)], brush, 1.4, prevFallthrough, true);
                 else
                 {
                     var mid = prevY + (y - prevY) / 2;
-                    Edge(canvas, [new(prevX, prevY), new(prevX, mid), new(topX, mid), new(topX, y)], EdgeNormal, 1.4, false, true);
+                    Edge(canvas, [new(prevX, prevY), new(prevX, mid), new(topX, mid), new(topX, y)], brush, 1.4, prevFallthrough, true);
+                }
+                if (prevFallthrough)
+                {
+                    var note = new TextBlock { Text = "停用/跳过时", FontSize = 9.5, Foreground = DimText };
+                    Canvas.SetLeft(note, prevX + 6); Canvas.SetTop(note, prevY + (y - prevY) / 2 - 7);
+                    canvas.Children.Add(note);
                 }
             }
-            prevX = x + b.BottomX; prevY = y + b.Height;
+            prevX = x + b.BottomX; prevY = y + b.Height; prevFallthrough = b.FallthroughOnly;
             if (b.LooseEnds is { Count: > 0 } ends && i < items.Count - 1)
             {
                 var mergeY = y + b.Height + VGap * 0.55;
-                foreach (var p in ends) Edge(canvas, [new(x + p.X, y + p.Y), new(x + p.X, mergeY), new(prevX, mergeY)], EdgeNormal, 1.1, false, false);
+                for (var k = 0; k < ends.Count; k++)
+                {
+                    if (b.JumpingEnds is { } jumping && k < jumping.Length && jumping[k]) continue; // 这条路线另有跳转去向
+                    var p = ends[k];
+                    Edge(canvas, [new(x + p.X, y + p.Y), new(x + p.X, mergeY), new(prevX, mergeY)], EdgeNormal, 1.1, false, false);
+                }
+                // 两条路线都跳走：正常不会走到下一行（车道被停用时才会），同样画成灰虚线。
+                if (b.JumpingEnds is { Length: 2 } both && both[0] && both[1]) prevFallthrough = true;
                 prevY = mergeY;
             }
             y += b.Height + VGap;
@@ -347,7 +390,8 @@ public sealed class TaskCenterFlowChartWindow : Window
         canvas.Width = width; canvas.Height = y;
         var first = items[0]; var last = items[^1];
         return new Block(canvas, width, y, (width - first.Width) / 2 + first.TopX, (width - last.Width) / 2 + last.BottomX,
-            last.LooseEnds?.Select(p => new Point((width - last.Width) / 2 + p.X, y - last.Height + p.Y)).ToList());
+            last.LooseEnds?.Select(p => new Point((width - last.Width) / 2 + p.X, y - last.Height + p.Y)).ToList(),
+            last.FallthroughOnly, last.JumpingEnds); // 最后一块（例如车道的分支）决定整条链的出口
     }
 
     /// <summary>判断块：头卡下分左右两支；chosen 为本轮选择（null=未判断），没走的一支灰显。</summary>

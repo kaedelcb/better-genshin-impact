@@ -93,17 +93,29 @@ function tcFcLayout(doc, trace) {
     };
     const pill = (t, cls = '') => { const w = Math.max(96, t.length * 13 + 28); return { ...empty(), pills:[{ x:0, y:0, w, h:26, t, cls }], w, h:26, topX:w / 2, botX:w / 2, loose:null }; };
     const card = c => ({ ...empty(), cards:[{ ...c, x:0, y:0 }], w:G.nw, h:G.nh, topX:G.nw / 2, botX:G.nw / 2, loose:null });
+    // fallthrough：这块正常执行时不会走到下一行（流程设了跳转），到下一行的线画成灰虚线并注明「停用/跳过时」。
+    // jumping[k]：loose 第 k 个出口另有跳转去向（车道路线设了跳转），不画汇合到下一行的线。
     function chain(items) {
-        const w = Math.max(...items.map(b => b.w)), out = empty(); let y = 0, px = 0, py = 0;
+        const w = Math.max(...items.map(b => b.w)), out = empty(); let y = 0, px = 0, py = 0, pf = false;
         items.forEach((b, i) => {
             const x = (w - b.w) / 2; merge(out, b, x, y);
-            if (i > 0) { const tx = x + b.topX; out.edges.push({ pts:Math.abs(px - tx) < .5 ? [[px, py], [tx, y]] : [[px, py], [px, (py + y) / 2], [tx, (py + y) / 2], [tx, y]], c:'n', arrow:true }); }
-            px = x + b.botX; py = y + b.h;
-            if (b.loose?.length && i < items.length - 1) { const my = y + b.h + G.vg * .55; for (const [ax, ay] of b.loose) out.edges.push({ pts:[[x + ax, y + ay], [x + ax, my], [px, my]], c:'n' }); py = my; }
+            if (i > 0) {
+                const tx = x + b.topX;
+                out.edges.push({ pts:Math.abs(px - tx) < .5 ? [[px, py], [tx, y]] : [[px, py], [px, (py + y) / 2], [tx, (py + y) / 2], [tx, y]], c:'n', arrow:true, dash:pf, dim:pf });
+                if (pf) out.labels.push({ x:px + 6, y:(py + y) / 2 - 9, t:'停用/跳过时', c:'n', dim:true });
+            }
+            px = x + b.botX; py = y + b.h; pf = !!b.fallthrough;
+            if (b.loose?.length && i < items.length - 1) {
+                const my = y + b.h + G.vg * .55;
+                b.loose.forEach(([ax, ay], k) => { if (!b.jumping?.[k]) out.edges.push({ pts:[[x + ax, y + ay], [x + ax, my], [px, my]], c:'n' }); });
+                if (b.jumping?.[0] && b.jumping?.[1]) pf = true; // 两条路线都跳走：正常不会走到下一行
+                py = my;
+            }
             y += b.h + G.vg;
         });
         y -= G.vg; const f = items[0], l = items[items.length - 1], lx = (w - l.w) / 2;
-        return { ...out, w, h:y, topX:(w - f.w) / 2 + f.topX, botX:lx + l.botX, loose:l.loose?.map(([a, c]) => [lx + a, y - l.h + c]) || null };
+        return { ...out, w, h:y, topX:(w - f.w) / 2 + f.topX, botX:lx + l.botX, loose:l.loose?.map(([a, c]) => [lx + a, y - l.h + c]) || null,
+            fallthrough:l.fallthrough, jumping:l.jumping };
     }
     function split(head, yes, no, yl, nl, chosen) {
         const tot = yes.w + G.hg + no.w, w = Math.max(head.w, tot), cx = w / 2, by = head.h + G.bg, tx = cx - tot / 2, fx = tx + yes.w + G.hg, sy = head.h + G.bg / 2, out = empty();
@@ -151,15 +163,17 @@ function tcFcLayout(doc, trace) {
         edges:b.edges.map(e => ({ ...e, dim:true })), labels:b.labels.map(l => ({ ...l, dim:true })), pills:b.pills.map(p => ({ ...p, dim:true })) } : b;
     const rows = mainRows.map((n, i) => dimIfJumped((() => {
         const no = numbers.get(n.nodeId) || String(i + 1).padStart(2, '0');
-        if (n.flow) return frame(`${no}  流程 · ${tcNodeName(n)}${TC_FC_RUN[trace.node(n.nodeId)] ? '  ' + TC_FC_RUN[trace.node(n.nodeId)] : ''}`,
-            (n.flow.steps || []).length ? steps(n.nodeId, n.flow.steps, n.flow.exitStepId) : pill('暂无步骤'), '#B39DDB', trace.node(n.nodeId), n.nodeId, null, !tcEnabled(n));
+        if (n.flow) return { ...frame(`${no}  流程 · ${tcNodeName(n)}${TC_FC_RUN[trace.node(n.nodeId)] ? '  ' + TC_FC_RUN[trace.node(n.nodeId)] : ''}`,
+            (n.flow.steps || []).length ? steps(n.nodeId, n.flow.steps, n.flow.exitStepId) : pill('暂无步骤'), '#B39DDB', trace.node(n.nodeId), n.nodeId, null, !tcEnabled(n)),
+            fallthrough:!n.flow.exitStepId && typeof tcJumpResolve === 'function' && !!tcJumpResolve(doc, n.flow.jumpTo) };
         if (n.lanes) {
             const l = n.lanes, owner = l.decision ? n.nodeId : l.sourceFlowNodeId, decision = l.decision || byId.get(l.sourceFlowNodeId)?.flow;
             const exit = decision?.steps?.find(s => s.id === decision.exitStepId), choice = trace.lane(n);
             const head = card({ icon:'⑂', color:'#E8C96D', name:`${no}  ${tcNodeName(n)}`, type:'车道', sum:exit ? '判断：' + tcFlowSummary(exit) : '还没有设置选择条件',
                 state:choice === true ? 'condTrue' : choice === false ? 'condFalse' : trace.node(n.nodeId), off:!tcEnabled(n), nodeId:n.nodeId });
             const branch = ids => ids?.length ? chain(ids.map((id, j) => byId.has(id) ? task(byId.get(id), `${numbers.get(id) || String(j + 1).padStart(2, '0')}  ${tcNodeName(byId.get(id))}`) : pill('任务引用缺失'))) : pill('（空，直接继续）');
-            const sp = split(head, branch(l.yesNodeIds), branch(l.noNodeIds), '满足 → ' + (l.yesName === '是' ? '路线 1' : l.yesName || '路线 1'), '其他 → ' + (l.noName === '否' ? '路线 2' : l.noName || '路线 2'), choice);
+            const sp = { ...split(head, branch(l.yesNodeIds), branch(l.noNodeIds), '满足 → ' + (l.yesName === '是' ? '路线 1' : l.yesName || '路线 1'), '其他 → ' + (l.noName === '否' ? '路线 2' : l.noName || '路线 2'), choice),
+                jumping:l.decision && typeof tcJumpResolve === 'function' ? [!!tcJumpResolve(doc, l.yesJumpTo), !!tcJumpResolve(doc, l.noJumpTo)] : null };
             const before = (decision?.steps || []).filter(s => s.id !== decision.exitStepId);
             return before.length ? chain([frame('判断前的步骤', steps(owner, before, null), '#9C97C0', '', owner, before[0].id), sp]) : sp;
         }
@@ -174,23 +188,31 @@ function tcFcLayout(doc, trace) {
         const rect = i => { const b = items[i + 1]; return { x:(g.w - b.w) / 2, y:tops[i + 1], w:b.w, h:b.h }; };
         const jumps = [];
         mainRows.forEach((n, i) => {
-            const add = (target, label, lit) => {
+            const add = (target, label, lit, route) => {
                 const resolved = tcJumpResolve(doc, target); if (!resolved) return;
                 const to = mainRows.findIndex(r => r.nodeId === resolved || r.lanes?.sourceFlowNodeId === resolved);
-                if (to > i) jumps.push({ from:i, to, label, lit });
+                if (to > i) jumps.push({ from:i, to, label, lit, route });
             };
-            if (n.kind === 'control.flow' && n.flow?.jumpTo && !n.flow.exitStepId) add(n.flow.jumpTo, '↪ ' + (numbers.get(n.flow.jumpTo) || ''), trace.node(n.nodeId) === 'success');
+            if (n.kind === 'control.flow' && n.flow?.jumpTo && !n.flow.exitStepId) add(n.flow.jumpTo, '↪ ' + (numbers.get(n.flow.jumpTo) || ''), trace.node(n.nodeId) === 'success', -1);
             if (n.lanes?.decision) {
                 const chose = trace.lane(n);
-                if (n.lanes.yesJumpTo) add(n.lanes.yesJumpTo, '满足 ↪ ' + (numbers.get(n.lanes.yesJumpTo) || ''), chose === true);
-                if (n.lanes.noJumpTo) add(n.lanes.noJumpTo, '其他 ↪ ' + (numbers.get(n.lanes.noJumpTo) || ''), chose === false);
+                if (n.lanes.yesJumpTo) add(n.lanes.yesJumpTo, '满足 ↪ ' + (numbers.get(n.lanes.yesJumpTo) || ''), chose === true, 0);
+                if (n.lanes.noJumpTo) add(n.lanes.noJumpTo, '其他 ↪ ' + (numbers.get(n.lanes.noJumpTo) || ''), chose === false, 1);
             }
         });
         jumps.forEach((j, k) => {
-            const a = rect(j.from), b = rect(j.to), lane = g.w + 18 + k * 22;
-            const y1 = a.y + Math.min(a.h, G.nh) / 2, y2 = b.y + Math.min(b.h, G.nh) / 2;
-            g.edges.push({ pts:[[a.x + a.w + 4, y1], [lane, y1], [lane, y2], [b.x + b.w + 4, y2]], c:'jump', dash:true, arrow:true, lit:j.lit });
-            g.labels.push({ x:a.x + a.w + 6, y:y1 - 20, t:j.label, c:'jump', lit:j.lit });
+            const a = rect(j.from), b = rect(j.to), lane = g.w + 18 + k * 22, y2 = b.y + Math.min(b.h, G.nh) / 2;
+            const end = j.route >= 0 ? items[j.from + 1].loose?.[j.route] : null;
+            if (end) {
+                // 车道路线的跳转从该路线末尾出发，向下一小段再横向走到右侧竖道。
+                const ex = a.x + end[0], ey = a.y + end[1], oy = ey + G.vg * .35;
+                g.edges.push({ pts:[[ex, ey], [ex, oy], [lane, oy], [lane, y2], [b.x + b.w + 4, y2]], c:'jump', dash:true, arrow:true, lit:j.lit });
+                g.labels.push({ x:ex + 6, y:oy - 20, t:j.label, c:'jump', lit:j.lit });
+            } else {
+                const y1 = a.y + Math.min(a.h, G.nh) / 2;
+                g.edges.push({ pts:[[a.x + a.w + 4, y1], [lane, y1], [lane, y2], [b.x + b.w + 4, y2]], c:'jump', dash:true, arrow:true, lit:j.lit });
+                g.labels.push({ x:a.x + a.w + 6, y:y1 - 20, t:j.label, c:'jump', lit:j.lit });
+            }
         });
         if (jumps.length) g.w += 18 + jumps.length * 22 + 10;
     }

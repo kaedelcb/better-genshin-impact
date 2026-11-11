@@ -738,7 +738,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         // 编号、跳转说明、执行状态同样只是展示（由 NotifyWorkspace / 运行刷新重算），不能回头重建工作区或排队保存。
         if (e.PropertyName is nameof(NodeEditVm.RowNumber) or nameof(NodeEditVm.JumpText) or nameof(NodeEditVm.JumpProblem)
             or nameof(NodeEditVm.HasJumpProblem) or nameof(NodeEditVm.HasJump) or nameof(NodeEditVm.IsUnreachable) or nameof(NodeEditVm.RowNotice)
-            or nameof(NodeEditVm.HasRowNotice) or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RunStateText) or nameof(NodeEditVm.JumpedOver)
+            or nameof(NodeEditVm.HasRowNotice) or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RunStateText) or nameof(NodeEditVm.JumpedOver) or nameof(NodeEditVm.JumpedFrom)
             or nameof(NodeEditVm.HasRunState)) return;
         NotifyWorkspace();
         if (e.PropertyName is nameof(NodeEditVm.DisplayName)

@@ -179,7 +179,7 @@ public sealed class CompositionPlanRow : UserControl
             var wrap = new StackPanel();
             wrap.Children.Add(header);
             var notice = Text(node.RowNotice); notice.FontSize = 11; notice.TextWrapping = TextWrapping.Wrap; notice.TextTrimming = TextTrimming.None;
-            notice.Foreground = B(node.HasJumpProblem ? "#F0A08C" : "#9C97C0"); notice.Margin = new Thickness(59, 0, 6, 3);
+            notice.Foreground = B(node.HasJumpProblem ? "#F0A08C" : node.IsUnreachable ? "#9C97C0" : "#C9B4F0"); notice.Margin = new Thickness(59, 0, 6, 3);
             wrap.Children.Add(notice);
             _expander.Header = wrap;
         }

@@ -471,3 +471,4 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .tc-composition-row.is-problem{border-color:#c9614f}
 .tc-composition-resource.is-unreachable .tc-name b{color:var(--muted)}
 .tc-jump-field select{max-width:420px}
+.tc-row-notice.is-entry{color:#c9b4f0}

@@ -83,18 +83,46 @@ function tcUnreachable(doc = tc.doc) {
     const integrated = new Set(doc.nodes.filter(n => n.lanes && !n.lanes.decision && n.lanes.sourceFlowNodeId).map(n => n.lanes.sourceFlowNodeId));
     return new Set(order.filter(id => !seen.has(id) && !integrated.has(id)));
 }
-/** 跳转说明，例如「执行完后 → #5 至冬材料」。 */
-function tcJumpText(n, doc = tc.doc) {
-    const t = id => tcRowLabel(id, doc) || '已删除的行';
-    if (n.flow?.jumpTo) return '执行完后 → ' + t(n.flow.jumpTo);
-    if (!n.lanes) return '';
-    return [n.lanes.yesJumpTo && '满足条件路线走完 → ' + t(n.lanes.yesJumpTo), n.lanes.noJumpTo && '其他情况路线走完 → ' + t(n.lanes.noJumpTo)].filter(Boolean).join('；');
+/** 每个跳转跳过的主计划行（与执行端 WorkflowComposition.JumpSpans 同口径）：{ source, route, target, skipped[] }。 */
+function tcJumpSpans(doc = tc.doc) {
+    const order = tcJumpOrder(doc), spans = [];
+    const integrated = new Set(doc.nodes.filter(n => n.lanes && !n.lanes.decision && n.lanes.sourceFlowNodeId).map(n => n.lanes.sourceFlowNodeId));
+    const add = (n, route, target) => {
+        const resolved = target && tcJumpResolve(doc, target); if (!resolved) return;
+        const from = order.indexOf(n.nodeId), to = order.indexOf(resolved); if (from < 0 || to <= from) return;
+        spans.push({ source:n.nodeId, route, target, skipped:order.slice(from + 1, to).filter(id => !integrated.has(id)) });
+    };
+    for (const id of order) {
+        const n = doc.nodes.find(x => x.nodeId === id); if (!n) continue;
+        if (n.kind === 'control.flow' && !n.flow?.exitStepId) add(n, null, n.flow?.jumpTo);
+        if (n.lanes?.decision) { add(n, 'yes', n.lanes.yesJumpTo); add(n, 'no', n.lanes.noJumpTo); }
+    }
+    return spans;
 }
-/** 行下方提示：跳转问题优先，其次是走不到。 */
-function tcRowNotice(n, issues, unreachable) {
+/** 跳转说明，例如「执行完后 → #5 至冬材料（跳过 #3）」。 */
+function tcJumpText(n, doc = tc.doc) {
+    const t = id => tcRowLabel(id, doc) || '已删除的行', numbers = tcRowNumbers(doc);
+    const skipped = tcJumpSpans(doc).filter(s => s.source === n.nodeId).flatMap(s => s.skipped);
+    const tail = skipped.length ? '（跳过 ' + [...new Set(skipped)].map(id => numbers.get(id) || '').join('、') + '）' : '';
+    if (n.flow?.jumpTo) return '执行完后 → ' + t(n.flow.jumpTo) + tail;
+    if (!n.lanes) return '';
+    const text = [n.lanes.yesJumpTo && '满足条件路线走完 → ' + t(n.lanes.yesJumpTo), n.lanes.noJumpTo && '其他情况路线走完 → ' + t(n.lanes.noJumpTo)].filter(Boolean).join('；');
+    return text ? text + tail : '';
+}
+/** 只靠跳转进入的行：写明从哪里跳进来，例如「从 #1 其他情况 跳到这里」。 */
+function tcJumpedFrom(n, doc = tc.doc) {
+    const spans = tcJumpSpans(doc); if (!spans.some(s => s.skipped.includes(n.nodeId))) return '';
+    const numbers = tcRowNumbers(doc), route = r => r === 'yes' ? ' 满足条件' : r === 'no' ? ' 其他情况' : '';
+    const sources = spans.filter(s => { const r = tcJumpResolve(doc, s.target); return r === n.nodeId || n.lanes?.sourceFlowNodeId === r; })
+        .map(s => (numbers.get(s.source) || '') + route(s.route));
+    return sources.length ? '从 ' + sources.join('、') + ' 跳到这里' : '';
+}
+/** 行下方提示：跳转问题优先，其次是走不到，再次是从哪里跳进来。 */
+function tcRowNotice(n, issues, unreachable, doc = tc.doc) {
     if (issues.has(n.nodeId)) return { text:'⚠ ' + issues.get(n.nodeId), problem:true };
     if (unreachable.has(n.nodeId)) return { text:'没有路径会走到这一行：前面的流程会无条件跳过它，执行时不会执行。', problem:false };
-    return null;
+    const from = tcJumpedFrom(n, doc);
+    return from ? { text:'↪ ' + from + '（按顺序经过前一行时会被跳过）', problem:false, entry:true } : null;
 }
 
 /** 删除前确认：这些行是别的行的跳转目标时先问；确认后调用方把指向它们的跳转改回继续下一行。 */

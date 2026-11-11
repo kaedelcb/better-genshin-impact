@@ -192,6 +192,33 @@ public static class WorkflowComposition
     }
 
     /// <summary>
+    /// 每个跳转跳过的主计划行（来源与目标之间、按执行顺序）。key = 来源行，value = 按路线分组的被跳过行。
+    /// 用于计划表说明「跳过 #3」；只做展示，不影响执行。
+    /// </summary>
+    public static IReadOnlyList<(string SourceNodeId, string? Route, string TargetNodeId, IReadOnlyList<string> Skipped)> JumpSpans(WorkflowDocument doc)
+    {
+        var spans = new List<(string, string?, string, IReadOnlyList<string>)>();
+        var main = doc.Nodes.Where(n => !IsLaneMember(doc, n.NodeId)).ToList();
+        var integrated = doc.Nodes.Where(n => n.Lanes is { Decision: null } l && !string.IsNullOrEmpty(l.SourceFlowNodeId))
+            .Select(n => n.Lanes!.SourceFlowNodeId).ToHashSet(StringComparer.Ordinal);
+        void Add(WorkflowNode source, string? route, string? target)
+        {
+            if (JumpTarget(doc, target) is not { } resolved) return;
+            var from = main.FindIndex(n => n.NodeId == source.NodeId);
+            var to = main.FindIndex(n => n.NodeId == resolved);
+            if (from < 0 || to <= from) return;
+            var skipped = main.Skip(from + 1).Take(to - from - 1).Where(n => !integrated.Contains(n.NodeId)).Select(n => n.NodeId).ToArray();
+            spans.Add((source.NodeId, route, target!, skipped));
+        }
+        foreach (var n in main)
+        {
+            if (n.Kind == "control.flow" && string.IsNullOrEmpty(n.Flow?.ExitStepId)) Add(n, null, n.Flow?.JumpTo);
+            if (n.Lanes is { Decision: not null } lane) { Add(n, "yes", lane.YesJumpTo); Add(n, "no", lane.NoJumpTo); }
+        }
+        return spans;
+    }
+
+    /// <summary>
     /// 从首行沿编排去向走不到的主计划行（例如被流程跳转无条件跳过、又没有车道路线跳到它）。只用于提示，不阻止启动。
     /// 车道两条路线都视为可走；有跳转的流程行按正常执行走跳转。计划本身有校验问题时不计算（返回空）。
     /// </summary>

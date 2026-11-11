@@ -663,10 +663,11 @@
                                                      </Grid>
                                             </Grid>
                                             <!-- 普通任务行：没有路径会走到时在行下方提示（流程/车道行由 CompositionPlanRow 自己显示）。 -->
-                                            <TextBlock Text="{Binding RowNotice}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="52,0,8,3" TextWrapping="Wrap">
+                                            <TextBlock Text="{Binding RowNotice}" FontSize="11" Margin="52,0,8,3" TextWrapping="Wrap">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Setter Property="Foreground" Value="{DynamicResource Dim}" />
                                                         <Style.Triggers>
                                                             <MultiDataTrigger>
                                                                 <MultiDataTrigger.Conditions>
@@ -674,6 +675,14 @@
                                                                     <Condition Binding="{Binding IsComposition}" Value="False" />
                                                                 </MultiDataTrigger.Conditions>
                                                                 <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                            <!-- 「从 #N 跳到这里」用跳转线同色，和走不到的灰色提示区分。 -->
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding IsUnreachable}" Value="False" />
+                                                                    <Condition Binding="{Binding HasJumpProblem}" Value="False" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Foreground" Value="#C9B4F0" />
                                                             </MultiDataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
