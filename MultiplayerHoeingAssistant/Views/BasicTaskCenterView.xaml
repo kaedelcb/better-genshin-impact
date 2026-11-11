@@ -486,6 +486,10 @@
                                                         </DataTrigger>
                                                         <!-- 灰底始终可辨，选中/起点的金色边框仍保留。 -->
                                                         <DataTrigger Binding="{Binding IsOutsideTimeWindow}" Value="True"><Setter TargetName="Row" Property="Background" Value="#2D2E36" /></DataTrigger>
+                                                        <!-- 正在执行的行：金色描边，与流程图「执行中」同色。 -->
+                                                        <DataTrigger Binding="{Binding RunState}" Value="Running">
+                                                            <Setter TargetName="Row" Property="BorderBrush" Value="#E8C96D" /><Setter TargetName="Row" Property="BorderThickness" Value="1.5" />
+                                                        </DataTrigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Setter.Value></Setter>
@@ -517,13 +521,39 @@
                                                     <Grid Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                                         <Grid Grid.Column="0" VerticalAlignment="Center" ClipToBounds="True">
-                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                                             <Border Grid.Column="0" Background="#E8C96D" CornerRadius="4" Padding="5,1" Margin="0,0,8,0"
                                                                     Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
                                                                 <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
                                                             </Border>
                                                             <TextBlock x:Name="ResourceNameText" Grid.Column="1" Text="{Binding DisplayName}" ToolTip="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14"
                                                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                            <!-- 最近一次运行本轮的状态（与流程图同口径；没有运行记录时不显示）。 -->
+                                                            <Border x:Name="ResourceRunStateBadge" Grid.Column="2" CornerRadius="9" Padding="7,1" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                                    BorderThickness="1" Visibility="{Binding HasRunState, Converter={StaticResource Visible}}" ToolTip="最近一次运行本轮的执行状态">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="#1F6FD8CE" /><Setter Property="BorderBrush" Value="#3F6A60" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding RunState}" Value="Running"><Setter Property="Background" Value="#E8C96D" /><Setter Property="BorderBrush" Value="#E8C96D" /></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding RunState}" Value="Failed"><Setter Property="Background" Value="#33EF5350" /><Setter Property="BorderBrush" Value="#7A4545" /></DataTrigger>
+                                                                            <DataTrigger Binding="{Binding RunState}" Value="Skipped"><Setter Property="Background" Value="#299C97C0" /><Setter Property="BorderBrush" Value="#4A4566" /></DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding RunStateText}" FontSize="10.5" FontWeight="SemiBold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="#6FD8CE" />
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding RunState}" Value="Running"><Setter Property="Foreground" Value="#241D3D" /></DataTrigger>
+                                                                                <DataTrigger Binding="{Binding RunState}" Value="Failed"><Setter Property="Foreground" Value="#F0B3A3" /></DataTrigger>
+                                                                                <DataTrigger Binding="{Binding RunState}" Value="Skipped"><Setter Property="Foreground" Value="#9C97C0" /></DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </Border>
                                                         </Grid>
                                                         <Button x:Name="ResourceSettingsButton" Grid.Column="1" Content="⚙" Style="{StaticResource BasicCellButton}" MinWidth="0" Width="24" Height="24"
                                                                 Padding="0" Margin="3,0,6,0" Tag="{Binding}" Click="OpenResourceTasksClick"

@@ -69,16 +69,20 @@ public sealed partial class TaskCenterPanelViewModel
     private static string RemoteAutoExpandPath
         => Path.Combine(AssistantDataDirectory.Root, "taskcenter-auto-expand-branch.txt");
 
-    /// <summary>按当前计划和最新运行列表重算路径；有变化才通知。</summary>
+    /// <summary>按当前计划和最新运行列表重算路径；计划表行标志每次重设，流程图等只在有变化时通知。</summary>
     private void UpdateRunTrace(IEnumerable<WorkflowRunRecord> runs)
     {
         TaskCenterRunTrace next;
         try { next = TaskCenterRunTrace.Build(Editing?.Draft, runs); }
         catch { next = TaskCenterRunTrace.Empty; }
         var key = (Editing?.Draft.WorkflowId ?? "") + "|" + next.Key;
-        if (key == _runTraceKey) return;
         var previous = _runTrace;
         _runTrace = next;
+        // 计划表每行的运行标志：每次刷新都按当前行重设（切换计划、重建草稿后不残留旧标志）。
+        // 必须在 _runTrace 更新之后设：行标志变化会触发车道行重画，重画时读取的是 RunTrace。
+        if (Editing is { } editing)
+            foreach (var row in editing.Nodes) row.RunState = next.Node(row.NodeId);
+        if (key == _runTraceKey) return;
         _runTraceKey = key;
         if (Editing?.Draft is { } doc && next.HasRun)
             foreach (var lane in doc.Nodes.Where(n => n.Lanes is not null))
@@ -87,4 +91,33 @@ public sealed partial class TaskCenterPanelViewModel
                     LaneDecided?.Invoke(lane.NodeId);
         RunTraceChanged?.Invoke();
     }
+}
+
+public sealed partial class NodeEditVm
+{
+    private NodeRunState _runState;
+    /// <summary>该行在最近一次运行本轮的状态（只读展示，来自运行记录）。</summary>
+    public NodeRunState RunState
+    {
+        get => _runState;
+        internal set
+        {
+            // 只是展示运行记录，不是编辑：不走 NodeEditVm.SetProperty（那里会记撤销步骤）。
+            if (_runState == value) return;
+            _runState = value;
+            OnPropertyChanged(); OnPropertyChanged(nameof(RunStateText)); OnPropertyChanged(nameof(HasRunState));
+        }
+    }
+    public bool HasRunState => RunState != NodeRunState.None;
+    /// <summary>与流程图徽标同口径的文字。</summary>
+    public string RunStateText => RunState switch
+    {
+        NodeRunState.Running => "执行中…",
+        NodeRunState.Success => "✓ 已完成",
+        NodeRunState.Failed => "✗ 未完成",
+        NodeRunState.Skipped => "已跳过",
+        NodeRunState.CondTrue => "→ 满足",
+        NodeRunState.CondFalse => "→ 其他",
+        _ => "",
+    };
 }

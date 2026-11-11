@@ -241,15 +241,15 @@ function tcRenderNodes() {
     if (!f || !doc) { host.innerHTML = ''; host.hidden = true; return; }
     host.hidden = false;
     if (tcHasFlowRows(doc)) { tcRenderFlowRows(host, doc); return; }
-    const editable = tcCanEdit(f), nodes = tcResourceNodes(), marker = tcStartMarker(), now = tcNow();
+    const editable = tcCanEdit(f), nodes = tcResourceNodes(), marker = tcStartMarker(), now = tcNow(), trace = tcRunTrace(doc);
     const head = `<header class="tc-nodes-head"><div><h3>配置单</h3><p class="dodoco-hint">${editable ? '拖动 ⠿ 调整顺序；点日期、时段或账号直接编辑。运行中修改会在下一个任务边界生效。' : '只读：' + (f.quarantined ? '隔离计划不可编辑' : '候选计划需先激活')}</p></div>${editable ? '<button id="tcAdd" class="dd-btn dd-btn-sm dd-btn-primary">＋ 新增任务</button>' : ''}</header>`;
     if (!nodes.length) { host.innerHTML = head + `<p class="dd-empty">${editable ? '这张计划表还是空的。先添加任务、流程或车道，修改会自动保存，之后即可启动计划。' : '没有配置单。'}</p>`; if (editable) mtEl('tcAdd').onclick = tcAddMenu; return; }
     host.innerHTML = head + `<div class="tc-table" role="table"><div class="tc-tr tc-th" role="row"><span></span><span>顺序</span><span>配置单</span><span>执行日期</span><span>执行时段</span><span>UID / 账号</span><span>启用</span><span></span></div>`
         + nodes.map((n, i) => {
             const acc = tcStrat(n, 'prerequisite.account'), out = doc.nodeTimeWindowEnabled && !tcInWindow(n, now) && tcEnabled(n);
-            return `<div class="tc-tr${n.nodeId === tc.selectedNode ? ' selected' : ''}${tcEnabled(n) ? '' : ' off'}" role="row" data-node="${mte(n.nodeId)}"${editable ? ' draggable="true"' : ''}>
+            return `<div class="tc-tr${n.nodeId === tc.selectedNode ? ' selected' : ''}${tcEnabled(n) ? '' : ' off'}${trace.node(n.nodeId) === 'running' ? ' is-running' : ''}" role="row" data-node="${mte(n.nodeId)}"${editable ? ' draggable="true"' : ''}>
               <span class="mt-grip" aria-hidden="true">${editable ? '⠿' : ''}</span><span class="tc-idx">${i + 1}${n.nodeId === marker ? '<i class="tc-start" title="点击启动计划时从这里开始">起点</i>' : ''}</span>
-              <span class="tc-name"><b class="mt-break">${mte(tcNodeName(n))}</b><small>${TC_KIND[n.kind]}${tcStrat(n, 'execution.failure') ? ' · ' + (tcStrat(n, 'execution.failure').onFailure === 'continue' ? '失败继续' : '失败停止') : ''}${n.legacyFiltered ? ' · 沿用旧版计划设置' : ''}</small></span>
+              <span class="tc-name"><b class="mt-break">${mte(tcNodeName(n))}${tcRunBadge(n, trace)}</b><small>${TC_KIND[n.kind]}${tcStrat(n, 'execution.failure') ? ' · ' + (tcStrat(n, 'execution.failure').onFailure === 'continue' ? '失败继续' : '失败停止') : ''}${n.legacyFiltered ? ' · 沿用旧版计划设置' : ''}</small></span>
               <button class="tc-cell" data-edit="week"${editable ? '' : ' disabled'}><span class="tc-label">执行日期</span>${mte(tcWeekText(n))}</button>
               <button class="tc-cell${out ? ' is-out' : ''}" data-edit="window"${editable ? '' : ' disabled'}><span class="tc-label">执行时段</span>${mte(tcWindowText(n))}${out ? ' <i class="tc-out">时段外</i>' : ''}</button>
               <button class="tc-cell" data-edit="account"${editable ? '' : ' disabled'}><span class="tc-label">账号</span>${acc ? mte(tcMask(acc.uid)) : '未绑定账号'}</button>

@@ -75,9 +75,28 @@ public sealed class TaskCenterFlowChartWindowTests : IDisposable
                 Assert.True(vm.RunTrace.LaneChoice(vm.Editing!.Draft, vm.Editing.Draft.Nodes[2]));
                 Assert.Equal(NodeRunState.CondTrue, vm.RunTrace.Step("n-f", cond.Id));
 
+                // 计划表每行显示本轮运行状态；只是展示，不算未保存修改。
+                var rows = vm.Editing.Nodes.ToDictionary(r => r.NodeId);
+                Assert.Equal("✓ 已完成", rows["n-a"].RunStateText);
+                Assert.Equal("✓ 已完成", rows["n-y"].RunStateText);
+                Assert.Equal("", rows["n-n"].RunStateText);
+                Assert.Equal(NodeRunState.CondTrue, rows["n-l"].RunState);
+                Assert.False(vm.Editing.HasUnsavedChanges);
+
                 // 计划表上的按钮能打开流程图窗口。
                 var view = new BasicTaskCenterView { DataContext = vm };
                 view.Measure(new Size(1200, 800)); view.Arrange(new Rect(0, 0, 1200, 800)); view.UpdateLayout();
+                // 测试视图不在窗口里，IsVisible 恒为 false；按自身及祖先的 Visibility 判断是否显示。
+                static bool Shown(DependencyObject d) { for (; d is not null; d = VisualTreeHelper.GetParent(d)) if (d is UIElement { Visibility: not Visibility.Visible }) return false; return true; }
+                var badges = Descendants(view).OfType<TextBlock>().Where(t => t.Text == "✓ 已完成" && Shown(t)).ToArray();
+                Assert.Equal(2, badges.Length); // 任务行 n-a 与流程行 n-f 的标题；车道行显示「→ 满足条件」
+                Assert.Contains(Descendants(view).OfType<TextBlock>(), t => t.Text == "→ 满足条件" && Shown(t));
+                if (Environment.GetEnvironmentVariable("TASKCENTER_PLAN_SNAPSHOT_PATH") is { Length: > 0 } planShot)
+                {
+                    var bmp = new RenderTargetBitmap(1200, 800, 96, 96, PixelFormats.Pbgra32); bmp.Render(view);
+                    var enc = new PngBitmapEncoder(); enc.Frames.Add(BitmapFrame.Create(bmp));
+                    using var fs = File.Create(planShot); enc.Save(fs);
+                }
                 var button = Descendants(view).OfType<Button>().Single(b => Equals(b.Content, "🗺 流程图"));
                 Assert.True(button.IsEnabled);
                 var opened = 0;

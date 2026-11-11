@@ -105,7 +105,8 @@ public sealed class CompositionPlanRow : UserControl
     }
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(NodeEditVm.DisplayName) or nameof(NodeEditVm.CompositionSummary) or nameof(NodeEditVm.ResourceIndex))
+        if (e.PropertyName is nameof(NodeEditVm.DisplayName) or nameof(NodeEditVm.CompositionSummary) or nameof(NodeEditVm.ResourceIndex)
+            or nameof(NodeEditVm.RunState))
             Draw();
     }
     internal void ExpandContents() => _expander.IsExpanded = true;
@@ -149,7 +150,26 @@ public sealed class CompositionPlanRow : UserControl
         hint.Margin = new Thickness(7, 0, 6, 0); Grid.SetColumn(hint, 3); header.Children.Add(hint);
         var edit = ActionButton(node.Model.Flow is null ? "设置车道" : "编辑步骤", () => { if (node.Model.Flow is not null) View?.OpenFlowEditor(node); else View?.EditLanes(node); });
         edit.Height = edit.MinHeight = 24; edit.Padding = new Thickness(6, 1, 6, 1); edit.Margin = new Thickness(3, 0, 0, 0);
-        Grid.SetColumn(edit, 4); header.Children.Add(edit); _expander.Header = header;
+        Grid.SetColumn(edit, 4); header.Children.Add(edit);
+        // 最近一次运行本轮的状态（车道按选中的路线显示），与普通任务行、流程图同口径。
+        // 车道行的结果就是本轮选中的路线（branchYes/branchNo → CondTrue/CondFalse）；旧配对车道的结果记在原流程行上，不在这里重复。
+        var laneChoice = node.Model.Lanes is not null ? node.RunState switch { NodeRunState.CondTrue => true, NodeRunState.CondFalse => (bool?)false, _ => null } : null;
+        var runText = laneChoice is { } chose ? (chose ? "→ 满足条件" : "→ 其他情况") : node.RunStateText;
+        if (runText.Length > 0)
+        {
+            var running = laneChoice is null && node.RunState == NodeRunState.Running;
+            var failed = laneChoice is null && node.RunState == NodeRunState.Failed;
+            var label = new TextBlock { Text = runText, FontSize = 10.5, FontWeight = FontWeights.SemiBold,
+                Foreground = B(running ? "#241D3D" : failed ? "#F0B3A3" : "#6FD8CE") };
+            var runBadge = new Border { Child = label, CornerRadius = new CornerRadius(9), Padding = new Thickness(7, 1, 7, 1),
+                Margin = new Thickness(4, 0, 2, 0), VerticalAlignment = VerticalAlignment.Center, BorderThickness = new Thickness(1),
+                Background = B(running ? "#E8C96D" : failed ? "#33EF5350" : "#1F6FD8CE"), BorderBrush = B(running ? "#E8C96D" : failed ? "#7A4545" : "#3F6A60"),
+                ToolTip = "最近一次运行本轮的执行状态" };
+            header.ColumnDefinitions.Insert(4, new() { Width = GridLength.Auto });
+            Grid.SetColumn(edit, 5);
+            Grid.SetColumn(runBadge, 4); header.Children.Add(runBadge);
+        }
+        _expander.Header = header;
         if (!_expander.IsExpanded) return;
         var content = new StackPanel { Margin = new Thickness(20, 2, 5, 5) };
         if (node.Model.Flow is { } flow)

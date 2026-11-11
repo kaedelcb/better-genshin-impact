@@ -245,3 +245,12 @@ function tcAutoExpandLanes(host, doc) {
         const el = host.querySelector(`details[data-composition="${CSS.escape(n.nodeId)}"]`); if (el) el.open = true;
     }
 }
+
+/** 计划表行的运行标志（最近一次运行本轮；与流程图、PC 计划表同口径）。车道按选中的路线显示。 */
+function tcRunBadge(n, trace) {
+    if (!trace?.run || !n) return '';
+    const choice = n.lanes ? trace.lane(n) : null;
+    const st = choice === true || choice === false ? 'lane' : trace.node(n.nodeId);
+    const text = choice === true ? '→ 满足条件' : choice === false ? '→ 其他情况' : { running:'执行中…', success:'✓ 已完成', failed:'✗ 未完成', skipped:'已跳过', condTrue:'→ 满足', condFalse:'→ 其他' }[st];
+    return text ? `<i class="tc-run-badge st-${st}" title="最近一次运行本轮的执行状态">${text}</i>` : '';
+}

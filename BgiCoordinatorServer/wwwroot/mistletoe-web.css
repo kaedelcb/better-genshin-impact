@@ -455,3 +455,9 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .tc-lane.is-skipped{opacity:.45}
 .tc-cell.is-walked b{color:var(--green)}
 .tc-fc-flash{outline:2px solid var(--gold);outline-offset:2px}
+/* 计划表行运行标志 */
+.tc-run-badge{display:inline-block;margin-left:8px;padding:0 8px;border:1px solid #3f6a60;border-radius:99px;background:#6fd8ce1f;color:var(--green);font-size:11px;font-style:normal;font-weight:600;line-height:18px;vertical-align:middle;white-space:nowrap}
+.tc-run-badge.st-running{border-color:var(--gold);background:var(--gold);color:#29241a}
+.tc-run-badge.st-failed{border-color:#7a4545;background:#ef535033;color:#f0b3a3}
+.tc-run-badge.st-skipped{border-color:#4a4566;background:#9c97c029;color:var(--muted)}
+.tc-tr.is-running,.tc-composition-resource.is-running{border-color:var(--gold);box-shadow:0 0 0 1px #e8c96d55}
