@@ -489,7 +489,11 @@ public class OneDragonAccountCapability
         }
         else
         {
-            return UidGameEntry.Screen.OtherUi;
+            using var menu = capture.Find(RecognitionAssets.Get("AutoSkip", "PageCloseMain"));
+            return menu.IsExist() || Bv.IsInAnyClosableUi(capture) || Bv.IsInBigMapUi(capture)
+                || Bv.IsInPartyViewUi(capture) || Bv.IsInTalkUi(capture)
+                ? UidGameEntry.Screen.OtherUi
+                : UidGameEntry.Screen.LoadingOrUnknown;
         }
 
         ct.ThrowIfCancellationRequested();

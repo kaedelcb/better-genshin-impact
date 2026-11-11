@@ -9,7 +9,7 @@ namespace BetterGenshinImpact.Service.OneDragon;
 /// <summary>任务中心账号前置的 UID 核对顺序；纯调度逻辑，不触碰游戏或剪贴板。</summary>
 internal static class AccountUidSequence
 {
-    // 保留连续三次可靠不符才切号；读取失败仅给本轮两次补读，总次数封顶，最多切换两次。
+    // 连续三次可靠不符才切号；常规核验最多五次，末尾的不符序列最多补两次，最多切换两次。
     internal static async Task<bool> EnsureAsync(
         Func<CancellationToken, Task<OneDragonAccountCapability.UidVerifyResult>> verify,
         Func<int, CancellationToken, Task<bool>> switchAccount, CancellationToken ct, ILogger? logger = null)
@@ -21,6 +21,7 @@ internal static class AccountUidSequence
         {
             var consecutiveMismatches = 0;
             var verifyLimit = 3;
+            var completingMismatchStreak = false;
             OneDragonAccountCapability.UidVerifyResult? uncertain = null;
             for (var verifyCount = 0; verifyCount < verifyLimit; verifyCount++)
             {
@@ -39,7 +40,7 @@ internal static class AccountUidSequence
                         uncertain = last;
                 }
                 // 未取得焦点的 PreparationNotStarted 不扩充预算；不能因重试抹掉已操作游戏的事实。
-                if (last.Status == OneDragonAccountCapability.UidVerifyStatus.ReadFailed)
+                if (!completingMismatchStreak && last.Status == OneDragonAccountCapability.UidVerifyStatus.ReadFailed)
                     verifyLimit = 5;
                 logger?.LogDebug("账号 UID 核验：切号次数 {SwitchCount}，本轮第 {Attempt}/{Limit} 次，状态 {Status}，连续不符 {Mismatches}，原因 {Reason}",
                     switchCount, verifyCount + 1, verifyLimit, last.Status, consecutiveMismatches, last.Reason);
@@ -47,6 +48,14 @@ internal static class AccountUidSequence
                 if (last.Status == OneDragonAccountCapability.UidVerifyStatus.InvalidExpected)
                     throw new AccountMismatchException(last.Reason ?? "期望 UID 无效");
                 if (consecutiveMismatches == 3) break;
+                // 最后一次才读到不符时，允许把当前连续证据补齐；补读一旦失败便停止，不滚动续期。
+                if (completingMismatchStreak && consecutiveMismatches == 0) break;
+                if (!completingMismatchStreak && verifyCount + 1 == verifyLimit && consecutiveMismatches > 0)
+                {
+                    completingMismatchStreak = true;
+                    verifyLimit += 3 - consecutiveMismatches;
+                    logger?.LogDebug("UID 已恢复读取，继续确认连续不符；本轮核验上限延长至 {Limit} 次", verifyLimit);
+                }
             }
 
             // 不跨读取/准备失败累加旧证据；补读耗尽仍须保持 Unknown，不能绕过账号核验。

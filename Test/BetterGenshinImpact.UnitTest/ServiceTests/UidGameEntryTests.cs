@@ -23,6 +23,51 @@ public class UidGameEntryTests
         Assert.Equal(0, waits);
     }
 
+    // 冷启动第一帧就是加载画面时，也必须等待主界面；不能提前返回并消耗 UID 核验预算。
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ColdStartLoading_WaitsForMainUiBeforeUidVerification(bool seesEntryButton)
+    {
+        var screens = new Queue<UidGameEntry.Screen>([
+            UidGameEntry.Screen.LoadingOrUnknown,
+            seesEntryButton ? UidGameEntry.Screen.EntryHandled : UidGameEntry.Screen.LoadingOrUnknown,
+            UidGameEntry.Screen.LoadingOrUnknown,
+            UidGameEntry.Screen.MainUi,
+        ]);
+        var waits = 0;
+        var error = await UidGameEntry.EnterIfNeededAsync(() => screens.Dequeue(), CancellationToken.None,
+            (_, _) => { waits++; return Task.CompletedTask; });
+
+        Assert.Null(error);
+        Assert.Empty(screens);
+        Assert.Equal(3, waits);
+    }
+
+    [Fact]
+    public async Task MenuTransitionBecomesRecognizable_ContinuesReturnToMainUi()
+    {
+        var reads = 0;
+        var error = await UidGameEntry.EnterIfNeededAsync(
+            () => ++reads == 1 ? UidGameEntry.Screen.LoadingOrUnknown : UidGameEntry.Screen.OtherUi,
+            CancellationToken.None, (_, _) => Task.CompletedTask, retryTimes: 3);
+
+        Assert.Null(error);
+        Assert.Equal(2, reads);
+    }
+
+    [Fact]
+    public async Task UnknownFromFirstFrame_TimesOutWithoutProceedingToUid()
+    {
+        var reads = 0;
+        var error = await UidGameEntry.EnterIfNeededAsync(
+            () => { reads++; return UidGameEntry.Screen.LoadingOrUnknown; }, CancellationToken.None,
+            (_, _) => Task.CompletedTask, retryTimes: 3);
+
+        Assert.Contains("超时", error);
+        Assert.Equal(4, reads);
+    }
+
     [Fact]
     public async Task EntryButtonMissed_RetriesAndWaitsThroughLoadingUntilMainUi()
     {
@@ -163,7 +208,7 @@ public class UidGameEntryTests
 
         Assert.Equal(JobErrorCodes.PrerequisiteOutcomeUnknown, error.Code);
         Assert.Contains("超时", error.Message);
-        Assert.Equal(3, verifies);
+        Assert.Equal(5, verifies);
         Assert.Equal(0, switches);
     }
 }

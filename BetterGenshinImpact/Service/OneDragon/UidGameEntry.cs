@@ -7,7 +7,7 @@ namespace BetterGenshinImpact.Service.OneDragon;
 /// <summary>UID 读取前的登录准备：识别并点击登录界面后，等待主界面实际出现。</summary>
 internal static class UidGameEntry
 {
-    internal enum Screen { MainUi, EntryHandled, OtherUi, FocusLost }
+    internal enum Screen { MainUi, EntryHandled, OtherUi, FocusLost, LoadingOrUnknown }
 
     internal static async Task<string?> EnterIfNeededAsync(Func<Screen> handleScreen, CancellationToken ct,
         Func<TimeSpan, CancellationToken, Task>? delay = null, int retryTimes = 120)
@@ -15,8 +15,9 @@ internal static class UidGameEntry
         delay ??= Task.Delay;
         ct.ThrowIfCancellationRequested();
         var screen = handleScreen();
-        // 未识别到登录/领奖界面时，保留原有返回主界面流程，不额外点击或等待。
+        // 只有已确认的游戏内菜单才交给返回主界面流程；未知画面可能是冷启动加载，不能发送 Esc。
         if (screen is Screen.MainUi or Screen.OtherUi) return null;
+        var entryHandled = screen == Screen.EntryHandled;
 
         for (var attempt = 0; attempt < retryTimes; attempt++)
         {
@@ -27,7 +28,8 @@ internal static class UidGameEntry
             await delay(TimeSpan.FromSeconds(1), ct);
             ct.ThrowIfCancellationRequested();
             screen = handleScreen();
-            if (screen == Screen.MainUi) return null;
+            if (screen == Screen.MainUi || (!entryHandled && screen == Screen.OtherUi)) return null;
+            entryHandled |= screen == Screen.EntryHandled;
         }
 
         return screen == Screen.FocusLost
