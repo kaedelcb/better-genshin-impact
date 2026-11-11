@@ -357,6 +357,111 @@ public sealed class CompositionOnlineRecoveryTests
         finally { deliverInterrupt.TrySetResult(); }
     }
 
+    // ---------------- 跳转 × 联机锄地（Docs/design/taskcenter-jump-plan-20261111.md 第 1 阶段） ----------------
+
+    /// <summary>流程执行到一半被联机锄地接管，接续后流程做完剩余步骤，再按跳转去目标行，不执行被跳过的行。</summary>
+    [Fact]
+    public async Task FlowInterruptedByOnlineHoeingResumesThenJumps()
+    {
+        static StartupStep Write(int number)
+        {
+            var values = RegisterBank.EmptySelection(); values[number - 1] = 1;
+            return new() { Kind = StartupStepKinds.SetRegister, RegisterWrite = new() { Values = values } };
+        }
+        var wait = StartupStepKinds.Create(StartupStepKinds.Wait); wait.WaitSeconds = 2;
+        var document = new WorkflowDocument
+        {
+            Name = "流程接续后跳转", Activation = new() { Status = "active" },
+            Nodes = [
+                new() { NodeId = "flow", Kind = "control.flow", Flow = new() { Steps = [Write(2), wait, Write(3)], JumpTo = "D" } },
+                new() { NodeId = "B", Kind = "resource.configGroup", Ref = new() { Config = "B", ConfigKey = "B#k", Revision = "rev-1" } },
+                new() { NodeId = "D", Kind = "resource.configGroup", Ref = new() { Config = "D", ConfigKey = "D#k", Revision = "rev-1" } }
+            ]
+        };
+        await using var f = new Fixture(false, document);
+        Assert.True((await f.Host.StartWorkflowAsync(document.WorkflowId!)).Ok);
+        await Until(() => f.Registers.GetSnapshot().Entries[1].Value == 1);
+        await f.Host.CloseOnlineHoeingSendAsync();
+        await Until(() => !f.Host.IsDriving(document.WorkflowId!) &&
+            f.Host.Runs.List().Single().State == WorkflowRunState.LocalWaitParking,
+            () => f.Host.Runs.List().Single().State + ": " + f.Host.Runs.List().Single().Note);
+        var parked = f.Host.Runs.List().Single();
+        Assert.Equal("flow", parked.Cursor!.NodeId);
+        var prepared = f.Host.PrepareOnlineHoeing(7, new(true, false, 42, 99, null));
+        Assert.True(prepared.Ready, prepared.Reason);
+        Assert.True(f.Host.ConfirmOnlineHoeingSuspend(7, Fixture.Ticket, JsonSerializer.Serialize(new { status = "no_task" })));
+        Assert.True(await f.Host.FinishOnlineGapAfterReleaseAsync(parked.RunId, Fixture.Ticket), f.Host.Runs.Load(parked.RunId)?.Note);
+        var finished = await f.FinishedAsync();
+        Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+        Assert.Equal(new[] { "D" }, f.Body.Submitted.ToArray());
+        Assert.Equal(1, f.Registers.GetSnapshot().Entries[2].Value);
+        Assert.DoesNotContain(finished.NodeOutcomes, o => o.NodeId == "B");
+        Assert.All(finished.NodeOutcomes, o => Assert.Equal(0, o.LoopIteration));
+        Assert.Equal(0, f.Port.Sends);
+    }
+
+    private static WorkflowDocument LaneJumpDocument()
+    {
+        var condition = StartupStepKinds.Create(StartupStepKinds.JudgeRegister);
+        condition.RegisterCondition = new() { Values = Selection(1) };
+        WorkflowNode R(string id) => new() { NodeId = id, Kind = "resource.configGroup", Ref = new() { Config = id, ConfigKey = id + "#k", Revision = "rev-1" } };
+        return new()
+        {
+            Name = "车道路线接续后跳转", Activation = new() { Status = "active" },
+            Nodes = [
+                new() { NodeId = "lane", Kind = "control.lanes", Lanes = new()
+                {
+                    Name = "B/C路线", YesName = "B线", NoName = "C线",
+                    Decision = new() { Name = "进入B线", Steps = [condition], ExitStepId = condition.Id },
+                    YesNodeIds = ["B1", "B2", "B3"], NoNodeIds = ["C"], YesJumpTo = "D"
+                } },
+                R("X"), R("D"), R("B1"), R("B2"), R("B3"), R("C")
+            ]
+        };
+    }
+
+    /// <summary>车道路线里的任务被联机锄地打断，原任务续跑完成后走完路线，再按路线跳转去目标行，跳过 X。</summary>
+    [Fact]
+    public async Task LaneRouteTaskInterruptedByOnlineHoeingResumesThenJumps()
+    {
+        await using var f = new Fixture(false, LaneJumpDocument());
+        await f.StartAsync();
+        var original = await f.SuspendB2Async();
+        var resume = await f.Host.PreparePlanResumeAsync(original.RunId, Fixture.Ticket);
+        Assert.NotNull(resume);
+        var job = f.Port.SetResume(original, resume!, missing: false);
+        Assert.True(f.Host.AcceptPlanResumeJob(original.RunId, Fixture.Ticket, job));
+        await f.Host.OpenOnlineHoeingSendAsync();
+        var finished = await f.FinishedAsync();
+        Assert.Equal(WorkflowRunState.Succeeded, finished.State);
+        Assert.Equal(new[] { "B1", "B2", "B3", "D" }, f.Body.Submitted.ToArray());
+        Assert.DoesNotContain(finished.NodeOutcomes, o => o.NodeId is "X" or "C");
+        Assert.All(finished.NodeOutcomes, o => Assert.Equal(0, o.LoopIteration));
+        Assert.Equal(0, f.Port.Sends);
+    }
+
+    /// <summary>
+    /// 联机锄地接管期间保存了跳转修改：现有规则是任务被锄地挂起期间计划出现任何新修订，续跑准备都拒绝
+    /// （与跳转无关，改计划名称也一样），原任务不会按旧身份续跑，运行最终为结果未确认，需要用户处理。
+    /// 本测试锁定这个已有行为：跳转修改不会让接续绕过该保护、走到错误的行或重复执行已完成任务。
+    /// </summary>
+    [Fact]
+    public async Task ChangingJumpTargetDuringOnlineHoeingIsRejectedLikeAnyPlanEdit()
+    {
+        await using var f = new Fixture(false, LaneJumpDocument());
+        await f.StartAsync();
+        var original = await f.SuspendB2Async();
+        var snapshot = f.Host.Workflows.LoadSnapshot(f.Document.WorkflowId!);
+        snapshot.Document.Nodes.Single(n => n.NodeId == "lane").Lanes!.YesJumpTo = null; // 改回「继续下一行」
+        f.Host.Workflows.Save(snapshot.Document, snapshot.Revision);
+        Assert.Null(await f.Host.PreparePlanResumeAsync(original.RunId, Fixture.Ticket));
+        var parked = f.Host.Runs.Load(original.RunId)!;
+        Assert.Equal(WorkflowRunState.OnlineHoeingParking, parked.State);
+        Assert.Equal(new[] { "B1", "B2" }, f.Body.Submitted.ToArray());
+        Assert.DoesNotContain(parked.NodeOutcomes, o => o.NodeId is "B3" or "X" or "D" or "C");
+        Assert.Equal(0, f.Port.Sends);
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         internal const string Ticket = "composition-online-ticket";

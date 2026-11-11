@@ -61,7 +61,7 @@ public sealed partial class WorkflowPlan
                 if(n.Path?.Yes is null || n.Path.No is null || !ValidCondition(n.Path.Condition))
                     yield return $"判断节点 {n.NodeId} 需要有效条件及明确的是/否去向";
             }
-            foreach(var target in new[]{n.Path?.Next,n.Path?.Yes,n.Path?.No}.Where(t=>t is not null && t!="$end"))
+            foreach(var target in new[]{n.Path?.Next,n.Path?.Yes,n.Path?.No,n.Path?.Jump}.Where(t=>t is not null && t!="$end"))
                 if(_doc.Nodes.Count(x=>x.NodeId==target)!=1 && !LaneTarget(target!,out _,out _)) yield return $"节点 {n.NodeId} 的去向 {target} 不存在或有歧义";
             if(n.Kind=="control.end" && n.Path is {Next: not null} && n.Path.Next!="$end")
                 yield return "结束流程节点不能拥有后续执行去向";
@@ -99,6 +99,8 @@ public sealed partial class WorkflowPlan
         var target=(n.Kind=="control.condition" || n.Kind=="control.flow" && n.Flow?.ExitStepId is {Length: > 0}
             || WorkflowComposition.HasInlineDecision(n))
             ? result switch {"branchYes"=>n.Path?.Yes,"branchNo"=>n.Path?.No,"skippedUser" or "skippedFilter"=>n.Path?.Next ?? "$end",_=>throw new InvalidOperationException("判断结果尚未持久化，禁止猜测去向")}
+            // 编排流程行设置了跳转：只有正常执行完（succeeded）才跳；过滤、停用、跳过当前仍走 Next。
+            : n.Kind=="control.flow" && result=="succeeded" && n.Path?.Jump is {Length: > 0} jump ? jump
             : n.Path?.Next;
         if(target=="$end") return _doc.Loop is null ? null : StructuralRoundEntry(checked(current.LoopIteration+1));
         var outputLane=current.PathLane ?? Lane(n);

@@ -225,6 +225,8 @@ public sealed partial class WorkflowStore
         doc.WorkflowId ??= NewWorkflowId();
         if (string.IsNullOrWhiteSpace(doc.Name))
             throw new ArgumentException("流程名不能为空", nameof(doc));
+        // 有跳转的行补齐旧版保护标记（网页、导入、远程等任何来源漏加都在这里纠正）；没有跳转的计划不变。
+        WorkflowComposition.SyncJumpMarkers(doc);
 
         // R4.8 一轮 I7：检查-备份-写入全程互斥（同进程两次保存不得通过同一期望修订；外部非合作写方仍不承诺 CAS）
         using (AcquireWriteWindow())

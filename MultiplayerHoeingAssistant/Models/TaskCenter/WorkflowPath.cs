@@ -9,6 +9,10 @@ public sealed class WorkflowPath
     [JsonPropertyName("next")] public string? Next { get; set; }
     [JsonPropertyName("yes")] public string? Yes { get; set; }
     [JsonPropertyName("no")] public string? No { get; set; }
+    /// <summary>编排流程行正常执行完（succeeded）后的去向；过滤或跳过时仍走 Next。由 Compile 派生，为空时不写入。</summary>
+    [JsonPropertyName("jump")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Jump { get; set; }
     [JsonPropertyName("condition")] public WorkflowPathCondition? Condition { get; set; }
     [JsonExtensionData] public Dictionary<string,JsonElement>? ExtensionData { get; set; }
 }

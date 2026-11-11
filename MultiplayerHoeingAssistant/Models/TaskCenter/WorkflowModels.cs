@@ -317,6 +317,8 @@ public static class WorkflowKindCatalog
         "schedule.priority",
         "schedule.time",
         "flow.route",
+        // 编排跳转标记：流程/车道设置了「执行完后跳到 #N」。旧版执行端不认识此类型，会拒绝执行而不是忽略跳转按顺序跑。
+        "flow.jump",
         "observer.log",
         "execution.failure",
     };

@@ -127,11 +127,31 @@ public sealed partial class WorkflowEditVm
         return ids;
     }
 
+    /// <summary>指向这些行的跳转（流程 / 车道路线）。删除前提示用。</summary>
+    internal IReadOnlyList<NodeEditVm> JumpSourcesTo(IReadOnlySet<string> ids)
+        => Nodes.Where(n => n.Model.Flow?.JumpTo is { } f && ids.Contains(f)
+            || n.Model.Lanes is { } l && (l.YesJumpTo is { } y && ids.Contains(y) || l.NoJumpTo is { } no && ids.Contains(no))).ToArray();
+
+    /// <summary>删除行时把指向它的跳转改回「继续下一行」，不留下指向已删除行的跳转。</summary>
+    internal void ClearJumpsTo(IReadOnlySet<string> ids)
+    {
+        foreach (var n in Draft.Nodes)
+        {
+            if (n.Flow is { JumpTo: { } f } flow && ids.Contains(f)) flow.JumpTo = null;
+            if (n.Lanes is { } l)
+            {
+                if (l.YesJumpTo is { } y && ids.Contains(y)) l.YesJumpTo = null;
+                if (l.NoJumpTo is { } no && ids.Contains(no)) l.NoJumpTo = null;
+            }
+        }
+    }
+
     internal bool RemoveComposition(NodeEditVm node)
     {
         if (!node.IsComposition) return false;
         RememberSchedule();
         var ids = CompositionGroup(node);
+        ClearJumpsTo(ids);
         if (Draft.ExtensionData?.TryGetValue(TaskCenterPanelViewModel.StartNodeExtensionKey, out var marker) == true
             && marker.ValueKind == JsonValueKind.String && marker.GetString() is { } start && ids.Contains(start))
             Draft.ExtensionData.Remove(TaskCenterPanelViewModel.StartNodeExtensionKey);

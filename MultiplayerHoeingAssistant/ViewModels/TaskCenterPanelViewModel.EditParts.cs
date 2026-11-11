@@ -229,6 +229,9 @@ public sealed partial class WorkflowEditVm : ViewModelBase
     {
         if (p is not NodeEditVm vm) return;
         if (RemoveComposition(vm)) return;
+        // 先存撤销快照再改写指向它的跳转，撤销删除时跳转一并恢复。
+        if (JumpSourcesTo(new HashSet<string>(StringComparer.Ordinal) { vm.NodeId }).Count > 0) RememberSchedule();
+        ClearJumpsTo(new HashSet<string>(StringComparer.Ordinal) { vm.NodeId });
         foreach (var pair in Draft.Nodes.Where(n => n.Lanes is not null))
         { pair.Lanes!.YesNodeIds.Remove(vm.NodeId); pair.Lanes.NoNodeIds.Remove(vm.NodeId); }
         Nodes.Remove(vm);

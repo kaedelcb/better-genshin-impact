@@ -70,6 +70,7 @@ public static class WorkflowComposition
             if (matches.Length != 1 || index + 1 >= main.Count || main[index + 1] != matches[0])
                 errors.Add($"流程 {flow.NodeId} 的两个出口须与紧随其后的唯一车道配对");
         }
+        errors.AddRange(ValidateJumps(doc));
         foreach (var step in doc.Nodes.SelectMany(n => new[] { n.Flow, n.Lanes?.Decision }).OfType<WorkflowFlowDefinition>()
             .SelectMany(f => TaskFlowNodeCatalog.Flatten(f.Steps)))
             if (TaskFlowNodeCatalog.IsTrigger(step.Kind) && step.TriggerScope == "task"
@@ -98,15 +99,126 @@ public static class WorkflowComposition
             var n = main[i];
             var next = i + 1 < main.Count ? main[i + 1].NodeId : "$end";
             n.Path!.Next = next;
+            // 流程行跳转只在正常执行完时使用（PathSuccessor）；过滤、停用、跳过当前仍走 Next。
+            if (n.Kind == "control.flow" && string.IsNullOrEmpty(n.Flow?.ExitStepId) && JumpTarget(doc, n.Flow?.JumpTo) is { } flowJump)
+                n.Path.Jump = flowJump;
             if (n.Lanes is not { } l) continue;
             var after = next;
             var source = l.Decision is not null ? n : byId[l.SourceFlowNodeId];
-            source.Path!.Yes = l.YesNodeIds.FirstOrDefault() ?? after;
-            source.Path.No = l.NoNodeIds.FirstOrDefault() ?? after;
+            // 路线走完后的去向：设置了跳转就去目标行，否则汇合到下一行。旧配对车道不支持跳转（Validate 拦截）。
+            var yesAfter = l.Decision is not null ? JumpTarget(doc, l.YesJumpTo) ?? after : after;
+            var noAfter = l.Decision is not null ? JumpTarget(doc, l.NoJumpTo) ?? after : after;
+            source.Path!.Yes = l.YesNodeIds.FirstOrDefault() ?? yesAfter;
+            source.Path.No = l.NoNodeIds.FirstOrDefault() ?? noAfter;
             source.Path.Next = after; // 明确跳过整个配对结构时不泄漏任一分支。
-            foreach (var ids in new[] { l.YesNodeIds, l.NoNodeIds })
-                for (var k = 0; k < ids.Count; k++) byId[ids[k]].Path!.Next = k + 1 < ids.Count ? ids[k + 1] : after;
+            foreach (var (ids, end) in new[] { (l.YesNodeIds, yesAfter), (l.NoNodeIds, noAfter) })
+                for (var k = 0; k < ids.Count; k++) byId[ids[k]].Path!.Next = k + 1 < ids.Count ? ids[k + 1] : end;
         }
+    }
+
+    /// <summary>跳转目标在计划里实际进入的行：旧配对车道换算为它的条件流程（仍先判断再选路线）；空或不存在返回 null。</summary>
+    internal static string? JumpTarget(WorkflowDocument doc, string? target)
+    {
+        if (string.IsNullOrWhiteSpace(target)) return null;
+        var node = doc.Nodes.FirstOrDefault(n => n.NodeId == target);
+        if (node is null) return null;
+        return node.Lanes is { Decision: null } legacy && !string.IsNullOrEmpty(legacy.SourceFlowNodeId) ? legacy.SourceFlowNodeId : target;
+    }
+
+    /// <summary>该行是否设置了跳转（流程行整行，或车道任一路线）。</summary>
+    public static bool HasJump(WorkflowNode node)
+        => node.Kind == "control.flow" && !string.IsNullOrWhiteSpace(node.Flow?.JumpTo)
+           || node.Kind == "control.lanes" && (!string.IsNullOrWhiteSpace(node.Lanes?.YesJumpTo) || !string.IsNullOrWhiteSpace(node.Lanes?.NoJumpTo));
+
+    public const string JumpMarkerKind = "flow.jump";
+
+    /// <summary>
+    /// 按实际跳转补齐或移除旧版保护标记：旧版执行端不认识 flow.jump，会拒绝执行而不是忽略跳转按顺序执行。
+    /// 由 WorkflowStore.Save 调用，网页、导入、远程等任何来源漏加都在保存时纠正；没有跳转的计划不变。
+    /// </summary>
+    public static void SyncJumpMarkers(WorkflowDocument doc)
+    {
+        foreach (var n in doc.Nodes)
+        {
+            var has = n.Strategies.Any(s => s.Kind == JumpMarkerKind);
+            if (HasJump(n) && !has) n.Strategies.Add(new WorkflowStrategy { Kind = JumpMarkerKind });
+            else if (!HasJump(n) && has) n.Strategies.RemoveAll(s => s.Kind == JumpMarkerKind);
+        }
+    }
+
+    /// <summary>跳转规则问题（进入启动前预检，阻止启动）。</summary>
+    public static IReadOnlyList<string> ValidateJumps(WorkflowDocument doc) => JumpIssues(doc).Select(i => i.Message).ToArray();
+
+    /// <summary>
+    /// 逐行的跳转问题（界面按来源行标红用）：只能跳到来源之后的主计划行（按显示顺序），不能往回跳、跳到自身、跳进车道；
+    /// 旧配对车道及其条件流程、车道的条件定义不能设置跳转。
+    /// </summary>
+    public static IReadOnlyList<(string SourceNodeId, string Message)> JumpIssues(WorkflowDocument doc)
+    {
+        var issues = new List<(string, string)>();
+        var main = doc.Nodes.Where(n => !IsLaneMember(doc, n.NodeId)).ToList();
+        void Check(WorkflowNode source, string? target, string label)
+        {
+            if (string.IsNullOrWhiteSpace(target)) return;
+            var name = source.Flow?.Name ?? source.Lanes?.Name ?? source.NodeId;
+            if (doc.Nodes.Count(n => n.NodeId == target) != 1)
+            { issues.Add((source.NodeId, $"「{name}」{label}的跳转目标已不存在，请重新选择")); return; }
+            if (IsLaneMember(doc, target))
+            { issues.Add((source.NodeId, $"「{name}」{label}不能跳进车道里的任务，只能跳到主计划行")); return; }
+            var from = main.FindIndex(n => n.NodeId == source.NodeId);
+            var to = main.FindIndex(n => n.NodeId == JumpTarget(doc, target));
+            if (from < 0 || to <= from)
+                issues.Add((source.NodeId, $"「{name}」{label}的跳转目标在它前面或就是它自己，只能往后跳，请修改"));
+        }
+        foreach (var n in doc.Nodes)
+        {
+            if (n.Lanes?.Decision?.JumpTo is { Length: > 0 })
+                issues.Add((n.NodeId, $"车道「{n.Lanes.Name}」的选择条件不能设置跳转"));
+            if (n.Kind == "control.flow" && n.Flow is { } flow && !string.IsNullOrWhiteSpace(flow.JumpTo))
+            {
+                if (!string.IsNullOrEmpty(flow.ExitStepId))
+                    issues.Add((n.NodeId, $"「{flow.Name}」是旧版车道的条件流程，不能设置跳转"));
+                else Check(n, flow.JumpTo, "执行完后");
+            }
+            if (n.Kind == "control.lanes" && n.Lanes is { } lane
+                && (!string.IsNullOrWhiteSpace(lane.YesJumpTo) || !string.IsNullOrWhiteSpace(lane.NoJumpTo)))
+            {
+                if (lane.Decision is null) { issues.Add((n.NodeId, $"旧版车道「{lane.Name}」不支持跳转，请改用新版车道")); continue; }
+                Check(n, lane.YesJumpTo, "「满足条件」路线");
+                Check(n, lane.NoJumpTo, "「其他情况」路线");
+            }
+        }
+        return issues;
+    }
+
+    /// <summary>
+    /// 从首行沿编排去向走不到的主计划行（例如被流程跳转无条件跳过、又没有车道路线跳到它）。只用于提示，不阻止启动。
+    /// 车道两条路线都视为可走；有跳转的流程行按正常执行走跳转。计划本身有校验问题时不计算（返回空）。
+    /// </summary>
+    public static IReadOnlyList<string> UnreachableRows(WorkflowDocument doc)
+    {
+        if (!HasComposition(doc) || Validate(doc).Count > 0) return [];
+        var copy = JsonSerializer.Deserialize<WorkflowDocument>(JsonSerializer.Serialize(doc))!;
+        Compile(copy);
+        var byId = copy.Nodes.ToDictionary(n => n.NodeId);
+        var entry = copy.Nodes.FirstOrDefault(n => !IsLaneMember(copy, n.NodeId));
+        if (entry is null) return [];
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var stack = new Stack<string>();
+        stack.Push(entry.NodeId);
+        while (stack.Count > 0)
+        {
+            var id = stack.Pop();
+            if (!seen.Add(id) || !byId.TryGetValue(id, out var n)) continue;
+            var targets = n.Path?.Jump is { Length: > 0 } jump
+                ? new[] { jump, n.Path.Yes, n.Path.No }
+                : new[] { n.Path?.Next, n.Path?.Yes, n.Path?.No };
+            foreach (var t in targets) if (t is { Length: > 0 } && t != "$end") stack.Push(t);
+        }
+        var integrated = copy.Nodes.Where(n => n.Lanes is { Decision: null } l && !string.IsNullOrEmpty(l.SourceFlowNodeId))
+            .Select(n => n.Lanes!.SourceFlowNodeId).ToHashSet(StringComparer.Ordinal);
+        return copy.Nodes.Where(n => !IsLaneMember(copy, n.NodeId) && !integrated.Contains(n.NodeId) && !seen.Contains(n.NodeId))
+            .Select(n => n.NodeId).ToArray();
     }
 
     internal static string LayoutKey(WorkflowDocument doc)
