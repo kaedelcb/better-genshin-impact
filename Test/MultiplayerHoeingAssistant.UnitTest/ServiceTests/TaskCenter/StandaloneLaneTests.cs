@@ -92,6 +92,53 @@ public sealed class StandaloneLaneTests
         Assert.Empty(runtime.List());
     }
 
+    /// <summary>
+    /// 往车道里添加的任务会追加到节点末尾，排在后续主计划行之后：整趟仍是同一轮，
+    /// 暂停后恢复也接着同一轮执行下一行，不重复执行、不进入第 2 轮。
+    /// </summary>
+    [Fact]
+    public async Task LaneTasksStoredAfterNextRowStayInTheSameRoundAcrossPauseAndResume()
+    {
+        using var state = new State();
+        var doc = Document();
+        var b = doc.Nodes.Single(n => n.NodeId == "B");
+        doc.Nodes.Remove(b); doc.Nodes.Add(b); // 存储顺序：lane, C, D, B（B 在车道里，但排在 D 之后）
+        state.Save(doc);
+        var first = state.Runner(weekend: true);
+        state.Port.OnSend = request => { if (request.Occurrence.NodeId == "B") first.RequestAction(request.Run.RunId, WorkflowRunAction.Pause); };
+        var paused = await first.StartAsync(doc.WorkflowId!).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(WorkflowRunState.Paused, paused.State);
+        Assert.Equal(("D", 0), (paused.Cursor!.NodeId, paused.Cursor.LoopIteration));
+        state.Port = new Port();
+        var done = await state.Runner(weekend: true).ResumeAsync(paused.RunId).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(WorkflowRunState.Succeeded, done.State);
+        Assert.Equal(new[] { "D" }, state.Port.Visited);
+        Assert.All(done.NodeOutcomes, o => Assert.Equal(0, o.LoopIteration));
+        Assert.Equal(new[] { "lane", "B", "D" }, done.NodeOutcomes.Select(o => o.NodeId));
+    }
+
+    /// <summary>按本轮挂载的触发器在车道任务之后的下一行仍然有效（不被误当成进入新一轮而关闭）。</summary>
+    [Fact]
+    public async Task RoundTriggerArmedBeforeLaneStaysArmedForRowAfterLaneTasks()
+    {
+        using var state = new State();
+        var timer = StartupStepKinds.Create(StartupStepKinds.TimerTrigger);
+        timer.TriggerScope = "round"; timer.TriggerTime = "23:59"; timer.FireSteps = [StartupStepKinds.Create(StartupStepKinds.Wait)];
+        var doc = Document();
+        doc.Nodes.Insert(0, new WorkflowNode { NodeId = "prep", Kind = "control.flow", Flow = new() { Name = "挂定时器", Steps = [timer] } });
+        var b = doc.Nodes.Single(n => n.NodeId == "B");
+        doc.Nodes.Remove(b); doc.Nodes.Add(b); // 存储顺序：prep, lane, C, D, B
+        state.Save(doc);
+        var runtime = Runtime(true);
+        var armedAtD = -1;
+        state.Port.OnSend = request => { if (request.Occurrence.NodeId == "D") armedAtD = runtime.List().Count(t => t.Kind == "timer"); };
+        var result = await state.Runner(runtime).StartAsync(doc.WorkflowId!).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal(new[] { "B", "D" }, state.Port.Visited);
+        Assert.Equal(1, armedAtD);
+        Assert.All(result.NodeOutcomes, o => Assert.Equal(0, o.LoopIteration));
+    }
+
     [Fact]
     public void InvalidOrAmbiguousInternalConditionIsRejected()
     {
