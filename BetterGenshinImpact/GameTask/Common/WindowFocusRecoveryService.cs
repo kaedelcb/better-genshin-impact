@@ -98,7 +98,7 @@ public static class WindowFocusRecoveryService
 
         if (IsSuspendedByNetwork)
         {
-            Logger.LogInformation("网络恢复中，暂停尝试恢复窗口");
+            // 恢复流程的每次 Delay 都会经过这里；阶段和结果由恢复器记录，避免逐帧刷屏。
             return;
         }
 

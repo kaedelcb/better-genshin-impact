@@ -15,7 +15,11 @@ namespace BetterGenshinImpact.Core.Input
         public static void ReleaseAll() => Interlocked.Increment(ref Releases);
         public static Input Foreground { get; } = new();
         public class Input { public Keyboard Keyboard { get; } = new(); }
-        public class Keyboard { public void KeyPress(Vanara.PInvoke.User32.VK key) { } }
+        public class Keyboard
+        {
+            public static Action? PressForTest;
+            public void KeyPress(Vanara.PInvoke.User32.VK key) => PressForTest?.Invoke();
+        }
     }
 }
 namespace BetterGenshinImpact.GameTask
@@ -35,10 +39,21 @@ namespace BetterGenshinImpact.GameTask
         public void Suspend() => Suspends++;
         public void Resume() => Resumes++;
     }
+    public static class SystemControl
+    {
+        public static bool ActiveForTest = true;
+        public static Action? FocusForTest;
+        public static bool IsGenshinImpactActiveByProcess() => ActiveForTest;
+        public static void FocusWindow(IntPtr _) => FocusForTest?.Invoke();
+    }
     public class TaskContext
     {
         private static readonly TaskContext Current = new();
         public static TaskContext Instance() => Current;
+        public IntPtr GameHandle => IntPtr.Zero;
+        public RuntimeData? Runtime { get; set; }
+        public class RuntimeData { public WindowData Window { get; } = new(); }
+        public class WindowData { public bool RequiresForeground { get; set; } = true; }
         public ConfigData Config { get; } = new();
         public class ConfigData { public TpConfigData TpConfig { get; } = new(); }
         public class TpConfigData { public bool UseOfficialTeleport { get; set; } }
@@ -46,7 +61,13 @@ namespace BetterGenshinImpact.GameTask
 }
 namespace BetterGenshinImpact.GameTask.Common
 {
-    public class Screen : IDisposable { public void Dispose() { } }
+    public class Screen : IDisposable
+    {
+        public static bool IsMapForTest;
+        public Screen Find(object _) => new();
+        public bool IsExist() => IsMapForTest;
+        public void Dispose() { }
+    }
     public partial class TaskControl
     {
         public static ILogger Logger { get; } = NullLogger.Instance;
@@ -57,7 +78,8 @@ namespace BetterGenshinImpact.GameTask.Common
         public static bool IsSuspendedByNetwork { get; set; }
         public static bool IsSuspendedByWindow { get; set; }
         public static Screen CaptureToRectArea() => new();
-        public static Task Delay(int ms, CancellationToken ct) => Task.Delay(ms, ct);
+        public static Func<int, CancellationToken, Task>? DelayForTest;
+        public static Task Delay(int ms, CancellationToken ct) => DelayForTest?.Invoke(ms, ct) ?? Task.Delay(ms, ct);
         public static Func<CancellationToken, Task> Monitor = _ => Task.CompletedTask;
         public static Func<CancellationToken, Task<bool>> ReachableForTest = _ => Task.FromResult(false);
         private static Task<bool> IsEnvironmentNetworkReachableAsync(CancellationToken ct) => ReachableForTest(ct);
@@ -74,20 +96,30 @@ namespace BetterGenshinImpact.GameTask.Common
 }
 namespace BetterGenshinImpact.GameTask.Common.BgiVision
 {
-    public static class Bv { public static bool IsInMainUi(Common.Screen _) => true; }
+    public static class Bv
+    {
+        public static Func<bool> MainUiForTest = () => true;
+        public static bool IsInMainUi(Common.Screen _) => MainUiForTest();
+    }
 }
 namespace BetterGenshinImpact.GameTask.Common.Job
 {
     public static class NetworkRecovery
     {
         public static bool RecoveryNetworkDone;
+        public static Func<CancellationToken, Task>? StartForTest;
         public static Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true,
             int mainUiAttempts = 60)
-            => Task.CompletedTask;
+            => StartForTest?.Invoke(ct) ?? Task.CompletedTask;
     }
 }
 namespace BetterGenshinImpact.GameTask.AutoTrackPath
 {
+    public sealed class TpTaskFastDragAssets
+    {
+        public object MapScaleButtonRo { get; } = new();
+        public static TpTaskFastDragAssets Get(Common.Screen _) => new();
+    }
     public class TpTaskFastDrag(CancellationToken ct)
     {
         public static Func<CancellationToken, Task<bool>>? ProbeForTest;

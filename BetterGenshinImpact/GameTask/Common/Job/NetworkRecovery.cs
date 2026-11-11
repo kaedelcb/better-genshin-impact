@@ -39,7 +39,8 @@ public class NetworkRecovery
         
         var aa =await NewRetry.WaitForElementDisappear(
             GetConfirmRa(true,"连接超时","连接已断开","网络错误","无法登录服务器","提示","通知"),
-            screen => { 
+            screen => {
+                if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)) return;
                 var confirm =
                     screen.FindMulti(GetConfirmRa());
                 var confirmDone = confirm.LastOrDefault(t =>
@@ -65,7 +66,8 @@ public class NetworkRecovery
         
         await NewRetry.WaitForElementDisappear(
             GetConfirmRa(true,"连接超时","连接已断开","网络错误","无法登录服务器","提示","通知"),
-            screen => { 
+            screen => {
+                if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)) return;
                 var confirm =
                     screen.FindMulti(GetConfirmRa());
                 var confirmDone = confirm.LastOrDefault(t =>
@@ -91,10 +93,11 @@ public class NetworkRecovery
                     return;//回到主页一次后，后续异步执行的所有操作都取消
                 }
                 IsSuspendedByNetwork = true;
-                Logger.LogWarning("尝试恢复中-1...");
-                
                 using var ra = CaptureToRectArea();
-                
+                // 受保护恢复只在仍未到主界面时处理登录按钮，避免返回大世界后继续盲点。
+                if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(ra)) return;
+                Logger.LogWarning("[网络恢复] 正在等待游戏返回主界面");
+
                 var tips = ra.Find(ElementAssets.Instance.MiMenuRo);
                 if (tips.IsExist())
                 {
@@ -135,7 +138,7 @@ public class NetworkRecovery
         
         ct.ThrowIfCancellationRequested();
         if (verifyMainUi && !mainUiAppeared) return;
-        Logger.LogWarning("回到主页-2");
+        Logger.LogInformation("[网络恢复] 正在确认主界面，尚未解除暂停");
         await new ReturnMainUiTask().Start(ct);
         ct.ThrowIfCancellationRequested();
         if (verifyMainUi)

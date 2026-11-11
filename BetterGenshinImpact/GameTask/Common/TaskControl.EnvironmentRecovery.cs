@@ -180,8 +180,7 @@ public partial class TaskControl
                     _inNetworkRecovery.Value = true;
                     RecoveryProbeToken.Value = token;
                     if (IsSuspendedByWindow || IsSuspendedByNetwork)
-                        await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false,
-                            mainUiAttempts: RecoveryMainUiAttempts);
+                        await PrepareNetworkRecoveryUiAsync(token);
                     token.ThrowIfCancellationRequested();
                     if (!await probe(token)) return false;
                     token.ThrowIfCancellationRequested();
@@ -238,12 +237,13 @@ public partial class TaskControl
                 RecoveryProbeToken.Value = token;
                 // 等主任务进入暂停点，避免恢复线程与正在移动/传送的任务同时发输入。
                 if (Volatile.Read(ref _environmentPauseDepth) == 0) return false;
-                await NetworkRecovery.Start(token, verifyMainUi: true, clearSuspend: false,
-                    mainUiAttempts: RecoveryMainUiAttempts);
-                using (var screen = CaptureToRectArea())
-                    if (!Bv.IsInMainUi(screen)) return false;
+                await PrepareNetworkRecoveryUiAsync(token);
                 var tp = new TpTaskFastDrag(token);
-                if (!await tp.ProbeMapForRecoveryAsync()) return false;
+                if (!await tp.ProbeMapForRecoveryAsync())
+                {
+                    Logger.LogWarning("[网络恢复] 尚未确认大地图可操作，保持暂停并重试");
+                    return false;
+                }
                 if (!await CloseRecoveryMapAsync(token)) return false;
                 token.ThrowIfCancellationRequested();
                 return true;
@@ -259,15 +259,47 @@ public partial class TaskControl
         // 预算窗口接受结果之后才发布恢复，迟到的探测不能提前放行主任务。
         Interlocked.Increment(ref _networkRecoveryVersion);
         ClearVerifiedNetworkRecovery();
+        Logger.LogInformation("已确认游戏操作恢复，继续原任务步骤");
+    }
+
+    private static async Task PrepareNetworkRecoveryUiAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using (var screen = CaptureToRectArea())
+        {
+            // 已到主界面或上一轮已打开地图时，直接继续操作验证，不重跑登录/OCR点击。
+            // 地图识别与快速传送探测使用同一套资产，不能混用公版模板。
+            using var map = screen.Find(TpTaskFastDragAssets.Get(screen).MapScaleButtonRo);
+            if (map.IsExist() || Bv.IsInMainUi(screen)) return;
+        }
+        await NetworkRecovery.Start(ct, verifyMainUi: true, clearSuspend: false,
+            mainUiAttempts: RecoveryMainUiAttempts);
     }
 
     private static async Task<bool> CloseRecoveryMapAsync(CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
-        InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
-        await Delay(500, ct);
-        using var restored = CaptureToRectArea();
-        return Bv.IsInMainUi(restored);
+        Logger.LogInformation("[网络恢复] 已确认大地图，正在验证返回主界面");
+        var recovered = await NetworkRecoveryMapProbe.CloseAsync(() =>
+        {
+            using var restored = CaptureToRectArea();
+            return Bv.IsInMainUi(restored);
+        }, () =>
+        {
+            ct.ThrowIfCancellationRequested();
+            if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+                && !SystemControl.IsGenshinImpactActiveByProcess())
+            {
+                Logger.LogWarning("[网络恢复-关图] 前台不是原神，先恢复焦点，本轮不按 Esc");
+                SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+                return false;
+            }
+            ct.ThrowIfCancellationRequested();
+            InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_ESCAPE);
+            return true;
+        }, (milliseconds, token) => Delay(milliseconds, token), ct);
+        if (!recovered)
+            Logger.LogWarning("[网络恢复] 关图后尚未稳定识别到主界面，保持暂停并重试");
+        return recovered;
     }
 
     /// <summary>仅在已检测到网络或窗口异常时复核；普通寻路卡住保留原重试、放弃和跳段处理。</summary>
