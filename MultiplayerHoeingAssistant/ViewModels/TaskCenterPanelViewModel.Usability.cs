@@ -201,6 +201,7 @@ public sealed partial class TaskCenterPanelViewModel
             var mainRows = Editing?.MainPlanNodes ?? Array.Empty<NodeEditVm>();
             if (!_planRows.SequenceEqual(mainRows)) { _planRows = mainRows; OnPropertyChanged(nameof(PlanRows)); }
             for (var row = 0; row < mainRows.Count; row++) mainRows[row].ResourceIndex = row + 1;
+            Editing?.RefreshJumpLabels();
             var resourcesChanged = !_resourceNodes.SequenceEqual(resourceNodes);
             if (resourcesChanged) _resourceNodes = resourceNodes;
             if (!resourceNodes.Any(n => n.IsComposition) && mainRows.Count == resourceNodes.Length)
@@ -279,6 +280,7 @@ public sealed partial class TaskCenterPanelViewModel
         }
 
         var name = node.DisplayName;
+        if (!ConfirmDeleteJumpTarget(node)) return;
         editing.RemoveNodeCommand.Execute(node);
         Refresh();
         SetStatus($"已移除配置单「{name}」，正在自动保存计划。", isError: false);

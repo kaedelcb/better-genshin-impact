@@ -54,7 +54,15 @@ public partial class BasicTaskCenterView
         var decision = source is null ? null : WorkflowComposition.GetDecision(initial.Draft, source.Model);
         var originalDecision = decision is null ? null : JsonSerializer.Serialize(decision);
         var lanes = source?.Model.Lanes ?? new WorkflowLanesDefinition { Name = "选择路线", YesName = "路线 1", NoName = "路线 2" };
-        var window = new LanesEditorWindow(lanes, decision, initial.Draft.Nodes, owner.AllowedTaskPrograms) { Owner = Window.GetWindow(this) };
+        // 旧版配对车道（条件在独立流程上）不支持跳转，不显示跳转设置。
+        var legacyPaired = source?.Model.Lanes is { Decision: null } paired && !string.IsNullOrEmpty(paired.SourceFlowNodeId);
+        var window = new LanesEditorWindow(lanes, decision, initial.Draft.Nodes, owner.AllowedTaskPrograms)
+        {
+            Owner = Window.GetWindow(this),
+            // 两条路线的合法目标相同；各自当前的不合法目标（例如被拖到前面）也列出，避免下拉框悄悄换掉。
+            JumpChoices = legacyPaired ? null : initial.JumpTargetChoices(nodeId, lanes.YesJumpTo)
+                .Concat(initial.JumpTargetChoices(nodeId, lanes.NoJumpTo)).DistinctBy(c => c.NodeId).ToArray(),
+        };
         window.ApplyToPlan = result =>
         {
             if (!ReferenceEquals(Host, owner) || owner.Editing is not { } editing || editing.Draft.WorkflowId != workflowId)
@@ -88,8 +96,12 @@ public partial class BasicTaskCenterView
         var sourceId = source?.NodeId;
         var original = source is null ? null : JsonSerializer.Serialize(source.Model.Flow);
         var flow = source?.Model.Flow ?? new WorkflowFlowDefinition { Name = requireExit ? "车道判断" : "流程" };
+        // 旧版车道的条件流程不支持跳转，不显示跳转设置。
         var window = new TaskFlowEditorWindow(flow, initial.Draft.Nodes, selectedStepId, owner.AllowedTaskPrograms, requireExit)
-        { Owner = Window.GetWindow(this) };
+        {
+            Owner = Window.GetWindow(this),
+            JumpChoices = requireExit || !string.IsNullOrEmpty(flow.ExitStepId) ? null : initial.JumpTargetChoices(sourceId, flow.JumpTo),
+        };
         window.ApplyToPlan = result =>
         {
             // 模态窗口仍会运行自动保存和刷新。按计划/节点身份重绑，不能用旧 VM 的引用判断丢掉结果。

@@ -19,6 +19,20 @@ public sealed partial class TaskCenterPanelViewModel
     /// <summary>车道判断出结果时触发（参数：车道节点 Id）；页面在开关打开时展开该车道。</summary>
     internal event Action<string>? LaneDecided;
 
+    /// <summary>删除确认（测试可替换）：参数为提示文字，返回 true 继续删除。</summary>
+    internal Func<string, bool> ConfirmDelete { get; set; } = message =>
+    {
+        var owner = System.Windows.Application.Current?.MainWindow;
+        return (owner is null
+            ? System.Windows.MessageBox.Show(message, "删除跳转目标", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.No)
+            : System.Windows.MessageBox.Show(owner, message, "删除跳转目标", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning, System.Windows.MessageBoxResult.No))
+            == System.Windows.MessageBoxResult.Yes;
+    };
+
+    /// <summary>删除前检查：这一行（或流程/车道带走的行）被跳转指向时先确认。返回 false 表示用户取消。</summary>
+    internal bool ConfirmDeleteJumpTarget(NodeEditVm node)
+        => Editing?.DeleteJumpWarning(node) is not { } warning || ConfirmDelete(warning);
+
     /// <summary>页面请求打开流程图（页面代码后置负责建窗口）。</summary>
     internal event Action? FlowChartRequested;
 

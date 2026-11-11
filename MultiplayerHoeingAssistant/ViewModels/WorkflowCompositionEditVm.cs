@@ -111,6 +111,8 @@ public sealed partial class WorkflowEditVm
         lanes.NotifyCompositionChanged(); CompositionChanged();
     }
 
+    internal IReadOnlySet<string> CompositionGroupIds(NodeEditVm node) => CompositionGroup(node);
+
     private HashSet<string> CompositionGroup(NodeEditVm node)
     {
         var root = node.Model.Lanes is { } lane

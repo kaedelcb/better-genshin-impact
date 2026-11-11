@@ -516,7 +516,17 @@
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="44" /><ColumnDefinition Width="*" /><ColumnDefinition Width="100" /><ColumnDefinition Width="148" /><ColumnDefinition Width="96" /><ColumnDefinition Width="44" /></Grid.ColumnDefinitions>
                                                      <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <TextBlock Text="⋮⋮" Foreground="{DynamicResource Dim}" FontSize="12" Margin="0,0,5,0" />
-                                                        <TextBlock Text="{Binding ResourceIndex, StringFormat={}{0:00}}" Foreground="{DynamicResource Water}" FontSize="14" />
+                                                        <!-- 编号与跳转目标同口径（#N）；没有编号时退回原顺序号。 -->
+                                                        <TextBlock Foreground="{DynamicResource Water}" FontSize="14">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="{Binding RowNumber}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding RowNumber}" Value=""><Setter Property="Text" Value="{Binding ResourceIndex, StringFormat={}{0:00}}" /></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                     </StackPanel>
                                                     <Grid Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TimeWindowMutedContent}">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
@@ -526,8 +536,20 @@
                                                                     Visibility="{Binding IsStartNode, Converter={StaticResource Visible}}">
                                                                 <TextBlock Text="起点" Foreground="#241D3D" FontSize="10" FontWeight="Bold" />
                                                             </Border>
-                                                            <TextBlock x:Name="ResourceNameText" Grid.Column="1" Text="{Binding DisplayName}" ToolTip="{Binding DisplayName}" Foreground="{DynamicResource White}" FontSize="14"
-                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                            <TextBlock x:Name="ResourceNameText" Grid.Column="1" Text="{Binding DisplayName}" ToolTip="{Binding DisplayName}" FontSize="14"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource White}" />
+                                                                        <Style.Triggers>
+                                                                            <!-- 没有路径会走到：灰显名称，并在提示里说明原因。 -->
+                                                                            <DataTrigger Binding="{Binding IsUnreachable}" Value="True">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource Dim}" /><Setter Property="ToolTip" Value="{Binding RowNotice}" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                             <!-- 最近一次运行本轮的状态（与流程图同口径；没有运行记录时不显示）。 -->
                                                             <Border x:Name="ResourceRunStateBadge" Grid.Column="2" CornerRadius="9" Padding="7,1" Margin="6,0,0,0" VerticalAlignment="Center"
                                                                     BorderThickness="1" Visibility="{Binding HasRunState, Converter={StaticResource Visible}}" ToolTip="最近一次运行本轮的执行状态">
@@ -640,6 +662,23 @@
                                                                    VerticalAlignment="Center" HorizontalAlignment="Center" />
                                                      </Grid>
                                             </Grid>
+                                            <!-- 普通任务行：没有路径会走到时在行下方提示（流程/车道行由 CompositionPlanRow 自己显示）。 -->
+                                            <TextBlock Text="{Binding RowNotice}" Foreground="{DynamicResource Dim}" FontSize="11" Margin="52,0,8,3" TextWrapping="Wrap">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding HasRowNotice}" Value="True" />
+                                                                    <Condition Binding="{Binding IsComposition}" Value="False" />
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                             </StackPanel>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>

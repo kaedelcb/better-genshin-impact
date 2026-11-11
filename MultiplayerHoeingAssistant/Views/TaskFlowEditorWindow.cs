@@ -45,6 +45,9 @@ public sealed class TaskFlowEditorWindow : Window
     internal TreeView StepTreeForTest => _tree;
     internal StackPanel ParameterPanelForTest => _parameters;
     internal Func<WorkflowFlowDefinition, string?>? ApplyToPlan { get; set; }
+    /// <summary>流程行的跳转目标选项（第一项为「继续下一行」）。为 null 时不显示跳转设置（车道条件、判断前的步骤）。</summary>
+    internal IReadOnlyList<MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice>? JumpChoices { get; init; }
+    internal ComboBox? JumpChoiceForTest { get; private set; }
 
     public TaskFlowEditorWindow(WorkflowFlowDefinition source, IEnumerable<WorkflowNode> resources, string? selectedStepId = null, IReadOnlyList<StartupStep>? allowedPrograms = null, bool requireExit = false)
     {
@@ -94,7 +97,9 @@ public sealed class TaskFlowEditorWindow : Window
         var nameLabel = new TextBlock { Text = "流程名称", Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#C6BAD5") };
         DockPanel.SetDock(nameLabel, Dock.Right); heading.Children.Add(nameLabel);
         heading.Children.Add(new TextBlock { Text = Title, FontSize = 20, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        root.Children.Add(heading);
+        var header = new StackPanel(); header.Children.Add(heading);
+        root.Children.Add(header);
+        Loaded += (_, _) => AddJumpRow(header);
         var columns = new Grid();
         columns.ColumnDefinitions.Add(new() { Width = new GridLength(0.82, GridUnitType.Star) });
         columns.ColumnDefinitions.Add(new() { Width = new GridLength(1.18, GridUnitType.Star) });
@@ -170,6 +175,25 @@ public sealed class TaskFlowEditorWindow : Window
             e.Handled = true; CloseCatalog();
         };
         RefreshTree(selectedStepId);
+    }
+
+    /// <summary>流程整行的跳转设置：执行完后继续下一行，或跳到后面的某一行。只有正常执行完才跳。</summary>
+    private void AddJumpRow(StackPanel header)
+    {
+        if (JumpChoices is not { Count: > 0 } choices || _requireExit || JumpChoiceForTest is not null) return;
+        var row = new DockPanel { Margin = new Thickness(0, -8, 0, 14) };
+        row.Children.Add(new TextBlock { Text = "执行完后", Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#C6BAD5") });
+        DockPanel.SetDock(row.Children[0], Dock.Left);
+        var combo = new ComboBox { ItemsSource = choices, MinWidth = 260, HorizontalAlignment = HorizontalAlignment.Left };
+        AutomationProperties.SetName(combo, "执行完后");
+        ThemeCombo(combo);
+        combo.SelectedItem = choices.FirstOrDefault(c => c.NodeId == _draft.JumpTo) ?? choices[0];
+        combo.SelectionChanged += (_, _) => _draft.JumpTo = (combo.SelectedItem as MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice)?.NodeId;
+        DockPanel.SetDock(combo, Dock.Left); row.Children.Add(combo);
+        row.Children.Add(new TextBlock { Text = "跳到后面的行时，中间的行不执行；流程被停用、过滤或跳过时不跳，照常执行下一行。",
+            Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#9C97C0"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
+        header.Children.Add(row);
+        JumpChoiceForTest = combo;
     }
 
     private static SolidColorBrush Brush(string color) => new((Color)ColorConverter.ConvertFromString(color));

@@ -30,6 +30,10 @@ public sealed class LanesEditorWindow : Window
     private readonly TextBox _yes;
     private readonly TextBox _no;
     internal Func<WorkflowLanesDefinition, string?>? ApplyToPlan { get; set; }
+    /// <summary>每条路线走完后的跳转目标选项（第一项为「继续下一行」）。为 null 时不显示（旧配对车道不支持跳转）。</summary>
+    internal IReadOnlyList<MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice>? JumpChoices { get; init; }
+    internal ComboBox? YesJumpForTest { get; private set; }
+    internal ComboBox? NoJumpForTest { get; private set; }
     public WorkflowLanesDefinition Result => _draft;
 
     public LanesEditorWindow(WorkflowLanesDefinition source, WorkflowFlowDefinition? decision,
@@ -78,6 +82,14 @@ public sealed class LanesEditorWindow : Window
         names.Children.Add(left); Grid.SetColumn(right, 1); names.Children.Add(right); body.Children.Add(names);
         _yes = TextField(left, "条件满足时走", source.YesName is "是" or "" ? "路线 1" : source.YesName);
         _no = TextField(right, "其他情况走", source.NoName is "否" or "" ? "路线 2" : source.NoName);
+        Loaded += (_, _) =>
+        {
+            if (JumpChoices is not { Count: > 0 } choices || YesJumpForTest is not null) return;
+            YesJumpForTest = JumpCombo(left, choices, _draft.YesJumpTo, v => _draft.YesJumpTo = v);
+            NoJumpForTest = JumpCombo(right, choices, _draft.NoJumpTo, v => _draft.NoJumpTo = v);
+            body.Children.Insert(body.Children.IndexOf(names) + 1,
+                Note("路线走完后可以跳到后面的行，中间的行本轮不执行；路线留空时判断后直接跳。"));
+        };
         body.Children.Add(Heading("选择条件"));
         var kinds = TaskFlowNodeCatalog.All.Where(k => k.NodeType == "condition").ToArray();
         var choices = new[] { "请选择判断方式" }.Concat(kinds.Select(k => k.DisplayName)).ToArray();
@@ -98,7 +110,8 @@ public sealed class LanesEditorWindow : Window
             var tile = CompositionUiTheme.Panel(route); tile.Margin = new Thickness(0, 0, 0, 8); summary.Children.Add(tile);
         }
         Route("满足条件", _yesPreview, _draft.YesNodeIds); Route("其他情况", _noPreview, _draft.NoNodeIds);
-        summary.Children.Add(Note("选中的路线结束后，继续下一项任务。"));
+        var after = Note("选中的路线结束后，继续下一项任务。"); summary.Children.Add(after);
+        Loaded += (_, _) => { if (JumpChoices is { Count: > 0 }) after.Text = "选中的路线结束后，按「这条路线走完后」的设置继续。"; };
         var preview = CompositionUiTheme.Panel(summary, inset: true);
         preview.VerticalAlignment = VerticalAlignment.Top;
         workspace.Children.Add(preview);
@@ -158,6 +171,15 @@ public sealed class LanesEditorWindow : Window
     {
         var box = new ComboBox { ItemsSource = labels.ToArray(), SelectedIndex = selected, MinWidth = 100, Margin = new Thickness(0, 3, 8, 3) };
         CompositionUiTheme.StyleCombo(box); return box;
+    }
+    private static ComboBox JumpCombo(Panel target, IReadOnlyList<MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice> choices, string? current, Action<string?> set)
+    {
+        target.Children.Add(Note("这条路线走完后"));
+        var box = new ComboBox { ItemsSource = choices, MinWidth = 100, Margin = new Thickness(0, 2, 8, 5) };
+        CompositionUiTheme.StyleCombo(box);
+        box.SelectedItem = choices.FirstOrDefault(c => c.NodeId == current) ?? choices[0];
+        box.SelectionChanged += (_, _) => set((box.SelectedItem as MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice)?.NodeId);
+        target.Children.Add(box); return box;
     }
     private static TextBox TextField(Panel target, string label, string value)
     {

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Collections.Specialized;
@@ -735,6 +735,11 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
     {
         // Clock ticks are presentation-only: they must not rebuild the workspace or queue saves.
         if (e.PropertyName is nameof(NodeEditVm.IsOutsideTimeWindow) or nameof(NodeEditVm.TimeWindowStatusText)) return;
+        // 编号、跳转说明、执行状态同样只是展示（由 NotifyWorkspace / 运行刷新重算），不能回头重建工作区或排队保存。
+        if (e.PropertyName is nameof(NodeEditVm.RowNumber) or nameof(NodeEditVm.JumpText) or nameof(NodeEditVm.JumpProblem)
+            or nameof(NodeEditVm.HasJumpProblem) or nameof(NodeEditVm.HasJump) or nameof(NodeEditVm.IsUnreachable) or nameof(NodeEditVm.RowNotice)
+            or nameof(NodeEditVm.HasRowNotice) or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RunStateText)
+            or nameof(NodeEditVm.HasRunState)) return;
         NotifyWorkspace();
         if (e.PropertyName is nameof(NodeEditVm.DisplayName)
             or nameof(NodeEditVm.KindName)

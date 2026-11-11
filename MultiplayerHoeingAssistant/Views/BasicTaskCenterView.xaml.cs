@@ -240,6 +240,7 @@ public partial class BasicTaskCenterView : UserControl
         var node = ContextNode(sender) ?? Host?.Editing?.SelectedNode;
         if (node is null || Host?.Editing is not { } editing) return;
         editing.SelectedNode = node;
+        if (!Host.ConfirmDeleteJumpTarget(node)) return;
         editing.RemoveNodeCommand.Execute(node);
         Host.RefreshCommand.Execute(null);
         Host.ShowInlineActionFeedback($"已移除配置单「{node.DisplayName}」，正在自动保存计划。", isError: false);

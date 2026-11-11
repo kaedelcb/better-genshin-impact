@@ -11,6 +11,7 @@ namespace MultiplayerHoeingAssistant.Views;
 /// <summary>基础表结构行；只渲染与编辑，不安装或拥有触发器。</summary>
 public sealed class CompositionPlanRow : UserControl
 {
+    private Border? _frame;
     private readonly Expander _expander = new() { IsExpanded = false, Margin = new Thickness(3, 0, 3, 0), Padding = new Thickness(0) };
     private NodeEditVm? _node;
     private TaskCenterPanelViewModel? _host;
@@ -71,7 +72,7 @@ public sealed class CompositionPlanRow : UserControl
               <ControlTemplate.Triggers><Trigger Property="IsExpanded" Value="True"><Setter TargetName="Body" Property="Visibility" Value="Visible"/></Trigger></ControlTemplate.Triggers>
             </ControlTemplate>
             """);
-        Content = new Border { BorderBrush = B("#51455D"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
+        Content = _frame = new Border { BorderBrush = B("#51455D"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6),
             Background = B("#2B253F"), Child = _expander, Margin = new Thickness(0, 0, 0, 1) };
         DataContextChanged += (_, e) =>
         {
@@ -106,7 +107,7 @@ public sealed class CompositionPlanRow : UserControl
     private void Changed(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(NodeEditVm.DisplayName) or nameof(NodeEditVm.CompositionSummary) or nameof(NodeEditVm.ResourceIndex)
-            or nameof(NodeEditVm.RunState))
+            or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RowNumber) or nameof(NodeEditVm.JumpText) or nameof(NodeEditVm.RowNotice))
             Draw();
     }
     internal void ExpandContents() => _expander.IsExpanded = true;
@@ -132,7 +133,7 @@ public sealed class CompositionPlanRow : UserControl
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1.15, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
-        var number = Text($"{node.ResourceIndex:00}", true); number.FontSize = 11; header.Children.Add(number);
+        var number = Text(node.RowNumber.Length > 0 ? node.RowNumber : $"{node.ResourceIndex:00}", true); number.FontSize = 11; header.Children.Add(number);
         var kind = Text(node.Model.Flow is null ? "车道" : "流程", true);
         kind.FontSize = 11; kind.Margin = new Thickness(0); kind.HorizontalAlignment = HorizontalAlignment.Center;
         var badge = new Border { Child = kind, Background = B("#403547"), CornerRadius = new CornerRadius(4),
@@ -146,7 +147,9 @@ public sealed class CompositionPlanRow : UserControl
         var summary = final is null ? node.CompositionSummary : LanesEditorWindow.Describe(final)
             + " → " + (node.Model.Lanes!.YesName == "是" ? "路线 1" : node.Model.Lanes.YesName)
             + "；其他 → " + (node.Model.Lanes.NoName == "否" ? "路线 2" : node.Model.Lanes.NoName);
-        var hint = Text(summary); hint.FontSize = 11; hint.Foreground = B("#C7BCD8"); hint.ToolTip = summary;
+        // 有跳转时摘要后面接上去向，例如「…；执行完后 → #5 至冬材料」。
+        if (node.HasJump) summary += "　" + node.JumpText;
+        var hint = Text(summary); hint.FontSize = 11; hint.Foreground = B(node.HasJump ? "#C9B4F0" : "#C7BCD8"); hint.ToolTip = summary;
         hint.Margin = new Thickness(7, 0, 6, 0); Grid.SetColumn(hint, 3); header.Children.Add(hint);
         var edit = ActionButton(node.Model.Flow is null ? "设置车道" : "编辑步骤", () => { if (node.Model.Flow is not null) View?.OpenFlowEditor(node); else View?.EditLanes(node); });
         edit.Height = edit.MinHeight = 24; edit.Padding = new Thickness(6, 1, 6, 1); edit.Margin = new Thickness(3, 0, 0, 0);
@@ -169,7 +172,18 @@ public sealed class CompositionPlanRow : UserControl
             Grid.SetColumn(edit, 5);
             Grid.SetColumn(runBadge, 4); header.Children.Add(runBadge);
         }
-        _expander.Header = header;
+        // 跳转有问题：整行标红，并在标题下方写明原因（计划因此不能启动）；不可达只提示。
+        if (_frame is not null) _frame.BorderBrush = B(node.HasJumpProblem ? "#C9614F" : "#51455D");
+        if (node.HasRowNotice)
+        {
+            var wrap = new StackPanel();
+            wrap.Children.Add(header);
+            var notice = Text(node.RowNotice); notice.FontSize = 11; notice.TextWrapping = TextWrapping.Wrap; notice.TextTrimming = TextTrimming.None;
+            notice.Foreground = B(node.HasJumpProblem ? "#F0A08C" : "#9C97C0"); notice.Margin = new Thickness(59, 0, 6, 3);
+            wrap.Children.Add(notice);
+            _expander.Header = wrap;
+        }
+        else _expander.Header = header;
         if (!_expander.IsExpanded) return;
         var content = new StackPanel { Margin = new Thickness(20, 2, 5, 5) };
         if (node.Model.Flow is { } flow)
@@ -213,7 +227,7 @@ public sealed class CompositionPlanRow : UserControl
             }
             Arrange(ActualWidth - 35); routes.SizeChanged += (_, e) => { if (e.WidthChanged) Arrange(e.NewSize.Width); };
             content.Children.Add(routes);
-            content.Children.Add(Text("车道中的任务执行完，继续下一项任务", true));
+            content.Children.Add(Text(node.HasJump ? "路线走完后：" + node.JumpText : "车道中的任务执行完，继续下一项任务", true));
         }
         _expander.Content = content;
     }
@@ -272,13 +286,19 @@ public sealed class CompositionPlanRow : UserControl
             Item("详情", () => WithMember((_, _, member) => View?.OpenLaneTask(member, this)));
             Item("上移", () => Move(-1), i > 0);
             Item("下移", () => Move(1), i + 1 < ids.Count);
-            Item("移除", () => WithMember((live, _, member) => { live.RemoveNodeCommand.Execute(member); live.CompositionChanged(); Draw(); }));
+            Item("移除", () => WithMember((live, _, member) =>
+            {
+                if (View?.CompositionHost?.ConfirmDeleteJumpTarget(member) == false) return;
+                live.RemoveNodeCommand.Execute(member); live.CompositionChanged(); Draw();
+            }));
             menu.Opened += (_, _) => _activeLaneMenu = menu;
             menu.Closed += (_, _) => { if (ReferenceEquals(_activeLaneMenu, menu)) _activeLaneMenu = null; };
             more.ContextMenu = menu; more.Click += (_, e) => { e.Handled = true; menu.IsOpen = true; };
             DockPanel.SetDock(more, Dock.Right); row.Children.Add(more);
-            var name = ActionButton($"{i + 1:00}　{vm.DisplayName}", () => View?.OpenLaneResourceTasks(vm, this));
-            name.Content = new TextBlock { Text = $"{i + 1:00}　{vm.DisplayName}", TextTrimming = TextTrimming.CharacterEllipsis, Foreground = B("#EEE8F5") };
+            // 车道里的任务用 #N.M 编号，与跳转目标、流程图同口径。
+            var label = (vm.RowNumber.Length > 0 ? vm.RowNumber : $"{i + 1:00}") + "　" + vm.DisplayName;
+            var name = ActionButton(label, () => View?.OpenLaneResourceTasks(vm, this));
+            name.Content = new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = B("#EEE8F5") };
             name.MinHeight = 24; name.Padding = new Thickness(3, 0, 3, 0); name.Margin = new Thickness(0);
             name.ToolTip = vm.DisplayName;
             name.HorizontalContentAlignment = HorizontalAlignment.Stretch; name.BorderThickness = new Thickness(0); name.Background = Brushes.Transparent;
