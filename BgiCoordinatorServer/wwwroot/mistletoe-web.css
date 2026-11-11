@@ -463,3 +463,11 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .tc-run-badge.st-failed{border-color:#7a4545;background:#ef535033;color:#f0b3a3}
 .tc-run-badge.st-skipped{border-color:#4a4566;background:#9c97c029;color:var(--muted)}
 .tc-tr.is-running,.tc-composition-resource.is-running{border-color:var(--gold);box-shadow:0 0 0 1px #e8c96d55}
+/* 任务中心跳转（网页，与 PC 同口径） */
+.tc-run-badge.st-jumped{border-color:#4a4566;background:#9c97c029;color:var(--muted)}
+.tc-jump-text{display:inline-block;margin-left:10px;color:#c9b4f0}
+.tc-row-notice{margin:2px 0 4px 56px;color:var(--muted);font-size:11.5px}
+.tc-row-notice.is-problem{color:#f0a08c}
+.tc-composition-row.is-problem{border-color:#c9614f}
+.tc-composition-resource.is-unreachable .tc-name b{color:var(--muted)}
+.tc-jump-field select{max-width:420px}

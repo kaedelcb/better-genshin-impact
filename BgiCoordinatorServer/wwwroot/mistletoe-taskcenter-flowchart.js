@@ -2,8 +2,8 @@
 // 计划行自上而下；流程画成带框的步骤链（内部判断是/否、触发器触发链）；车道先判断再分两条路线后汇合。
 // 按该计划最近一次运行的本轮记录点亮走过的节点与路线，没走的路线灰显。只读运行记录，不写计划。
 const TC_FC_GEO = { nw:232, nh:70, vg:40, hg:32, bg:40, pad:30, fp:14, ft:26 };
-const TC_FC_EDGE = { n:'#7f7aa2', yes:'#6fd8ce', no:'#e88a6f', fire:'#ffc857' };
-const TC_FC_RUN = { running:'执行中…', success:'✓ 完成', failed:'✗ 未完成', skipped:'已跳过', condTrue:'→ 是', condFalse:'→ 否' };
+const TC_FC_EDGE = { n:'#7f7aa2', yes:'#6fd8ce', no:'#e88a6f', fire:'#ffc857', jump:'#b39ddb' };
+const TC_FC_RUN = { running:'执行中…', success:'✓ 完成', failed:'✗ 未完成', skipped:'已跳过', jumped:'本轮跳过（跳转）', condTrue:'→ 是', condFalse:'→ 否' };
 const TC_FC_EXPAND_KEY = 'mistletoe.taskcenter.autoExpandBranch';
 const tcfc = { view:{ zoom:1, x:0, y:0, w:0, h:0, mode:'fit' }, key:'', laneSeen:new Map() };
 
@@ -45,10 +45,34 @@ function tcRunTrace(doc = tc.doc) {
         for (const f of [n.flow, n.lanes?.decision]) if (f) resolve(n.nodeId, f.steps);
     }
     const ownerOf = lane => lane.lanes?.decision ? lane.nodeId : lane.lanes?.sourceFlowNodeId || lane.nodeId;
+    // 本轮被跳转跳过的行（与 PC TaskCenterRunTrace.MarkJumpedOver 同规则）：跳转来源本轮已实际经过，
+    // 来源与目标之间本轮没有结果的主计划行算被跳过；车道成员随所在车道一起计。
+    const jumped = new Set();
+    if (typeof tcJumpOrder === 'function') {
+        const order = tcJumpOrder(doc), byId = new Map((doc.nodes || []).map(n => [n.nodeId, n]));
+        const mark = (sourceId, target) => {
+            const resolved = target && tcJumpResolve(doc, target); if (!resolved) return;
+            const from = order.indexOf(sourceId), to = order.indexOf(resolved); if (from < 0 || to <= from) return;
+            for (let i = from + 1; i < to; i++) {
+                const id = order[i]; if (nodes.has(id)) continue; jumped.add(id);
+                const row = byId.get(id); if (row?.lanes) for (const m of [...(row.lanes.yesNodeIds || []), ...(row.lanes.noNodeIds || [])]) if (!nodes.has(m)) jumped.add(m);
+            }
+        };
+        for (const id of order) {
+            const n = byId.get(id); if (!n) continue;
+            if (n.kind === 'control.flow' && nodes.get(id) === 'success') mark(id, n.flow?.jumpTo);
+            if (!n.lanes?.decision) continue;
+            const chose = ({ condTrue:true, condFalse:false })[nodes.get(id)]; if (chose === undefined) continue;
+            const route = (chose ? n.lanes.yesNodeIds : n.lanes.noNodeIds) || [];
+            const last = route[route.length - 1];
+            if (!route.length || nodes.has(last) && nodes.get(last) !== 'running') mark(id, chose ? n.lanes.yesJumpTo : n.lanes.noJumpTo);
+        }
+    }
     return { run, round, active, state:st,
-        node:id => nodes.get(id) || '', step:(owner, id) => steps.get(owner + '/' + id) || '',
+        node:id => jumped.has(id) ? 'jumped' : nodes.get(id) || '', step:(owner, id) => steps.get(owner + '/' + id) || '',
+        jumped:id => jumped.has(id),
         lane:lane => ({ condTrue:true, condFalse:false })[nodes.get(ownerOf(lane))] ?? null,
-        key:`${run.runId}|${run.recordRevision}|${st}|${round}|${[...nodes].join(',')}|${[...steps].join(',')}` };
+        key:`${run.runId}|${run.recordRevision}|${st}|${round}|${[...nodes].join(',')}|${[...steps].join(',')}|${[...jumped].join(',')}` };
 }
 
 /** 任务卡摘要：日期 · 账号/UID · 失败处理 · 执行时段（与 PC 同口径）。 */
@@ -120,8 +144,13 @@ function tcFcLayout(doc, trace) {
     }
     const byId = new Map((doc.nodes || []).map(n => [n.nodeId, n]));
     const task = (n, label) => card({ icon:'▶', color:'#48C87E', name:label, type:TC_KIND[n.kind] || n.kind, sum:tcFcTaskSummary(doc, n), state:trace.node(n.nodeId), off:!tcEnabled(n), nodeId:n.nodeId });
-    const rows = tcMainNodes(doc).map((n, i) => {
-        const no = String(i + 1).padStart(2, '0');
+    const numbers = typeof tcRowNumbers === 'function' ? tcRowNumbers(doc) : new Map();
+    const mainRows = tcMainNodes(doc);
+    // 被跳转跳过的行整块灰显（与计划表、PC 同口径）。
+    const dimIfJumped = (b, n) => trace.jumped?.(n.nodeId) ? { ...b, cards:b.cards.map(c => ({ ...c, dim:true })), frames:b.frames.map(f => ({ ...f, dim:true })),
+        edges:b.edges.map(e => ({ ...e, dim:true })), labels:b.labels.map(l => ({ ...l, dim:true })), pills:b.pills.map(p => ({ ...p, dim:true })) } : b;
+    const rows = mainRows.map((n, i) => dimIfJumped((() => {
+        const no = numbers.get(n.nodeId) || String(i + 1).padStart(2, '0');
         if (n.flow) return frame(`${no}  流程 · ${tcNodeName(n)}${TC_FC_RUN[trace.node(n.nodeId)] ? '  ' + TC_FC_RUN[trace.node(n.nodeId)] : ''}`,
             (n.flow.steps || []).length ? steps(n.nodeId, n.flow.steps, n.flow.exitStepId) : pill('暂无步骤'), '#B39DDB', trace.node(n.nodeId), n.nodeId, null, !tcEnabled(n));
         if (n.lanes) {
@@ -129,15 +158,43 @@ function tcFcLayout(doc, trace) {
             const exit = decision?.steps?.find(s => s.id === decision.exitStepId), choice = trace.lane(n);
             const head = card({ icon:'⑂', color:'#E8C96D', name:`${no}  ${tcNodeName(n)}`, type:'车道', sum:exit ? '判断：' + tcFlowSummary(exit) : '还没有设置选择条件',
                 state:choice === true ? 'condTrue' : choice === false ? 'condFalse' : trace.node(n.nodeId), off:!tcEnabled(n), nodeId:n.nodeId });
-            const branch = ids => ids?.length ? chain(ids.map((id, j) => byId.has(id) ? task(byId.get(id), `${String(j + 1).padStart(2, '0')}  ${tcNodeName(byId.get(id))}`) : pill('任务引用缺失'))) : pill('（空，直接继续）');
+            const branch = ids => ids?.length ? chain(ids.map((id, j) => byId.has(id) ? task(byId.get(id), `${numbers.get(id) || String(j + 1).padStart(2, '0')}  ${tcNodeName(byId.get(id))}`) : pill('任务引用缺失'))) : pill('（空，直接继续）');
             const sp = split(head, branch(l.yesNodeIds), branch(l.noNodeIds), '满足 → ' + (l.yesName === '是' ? '路线 1' : l.yesName || '路线 1'), '其他 → ' + (l.noName === '否' ? '路线 2' : l.noName || '路线 2'), choice);
             const before = (decision?.steps || []).filter(s => s.id !== decision.exitStepId);
             return before.length ? chain([frame('判断前的步骤', steps(owner, before, null), '#9C97C0', '', owner, before[0].id), sp]) : sp;
         }
         return task(n, `${no}  ${tcNodeName(n)}`);
-    });
+    })(), n));
     const start = pill(trace.run ? `▶ 开始 · 第 ${trace.round + 1} 轮` : '▶ 开始', 'gold'), end = pill(doc.loop ? '↻ 进入下一轮' : '■ 计划结束', 'gold');
-    return chain([start, ...(rows.length ? rows : [pill('（计划表还是空的）')]), end]);
+    const items = [start, ...(rows.length ? rows : [pill('（计划表还是空的）')]), end];
+    const g = chain(items);
+    // 跳转连线：与 chain 同公式算出各行块位置，从来源右侧沿图右边各自独立的竖道连到目标右侧，不横穿卡片。
+    if (rows.length && typeof tcJumpResolve === 'function') {
+        const tops = []; let y = 0; for (const b of items) { tops.push(y); y += b.h + G.vg; }
+        const rect = i => { const b = items[i + 1]; return { x:(g.w - b.w) / 2, y:tops[i + 1], w:b.w, h:b.h }; };
+        const jumps = [];
+        mainRows.forEach((n, i) => {
+            const add = (target, label, lit) => {
+                const resolved = tcJumpResolve(doc, target); if (!resolved) return;
+                const to = mainRows.findIndex(r => r.nodeId === resolved || r.lanes?.sourceFlowNodeId === resolved);
+                if (to > i) jumps.push({ from:i, to, label, lit });
+            };
+            if (n.kind === 'control.flow' && n.flow?.jumpTo && !n.flow.exitStepId) add(n.flow.jumpTo, '↪ ' + (numbers.get(n.flow.jumpTo) || ''), trace.node(n.nodeId) === 'success');
+            if (n.lanes?.decision) {
+                const chose = trace.lane(n);
+                if (n.lanes.yesJumpTo) add(n.lanes.yesJumpTo, '满足 ↪ ' + (numbers.get(n.lanes.yesJumpTo) || ''), chose === true);
+                if (n.lanes.noJumpTo) add(n.lanes.noJumpTo, '其他 ↪ ' + (numbers.get(n.lanes.noJumpTo) || ''), chose === false);
+            }
+        });
+        jumps.forEach((j, k) => {
+            const a = rect(j.from), b = rect(j.to), lane = g.w + 18 + k * 22;
+            const y1 = a.y + Math.min(a.h, G.nh) / 2, y2 = b.y + Math.min(b.h, G.nh) / 2;
+            g.edges.push({ pts:[[a.x + a.w + 4, y1], [lane, y1], [lane, y2], [b.x + b.w + 4, y2]], c:'jump', dash:true, arrow:true, lit:j.lit });
+            g.labels.push({ x:a.x + a.w + 6, y:y1 - 20, t:j.label, c:'jump', lit:j.lit });
+        });
+        if (jumps.length) g.w += 18 + jumps.length * 22 + 10;
+    }
+    return g;
 }
 
 function tcFlowChart() {
@@ -175,7 +232,7 @@ function tcRenderFlowChart() {
         + g.labels.map(l => `<span class="mt-elabel${l.dim ? ' dim' : ''}${l.lit ? ' lit' : ''}" style="left:${l.x + pad}px;top:${l.y + pad}px;color:${TC_FC_EDGE[l.c]}">${mte(l.t)}</span>`).join('')
         + g.pills.map(p => `<span class="${p.cls === 'gold' ? 'mt-start tc-fc-pill' : 'mt-ph'}${p.dim ? ' dim' : ''}" style="left:${p.x + pad}px;top:${p.y + pad}px;width:${p.w}px;height:${p.h}px">${mte(p.t)}</span>`).join('')
         + g.cards.map(c => `<button type="button" class="mt-node${c.state ? ' st-' + c.state : ''}${c.dim ? ' dim' : ''}${c.off ? ' off' : ''}"${data(c)} style="left:${c.x + pad}px;top:${c.y + pad}px;width:${TC_FC_GEO.nw}px;height:${TC_FC_GEO.nh}px;--c:${c.color}" title="${mte(c.name + '\n' + c.sum)}">`
-            + `${c.state && !c.dim ? `<span class="mt-node-st">${TC_FC_RUN[c.state]}</span>` : c.off ? '<span class="mt-node-st">已停用</span>' : ''}`
+            + `${c.state && (!c.dim || c.state === 'jumped') ? `<span class="mt-node-st">${TC_FC_RUN[c.state]}</span>` : c.off ? '<span class="mt-node-st">已停用</span>' : ''}`
             + `<span class="mt-ic">${c.icon}</span><span class="mt-node-tx"><b>${mte(c.name)}</b><small>${mte(c.type)} · ${mte(c.sum)}</small></span></button>`).join('');
     tcfc.view.w = W; tcfc.view.h = H;
     if (tcfc.view.mode === 'fit') tcFcFit(); else tcFcApply();
@@ -252,6 +309,6 @@ function tcRunBadge(n, trace) {
     const choice = n.lanes ? trace.lane(n) : null;
     const st = choice === true || choice === false ? 'lane' : trace.node(n.nodeId);
     const waitAt = st === 'running' && trace.run.wait?.kind === 'timeWindow.start' && trace.run.cursor?.nodeId === n.nodeId && tcState(trace.run) === 'Waiting' ? String(trace.run.wait.nextTriggerAt || '').slice(11, 16) : '';
-    const text = choice === true ? '→ 满足条件' : choice === false ? '→ 其他情况' : waitAt ? '等到 ' + waitAt : { running:'执行中…', success:'✓ 已完成', failed:'✗ 未完成', skipped:'已跳过', condTrue:'→ 满足', condFalse:'→ 其他' }[st];
+    const text = choice === true ? '→ 满足条件' : choice === false ? '→ 其他情况' : waitAt ? '等到 ' + waitAt : { running:'执行中…', success:'✓ 已完成', failed:'✗ 未完成', skipped:'已跳过', jumped:'本轮跳过（跳转）', condTrue:'→ 满足', condFalse:'→ 其他' }[st];
     return text ? `<i class="tc-run-badge st-${st}" title="最近一次运行本轮的执行状态">${text}</i>` : '';
 }
