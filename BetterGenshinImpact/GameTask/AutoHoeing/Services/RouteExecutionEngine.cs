@@ -349,7 +349,7 @@ public class RouteExecutionEngine
         {
             try
             {
-                Logger.LogInformation("开始执行地图追踪任务: {Name}", route.FileName);
+                Logger.LogInformation("→ 开始执行地图追踪任务: {Name}", route.FileName);
                 var task = cooperativeContext?.Plan.CreateTask() ?? PathingTask.BuildFromFilePath(route.FullPath);
                 if (task != null)
                 {

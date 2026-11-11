@@ -74,7 +74,7 @@ public sealed class DailyReportService
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     /// <summary>配置组内项目任务结束：→ 脚本执行结束: "X"[, 耗时: M分S秒]（ScriptService 带耗时后缀；
-    /// RouteExecutionEngine 独立任务版锄地逐线路补打同款但无后缀——其开始行无 "→ " 前缀不会开单元，此处按名找不到即忽略）。</summary>
+    /// RouteExecutionEngine 独立任务版锄地逐线路开始/结束都带 "→ "，结束行无耗时后缀，同样按名配对成地图追踪单元）。</summary>
     private static readonly Regex ProjectEndRegex = new(
         @"→ 脚本执行结束: ""(?<name>.+?)""",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
