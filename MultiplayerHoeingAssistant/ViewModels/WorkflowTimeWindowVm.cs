@@ -47,24 +47,40 @@ public sealed partial class NodeEditVm
     public string TimeWindowStart => TimeWindow?.Start ?? "00:00";
     public string TimeWindowEnd => TimeWindow?.End ?? "00:00";
     public string TimeWindowDisplay => WorkflowTimeWindowPolicy.Display(TimeWindow);
+    public bool TimeWindowWaitForStart => TimeWindow?.WaitForStart == true;
+    public bool TimeWindowCloseGameWhileWaiting => TimeWindow?.CloseGameWhileWaiting == true;
+    public bool TimeWindowStopAtEnd => TimeWindow?.StopAtEnd == true;
+    /// <summary>附加选项简述（等到点执行 / 关游戏等到点 / 到点结束），没有时为空。</summary>
+    public string TimeWindowOptionsText => WorkflowTimeWindowPolicy.OptionsDisplay(TimeWindow);
+    public bool HasTimeWindowOptions => TimeWindowOptionsText.Length > 0;
     public bool IsOutsideTimeWindow => _timeWindowEnabled
         && !WorkflowTimeWindowPolicy.Allows(TimeWindow, _timeWindowNow);
     public string TimeWindowStatusText => !IncludedInPlan ? "已停用"
         : !_timeWindowEnabled ? "未启用时段限制"
         : !WorkflowTimeWindowPolicy.TryValidate(TimeWindow, out _) ? "时段无效"
-        : IsOutsideTimeWindow ? "时段外 · 跳过"
+        : IsOutsideTimeWindow ? WorkflowTimeWindowPolicy.StartWaitTarget(true, TimeWindow, _timeWindowNow) is { } waitAt
+            ? $"时段外 · 等到 {waitAt:HH:mm} 执行" : "时段外 · 跳过"
         : HasTimeWindow ? "时段内" : "全天";
 
     /// <summary>弹窗确认后一次提交完整时段，避免时、分选择过程落盘。</summary>
-    public void SetTimeWindow(string start, string end)
+    public void SetTimeWindow(string start, string end) => SetTimeWindow(start, end,
+        TimeWindowWaitForStart, TimeWindowCloseGameWhileWaiting, TimeWindowStopAtEnd);
+
+    public void SetTimeWindow(string start, string end, bool waitForStart, bool closeGameWhileWaiting, bool stopAtEnd)
     {
         var next = TimeWindow is null ? new WorkflowTimeWindow()
             : JsonSerializer.Deserialize<WorkflowTimeWindow>(JsonSerializer.Serialize(TimeWindow))!;
         next.Start = start;
         next.End = end;
+        next.WaitForStart = waitForStart;
+        // 关游戏等待只是等待的子选项。
+        next.CloseGameWhileWaiting = waitForStart && closeGameWhileWaiting;
+        next.StopAtEnd = stopAtEnd;
         if (!WorkflowTimeWindowPolicy.TryValidate(next, out var error))
             throw new InvalidOperationException(error);
-        if (TimeWindow is { } current && current.Start == start && current.End == end) return;
+        if (TimeWindow is { } current && current.Start == start && current.End == end
+            && current.WaitForStart == next.WaitForStart && current.CloseGameWhileWaiting == next.CloseGameWhileWaiting
+            && current.StopAtEnd == next.StopAtEnd) return;
         BeforeEdit?.Invoke();
         Model.TimeWindow = next;
         NotifyTimeWindowChanged();
@@ -85,6 +101,11 @@ public sealed partial class NodeEditVm
         OnPropertyChanged(nameof(TimeWindowStart));
         OnPropertyChanged(nameof(TimeWindowEnd));
         OnPropertyChanged(nameof(TimeWindowDisplay));
+        OnPropertyChanged(nameof(TimeWindowWaitForStart));
+        OnPropertyChanged(nameof(TimeWindowCloseGameWhileWaiting));
+        OnPropertyChanged(nameof(TimeWindowStopAtEnd));
+        OnPropertyChanged(nameof(TimeWindowOptionsText));
+        OnPropertyChanged(nameof(HasTimeWindowOptions));
         NotifyTimeWindowState();
     }
 

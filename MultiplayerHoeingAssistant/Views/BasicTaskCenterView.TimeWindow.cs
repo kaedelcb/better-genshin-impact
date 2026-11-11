@@ -21,6 +21,10 @@ public partial class BasicTaskCenterView
         NodeTimeWindowTitle.Text = node.DisplayName;
         NodeTimeWindowStartPicker.Value = node.TimeWindowStart;
         NodeTimeWindowEndPicker.Value = node.TimeWindowEnd;
+        NodeTimeWindowWaitCheck.IsChecked = node.TimeWindowWaitForStart;
+        NodeTimeWindowCloseGameCheck.IsChecked = node.TimeWindowCloseGameWhileWaiting;
+        NodeTimeWindowStopAtEndCheck.IsChecked = node.TimeWindowStopAtEnd;
+        NodeTimeWindowCloseGameCheck.IsEnabled = node.TimeWindowWaitForStart;
         NodeTimeWindowNotice.Text = editing.NodeTimeWindowEnabled
             ? "跨午夜可用 · 起止相同为全天 · 限制已开启"
             : "跨午夜可用 · 起止相同为全天 · 总开关关闭";
@@ -53,7 +57,23 @@ public partial class BasicTaskCenterView
             NodeTimeWindowNotice.Text = error;
             return;
         }
-        CommitTimeWindow(node => node.SetTimeWindow(window.Start, window.End));
+        var wait = NodeTimeWindowWaitCheck.IsChecked == true;
+        var closeGame = NodeTimeWindowCloseGameCheck.IsChecked == true;
+        var stopAtEnd = NodeTimeWindowStopAtEndCheck.IsChecked == true;
+        if (window.Start == window.End && (wait || stopAtEnd))
+        {
+            NodeTimeWindowNotice.Text = "全天时段没有开始和结束时间，等到点或到点结束不会生效；请先设置起止时间。";
+            return;
+        }
+        CommitTimeWindow(node => node.SetTimeWindow(window.Start, window.End, wait, closeGame, stopAtEnd));
+    }
+
+    private void NodeTimeWindowWaitChanged(object sender, RoutedEventArgs e)
+    {
+        if (NodeTimeWindowCloseGameCheck is null) return;
+        var wait = NodeTimeWindowWaitCheck.IsChecked == true;
+        NodeTimeWindowCloseGameCheck.IsEnabled = wait;
+        if (!wait) NodeTimeWindowCloseGameCheck.IsChecked = false;
     }
 
     private void ClearNodeTimeWindowClick(object sender, RoutedEventArgs e)
@@ -69,7 +89,8 @@ public partial class BasicTaskCenterView
         }
         apply(node);
         NodeTimeWindowPopup.IsOpen = false;
-        Host?.ShowInlineActionFeedback($"已设置「{node.DisplayName}」执行时段：{node.TimeWindowDisplay}，正在自动保存计划。", isError: false);
+        var options = node.HasTimeWindowOptions ? "（" + node.TimeWindowOptionsText + "）" : "";
+        Host?.ShowInlineActionFeedback($"已设置「{node.DisplayName}」执行时段：{node.TimeWindowDisplay}{options}，正在自动保存计划。", isError: false);
     }
 
     private void CloseNodeTimeWindowClick(object sender, RoutedEventArgs e)

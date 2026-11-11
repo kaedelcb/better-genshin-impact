@@ -223,6 +223,12 @@ public sealed class WorkflowRunnerOptions
     /// </summary>
     public Func<WorkflowNodeOccurrence, bool>? ShouldRegisterLocalWait { get; init; }
 
+    /// <summary>
+    /// 时段「等待到点」期间关闭游戏（可选；null＝不支持，只等待不关游戏）。返回实际结果说明，用于日志与状态显示。
+    /// 实现方负责确认 BGI 空闲后才关闭；关闭失败不影响等待。
+    /// </summary>
+    public Func<CancellationToken, Task<(bool Closed, string Message)>>? CloseGameForTimeWindowWaitAsync { get; init; }
+
     /// <summary>可取消延时（测试用手动时钟快进；生产 Task.Delay）。</summary>
     public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; init; } = Task.Delay;
 
@@ -885,6 +891,18 @@ public sealed partial class WorkflowRunner
                 (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
                 if (!ReferenceEquals(arrivalPlan, plan)) continue;
 
+                // 时段「等待到点」：当天开始时间还没到、其他条件都放行时，等到开始时间再执行，而不是直接跳过。
+                if (await AwaitTimeWindowStartAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false))
+                {
+                    if (control.PauseRequested) return Pause(run);
+                    if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
+                    if (!IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var afterWindowRound))
+                    { occurrence = afterWindowRound; continue; }
+                    // 等待期间可能改了计划：按节点边界重新对账后再判断本行。
+                    var windowArrivalPlan = plan;
+                    (plan, occurrence) = ProcessBoundaryActions(run, plan, occurrence, control);
+                    if (!ReferenceEquals(windowArrivalPlan, plan)) continue;
+                }
                 if (node.Kind is "control.flow" or "control.lanes")
                 {
                     if (node.Kind == "control.lanes" && !WorkflowComposition.HasInlineDecision(node))
@@ -1627,6 +1645,31 @@ public sealed partial class WorkflowRunner
                 else Log(run, "过期跳过动作已丢弃（出现身份漂移，不误伤后续节点）。");
             }
         }
+        // 时段「到点结束」：任务已受理后，到时段结束时间按跳过同一路径取消并等待 BGI 确认退出。
+        var windowEndHit = 0;
+        using var windowEndTimer = new CancellationTokenSource();
+        if (plan.Document.NodeTimeWindowEnabled && node.TimeWindow is { StopAtEnd: true } stopWindow
+            && WorkflowTimeWindowPolicy.CurrentWindowEnd(stopWindow, _opt.Clock()) is { } windowEnd)
+        {
+            var timerToken = windowEndTimer.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var remaining = windowEnd - _opt.Clock();
+                    while (remaining > TimeSpan.Zero)
+                    {
+                        await _opt.DelayAsync(remaining < TimeSpan.FromSeconds(30) ? remaining : TimeSpan.FromSeconds(30), timerToken).ConfigureAwait(false);
+                        remaining = windowEnd - _opt.Clock();
+                    }
+                    Interlocked.Exchange(ref windowEndHit, 1);
+                    Log(run, $"节点 {occurrence.NodeId}#{occurrence.LoopIteration} 到达时段结束时间 {windowEnd:HH:mm}，自动结束任务。");
+                    lock (control.Sync) { if (ReferenceEquals(control.LeafCts, leaf)) leaf.Cancel(); }
+                }
+                catch (OperationCanceledException) { }
+                catch (ObjectDisposedException) { }
+            });
+        }
         try
         {
             BoundaryTerminalResult terminal;
@@ -1636,8 +1679,11 @@ public sealed partial class WorkflowRunner
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                // 叶子被取消（显式跳过）：远端取消确认后再推进（B4 确认阶段；Stop 会先取消运行令牌）
-                return await ConfirmSkipAsync(run, submission, ct).ConfigureAwait(false);
+                // 叶子被取消（显式跳过或到点结束）：远端取消确认后再推进（B4 确认阶段；Stop 会先取消运行令牌）
+                var confirmed = await ConfirmSkipAsync(run, submission, ct).ConfigureAwait(false);
+                if (Volatile.Read(ref windowEndHit) == 1 && confirmed.Result is "skippedUser")
+                    return ("skippedFilter", $"已到时段结束时间（{WorkflowTimeWindowPolicy.Display(node.TimeWindow)}），按设置自动结束任务（BGI 已确认退出）", confirmed.RawTerminal);
+                return confirmed;
             }
             if (terminal.Uncertain)
             {
@@ -1673,6 +1719,7 @@ public sealed partial class WorkflowRunner
         }
         finally
         {
+            windowEndTimer.Cancel(); // 任务已结束：停止到点结束计时，不留后台等待。
             lock (control.Sync) control.LeafCts = null;
             leaf.Dispose();
         }
@@ -2233,7 +2280,8 @@ public sealed partial class WorkflowRunner
         }
     }
 
-    private async Task WaitAsync(WorkflowRunRecord run, string kind, DateTimeOffset until, RunControl control, CancellationToken ct)
+    private async Task WaitAsync(WorkflowRunRecord run, string kind, DateTimeOffset until, RunControl control, CancellationToken ct,
+        Action<WaitStateRecord>? decorate = null)
     {
         run.State = WorkflowRunState.Waiting;
         run.Wait = new WaitStateRecord
@@ -2242,6 +2290,7 @@ public sealed partial class WorkflowRunner
             NextTriggerAt = until,
             TriggerOccurrenceId = $"{kind}:{until:yyyyMMddHHmm}",
         };
+        decorate?.Invoke(run.Wait);
         _runs.Update(run);
         Log(run, $"进入等待（{kind}）至 {until:yyyy-MM-dd HH:mm}（不持有执行锁、不提交等待作业）");
         var delay = until - _opt.Clock();

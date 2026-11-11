@@ -22,7 +22,8 @@ public sealed class BgiWorkflowPrerequisiteAdapter : IWorkflowPrerequisiteAdapte
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan ExpireWindow = TimeSpan.FromMinutes(10);
-    private static readonly TimeSpan ExecuteBudget = TimeSpan.FromMinutes(5);
+    // 账号前置可能先冷启动游戏（启动约 1 分钟 + 登录/领奖最长 5 分钟）再核对 UID；观察预算须覆盖整段，避免误记结果未知。
+    private static readonly TimeSpan ExecuteBudget = TimeSpan.FromMinutes(12);
     private static readonly TimeSpan ConfirmBudget = TimeSpan.FromSeconds(10);
 
     private readonly IBgiExecutionPort _port;

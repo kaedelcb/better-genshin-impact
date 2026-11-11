@@ -21,6 +21,9 @@ public sealed class TaskCenterRunTrace
     public int Round { get; private init; }
     public bool IsActive { get; private init; }
     public bool HasRun => RunId is not null;
+    /// <summary>正在「等待时段开始」的行与说明（例如「等到 17:00」）；没有时为 null。</summary>
+    public string? WaitingNodeId { get; private init; }
+    public string? WaitingText { get; private init; }
 
     /// <summary>变化检测键：运行态有变化才需要重画。</summary>
     public string Key { get; private init; } = "";
@@ -53,6 +56,10 @@ public sealed class TaskCenterRunTrace
         {
             RunId = run.RunId, State = run.State, Round = round, IsActive = active,
             Key = $"{run.RunId}|{run.RecordRevision}|{run.State}|{round}",
+            WaitingNodeId = active && run.State == WorkflowRunState.Waiting && run.Wait is { Kind: WorkflowRunner.TimeWindowStartWaitKind }
+                ? run.Cursor?.NodeId : null,
+            WaitingText = active && run.State == WorkflowRunState.Waiting && run.Wait is { Kind: WorkflowRunner.TimeWindowStartWaitKind } wait
+                ? $"等到 {wait.NextTriggerAt:HH:mm}" : null,
         };
         foreach (var outcome in run.NodeOutcomes.Where(o => o.LoopIteration == round))
             trace._nodes[outcome.NodeId] = outcome.Result switch

@@ -757,7 +757,12 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             or nameof(NodeEditVm.HasTimeWindow)
             or nameof(NodeEditVm.TimeWindowStart)
             or nameof(NodeEditVm.TimeWindowEnd)
-            or nameof(NodeEditVm.TimeWindowDisplay))
+            or nameof(NodeEditVm.TimeWindowDisplay)
+            or nameof(NodeEditVm.TimeWindowWaitForStart)
+            or nameof(NodeEditVm.TimeWindowCloseGameWhileWaiting)
+            or nameof(NodeEditVm.TimeWindowStopAtEnd)
+            or nameof(NodeEditVm.TimeWindowOptionsText)
+            or nameof(NodeEditVm.HasTimeWindowOptions))
             return;
         QueueAutoSave();
     }
@@ -1361,7 +1366,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         {
             WorkflowRunState.Planned => driving ? "正在准备" : "已计划",
             WorkflowRunState.Running => driving ? "运行中" : "执行已中断 · 等待核对",
-            WorkflowRunState.Waiting => $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
+            WorkflowRunState.Waiting => WorkflowTimeWindowWaitDisplay.Describe(run.Wait)
+                ?? $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
             WorkflowRunState.LocalWaitParking => run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait, Binding: not null }
                 ? "等待空闲 · 按优先级接续" : "等待确认 · 可恢复或停止",
             WorkflowRunState.OnlineHoeingParking => "联机锄地中 · 等待原计划接续",
@@ -1381,7 +1387,9 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             WorkflowRunState.Interrupted => "任务已中断；确认没有其他同计划运行后点击「恢复」。",
             WorkflowRunState.LocalWaitParking => "任务正在等待可用执行位置；可继续等待，或点击「停止」结束本次计划。",
             WorkflowRunState.OnlineHoeingParking => "原计划保留在当前节点；锄地完成且恢复作业终态确认后自动继续。",
-            WorkflowRunState.Waiting => "任务正在等待设定时间；需要取消时点击「停止」。",
+            WorkflowRunState.Waiting => WorkflowTimeWindowWaitDisplay.Describe(run.Wait) is not null
+                ? "还没到该任务的执行时段，到点后自动执行（如已关闭游戏，会先自动启动游戏）；需要取消时点击「停止」。"
+                : "任务正在等待设定时间；需要取消时点击「停止」。",
             WorkflowRunState.Completing => "任务正在收尾，请等待状态确认。",
             _ => "",
         };

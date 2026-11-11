@@ -2054,6 +2054,7 @@ public sealed partial class TaskCenterHost
                 OnlineHoeingContinuation = (run, sub, terminal, ct)
                     => AwaitOnlineHoeingContinuationAsync(boundary, run, sub, terminal, ct),
                 OnlineHoeingSendClosed = () => _onlineSendGate.IsClosed,
+                CloseGameForTimeWindowWaitAsync = ct => CloseGameForTimeWindowWaitAsync(c, ct),
                 ResolveResourceRevisionAsync = _resolveLiveResourceRevisions
                     ? (node, ct) => WorkflowResourceEditor.ReadRevisionAsync(node, new BgiExternalCatalogTransport(c), ct)
                     : null,
@@ -2062,6 +2063,52 @@ public sealed partial class TaskCenterHost
             localWaitPrerequisiteReferenceProvider: LocalWaitPrerequisiteReference,
             localWaitAdmissionScopeProvider: run => TryGetAdmissionScope(run.RunId!, run.WorkflowId),
             waitDecisionSource: WaitDecisionSource);
+    }
+
+    /// <summary>
+    /// 时段「等待到点」前关闭游戏：只在 BGI 任务状态新鲜且确认空闲、没有联机锄地接管时发送关闭；
+    /// 状态未知或有任务在跑一律不关，保持游戏等待。到点后执行任务时 BGI 会按「联动启动原神」设置自动启动游戏。
+    /// </summary>
+    private async Task<(bool Closed, string Message)> CloseGameForTimeWindowWaitAsync(BgiExternalClient client, CancellationToken ct)
+    {
+        if (_onlineSendGate.IsClosed) return (false, "联机锄地进行中，未关闭游戏");
+        var facts = CurrentArbitrationFacts();
+        if (facts.ExecutionFactsUnknown) return (false, "BGI 任务状态未确认，未关闭游戏");
+        if (facts.ExecutionOccupied) return (false, "BGI 仍有任务在执行，未关闭游戏");
+        if (!client.HasCapability("action.closeGame")) return (false, "BGI 版本不支持远程关闭游戏，未关闭游戏");
+        // 到点能否重新拉起游戏取决于 BGI「联动启动原神」与安装路径；读不到或未开启时不关游戏，避免到点无法执行。
+        if (LinkedGameStartUnavailable() is { } noRestart) return (false, noRestart + "，未关闭游戏");
+        var response = await client.SendCommandAsync("ext.action.closeGame", new { }, cancellationToken: ct).ConfigureAwait(false);
+        if (!response.Success) return (false, "关闭游戏失败：" + (response.ErrorMessage ?? response.ErrorCode ?? "未知原因"));
+        TryLog("[任务中心] 等待执行时段期间已关闭游戏，到点后由 BGI 自动启动游戏执行任务。");
+        return (true, "已关闭游戏，到点后自动启动游戏");
+    }
+
+    /// <summary>读取 BGI User/config.json 的启动设置；能自动启动游戏时返回 null，否则返回原因。</summary>
+    private string? LinkedGameStartUnavailable()
+    {
+        try
+        {
+            var root = UserConfigRootProvider?.Invoke();
+            if (string.IsNullOrWhiteSpace(root)) return "未找到 BGI 配置目录，无法确认到点能自动启动游戏";
+            var path = Path.Combine(root, "config.json");
+            if (!File.Exists(path)) return "未找到 BGI 配置，无法确认到点能自动启动游戏";
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var doc = JsonDocument.Parse(stream);
+            if (!doc.RootElement.TryGetProperty("genshinStartConfig", out var start) || start.ValueKind != JsonValueKind.Object)
+                return "BGI 启动设置不可读，无法确认到点能自动启动游戏";
+            // 缺省值与 BGI 一致：联动启动默认开启。
+            if (start.TryGetProperty("linkedStartEnabled", out var linked) && linked.ValueKind == JsonValueKind.False)
+                return "BGI 未开启「联动启动原神」，到点无法自动启动游戏";
+            if (!start.TryGetProperty("installPath", out var install) || install.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(install.GetString()) || !File.Exists(install.GetString()))
+                return "BGI 未设置有效的原神安装路径，到点无法自动启动游戏";
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return "读取 BGI 启动设置失败（" + ex.GetType().Name + "）";
+        }
     }
 
     /// <summary>登记驱动任务并观察至收敛（异常按在飞事实收敛 Unknown/Interrupted，绝不留 Running 僵尸）。</summary>

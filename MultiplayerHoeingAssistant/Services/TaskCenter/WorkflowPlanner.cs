@@ -283,7 +283,7 @@ public sealed partial class WorkflowPlan
     /// 节点闸门（运行边界逐节点求值；顺序 = 类型拒绝 → 单项能力 → 条件过滤，先拒绝再评估副作用策略）。
     /// </summary>
     public NodeGateDecision EvaluateNode(WorkflowNodeOccurrence occurrence, DateTimeOffset now, bool singleNativeSupported,
-        bool ignorePlanParticipation = false)
+        bool ignorePlanParticipation = false, bool ignoreTimeWindow = false)
     {
         var node = NodeAt(occurrence);
 
@@ -294,7 +294,8 @@ public sealed partial class WorkflowPlan
             return new NodeGateDecision(NodeGateAction.Reject,
                 "task.single.native=false：单项任务原生执行能力未开放，响亮拒绝（不进入执行、不记成功、不授权成功收尾）");
 
-        var timeWindowGate = WorkflowTimeWindowPolicy.Evaluate(_doc, node, now);
+        // ignoreTimeWindow 只用于「等待到点」前确认其他条件仍放行；正式执行前照常判断时段。
+        var timeWindowGate = ignoreTimeWindow ? NodeGateDecision.ProceedInstance : WorkflowTimeWindowPolicy.Evaluate(_doc, node, now);
         if (timeWindowGate.Action != NodeGateAction.Proceed) return timeWindowGate;
 
         if (!ignorePlanParticipation && node.ExtensionData?.TryGetValue("planDisabled", out var disabled) == true)

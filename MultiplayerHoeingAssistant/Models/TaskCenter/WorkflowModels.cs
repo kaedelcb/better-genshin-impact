@@ -128,6 +128,21 @@ public sealed class WorkflowTimeWindow
     [JsonPropertyName("end")]
     public string End { get; set; } = "00:00";
 
+    /// <summary>当天还没到开始时间时等待到点再执行（默认 false：时段外直接跳过）。</summary>
+    [JsonPropertyName("waitForStart")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool WaitForStart { get; set; }
+
+    /// <summary>等待到点期间先关闭游戏，到点由 BGI 自动启动游戏（仅 <see cref="WaitForStart"/> 时生效）。</summary>
+    [JsonPropertyName("closeGameWhileWaiting")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool CloseGameWhileWaiting { get; set; }
+
+    /// <summary>执行中到达结束时间时自动结束任务（默认 false：已开始的任务继续到自然结束）。</summary>
+    [JsonPropertyName("stopAtEnd")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool StopAtEnd { get; set; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

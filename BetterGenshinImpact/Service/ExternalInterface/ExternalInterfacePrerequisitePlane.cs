@@ -213,6 +213,10 @@ internal static class ExternalInterfacePrerequisitePlane
         // 任务中心可能先于 BGI 首页按钮启动前置作业。把“启动截图器/绑定游戏窗口”纳入
         // 任务入口本身，避免外部通道已 Ready、但 TaskContext 仍为空时直接落入 Unknown。
         var runtimeService = App.GetService<GameRuntimeService>();
+        // 游戏进程本来不在（例如任务中心等待执行时段时关闭了游戏）：BGI 会按「联动启动原神」拉起游戏，
+        // 之后必须等到游戏进入可操作界面，不能在启动画面上直接核对 UID。
+        var coldStart = runtimeService is { Kind: GameRuntimeKind.Win32Window, IsRunning: false }
+                        && SystemControl.FindGenshinImpactHandle() == IntPtr.Zero;
         if (runtimeService is not null && !runtimeService.IsRunning)
         {
             bool started;
@@ -243,7 +247,17 @@ internal static class ExternalInterfacePrerequisitePlane
         {
             var context = TaskContext.Instance();
             if (context.Runtime?.Capture is not null && context.GameHandle != IntPtr.Zero)
+            {
+                if (!coldStart) return;
+                try { await ScriptService.WaitColdStartedGameReadyAsync(ct); }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
+                {
+                    throw new PrerequisiteFailedException(JobErrorCodes.PrerequisiteFailed,
+                        "游戏已自动启动，但未能进入游戏主界面，账号前置未执行：" + ex.GetBaseException().Message);
+                }
                 return;
+            }
             await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
         }
 

@@ -57,7 +57,7 @@ function tcFcTaskSummary(doc, n) {
     const acc = tcStrat(n, 'prerequisite.account'), fail = tcStrat(n, 'execution.failure');
     const parts = [tcStrat(n, 'condition.weekdays') ? '星期 ' + tcWeekText(n).replace(/\//g, '') : '每天', acc ? '账号 ' + tcMask(acc.uid) : '未绑定账号'];
     if (fail) parts.push(fail.onFailure === 'continue' ? '失败继续' : '失败停止');
-    if (n.timeWindow) parts.push('时段 ' + tcWindowText(n) + (doc.nodeTimeWindowEnabled ? '' : '（总开关关闭，不生效）'));
+    if (n.timeWindow) parts.push('时段 ' + tcWindowText(n) + (tcWindowOpts(n) ? '（' + tcWindowOpts(n) + '）' : '') + (doc.nodeTimeWindowEnabled ? '' : '（总开关关闭，不生效）'));
     return parts.join(' · ');
 }
 
@@ -251,6 +251,7 @@ function tcRunBadge(n, trace) {
     if (!trace?.run || !n) return '';
     const choice = n.lanes ? trace.lane(n) : null;
     const st = choice === true || choice === false ? 'lane' : trace.node(n.nodeId);
-    const text = choice === true ? '→ 满足条件' : choice === false ? '→ 其他情况' : { running:'执行中…', success:'✓ 已完成', failed:'✗ 未完成', skipped:'已跳过', condTrue:'→ 满足', condFalse:'→ 其他' }[st];
+    const waitAt = st === 'running' && trace.run.wait?.kind === 'timeWindow.start' && trace.run.cursor?.nodeId === n.nodeId && tcState(trace.run) === 'Waiting' ? String(trace.run.wait.nextTriggerAt || '').slice(11, 16) : '';
+    const text = choice === true ? '→ 满足条件' : choice === false ? '→ 其他情况' : waitAt ? '等到 ' + waitAt : { running:'执行中…', success:'✓ 已完成', failed:'✗ 未完成', skipped:'已跳过', condTrue:'→ 满足', condFalse:'→ 其他' }[st];
     return text ? `<i class="tc-run-badge st-${st}" title="最近一次运行本轮的执行状态">${text}</i>` : '';
 }

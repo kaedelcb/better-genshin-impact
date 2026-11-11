@@ -44,6 +44,17 @@ function tcWindowText(n) {
     const ok = /^\d\d:\d\d$/; if (!ok.test(w.start) || !ok.test(w.end)) return '时段无效';
     return w.start === w.end ? '全天' : `${w.start}–${w.start > w.end ? '次日 ' : ''}${w.end}`;
 }
+/** 等到点 / 到点结束等附加选项的简述（与 PC 同口径），没有时为空。 */
+function tcWindowOpts(n) {
+    const w = n.timeWindow; if (!w) return '';
+    const p = []; if (w.waitForStart) p.push(w.closeGameWhileWaiting ? '关游戏等到点' : '等到点执行'); if (w.stopAtEnd) p.push('到点结束');
+    return p.join(' · ');
+}
+/** 当天还没到开始时间且勾选了等到点：返回开始时间 HH:mm，否则空。 */
+function tcWaitStart(n, now) {
+    const w = n.timeWindow; if (!w?.waitForStart || !w.start || w.start === w.end || tcInWindow(n, now)) return '';
+    return now.getHours() * 60 + now.getMinutes() < +w.start.slice(0, 2) * 60 + +w.start.slice(3) ? w.start : '';
+}
 function tcInWindow(n, now) {
     const w = n.timeWindow; if (!w || w.start === w.end) return true;
     const m = now.getHours() * 60 + now.getMinutes(), t = s => +s.slice(0, 2) * 60 + +s.slice(3);
@@ -57,13 +68,13 @@ function tcStartMarker() { const v = tc.doc?.[TC_START_KEY]; return typeof v ===
 function tcRunView(run) {
     const st = tcState(run), id = mtPick(run, 'workflowId'), driving = tcDriving(id), wait = run.wait?.nextTriggerAt;
     const lw = run.localWaitDecision;
-    let text = { Planned:driving ? '正在准备' : '已计划', Running:driving ? '运行中' : '执行已中断 · 等待核对', Waiting:`等待触发（${wait ? String(wait).slice(5, 16).replace('T', ' ') : '—'}）`,
+    let text = { Planned:driving ? '正在准备' : '已计划', Running:driving ? '运行中' : '执行已中断 · 等待核对', Waiting:run.wait?.kind === 'timeWindow.start' ? `等待时段开始（${wait ? String(wait).slice(11, 16) : '—'} 执行）${run.wait.gameClosed === true || run.wait.extensionData?.gameClosed === true ? ' · 已关闭游戏' : ''}` : `等待触发（${wait ? String(wait).slice(5, 16).replace('T', ' ') : '—'}）`,
         LocalWaitParking:lw && lw.kind === 1 && lw.binding ? '等待空闲 · 按优先级接续' : '等待确认 · 可恢复或停止', OnlineHoeingParking:'联机锄地中 · 等待原计划接续',
         Completing:'收尾中', Paused:'已暂停', Interrupted:'已中断（可显式恢复）', Unknown:'无法确认上次结果' }[st] || TC_STATE_TEXT[st] || st;
     let hint = { Unknown:'上次任务结果未知，当前计划已禁止重复启动；请保留未确认历史并删除旧计划后新建计划，或使用「重置执行状态」。',
         Planned:driving ? '任务正在准备；需要取消时点击「停止」。' : '', Running:driving ? '任务正在执行；需要结束时点击「停止」。' : '计划推进已中断，当前节点仅为最后记录；请核对恢复或停止结果，未确认前不会重跑。',
         Paused:'任务已暂停；准备继续时点击「恢复」。', Interrupted:'任务已中断；确认没有其他同计划运行后点击「恢复」。', LocalWaitParking:'任务正在等待可用执行位置；可继续等待，或点击「停止」结束本次计划。',
-        OnlineHoeingParking:'原计划保留在当前节点；锄地完成且恢复作业终态确认后自动继续。', Waiting:'任务正在等待设定时间；需要取消时点击「停止」。', Completing:'任务正在收尾，请等待状态确认。' }[st] || '';
+        OnlineHoeingParking:'原计划保留在当前节点；锄地完成且恢复作业终态确认后自动继续。', Waiting:run.wait?.kind === 'timeWindow.start' ? '还没到该任务的执行时段，到点后自动执行（如已关闭游戏，会先自动启动游戏）；需要取消时点击「停止」。' : '任务正在等待设定时间；需要取消时点击「停止」。', Completing:'任务正在收尾，请等待状态确认。' }[st] || '';
     let blocks = ['Running','Waiting','Paused','Completing','Unknown','LocalWaitParking','OnlineHoeingParking'].includes(st) || st === 'Planned' && driving;
     let canStop = ['Running','Waiting','Paused','Completing','LocalWaitParking','OnlineHoeingParking','Interrupted','Unknown'].includes(st) || st === 'Planned' && driving;
     let canSkip = driving && st === 'Running', canPause = !run.onlineHoeingHandoff && driving && (st === 'Running' || st === 'Waiting');
@@ -251,7 +262,7 @@ function tcRenderNodes() {
               <span class="mt-grip" aria-hidden="true">${editable ? '⠿' : ''}</span><span class="tc-idx">${i + 1}${n.nodeId === marker ? '<i class="tc-start" title="点击启动计划时从这里开始">起点</i>' : ''}</span>
               <span class="tc-name"><b class="mt-break">${mte(tcNodeName(n))}${tcRunBadge(n, trace)}</b><small>${TC_KIND[n.kind]}${tcStrat(n, 'execution.failure') ? ' · ' + (tcStrat(n, 'execution.failure').onFailure === 'continue' ? '失败继续' : '失败停止') : ''}${n.legacyFiltered ? ' · 沿用旧版计划设置' : ''}</small></span>
               <button class="tc-cell" data-edit="week"${editable ? '' : ' disabled'}><span class="tc-label">执行日期</span>${mte(tcWeekText(n))}</button>
-              <button class="tc-cell${out ? ' is-out' : ''}" data-edit="window"${editable ? '' : ' disabled'}><span class="tc-label">执行时段</span>${mte(tcWindowText(n))}${out ? ' <i class="tc-out">时段外</i>' : ''}</button>
+              <button class="tc-cell${out ? ' is-out' : ''}" data-edit="window"${editable ? '' : ' disabled'}><span class="tc-label">执行时段</span>${mte(tcWindowText(n))}${tcWindowOpts(n) ? `<small class="tc-win-opts">${mte(tcWindowOpts(n))}</small>` : ''}${out ? ` <i class="tc-out">${tcWaitStart(n, now) ? '等到 ' + tcWaitStart(n, now) : '时段外'}</i>` : ''}</button>
               <button class="tc-cell" data-edit="account"${editable ? '' : ' disabled'}><span class="tc-label">账号</span>${acc ? mte(tcMask(acc.uid)) : '未绑定账号'}</button>
               <label class="tc-toggle"><input type="checkbox" data-enable${tcEnabled(n) ? ' checked' : ''}${editable ? '' : ' disabled'} aria-label="启用此配置单"></label>
               <span class="tc-row-act"><button class="dd-btn dd-btn-sm dd-btn-icon" data-tasks title="设置此配置单内部任务的启用、顺序和执行起点">⚙</button><button class="dd-btn dd-btn-sm dd-btn-icon" data-more title="更多操作">⋯</button></span></div>`;
@@ -307,7 +318,7 @@ function tcNodeDialog(node, focus) {
     const fail = tcStrat(node, 'execution.failure'), pr = tcStrat(node, 'schedule.priority'), win = node.timeWindow;
     const redeem = tcStrat(node, 'prerequisite.redeemCode');
     const body = `<section class="tc-sec${focus === 'week' ? ' focus' : ''}"><h4>执行日期</h4><label class="dd-check"><input type="checkbox" id="tcWeekOn"${w ? ' checked' : ''}>只在选定的星期执行（未勾选时每天执行）</label><div class="mt-week" id="tcWeekDays">${TC_WEEK.map(d => `<label><input type="checkbox" value="${d}"${days.includes(d) ? ' checked' : ''}${w ? '' : ' disabled'}>${d.slice(1)}</label>`).join('')}</div></section>
-      <section class="tc-sec${focus === 'window' ? ' focus' : ''}"><h4>执行时段</h4><p class="dodoco-hint">按执行端本机时间判断，包含开始、不含结束；结束早于开始表示跨午夜，起止相同表示全天。计划的「按时段执行」关闭时保留设置，按原计划执行。</p><div class="mt-form-row">${mtField('开始', `<input id="tcWinStart" type="time" value="${mte(win?.start || '00:00')}">`)}${mtField('结束', `<input id="tcWinEnd" type="time" value="${mte(win?.end || '00:00')}">`)}<button id="tcWinAll" class="dd-btn dd-btn-sm dd-align-end">设为全天</button></div></section>
+      <section class="tc-sec${focus === 'window' ? ' focus' : ''}"><h4>执行时段</h4><p class="dodoco-hint">按执行端本机时间判断，包含开始、不含结束；结束早于开始表示跨午夜，起止相同表示全天。计划的「按时段执行」关闭时保留设置，按原计划执行。</p><div class="mt-form-row">${mtField('开始', `<input id="tcWinStart" type="time" value="${mte(win?.start || '00:00')}">`)}${mtField('结束', `<input id="tcWinEnd" type="time" value="${mte(win?.end || '00:00')}">`)}<button id="tcWinAll" class="dd-btn dd-btn-sm dd-align-end">设为全天</button></div><label class="dd-check" title="前面的任务提前做完、还没到开始时间时，等到开始时间再执行；当天开始时间已过仍按原规则跳过"><input type="checkbox" id="tcWinWait"${win?.waitForStart ? ' checked' : ''}>没到开始时间就等到点再执行</label><label class="dd-check tc-sub-check" title="等待期间先关闭游戏；到点执行时 BGI 按「联动启动原神」自动启动游戏并等游戏进入主界面。BGI 未开启联动启动、未设置安装路径或仍有任务在执行时不关游戏"><input type="checkbox" id="tcWinClose"${win?.closeGameWhileWaiting ? ' checked' : ''}${win?.waitForStart ? '' : ' disabled'}>等待期间关闭游戏，到点自动启动</label><label class="dd-check" title="执行中到了结束时间就自动结束这一行（与跳过当前任务同样停止并等 BGI 确认），然后继续下一行"><input type="checkbox" id="tcWinStop"${win?.stopAtEnd ? ' checked' : ''}>严格按结束时间结束任务</label></section>
       <section class="tc-sec${focus === 'account' ? ' focus' : ''}"><h4>账号</h4>${acc ? `<p class="dodoco-hint">当前绑定：UID ${mte(tcMask(acc.uid))} · 绑定码 ${mte(tcMask(acc.bindingCode))}</p><div class="mt-form-row">${mtField('新账号 UID（留空保留当前值）', '<input id="tcUid" maxlength="32" autocomplete="off">')}${mtField('新绑定码（留空保留当前值）', '<input id="tcBind" maxlength="128" autocomplete="off" type="password">')}</div><button id="tcAccDel" class="dd-btn dd-btn-sm dd-btn-danger">移除账号</button>` : '<p class="dodoco-hint">未绑定账号：按当前登录的账号执行。</p><button id="tcAccAdd" class="dd-btn dd-btn-sm">添加账号</button>'}
         ${redeem ? `<p class="dodoco-hint">兑换码：${redeem.uid ? 'UID ' + mte(tcMask(redeem.uid)) : '继承账号 UID'}</p>${mtField('兑换码 UID（留空保留当前值）', '<input id="tcRedeemUid" maxlength="32" autocomplete="off">')}` : ''}</section>
       <section class="tc-sec"><h4>此配置单的失败处理</h4><label class="dd-check"><input type="checkbox" id="tcFailPlan"${fail ? '' : ' checked'}>沿用计划的失败设置</label><div class="mt-form-row">${mtField('失败时', `<select id="tcFailMode"${fail ? '' : ' disabled'}><option value="stop"${fail?.onFailure === 'continue' ? '' : ' selected'}>失败后停止计划</option><option value="continue"${fail?.onFailure === 'continue' ? ' selected' : ''}>失败后继续下一个任务</option></select>`)}${mtField('最多重试次数（0–3）', `<input id="tcFailRetry" type="number" min="0" max="3" value="${mte(fail?.maxRetries ?? 0)}"${fail ? '' : ' disabled'}>`)}</div><p class="dodoco-hint">未知、取消和拒绝不会自动重试。</p></section>
@@ -316,6 +327,7 @@ function tcNodeDialog(node, focus) {
     const q = s => dialog.querySelector(s);
     q('#tcWeekOn').onchange = e => dialog.querySelectorAll('#tcWeekDays input').forEach(x => x.disabled = !e.target.checked);
     q('#tcWinAll').onclick = () => { q('#tcWinStart').value = '00:00'; q('#tcWinEnd').value = '00:00'; };
+    q('#tcWinWait').onchange = e => { q('#tcWinClose').disabled = !e.target.checked; if (!e.target.checked) q('#tcWinClose').checked = false; };
     q('#tcFailPlan').onchange = e => { q('#tcFailMode').disabled = q('#tcFailRetry').disabled = e.target.checked; };
     let accAction = acc ? 'keep' : 'none';
     if (q('#tcAccAdd')) q('#tcAccAdd').onclick = () => { accAction = 'add'; q('#tcAccAdd').outerHTML = `<div class="mt-form-row">${mtField('账号 UID', '<input id="tcUid" maxlength="32" autocomplete="off">')}${mtField('绑定码', '<input id="tcBind" maxlength="128" autocomplete="off" type="password">')}</div>`; };
@@ -334,8 +346,12 @@ function tcNodeDialog(node, focus) {
             else if (on && w && JSON.stringify(picked) !== JSON.stringify(days.filter(d => TC_WEEK.includes(d)))) w.days = picked;
             const a = q('#tcWinStart').value, b = q('#tcWinEnd').value;
             if (!/^\d\d:\d\d$/.test(a) || !/^\d\d:\d\d$/.test(b)) throw new Error('开始和结束时间须为 HH:mm');
+            const wWait = q('#tcWinWait').checked, wClose = wWait && q('#tcWinClose').checked, wStop = q('#tcWinStop').checked;
+            if (a === b && (wWait || wStop)) throw new Error('全天时段没有开始和结束时间，等到点或到点结束不会生效；请先设置起止时间。');
             if (!win && a !== b) node.timeWindow = { start:a, end:b };
             else if (win && (win.start !== a || win.end !== b)) { if (a === b) delete node.timeWindow; else Object.assign(win, { start:a, end:b }); }
+            // 附加选项只在有时段时保存；默认值不写入，保持旧计划文件不变。
+            if (node.timeWindow) for (const [k, v] of [['waitForStart', wWait], ['closeGameWhileWaiting', wClose], ['stopAtEnd', wStop]]) { if (v) node.timeWindow[k] = true; else delete node.timeWindow[k]; }
             const uid = q('#tcUid')?.value.trim(), bind = q('#tcBind')?.value.trim();
             if (accAction === 'remove' && acc) s.splice(s.indexOf(acc), 1);
             else if (accAction === 'add') { if (!uid) throw new Error('请填写账号 UID'); s.push({ kind:'prerequisite.account', uid, ...(bind ? { bindingCode:bind } : {}) }); }

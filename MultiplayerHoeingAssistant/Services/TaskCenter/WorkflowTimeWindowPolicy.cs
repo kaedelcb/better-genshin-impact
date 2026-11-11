@@ -49,6 +49,39 @@ public static class WorkflowTimeWindowPolicy
             : new(NodeGateAction.Skip, "当前不在允许执行时间段（" + Display(window) + "），跳过本次任务。");
     }
 
+    /// <summary>
+    /// 等待到点的目标时刻：时段限制开启、设置了等待、当前在时段外，且当天开始时间还没到时返回当天的开始时刻；
+    /// 当天开始时间已过（已错过）返回 null，按原规则跳过。
+    /// </summary>
+    public static DateTimeOffset? StartWaitTarget(bool enabled, WorkflowTimeWindow? window, DateTimeOffset now)
+    {
+        if (!enabled || window is not { WaitForStart: true } || Allows(window, now)) return null;
+        if (!TryParse(window.Start, out var start) || !TryParse(window.End, out var end) || start == end) return null;
+        var time = TimeOnly.FromDateTime(now.DateTime);
+        if (start <= time) return null;
+        return new DateTimeOffset(now.Year, now.Month, now.Day, start.Hour, start.Minute, 0, now.Offset);
+    }
+
+    /// <summary>当前时刻所在时段的结束时刻（严格结束用）；全天、无效或当前不在时段内返回 null。</summary>
+    public static DateTimeOffset? CurrentWindowEnd(WorkflowTimeWindow? window, DateTimeOffset now)
+    {
+        if (window is null || !Allows(window, now)) return null;
+        if (!TryParse(window.Start, out var start) || !TryParse(window.End, out var end) || start == end) return null;
+        var time = TimeOnly.FromDateTime(now.DateTime);
+        var at = new DateTimeOffset(now.Year, now.Month, now.Day, end.Hour, end.Minute, 0, now.Offset);
+        return end > time ? at : at.AddDays(1);
+    }
+
+    /// <summary>附加选项的简短说明（展示用；没有附加选项时为空）。</summary>
+    public static string OptionsDisplay(WorkflowTimeWindow? window)
+    {
+        if (window is null) return "";
+        var parts = new List<string>();
+        if (window.WaitForStart) parts.Add(window.CloseGameWhileWaiting ? "关游戏等到点" : "等到点执行");
+        if (window.StopAtEnd) parts.Add("到点结束");
+        return string.Join(" · ", parts);
+    }
+
     private static bool TryParse(string? value, out TimeOnly time)
         => TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
 }

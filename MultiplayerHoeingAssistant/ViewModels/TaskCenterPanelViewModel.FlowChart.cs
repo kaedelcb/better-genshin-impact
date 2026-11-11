@@ -81,7 +81,11 @@ public sealed partial class TaskCenterPanelViewModel
         // 计划表每行的运行标志：每次刷新都按当前行重设（切换计划、重建草稿后不残留旧标志）。
         // 必须在 _runTrace 更新之后设：行标志变化会触发车道行重画，重画时读取的是 RunTrace。
         if (Editing is { } editing)
-            foreach (var row in editing.Nodes) row.RunState = next.Node(row.NodeId);
+            foreach (var row in editing.Nodes)
+            {
+                row.RunWaitText = row.NodeId == next.WaitingNodeId ? next.WaitingText : null;
+                row.RunState = next.Node(row.NodeId);
+            }
         if (key == _runTraceKey) return;
         _runTraceKey = key;
         if (Editing?.Draft is { } doc && next.HasRun)
@@ -109,10 +113,22 @@ public sealed partial class NodeEditVm
         }
     }
     public bool HasRunState => RunState != NodeRunState.None;
+    private string? _runWaitText;
+    /// <summary>本行正在等待时段开始时的说明（替代「执行中…」显示）。</summary>
+    public string? RunWaitText
+    {
+        get => _runWaitText;
+        internal set
+        {
+            if (_runWaitText == value) return;
+            _runWaitText = value;
+            OnPropertyChanged(); OnPropertyChanged(nameof(RunStateText));
+        }
+    }
     /// <summary>与流程图徽标同口径的文字。</summary>
     public string RunStateText => RunState switch
     {
-        NodeRunState.Running => "执行中…",
+        NodeRunState.Running => RunWaitText ?? "执行中…",
         NodeRunState.Success => "✓ 已完成",
         NodeRunState.Failed => "✗ 未完成",
         NodeRunState.Skipped => "已跳过",

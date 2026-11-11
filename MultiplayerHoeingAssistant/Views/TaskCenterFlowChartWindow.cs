@@ -208,7 +208,9 @@ public sealed class TaskCenterFlowChartWindow : Window
         // 与计划表「UID/账号」列同口径：未绑定也写明，避免误以为漏显示；UID 按计划表同样掩码。
         var summary = vm.SettingsSummary + (vm.HasAccount ? "" : " · 未绑定账号");
         if (vm.HasTimeWindow)
-            summary += " · 时段 " + WorkflowTimeWindowPolicy.Display(vm.TimeWindow) + (editing.NodeTimeWindowEnabled ? "" : "（总开关关闭，不生效）");
+            summary += " · 时段 " + WorkflowTimeWindowPolicy.Display(vm.TimeWindow)
+                + (vm.HasTimeWindowOptions ? "（" + vm.TimeWindowOptionsText + "）" : "")
+                + (editing.NodeTimeWindowEnabled ? "" : "（总开关关闭，不生效）");
         return summary;
     }
 

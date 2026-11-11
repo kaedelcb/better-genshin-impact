@@ -248,6 +248,8 @@ svg.mt-edges{position:absolute;left:0;top:0;overflow:visible;pointer-events:none
 .tc-cell:hover:not(:disabled){border-color:#5a5772;background:#1f2036}
 .tc-cell.is-out{color:#f0d39d}
 .tc-out{padding:0 5px;border-radius:5px;background:#443b2e;font-size:11px;font-style:normal}
+.tc-win-opts{display:block;font-size:10.5px;color:#e8c96d;opacity:.85}
+.tc-sub-check{margin-left:22px}
 .tc-label{display:none}
 .tc-toggle{display:flex;justify-content:center}
 .tc-row-act{display:flex;gap:4px;justify-content:flex-end}

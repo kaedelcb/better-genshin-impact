@@ -575,6 +575,8 @@
                                                         <Button.ToolTip>
                                                             <StackPanel>
                                                                 <TextBlock Text="{Binding TimeWindowStatusText}" FontWeight="SemiBold" />
+                                                                <TextBlock Text="{Binding TimeWindowOptionsText}" Margin="0,4,0,0" Foreground="#E8C96D"
+                                                                           Visibility="{Binding HasTimeWindowOptions, Converter={StaticResource Visible}}" />
                                                                 <TextBlock Text="点选允许执行的时间段；支持跨午夜，未设置时全天可执行。" Margin="0,4,0,0" />
                                                             </StackPanel>
                                                         </Button.ToolTip>
@@ -615,6 +617,11 @@
                                                                         </Style.Triggers></Style>
                                                                     </TextBlock.Style>
                                                                 </TextBlock>
+                                                                <!-- 等到点 / 到点结束：小图标提示，详情见悬停说明。 -->
+                                                                <TextBlock Text="⏳" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                                           Visibility="{Binding TimeWindowWaitForStart, Converter={StaticResource Visible}}" />
+                                                                <TextBlock Text="⏹" FontSize="10" Margin="3,0,0,0" VerticalAlignment="Center" Foreground="#F0B3A3"
+                                                                           Visibility="{Binding TimeWindowStopAtEnd, Converter={StaticResource Visible}}" />
                                                             </StackPanel>
                                                         </Border>
                                                     </Button>
@@ -806,6 +813,21 @@
                             <views:TimeOfDayPicker x:Name="NodeTimeWindowEndPicker" ShowSeconds="False" CommitOnSubmit="True" FontSize="15" Height="36" />
                         </StackPanel>
                     </Grid>
+                    <StackPanel Margin="0,0,0,10">
+                        <CheckBox x:Name="NodeTimeWindowWaitCheck" Style="{StaticResource BasicCheckBox}" FontSize="12" Margin="0,0,0,6"
+                                  Checked="NodeTimeWindowWaitChanged" Unchecked="NodeTimeWindowWaitChanged"
+                                  ToolTip="前面的任务提前做完、还没到开始时间时，等到开始时间再执行这一行，而不是直接跳过。当天开始时间已过仍按原规则跳过。">
+                            <TextBlock Text="没到开始时间就等到点再执行" />
+                        </CheckBox>
+                        <CheckBox x:Name="NodeTimeWindowCloseGameCheck" Style="{StaticResource BasicCheckBox}" FontSize="12" Margin="30,0,0,6"
+                                  ToolTip="等待期间先关闭游戏；到点执行时 BGI 按「联动启动原神」自动启动游戏，等游戏进入主界面后再执行。BGI 未开启联动启动、未设置安装路径或仍有任务在执行时不关游戏。">
+                            <TextBlock Text="等待期间关闭游戏，到点自动启动" />
+                        </CheckBox>
+                        <CheckBox x:Name="NodeTimeWindowStopAtEndCheck" Style="{StaticResource BasicCheckBox}" FontSize="12"
+                                  ToolTip="执行中到了结束时间就自动结束这一行（按「跳过当前任务」同样方式停止并等 BGI 确认），然后继续计划的下一行。">
+                            <TextBlock Text="严格按结束时间结束任务" />
+                        </CheckBox>
+                    </StackPanel>
                     <TextBlock x:Name="NodeTimeWindowNotice" Foreground="{DynamicResource Dim}" FontSize="10.5" Margin="0,0,0,12"
                                ToolTip="按执行端本机时间判断，包含开始、不含结束。结束早于开始表示跨午夜；起止相同表示全天。总开关关闭时保留设置，按原计划执行。" />
                     <DockPanel>

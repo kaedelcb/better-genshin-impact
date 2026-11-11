@@ -151,6 +151,32 @@ public partial class ScriptService
         }
     }
 
+    /// <summary>
+    /// 外部前置（账号核对等）发现游戏刚由 BGI 冷启动时调用：沿用任务启动同一套就绪判断，
+    /// 处理登录/领奖界面并等待游戏进入可操作界面（最长 5 分钟，跟随调用方令牌取消）。
+    /// </summary>
+    internal static Task WaitColdStartedGameReadyAsync(CancellationToken ct)
+    {
+        var runtime = App.GetService<GameRuntimeService>()!;
+        var waitingLogged = false;
+        return GameTaskStartupGate.PrepareAsync(true,
+            token => runtime.IsRunning ? Task.FromResult(true) : runtime.StartAsync(token),
+            token =>
+            {
+                using var pause = TaskTriggerDispatcher.Instance().PauseForInference();
+                token.ThrowIfCancellationRequested();
+                if (!runtime.IsRunning || !TaskContext.Instance().IsInitialized) return false;
+                using var frame = TaskControl.CaptureToRectArea();
+                var ready = CheckStartupScreen(frame, token.ThrowIfCancellationRequested);
+                if (!ready && !waitingLogged)
+                {
+                    waitingLogged = true;
+                    TaskControl.Logger.LogInformation("游戏刚启动，等待登录、加载和领奖完成后再核对账号（最长5分钟，可随时停止）");
+                }
+                return ready;
+            }, ct);
+    }
+
     private static bool CheckStartupScreen(ImageRegion frame, Action verifyOwnership)
     {
         // 沿用 UID 登录准备的识别资源；先处理登录/领奖遮挡，再判断原有的游戏内就绪界面。
