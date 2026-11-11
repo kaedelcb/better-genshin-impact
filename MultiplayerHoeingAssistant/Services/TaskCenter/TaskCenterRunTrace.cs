@@ -31,6 +31,11 @@ public sealed class TaskCenterRunTrace
     public NodeRunState Node(string nodeId) => _nodes.GetValueOrDefault(nodeId);
     public NodeRunState Step(string ownerNodeId, string stepId) => _steps.GetValueOrDefault(ownerNodeId + "/" + stepId);
 
+    private readonly HashSet<string> _jumpedOver = new(StringComparer.Ordinal);
+    /// <summary>本轮被跳转跳过的行（流程执行完或车道路线走完后跳到后面，中间的行没执行）。车道成员按所在车道计。</summary>
+    public bool JumpedOver(string nodeId) => _jumpedOver.Contains(nodeId);
+    public IReadOnlyCollection<string> JumpedOverRows => _jumpedOver;
+
     /// <summary>车道本轮的选择：true=满足条件路线，false=其他路线，null=尚未判断。</summary>
     public bool? LaneChoice(WorkflowDocument doc, WorkflowNode lane)
         => Node(WorkflowComposition.GetDecisionOwnerId(doc, lane)) switch
@@ -101,7 +106,43 @@ public sealed class TaskCenterRunTrace
                 foreach (var flow in new[] { node.Flow, node.Lanes?.Decision })
                     if (flow is not null) trace.ResolveBranches(node.NodeId, flow.Steps);
         }
+        trace.MarkJumpedOver(doc);
         return trace;
+    }
+
+    /// <summary>
+    /// 推出本轮被跳转跳过的主计划行：跳转来源本轮已经实际经过（流程执行成功，或车道选中的路线已走完），
+    /// 来源与目标之间、本轮没有结果的行视为被跳过。车道成员随所在车道一起计。只读，不影响执行。
+    /// </summary>
+    private void MarkJumpedOver(WorkflowDocument doc)
+    {
+        var main = doc.Nodes.Where(n => !WorkflowComposition.IsLaneMember(doc, n.NodeId)).ToList();
+        void Mark(string sourceId, string? target)
+        {
+            if (WorkflowComposition.JumpTarget(doc, target) is not { } resolved) return;
+            var from = main.FindIndex(n => n.NodeId == sourceId);
+            var to = main.FindIndex(n => n.NodeId == resolved);
+            if (from < 0 || to <= from) return;
+            for (var i = from + 1; i < to; i++)
+            {
+                var row = main[i];
+                if (_nodes.ContainsKey(row.NodeId)) continue; // 本轮另经别的路线执行过，不算跳过
+                _jumpedOver.Add(row.NodeId);
+                if (row.Lanes is { } l)
+                    foreach (var id in l.YesNodeIds.Concat(l.NoNodeIds)) if (!_nodes.ContainsKey(id)) _jumpedOver.Add(id);
+            }
+        }
+        foreach (var n in main)
+        {
+            if (n.Kind == "control.flow" && Node(n.NodeId) == NodeRunState.Success) Mark(n.NodeId, n.Flow?.JumpTo);
+            if (n.Lanes is not { Decision: not null } lane) continue;
+            var chose = LaneChoice(doc, n);
+            if (chose is null) continue;
+            var route = chose.Value ? lane.YesNodeIds : lane.NoNodeIds;
+            // 路线走完才算跳出：空路线判断后即跳；否则路线最后一个任务本轮已有结果。
+            var finished = route.Count == 0 || _nodes.ContainsKey(route[^1]) && Node(route[^1]) != NodeRunState.Running;
+            if (finished) Mark(n.NodeId, chose.Value ? lane.YesJumpTo : lane.NoJumpTo);
+        }
     }
 
     private void ResolveBranches(string owner, IEnumerable<StartupStep> steps)

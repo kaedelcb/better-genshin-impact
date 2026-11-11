@@ -27,6 +27,7 @@ public sealed class TaskCenterFlowChartWindow : Window
         Pyro = Frozen("#E88A6F"), Fail = Frozen("#EF5350"), DimText = Frozen("#9C97C0"), WhiteText = Frozen("#F4F2FA"),
         CardBg = Frozen("#241d3d"), EdgeNormal = Frozen("#809C97C0"), EdgeDim = Frozen("#339C97C0"),
         TrueEdgeBase = Frozen("#806FD8CE"), FalseEdgeBase = Frozen("#80E88A6F"), CardEdge = Frozen("#40D4AF37"),
+        JumpEdge = Frozen("#CCB39DDB"), JumpEdgeLit = Frozen("#FFC9B4F0"),
         ChipBg = Frozen("#299C97C0"), FrameBg = Frozen("#1C1833");
 
     private readonly TaskCenterPanelViewModel _host;
@@ -144,19 +145,85 @@ public sealed class TaskCenterFlowChartWindow : Window
         var all = Chain([start, .. blocks, end]);
         Canvas.SetLeft(all.Panel, Pad); Canvas.SetTop(all.Panel, Pad);
         _chart.Children.Add(all.Panel);
-        _chart.Width = all.Width + Pad * 2;
+        var jumpWidth = DrawJumps(editing, trace, rows, blocks, all);
+        _chart.Width = all.Width + Pad * 2 + jumpWidth;
         _chart.Height = all.Height + Pad * 2;
+    }
+
+    /// <summary>
+    /// 跳转连线：从来源行右侧引出，沿图右边各自独立的竖道（每个跳转一条，互不重叠）走到目标行右侧，
+    /// 紫色虚线加箭头，不横穿中间的卡片；本轮实际跳过时加粗点亮。返回竖道多占的宽度。
+    /// </summary>
+    private double DrawJumps(WorkflowEditVm editing, TaskCenterRunTrace trace, IReadOnlyList<NodeEditVm> rows, List<Block> blocks, Block all)
+    {
+        if (blocks.Count != rows.Count) return 0;
+        var doc = editing.Draft;
+        var numbers = editing.RowNumbers();
+        string No(string? id) => id is not null && numbers.TryGetValue(id, out var no) ? no : "";
+        // 行块位置：Chain 把它们放在 all.Panel 里（Canvas 坐标），加上整图外边距即为图上坐标。
+        Rect RowRect(int i)
+        {
+            var panel = blocks[i].Panel;
+            return new Rect(Pad + Canvas.GetLeft(panel), Pad + Canvas.GetTop(panel), blocks[i].Width, blocks[i].Height);
+        }
+        var rowList = rows.ToList();
+        var jumps = new List<(int From, int To, string Label, bool Lit)>();
+        for (var i = 0; i < rowList.Count; i++)
+        {
+            var n = rowList[i].Model;
+            var index = i;
+            void Add(string? target, string label, bool lit)
+            {
+                if (WorkflowComposition.JumpTarget(doc, target) is not { } resolved) return;
+                var to = rowList.FindIndex(r => r.NodeId == resolved || r.Model.Lanes?.SourceFlowNodeId == resolved);
+                if (to <= index) return; // 往回或无效：计划表已标红，图上不画
+                jumps.Add((index, to, label, lit));
+            }
+            if (n.Kind == "control.flow")
+                Add(n.Flow?.JumpTo, "↪ " + No(n.Flow?.JumpTo), trace.Node(n.NodeId) == NodeRunState.Success);
+            if (n.Lanes is { Decision: not null } lane)
+            {
+                var chose = trace.LaneChoice(doc, n);
+                Add(lane.YesJumpTo, "满足 ↪ " + No(lane.YesJumpTo), chose == true);
+                Add(lane.NoJumpTo, "其他 ↪ " + No(lane.NoJumpTo), chose == false);
+            }
+        }
+        if (jumps.Count == 0) return 0;
+        const double LaneGap = 22, Stub = 18;
+        var right = Pad + all.Width;
+        var layer = new Canvas { IsHitTestVisible = false };
+        for (var k = 0; k < jumps.Count; k++)
+        {
+            var (fromIndex, toIndex, label, lit) = jumps[k];
+            var a = RowRect(fromIndex); var b = RowRect(toIndex);
+            var laneX = right + Stub + k * LaneGap;
+            var y1 = a.Top + Math.Min(a.Height, NodeH) / 2;
+            var y2 = b.Top + Math.Min(b.Height, NodeH) / 2;
+            var brush = lit ? JumpEdgeLit : JumpEdge;
+            Edge(layer, [new(a.Right + 4, y1), new(laneX, y1), new(laneX, y2), new(b.Right + 4, y2)], brush, lit ? 2.4 : 1.6, true, true);
+            var text = new Border
+            {
+                Background = Frozen("#14122a"), CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0),
+                Child = new TextBlock { Text = label, FontSize = 9.5, FontWeight = FontWeights.SemiBold, Foreground = brush },
+            };
+            Canvas.SetLeft(text, a.Right + 6); Canvas.SetTop(text, y1 - 15);
+            layer.Children.Add(text);
+        }
+        _chart.Children.Add(layer);
+        return Stub + jumps.Count * LaneGap + 10;
     }
 
     private Block BuildRow(WorkflowDocument doc, WorkflowEditVm editing, NodeEditVm row, TaskCenterRunTrace trace)
     {
         var node = row.Model;
-        var nodeState = trace.Node(node.NodeId);
-        var opacity = row.IsEnabled ? 1.0 : 0.45;
+        // 本轮被跳转跳过的行：灰显并标「本轮跳过（跳转）」（与计划表同口径）。
+        var jumped = trace.JumpedOver(node.NodeId);
+        var nodeState = jumped ? NodeRunState.Skipped : trace.Node(node.NodeId);
+        var opacity = (row.IsEnabled ? 1.0 : 0.45) * (jumped ? 0.4 : 1.0);
         if (node.Flow is { } flow)
         {
             var inner = flow.Steps.Count == 0 ? Pill("暂无步骤", DimText) : Steps(node.NodeId, flow.Steps, flow.ExitStepId, trace);
-            var f = Frame($"{row.ResourceIndex:00}  流程 · {row.DisplayName}" + Badge(nodeState, " "), inner, "#B39DDB", nodeState, () => _locate(node.NodeId, null));
+            var f = Frame($"{RowNo(row)}  流程 · {row.DisplayName}" + (jumped ? "  本轮跳过（跳转）" : Badge(nodeState, " ")), inner, "#B39DDB", nodeState, () => _locate(node.NodeId, null));
             f.Panel.Opacity = opacity;
             return f;
         }
@@ -169,9 +236,9 @@ public sealed class TaskCenterFlowChartWindow : Window
             var laneState = choice switch { true => NodeRunState.CondTrue, false => NodeRunState.CondFalse, _ => nodeState };
             var yesName = lanes.YesName == "是" ? "路线 1" : lanes.YesName;
             var noName = lanes.NoName == "否" ? "路线 2" : lanes.NoName;
-            var head = Card("⑂", $"{row.ResourceIndex:00}  {row.DisplayName}", "车道",
+            var head = Card("⑂", $"{RowNo(row)}  {row.DisplayName}", "车道",
                 exit is null ? "还没有设置选择条件" : "判断：" + LanesEditorWindow.Describe(exit), "#E8C96D", laneState, opacity,
-                () => _locate(node.NodeId, null));
+                () => _locate(node.NodeId, null), jumped);
             var yes = LaneBranch(editing, lanes.YesNodeIds, trace);
             var no = LaneBranch(editing, lanes.NoNodeIds, trace);
             var split = Split(head, yes, no, "满足 → " + yesName, "其他 → " + noName, choice);
@@ -183,9 +250,12 @@ public sealed class TaskCenterFlowChartWindow : Window
             pre.Panel.Opacity = opacity;
             return Chain([pre, split]);
         }
-        return Card("▶", $"{row.ResourceIndex:00}  {row.DisplayName}", row.KindName,
-            TaskSummary(editing, row), "#48C87E", nodeState, opacity, () => _locate(node.NodeId, null));
+        return Card("▶", $"{RowNo(row)}  {row.DisplayName}", row.KindName,
+            TaskSummary(editing, row), "#48C87E", nodeState, opacity, () => _locate(node.NodeId, null), jumped);
     }
+
+    /// <summary>与计划表、跳转目标同口径的编号（#N / #N.M）；没有编号时退回顺序号。</summary>
+    private static string RowNo(NodeEditVm row) => row.RowNumber.Length > 0 ? row.RowNumber : $"{row.ResourceIndex:00}";
 
     private Block LaneBranch(WorkflowEditVm editing, List<string> ids, TaskCenterRunTrace trace)
     {
@@ -195,8 +265,8 @@ public sealed class TaskCenterFlowChartWindow : Window
         {
             var vm = editing.Nodes.FirstOrDefault(n => n.NodeId == id);
             items.Add(vm is null ? Card("⚠", "任务引用缺失", "", "请重新绑定", "#EF5350", NodeRunState.None, 1, null)
-                : Card("▶", $"{i + 1:00}  {vm.DisplayName}", vm.KindName, TaskSummary(editing, vm),
-                    "#48C87E", trace.Node(id), vm.IsEnabled ? 1 : 0.45, () => _locate(id, null)));
+                : Card("▶", (vm.RowNumber.Length > 0 ? vm.RowNumber : $"{i + 1:00}") + "  " + vm.DisplayName, vm.KindName, TaskSummary(editing, vm),
+                    "#48C87E", trace.JumpedOver(id) ? NodeRunState.Skipped : trace.Node(id), vm.IsEnabled ? 1 : 0.45, () => _locate(id, null), trace.JumpedOver(id)));
         }
         return Chain(items);
     }
@@ -364,7 +434,7 @@ public sealed class TaskCenterFlowChartWindow : Window
         return new Block(c, c.Width, c.Height, c.Width / 2, c.Width / 2, null);
     }
 
-    private Block Card(string icon, string name, string type, string summary, string accentHex, NodeRunState state, double opacity, Action? onClick)
+    private Block Card(string icon, string name, string type, string summary, string accentHex, NodeRunState state, double opacity, Action? onClick, bool jumpedOver = false)
     {
         var accent = Frozen(accentHex);
         var card = new Border
@@ -386,14 +456,15 @@ public sealed class TaskCenterFlowChartWindow : Window
         Grid.SetColumn(iconBg, 1); grid.Children.Add(iconBg);
         var right = new StackPanel();
         var row1 = new DockPanel();
-        var badgeText = Badge(state, "");
+        var badgeText = jumpedOver ? "本轮跳过（跳转）" : Badge(state, "");
         if (badgeText.Length > 0)
         {
             var badge = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 1, 5, 1), Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                 Background = BadgeBg(state), Child = new TextBlock { Text = badgeText, FontSize = 9, Foreground = BadgeFg(state) } };
             DockPanel.SetDock(badge, Dock.Right); row1.Children.Add(badge);
         }
-        if (type.Length > 0)
+        // 被跳过的卡片徽标较长：不再显示类型标签，给名称留出位置。
+        if (type.Length > 0 && !jumpedOver)
         {
             var chip = new Border { CornerRadius = new CornerRadius(5), Padding = new Thickness(5, 1, 5, 1), Margin = new Thickness(6, 0, 0, 0), Background = ChipBg, VerticalAlignment = VerticalAlignment.Center,
                 Child = new TextBlock { Text = type, FontSize = 9, Foreground = DimText } };

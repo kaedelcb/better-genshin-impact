@@ -192,6 +192,79 @@ public sealed class CompositionJumpUiTests
         finally { try { Directory.Delete(root, true); } catch { } }
     });
 
+    // ---------------- 第 3 阶段：被跳过的行与流程图连线 ----------------
+
+    private static WorkflowRunRecord Run(string workflowId, string cursor, params (string Node, string Result)[] outcomes) => new()
+    {
+        RunId = "run-1", WorkflowId = workflowId, State = WorkflowRunState.Running, CreatedAt = DateTimeOffset.Now,
+        Cursor = new() { NodeId = cursor }, NodeOutcomes = outcomes.Select(o => new WorkflowNodeOutcome { NodeId = o.Node, Result = o.Result }).ToList(),
+    };
+
+    [Fact]
+    public void TraceMarksRowsSkippedByFlowAndLaneJumps()
+    {
+        var doc = new WorkflowDocument { Name = "跳过", WorkflowId = "wf-j", Nodes = [Flow("F", jumpTo: "C"), R("B"), Lane("L", ["Y"], [], noJump: "E"), R("C"), R("D"), R("E"), R("Y")] };
+        // 流程执行完 → 跳过 B 和整条车道（含车道成员 Y）
+        var t1 = TaskCenterRunTrace.Build(doc, [Run("wf-j", "C", ("F", "succeeded"))]);
+        Assert.True(t1.JumpedOver("B")); Assert.True(t1.JumpedOver("L")); Assert.True(t1.JumpedOver("Y"));
+        Assert.False(t1.JumpedOver("C")); Assert.False(t1.JumpedOver("E"));
+        // 流程被过滤（没执行）→ 不跳，什么都不算跳过
+        var t2 = TaskCenterRunTrace.Build(doc, [Run("wf-j", "B", ("F", "skippedFilter"))]);
+        Assert.Empty(t2.JumpedOverRows);
+        // 车道「其他」空路线跳到 E → 跳过 C、D；「满足」路线没走完时不算
+        var lanePlan = new WorkflowDocument { Name = "车道跳过", WorkflowId = "wf-j", Nodes = [Lane("L", ["Y"], [], yesJump: "E", noJump: "E"), R("C"), R("D"), R("E"), R("Y")] };
+        var t3 = TaskCenterRunTrace.Build(lanePlan, [Run("wf-j", "E", ("L", "branchNo"))]);
+        Assert.True(t3.JumpedOver("C")); Assert.True(t3.JumpedOver("D"));
+        var t4 = TaskCenterRunTrace.Build(lanePlan, [Run("wf-j", "Y", ("L", "branchYes"))]);
+        Assert.Empty(t4.JumpedOverRows); // Y 还在执行，路线没走完
+        var t5 = TaskCenterRunTrace.Build(lanePlan, [Run("wf-j", "E", ("L", "branchYes"), ("Y", "succeeded"))]);
+        Assert.True(t5.JumpedOver("C"));
+    }
+
+    [Fact]
+    public Task PlanTableAndFlowChartShowJumpedOverRowsAndJumpLines() => OnSta(async () =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "jump-p3-ui-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var host = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"), () => null, () => true, () => null);
+            var revision = host.SaveFlow(new WorkflowDocument { Name = "跳转状态", Nodes = [R("A"), Flow("F", jumpTo: "D"), R("B"), R("C"), R("D")] }, null);
+            var workflowId = host.ListFlows().Single().WorkflowId;
+            var seed = new RunStore(Path.Combine(root, "runs"));
+            var run = seed.CreateRun(workflowId, revision);
+            run.State = WorkflowRunState.Succeeded;
+            foreach (var (id, result) in new[] { ("A", "succeeded"), ("F", "succeeded"), ("D", "succeeded") })
+                run.NodeOutcomes.Add(new() { NodeId = id, Result = result });
+            seed.Update(run);
+
+            var vm = new TaskCenterPanelViewModel(host, autoRefresh: false);
+            vm.Refresh();
+            var rows = vm.Editing!.Nodes.ToDictionary(n => n.NodeId);
+            Assert.Equal("本轮跳过（跳转）", rows["B"].RunStateText);
+            Assert.Equal("本轮跳过（跳转）", rows["C"].RunStateText);
+            Assert.Equal("✓ 已完成", rows["D"].RunStateText);
+            Assert.False(vm.Editing.HasUnsavedChanges);
+
+            var view = new BasicTaskCenterView { DataContext = vm };
+            var window = new Window { Content = view, Width = 1200, Height = 800 };
+            window.Show();
+            await Layout(window);
+            Assert.Equal(2, Descendants<TextBlock>(view).Count(t => t.IsVisible && t.Text == "本轮跳过（跳转）"));
+            Capture(window, "jump-plan-skipped");
+
+            var chart = new TaskCenterFlowChartWindow(vm, (_, _) => { });
+            chart.Show();
+            await Layout(chart);
+            var texts = Descendants<TextBlock>(chart).Select(t => t.Text).ToArray();
+            Assert.Contains("↪ #5", texts);
+            Assert.Equal(2, texts.Count(t => t == "本轮跳过（跳转）"));
+            Assert.Contains(Descendants<System.Windows.Shapes.Polyline>(chart), l => l.StrokeDashArray.Count > 0 && l.Points.Count == 4);
+            Capture(chart, "jump-flowchart");
+            chart.Close(); window.Close();
+        }
+        finally { try { Directory.Delete(root, true); } catch { } }
+    });
+
     // ---------------- 工具 ----------------
 
     private static Button Button(DependencyObject root, string label) => Descendants<Button>(root).Single(b => b.Content as string == label);

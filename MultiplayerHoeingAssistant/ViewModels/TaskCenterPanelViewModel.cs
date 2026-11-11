@@ -738,7 +738,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
         // 编号、跳转说明、执行状态同样只是展示（由 NotifyWorkspace / 运行刷新重算），不能回头重建工作区或排队保存。
         if (e.PropertyName is nameof(NodeEditVm.RowNumber) or nameof(NodeEditVm.JumpText) or nameof(NodeEditVm.JumpProblem)
             or nameof(NodeEditVm.HasJumpProblem) or nameof(NodeEditVm.HasJump) or nameof(NodeEditVm.IsUnreachable) or nameof(NodeEditVm.RowNotice)
-            or nameof(NodeEditVm.HasRowNotice) or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RunStateText)
+            or nameof(NodeEditVm.HasRowNotice) or nameof(NodeEditVm.RunState) or nameof(NodeEditVm.RunStateText) or nameof(NodeEditVm.JumpedOver)
             or nameof(NodeEditVm.HasRunState)) return;
         NotifyWorkspace();
         if (e.PropertyName is nameof(NodeEditVm.DisplayName)
@@ -1469,6 +1469,8 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             var currentLoop = run.Cursor?.LoopIteration ?? 0;
             // 二轮（重要6）：outcome 按当前轮次匹配（旧轮结果不得冒充本轮）；游标节点「运行中」优先于陈旧 outcome
             var segments = new List<string>();
+            // 本轮被跳转跳过的行：标「跳转跳过」，不显示成「待执行」（与计划表、流程图同口径）。
+            var trace = TaskCenterRunTrace.Build(snapshot.Document, [run]);
             foreach (var node in nodes.Take(20))
             {
                 var outcome = run.NodeOutcomes.LastOrDefault(o => o.NodeId == node.NodeId && o.LoopIteration == currentLoop);
@@ -1484,7 +1486,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
                     "cancelled" => "已取消",
                     "cancelUnconfirmed" => "停止结果待确认",
                     "unknown" => "待确认",
-                    _ => "待执行",
+                    _ => trace.JumpedOver(node.NodeId) ? "跳转跳过" : "待执行",
                 };
                 segments.Add($"{node.Ref?.Config ?? node.NodeId} · {label}");
             }

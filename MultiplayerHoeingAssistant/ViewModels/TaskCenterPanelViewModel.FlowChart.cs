@@ -97,8 +97,10 @@ public sealed partial class TaskCenterPanelViewModel
         if (Editing is { } editing)
             foreach (var row in editing.Nodes)
             {
-                row.RunWaitText = row.NodeId == next.WaitingNodeId ? next.WaitingText : null;
-                row.RunState = next.Node(row.NodeId);
+                row.SetRunWaitText(row.NodeId == next.WaitingNodeId ? next.WaitingText : null);
+                // 被跳转跳过的行本轮没有结果：显示为「本轮跳过（跳转）」，不当作待执行。
+                row.SetJumpedOver(next.JumpedOver(row.NodeId));
+                row.RunState = row.JumpedOver ? NodeRunState.Skipped : next.Node(row.NodeId);
             }
         if (key == _runTraceKey) return;
         _runTraceKey = key;
@@ -127,17 +129,20 @@ public sealed partial class NodeEditVm
         }
     }
     public bool HasRunState => RunState != NodeRunState.None;
+    private bool _jumpedOver;
+    /// <summary>本轮被跳转跳过（只读展示，来自运行记录推算）。</summary>
+    // 只读属性 + 内部设置方法：未保存修改与撤销快照只采集「可写的 string/int/bool 属性」，展示字段不能混进编辑状态。
+    public bool JumpedOver => _jumpedOver;
+    internal void SetJumpedOver(bool value)
+    { if (_jumpedOver == value) return; _jumpedOver = value; OnPropertyChanged(nameof(JumpedOver)); OnPropertyChanged(nameof(RunStateText)); }
     private string? _runWaitText;
     /// <summary>本行正在等待时段开始时的说明（替代「执行中…」显示）。</summary>
-    public string? RunWaitText
+    public string? RunWaitText => _runWaitText;
+    internal void SetRunWaitText(string? value)
     {
-        get => _runWaitText;
-        internal set
-        {
-            if (_runWaitText == value) return;
-            _runWaitText = value;
-            OnPropertyChanged(); OnPropertyChanged(nameof(RunStateText));
-        }
+        if (_runWaitText == value) return;
+        _runWaitText = value;
+        OnPropertyChanged(nameof(RunWaitText)); OnPropertyChanged(nameof(RunStateText));
     }
     /// <summary>与流程图徽标同口径的文字。</summary>
     public string RunStateText => RunState switch
@@ -145,7 +150,7 @@ public sealed partial class NodeEditVm
         NodeRunState.Running => RunWaitText ?? "执行中…",
         NodeRunState.Success => "✓ 已完成",
         NodeRunState.Failed => "✗ 未完成",
-        NodeRunState.Skipped => "已跳过",
+        NodeRunState.Skipped => JumpedOver ? "本轮跳过（跳转）" : "已跳过",
         NodeRunState.CondTrue => "→ 满足",
         NodeRunState.CondFalse => "→ 其他",
         _ => "",
