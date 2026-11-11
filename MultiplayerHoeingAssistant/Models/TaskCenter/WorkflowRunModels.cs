@@ -367,6 +367,21 @@ public sealed class WorkflowRunRecord
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ExplicitEntryNodeId { get; set; }
 
+    /// <summary>新运行确实使用持久起点时捕获的定义修订；恢复不能重新认领当前标记。</summary>
+    [JsonPropertyName("startMarkerRevision")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StartMarkerRevision { get; set; }
+
+    /// <summary>捕获的原始持久起点；旧车道入口可能映射为另一 control.flow 节点。</summary>
+    [JsonPropertyName("startMarkerNodeId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? StartMarkerNodeId { get; set; }
+
+    /// <summary>进入正文时先持久化消费尝试，防止崩溃后恢复旧运行再次清除用户重设的标记。</summary>
+    [JsonPropertyName("startMarkerConsumptionAttempted")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool StartMarkerConsumptionAttempted { get; set; }
+
     [JsonPropertyName("loopDeadlineAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DateTimeOffset? LoopDeadlineAt { get; set; }

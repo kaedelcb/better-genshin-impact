@@ -42,7 +42,8 @@ public sealed class LocalBrowserBridgeTests
         Assert.Equal(HttpStatusCode.OK, script.StatusCode);
         using var starStyle = await client.GetAsync("/project-star.css");
         Assert.Equal(HttpStatusCode.OK, starStyle.StatusCode);
-        foreach (var asset in new[] { "mistletoe-registers.js", "mistletoe-composition.js" })
+        foreach (var asset in new[] { "mistletoe-registers.js", "mistletoe-composition.js",
+            "mistletoe-taskcenter-jump.js", "mistletoe-taskcenter-flowchart.js" })
         {
             using var module = await client.GetAsync("/" + asset);
             Assert.Equal(HttpStatusCode.OK, module.StatusCode);

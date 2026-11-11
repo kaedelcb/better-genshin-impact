@@ -9,7 +9,7 @@ module.exports = function installSimExecutor() {
     code: '', authorized: new Set(), runHold: false, prompts: [], triggers: [], states: [], silentOps: new Set(),
     startup: { enabled: false, delaySeconds: 5, autoExpandBranch: true, steps: [] }, startupRevision: 'rev-s1',
     schemes: [], schemesRevision: 'rev-sc1', autoLaunch: { enabled: false, mode: 0 },
-    flows: new Map(), runs: [], history: [], deleted: [], catalog: { entries: [], isDegraded: false },
+    flows: new Map(), runs: [], history: [], clearedRunTraceIds: [], deleted: [], catalog: { entries: [], isDegraded: false },
     bgiPath: { path: 'D:\\BGI\\BetterGI.exe', revision: 'bp-1' }, imports: [], migrations: [],
     layout: { tasks: [{ taskId: 't1', name: '每日委托', enabled: true }, { taskId: 't2', name: '纪行', enabled: true }], startTaskId: null, revision: 'cfg-r1' }
   };
@@ -85,7 +85,7 @@ module.exports = function installSimExecutor() {
       case 'startup.trigger.cancel': { const t = sim.triggers.find(x => x.RuntimeId === payload); if (!t) return reply('rejected', '执行端已找不到这条触发器；请刷新状态'); sim.triggers = sim.triggers.filter(x => x !== t); return reply('ok', '执行端已取消触发器'); }
       case 'startup.runStates.clear': sim.states = []; return reply('ok', '执行端执行路径显示已清除');
       case 'task.list': return reply('ok', '', {
-        serverTime: new Date().toISOString(), flows: [...sim.flows.values()].map(flowEntry), active: sim.runs, history: sim.history,
+        serverTime: new Date().toISOString(), flows: [...sim.flows.values()].map(flowEntry), active: sim.runs, history: sim.history, clearedRunTraceIds: sim.clearedRunTraceIds,
         catalog: sim.catalog, storedResourceEntries: [], deleted: sim.deleted,
         activeFlowSnapshots: Object.fromEntries(sim.runs.filter(r => sim.flows.has(r.workflowId)).map(r => [r.workflowId, { Document: sim.flows.get(r.workflowId).doc, Revision: sim.flows.get(r.workflowId).revision }])),
         drivingWorkflowIds: sim.runs.filter(r => r.driving).map(r => r.workflowId) });
@@ -103,6 +103,10 @@ module.exports = function installSimExecutor() {
         sim.startCount = (sim.startCount || 0) + 1; sim.lastStart = payload;
         const runId = 'run-' + Math.random().toString(16).slice(2, 10);
         sim.runs.push({ runId, workflowId: payload.workflowId, workflowRevision: f.revision, state: 2, driving: true, stopRequested: false, cursor: { nodeId: payload.entryNodeId || f.doc.nodes[0]?.nodeId, loopIteration: 0 }, nodeOutcomes: [], updatedAt: new Date().toISOString(), note: '' });
+        // 模拟执行端实际开始连续运行后消费本次使用的保存起点，并更新文档修订。
+        if (!payload.stopAfterNodeId && f.doc.taskCenterStartNodeId && payload.entryNodeId === f.doc.taskCenterStartNodeId) {
+          delete f.doc.taskCenterStartNodeId; f.revision = rev();
+        }
         return track(id, () => reply('ok', '已受理计划，运行开始'));
       }
       case 'task.run.action': {
@@ -135,7 +139,15 @@ module.exports = function installSimExecutor() {
         sim.deleted = sim.deleted.filter(x => x !== d); sim.flows.set(d.WorkflowId, { doc: { schema: 'mistletoe.workflow', schemaVersion: 1, workflowId: d.WorkflowId, name: d.Name, nodes: [], triggers: [], terminal: [] }, revision: rev() });
         return immediate(id, reply('ok', '计划已恢复'));
       }
-      case 'task.flow.resetExecutionState': return track(id, () => { if (sim.bgiDisconnected) return reply('rejected', 'BGI 当前实例和执行纪元不可确认，旧执行责任保留；未完成重置。'); sim.resetCount = (sim.resetCount || 0) + 1; sim.runs = sim.runs.filter(r => r.workflowId !== payload); return reply('ok', '执行状态已重置；计划未自动启动'); });
+      case 'task.flow.resetExecutionState': return track(id, () => {
+        if (sim.bgiDisconnected) return reply('rejected', 'BGI 当前实例和执行纪元不可确认，旧执行责任保留；未完成重置。');
+        const released = sim.runs.filter(r => r.workflowId === payload);
+        sim.clearedRunTraceIds = [...new Set([...sim.clearedRunTraceIds, ...released.map(r => r.runId), ...sim.history.filter(r => r.workflowId === payload).map(r => r.runId)])];
+        sim.history.unshift(...released.filter(r => !sim.history.some(h => h.runId === r.runId)));
+        sim.runs = sim.runs.filter(r => r.workflowId !== payload);
+        sim.resetCount = (sim.resetCount || 0) + 1;
+        return reply('ok', '执行状态已重置；计划未自动启动');
+      });
       case 'task.migration.prepare':
         if (typeof payload !== 'string' || !/^[A-Za-z]:\\/.test(payload)) return reply('rejected', '迁移来源必须是执行端上的绝对目录');
         return track(id, () => { sim.migrations.push(payload); sim.flows.set('wf-mig', { doc: { schema: 'mistletoe.workflow', schemaVersion: 1, workflowId: 'wf-mig', name: '旧版迁移候选', nodes: [], triggers: [], terminal: [] }, revision: rev(), candidate: true }); return reply('ok', '已生成迁移候选'); });

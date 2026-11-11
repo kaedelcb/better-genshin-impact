@@ -447,6 +447,7 @@ public sealed partial class WorkflowRunner
         var run = _runs.CreateRun(workflowId, snapshot.Revision, stopAuthority: authority,
             initialCursor: plan.ExplicitEntryCursor(entryNodeId), stopAfterNodeId: stopAfterNodeId);
         ApplyMigrationEntrySeed(run, plan);
+        CaptureStartNodeMarker(run, snapshot, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + run.RunId);
@@ -511,6 +512,7 @@ public sealed partial class WorkflowRunner
         FreezeLegacyFixedTriggerPolicy(run, snapshot);
         run.WorkflowRevision = snapshot.Revision; // 与 Resume 同口径：起步对账到当前修订（受理与驱动同窗口，正常相等）
         ApplyMigrationEntrySeed(run, plan);
+        CaptureStartNodeMarker(run, snapshot, plan);
         var control = new RunControl { RunCts = CancellationTokenSource.CreateLinkedTokenSource(ct) };
         if (!_controls.TryAdd(run.RunId, control))
             throw new InvalidOperationException("运行登记冲突：" + runId);
@@ -713,6 +715,41 @@ public sealed partial class WorkflowRunner
         finally { _controls.TryRemove(runId, out _); control.RunCts.Dispose(); }
     }
 
+    private void CaptureStartNodeMarker(WorkflowRunRecord run, WorkflowSnapshot snapshot, WorkflowPlan plan)
+    {
+        if (IsSingleNodeRun(run) || run.StartMarkerRevision is not null || run.ExplicitEntryNodeId is null) return;
+        var marker = WorkflowStore.GetStartNodeMarker(snapshot.Document);
+        if (string.IsNullOrWhiteSpace(marker)) return;
+        WorkflowNodeCursor? markerEntry;
+        try { markerEntry = plan.ExplicitEntryCursor(marker); }
+        catch (InvalidOperationException) { return; } // 未使用的失效标记不阻断其他显式入口。
+        if (!string.Equals(markerEntry?.NodeId, run.ExplicitEntryNodeId, StringComparison.Ordinal)) return;
+        run.StartMarkerNodeId = marker;
+        run.StartMarkerRevision = snapshot.Revision;
+        _runs.Update(run);
+    }
+
+    private void ConsumeStartNodeMarker(WorkflowRunRecord run)
+    {
+        if (IsSingleNodeRun(run) || run.StartMarkerRevision is null || run.StartMarkerNodeId is null) return;
+        if (run.StartMarkerConsumptionAttempted)
+            throw new InvalidOperationException("上次持久起点消费未确认完成，禁止恢复后假定成功；请检查起点并重新启动计划。");
+        // 先记录本次消费身份已使用；恢复旧运行不能重新认领后来重设的同名起点。
+        // 两份文件不能跨文件原子提交，崩溃窗口选择保留标记，绝不误清新标记。
+        run.StartMarkerConsumptionAttempted = true;
+        _runs.Update(run);
+        try
+        {
+            var consumed = _workflows.TryConsumeStartNodeMarker(run.WorkflowId,
+                run.StartMarkerNodeId, run.StartMarkerRevision);
+            Log(run, consumed ? "计划已进入正文，已清除本次持久起点。" : "起点捕获后计划已有修订或标记变化（包括普通编辑），为避免清除新设置，保留当前起点标记。");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("持久起点消费失败，计划正文未执行；请检查保存状态后重新启动。", ex);
+        }
+    }
+
     private async Task<WorkflowRunRecord> DriveAsync(WorkflowRunRecord run, WorkflowPlan plan, RunControl control)
     {
         var ct = control.RunCts.Token;
@@ -747,6 +784,9 @@ public sealed partial class WorkflowRunner
                     _runs.Update(run);
                     return run;
                 }
+                ct.ThrowIfCancellationRequested();
+                await VerifyStopAuthorityAsync(run, ct).ConfigureAwait(false);
+                ConsumeStartNodeMarker(run);
                 run.TriggerConsumed = true;
                 run.State = WorkflowRunState.Running;
                 _runs.Update(run);
@@ -2402,8 +2442,8 @@ public sealed partial class WorkflowRunner
             if (plan.TryLocate(run.Cursor.NodeId, run.Cursor.Occurrence, run.Cursor.LoopIteration, out var saved)) return saved with { PathLane = run.Cursor.PathLane };
             throw new InvalidOperationException("路径中的待执行节点已被删除；保留原游标，不能猜测另一条路径。");
         }
-        // Clearing the UI's one-shot start marker saves a new workflow revision immediately
-        // after admission. Until the first node settles, that metadata-only reload must keep
+        // Consuming the persistent one-shot start marker saves a new workflow revision at
+        // body entry. Until the first node settles, that metadata-only reload must keep
         // the accepted entry cursor instead of treating "no completed outcomes" as the head.
         if (run.NodeOutcomes.Count == 0
             && (run.ExplicitEntryNodeId is not null || run.MigrationEntrySeedKey is not null))

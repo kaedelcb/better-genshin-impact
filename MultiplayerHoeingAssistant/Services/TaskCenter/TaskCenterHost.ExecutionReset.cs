@@ -173,6 +173,8 @@ public sealed partial class TaskCenterHost
                 || finalRecords.Any(run => HasUnclosedResetAdmission(run.RunId))
                 || LocalWaitQueue.Load().Any(item => item.WorkflowId == workflowId && item.State == LocalWaitItemState.Waiting))
                 return HostActionResult.Unavailable("仍有未结执行、等待或仲裁责任，已保留处置结果；未宣告重置完成。");
+            // 仅在整个重置确认成功后清除当前展示；原运行文件与失败历史保持不变。
+            _runs.ClearRunTrace(workflowId, finalRecords);
             NotifyStateChanged();
             return HostActionResult.Effective(changed == 0
                 ? "当前计划的执行状态已清空；计划内容和失败历史保留，可重新执行或删除。"

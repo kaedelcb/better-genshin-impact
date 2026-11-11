@@ -250,8 +250,7 @@ function tcLanesEditor(node = null, selectedStepId = null) {
     return dialog;
 }
 function tcLaneStatus(owner,yes) {
-    const runs=[...tcActive(),...(mtPick(tc.list,'history')||[])].filter(r=>mtPick(r,'workflowId')===tc.selected).sort((a,b)=>String(mtPick(b,'createdAt')).localeCompare(String(mtPick(a,'createdAt'))));
-    const run=runs[0];if(!run)return '';const round=run.cursor?.loopIteration??Math.max(0,...(run.nodeOutcomes||[]).map(o=>o.loopIteration||0));const outcome=(run.nodeOutcomes||[]).filter(o=>o.nodeId===owner&&o.loopIteration===round).at(-1);
+    const run=tcLatestTraceRun();if(!run)return '';const round=run.cursor?.loopIteration??Math.max(0,...(run.nodeOutcomes||[]).map(o=>o.loopIteration||0));const outcome=(run.nodeOutcomes||[]).filter(o=>o.nodeId===owner&&o.loopIteration===round).at(-1);
     return !['branchYes','branchNo'].includes(outcome?.result)?'执行到这里时选择':(outcome.result==='branchYes')===yes?'已选中此车道':'本轮未选择';
 }
 function tcRenderCompositionRows(host,doc) {

@@ -284,6 +284,207 @@ public class WorkflowRunnerTests : IDisposable
         Assert.Equal("entry", _runs.Load(run.RunId)!.ExplicitEntryNodeId);
     }
 
+    private string SeedStartMarkerFlow(List<WorkflowTrigger>? triggers = null)
+        => SeedFlow(new WorkflowDocument
+        {
+            Name = "持久起点消费",
+            Nodes = [DragonNode("first", "A"), DragonNode("entry", "B"), DragonNode("last", "C")],
+            Triggers = triggers ?? [],
+            ExtensionData = new() { ["taskCenterStartNodeId"] = System.Text.Json.JsonSerializer.SerializeToElement("entry") },
+        }).Split('|')[1];
+
+    private string? SavedStartMarker(string id)
+    {
+        var document = _workflows.Load(id);
+        return document.ExtensionData?.TryGetValue("taskCenterStartNodeId", out var marker) == true
+            ? marker.GetString() : null;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PersistentStartMarker_BodyEntryConsumesAndNextRunStartsAtHead(bool existingRun)
+    {
+        var id = SeedStartMarkerFlow();
+        var snapshot = _workflows.LoadSnapshot(id);
+        var (runner, boundary, _) = MakeRunner();
+        boundary.OnSubmit = _ => { Assert.Null(SavedStartMarker(id)); return Task.CompletedTask; };
+        WorkflowRunRecord result;
+        if (existingRun)
+        {
+            var queued = _runs.CreateRun(id, snapshot.Revision,
+                initialCursor: new WorkflowPlan(snapshot.Document).ExplicitEntryCursor("entry"));
+            Assert.Equal("entry", SavedStartMarker(id)); // Planned / 仅入队不得消费。
+            result = await runner.StartExistingRunAsync(queued.RunId);
+        }
+        else result = await runner.StartAsync(id, entryNodeId: "entry");
+
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.True(_runs.Load(result.RunId)!.StartMarkerConsumptionAttempted);
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+        Assert.Null(SavedStartMarker(id));
+        var (next, nextBoundary, _) = MakeRunner();
+        await next.StartAsync(id);
+        Assert.Equal(new[] { "first", "entry", "last" }, nextBoundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task PersistentStartMarker_PreflightAndStopFailureRetainMarker()
+    {
+        var id = SeedStartMarkerFlow();
+        var before = _workflows.LoadSnapshot(id).Revision;
+        var (runner, boundary, _) = MakeRunner();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => runner.StartAsync(id, entryNodeId: "missing"));
+        boundary.RequiresStopAuthority = true;
+        boundary.StopAuthorityCurrent = false;
+        var result = await runner.StartAsync(id, entryNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Cancelled, result.State);
+        Assert.Empty(boundary.Submissions);
+        Assert.Equal("entry", SavedStartMarker(id));
+        Assert.Equal(before, _workflows.LoadSnapshot(id).Revision);
+    }
+
+    [Fact]
+    public async Task PersistentStartMarker_SingleTaskDoesNotConsume()
+    {
+        var id = SeedStartMarkerFlow();
+        var revision = _workflows.LoadSnapshot(id).Revision;
+        var (runner, boundary, _) = MakeRunner();
+        var result = await runner.StartAsync(id, entryNodeId: "entry", stopAfterNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal("entry", Assert.Single(boundary.Submissions).NodeId);
+        Assert.Equal("entry", SavedStartMarker(id));
+        Assert.Equal(revision, _workflows.LoadSnapshot(id).Revision);
+    }
+
+    [Theory]
+    [InlineData("last")]
+    [InlineData("entry")]
+    public async Task PersistentStartMarker_ConcurrentRevisionRetainsCurrentMarker(string replacement)
+    {
+        var id = SeedStartMarkerFlow();
+        var (runner, boundary, _) = MakeRunner();
+        boundary.RequiresStopAuthority = true;
+        boundary.OnInspectStopAuthority = () =>
+        {
+            boundary.OnInspectStopAuthority = null;
+            var snapshot = _workflows.LoadSnapshot(id);
+            snapshot.Document.Name = "并发修改";
+            snapshot.Document.ExtensionData!["taskCenterStartNodeId"] = System.Text.Json.JsonSerializer.SerializeToElement(replacement);
+            _workflows.Save(snapshot.Document, snapshot.Revision);
+        };
+        var result = await runner.StartAsync(id, entryNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal(replacement, SavedStartMarker(id));
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PersistentStartMarker_WaitRetainsAndResumeUsesOriginalCapture(bool changedWhilePaused)
+    {
+        var now = new DateTimeOffset(2026, 10, 3, 5, 0, 0, TimeSpan.FromHours(8));
+        var id = SeedStartMarkerFlow([new WorkflowTrigger
+        {
+            Kind = "trigger.time", Params = new()
+            {
+                ["time"] = System.Text.Json.JsonSerializer.SerializeToElement("06:30"),
+                ["missPolicy"] = System.Text.Json.JsonSerializer.SerializeToElement("nextDay"),
+            },
+        }]);
+        WorkflowRunner? active = null;
+        var (runner, boundary, _) = MakeRunner(now: now, delay: (_, _) =>
+        {
+            Assert.Equal("entry", SavedStartMarker(id));
+            active!.RequestAction(_runs.List().Single().RunId, WorkflowRunAction.Pause);
+            return Task.CompletedTask;
+        });
+        active = runner;
+        var paused = await runner.StartAsync(id, entryNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Paused, paused.State);
+        Assert.False(paused.StartMarkerConsumptionAttempted);
+        Assert.Empty(boundary.Submissions);
+        Assert.Equal("entry", SavedStartMarker(id));
+        if (changedWhilePaused)
+        {
+            var snapshot = _workflows.LoadSnapshot(id);
+            snapshot.Document.Name = "暂停后重设起点";
+            snapshot.Document.ExtensionData!["taskCenterStartNodeId"] = System.Text.Json.JsonSerializer.SerializeToElement("last");
+            _workflows.Save(snapshot.Document, snapshot.Revision);
+        }
+        var (resumer, resumedBoundary, _) = MakeRunner(now: now.AddHours(1.5));
+        var result = await resumer.ResumeAsync(paused.RunId);
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal(changedWhilePaused ? "last" : null, SavedStartMarker(id));
+        Assert.Equal(new[] { "entry", "last" }, resumedBoundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task PersistentStartMarker_LegacyResumeDoesNotClaimCurrentMarker()
+    {
+        var id = SeedStartMarkerFlow();
+        var snapshot = _workflows.LoadSnapshot(id);
+        var legacy = _runs.CreateRun(id, snapshot.Revision,
+            initialCursor: new WorkflowPlan(snapshot.Document).ExplicitEntryCursor("entry"));
+        legacy.State = WorkflowRunState.Interrupted;
+        _runs.Update(legacy);
+        var (runner, boundary, _) = MakeRunner();
+        var result = await runner.ResumeAsync(legacy.RunId);
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal("entry", SavedStartMarker(id));
+        Assert.Equal(new[] { "entry", "last" }, boundary.Submissions.Select(s => s.NodeId));
+    }
+
+    [Fact]
+    public async Task PersistentStartMarker_ConsumedRunResumeDoesNotClearResetMarker()
+    {
+        var id = SeedStartMarkerFlow();
+        var (runner, boundary, _) = MakeRunner();
+        boundary.OnSubmit = request =>
+        {
+            runner.RequestAction(request.Run.RunId, WorkflowRunAction.Pause);
+            return Task.CompletedTask;
+        };
+        var paused = await runner.StartAsync(id, entryNodeId: "entry");
+        Assert.Equal(WorkflowRunState.Paused, paused.State);
+        Assert.True(paused.TriggerConsumed);
+        Assert.Null(SavedStartMarker(id));
+        var snapshot = _workflows.LoadSnapshot(id);
+        snapshot.Document.ExtensionData ??= new();
+        snapshot.Document.ExtensionData["taskCenterStartNodeId"] = System.Text.Json.JsonSerializer.SerializeToElement("entry");
+        _workflows.Save(snapshot.Document, snapshot.Revision);
+        var (resumer, _, _) = MakeRunner();
+        var result = await resumer.ResumeAsync(paused.RunId);
+        Assert.Equal(WorkflowRunState.Succeeded, result.State);
+        Assert.Equal("entry", SavedStartMarker(id));
+    }
+
+    [Fact]
+    public async Task PersistentStartMarker_SaveFailureStopsBeforeAnySubmission()
+    {
+        var id = SeedStartMarkerFlow();
+        var (runner, boundary, _) = MakeRunner();
+        boundary.RequiresStopAuthority = true;
+        boundary.OnInspectStopAuthority = () =>
+        {
+            boundary.OnInspectStopAuthority = null;
+            // Save 创建 _backup 前确定失败；不依赖权限或文件锁的机器差异。
+            File.WriteAllText(Path.Combine(_workflows.RootDirectory, "_backup"), "blocked");
+        };
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => runner.StartAsync(id, entryNodeId: "entry"));
+        Assert.Contains("持久起点消费失败", error.Message);
+        Assert.Empty(boundary.Submissions);
+        Assert.Equal("entry", SavedStartMarker(id));
+        var interrupted = _runs.Load(_runs.List().Single().RunId)!;
+        interrupted.State = WorkflowRunState.Interrupted;
+        _runs.Update(interrupted);
+        var (resumer, resumedBoundary, _) = MakeRunner();
+        var resumeError = await Assert.ThrowsAsync<InvalidOperationException>(() => resumer.ResumeAsync(interrupted.RunId));
+        Assert.Contains("持久起点消费未确认完成", resumeError.Message);
+        Assert.Empty(resumedBoundary.Submissions);
+    }
+
     [Fact]
     public async Task FullProduct_InvalidExplicitEntryRejectsBeforeCreatingRunOrSending()
     {

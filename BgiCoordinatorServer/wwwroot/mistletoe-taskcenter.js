@@ -20,6 +20,13 @@ function tcHasFlowRows(doc = tc.doc) { return (doc?.nodes || []).some(n => n.kin
 function tcCanEdit(f) { return f && !f.candidate && !f.quarantined; }
 function tcCanStart(f) { return f && !f.candidate && !f.quarantined && !f.unsupported.length; }
 function tcActive() { return mtPick(tc.list, 'active') || []; }
+/** 先选该计划最新记录，再按执行端权威清除列表隐藏轨迹；不能回退到更早历史。 */
+function tcLatestTraceRun() {
+    const run = [...tcActive(), ...(mtPick(tc.list, 'history') || [])].filter(r => mtPick(r, 'workflowId') === tc.selected)
+        .sort((a, b) => String(mtPick(b, 'createdAt')).localeCompare(String(mtPick(a, 'createdAt'))))[0];
+    const cleared = mtPick(tc.list, 'clearedRunTraceIds');
+    return !run || Array.isArray(cleared) && cleared.includes(mtPick(run, 'runId')) ? null : run;
+}
 function tcDriving(id) { return (mtPick(tc.list, 'drivingWorkflowIds') || []).includes(id); }
 /** 只用于历史记录显示。运行列表（active）由执行端按完整重置证据过滤，已有效重置的运行不会出现在里面；
  *  网页无法复核证据哈希，因此运行卡片一律按原状态显示，不能因为字段存在就隐藏「停止」。 */
@@ -621,7 +628,7 @@ async function tcInnerTasks(node, connect) {
 }
 
 // ---------- 启动 / 运行操作 ----------
-/** 同 PC：先确认保存草稿，再以计划修订启动；单任务启动 stopAfter = 入口；「连续一条龙」使用起点标记并在受理后清除。 */
+/** 同 PC：先确认保存草稿，再以计划修订启动；单任务启动 stopAfter = 入口；起点由执行端实际开始运行后清除。 */
 async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
     const f = tcFlow(); if (!f || tc.starting) return;
     if (!tcCanStart(f)) return mtToast(`计划「${f.name}」当前不可启动：${f.quarantined ? '已隔离' : f.candidate ? '只读候选' : '含未支持类型'}`, true);
@@ -634,9 +641,9 @@ async function tcStart(entryNodeId, stopAfterNodeId, fromHere) {
         if (entry && typeof tcCanUseEntry === 'function' && !tcCanUseEntry(entry)) return mtToast('当前起点已失效或节点身份重复。本次没有启动，请重新选择起点或清除旧起点。', true);
         const label = stopAfterNodeId ? '启动单任务' : fromHere ? '从此处开始执行' : '连续一条龙';
         const reply = await mtOperate('task.run.start', { workflowId:f.id, entryNodeId:entry, expectedRevision:tc.revision, stopAfterNodeId:stopAfterNodeId || null }, { label, onStage:mtStageBar, waitBudget:12000 });
-        if (reply.status === 'ok' && marker) { tc.consumed.set(f.id, marker); delete tc.doc[TC_START_KEY]; tc.dirty = true; await tcSave(); }
         if (reply.status === 'ok') mtStageBar('done', (reply.message || `「${label}」已受理`) + '；运行进度以上方运行卡片为准。');
         await tcLoad(true);
+        if (mt.tab === 'taskcenter') { tcRenderNodes(); tcRenderFlowChart(); }
     } finally { tc.starting = false; if (mt.tab === 'taskcenter') { tcRenderRuns(); tcRenderPlans(); tcRenderPlanHead(); } }
 }
 async function tcRunAction(runId, action, button) {
@@ -723,7 +730,7 @@ async function tcManageAction(m) {
         else if (m === 'migRehearsal') await tcMigration('task.migration.rehearsal', undefined, '迁移演练');
         else if (m === 'migRollback') { if (confirm(`回退计划「${f.name}」的手动迁移？`)) await tcMigration('task.migration.rollback', f.id, '回退手动迁移'); }
     } catch (error) { mtToast(error.message, true); }
-    await tcLoad(true); if (mt.tab === 'taskcenter') tcRender(mtEl('mtContent'));
+    await tcLoad(true); if (mt.tab === 'taskcenter') { tcRender(mtEl('mtContent')); tcRenderFlowChart(); }
 }
 async function tcMigration(op, payload, label) {
     const reply = await mtOperate(op, payload, { label, onStage:mtStageBar, waitBudget:60000 });

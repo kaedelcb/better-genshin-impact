@@ -126,6 +126,7 @@ public sealed class CompositionEntryTests
         var decision = lane.Decision!;
         lane.Decision = null; lane.SourceFlowNodeId = "legacy-decision";
         doc.Nodes.Insert(2, new() { NodeId = "legacy-decision", Kind = "control.flow", Flow = decision });
+        doc.ExtensionData = new() { ["taskCenterStartNodeId"] = JsonSerializer.SerializeToElement("lane") };
         state.Save(doc);
 
         var run = await state.Runner().StartAsync(doc.WorkflowId!, entryNodeId: "lane").WaitAsync(TimeSpan.FromSeconds(10));
@@ -133,6 +134,9 @@ public sealed class CompositionEntryTests
         Assert.Equal(WorkflowRunState.Succeeded, run.State);
         Assert.Equal(yes ? new[] { "B1", "B2", "D" } : new[] { "C", "D" }, state.Port.Visited);
         Assert.Equal("legacy-decision", run.ExplicitEntryNodeId);
+        Assert.Equal("lane", run.StartMarkerNodeId);
+        Assert.True(run.StartMarkerConsumptionAttempted);
+        Assert.False(state.Flows.Load(doc.WorkflowId!).ExtensionData?.ContainsKey("taskCenterStartNodeId") == true);
         Assert.Equal(yes ? "branchYes" : "branchNo", run.NodeOutcomes.Single(o => o.NodeId == "legacy-decision").Result);
         Assert.Equal(0, state.Value(1));
         Assert.Equal(1, state.Value(2));

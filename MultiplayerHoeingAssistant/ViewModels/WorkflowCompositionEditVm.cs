@@ -255,14 +255,10 @@ public sealed partial class TaskCenterPanelViewModel
         ? AllowedProgramsProvider?.Invoke() ?? [] : _remoteSnapshot?.AllowedTaskPrograms ?? [];
     internal string LaneRunStatus(string sourceFlowId, bool yes)
     {
-        var runs = _remoteTarget is null ? _host.ListRunOverview().Active.Concat(_host.ListRunOverview().History)
-            : (_remoteSnapshot?.Active ?? []).Concat(_remoteSnapshot?.History ?? []);
-        var run = runs.Where(r => r.WorkflowId == SelectedWorkflowId).OrderByDescending(r => r.CreatedAt).FirstOrDefault();
-        if (run is null) return "";
-        var round = run.Cursor?.LoopIteration ?? run.NodeOutcomes.Select(o => o.LoopIteration).DefaultIfEmpty(0).Max();
-        var decision = run.NodeOutcomes.LastOrDefault(o => o.NodeId == sourceFlowId && o.LoopIteration == round);
-        if (decision?.Result is not ("branchYes" or "branchNo")) return "执行到这里时选择";
-        var chosen = decision.Result == "branchYes";
+        if (!RunTrace.HasRun) return "";
+        var decision = RunTrace.Node(sourceFlowId);
+        if (decision is not (NodeRunState.CondTrue or NodeRunState.CondFalse)) return "执行到这里时选择";
+        var chosen = decision == NodeRunState.CondTrue;
         return chosen == yes ? "已选中此车道" : "本轮未选择";
     }
     public event Action<string, string?>? CompositionLocateRequested;

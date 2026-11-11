@@ -143,6 +143,8 @@ public sealed class RemoteTaskListSnapshot
     public List<WorkflowCatalogEntry> Flows { get; set; } = [];
     public List<WorkflowRunRecord> Active { get; set; } = [];
     public List<WorkflowRunRecord> History { get; set; } = [];
+    /// <summary>执行端确认已清除当前路径展示的运行；历史事实仍保留。</summary>
+    public HashSet<string> ClearedRunTraceIds { get; set; } = new(StringComparer.Ordinal);
     public ResourceCatalogSnapshot Catalog { get; set; } = new();
     public List<TaskCenterResourceEntry> StoredResourceEntries { get; set; } = [];
     public List<WorkflowDeletionReceipt> Deleted { get; set; } = [];

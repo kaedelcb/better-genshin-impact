@@ -407,7 +407,7 @@ async function layoutAudit(page, name) {
       const copyId = await S(() => sim.flows.get('wf-sim').doc.nodes[1].nodeId);
       yes(); await menu(copyId, 'del');
       await executor.waitForFunction(id => !sim.flows.get('wf-sim').doc.nodes.some(n => n.nodeId === id), copyId, { timeout: 8000 });
-      // 单任务启动：stopAfter = 入口；「连续一条龙」从起点开始并在受理后清除起点。
+      // 单任务启动：stopAfter = 入口；「连续一条龙」使用的起点由执行端实际开始后清除。
       await menu('n-a', 'single');
       await executor.waitForFunction(() => sim.lastStart?.stopAfterNodeId === 'n-a', null, { timeout: 8000 });
       await page.locator('#tcRuns .tc-run').waitFor({ timeout: 8000 });
@@ -425,9 +425,13 @@ async function layoutAudit(page, name) {
       yes(); await page.locator('#tcRuns [data-run-act="Stop"]').click();
       await page.locator('#tcRuns .tc-run').waitFor({ state: 'detached', timeout: 10000 });
       await page.waitForFunction(() => !mt.unconfirmed, null, { timeout: 8000 });
+      assert.equal(await S(() => sim.flows.get('wf-sim').doc.taskCenterStartNodeId), 'n-b', '单任务不消费连续运行起点');
+      const savesBeforeStart = await S(() => sim.saveCount || 0);
       await page.locator('#tcStart').click();
       await executor.waitForFunction(() => sim.lastStart?.entryNodeId === 'n-b' && !sim.lastStart.stopAfterNodeId, null, { timeout: 8000 });
       await executor.waitForFunction(() => !sim.flows.get('wf-sim').doc.taskCenterStartNodeId, null, { timeout: 8000 });
+      await page.waitForFunction(() => !tc.starting && !tc.doc?.taskCenterStartNodeId, null, { timeout: 8000 });
+      assert.equal(await S(() => sim.saveCount || 0), savesBeforeStart, '网页读取执行端修订，不二次保存清除起点');
       yes(); await page.locator('#tcRuns [data-run-act="Stop"]').click();
       await page.locator('#tcRuns .tc-run').waitFor({ state: 'detached', timeout: 10000 });
     });
@@ -510,6 +514,72 @@ async function layoutAudit(page, name) {
       await page.locator('#tcPlanHead .tc-reason').getByText(/旧运行结果无法确认/).waitFor({ state: 'detached', timeout: 10000 });
       assert.equal(await page.locator('#tcReset').isVisible(), true, '重置后按钮仍常驻');
       await page.waitForFunction(() => !document.querySelector('#tcStart').disabled, null, { timeout: 10000 });
+    });
+
+    await check('重置执行轨迹：历史保留、打开的流程图立即清空，刷新重开不复现', async () => {
+      await S(() => {
+        const resource = id => ({ nodeId: id, kind: 'resource.configGroup', ref: { config: id }, strategies: [] });
+        sim.flows.set('wf-reset-trace', { revision: 'trace-r1', doc: { schema: 'mistletoe.workflow', schemaVersion: 1, workflowId: 'wf-reset-trace', name: '重置轨迹回归', triggers: [], terminal: [], nodes: [
+          { nodeId: 'lead', kind: 'control.flow', flow: { name: '开场流程', steps: [{ id: 'wait', kind: 'wait', nodeType: 'action', waitSeconds: 1 }], jumpTo: 'lane' } },
+          resource('skipped'),
+          { nodeId: 'lane', kind: 'control.lanes', lanes: { name: '条件车道', decision: { exitStepId: 'check', steps: [{ id: 'check', kind: 'weekday', nodeType: 'condition', weekdays: [1], trueSteps: [], falseSteps: [] }] }, yesNodeIds: ['yes-task'], noNodeIds: ['no-task'] } },
+          resource('yes-task'), resource('no-task'), resource('tail')
+        ] } });
+        const run = { runId: 'trace-latest', workflowId: 'wf-reset-trace', workflowRevision: 'trace-r1', state: 8, driving: false, recordRevision: 1,
+          createdAt: '2026-11-11T12:00:00Z', updatedAt: '2026-11-11T12:01:00Z', cursor: { nodeId: 'tail', loopIteration: 0 }, note: '重置前原始历史证据',
+          nodeOutcomes: ['lead', 'lane', 'yes-task'].map(nodeId => ({ nodeId, loopIteration: 0, result: nodeId === 'lane' ? 'branchYes' : 'succeeded' })),
+          extensionData: { 'taskFlowStep:lead:0:wait': 'done', 'taskFlowStep:lane:0:check': 'yes' } };
+        sim.history.push({ ...structuredClone(run), runId: 'trace-old', createdAt: '2026-11-10T12:00:00Z' });
+        sim.runs.push(run);
+      });
+      await page.locator('#tcPlanList [data-plan="wf-reset-trace"]').click({ timeout: 10000 });
+      await page.locator('#tcNodes .tc-run-badge.st-jumped').waitFor({ timeout: 10000 });
+      assert.ok(await page.locator('#tcNodes .is-walked').count(), '内部步骤显示已走');
+      assert.ok(await page.locator('#tcNodes .tc-lane.is-taken').count(), '车道显示已选');
+      const original = await S(() => ({ runs: sim.runs, history: sim.history, cleared: sim.clearedRunTraceIds }));
+      // 拒绝时执行端不增清除ID、不移运行、不改历史；读取新快照后原徽标仍在。
+      await S(() => { sim.bgiDisconnected = true; });
+      const rejected = await page.evaluate(() => mtOperate('task.flow.resetExecutionState', 'wf-reset-trace', { label: '验证重置拒绝', waitBudget: 12000 }));
+      assert.equal(rejected.status, 'rejected');
+      assert.deepEqual(await S(() => ({ runs: sim.runs, history: sim.history, cleared: sim.clearedRunTraceIds })), original);
+      await page.evaluate(() => tcPoll());
+      assert.ok(await page.locator('#tcNodes .tc-run-badge.st-jumped').count());
+      await S(() => { sim.bgiDisconnected = false; });
+      await page.locator('#tcFlowChartBtn').click();
+      await page.locator('#tcFlowChart[open] .st-success').first().waitFor();
+      assert.ok(await page.locator('#tcFcWorld path[stroke-width="2.6"]').count(), '重置前路线高亮');
+      // 流程图是模态框，直接调用正式重置入口以覆盖图保持打开时收到重置结果的场景。
+      yes(); await page.evaluate(() => tcManageAction('reset'));
+      const assertCleared = async () => {
+        await page.waitForFunction(() => tc.selected === 'wf-reset-trace' && tc.list?.clearedRunTraceIds?.includes('trace-latest'));
+        assert.equal(await page.locator('#tcNodes .tc-run-badge, #tcNodes .is-walked, #tcNodes .tc-lane.is-taken, #tcNodes .tc-lane.is-skipped').count(), 0);
+        assert.equal(await page.locator('#tcFcWorld .st-success, #tcFcWorld .st-jumped, #tcFcWorld .st-condTrue, #tcFcWorld path[stroke-width="2.6"]').count(), 0);
+        assert.match(await page.locator('#tcFcRun').textContent(), /当前没有显示执行路径/);
+      };
+      await assertCleared();
+      const after = await S(() => ({ runs: sim.runs, history: sim.history, cleared: sim.clearedRunTraceIds }));
+      assert.deepEqual(after.runs, original.runs.filter(r => r.workflowId !== 'wf-reset-trace'));
+      assert.deepEqual(after.history, [...original.runs.filter(r => r.workflowId === 'wf-reset-trace'), ...original.history]);
+      assert.deepEqual([...after.cleared].sort(), [...new Set([...original.cleared, 'trace-latest', 'trace-old'])].sort());
+      await page.locator('#tcFlowChart [data-close]').click();
+      await page.locator('[data-mt-tab="history"]').click();
+      await page.locator('#tcHistFilter').selectOption('wf-reset-trace');
+      await page.locator('.tc-hist details[data-run="trace-latest"] summary').click();
+      assert.match(await page.locator('.tc-hist details[data-run="trace-latest"]').textContent(), /lead/);
+      assert.equal(await page.locator('.tc-hist details[data-run="trace-old"]').count(), 1, '更早历史可查看');
+      await page.locator('#tcHistFilter').selectOption('');
+      // 真正重载页面并重新入房，清除状态必须来自执行端，不能依赖网页内存。
+      await page.reload();
+      await page.locator('#roomCode').fill(room); await page.locator('#password').fill(secret); await page.locator('#nickname').fill('我的执行端');
+      await page.locator('#joinButton').click(); await page.locator('#mistletoeProduct').click();
+      await page.locator('#mtTarget option[value="remote:owner-uid:inst-exec"]').waitFor({ state: 'attached' });
+      await page.locator('#mtTarget').selectOption('remote:owner-uid:inst-exec');
+      await page.locator('[data-mt-tab="taskcenter"]').click();
+      await page.locator('#tcPlanList [data-plan="wf-reset-trace"]').click({ timeout: 10000 });
+      await page.locator('#tcFlowChartBtn').click();
+      await assertCleared();
+      await page.locator('#tcFlowChart [data-close]').click();
+      await page.locator('#tcPlanList [data-plan="wf-sim"]').click();
     });
 
     await check('运行记录：历史显示、计划筛选、长文本换行', async () => {

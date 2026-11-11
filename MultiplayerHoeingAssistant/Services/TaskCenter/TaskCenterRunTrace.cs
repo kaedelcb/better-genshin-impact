@@ -50,11 +50,13 @@ public sealed class TaskCenterRunTrace
         or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking;
 
     /// <summary>取该计划最近创建的一次运行，推出本轮路径。没有运行时返回 <see cref="Empty"/>。</summary>
-    public static TaskCenterRunTrace Build(WorkflowDocument? doc, IEnumerable<WorkflowRunRecord> runs)
+    public static TaskCenterRunTrace Build(WorkflowDocument? doc, IEnumerable<WorkflowRunRecord> runs,
+        IReadOnlySet<string>? clearedRunIds = null)
     {
         if (doc?.WorkflowId is not { Length: > 0 } workflowId) return Empty;
         var run = runs.Where(r => r.WorkflowId == workflowId).OrderByDescending(r => r.CreatedAt).FirstOrDefault();
-        if (run is null) return Empty;
+        // 先选最近运行再判断清除，不能退回更老的历史重新点亮路线。
+        if (run is null || clearedRunIds?.Contains(run.RunId) == true || TaskCenterHost.IsExecutionResetReleased(run)) return Empty;
         var round = run.Cursor?.LoopIteration ?? run.NodeOutcomes.Select(o => o.LoopIteration).DefaultIfEmpty(0).Max();
         var active = IsActiveState(run.State);
         var trace = new TaskCenterRunTrace

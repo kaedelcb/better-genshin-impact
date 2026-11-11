@@ -156,6 +156,25 @@ public sealed partial class WorkflowStore
         return new WorkflowSnapshot(doc, entry.Revision);
     }
 
+    internal const string StartNodeMarkerKey = "taskCenterStartNodeId";
+
+    internal static string? GetStartNodeMarker(WorkflowDocument document)
+        => document.ExtensionData?.TryGetValue(StartNodeMarkerKey, out var marker) == true
+            && marker.ValueKind == JsonValueKind.String ? marker.GetString() : null;
+
+    /// <summary>只消费本次捕获的起点；检查与保存共用写锁，任何并发修订均保留。</summary>
+    internal bool TryConsumeStartNodeMarker(string workflowId, string nodeId, string expectedRevision)
+    {
+        using var window = AcquireWriteWindow();
+        var snapshot = LoadSnapshot(workflowId);
+        if (!string.Equals(snapshot.Revision, expectedRevision, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(GetStartNodeMarker(snapshot.Document), nodeId, StringComparison.Ordinal))
+            return false;
+        snapshot.Document.ExtensionData!.Remove(StartNodeMarkerKey);
+        Save(snapshot.Document, snapshot.Revision);
+        return true;
+    }
+
     /// <summary>Only recovery identity/resource metadata; never an executable or editable snapshot.</summary>
     internal WorkflowMigrationRecoveryDescriptor LoadMigrationRecovery(string workflowId)
     {

@@ -443,16 +443,17 @@ public sealed partial class TaskCenterHost
             .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList();
 
     /// <summary>面板同一展示拍只读取一次运行目录，避免活动与历史卡片重复读取全部记录。</summary>
-    public (IReadOnlyList<WorkflowRunRecord> Active, IReadOnlyList<WorkflowRunRecord> History) ListRunOverview(int historyLimit = 20)
+    public (IReadOnlyList<WorkflowRunRecord> Active, IReadOnlyList<WorkflowRunRecord> History,
+        IReadOnlySet<string> ClearedRunTraceIds) ListRunOverview(int historyLimit = 20)
     {
         var records = _runs.List();
-        return (
-            records.Where(r => !IsExecutionResetReleased(r) && (ActiveStates.Contains(r.State)
+        var active = records.Where(r => !IsExecutionResetReleased(r) && (ActiveStates.Contains(r.State)
                                || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
-                .OrderByDescending(r => r.UpdatedAt).ToList(),
-            records.Where(r => IsExecutionResetReleased(r) || !ActiveStates.Contains(r.State)
+                .OrderByDescending(r => r.UpdatedAt).ToList();
+        var history = records.Where(r => IsExecutionResetReleased(r) || !ActiveStates.Contains(r.State)
                                && r.State is not (WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
-                .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList());
+                .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList();
+        return (active, history, _runs.ListClearedRunTraceIds(active.Concat(history)));
     }
 
     /// <summary>流程是否在本进程驱动中（UI 动作可用性判定）。</summary>

@@ -27,6 +27,8 @@ public sealed class TaskCenterFlowChartWindowTests : IDisposable
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var thread = new Thread(() =>
         {
+            SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(
+                System.Windows.Threading.Dispatcher.CurrentDispatcher));
             TaskCenterFlowChartWindow? window = null;
             try
             {
@@ -120,6 +122,37 @@ public sealed class TaskCenterFlowChartWindowTests : IDisposable
                 Assert.Contains("→ 是", texts);
                 Assert.Contains(texts, t => t.Contains("时段 08:00–12:00"));
                 RenderSnapshotIfRequested(window);
+
+                // 实际重置成功后，已打开的流程图和计划行一起清空；历史记录仍在。
+                vm.ConfirmResetExecutionStateOverride = _ => true;
+                vm.ResetExecutionStateCommand.Execute(null);
+                var frame = new System.Windows.Threading.DispatcherFrame();
+                var deadline = DateTime.UtcNow.AddSeconds(10);
+                var resetTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(10) };
+                resetTimer.Tick += (_, _) =>
+                {
+                    if (!vm.IsResettingExecutionState || DateTime.UtcNow >= deadline)
+                    { resetTimer.Stop(); frame.Continue = false; }
+                };
+                resetTimer.Start();
+                System.Windows.Threading.Dispatcher.PushFrame(frame);
+                Assert.False(vm.IsResettingExecutionState);
+                Assert.False(vm.StatusIsError, vm.StatusMessage);
+                vm.Refresh();
+                window.UpdateLayout(); view.UpdateLayout();
+                Assert.False(vm.RunTrace.HasRun);
+                Assert.All(vm.Editing.Nodes, row => Assert.False(row.HasRunState));
+                Assert.Equal("", vm.LaneRunStatus("n-l", true));
+                Assert.Single(host.ListHistoryRuns());
+                Assert.DoesNotContain(Descendants(view).OfType<TextBlock>(), t => t.Text == "✓ 已完成" && Shown(t));
+                Assert.Contains(Descendants(window).OfType<TextBlock>(), t => t.Text.StartsWith("当前没有显示执行路径"));
+                Assert.DoesNotContain(Descendants(window).OfType<TextBlock>(), t => t.Text.StartsWith("最近一次运行："));
+                window.Close();
+                window = new TaskCenterFlowChartWindow(vm, (_, _) => { });
+                window.Show(); window.UpdateLayout();
+                Assert.Contains(Descendants(window).OfType<TextBlock>(), t => t.Text.StartsWith("当前没有显示执行路径"));
+                vm.StopAutoRefresh();
+                host.ShutdownAsync().GetAwaiter().GetResult();
                 done.SetResult();
             }
             catch (Exception ex) { done.SetException(ex); }

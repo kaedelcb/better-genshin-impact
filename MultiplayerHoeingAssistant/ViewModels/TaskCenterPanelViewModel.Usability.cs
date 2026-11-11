@@ -294,8 +294,7 @@ public sealed partial class TaskCenterPanelViewModel
             if (p is WorkflowListItemVm { CanStart: true } remoteFlow)
             {
                 var startNodeId = StartFromNodeId;
-                if (await RemoteStartAsync(remoteFlow.WorkflowId, startNodeId) && startNodeId is not null)
-                    ClearStartFromNodeCommand.Execute(null);
+                await RemoteStartAsync(remoteFlow.WorkflowId, startNodeId);
             }
             return;
         }
@@ -330,9 +329,7 @@ public sealed partial class TaskCenterPanelViewModel
                     (result.Message.Contains("BGI", StringComparison.OrdinalIgnoreCase) ? "；BGI未就绪。" : ""), isError: true);
             else
                 ApplyActionResult(result);
-            // 起点标记只服务一次启动；受理成功后立即清除并自动保存，避免下一次启动继续从旧任务开始。
-            if (startNodeId is not null && result.Status != HostActionStatus.Unavailable)
-                ClearStartFromNodeCommand.Execute(null);
+            // 起点由执行端在计划实际开始时消费；受理、等待或拒绝都不能由客户端抢先清除。
         }
         catch (Exception ex) { SetStatus("开始失败：" + ex.Message + "；编辑内容已保留。", true); }
         finally

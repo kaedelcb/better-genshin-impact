@@ -24,6 +24,64 @@ const plan={workflowId:'wf-test',name:'日常',future:{keep:true},nodes:[
     resource('weekend','周末采集'),resource('weekday','工作日一条龙'),resource('tail','日常收尾')
 ]};
 function load(x,doc=plan){x.ctx.plan=structuredClone(doc);x.run("tc.doc=plan;tc.selected='wf-test';tc.revision='r1';tc.list={flows:[{workflowId:'wf-test',name:'日常',unsupportedKinds:[]}]};");}
+function traceSetup() {
+    const x=setup(),doc=structuredClone(plan);
+    doc.nodes.unshift({nodeId:'lead',kind:'control.flow',flow:{name:'开场',steps:[{id:'wait',kind:'wait',waitSeconds:1}],jumpTo:'lanes'}},resource('skipped','跳过项'));
+    load(x,doc);
+    x.run('const MT_COND=TC_FLOW_CONDITIONS,MT_FIRE=TC_FLOW_TRIGGERS,MT_KIND={};');
+    for(const file of ['mistletoe-taskcenter-jump.js','mistletoe-taskcenter-flowchart.js']) vm.runInContext(fs.readFileSync(path.join(__dirname,'../../BgiCoordinatorServer/wwwroot',file),'utf8'),x.ctx);
+    const elements={tcFlowChart:{open:true},tcFcWorld:{style:{},innerHTML:''},tcFcTitle:{},tcFcRun:{}};
+    x.ctx.mtEl=id=>elements[id]||x.host;
+    x.ctx.CSS={escape:s=>s};
+    x.run("tcfc.view.mode='manual'");
+    const run={runId:'latest',workflowId:'wf-test',createdAt:'2026-11-11T12:00:00Z',state:'Succeeded',recordRevision:2,cursor:{loopIteration:0},
+        nodeOutcomes:['lead','decision','weekend','tail'].map(nodeId=>({nodeId,loopIteration:0,result:nodeId==='decision'?'branchYes':'succeeded'})),
+        extensionData:{'taskFlowStep:lead:0:wait':'done','taskFlowStep:decision:0:check':'yes'}};
+    x.ctx.history=[{...structuredClone(run),runId:'older',createdAt:'2026-11-10T12:00:00Z'},run,{...structuredClone(run),runId:'other',workflowId:'wf-other',createdAt:'2026-11-11T13:00:00Z'}];
+    x.run('tc.list.history=history;tc.list.active=[]');
+    return {...x,elements};
+}
+test('权威清除保留历史且清空节点、内部步骤、车道、跳转徽标和已打开流程图路线，不回退旧记录',async()=>{
+    const x=traceSetup(),before=x.run('JSON.stringify(tc.list.history)');
+    assert.equal(x.run('tcRunTrace().run.runId'),'latest');
+    assert.equal(x.run("tcRunTrace().node('skipped')"),'jumped');
+    assert.equal(x.run("tcRunTrace().step('lead','wait')"),'success');
+    assert.equal(x.run("tcLaneStatus('decision',true)"),'已选中此车道');
+    x.run('tcRenderNodes();tcRenderFlowChart()');
+    assert.match(x.host.innerHTML,/tc-run-badge/);assert.match(x.host.innerHTML,/is-walked/);assert.match(x.host.innerHTML,/is-taken/);
+    assert.match(x.elements.tcFcWorld.innerHTML,/st-success/);assert.match(x.elements.tcFcWorld.innerHTML,/stroke-width="2.6"/);
+    x.ctx.confirm=()=>true;
+    x.run("mt.tab='taskcenter';mtStageBar=()=>{};tcRender=()=>tcRenderNodes();tcLoad=async()=>{tc.list.clearedRunTraceIds=['latest']}");
+    await x.run("tcManageAction('reset')");
+    assert.equal(x.calls.at(-1)[0],'task.flow.resetExecutionState');
+    assert.equal(x.run('JSON.stringify(tc.list.history)'),before);
+    assert.equal(x.run('tcRunTrace().run'),null);
+    assert.match(x.elements.tcFcRun.textContent,/当前没有显示执行路径/);
+    for(const id of ['lead','decision','weekend','tail','skipped']) assert.equal(x.run(`tcRunTrace().node('${id}')`),'');
+    assert.equal(x.run("tcRunTrace().step('lead','wait')"),'');
+    assert.equal(x.run('tcRunTrace().lane(tc.doc.nodes.find(n=>n.lanes))'),null);
+    assert.equal(x.run("tcLaneStatus('decision',true)"),'');assert.equal(x.run("tcLaneStatus('decision',false)"),'');
+    assert.doesNotMatch(x.host.innerHTML,/tc-run-badge|is-walked|is-taken|is-skipped/);
+    assert.doesNotMatch(x.elements.tcFcWorld.innerHTML,/st-success|st-jumped|st-condTrue|stroke-width="2.6"|mt-elabel lit/);
+    assert.equal(x.run('tcFcLayout(tc.doc,tcRunTrace()).edges.some(e=>e.lit)'),false);
+    // 重新加载同一快照、重新打开图，不能依赖临时客户端清理才能生效。
+    const reopened=traceSetup();reopened.ctx.snapshot=JSON.parse(x.run('JSON.stringify(tc.list)'));
+    reopened.run('tc.list=snapshot;tcRenderNodes();tcRenderFlowChart()');
+    assert.equal(reopened.run('tcRunTrace().run'),null);assert.doesNotMatch(reopened.host.innerHTML,/tc-run-badge|is-walked|is-taken/);
+    assert.doesNotMatch(reopened.elements.tcFcWorld.innerHTML,/st-success|stroke-width="2.6"/);
+});
+test('清除仅影响对应运行，新运行重新显示；旧端缺省清除数组及孤立重置字段兼容',()=>{
+    const x=traceSetup();
+    x.run("tc.list.history.find(r=>r.runId==='latest').executionResetRelease={};tc.list.clearedRunTraceIds=['other']");
+    assert.equal(x.run('tcRunTrace().run.runId'),'latest','不能凭重置字段存在隐藏轨迹');
+    x.run("tc.list.clearedRunTraceIds=['latest'];tc.selected='wf-other'");
+    assert.equal(x.run('tcRunTrace().run.runId'),'other');
+    x.run("tc.selected='wf-test';tc.list.active=[{...tc.list.history[1],runId:'new',createdAt:'2026-11-11T14:00:00Z',state:'Running'}]");
+    assert.equal(x.run('tcRunTrace().run.runId'),'new');assert.equal(x.run("tcLaneStatus('decision',true)"),'已选中此车道');
+    x.run('tcRenderNodes();tcRenderFlowChart()');assert.match(x.host.innerHTML,/tc-run-badge/);assert.match(x.elements.tcFcWorld.innerHTML,/stroke-width="2.6"/);
+    x.run('tc.list.active=[];delete tc.list.clearedRunTraceIds');
+    assert.equal(x.run('tcRunTrace().run.runId'),'latest');assert.equal(x.run("tcRunTrace().step('lead','wait')"),'success');
+});
 test('编排展示保留旧配对身份且每项车道任务仅展示一次，整计划可编辑',()=>{
     const x=setup();load(x);x.run('tcRenderNodes()');
     assert.match(x.host.innerHTML,/本日 &lt;安排&gt;/);
@@ -152,14 +210,23 @@ test('编排中途启动原样传递所选入口及单任务边界，不静默�
     }
 });
 
-test('中间起点标记用于一次连续启动，失效起点保留且不发执行请求',async()=>{
+test('启动受理不清起点、不二次保存，执行端实际开始后的新修订清除标记；失效起点仍拒绝',async()=>{
     const x=setup();load(x);
-    x.run('tcRenderNodes=()=>{};tcFlush=async()=>true;tcLoad=async()=>{};mtStageBar=()=>{};');
+    x.run('tcRenderNodes=()=>{};tcFlush=async()=>{tc.dirty=false;return true};mtStageBar=()=>{};');
     await x.run("tcMark(tc.doc.nodes.find(n=>n.nodeId==='weekday'),true)");
     assert.equal(x.run('tcStartMarker()'),'weekday');
+    const serverDoc=structuredClone(x.run('tc.doc'));let revision='r1';
+    x.ctx.performance={now:()=>0};
+    x.ctx.mtRead=async op=>op==='task.list'?{data:{flows:[{workflowId:'wf-test',revision,unsupportedKinds:[]}]}}:{data:structuredClone(serverDoc),revision};
+    const saves=x.calls.filter(c=>c[0]==='task.flow.save').length;
     await x.run('tcStart()');
     const start=x.calls.find(c=>c[0]==='task.run.start');assert.equal(start[1].entryNodeId,'weekday');assert.equal(start[1].stopAfterNodeId,null);
+    assert.equal(x.run('tcStartMarker()'),'weekday','受理后尚未实际开始，保留标记');
+    assert.equal(x.calls.filter(c=>c[0]==='task.flow.save').length,saves,'网页不另存计划清除标记');
+    delete serverDoc.taskCenterStartNodeId;revision='r2';
+    await x.run('tcLoad(true)');
     assert.equal(x.run('tcStartMarker()'),null);
+    assert.equal(x.run('tc.revision'),'r2');
     x.run("tc.doc[TC_START_KEY]='missing';tc.consumed.clear()");
     const before=x.calls.length;await x.run('tcStart()');assert.equal(x.calls.length,before);
     assert.equal(x.run('tcStartMarker()'),'missing');assert.match(x.notices.at(-1)[0],/起点已失效/);

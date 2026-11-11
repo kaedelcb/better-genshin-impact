@@ -132,7 +132,7 @@ public sealed class TaskCenterFlowChartWindow : Window
         }
         var doc = editing.Draft;
         _title.Text = $"🗺  任务流程图（只读） · {editing.NameText}";
-        _runText.Text = !trace.HasRun ? "这张计划表还没有运行记录；运行后会点亮实际走过的路径。"
+        _runText.Text = !trace.HasRun ? "当前没有显示执行路径；运行计划后会点亮实际走过的路径。"
             : $"最近一次运行：{RunStateText(trace.State)} · 第 {trace.Round + 1} 轮" + (trace.IsActive ? " · 实时刷新" : "")
               + "　　亮色为本轮走过的节点与路线，灰色为没有走的路线。";
 

@@ -15,9 +15,7 @@ function tcSetAutoExpand(on) { try { localStorage.setItem(TC_FC_EXPAND_KEY, on ?
 function tcRunTrace(doc = tc.doc) {
     const empty = { run:null, round:0, active:false, node:() => '', step:() => '', lane:() => null, key:'' };
     if (!doc || !tc.selected) return empty;
-    const runs = [...tcActive(), ...(mtPick(tc.list, 'history') || [])].filter(r => mtPick(r, 'workflowId') === tc.selected)
-        .sort((a, b) => String(mtPick(b, 'createdAt')).localeCompare(String(mtPick(a, 'createdAt'))));
-    const run = runs[0]; if (!run) return empty;
+    const run = tcLatestTraceRun(); if (!run) return empty;
     const outs = run.nodeOutcomes || [], round = run.cursor?.loopIteration ?? Math.max(0, ...outs.map(o => o.loopIteration || 0));
     const st = tcState(run), active = ['Planned','Running','Waiting','Paused','Completing','LocalWaitParking','OnlineHoeingParking'].includes(st);
     const nodes = new Map(), steps = new Map();
@@ -241,7 +239,7 @@ function tcRenderFlowChart() {
     const trace = tcRunTrace(doc), key = JSON.stringify(doc.nodes) + '|' + doc.loop?.mode + '|' + doc.name + '|' + doc.nodeTimeWindowEnabled + '|' + trace.key;
     if (key === tcfc.key) return; tcfc.key = key;
     mtEl('tcFcTitle').textContent = `🗺 任务流程图（只读） · ${doc.name || ''}`;
-    mtEl('tcFcRun').textContent = !trace.run ? '这张计划表还没有运行记录；运行后会点亮实际走过的路径。'
+    mtEl('tcFcRun').textContent = !trace.run ? '当前没有显示执行路径；运行计划后会点亮实际走过的路径。'
         : `最近一次运行：${TC_STATE_TEXT[trace.state] || trace.state} · 第 ${trace.round + 1} 轮${trace.active ? ' · 实时刷新' : ''}　亮色为本轮走过的节点与路线，灰色为没有走的路线。`;
     const g = tcFcLayout(doc, trace), { pad } = TC_FC_GEO, W = g.w + pad * 2, H = g.h + pad * 2;
     const path = e => e.pts.map((p, i) => (i ? 'L' : 'M') + (p[0] + pad) + ',' + (p[1] + pad)).join(' ');

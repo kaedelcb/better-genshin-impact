@@ -122,6 +122,53 @@ public sealed class WorkflowExecutionResetTests : IDisposable
     }
 
     [Theory]
+    [InlineData(WorkflowRunState.Succeeded)]
+    [InlineData(WorkflowRunState.Failed)]
+    [InlineData(WorkflowRunState.Cancelled)]
+    public async Task SettledHistory_ResetClearsTraceDurablyWithoutChangingHistory_AndNewRunShowsAgain(WorkflowRunState state)
+    {
+        var (id, revision) = Seed(resourceNodes: true);
+        var (otherId, otherRevision) = Seed("其他计划");
+        var host = Host();
+        try
+        {
+            var older = AddRun(host, id, revision, WorkflowRunState.Succeeded);
+            var latest = AddRun(host, id, revision, state, "原运行事实保留");
+            latest.NodeOutcomes.Add(new() { NodeId = "first", Result = "succeeded" });
+            host.Runs.Update(latest);
+            var other = AddRun(host, otherId, otherRevision, WorkflowRunState.Succeeded);
+            var bytes = RunBytes(latest.RunId);
+            var definition = FlowBytes(id);
+            var doc = host.LoadFlowSnapshot(id).Document;
+            Assert.True(TaskCenterRunTrace.Build(doc, host.Runs.List()).HasRun);
+
+            Assert.True((await host.ResetWorkflowExecutionStateAsync(id)).Ok);
+            var overview = host.ListRunOverview();
+            Assert.Contains(older.RunId, overview.ClearedRunTraceIds);
+            Assert.Contains(latest.RunId, overview.ClearedRunTraceIds);
+            Assert.DoesNotContain(other.RunId, overview.ClearedRunTraceIds);
+            Assert.False(TaskCenterRunTrace.Build(doc, overview.Active.Concat(overview.History), overview.ClearedRunTraceIds).HasRun);
+            Assert.Equal(bytes, RunBytes(latest.RunId));
+            Assert.Equal(definition, FlowBytes(id));
+            Assert.Equal(3, host.Runs.List().Count);
+
+            // 新存储实例仍读到清除边界；重新打开页面不能回退显示更老的历史。
+            var reloaded = new RunStore(Runs);
+            var cleared = reloaded.ListClearedRunTraceIds(reloaded.List());
+            Assert.False(TaskCenterRunTrace.Build(doc, reloaded.List(), cleared).HasRun);
+            var fresh = AddRun(host, id, revision, WorkflowRunState.Running);
+            fresh.Cursor = new() { NodeId = "second" };
+            host.Runs.Update(fresh);
+            overview = host.ListRunOverview();
+            var trace = TaskCenterRunTrace.Build(doc, overview.Active.Concat(overview.History), overview.ClearedRunTraceIds);
+            Assert.Equal(fresh.RunId, trace.RunId);
+            Assert.Equal(NodeRunState.Running, trace.Node("second"));
+            Assert.Equal(bytes, RunBytes(latest.RunId));
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Theory]
     [InlineData(WorkflowRunState.Interrupted)]
     [InlineData(WorkflowRunState.Unknown)]
     public async Task NoOutstandingSubmission_ResetAllowsDelete_WithoutRemovingHistory(WorkflowRunState state)
@@ -225,6 +272,7 @@ public sealed class WorkflowExecutionResetTests : IDisposable
             var reset = await host.ResetWorkflowExecutionStateAsync(id);
 
             Assert.Equal(HostActionStatus.Unavailable, reset.Status);
+            Assert.DoesNotContain(run.RunId, host.ListRunOverview().ClearedRunTraceIds);
             var remaining = host.Runs.Load(run.RunId)!;
             Assert.False(remaining.IsTerminal);
             Assert.Null(remaining.ExecutionResetRelease);

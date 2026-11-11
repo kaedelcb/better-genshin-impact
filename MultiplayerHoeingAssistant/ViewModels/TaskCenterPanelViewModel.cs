@@ -1204,7 +1204,7 @@ public sealed partial class TaskCenterPanelViewModel : ViewModelBase
             }
             NotifyWorkspace();
             NotifyResetExecutionStateAvailability();
-            UpdateRunTrace(runs.Active.Concat(runs.History));
+            UpdateRunTrace(runs.Active.Concat(runs.History), runs.ClearedRunTraceIds);
             SnapshotRefreshed?.Invoke();
             OnPropertyChanged(nameof(SelectedWorkflowId));
         }

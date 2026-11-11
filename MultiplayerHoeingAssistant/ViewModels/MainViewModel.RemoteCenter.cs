@@ -305,6 +305,7 @@ public partial class MainViewModel
                     serverTime = DateTimeOffset.Now,
                     allowedTaskPrograms = mistletoe.GetAllowedTaskPrograms(),
                     flows = host.ListFlows(), active = overview.Active, history = overview.History,
+                    clearedRunTraceIds = overview.ClearedRunTraceIds,
                     catalog = host.Catalog.Current,
                     storedResourceEntries = host.Catalog.Current.Entries.Count == 0
                         ? host.ListStoredResourceEntries() : [],

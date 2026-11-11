@@ -274,6 +274,8 @@ public sealed class TaskCenterUsabilityTests : IDisposable
             var deadline = DateTime.UtcNow.AddSeconds(5);
             while (DateTime.UtcNow < deadline)
             {
+                // 测试关闭了定时刷新；显式同步执行端实际消费后的计划修订。
+                vm.Refresh();
                 if (host.Runs.List().Count(run => run.State == WorkflowRunState.Succeeded) >= count
                     && (count != 1 || vm.StartFromNodeId is null)) return;
                 await Task.Delay(20);

@@ -84,10 +84,10 @@ public sealed partial class TaskCenterPanelViewModel
         => Path.Combine(AssistantDataDirectory.Root, "taskcenter-auto-expand-branch.txt");
 
     /// <summary>按当前计划和最新运行列表重算路径；计划表行标志每次重设，流程图等只在有变化时通知。</summary>
-    private void UpdateRunTrace(IEnumerable<WorkflowRunRecord> runs)
+    private void UpdateRunTrace(IEnumerable<WorkflowRunRecord> runs, IReadOnlySet<string> clearedRunIds)
     {
         TaskCenterRunTrace next;
-        try { next = TaskCenterRunTrace.Build(Editing?.Draft, runs); }
+        try { next = TaskCenterRunTrace.Build(Editing?.Draft, runs, clearedRunIds); }
         catch { next = TaskCenterRunTrace.Empty; }
         var key = (Editing?.Draft.WorkflowId ?? "") + "|" + next.Key;
         var previous = _runTrace;
