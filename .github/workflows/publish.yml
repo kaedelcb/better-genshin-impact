@@ -498,8 +498,9 @@ jobs:
         uses: robinraju/release-downloader@v1.8
         with:
           repository: "lemutec/MicaSetup"
-          latest: true
-          fileName: "MicaSetup_v*.7z"
+          # v2.5.7 缺少四份许可证资源，固定到已成功构建的版本。
+          tag: "v2.5.6"
+          fileName: "MicaSetup_v2.5.6.7z"
       - name: 📦 Pack MicaSetup
         run: |
           $archiveFiles = Get-ChildItem -Path . -Filter "MicaSetup_v*.7z"
@@ -574,11 +575,18 @@ jobs:
           }
 
           .\makemica.exe micasetup.json
+          if ($LASTEXITCODE -ne 0) {
+              throw "MicaSetup packaging failed with exit code $LASTEXITCODE. See the build errors above."
+          }
+          if (-not (Test-Path -LiteralPath "BetterGI_Setup.exe" -PathType Leaf)) {
+              throw "MicaSetup did not generate BetterGI_Setup.exe. See the build errors above."
+          }
           ren BetterGI_Setup.exe BetterGI_Setup_v${{ needs.validate.outputs.version }}.exe
       - uses: actions/upload-artifact@v4
         with:
           name: BetterGI_Setup
-          path: BetterGI_Setup*.exe
+          path: BetterGI_Setup_v${{ needs.validate.outputs.version }}.exe
+          if-no-files-found: error
 
   # 创建 GitHub Release
   create_release:

@@ -356,6 +356,41 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("!inputs.create-release", publish["if"])
         self.assertNotIn("always()", publish["if"])
 
+    def test_micasetup_uses_last_successful_version_and_requires_artifact(self):
+        steps = self.load("publish.yml")["jobs"]["build_setup"]["steps"]
+        download = next(s for s in steps if s.get("with", {}).get("repository") == "lemutec/MicaSetup")
+        self.assertEqual("v2.5.6", download["with"]["tag"])
+        self.assertEqual("MicaSetup_v2.5.6.7z", download["with"]["fileName"])
+        self.assertNotIn("latest", download["with"])
+        upload = next(s for s in steps if s.get("with", {}).get("name") == "BetterGI_Setup")
+        self.assertEqual("error", upload["with"]["if-no-files-found"])
+        self.assertEqual("BetterGI_Setup_v${{ needs.validate.outputs.version }}.exe", upload["with"]["path"])
+
+    def test_micasetup_failure_or_missing_output_stops_before_rename(self):
+        pwsh = shutil.which("pwsh")
+        if not pwsh:
+            self.skipTest("需要 PowerShell 验证 Actions 的实际打包守卫")
+        steps = self.load("publish.yml")["jobs"]["build_setup"]["steps"]
+        pack = next(s["run"] for s in steps if "makemica.exe micasetup.json" in s.get("run", ""))
+        _, separator, guard = pack.rpartition("\\makemica.exe micasetup.json\n")
+        self.assertTrue(separator)
+        guard = guard.replace("${{ needs.validate.outputs.version }}", "1.2.3")
+        for exit_code, has_output in [(7, False), (7, True), (0, False), (0, True)]:
+            with self.subTest(exit_code=exit_code, has_output=has_output), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                if has_output:
+                    (root / "BetterGI_Setup.exe").write_bytes(b"fixture")
+                # 模拟外部工具返回值，执行工作流原文中的产物检查和重命名。
+                script = f"$ErrorActionPreference = 'Stop'; $global:LASTEXITCODE = {exit_code};\n" + guard
+                result = subprocess.run([pwsh, "-NoProfile", "-Command", script], cwd=root, capture_output=True)
+                succeeds = exit_code == 0 and has_output
+                self.assertEqual(succeeds, result.returncode == 0, result.stderr.decode("utf-8", "replace"))
+                self.assertEqual(succeeds, (root / "BetterGI_Setup_v1.2.3.exe").is_file())
+                self.assertEqual(has_output and not succeeds, (root / "BetterGI_Setup.exe").is_file())
+                if not succeeds:
+                    expected = "exit code 7" if exit_code else "did not generate BetterGI_Setup.exe"
+                    self.assertIn(expected, result.stderr.decode("utf-8", "replace"))
+
     def test_expected_sha_guard_allows_matching_or_empty_and_rejects_mismatch(self):
         data = self.load("publish.yml")
         option = data["on"]["workflow_dispatch"]["inputs"]["expected-sha"]
