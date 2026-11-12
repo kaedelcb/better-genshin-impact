@@ -178,6 +178,142 @@ public class BgiUpdateCoordinationTests : IDisposable
         finally { session.Fail(); }
     }
 
+    [Theory]
+    [InlineData(true, true, 0)]
+    [InlineData(false, true, 1)]
+    [InlineData(null, false, 0)]
+    public void UpdateRestore_DoesNotRelaunchExistingOrUncertainTarget(bool? running, bool expected, int expectedLaunches)
+    {
+        var launches = 0;
+        var result = BgiUpdateCoordination.RestoreBgiIfNeededCore(() => running, () => { launches++; return true; });
+        Assert.Equal(expected, result);
+        Assert.Equal(expectedLaunches, launches);
+    }
+
+    [Fact]
+    public void UpdateRestore_ReusesProcessAlreadyStartedDuringCompletionDelay()
+    {
+        var running = false;
+        var launches = 0;
+        var kept = 0;
+        bool Restore() => BgiUpdateCoordination.RestoreBgiIfNeededCore(() => running,
+            () => { launches++; running = true; return true; }, () => kept++);
+        Assert.True(Restore());
+        Assert.True(Restore());
+        Assert.Equal(1, launches);
+        Assert.Equal(1, kept);
+    }
+
+    [Fact]
+    public async Task UnsafeLauncher_BlocksFailureRecovery_AndOnlyANewUpdateReleasesIt()
+    {
+        var session = await BgiUpdateCoordination.BeginAsync(_dir, closeBgi: true, null);
+        session.BlockRestart();
+        session.Fail();
+        session.Complete(TimeSpan.Zero);
+        Assert.Equal(BgiUpdateCoordination.Blocked, BgiUpdateCoordination.Read(_dir)!.Phase);
+        var executable = Path.Combine(_dir, "BetterGI.exe");
+        Assert.False(BgiPackageUpdateService.TryLaunchWhileNotInstalling(executable,
+            () => throw new Exception("启动文件未确认时不得恢复进程")));
+        using var monitor = new BgiProcessMonitor(executable);
+        var vm = new MainViewModel();
+        typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm,
+            new AssistConfig { BgiPath = executable, GuardBgi = true });
+        typeof(MainViewModel).GetField("_processMonitor", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm, monitor);
+        typeof(MainViewModel).GetMethod("CheckBgiUpdateCoordination", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null);
+        Assert.True(monitor.IsAutomaticRestartHeld);
+        Assert.False(monitor.RestartBgi());
+
+        var retry = await BgiUpdateCoordination.BeginAsync(_dir, closeBgi: true, null);
+        retry.BeginInstallation();
+        retry.Complete(TimeSpan.Zero);
+        Assert.True(BgiPackageUpdateService.TryLaunchWhileNotInstalling(executable, () => { }));
+    }
+
+    [Fact]
+    public void BlockedLauncher_DoesNotAutomaticallyRecoverWhenPrepareLifetimeExpires()
+    {
+        File.WriteAllText(BgiUpdateCoordination.PathFor(_dir), JsonSerializer.Serialize(
+            new BgiUpdateCoordinationState("blocked", BgiUpdateCoordination.Blocked,
+                DateTimeOffset.UtcNow.AddDays(-1), null, false)));
+        Assert.True(BgiUpdateCoordination.IsLaunchBlocked(_dir));
+    }
+
+    [Fact]
+    public async Task InstallationAndDesktopConfirmation_StayProtectedUntilExplicitCompletion()
+    {
+        var session = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        session.BeginInstallation();
+        Assert.Equal(DateTimeOffset.MaxValue, BgiUpdateCoordination.Read(_dir)!.ExpiresUtc);
+        Assert.True(BgiUpdateCoordination.IsLaunchBlocked(_dir));
+        Assert.False(BgiUpdateCoordination.Read(_dir)!.RestartAssistants);
+        session.Complete(TimeSpan.FromSeconds(1)); // 电脑端在完成提示返回后调用。
+        Assert.Equal(BgiUpdateCoordination.Done, BgiUpdateCoordination.Read(_dir)!.Phase);
+    }
+
+    [Fact]
+    public async Task ConfirmationWithoutCopiedFiles_RemainsProtected_ButCannotCountAsRepair()
+    {
+        var session = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        session.HoldUntilConfirmation();
+        Assert.Equal(DateTimeOffset.MaxValue, BgiUpdateCoordination.Read(_dir)!.ExpiresUtc);
+        Assert.True(BgiUpdateCoordination.IsLaunchBlocked(_dir));
+        session.BlockRestart();
+        var retry = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        retry.HoldUntilConfirmation();
+        Assert.Throws<IOException>(() => retry.Complete(TimeSpan.Zero));
+        retry.Fail();
+        Assert.Equal(BgiUpdateCoordination.Blocked, BgiUpdateCoordination.Read(_dir)!.Phase);
+    }
+
+    [Fact]
+    public async Task FailedRetry_PreservesPreviousBlockedState_AndCannotCompleteWithoutRepair()
+    {
+        var first = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        first.BlockRestart();
+        var retry = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        Assert.Equal(DateTimeOffset.MaxValue, BgiUpdateCoordination.Read(_dir)!.ExpiresUtc);
+        Assert.Throws<IOException>(() => retry.Complete(TimeSpan.Zero));
+        retry.Fail();
+        Assert.Equal(BgiUpdateCoordination.Blocked, BgiUpdateCoordination.Read(_dir)!.Phase);
+        Assert.True(BgiUpdateCoordination.IsLaunchBlocked(_dir));
+    }
+
+    [Fact]
+    public async Task TerminalWriteFailure_LeavesDurableInstallationProtection_AndCanRetryTheWrite()
+    {
+        var session = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        session.BeginInstallation();
+        using (var held = new FileStream(BgiUpdateCoordination.PathFor(_dir), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = Record.Exception(() => session.BlockRestart());
+            Assert.True(error is IOException or UnauthorizedAccessException, error?.ToString());
+        }
+        Assert.Equal(DateTimeOffset.MaxValue, BgiUpdateCoordination.Read(_dir)!.ExpiresUtc);
+        Assert.True(BgiUpdateCoordination.IsLaunchBlocked(_dir));
+        session.Fail();
+        Assert.Equal(BgiUpdateCoordination.Blocked, BgiUpdateCoordination.Read(_dir)!.Phase);
+    }
+
+    [Fact]
+    public async Task ProtectionWriteFailure_StopsBeforeAnyProductFileIsOverwritten()
+    {
+        var executable = Path.Combine(_dir, "BetterGI.exe");
+        File.WriteAllText(executable, "original-launcher");
+        var fixture = Path.Combine(AppContext.BaseDirectory, "TestData", "BetterGI_v0.64.2+lcb.22.7-NexusBGI-fix13.7z");
+        var session = await BgiUpdateCoordination.BeginAsync(_dir, true, null);
+        using (var held = new FileStream(BgiUpdateCoordination.PathFor(_dir), FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var result = BgiPackageUpdateService.Apply(fixture, _dir, ["User"], [], null,
+                beforeOverwrite: session.BeginInstallation);
+            Assert.False(result.Success);
+            Assert.Equal(0, result.ExtractedFiles);
+            Assert.Equal("original-launcher", File.ReadAllText(executable));
+        }
+        session.Fail();
+        Assert.Equal(BgiUpdateCoordination.Failed, BgiUpdateCoordination.Read(_dir)!.Phase);
+    }
+
     [Fact]
     public void Read_IgnoresMissingOrCorruptFile()
     {

@@ -92,6 +92,76 @@ public class BgiProcessMonitor : IDisposable
         return matched.ToArray();
     }
 
+    /// <summary>更新 watcher 专用：只返回仍存活、当前会话且精确可执行路径已确认的实例；调用方负责 Dispose。</summary>
+    internal static Process[] GetConfirmedCurrentSessionBgiProcesses(string executable)
+    {
+        using var current = Process.GetCurrentProcess();
+        var currentSession = current.SessionId;
+        var all = Process.GetProcessesByName("BetterGI");
+        Process[] matched = [];
+        try
+        {
+            matched = SelectConfirmedBgiProcessesCore(all, currentSession, executable,
+                process => process.SessionId, process => process.HasExited, process => process.MainModule?.FileName);
+            return matched;
+        }
+        finally
+        {
+            foreach (var process in all)
+                if (!matched.Contains(process)) process.Dispose();
+        }
+    }
+
+    /// <summary>纯选择核心：身份读取失败、已退出或其他安装目录均不成为更新前运行目标。</summary>
+    internal static T[] SelectConfirmedBgiProcessesCore<T>(IEnumerable<T> candidates, int currentSession,
+        string executable, Func<T, int> readSessionId, Func<T, bool> readHasExited, Func<T, string?> readExecutablePath)
+        => candidates.Where(process => IsConfirmedProcessIdentityCore(executable, matchDirectory: false,
+            () => readHasExited(process), () => readExecutablePath(process),
+            () => readSessionId(process) == currentSession)).ToArray();
+
+    /// <summary>关闭前再次确认同一 Process 对象的存活状态、当前会话和精确路径，不按 PID 重新查找。</summary>
+    internal static bool IsConfirmedCurrentSessionBgiProcess(Process process, string executable)
+    {
+        try
+        {
+            using var current = Process.GetCurrentProcess();
+            var currentSession = current.SessionId;
+            return IsConfirmedProcessIdentityCore(executable, matchDirectory: false,
+                () => process.HasExited, () => process.MainModule?.FileName,
+                () => process.SessionId == currentSession);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>跨会话更新兜底专用：仅确认仍存活且规范化路径位于目标目录内；身份未知一律 false。</summary>
+    internal static bool IsConfirmedProcessUnderDirectory(Process process, string dir)
+        => IsConfirmedProcessIdentityCore(dir, matchDirectory: true,
+            () => process.HasExited, () => process.MainModule?.FileName);
+
+    internal static bool IsConfirmedProcessIdentityCore(string targetPath, bool matchDirectory,
+        Func<bool> readHasExited, Func<string?> readExecutablePath, Func<bool>? confirmSession = null)
+    {
+        try
+        {
+            if (readHasExited() || (confirmSession is not null && !confirmSession())) return false;
+            var executable = readExecutablePath();
+            // 相对路径依赖当前工作目录，空路径也不能交给 GetFullPath 推测身份。
+            if (string.IsNullOrWhiteSpace(executable) || string.IsNullOrWhiteSpace(targetPath)
+                || !System.IO.Path.IsPathFullyQualified(executable) || !System.IO.Path.IsPathFullyQualified(targetPath))
+                return false;
+            var actual = System.IO.Path.GetFullPath(executable);
+            var target = System.IO.Path.GetFullPath(targetPath);
+            var directoryPrefix = System.IO.Path.EndsInDirectorySeparator(target)
+                ? target : target + System.IO.Path.DirectorySeparatorChar;
+            var matches = matchDirectory
+                ? actual.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(actual, target, StringComparison.OrdinalIgnoreCase);
+            // 读取身份时可能已退出；明确仍存活才允许计入选择或执行关闭。
+            return matches && !readHasExited();
+        }
+        catch { return false; }
+    }
+
     /// <summary>
     /// **严格枚举（隔离判定专用）**：返回 false 表示无法证明枚举完整（会话读取失败、进程会话身份未知/访问失败、
     /// 枚举 API 抛错等）。成功时调用方拥有返回数组，必须逐个 Dispose。
@@ -346,7 +416,7 @@ public class BgiProcessMonitor : IDisposable
     public bool RestartBgi(string? args = null)
     {
         // 更新关闭不是崩溃；所有启动来源都要让路，不能先解除更新 watcher 持有的暂停。
-        if (BgiUpdateCoordination.IsPreparingExecutable(_bgiPath))
+        if (BgiUpdateCoordination.IsLaunchBlockedExecutable(_bgiPath))
         {
             _log?.Invoke(BgiUpdateCoordination.PreparingMessage);
             return false;
@@ -497,7 +567,7 @@ public class BgiProcessMonitor : IDisposable
         try
         {
             if (stopVersion != Volatile.Read(ref _userStopVersion)
-                || BgiUpdateCoordination.IsPreparingExecutable(_bgiPath)) return false;
+                || BgiUpdateCoordination.IsLaunchBlockedExecutable(_bgiPath)) return false;
             // 让路窗口覆盖整个杀+等退出过程（最坏 10s）
             _guardSuppressUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(15);
             _log?.Invoke($"[进程仲裁] 受控重启开始（{reason}），args={args ?? "(无)"}");

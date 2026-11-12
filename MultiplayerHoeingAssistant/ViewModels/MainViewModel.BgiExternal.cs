@@ -342,7 +342,7 @@ public partial class MainViewModel
     private async Task<string?> EnsureTaskCenterExecutionReadyAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        if (BgiUpdateCoordination.IsPreparing(ResolveConfiguredBgiDirectory()))
+        if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
             return BgiUpdateCoordination.PreparingMessage;
         var binding = InspectTaskCenterClientBinding();
         if (binding.Client != null)
@@ -364,7 +364,7 @@ public partial class MainViewModel
             return "等待执行环境确保排队超时（前序请求的就绪等待未在预算内完成；未发送任何任务）";
         try
         {
-            if (BgiUpdateCoordination.IsPreparing(ResolveConfiguredBgiDirectory()))
+            if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
                 return BgiUpdateCoordination.PreparingMessage;
             binding = InspectTaskCenterClientBinding();
             if (binding.Client != null)
@@ -387,7 +387,7 @@ public partial class MainViewModel
             while (DateTime.UtcNow < deadline)
             {
                 ct.ThrowIfCancellationRequested();
-                if (BgiUpdateCoordination.IsPreparing(ResolveConfiguredBgiDirectory()))
+                if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
                     return BgiUpdateCoordination.PreparingMessage;
                 BgiExternalLinkState? probeState;
                 try

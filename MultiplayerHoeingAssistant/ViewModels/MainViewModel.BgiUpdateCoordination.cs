@@ -60,19 +60,35 @@ public partial class MainViewModel
                 }
                 if (_preparingCoordinationId == state.Id) return;
                 _preparingCoordinationId = state.Id;
-                var processes = BgiProcessMonitor.GetCurrentSessionBgiProcesses();
-                _bgiRunningBeforeCoordination = processes.Length > 0;
-                AddLog(_bgiRunningBeforeCoordination
-                    ? "[更新BGI] 本机正在更新 BGI，关闭本会话的 BGI 并暂停守护"
-                    : "[更新BGI] 本机正在更新 BGI，暂停守护（本会话 BGI 未运行）");
+                var executable = Path.Combine(bgiDir, "BetterGI.exe");
+                var processes = BgiProcessMonitor.GetConfirmedCurrentSessionBgiProcesses(executable);
+                _bgiRunningBeforeCoordination = false;
                 _guardHeldBeforeCoordination = _processMonitor?.IsAutomaticRestartHeld == true;
                 _processMonitor?.HoldAutomaticRestartForUserStop();
                 foreach (var process in processes)
                 {
-                    try { process.Kill(entireProcessTree: true); }
-                    catch (Exception ex) { AddLog("[更新BGI] 关闭本会话 BGI 失败：" + ex.Message); }
-                    process.Dispose();
+                    try
+                    {
+                        if (!BgiProcessMonitor.IsConfirmedCurrentSessionBgiProcess(process, executable)) continue;
+                        _bgiRunningBeforeCoordination = true;
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch (Exception ex) { AddLog("[更新BGI] 关闭本会话目标 BGI 失败：" + ex.Message); }
+                    finally { process.Dispose(); }
                 }
+                AddLog(_bgiRunningBeforeCoordination
+                    ? "[更新BGI] 本机正在更新 BGI，关闭本会话的目标 BGI 并暂停守护"
+                    : "[更新BGI] 本机正在更新 BGI，暂停守护（未确认本会话目标 BGI 正在运行）");
+                return;
+            }
+
+            if (state.Phase == BgiUpdateCoordination.Blocked)
+            {
+                _handledCoordinationId = state.Id;
+                _preparingCoordinationId = null;
+                _bgiRunningBeforeCoordination = false;
+                _processMonitor?.HoldAutomaticRestartForUserStop();
+                AddLog("[更新BGI] 启动文件完整性未确认，保持 BGI 关闭；修复后重新更新，暂不自动恢复。");
                 return;
             }
 
@@ -113,13 +129,16 @@ public partial class MainViewModel
     /// <summary>重新启动本会话 BGI：执行端经进程监控启动；监控端没有进程监控，直接按配置路径启动。</summary>
     private bool StartCoordinatedBgi()
     {
-        if (_processMonitor is { } monitor) return monitor.RestartBgi();
         var exe = _config?.BgiPath;
         if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe)) return false;
         try
         {
-            return BgiPackageUpdateService.TryLaunchWhileNotInstalling(exe, () =>
-                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! })?.Dispose());
+            return BgiUpdateCoordination.RestoreBgiIfNeeded(exe, () =>
+            {
+                if (_processMonitor is { } monitor) return monitor.RestartBgi();
+                return BgiPackageUpdateService.TryLaunchWhileNotInstalling(exe, () =>
+                    Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! })?.Dispose());
+            }, () => AddLog("[更新BGI] 本会话的目标 BGI 已运行，保留当前进程，不重复启动"));
         }
         catch (Exception ex) { AddLog("[更新BGI] 启动 BGI 失败：" + ex.Message); return false; }
     }

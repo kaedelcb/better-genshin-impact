@@ -503,6 +503,7 @@ public partial class UpdateBgiWindow : Window
             }
             // 同机协作：通知本机所有使用这个 BGI 目录的助手（执行端、监控端、任何 Windows 账户）各自关闭 BGI。
             StatusText.Text = "正在通知本机所有助手关闭 BGI…";
+            _vm.AddLog($"[更新BGI][电脑端] 安装包={package.FileName}；目标={Path.GetFullPath(targetDir)}；排除={string.Join("、", _excludeDirs)}；完成后等待确认再重启");
             BgiUpdateCoordinationSession coordination;
             try
             {
@@ -520,18 +521,23 @@ public partial class UpdateBgiWindow : Window
             try
             {
                 result = await BgiPackageUpdateService.ApplyAsync(archivePath, targetDir,
-                    _excludeDirs.ToList(), BackupCheckBox.IsChecked == true ? _backupDirs.ToList() : [], progress);
+                    _excludeDirs.ToList(), BackupCheckBox.IsChecked == true ? _backupDirs.ToList() : [], progress,
+                    beforeOverwrite: coordination.BeginInstallation);
             }
             catch
             {
                 coordination.Fail();
                 throw;
             }
+            _vm.AddLog($"[更新BGI][电脑端] 覆盖结果：成功={result.Success}，覆盖={result.ExtractedFiles}，改名腾位={result.RenamedAside}，跳过={result.SkippedFiles.Count}");
             var autoRelaunch = result.Success && result.SkippedFiles.Count == 0;
-            if (!autoRelaunch) coordination.Fail(); // 恢复原来运行的 BGI，不重启助手
+            var restartBlocked = !autoRelaunch && (result.RestartBlocked || coordination.MustKeepRestartBlocked);
+            if (restartBlocked) coordination.BlockRestart();
+            else if (!autoRelaunch) coordination.Fail(); // 普通失败恢复；启动文件待修复时保持关闭。
 
             if (result.Success)
             {
+                if (autoRelaunch) coordination.HoldUntilConfirmation();
                 var lines = new List<string> { $"更新完成：覆盖 {result.ExtractedFiles} 个文件。" };
                 if (result.ExcludedFiles > 0) lines.Add($"排除目录跳过 {result.ExcludedFiles} 个文件（未触碰）。");
                 if (result.RenamedAside > 0) lines.Add($"{result.RenamedAside} 个被占用文件已改名腾位后覆盖。");
@@ -540,7 +546,9 @@ public partial class UpdateBgiWindow : Window
                 if (result.BackupCleanupWarning != null) lines.Add(result.BackupCleanupWarning);
                 lines.Add(autoRelaunch
                     ? "点击确定后，本机所有助手（执行端和监控端）将自动重启，原来在运行的 BGI 也会重新启动。"
-                    : "有文件被跳过，未自动重启。已恢复原来运行的 BGI，请手动重启助手和 BGI 使新版本生效。");
+                    : restartBlocked
+                        ? "有文件未完整更新，BGI 保持关闭，助手未重启。请修复后重新更新。"
+                        : "有文件被跳过，未自动重启。已恢复原来运行的 BGI，请手动重启助手和 BGI 使新版本生效。");
                 MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
                 // 本机版本已变，重算启动检查提示点。
@@ -551,7 +559,8 @@ public partial class UpdateBgiWindow : Window
             else
             {
                 StatusText.Text = "更新失败。";
-                MessageBox.Show(this, $"更新失败：{result.Error}\n\n（备份位置：{result.BackupDir ?? "未生成"}）",
+                MessageBox.Show(this, $"更新失败：{result.Error}\n\n（备份位置：{result.BackupDir ?? "未生成"}）" +
+                    (restartBlocked ? "\nBGI 保持关闭，助手未重启；修复后重新更新。" : ""),
                     "更新BGI", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

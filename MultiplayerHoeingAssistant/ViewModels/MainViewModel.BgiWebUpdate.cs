@@ -206,6 +206,7 @@ public partial class MainViewModel
                 var target = Path.GetDirectoryName(ticket.Executable)!;
                 job.State = "installing";
                 job.Message = "正在通知本机所有助手关闭 BGI…";
+                AddLog($"[更新BGI][网页端] 安装包={ticket.Package.FileName}；目标={Path.GetFullPath(target)}；排除={string.Join("、", ticket.Excludes)}；完成后自动重启");
                 // 同机协作：所有使用这个 BGI 目录的助手（执行端、监控端、任何 Windows 账户）各自关闭自己的 BGI。
                 var coordination = await BgiUpdateCoordination.BeginAsync(target, job.CloseBgi,
                     message => { if (job.State == "installing") job.Message = message; });
@@ -218,11 +219,22 @@ public partial class MainViewModel
                         throw new IOException("BGI 正在运行、路径已变化或无法确认进程状态。已保留下载包，已恢复原来运行的 BGI。");
                     job.Message = "正在更新 BGI…";
                     var result = await BgiPackageUpdateService.ApplyAsync(path, target, ticket.Excludes, backupDirs,
-                        new Progress<string>(message => { if (job.State == "installing") job.Message = message; }));
+                        new Progress<string>(message => { if (job.State == "installing") job.Message = message; }),
+                        beforeOverwrite: coordination.BeginInstallation);
                     NotifyRemoteUpdateStateChanged();
+                    AddLog($"[更新BGI][网页端] 覆盖结果：成功={result.Success}，覆盖={result.ExtractedFiles}，改名腾位={result.RenamedAside}，跳过={result.SkippedFiles.Count}");
                     if (!result.Success || result.SkippedFiles.Count > 0)
+                    {
+                        var restartBlocked = result.RestartBlocked || coordination.MustKeepRestartBlocked;
+                        if (restartBlocked)
+                        {
+                            coordination.BlockRestart();
+                            completed = true; // 这是失败终态；finally 不得改成允许恢复的普通失败。
+                        }
                         throw new IOException((result.Error ?? $"有 {result.SkippedFiles.Count} 个文件未覆盖。") +
-                            (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") + " 已恢复原来运行的 BGI，未重启助手。");
+                            (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
+                            (restartBlocked ? " 更新未完整完成，BGI 保持关闭，未重启助手。" : " 已恢复原来运行的 BGI，未重启助手。"));
+                    }
                     job.Message = $"更新完成，已覆盖 {result.ExtractedFiles} 个文件。" +
                         (result.BackupDir == null ? "" : $" 备份：{result.BackupDir}") +
                         (result.BackupCleanupWarning == null ? "" : $" {result.BackupCleanupWarning}") +
@@ -266,8 +278,8 @@ public partial class MainViewModel
         return Path.GetFileName(path).Equals("BetterGI.exe", StringComparison.OrdinalIgnoreCase) && File.Exists(path) ? path : null;
     }
 
-    // 与 PC 端更新窗口一致：不再排除助手所在目录，包内的助手文件也会被更新（被占用的先改名腾位），
-    // 更新完成后由 RelaunchAfterBgiUpdate 自动重启助手使新文件生效。
+    // 网页使用配置快照中的排除项并额外保护 User；电脑端使用窗口当前的排除项。
+    // 两端都不自动排除助手目录，未被用户排除的助手文件经共用覆盖器更新，完成后重启生效。
     private static string[] WebBgiExcludes(AssistConfig config, string? executable)
     {
         var paths = new HashSet<string>(config.BgiUpdateExcludeDirs ?? [], StringComparer.OrdinalIgnoreCase) { "User" };

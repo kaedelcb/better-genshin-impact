@@ -67,6 +67,7 @@ public sealed record BgiUpdateApplyResult(
     string? Error)
 {
     public string? BackupCleanupWarning { get; init; }
+    public bool RestartBlocked { get; init; }
 
     public static BgiUpdateApplyResult Fail(string error, string? backupDir = null)
         => new(false, 0, 0, 0, [], backupDir, error);
@@ -129,7 +130,7 @@ public static class BgiPackageUpdateService
         lock (ExecutableGate)
         {
             // 协作文件覆盖关闭等待期及跨助手/Windows 会话；本地安装预约只覆盖后续解压期。
-            if (BgiUpdateCoordination.IsPreparingExecutable(executable)
+            if (BgiUpdateCoordination.IsLaunchBlockedExecutable(executable)
                 || (_webInstallExecutable != null && string.Equals(Path.GetFullPath(executable), _webInstallExecutable,
                     StringComparison.OrdinalIgnoreCase))) return false;
             launch();
@@ -216,8 +217,8 @@ public static class BgiPackageUpdateService
 
     public static Task<BgiUpdateApplyResult> ApplyAsync(string archivePath, string targetDir,
         IReadOnlyList<string> excludeDirs, IReadOnlyList<string> backupDirs,
-        IProgress<string>? progress, CancellationToken ct = default)
-        => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupDirs, progress, ct), ct);
+        IProgress<string>? progress, CancellationToken ct = default, Action? beforeOverwrite = null)
+        => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupDirs, progress, ct, beforeOverwrite), ct);
 
     /// <summary>独立复制所选目录，不下载、不更新、不关闭 BGI，也不清理旧备份。</summary>
     public static Task<BgiManualBackupResult> BackupAsync(string targetDir, IReadOnlyList<string> directories,
@@ -300,7 +301,7 @@ public static class BgiPackageUpdateService
 
     public static BgiUpdateApplyResult Apply(string archivePath, string targetDir,
         IReadOnlyList<string> excludeDirs, IReadOnlyList<string> backupDirs,
-        IProgress<string>? progress, CancellationToken ct = default)
+        IProgress<string>? progress, CancellationToken ct = default, Action? beforeOverwrite = null)
     {
         // ① 解压前再校验包名：不合法绝不解压覆盖（需求硬约束）。
         // 只允许茶包版：名称必须含 +lcb. 段，防止拿官方版等非茶包包误升级覆盖（2026-09-14 明确）
@@ -315,10 +316,12 @@ public static class BgiPackageUpdateService
 
         var excludes = excludeDirs ?? [];
         // 备份目录硬保护：_update_backup 下的包内条目一律跳过，绝不覆盖已有备份（与用户排除配置无关）
-        var extractExcludes = excludes.Append(BackupRootDirName).ToArray();
+        var extractExcludes = excludes.Append(BackupRootDirName).Append(BgiUpdateCoordination.FileName).ToArray();
         string? backupDir = null;
         int extracted = 0, renamedAside = 0, excluded = 0;
         var skipped = new List<string>();
+        var updatedLaunchers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var overwriteStarted = false;
         try
         {
             using var archive = SevenZipArchive.Open(archivePath);
@@ -380,9 +383,15 @@ public static class BgiPackageUpdateService
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(fullTarget)!);
+                if (!overwriteStarted)
+                {
+                    beforeOverwrite?.Invoke(); // 保护写盘失败时，不能开始截断任何产品文件。
+                    overwriteStarted = true;
+                }
                 try
                 {
                     WriteEntry(entry, fullTarget, solid);
+                    if (WindowsLauncherIntegrity.IsProductLauncher(targetRoot, fullTarget)) updatedLaunchers.Add(fullTarget);
                     extracted++;
                 }
                 catch (IOException) when (File.Exists(fullTarget))
@@ -393,6 +402,7 @@ public static class BgiPackageUpdateService
                         File.Move(fullTarget, fullTarget + ".old-" + DateTime.Now.ToString("yyyyMMddHHmmssfff"));
                         renamedAside++;
                         WriteEntry(entry, fullTarget, solid);
+                        if (WindowsLauncherIntegrity.IsProductLauncher(targetRoot, fullTarget)) updatedLaunchers.Add(fullTarget);
                         extracted++;
                     }
                     catch (Exception inner) when (inner is IOException or UnauthorizedAccessException)
@@ -407,6 +417,12 @@ public static class BgiPackageUpdateService
                     DrainEntry(solid, entry);
                 }
             }
+            foreach (var launcher in updatedLaunchers)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (WindowsLauncherIntegrity.NormalizeUpdatedLauncher(targetRoot, launcher))
+                    progress?.Report("已修正启动文件的 Low 完整性标签：" + Path.GetRelativePath(targetRoot, launcher));
+            }
         }
         catch (OperationCanceledException)
         {
@@ -414,10 +430,14 @@ public static class BgiPackageUpdateService
         }
         catch (Exception ex)
         {
-            return new BgiUpdateApplyResult(false, extracted, renamedAside, excluded, skipped, backupDir, $"解压失败：{ex.Message}");
+            return new BgiUpdateApplyResult(false, extracted, renamedAside, excluded, skipped, backupDir, $"解压失败：{ex.Message}")
+            {
+                RestartBlocked = overwriteStarted
+            };
         }
         return new BgiUpdateApplyResult(true, extracted, renamedAside, excluded, skipped, backupDir, null)
         {
+            RestartBlocked = overwriteStarted && skipped.Count > 0,
             BackupCleanupWarning = skipped.Count == 0 ? PruneExpiredBackups(targetRoot, progress) : null
         };
     }
