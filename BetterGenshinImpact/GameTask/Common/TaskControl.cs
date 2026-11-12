@@ -325,6 +325,7 @@ public partial class TaskControl
         if (!InputHub.CurrentOperationToken.HasValue)
         {
             TrySuspendCore(ct);
+            ThrowIfTeleportStepInterrupted(ct);
             return;
         }
 
@@ -333,6 +334,7 @@ public partial class TaskControl
         {
             InputHub.ThrowIfOperationCancelled();
             TrySuspendCore(combined);
+            ThrowIfTeleportStepInterrupted(combined);
             InputHub.ThrowIfOperationCancelled();
         }
         catch (OperationCanceledException)
@@ -388,6 +390,7 @@ public partial class TaskControl
                     }
                     Logger.LogWarning(IsSuspendedByNetwork ? "网络检测失败触发暂停，等待解除" : "快捷键触发暂停，等待解除");
                     foreach (var item in suspendables) item.Suspend();
+                    SetTeleportStepPaused(true);
                     Interlocked.Increment(ref _environmentPauseDepth);
                     acknowledged = true;
                 }
@@ -399,7 +402,11 @@ public partial class TaskControl
         {
             if (suspended)
             {
-                if (acknowledged) Interlocked.Decrement(ref _environmentPauseDepth);
+                if (acknowledged)
+                {
+                    Interlocked.Decrement(ref _environmentPauseDepth);
+                    SetTeleportStepPaused(false);
+                }
                 foreach (var item in suspendables) item.Resume();
                 RunnerContext.Instance.ResumeAutoPick();
                 if (!ct.IsCancellationRequested) Logger.LogWarning("暂停已经解除");
@@ -617,6 +624,7 @@ public partial class TaskControl
 
     public static Mat CaptureGameImage(IGameCapture? gameCapture)
     {
+        ThrowIfTeleportStepInterrupted();
         // 第 1 次尝试（正常路径，零延迟、零日志、零副作用）
         var image = gameCapture?.Capture();
         if (image != null) return image.Frame;

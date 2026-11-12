@@ -213,10 +213,22 @@ public class TpTaskFastDrag
     }
 
     /// <summary>
-    /// 传送到七天神像
+    /// 开始完整地图步骤时清理旧定位，尤其是被中断的拖动预测。
     /// </summary>
-    public async Task TpToStatueOfTheSeven(bool requireLoadingScreen = false)
+    private void ResetMapRecognitionState()
     {
+        _dragPriorCenterGenshin = null;
+        _dragPriorRadiusGenshin = 0;
+        _lastDragCenterGenshin = null;
+        _miniMapPriorGenshin = null;
+        _targetPriorGenshin = null;
+        _priorIsRegionCenter = false;
+        _lastSwitchAreaFailed = false;
+    }
+
+    private async Task<(double X, double Y, GiTpPosition Point)> PrepareStatueTeleportAsync()
+    {
+        ResetMapRecognitionState();
         await CheckInBigMapUi();
 
         // 提前调整至恰当的缩放以更快的传送
@@ -248,6 +260,13 @@ public class TpTaskFastDrag
         }
 
         TaskControl.Logger.LogInformation("将传送至 {country} {area} 七天神像", country, area);
+        return (x, y, revivePoint);
+    }
+
+    public async Task TpToStatueOfTheSeven(bool requireLoadingScreen = false)
+    {
+        var (x, y, revivePoint) = await RunTeleportStepAsync(
+            PrepareStatueTeleportAsync, MapTypes.Teyvat.ToString(), ct);
         await Tp(x, y, MapTypes.Teyvat.ToString(), false, requireLoadingScreen);
         if (_tpConfig.ShouldMove || _tpConfig.IsReviveInNearestStatueOfTheSeven)
         {
@@ -339,7 +358,7 @@ public class TpTaskFastDrag
             {
                 throw;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not OperationCanceledException && e is not NormalEndException)
             {
                 if (retryCount > 1)
                 {
@@ -368,6 +387,8 @@ public class TpTaskFastDrag
     {
         // 分层先验：打开大地图【之前】采集小地图当前坐标作第一层先验（原神坐标）。
         // 详见 teleport-bigmap-position-region-constrained-match spec。
+        // 上一次可能在拖动中被恢复打断；重新开图后，旧的预测中心不能参与新定位。
+        ResetMapRecognitionState();
         _miniMapPriorGenshin = TryGetMiniMapPriorGenshin(mapName);
         _priorIsRegionCenter = false; // 缓存先验，用第一层标准半径100
         _tpRetryTimes = retryTimes;   // 重试轮标识：>0 时 SwitchArea 等 UI 渲染敏感点追加延时
@@ -432,7 +453,7 @@ public class TpTaskFastDrag
 
         if (!await WaitForBigMapUiOrTimeoutAsync(ApplyExtraDelay(2000)))
         {
-            Logger.LogWarning("等待大地图界面超时（2000ms），可能地图尚未打开，继续按原逻辑读取缩放级别");
+            throw new MapUiUnavailableException("等待大地图界面超时，停止读取缩放和点击");
         }
         #endregion
 
@@ -475,7 +496,7 @@ public class TpTaskFastDrag
                     adjBaseX, adjBaseY);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             TaskControl.Logger.LogWarning(ex, "白名单判定异常，按通用流程处理");
             skipStep4DueToSpecial = false;
@@ -653,7 +674,7 @@ public class TpTaskFastDrag
                 bigMapInAllMapRect = GetBigMapRect(mapName);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             TaskControl.Logger.LogWarning(ex, "步骤 5.7 白名单判定异常");
             // 补偿逻辑：如果步骤 4 被跳过了，这里必须补上安全缩放
@@ -877,7 +898,7 @@ public class TpTaskFastDrag
                             TaskControl.Logger.LogInformation("[联机][FastSync] TpTask 抢报命中 syncId={SyncId}", fastSyncId);
                         }
                         catch (OperationCanceledException) { throw; }
-                        catch (System.Exception ex)
+                        catch (System.Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
                         {
                             // 抢报失败不阻塞传送主流程：严格路径会在 PathExecutor 外层补上报
                             TaskControl.Logger.LogWarning(ex, "[联机][FastSync] TpTask 抢报异常，已忽略 syncId={SyncId}", fastSyncId);
@@ -946,37 +967,71 @@ public class TpTaskFastDrag
         return (clickX, clickY);
     }
 
-    public async Task CheckInBigMapUi(int retryCount = 0, string? mapName = null)
-    {
-        using var environmentOperation = BeginEnvironmentOperation();
-        // 尝试打开地图失败后，先回到主界面后再次尝试打开地图
-        if (!await TryToOpenBigMapUi(retryCount, mapName))
+    public Task CheckInBigMapUi(int retryCount = 0, string? mapName = null)
+        => RunTeleportStepAsync(async () =>
         {
-            await new ReturnMainUiTask().Start(ct);
-            await Delay(ApplyExtraDelay(500), ct);
+            // 嵌套在传送中时，恢复必须重做外层传送，不能只补开地图后继续使用旧坐标。
             if (!await TryToOpenBigMapUi(retryCount, mapName))
             {
-                await WaitForEnvironmentRecoveryAsync(
-                    token => new TpTaskFastDrag(token).ProbeMapForRecoveryAsync(mapName), ct);
+                await new ReturnMainUiTask().Start(ct);
+                await Delay(ApplyExtraDelay(500), ct);
+                if (!await TryToOpenBigMapUi(retryCount, mapName))
+                    throw new MapUiUnavailableException("两次尝试后仍未确认大地图");
             }
-        }
-    }
+            return true;
+        }, mapName, ct);
 
     /// <summary>
     /// 尝试打开地图界面
     /// </summary>
-    internal async Task<bool> ProbeMapForRecoveryAsync(string? mapName = null)
+    internal async Task<bool> ProbeMapForRecoveryAsync(string? mapName = null, bool verifyExistingMapResponse = true)
     {
         ct.ThrowIfCancellationRequested();
         PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+        if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+            && !SystemControl.IsGenshinImpactActiveByProcess())
+        {
+            Logger.LogWarning("[环境恢复] 前台不是原神，先恢复焦点后重新识别，本轮不发送游戏按键");
+            SystemControl.FocusWindow(TaskContext.Instance().GameHandle);
+            await Delay(300, ct);
+            return false;
+        }
         using (var screen = CaptureToRectArea())
         {
-            if (IsInBigMapUiViaAssets(screen)) return true;
+            if (IsInBigMapUiViaAssets(screen))
+            {
+                if (!verifyExistingMapResponse) return true; // 调用方随后会用关图响应验证。
+                var responsive = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(() =>
+                {
+                    using var frame = CaptureToRectArea();
+                    return IsInBigMapUiViaAssets(frame) ? GetBigMapScaleViaFastDragAssets(frame) : (double?)null;
+                }, async (before, token) =>
+                {
+                    GameCaptureRegion.GameRegionMove((rect, _) => (rect.Width / 2d, rect.Height / 2d));
+                    await Delay(100, token);
+                    if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+                        && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
+                    using var current = CaptureToRectArea();
+                    if (!IsInBigMapUiViaAssets(current)
+                        || Math.Abs(GetBigMapScaleViaFastDragAssets(current) - before) > 0.01) return false;
+                    token.ThrowIfCancellationRequested();
+                    // 在滑轨边界朝内部滚一格；后续完整传送会重新读取缩放、定位目标。
+                    InputHub.Foreground.Mouse.VerticalScroll(before >= 0.95 ? -1 : 1);
+                    return true;
+                }, (milliseconds, token) => Delay(milliseconds, token), ct);
+                if (!responsive)
+                    Logger.LogDebug("[环境恢复-地图] 已识别地图，但尚未确认缩放响应，保持暂停");
+                return responsive;
+            }
             if (!Bv.IsInMainUi(screen))
             {
                 // 仅处理明确识别到的派蒙菜单；未知界面继续交给原有60秒保护。
                 using var menuBag = screen.Find(RecognitionAssets.Get("AutoWood", "MenuBag", screen));
-                if (!menuBag.IsExist()) return false;
+                if (!menuBag.IsExist())
+                {
+                    Logger.LogDebug("[环境恢复-识别] 未确认大地图、主界面或派蒙菜单，保持暂停，不发送地图操作");
+                    return false;
+                }
                 if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
                     && !SystemControl.IsGenshinImpactActiveByProcess()) return false;
                 ct.ThrowIfCancellationRequested();
@@ -1147,7 +1202,7 @@ public class TpTaskFastDrag
                     return true;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 Logger.LogDebug("[快速识别] OpenBigMapUi 探测异常: {Msg}", ex.Message);
             }
@@ -1177,7 +1232,7 @@ public class TpTaskFastDrag
                     return true;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 Logger.LogDebug("[快速识别] WaitForElement 探测异常 {Name}: {Msg}", ro.Name, ex.Message);
             }
@@ -1198,28 +1253,15 @@ public class TpTaskFastDrag
         bool lastWasTpPointNotActivate = false;
         for (var i = 0; i < 3; i++)
         {
-            var recoveryVersion = NetworkRecoveryVersion;
             try
             {
-                return await TpOnce(tpX, tpY, mapName, force, i, requireLoadingScreen, fastSyncId, lastWasTpPointNotActivate);
-            }
-            catch (Exception e) when (e is not NormalEndException && e is not OperationCanceledException
-                                      && NetworkRecoveryVersion != recoveryVersion)
-            {
-                ct.ThrowIfCancellationRequested();
-                InputHub.ReleaseAll();
-                i--;
-                lastWasTpPointNotActivate = false;
-                Logger.LogWarning("传送步骤经过网络恢复，丢弃中断前的识别/超时结果，原步骤重试且不计次数");
-                PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
-            }
-            catch (MapUiUnavailableException)
-            {
-                await WaitForEnvironmentRecoveryAsync(
-                    token => new TpTaskFastDrag(token).ProbeMapForRecoveryAsync(mapName), ct);
-                i--; // 环境中断重做本次传送，保留普通错误的重试额度。
-                lastWasTpPointNotActivate = false;
-                PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+                return await RunTeleportStepAsync(async () =>
+                {
+                    var pullZoom = lastWasTpPointNotActivate;
+                    lastWasTpPointNotActivate = false;
+                    PathExecutor.CurrentWorldStateMonitor?.RefreshTeleportSuppression();
+                    return await TpOnce(tpX, tpY, mapName, force, i, requireLoadingScreen, fastSyncId, pullZoom);
+                }, mapName, ct);
             }
             catch (TpPointNotActivate e)
             {
@@ -1237,7 +1279,7 @@ public class TpTaskFastDrag
             {
                 throw;
             }
-            catch (Exception e)
+            catch (Exception e) when (e is not OperationCanceledException && e is not NormalEndException)
             {
                 lastWasTpPointNotActivate = false; // 非"点击后没传送点"的失败，下次重试不拉 5.5
                 TaskControl.Logger.LogError("传送失败，重试 {I} 次，原因：{Msg}", i + 1, e.Message);
@@ -1835,6 +1877,11 @@ public class TpTaskFastDrag
     /// <param name="y2">鼠标移动后位置y</param>
     public async Task MouseClickAndMove(int x1, int y1, int x2, int y2)
     {
+        using (var screen = CaptureToRectArea())
+        {
+            if (!IsInBigMapUiViaAssets(screen))
+                throw new MapUiUnavailableException("缩放前大地图已不可用，停止拖动");
+        }
         // 缩放滑轨拖动专用：用"实时读取游戏窗口"的比例放大 1080p 参数坐标，替代 GameRegionMove 内部
         // 依赖的 SystemInfo.ScaleTo1080PRatio。后者在 BetterGI 启动时构建、不随窗口变化刷新，
         // "运行中切换游戏分辨率/窗口大小"后会过期（曾实测 2K 下仍 =1.000），导致拖动落点脱离实际滑块。
@@ -2091,7 +2138,7 @@ public class TpTaskFastDrag
                 prev1 = p1;
                 prev2 = p2;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 // 截图异常（暂停态/帧不可用）→ 不抛，下一轮重试，外层暂停信号会接管
                 Logger.LogDebug("[快速识别] 像素采样异常: {Msg}", ex.Message);
@@ -2128,7 +2175,7 @@ public class TpTaskFastDrag
                     goto AfterClick;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 Logger.LogDebug("[快速识别] 探测传送按钮异常: {Msg}", ex.Message);
             }
@@ -2159,7 +2206,7 @@ public class TpTaskFastDrag
                     Logger.LogDebug("[快速识别] 阶段 2 容错重点传送按钮（第 {N} 次）", reclickCount);
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 Logger.LogDebug("[快速识别] 阶段 2 异常: {Msg}", ex.Message);
             }
@@ -2234,7 +2281,7 @@ public class TpTaskFastDrag
         {
             return GetBigMapCenterPoint(mapName, usePrior);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             return null;
         }
@@ -2251,19 +2298,18 @@ public class TpTaskFastDrag
         {
             // 判断是否在地图界面
             using var ra = CaptureToRectArea();
-            using var mapScaleButtonRa = ra.Find(GetQuickTeleportRecognitionObject("MapScaleButton", ra));
+            using var mapScaleButtonRa = ra.Find(TpTaskFastDragAssets.Get(ra).MapScaleButtonRo);
             if (mapScaleButtonRa.IsExist())
             {
                 try
                 {  
                     using var ra2 = CaptureToRectArea();
                     using var mapScaleButtonRa2 = ra2.Find(TpTaskFastDragAssets.Get(ra2).MapScaleButtonRo);
-                    if (mapScaleButtonRa2.IsExist())
-                    {
-                        rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(ra.CacheGreyMat);
-                    }
+                    if (!mapScaleButtonRa2.IsExist())
+                        throw new MapUiUnavailableException("定位期间大地图已消失，停止滚轮和缩放自救");
+                    rect = MapManager.GetMap(mapName, _mapMatchingMethod).GetBigMapRect(ra2.CacheGreyMat);
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
                 {
                     rect = default; // 发生异常视为识别失败
                 }
@@ -2395,7 +2441,7 @@ public class TpTaskFastDrag
                     return candidate;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 lastError = ex;
             }
@@ -2470,7 +2516,7 @@ public class TpTaskFastDrag
             {
                 r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, c1, layer1Range);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 // 区块内特征点不足（如沙漠低特征区）→ FindHomography 抛异常。视为该层失败，降级下一层。
                 Logger.LogDebug("[大地图定位] 第一层区块匹配异常(特征点不足)，降级: {Msg}", ex.Message);
@@ -2501,7 +2547,7 @@ public class TpTaskFastDrag
             {
                 r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, c2, BigMapPriorMatchDecisions.Layer2RangeGenshin);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 // 区块内特征点不足 → FindHomography 抛异常。视为该层失败，降级全图兜底。
                 Logger.LogDebug("[大地图定位] 第二层区块匹配异常(特征点不足)，降级: {Msg}", ex.Message);
@@ -2555,7 +2601,7 @@ public class TpTaskFastDrag
         {
             r256 = TpMapRegionMatch.GetBigMapPositionInRange(teyvat, greyBigMapMat, dragCenter, radiusGenshin);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             Logger.LogDebug("[大地图定位] 拖动先验区块匹配异常(特征点不足)，降级全图: {Msg}", ex.Message);
             r256 = default;
@@ -2648,7 +2694,7 @@ public class TpTaskFastDrag
                 scene.Type, priorGenshin.X, priorGenshin.Y, rImg, idx.Count);
             return scene.SiftMatcher.Match(subKps, subDesc, greyBigMapMat);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             Logger.LogDebug(ex, "[大地图定位] 非提瓦特先验局部匹配异常，降级全图: {Msg}", ex.Message);
             return default;
@@ -2722,7 +2768,7 @@ public class TpTaskFastDrag
                         p = scene.GetBigMapPosition(ra.CacheGreyMat); // 旧行为，逐字节不变
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
                 {
                     throw new MapPositionNotRecognizedException("大地图特征点匹配引发异常：" + ex.Message, ex);
                 }
@@ -2863,7 +2909,7 @@ public class TpTaskFastDrag
                 .Deserialize<List<SpecialAdjacentTpPoint>>(json)
                 ?? new List<SpecialAdjacentTpPoint>();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
         {
             // 解析失败：结构化告警 + 用户来源降级为空清单（内置清单仍生效）。
             // 绝不因用户清单坏掉而中断传送（可恢复，仍走内置 + 原路径）。
@@ -3204,16 +3250,8 @@ public class TpTaskFastDrag
     /// <returns></returns>
     public double GetBigMapZoomLevel(ImageRegion region)
     {
-        // 失败重试：原实现是死代码——底层 Bv.GetBigMapScale 在找不到缩放按钮时直接 throw，
-        // for 循环里 if(s>0) break 与「重试中」日志永远走不到，第一次就抛普通 Exception，
-        // 打断传送。现改为：捕获 throw 并重新截图重试（避免同一帧失败画面反复重试），
-        // 仍全部失败则返回显示档兜底值，绝不再向外裸抛普通 Exception 中断（复苏路径）。
-        //
-        // 兜底值语义（DisplayTpPointZoomLevel=4.4，普通地图显示档）：
-        //   - 普通地图：命中各调用点 if(zoomNow > display + threshold) 判据的反面 → 跳过本轮缩放微调，行为安全；
-        //   - 霜月/旧日之海：4.4 > 3.0 会触发一次「降到 ≤3.0」调整，而这两个地图的传送点本就仅 ≤3.0 渲染，
-        //     调整方向正确；
-        //   - 原实现失败时返回 6.0（最大缩小），那才是真正有害的（强制触发放大/认偏），本改动一并修正。
+        // 每次失败都重新截图；三次仍不能读取时交给环境恢复。
+        // 未知缩放不能伪装成 4.4，否则重试分支仍会按假坐标拖向 5.5/2.0。
         for (int i = 0; i < 3; i++)
         {
             using var ra = CaptureToRectArea();
@@ -3226,7 +3264,7 @@ public class TpTaskFastDrag
                 // 未识别时该方法会抛异常，由外层 catch 负责重试，因此这里不再用 s>0 判断成功。
                 return (-5 * s) + 6;
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException && ex is not NormalEndException && ex is not MapUiUnavailableException)
             {
                 TaskControl.Logger.LogWarning("获取大地图缩放级别失败（{Attempt}/3），原因：{Msg}，重试中...", i + 1, ex.Message);
                 TaskControl.Logger.LogDebug(ex, "GetBigMapScale 失败详情（{Attempt}/3）", i + 1);
@@ -3234,8 +3272,8 @@ public class TpTaskFastDrag
             Thread.Sleep(100);
         }
 
-        TaskControl.Logger.LogWarning("获取大地图缩放级别连续失败，返回显示档兜底值 {Zoom:0.00}，跳过本轮缩放微调", DisplayTpPointZoomLevel);
-        return DisplayTpPointZoomLevel;
+        TaskControl.Logger.LogWarning("获取大地图缩放级别连续失败，停止本次地图操作，等待确认地图后重新传送");
+        throw new MapUiUnavailableException("无法确认大地图缩放，禁止使用兜底坐标继续操作");
     }
 
     /// <summary>

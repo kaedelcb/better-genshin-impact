@@ -166,6 +166,7 @@ public partial class TaskControl
         {
             InputHub.ReleaseAll();
             foreach (var item in suspendables) item.Suspend();
+            SetTeleportStepPaused(true);
             Interlocked.Increment(ref _environmentPauseDepth);
             acknowledged = true;
             Logger.LogWarning("游戏操作连续无响应，保留当前步骤并检查环境；本次等待不计入任务重试");
@@ -207,7 +208,11 @@ public partial class TaskControl
             finally
             {
                 if (ownsRecoveryGate) _networkRecoveryGate.Release();
-                if (acknowledged) Interlocked.Decrement(ref _environmentPauseDepth);
+                if (acknowledged)
+                {
+                    Interlocked.Decrement(ref _environmentPauseDepth);
+                    SetTeleportStepPaused(false);
+                }
                 foreach (var item in suspendables) item.Resume();
                 RunnerContext.Instance.ResumeAutoPick();
             }
@@ -226,7 +231,7 @@ public partial class TaskControl
         _lastCheckTime = DateTime.UtcNow;
     }
 
-    // 调用方已经持有恢复门。真实开图、关图响应才允许继续原任务，不能仅凭派蒙图标放行。
+    // 调用方已经持有恢复门。确认地图后按任务归还界面：传送保留地图，其余任务返回主界面。
     private static async Task RecoverNetworkWithProtectionAsync(CancellationToken ct)
     {
         await new EnvironmentRecoveryWindow().WaitAsync(async token =>
@@ -237,14 +242,24 @@ public partial class TaskControl
                 RecoveryProbeToken.Value = token;
                 // 等主任务进入暂停点，避免恢复线程与正在移动/传送的任务同时发输入。
                 if (Volatile.Read(ref _environmentPauseDepth) == 0) return false;
+                var teleport = Volatile.Read(ref _activeTeleportStep);
+                // 旁路识图到达暂停点，不能代替正在传送的调用栈确认停手。
+                if (teleport != null && Volatile.Read(ref teleport.Paused) == 0) return false;
                 await PrepareNetworkRecoveryUiAsync(token);
                 var tp = new TpTaskFastDrag(token);
-                if (!await tp.ProbeMapForRecoveryAsync())
+                if (!await tp.ProbeMapForRecoveryAsync(teleport?.MapName, verifyExistingMapResponse: teleport != null))
                 {
                     Logger.LogWarning("[网络恢复] 尚未确认大地图可操作，保持暂停并重试");
                     return false;
                 }
-                if (!await CloseRecoveryMapAsync(token)) return false;
+                if (teleport == null)
+                {
+                    if (!await CloseRecoveryMapAsync(token)) return false;
+                }
+                else
+                {
+                    Logger.LogInformation("[网络恢复] 已确认大地图，保留地图并交回当前传送步骤");
+                }
                 token.ThrowIfCancellationRequested();
                 return true;
             }
@@ -312,7 +327,7 @@ public partial class TaskControl
         {
             try
             {
-                var responsive = await new TpTaskFastDrag(token).ProbeMapForRecoveryAsync()
+                var responsive = await new TpTaskFastDrag(token).ProbeMapForRecoveryAsync(verifyExistingMapResponse: false)
                                  && await CloseRecoveryMapAsync(token);
                 unresponsive |= !responsive;
                 return responsive;

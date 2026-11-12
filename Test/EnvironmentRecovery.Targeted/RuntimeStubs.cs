@@ -85,12 +85,19 @@ namespace BetterGenshinImpact.GameTask.Common
         private static Task<bool> IsEnvironmentNetworkReachableAsync(CancellationToken ct) => ReachableForTest(ct);
         private static Task CheckNetworkStatusAsync(CancellationToken ct) => Monitor(ct);
         public static void TriggerMonitor() => ScheduleNetworkCheck();
-        public static async Task RunNetworkRecoveryForTest(CancellationToken ct)
+        public static void PauseTeleportForTest(bool paused) => SetTeleportStepPaused(paused);
+        public static async Task RunNetworkRecoveryForTest(CancellationToken ct, bool acknowledgeTeleport = true)
         {
-            _environmentPauseDepth = 1; // 模拟主任务已在暂停点释放输入。
+            _environmentPauseDepth = 1; // 模拟任务已在暂停点释放输入。
+            if (acknowledgeTeleport) SetTeleportStepPaused(true);
             _inNetworkRecovery.Value = true;
             try { await RecoverNetworkWithProtectionAsync(ct); }
-            finally { _environmentPauseDepth = 0; _inNetworkRecovery.Value = false; }
+            finally
+            {
+                _environmentPauseDepth = 0;
+                SetTeleportStepPaused(false);
+                _inNetworkRecovery.Value = false;
+            }
         }
     }
 }
@@ -124,10 +131,12 @@ namespace BetterGenshinImpact.GameTask.AutoTrackPath
     {
         public static Func<CancellationToken, Task<bool>>? ProbeForTest;
         public static int ProbeCalls;
+        public static string? LastProbeMapNameForTest;
 
-        public Task<bool> ProbeMapForRecoveryAsync(string? mapName = null)
+        public Task<bool> ProbeMapForRecoveryAsync(string? mapName = null, bool verifyExistingMapResponse = true)
         {
             ct.ThrowIfCancellationRequested();
+            LastProbeMapNameForTest = mapName;
             Interlocked.Increment(ref ProbeCalls);
             return ProbeForTest?.Invoke(ct) ?? Task.FromResult(true);
         }

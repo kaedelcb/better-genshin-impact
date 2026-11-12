@@ -12,6 +12,85 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.CommonTests;
 public class NetworkRecoveryMapProbeTests
 {
     [Fact]
+    public async Task FrozenMapCannotBePublishedAsRecovered()
+    {
+        var inputs = 0;
+        var elapsed = 0;
+        var result = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => 0.4, (_, _) => { inputs++; return Task.FromResult(true); },
+            (ms, _) => { elapsed += ms; return Task.CompletedTask; }, CancellationToken.None);
+        Assert.False(result);
+        Assert.Equal(1, inputs);
+        Assert.Equal(1800, elapsed);
+    }
+
+    [Fact]
+    public async Task MapResponseWaitsForNewFramesWithoutRepeatedZoomInput()
+    {
+        var elapsed = 0;
+        var inputs = 0;
+        var result = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => elapsed < 600 ? 0.4 : 0.5,
+            (before, _) => { Assert.Equal(0.4, before); inputs++; return Task.FromResult(true); },
+            (ms, _) => { elapsed += ms; return Task.CompletedTask; }, CancellationToken.None);
+        Assert.True(result);
+        Assert.Equal(1, inputs);
+        Assert.Equal(750, elapsed);
+    }
+
+    [Fact]
+    public async Task SingleChangedFrameDoesNotReleaseMapRecovery()
+    {
+        var samples = new Queue<double?>(new double?[] { 0.4, 0.5, null, 0.4 });
+        var result = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => samples.Count > 0 ? samples.Dequeue() : 0.4,
+            (_, _) => Task.FromResult(true), (_, _) => Task.CompletedTask, CancellationToken.None);
+        Assert.False(result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(double.NaN)]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public async Task UnknownScaleCannotCauseAnyMapInput(double? scale)
+    {
+        var result = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => scale, (_, _) => throw new Exception("未知缩放不能发送输入"),
+            (_, _) => throw new Exception("不应进入响应等待"), CancellationToken.None);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task LostInputTargetCannotPublishMapRecovery()
+    {
+        var result = await NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => 0.4, (_, _) => Task.FromResult(false),
+            (_, _) => throw new Exception("输入目标不符不能等待假成功"), CancellationToken.None);
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task StopDuringMapCapturePreventsZoomInput()
+    {
+        using var stop = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => { stop.Cancel(); return 0.4; }, (_, _) => throw new Exception("停止后不能发送输入"),
+            (_, _) => Task.CompletedTask, stop.Token));
+    }
+
+    [Fact]
+    public async Task StopDuringMapResponsePreventsSuccess()
+    {
+        using var stop = new CancellationTokenSource();
+        var captures = 0;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => NetworkRecoveryMapProbe.VerifyScaleResponseAsync(
+            () => { if (++captures == 3) stop.Cancel(); return captures == 1 ? 0.4 : 0.5; },
+            (_, _) => Task.FromResult(true), (_, _) => Task.CompletedTask, stop.Token));
+        Assert.Equal(3, captures);
+    }
+
+    [Fact]
     public async Task SlowCloseAnimationSucceedsWithoutPressingEscapeAgain()
     {
         var elapsed = 0;
