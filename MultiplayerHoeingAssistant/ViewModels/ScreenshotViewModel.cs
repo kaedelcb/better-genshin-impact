@@ -647,9 +647,17 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         }
     }
 
-    public string ControlNotice => "输入作用于对方当前桌面；BGI 或本机鼠标同时操作可能干扰，可手动暂停 BGI；不支持锁屏/UAC 安全桌面";
+    public string ControlNotice => "操作对方桌面；BGI 干扰可手动暂停；不支持锁屏/UAC";
     private string _controlStatusText = "控制模式默认关闭；仅最新画面可控，每个被控端两秒一次";
-    public string ControlStatusText { get => _controlStatusText; private set => SetProperty(ref _controlStatusText, value); }
+    public string ControlStatusText
+    {
+        get => _controlStatusText;
+        private set
+        {
+            if (SetProperty(ref _controlStatusText, value)) OnPropertyChanged(nameof(ControlLineText));
+        }
+    }
+    public string ControlLineText => IsControlMode ? $"{ControlStatusText} · {ControlNotice}" : ControlStatusText;
     public bool ControlBusy => _controlBusy;
     public bool CanRefresh => !_controlBusy;
     public bool CanToggleControl => IsControlMode || CanEnableControl;
@@ -755,7 +763,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 return;
             }
             executed = result.Status == "executed";
-            ControlStatusText = executed ? "系统已接受输入；请以刷新画面确认效果"
+            ControlStatusText = executed ? "系统已接受输入，请刷新确认"
                 : $"输入结果：{result.Status} · {result.Message}；请刷新画面后再操作";
             if (executed)
                 await Task.Delay(ControlRefreshDelay, _timeProvider, cancellation.Token);
@@ -821,6 +829,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private void NotifyControlState()
     {
         OnPropertyChanged(nameof(IsControlMode));
+        OnPropertyChanged(nameof(ControlLineText));
         OnPropertyChanged(nameof(CanEnableControl));
         OnPropertyChanged(nameof(CanToggleControl));
         OnPropertyChanged(nameof(CanSendControl));
@@ -965,6 +974,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>房间内桌面可见性提示。</summary>
     public string PrivacyNote => _sessionExpired ? SessionExpiredText
         : "加入房间后，成员可按需查看彼此的桌面；画面只发给请求者；每次进入最多查看 3 分钟";
+    public string PrivacySummary => _sessionExpired ? "本次已到期 · 重新进入" : "按需共享 · 单次 3 分钟";
 
     private string _statusText = "";
     public string StatusText { get => _statusText; set => SetProperty(ref _statusText, value); }
@@ -1009,6 +1019,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         _lastRequests.Clear();
         StatusText = "每次进入桌面监控最多查看 3 分钟";
         OnPropertyChanged(nameof(PrivacyNote));
+        OnPropertyChanged(nameof(PrivacySummary));
         var sessionId = _sessionId;
         _sessionTimer = _timeProvider.CreateTimer(_ =>
         {
@@ -1048,6 +1059,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         _pendingRequests.Clear();
         StatusText = SessionExpiredText;
         OnPropertyChanged(nameof(PrivacyNote));
+        OnPropertyChanged(nameof(PrivacySummary));
         return false;
     }
 

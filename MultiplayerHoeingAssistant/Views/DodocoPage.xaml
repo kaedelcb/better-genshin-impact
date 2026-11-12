@@ -1374,59 +1374,67 @@
 
                 <!-- 工具栏 -->
                 <Border Grid.Row="0" Style="{DynamicResource QuestCard}" Padding="10,8" Margin="0,0,0,8">
-                    <WrapPanel>
-                        <TextBlock Text="画面源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <ComboBox Width="180" ItemsSource="{Binding Monitor.MonitorOptions}" SelectedItem="{Binding Monitor.SelectedMonitor}"
-                                  DisplayMemberPath="Label"
-                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                  VerticalAlignment="Center" Margin="0,0,12,0"
-                                  ToolTip="全员同屏、本机主屏或单个远程成员画面"/>
-                        <Button Content="{Binding Monitor.CaptureButtonText}" Style="{DynamicResource BtnGold}" Padding="12,5"
-                                Command="{Binding Monitor.CaptureCommand}" IsEnabled="{Binding Monitor.CanRefresh}" Margin="0,0,12,0"/>
-                        <CheckBox Content="自动刷新" IsChecked="{Binding Monitor.AutoRefresh, Mode=TwoWay}"
-                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
-                                  ToolTip="全员同屏时按间隔刷新所有在线画面；离开本页自动停止"/>
-                        <ComboBox Width="76" SelectedIndex="{Binding Monitor.IntervalIndex}"
-                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                  VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="自动刷新间隔">
-                            <ComboBoxItem Content="1 秒" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="3 秒" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="5 秒" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="10 秒" Style="{DynamicResource GoldComboItem}"/>
-                        </ComboBox>
-                        <Button x:Name="MonitorBgiHotkeyButton" Content="BGI 快捷功能" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Click="MonitorBgiHotkey_Click" Margin="0,0,6,0"
-                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
-                                ToolTip="复用耕地机的快捷键选择与执行，可手动暂停或停止所选成员的 BGI；无需开启桌面点击控制"/>
-                        <Button Content="清空历史" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,6,0"
-                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"/>
-                        <Button Content="🔍 放大" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Click="MonitorZoom_Click" Margin="0,0,6,0"
-                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
-                                ToolTip="放大查看当前画面（滚轮缩放，也可直接点击大图）"/>
-                        <Button Content="⬇ 下载" Style="{DynamicResource BtnGhost}" Padding="10,4"
-                                Command="{Binding Monitor.SaveFrameCommand}" Margin="0,0,12,0"
-                                Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
-                                ToolTip="把当前大图的 JPEG 原帧保存到本机（远程画面为对方共享的压缩图）"/>
-                        <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
-                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
-                                  Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
-                                  VerticalAlignment="Center" Margin="0,0,12,0"
-                                  ToolTip="共享画质（被请求时上传的截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
-                            <ComboBoxItem Content="480px" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="960px" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="1280px" Style="{DynamicResource GoldComboItem}"/>
-                            <ComboBoxItem Content="1920px" Style="{DynamicResource GoldComboItem}"/>
-                        </ComboBox>
-                        <TextBlock Text="{Binding Monitor.PrivacyNote}" FontSize="10" Foreground="{DynamicResource Dim}"
-                                   VerticalAlignment="Center"/>
-                        <CheckBox x:Name="AllowDesktopControlToggle" Content="允许控制本机桌面"
-                                  IsChecked="{Binding Monitor.AllowDesktopControl, Mode=TwoWay}"
-                                  Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
-                                  Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="12,0,0,0"
-                                  ToolTip="独立接收授权，默认关闭；开启后允许低频操作本机当前主屏，不会自动暂停或恢复 BGI"/>
-                    </WrapPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <WrapPanel>
+                            <TextBlock Text="画面源" FontSize="11" Foreground="{DynamicResource Dim}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <ComboBox Width="180" ItemsSource="{Binding Monitor.MonitorOptions}" SelectedItem="{Binding Monitor.SelectedMonitor}"
+                                      DisplayMemberPath="Label"
+                                      Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                      VerticalAlignment="Center" Margin="0,0,12,0"
+                                      ToolTip="全员同屏、本机主屏或单个远程成员画面"/>
+                            <Button Content="{Binding Monitor.CaptureButtonText}" Style="{DynamicResource BtnGold}" Padding="12,5"
+                                    Command="{Binding Monitor.CaptureCommand}" IsEnabled="{Binding Monitor.CanRefresh}" Margin="0,0,12,0"/>
+                            <CheckBox Content="自动刷新" IsChecked="{Binding Monitor.AutoRefresh, Mode=TwoWay}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                      ToolTip="全员同屏时按间隔刷新所有在线画面；离开本页自动停止"/>
+                            <ComboBox Width="76" SelectedIndex="{Binding Monitor.IntervalIndex}"
+                                      Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                      VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="自动刷新间隔">
+                                <ComboBoxItem Content="1 秒" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="3 秒" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="5 秒" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="10 秒" Style="{DynamicResource GoldComboItem}"/>
+                            </ComboBox>
+                            <Button x:Name="MonitorBgiHotkeyButton" Content="BGI 快捷功能" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                    Click="MonitorBgiHotkey_Click" Margin="0,0,6,0"
+                                    Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="复用耕地机的快捷键选择与执行，可手动暂停或停止所选成员的 BGI；无需开启桌面点击控制"/>
+                            <Button Content="清空历史" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                    Command="{Binding Monitor.ClearHistoryCommand}" Margin="0,0,6,0"
+                                    Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"/>
+                            <Button Content="🔍 放大" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                    Click="MonitorZoom_Click" Margin="0,0,6,0"
+                                    Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="放大查看当前画面（滚轮缩放，也可直接点击大图）"/>
+                            <Button Content="⬇ 下载" Style="{DynamicResource BtnGhost}" Padding="10,4"
+                                    Command="{Binding Monitor.SaveFrameCommand}" Margin="0,0,12,0"
+                                    Visibility="{Binding Monitor.IsSingleSelected, Converter={StaticResource BoolToVis}}"
+                                    ToolTip="把当前大图的 JPEG 原帧保存到本机（远程画面为对方共享的压缩图）"/>
+                            <ComboBox Width="92" SelectedIndex="{Binding ShareScreenshotWidthIndex}"
+                                      Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
+                                      Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
+                                      VerticalAlignment="Center" Margin="0,0,12,0"
+                                      ToolTip="共享画质（被请求时上传的截图宽度，高度等比）：越大越清晰、越费带宽；1280 可看清屏上文字">
+                                <ComboBoxItem Content="480px" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="960px" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="1280px" Style="{DynamicResource GoldComboItem}"/>
+                                <ComboBoxItem Content="1920px" Style="{DynamicResource GoldComboItem}"/>
+                            </ComboBox>
+                            <CheckBox x:Name="AllowDesktopControlToggle" Content="允许控制本机桌面"
+                                      IsChecked="{Binding Monitor.AllowDesktopControl, Mode=TwoWay}"
+                                      Visibility="{Binding IsExecutorMode, Converter={StaticResource BoolToVis}}"
+                                      Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                      ToolTip="独立接收授权，默认关闭；开启后允许低频操作本机当前主屏，不会自动暂停或恢复 BGI"/>
+                        </WrapPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding Monitor.PrivacySummary}" FontSize="10" Foreground="{DynamicResource Dim}"
+                                   VerticalAlignment="Center" Margin="12,0,0,0" MaxWidth="180"
+                                   TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding Monitor.PrivacyNote}"/>
+                    </Grid>
                 </Border>
 
                 <!-- 有画面的成员占满主区域；离线/等待首帧的成员在底部紧凑显示 -->
@@ -1529,24 +1537,28 @@
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <StackPanel Grid.Row="0" Margin="0,0,0,6">
-                            <WrapPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
                                 <CheckBox x:Name="DesktopControlModeToggle" Content="控制模式"
                                           IsChecked="{Binding Monitor.IsControlMode, Mode=TwoWay}"
                                           IsEnabled="{Binding Monitor.CanToggleControl}"
                                           Style="{DynamicResource GuildCheckBox}" VerticalAlignment="Center" Margin="0,0,12,0"
                                           ToolTip="仅已授权且新鲜的最新画面可控；切成员、历史、离开或三分钟到期会自动关闭"/>
-                                <TextBlock Text="鼠标方式" FontSize="11" Foreground="{DynamicResource Dim}"
+                                <TextBlock Grid.Column="1" Text="鼠标方式" FontSize="11" Foreground="{DynamicResource Dim}"
                                            VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <ComboBox x:Name="DesktopMouseAction" Width="76" ItemsSource="{Binding Monitor.MouseActions}"
+                                <ComboBox x:Name="DesktopMouseAction" Grid.Column="2" Width="76" ItemsSource="{Binding Monitor.MouseActions}"
                                           SelectedIndex="{Binding Monitor.MouseActionIndex}" IsEnabled="{Binding Monitor.IsControlMode}"
                                           Style="{StaticResource GoldComboBox}" ItemContainerStyle="{StaticResource GoldComboItem}"
                                           VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                <TextBlock Text="{Binding Monitor.ControlStatusText}" FontSize="10" Foreground="{DynamicResource Dim}"
-                                           VerticalAlignment="Center" TextWrapping="Wrap"/>
-                            </WrapPanel>
-                            <TextBlock Text="{Binding Monitor.ControlNotice}" FontSize="10" Foreground="{DynamicResource Dim}"
-                                       TextWrapping="Wrap" Margin="0,4,0,2"
-                                       Visibility="{Binding Monitor.IsControlMode, Converter={StaticResource BoolToVis}}"/>
+                                <TextBlock Grid.Column="3" Text="{Binding Monitor.ControlLineText}" FontSize="10" Foreground="{DynamicResource Dim}"
+                                           VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding Monitor.ControlLineText}"/>
+                            </Grid>
                             <ItemsControl x:Name="DesktopControlKeys" ItemsSource="{Binding Monitor.ControlKeys}"
                                           Visibility="{Binding Monitor.IsControlMode, Converter={StaticResource BoolToVis}}">
                                 <ItemsControl.ItemsPanel>
