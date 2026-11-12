@@ -11,6 +11,54 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public class DesktopControlServiceTests
 {
     [Fact]
+    public async Task InputRequiresMatchingActivePresenceAndRevocationEndsIt()
+    {
+        using var f = new DesktopControlFixture(); f.Allow();
+        var command = f.Command() with { ControlId = Guid.NewGuid().ToString("N") };
+        Assert.Equal("denied", (await f.Control.ExecuteLocalAsync(command, f.Deadline)).Status);
+        var active = f.Command();
+        Assert.Equal("executed", (await f.Control.ExecuteLocalAsync(active, f.Deadline)).Status);
+        f.Settings.Update(x => x.AllowDesktopControl = false);
+        Assert.False(f.Presence.IsActive("local-pc", active.ControlId));
+        Assert.Equal(1, f.Sender.Calls);
+    }
+
+    [Fact]
+    public async Task BrowserOwnersAreIndependentAndExpiredRenewCannotRevive()
+    {
+        using var f = new DesktopControlFixture(); f.Allow();
+        var frame = f.Capture().FrameId;
+        DesktopControlPresenceRequest Request(string id, string action) => new()
+        { RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = frame, ControlId = id, Action = action,
+            ExpiresAtUtc = f.Deadline };
+        var first = Guid.NewGuid().ToString("N");
+        var second = Guid.NewGuid().ToString("N");
+        Assert.Equal("active", (await f.Control.ChangeBrowserPresenceAsync("a", Request(first, "start"))).Status);
+        Assert.Equal("active", (await f.Control.ChangeBrowserPresenceAsync("b", Request(second, "start"))).Status);
+        await f.Control.ClearBrowserPresenceAsync("a");
+        Assert.False(f.Presence.IsActive("browser:a:", first));
+        Assert.True(f.Presence.IsActive("browser:b:", second));
+        f.Clock.Advance(DesktopControlProtocol.PresenceLifetime);
+        Assert.Equal("denied", (await f.Control.ChangeBrowserPresenceAsync("b", Request(second, "renew"))).Status);
+        Assert.Equal("denied", (await f.Control.ChangeBrowserPresenceAsync("a", Request(first, "start"))).Status);
+    }
+
+    [Fact]
+    public async Task ExpiredBrowserPresenceStartCannotShowIndicator()
+    {
+        using var f = new DesktopControlFixture(); f.Allow();
+        var request = new DesktopControlPresenceRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = f.Capture().FrameId,
+            ControlId = Guid.NewGuid().ToString("N"), Action = "start", ExpiresAtUtc = f.Deadline
+        };
+        f.Clock.Advance(DesktopControlProtocol.RequestLifetime);
+        Assert.Equal("denied", (await f.Control.ChangeBrowserPresenceAsync("a", request)).Status);
+        Assert.False(f.Presence.IsActive("browser:a:", request.ControlId));
+        Assert.Equal("ended", (await f.Control.ChangeBrowserPresenceAsync("a", request with { Action = "end" })).Status);
+    }
+
+    [Fact]
     public async Task PermissionDefaultsOffAndSnapshotCannotEnableIt()
     {
         using var f = new DesktopControlFixture();
@@ -246,6 +294,57 @@ public class DesktopControlServiceTests
     }
 
     [Fact]
+    public async Task DelayedRemotePresenceStartUsesCaptureRelativeDeadline()
+    {
+        using var f = new DesktopControlFixture(); f.Allow();
+        f.Client = new FakeDesktopControlClient(); f.Control.EnsureHooked();
+        var command = f.RemoteCommand();
+        var id = Guid.NewGuid().ToString("N");
+        f.Clock.Advance(TimeSpan.FromSeconds(4));
+        f.Client.PresenceRequest(new DesktopControlPresenceRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"), TargetUid = f.Client.Uid, RoomCode = f.Client.Room,
+            RequesterConnectionId = "viewer", FrameId = command.FrameId, ControlId = id,
+            Action = "start", FrameAgeMilliseconds = 0, LifetimeMilliseconds = 12000
+        });
+        Assert.Equal("denied", (await f.Client.NextPresenceReport()).Status);
+        Assert.False(f.Presence.IsActive($"remote:{f.Client.DesktopControlContext}:viewer:", id));
+    }
+
+    [Fact]
+    public async Task PresenceAckWaitsForMatchingActiveAndTimesOutWithoutIt()
+    {
+        using var f = new DesktopControlFixture(); f.Client = new FakeDesktopControlClient();
+        var id = Guid.NewGuid().ToString("N");
+        var waiting = f.Control.StartPresenceAsync("target-uid", "frame", id);
+        var request = Assert.Single(f.Client.PresenceSent);
+        Assert.False(waiting.IsCompleted);
+        f.Client.PresenceResult(new() { RequestId = request.RequestId, ControlId = id, TargetUid = request.TargetUid, Status = "active" });
+        Assert.Equal("active", (await waiting).Status);
+        var renewal = f.Control.RenewPresenceAsync("target-uid", "frame", id);
+        f.Clock.Advance(DesktopControlProtocol.RequestLifetime);
+        Assert.Equal("denied", (await renewal).Status);
+    }
+
+    [Fact]
+    public async Task PresenceAckRequiresMatchingTargetConfirmationAndDisconnectRejectsLateResult()
+    {
+        using var f = new DesktopControlFixture(); f.Client = new FakeDesktopControlClient();
+        var id = Guid.NewGuid().ToString("N");
+        var waiting = f.Control.StartPresenceAsync("target-uid", "frame", id);
+        var request = Assert.Single(f.Client.PresenceSent);
+        Assert.False(waiting.IsCompleted);
+        f.Client.PresenceResult(new() { RequestId = request.RequestId, ControlId = id, TargetUid = "other", Status = "active" });
+        Assert.False(waiting.IsCompleted);
+        f.Client.PresenceResult(new() { RequestId = request.RequestId, ControlId = Guid.NewGuid().ToString("N"), TargetUid = request.TargetUid, Status = "active" });
+        Assert.False(waiting.IsCompleted);
+        f.Client.Ready = false;
+        f.Client.RetireForReplacement();
+        Assert.Equal("denied", (await waiting).Status);
+        f.Client.PresenceResult(new() { RequestId = request.RequestId, ControlId = id, TargetUid = request.TargetUid, Status = "active" });
+    }
+
+    [Fact]
     public async Task AcceptedAckDoesNotCompleteViewerUntilMatchingResult()
     {
         using var f = new DesktopControlFixture();
@@ -267,12 +366,32 @@ public class DesktopControlServiceTests
     public async Task ViewerTimesOutAsUnknownAndCancelsWithoutRetry()
     {
         using var f = new DesktopControlFixture(); f.Client = new FakeDesktopControlClient();
-        var waiting = f.Control.RequestAsync(f.RemoteCommand());
+        var command = f.RemoteCommand();
+        var waiting = f.Control.RequestAsync(command);
         Assert.False(waiting.IsCompleted);
         f.Clock.Advance(TimeSpan.FromSeconds(3));
         Assert.Equal("unknown", (await waiting).Status);
         Assert.Single(f.Client.Sent);
-        Assert.Single(f.Client.CancelledSessions);
+        var cancel = Assert.Single(f.Client.CancelledSessions);
+        Assert.Equal(command.ControlId, cancel.ControlId);
+        Assert.Equal(command.RequestId, cancel.RequestId);
+    }
+
+    [Fact]
+    public async Task OldControlCancellation_DoesNotCancelNewPendingControl()
+    {
+        using var f = new DesktopControlFixture(); f.Client = new FakeDesktopControlClient();
+        var old = f.RemoteCommand();
+        var current = old with { RequestId = Guid.NewGuid().ToString("N"), ControlId = Guid.NewGuid().ToString("N") };
+        var oldWait = f.Control.RequestAsync(old);
+        var currentWait = f.Control.RequestAsync(current);
+        var session = old.FrameId.Substring(7, 32);
+        await f.Control.CancelAsync(session, old.TargetUid, old.ControlId);
+        Assert.Equal("cancelled", (await oldWait).Status);
+        Assert.False(currentWait.IsCompleted);
+        Assert.All(f.Client.CancelledSessions, cancel => Assert.Equal(old.ControlId, cancel.ControlId));
+        f.Client.Result(new() { RequestId = current.RequestId, TargetUid = current.TargetUid, Status = "executed" });
+        Assert.Equal("executed", (await currentWait).Status);
     }
 
     [Fact]
@@ -370,6 +489,7 @@ internal sealed class DesktopControlFixture : IDisposable
     public ScreenshotService Screenshots { get; }
     public DesktopControlService Control { get; }
     public FakeDesktopSender Sender { get; } = new();
+    public FakeControlPresence Presence { get; }
     public FakeDesktopControlClient? Client;
     public Action? GeometryProbe;
     public DesktopCaptureGeometry Geometry = new() { Left = 0, Top = 0, Width = 3840, Height = 2160, DisplayId = "primary", LayoutId = "layout-150-percent" };
@@ -381,21 +501,30 @@ internal sealed class DesktopControlFixture : IDisposable
         Settings = new DodocoSettingsService(Root);
         Screenshots = new ScreenshotService(() => 1280, Clock, () => { GeometryProbe?.Invoke(); return Geometry; },
             (_, _) => new ScreenFrame { JpegBytes = [1, 2, 3], Width = 1280, Height = 720, Geometry = Geometry });
-        Control = new DesktopControlService(Screenshots, Settings, () => Client, Sender, Clock);
+        Presence = new FakeControlPresence(Clock);
+        Control = new DesktopControlService(Screenshots, Settings, () => Client, Sender, Clock, Presence);
     }
     public void Allow() => Settings.Update(x => x.AllowDesktopControl = true);
     public ScreenFrame Capture() => Screenshots.Capture()!;
-    public DesktopControlCommand Command(ScreenFrame? frame = null) => new()
+    public DesktopControlCommand Command(ScreenFrame? frame = null)
     {
-        RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = (frame ?? Capture()).FrameId,
-        Action = "key", Key = "Win+D"
-    };
+        var id = Guid.NewGuid().ToString("N");
+        Presence.ActivateAsync("local-pc", id, DesktopControlProtocol.PresenceLifetime, false).GetAwaiter().GetResult();
+        return new DesktopControlCommand
+        {
+            RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = (frame ?? Capture()).FrameId,
+            ControlId = id, Action = "key", Key = "Win+D"
+        };
+    }
     public DesktopControlCommand RemoteCommand()
     {
         var frame = Capture();
         var id = MemberScreenshotRelayService.CreateRequestId(Guid.NewGuid().ToString("N"));
         Screenshots.RememberControlFrame(id, frame.Geometry!, Client!.DesktopControlContext);
-        return Command(frame) with { TargetUid = Client.DesktopControlUid, FrameId = id };
+        var command = Command(frame) with { TargetUid = Client.DesktopControlUid, FrameId = id };
+        Presence.ActivateAsync($"remote:{Client.DesktopControlContext}:viewer:", command.ControlId,
+            DesktopControlProtocol.PresenceLifetime, false).GetAwaiter().GetResult();
+        return command;
     }
     public void Dispose()
     {
@@ -403,6 +532,42 @@ internal sealed class DesktopControlFixture : IDisposable
         // 本夹具只写自身新建的设置目录，失败日志由外层受控测试命令保留。
         if (Directory.Exists(Root)) Directory.Delete(Root, true);
     }
+}
+
+internal sealed class FakeControlPresence(TimeProvider time) : IRemoteControlPresence
+{
+    private readonly object _gate = new();
+    private readonly Dictionary<(string Owner, string Id), long> _active = new();
+    private readonly HashSet<(string Owner, string Id)> _ended = new();
+    public Task<bool> ActivateAsync(string owner, string controlId, TimeSpan lifetime, bool renewOnly, CancellationToken cancellationToken = default)
+    {
+        lock (_gate)
+        {
+            var key = (owner, controlId);
+            if (cancellationToken.IsCancellationRequested || _ended.Contains(key) || (renewOnly && !IsActive(owner, controlId)))
+                return Task.FromResult(false);
+            _active[key] = time.GetTimestamp() + (long)(lifetime.TotalSeconds * time.TimestampFrequency);
+            return Task.FromResult(true);
+        }
+    }
+    public Task DeactivateAsync(string owner, string controlId)
+    {
+        lock (_gate) { _ended.Add((owner, controlId)); _active.Remove((owner, controlId)); }
+        return Task.CompletedTask;
+    }
+    public Task ClearOwnerPrefixAsync(string prefix)
+    {
+        lock (_gate)
+            foreach (var key in _active.Keys.Where(x => x.Owner.StartsWith(prefix, StringComparison.Ordinal)).ToArray())
+            { _active.Remove(key); _ended.Add(key); }
+        return Task.CompletedTask;
+    }
+    public Task ClearAsync() => ClearOwnerPrefixAsync("");
+    public bool IsActive(string owner, string controlId)
+    {
+        lock (_gate) return _active.TryGetValue((owner, controlId), out var until) && time.GetTimestamp() < until;
+    }
+    public void Dispose() => ClearAsync();
 }
 
 internal sealed class FakeDesktopSender : DesktopInputSender
@@ -425,18 +590,27 @@ internal sealed class FakeDesktopControlClient : SignalRClient
     public string Room = "room-a";
     public string Uid = "target-uid";
     public readonly ConcurrentQueue<DesktopControlCommand> Sent = new();
-    public readonly ConcurrentQueue<string> CancelledSessions = new();
+    public readonly ConcurrentQueue<DesktopControlPresenceRequest> PresenceSent = new();
+    public readonly ConcurrentQueue<(string Session, string Target, string ControlId, string? RequestId)> CancelledSessions = new();
     private readonly Channel<DesktopControlResult> _reports = Channel.CreateUnbounded<DesktopControlResult>();
+    private readonly Channel<DesktopControlPresenceResult> _presenceReports = Channel.CreateUnbounded<DesktopControlPresenceResult>();
     internal override bool DesktopControlReady => Ready;
     internal override long DesktopControlEpoch => Epoch;
     internal override string DesktopControlRoomCode => Room;
     internal override string DesktopControlUid => Uid;
     public override Task RequestDesktopControlAsync(DesktopControlCommand command, CancellationToken cancellationToken = default)
     { Sent.Enqueue(command); return Task.CompletedTask; }
+    public override Task RequestDesktopControlPresenceAsync(DesktopControlPresenceRequest request, CancellationToken cancellationToken = default)
+    { PresenceSent.Enqueue(request); return Task.CompletedTask; }
+    public void PresenceResult(DesktopControlPresenceResult result) => Event("desktop.control.presence.result", result);
+    public void PresenceRequest(DesktopControlPresenceRequest request) => Event("desktop.control.presence.requested", request);
+    public override Task ReportDesktopControlPresenceAsync(DesktopControlPresenceResult result, CancellationToken cancellationToken = default)
+    { _presenceReports.Writer.TryWrite(result); return Task.CompletedTask; }
+    public Task<DesktopControlPresenceResult> NextPresenceReport() => _presenceReports.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
     public override Task ReportDesktopControlAsync(DesktopControlResult result, CancellationToken cancellationToken = default)
     { _reports.Writer.TryWrite(result); return Task.CompletedTask; }
-    public override Task CancelDesktopControlAsync(string sessionId, string? targetUid = null, CancellationToken cancellationToken = default)
-    { CancelledSessions.Enqueue(sessionId); return Task.CompletedTask; }
+    public override Task CancelDesktopControlAsync(string sessionId, string targetUid, string controlId, string? requestId = null, CancellationToken cancellationToken = default)
+    { CancelledSessions.Enqueue((sessionId, targetUid, controlId, requestId)); return Task.CompletedTask; }
     public Task<DesktopControlResult> NextReport() => _reports.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
     public void Request(DesktopControlCommand command, DateTimeOffset deadline,
         double frameAgeMilliseconds = 0, double lifetimeMilliseconds = 3000)

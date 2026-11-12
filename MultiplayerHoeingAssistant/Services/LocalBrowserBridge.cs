@@ -31,6 +31,7 @@ internal sealed class LocalBrowserBridge : IDisposable
     private readonly Func<LocalBrowserRequest, CancellationToken, Task<LocalBrowserResult>> _handler;
     private readonly Action<string>? _sessionEnded;
     private readonly Action<string>? _report;
+    private readonly TimeProvider _claimClock;
     private readonly string _instanceId = NewSecret();
     private readonly Task _acceptLoop;
     private int _disposed;
@@ -41,12 +42,13 @@ internal sealed class LocalBrowserBridge : IDisposable
         public readonly ConcurrentDictionary<string, Claim> Claims = new(StringComparer.Ordinal);
         public long LastSeenTicks = DateTimeOffset.UtcNow.UtcTicks;
     }
-    private sealed record Claim(string Fingerprint, Task<LocalBrowserResult> Task, bool ReadOnly, DateTimeOffset Created);
+    private sealed record Claim(string Fingerprint, Task<LocalBrowserResult> Task, bool CanExpire, DateTimeOffset Created);
     private sealed record HttpRequest(string Method, string Path, Dictionary<string, string> Headers, byte[] Body);
 
     public LocalBrowserBridge(Func<LocalBrowserRequest, CancellationToken, Task<LocalBrowserResult>> handler,
-        Action<string>? sessionEnded = null, Action<string>? report = null)
+        Action<string>? sessionEnded = null, Action<string>? report = null, TimeProvider? claimClock = null)
     {
+        _claimClock = claimClock ?? TimeProvider.System;
         _handler = handler ?? throw new ArgumentNullException(nameof(handler));
         _sessionEnded = sessionEnded;
         _report = report;
@@ -162,14 +164,14 @@ internal sealed class LocalBrowserBridge : IDisposable
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(operation + "\n" + args.ToJsonString())));
         if (session.Claims.Count >= 256)
             foreach (var item in session.Claims)
-                if (item.Value.ReadOnly && item.Value.Task.IsCompleted && DateTimeOffset.UtcNow - item.Value.Created > TimeSpan.FromSeconds(30))
+                if (item.Value.CanExpire && item.Value.Task.IsCompleted && _claimClock.GetUtcNow() - item.Value.Created > TimeSpan.FromSeconds(30))
                     ((ICollection<KeyValuePair<string, Claim>>)session.Claims).Remove(item);
         if (session.Claims.Count >= MaxClaims && !session.Claims.ContainsKey(requestId))
             return new { requestId, status = "error", message = "本机会话请求数已达上限，请重新打开", data = (object?)null };
         // Create the actual task only after winning the claim; ConcurrentDictionary.GetOrAdd can run
         // a factory multiple times, which would execute a mutating request more than once.
         var completion = new TaskCompletionSource<LocalBrowserResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var candidate = new Claim(fingerprint, completion.Task, IsReadOnly(operation), DateTimeOffset.UtcNow);
+        var candidate = new Claim(fingerprint, completion.Task, CanExpireClaim(operation), _claimClock.GetUtcNow());
         if (session.Claims.TryAdd(requestId, candidate))
             _ = RunClaimAsync(sessionId, session, requestId, operation, (JsonObject)args.DeepClone(), completion);
         var claim = session.Claims[requestId];
@@ -198,9 +200,11 @@ internal sealed class LocalBrowserBridge : IDisposable
         catch (Exception ex) { completion.TrySetResult(new("unknown", "本机操作未能确认：" + ex.Message)); }
     }
 
-    private static bool IsReadOnly(string operation) => operation is "local.identity" or "log.poll" or "log.files" or "log.chunk"
+    // Presence starts and renewals have their own three-second deadline, and end is
+    // scoped to a unique control ID. Completed claims can therefore expire safely.
+    private static bool CanExpireClaim(string operation) => operation is "local.identity" or "log.poll" or "log.files" or "log.chunk"
         or "screenshot.capture" or "watch.read" or "watch.records" or "watch.incidents" or "watch.frame"
-        or "report.dates" or "report.day" or "watch.diagnostic.chunk" or "mistletoe.read";
+        or "report.dates" or "report.day" or "watch.diagnostic.chunk" or "mistletoe.read" or "desktop.control.presence";
 
     private static bool ValidToken(string value) => value.Length is > 0 and <= 128 &&
         value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-');

@@ -1,5 +1,6 @@
 using BgiCoordinatorServer.Models;
 using MultiplayerHoeingAssistant.Services.Gateway;
+using System.Windows.Threading;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -12,6 +13,10 @@ public class DesktopControlService : IDisposable
     private readonly Func<SignalRClient?> _clientProvider;
     private readonly DesktopInputSender _sender;
     private readonly TimeProvider _time;
+    private readonly IRemoteControlPresence _presence;
+    private readonly Dictionary<string, (DesktopControlPresenceRequest Request, TaskCompletionSource<DesktopControlPresenceResult> Completion)> _presencePending = new(StringComparer.Ordinal);
+    private Action<DesktopControlPresenceRequest>? _presenceRequested;
+    private Action<DesktopControlPresenceResult>? _presenceResult;
     private readonly object _state = new();
     private readonly SemaphoreSlim _execution = new(1, 1);
     private readonly Dictionary<string, Claim> _claims = new(StringComparer.Ordinal);
@@ -46,11 +51,13 @@ public class DesktopControlService : IDisposable
     }
 
     public DesktopControlService(ScreenshotService screenshots, DodocoSettingsService settings,
-        Func<SignalRClient?> clientProvider, DesktopInputSender? inputSender = null, TimeProvider? timeProvider = null)
+        Func<SignalRClient?> clientProvider, DesktopInputSender? inputSender = null, TimeProvider? timeProvider = null,
+        IRemoteControlPresence? presence = null)
     {
         (_screenshots, _settings, _clientProvider) = (screenshots, settings, clientProvider);
         _sender = inputSender ?? new DesktopInputSender();
         _time = timeProvider ?? TimeProvider.System;
+        _presence = presence ?? new RemoteControlPresence(Dispatcher.CurrentDispatcher, _time);
         _settings.SettingsChanged += SettingsChanged;
         EnsureHooked();
     }
@@ -69,6 +76,10 @@ public class DesktopControlService : IDisposable
             if (client == null) return;
             _requested = request => { _ = HandleRequestedAsync(client, context!, request); };
             _result = result => HandleResult(client, context!, result);
+            _presenceRequested = request => { _ = HandlePresenceRequestedAsync(client, context!, request); };
+            _presenceResult = result => HandlePresenceResult(client, context!, result);
+            client.OnDesktopControlPresenceRequested += _presenceRequested;
+            client.OnDesktopControlPresenceResult += _presenceResult;
             _cancelled = id => { if (IsCurrent(client, context!)) CancelLocal(id); };
             _contextChanged = () =>
             {
@@ -81,6 +92,165 @@ public class DesktopControlService : IDisposable
             client.DesktopControlContextChanged += _contextChanged;
         }
     }
+
+    private static string RemoteOwner(string context, string requester) => $"remote:{context}:{requester}:";
+    private static string BrowserOwner(string session) => $"browser:{session}:";
+
+    public virtual Task<DesktopControlPresenceResult> StartPresenceAsync(string targetUid, string frameId, string controlId,
+        CancellationToken cancellationToken = default)
+        => ChangePresenceAsync(targetUid, frameId, controlId, "start", cancellationToken);
+
+    public virtual Task<DesktopControlPresenceResult> RenewPresenceAsync(string targetUid, string frameId, string controlId,
+        CancellationToken cancellationToken = default)
+        => ChangePresenceAsync(targetUid, frameId, controlId, "renew", cancellationToken);
+
+    public virtual async Task EndPresenceAsync(string targetUid, string frameId, string controlId)
+        => _ = await ChangePresenceAsync(targetUid, frameId, controlId, "end", CancellationToken.None).ConfigureAwait(false);
+
+    internal Task<DesktopControlPresenceResult> ChangeBrowserPresenceAsync(string session, DesktopControlPresenceRequest request,
+        CancellationToken cancellationToken = default)
+        => ApplyPresenceAsync(BrowserOwner(session), request with { LifetimeMilliseconds = DesktopControlProtocol.PresenceLifetime.TotalMilliseconds }, null, cancellationToken);
+
+    internal Task ClearBrowserPresenceAsync(string session) => _presence.ClearOwnerPrefixAsync(BrowserOwner(session));
+
+    private async Task<DesktopControlPresenceResult> ChangePresenceAsync(string target, string frame, string controlId,
+        string action, CancellationToken cancellationToken)
+    {
+        var request = new DesktopControlPresenceRequest { RequestId = Guid.NewGuid().ToString("N"), TargetUid = target,
+            FrameId = frame, ControlId = controlId, Action = action, ExpiresAtUtc = _time.GetUtcNow() + DesktopControlProtocol.RequestLifetime,
+            LifetimeMilliseconds = DesktopControlProtocol.PresenceLifetime.TotalMilliseconds };
+        if (target == "local") return await ApplyPresenceAsync("local-pc", request, null, cancellationToken).ConfigureAwait(false);
+        EnsureHooked();
+        var client = _clientProvider();
+        if (client == null || !client.DesktopControlReady) return PresenceResult(request, "denied", "控制房间尚未连接");
+        var context = client.DesktopControlContext;
+        if (action == "end")
+        {
+            try { using var timeout = new CancellationTokenSource(DesktopControlProtocol.RequestLifetime, _time);
+                await client.RequestDesktopControlPresenceAsync(request, timeout.Token).ConfigureAwait(false); }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[DesktopControl] 结束提示未确认: {ex.Message}"); }
+            return PresenceResult(request, "ended", "控制已关闭");
+        }
+        var completion = new TaskCompletionSource<DesktopControlPresenceResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_state)
+        {
+            if (!IsCurrent(client, context)) return PresenceResult(request, "denied", "控制连接已变化");
+            _presencePending.Add(request.RequestId, (request, completion));
+        }
+        using var sendCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            _ = SendPresenceRequestAsync(client, context, request, completion, sendCancellation.Token);
+            var result = await completion.Task.WaitAsync(DesktopControlProtocol.RequestLifetime, _time, cancellationToken).ConfigureAwait(false);
+            return result.ControlId == controlId && result.TargetUid == target ? result : PresenceResult(request, "denied", "控制确认不匹配");
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+        { return PresenceResult(request, "denied", "等待对方确认超时或已取消"); }
+        finally { sendCancellation.Cancel(); lock (_state) _presencePending.Remove(request.RequestId); }
+    }
+
+    private async Task SendPresenceRequestAsync(SignalRClient client, string context, DesktopControlPresenceRequest request,
+        TaskCompletionSource<DesktopControlPresenceResult> completion, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!IsCurrent(client, context)) throw new InvalidOperationException("控制连接已变化");
+            await client.RequestDesktopControlPresenceAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) { completion.TrySetResult(PresenceResult(request, "denied", ex.Message)); }
+    }
+
+    private void HandlePresenceResult(SignalRClient client, string context, DesktopControlPresenceResult result)
+    {
+        if (!IsCurrent(client, context)) return;
+        lock (_state)
+            if (_presencePending.TryGetValue(result.RequestId, out var pending)
+                && pending.Request.TargetUid == result.TargetUid && pending.Request.ControlId == result.ControlId
+                && result.Status is "active" or "denied")
+                pending.Completion.TrySetResult(result);
+    }
+
+    private async Task HandlePresenceRequestedAsync(SignalRClient client, string context, DesktopControlPresenceRequest request)
+    {
+        try
+        {
+            if (!IsCurrent(client, context) || request.RoomCode != client.DesktopControlRoomCode
+                || string.IsNullOrWhiteSpace(request.RequesterConnectionId)) return;
+            var result = await ApplyPresenceAsync(RemoteOwner(context, request.RequesterConnectionId), request, context, CancellationToken.None).ConfigureAwait(false);
+            if (request.Action != "end" && IsCurrent(client, context))
+            {
+                using var timeout = new CancellationTokenSource(DesktopControlProtocol.RequestLifetime, _time);
+                await client.ReportDesktopControlPresenceAsync(result, timeout.Token).ConfigureAwait(false);
+            }
+            if (!IsCurrent(client, context)) await _presence.ClearOwnerPrefixAsync(RemoteOwner(context, request.RequesterConnectionId)).ConfigureAwait(false);
+        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[DesktopControl] 提示请求失败: {ex.Message}"); }
+    }
+
+    private async Task<DesktopControlPresenceResult> ApplyPresenceAsync(string owner, DesktopControlPresenceRequest request,
+        string? context, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParseExact(request.RequestId, "N", out _) || !Guid.TryParseExact(request.ControlId, "N", out _)
+            || (context == null ? request.TargetUid != "local" : !TrySession(request.FrameId, out _)))
+            return PresenceResult(request, "denied", "控制提示参数无效");
+        if (request.Action == "end")
+        {
+            await _presence.DeactivateAsync(owner, request.ControlId).ConfigureAwait(false);
+            return PresenceResult(request, "ended", "控制已关闭");
+        }
+        var started = _time.GetTimestamp();
+        if (request.Action is not ("start" or "renew") || !_settings.Current.AllowDesktopControl || _disposed)
+            return PresenceResult(request, "denied", "本机未授权桌面控制");
+        var milliseconds = request.LifetimeMilliseconds;
+        if (!double.IsFinite(milliseconds) || milliseconds <= 0 || milliseconds > DesktopControlProtocol.PresenceLifetime.TotalMilliseconds)
+            return PresenceResult(request, "denied", "控制租约时限无效");
+        var lifetime = TimeSpan.FromMilliseconds(milliseconds);
+        var budget = lifetime < DesktopControlProtocol.RequestLifetime ? lifetime : DesktopControlProtocol.RequestLifetime;
+        if (context == null)
+        {
+            // 本机浏览器与助手使用同机时钟；HTTP 排队不能重新开始三秒确认时限。
+            var remaining = request.ExpiresAtUtc - _time.GetUtcNow();
+            if (remaining < budget) budget = remaining;
+        }
+        if (request.Action == "start")
+        {
+            if (context == null)
+            {
+                if (!_screenshots.TryGetControlFrame(request.FrameId, out _))
+                    return PresenceResult(request, "denied", "画面已过期，请刷新");
+            }
+            else
+            {
+                if (!double.IsFinite(request.FrameAgeMilliseconds) || request.FrameAgeMilliseconds < 0
+                    || request.FrameAgeMilliseconds >= DesktopControlProtocol.FrameLifetime.TotalMilliseconds
+                    || !_screenshots.TryGetControlFrameAge(request.FrameId, context, out var captureAge))
+                    return PresenceResult(request, "denied", "画面已过期，请刷新");
+                // 目标的截图捕获早于服务器收到该帧；两段单调帧龄之差保守包含网络延迟。
+                var transport = captureAge - TimeSpan.FromMilliseconds(request.FrameAgeMilliseconds);
+                if (transport > TimeSpan.Zero) { budget -= transport; lifetime -= transport; }
+            }
+        }
+        budget -= _time.GetElapsedTime(started);
+        if (budget <= TimeSpan.Zero || lifetime <= TimeSpan.Zero)
+            return PresenceResult(request, "denied", "控制提示确认已超时");
+        using var timeout = new CancellationTokenSource(budget, _time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+        var active = false;
+        try
+        {
+            active = await _presence.ActivateAsync(owner, request.ControlId, lifetime,
+                request.Action == "renew", linked.Token).ConfigureAwait(false);
+            if (linked.IsCancellationRequested || !_settings.Current.AllowDesktopControl || _disposed
+                || (context != null && (_hooked == null || !IsCurrent(_hooked, context))))
+                active = false;
+        }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested) { }
+        if (!active) await _presence.DeactivateAsync(owner, request.ControlId).ConfigureAwait(false);
+        return PresenceResult(request, active ? "active" : "denied", active ? "控制提示已显示" : "控制提示未显示或已失效");
+    }
+
+    private static DesktopControlPresenceResult PresenceResult(DesktopControlPresenceRequest request, string status, string message)
+        => new() { RequestId = request.RequestId, ControlId = request.ControlId, TargetUid = request.TargetUid, Status = status, Message = message };
 
     private bool IsCurrent(SignalRClient client, string context)
         => !_disposed && ReferenceEquals(client, _clientProvider()) && client.DesktopControlReady
@@ -136,7 +306,7 @@ public class DesktopControlService : IDisposable
             sendCancellation.Cancel();
             RemovePending(pending);
             if (needsCancel && TrySession(command.FrameId, out var session))
-                _ = CancelTransportAsync(client, context, session, command.TargetUid);
+                _ = CancelTransportAsync(client, context, session, command.TargetUid, command.ControlId, command.RequestId);
         }
     }
 
@@ -178,7 +348,11 @@ public class DesktopControlService : IDisposable
 
     public virtual Task<DesktopControlResult> ExecuteLocalAsync(DesktopControlCommand command,
         DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default)
-        => ExecuteAsync(command, expiresAtUtc, cancellationToken, null, null);
+        => ExecuteAsync(command, expiresAtUtc, cancellationToken, null, null, owner: "local-pc");
+
+    internal Task<DesktopControlResult> ExecuteBrowserAsync(string sessionId, DesktopControlCommand command,
+        DateTimeOffset expiresAtUtc, CancellationToken cancellationToken = default)
+        => ExecuteAsync(command, expiresAtUtc, cancellationToken, null, null, owner: BrowserOwner(sessionId));
 
     private async Task HandleRequestedAsync(SignalRClient client, string context, DesktopControlRequest request)
     {
@@ -203,7 +377,7 @@ public class DesktopControlService : IDisposable
                 result = budget <= TimeSpan.Zero
                     ? Result(request.Command, "expired", "输入指令已超过有效期，请刷新画面")
                     : await ExecuteAsync(request.Command, request.ExpiresAtUtc, CancellationToken.None, client, context,
-                        budget, budgetStarted).ConfigureAwait(false);
+                        budget, budgetStarted, RemoteOwner(context, request.RequesterConnectionId)).ConfigureAwait(false);
             }
             if (IsCurrent(client, context))
             {
@@ -216,7 +390,7 @@ public class DesktopControlService : IDisposable
 
     private async Task<DesktopControlResult> ExecuteAsync(DesktopControlCommand command, DateTimeOffset expiresAtUtc,
         CancellationToken cancellationToken, SignalRClient? source, string? context,
-        TimeSpan? relativeBudget = null, long budgetStarted = 0)
+        TimeSpan? relativeBudget = null, long budgetStarted = 0, string owner = "local-pc")
     {
         if (!DesktopControlProtocol.IsValid(command)
             || (source == null ? command.TargetUid != "local" || !Guid.TryParseExact(command.FrameId, "N", out _)
@@ -272,7 +446,8 @@ public class DesktopControlService : IDisposable
 
                     void Validate()
                     {
-                        if (!_settings.Current.AllowDesktopControl) throw new Rejected("denied", "本机未允许桌面控制");
+                        if (!_settings.Current.AllowDesktopControl || !_presence.IsActive(owner, command.ControlId))
+                            throw new Rejected("denied", "本机未授权或远程控制提示已失效");
                         token.ThrowIfCancellationRequested();
                         if (_disposed || (source != null && !IsCurrent(source, context!)))
                             throw new Rejected("cancelled", "控制连接已变化，操作已取消");
@@ -333,26 +508,27 @@ public class DesktopControlService : IDisposable
         }
     }
 
-    public virtual async Task CancelAsync(string sessionId, string? targetUid = null)
+    public virtual async Task CancelAsync(string sessionId, string targetUid, string controlId)
     {
-        if (!Guid.TryParseExact(sessionId, "N", out _)) return;
+        if (!Guid.TryParseExact(sessionId, "N", out _) || !Guid.TryParseExact(controlId, "N", out _)
+            || targetUid is not { Length: > 0 and <= 128 }) return;
         EnsureHooked();
         lock (_state)
             foreach (var pending in _pending.Values.Where(x => TrySession(x.Command.FrameId, out var session)
-                && session == sessionId && (targetUid == null || x.Command.TargetUid == targetUid)))
+                && session == sessionId && x.Command.TargetUid == targetUid && x.Command.ControlId == controlId))
                 pending.Completion.TrySetResult(Result(pending.Command, "cancelled", "监控控制模式已关闭"));
         var client = _clientProvider();
         if (client != null && targetUid != "local")
-            await CancelTransportAsync(client, client.DesktopControlContext, sessionId, targetUid).ConfigureAwait(false);
+            await CancelTransportAsync(client, client.DesktopControlContext, sessionId, targetUid, controlId).ConfigureAwait(false);
     }
 
-    private async Task CancelTransportAsync(SignalRClient client, string context, string sessionId, string? targetUid)
+    private async Task CancelTransportAsync(SignalRClient client, string context, string sessionId, string targetUid, string controlId, string? requestId = null)
     {
         try
         {
             if (!IsCurrent(client, context)) return;
             using var timeout = new CancellationTokenSource(DesktopControlProtocol.RequestLifetime, _time);
-            await client.CancelDesktopControlAsync(sessionId, targetUid, timeout.Token).ConfigureAwait(false);
+            await client.CancelDesktopControlAsync(sessionId, targetUid, controlId, requestId, timeout.Token).ConfigureAwait(false);
         }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[DesktopControl] 取消未确认（指令仍受三秒截止限制）: {ex.Message}"); }
     }
@@ -360,12 +536,17 @@ public class DesktopControlService : IDisposable
     private void SettingsChanged()
     {
         if (_settings.Current.AllowDesktopControl) return;
+        _ = _presence.ClearAsync();
         lock (_state)
             foreach (var claim in _claims.Values) claim.Cancellation?.Cancel();
     }
 
     private void EndContextLocked()
     {
+        _ = _presence.ClearOwnerPrefixAsync("remote:");
+        foreach (var pending in _presencePending.Values)
+            pending.Completion.TrySetResult(PresenceResult(pending.Request, "denied", "控制连接已变化"));
+        _presencePending.Clear();
         foreach (var pending in _pending.Values)
             pending.Completion.TrySetResult(Result(pending.Command, "unknown", "控制连接或房间已变化，执行结果未确认，请刷新画面"));
         _pending.Clear();
@@ -375,6 +556,8 @@ public class DesktopControlService : IDisposable
     private void UnhookLocked()
     {
         if (_hooked == null) return;
+        _hooked.OnDesktopControlPresenceRequested -= _presenceRequested;
+        _hooked.OnDesktopControlPresenceResult -= _presenceResult;
         _hooked.OnDesktopControlRequested -= _requested;
         _hooked.OnDesktopControlResult -= _result;
         _hooked.OnDesktopControlCancelled -= _cancelled;
@@ -407,6 +590,7 @@ public class DesktopControlService : IDisposable
             EndContextLocked();
             foreach (var claim in _claims.Values) claim.Cancellation?.Cancel();
             UnhookLocked();
+            _presence.Dispose();
             // 运行中的同步原生序列在 finally 释放合成键及执行闸门。
         }
     }

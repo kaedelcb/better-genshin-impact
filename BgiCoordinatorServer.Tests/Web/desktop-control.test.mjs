@@ -95,7 +95,7 @@ test('三秒到期检查不依赖定时器；迟到 executed 仍是结果未确�
     h.advance(3000);h.result();
     assert.equal(h.api.dodocoControl.pending,null);assert.match(h.element('dodocoControlStatus').textContent,/超时，结果未确认/);
     assert.doesNotMatch(h.element('dodocoControlStatus').textContent,/系统已接受输入/);
-    assert.deepEqual(plain(h.cancels()[0].payload),{roomCode:'ROOM01',sessionId:p.visit.id,targetUid:'alice'});
+    assert.deepEqual(plain(h.cancels()[0].payload),{roomCode:'ROOM01',sessionId:p.visit.id,targetUid:'alice',controlId:p.controlId,requestId:p.id});
     h.api.dodocoEvent({name:'desktop.control.result',payload:{requestId:p.id,targetUid:'alice',status:'executed'}});
     h.api.dodocoControlSend('key',0,0,'Win+D');assert.equal(h.inputs().length,1);
 });
@@ -150,8 +150,8 @@ test('未开启时点击放大；历史、放大和全员视图均不能输入',
 
 test('15 秒帧新鲜度包含系统休眠；授权撤销后不再发送',async()=>{
     for(const suspend of [false,true]){
-        const h=harness();await h.capture();h.enable();if(suspend)h.suspend(15000);else h.advance(15000);
-        h.api.dodocoControlSend('key',0,0,'Win+D');assert.equal(h.inputs().length,0);assert.match(h.element('dodocoControlStatus').textContent,/15 秒/);
+        const h=harness();await h.capture();if(suspend)h.suspend(15000);else h.advance(15000);
+        assert.equal(h.enable(),false);h.api.dodocoControlSend('key',0,0,'Win+D');assert.equal(h.inputs().length,0);assert.match(h.element('dodocoControlStatus').textContent,/15 秒/);
     }
     const h=harness();await h.capture();h.enable();await h.capture({controlAllowed:false});h.api.dodocoControlSend('key',0,0,'Win+D');
     assert.equal(h.inputs().length,0);assert.equal(h.element('dodocoControlKeys').querySelector('[data-control-key="Win+D"]').disabled,true);
@@ -219,13 +219,14 @@ test('正式本机桥在 HTTP 下使用 getRandomValues，input abort 后仍独�
             let data={};
             if(body.operation==='local.identity')data={uid:'alice',name:'本机助手',clientInstanceId:'instance-1',machineId:'machine-1',status:{}};
             if(body.operation==='screenshot.capture')data={frameId:'real-bridge-frame',jpegBase64:'YQ==',geometry,controlAllowed:true};
+            if(body.operation==='desktop.control.presence')data={requestId:body.args.requestId,controlId:body.args.controlId,targetUid:'local',status:body.args.action==='end'?'ended':'active'};
             if(body.operation==='desktop.control.input')return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>{const e=new Error('aborted');e.name='AbortError';reject(e);},{once:true}));
             return {ok:true,json:async()=>({requestId:body.requestId,instanceId:'bridge-1',status:'ok',data})};
         },
     });
     vm.runInContext(localSource,h.context);await flush();
     assert.equal(h.context.window.bgiLocalBridge.available,true);
-    await h.api.dodocoCapture();h.enable();h.key();await flush();
+    await h.api.dodocoCapture();h.enable();await flush();h.key();await flush();
     const input=calls.find(c=>c.body.operation==='desktop.control.input');assert.ok(input);assert.equal(input.body.args.targetUid,'local');
     const checkbox=h.element('dodocoControlEnabled');checkbox.checked=false;checkbox.onchange({target:checkbox});await flush();
     const cancel=calls.find(c=>c.body.operation==='desktop.control.cancel');assert.ok(cancel);assert.equal(cancel.body.args.requestId,input.body.args.requestId);

@@ -117,6 +117,39 @@ public sealed class LocalBrowserBridgeTests
     }
 
     [Fact]
+    public async Task CompletedPresenceClaimsExpireWithoutDiscardingOtherMutationClaims()
+    {
+        var clock = new ClaimClock();
+        var writes = 0;
+        using var bridge = new LocalBrowserBridge((request, _) =>
+        {
+            if (request.Operation == "watch.settings") Interlocked.Increment(ref writes);
+            return Task.FromResult(new LocalBrowserResult("ok"));
+        }, claimClock: clock);
+        using var client = Client(bridge);
+        var session = await Pair(client, bridge, PairToken(bridge));
+        var write = new { requestId = "saved", operation = "watch.settings", args = new { value = 1 } };
+        using (var response = await Post(client, "/api/execute", write, bridge.Origin, session))
+            Assert.Equal("ok", JsonNode.Parse(await response.Content.ReadAsStringAsync())!["status"]!.GetValue<string>());
+        for (var i = 0; i < 600; i++)
+        {
+            if (i % 150 == 0) clock.Advance(TimeSpan.FromSeconds(31));
+            using var response = await Post(client, "/api/execute", new { requestId = $"presence-{i}", operation = "desktop.control.presence", args = new { } }, bridge.Origin, session);
+            Assert.Equal("ok", JsonNode.Parse(await response.Content.ReadAsStringAsync())!["status"]!.GetValue<string>());
+        }
+        using var replay = await Post(client, "/api/execute", write, bridge.Origin, session);
+        Assert.Equal("ok", JsonNode.Parse(await replay.Content.ReadAsStringAsync())!["status"]!.GetValue<string>());
+        Assert.Equal(1, writes);
+    }
+
+    private sealed class ClaimClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
+        public void Advance(TimeSpan amount) => _now += amount;
+    }
+
+    [Fact]
     public async Task End_CancelsInFlightBeforeReleasingSession_AndDisposeClosesListener()
     {
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

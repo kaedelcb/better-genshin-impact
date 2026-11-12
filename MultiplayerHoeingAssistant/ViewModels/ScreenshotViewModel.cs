@@ -63,7 +63,10 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, DateTime> _pendingRequests = new();
     private readonly Dictionary<string, DateTime> _lastRequests = new();
     private readonly Func<DesktopControlCommand, bool, CancellationToken, Task<DesktopControlResult>>? _sendControl;
-    private readonly Func<string, string?, Task>? _cancelControl;
+    private readonly Func<string, string, string, Task>? _cancelControl;
+    private readonly Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>>? _startPresence;
+    private readonly Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>>? _renewPresence;
+    private readonly Func<string, string, string, Task>? _endPresence;
     private readonly Func<bool> _controlConnected;
     private readonly Dictionary<string, long> _lastControlRequests = new();
     private readonly HashSet<string> _usedControlFrames = new(StringComparer.Ordinal);
@@ -75,6 +78,10 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private bool _controlBusy;
     private bool _awaitingControlFrame;
     private string? _controlModeTarget;
+    private string? _controlId;
+    private string? _presenceFrameId;
+    private bool _presenceConfirmed;
+    private CancellationTokenSource? _presenceCancellation;
     private string? _controlRoomCode;
     private static readonly TimeSpan ControlRefreshDelay = TimeSpan.FromMilliseconds(1100);
 
@@ -101,6 +108,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 ? desktopControl.ExecuteLocalAsync(command, _timeProvider.GetUtcNow() + DesktopControlProtocol.RequestLifetime, cancellation)
                 : desktopControl.RequestAsync(command, cancellation);
             _cancelControl = desktopControl.CancelAsync;
+            _startPresence = desktopControl.StartPresenceAsync;
+            _renewPresence = desktopControl.RenewPresenceAsync;
+            _endPresence = desktopControl.EndPresenceAsync;
         }
         _autoTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(CurrentIntervalSeconds) };
         _autoTimer.Tick += (_, _) => _ = CaptureAsync();
@@ -116,12 +126,18 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     internal ScreenshotViewModel(ScreenshotService service, DodocoSettingsService settings, MainViewModel mainVm,
         MemberScreenshotRelayService relay, TimeProvider timeProvider,
         Func<DesktopControlCommand, bool, CancellationToken, Task<DesktopControlResult>> sendControl,
-        Func<string, string?, Task> cancelControl, Func<bool> connected)
+        Func<string, string, string, Task> cancelControl, Func<bool> connected,
+        Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>>? startPresence = null,
+        Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>>? renewPresence = null,
+        Func<string, string, string, Task>? endPresence = null)
         : this(service, settings, mainVm, relay, timeProvider)
     {
         _sendControl = sendControl;
         _cancelControl = cancelControl;
         _controlConnected = connected;
+        _startPresence = startPresence;
+        _renewPresence = renewPresence;
+        _endPresence = endPresence;
     }
 
     internal void ReloadConfigTransferSettings()
@@ -641,9 +657,15 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 return;
             }
             _controlModeTarget = ControlTargetUid;
+            _controlId = Guid.NewGuid().ToString("N");
+            _presenceFrameId = _currentControlFrame!.Frame.FrameId;
+            _presenceConfirmed = false;
             _isControlMode = true;
-            ControlStatusText = "控制已开启：点画面发送所选鼠标动作，或用鼠标点击下方键盘按钮";
+            var cancellation = new CancellationTokenSource();
+            _presenceCancellation = cancellation;
+            ControlStatusText = "等待对方确认远程控制提示…";
             NotifyControlState();
+            _ = MaintainPresenceAsync(_controlModeTarget!, _presenceFrameId, _controlId, cancellation);
         }
     }
 
@@ -661,10 +683,10 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     public bool ControlBusy => _controlBusy;
     public bool CanRefresh => !_controlBusy;
     public bool CanToggleControl => IsControlMode || CanEnableControl;
-    public bool CanEnableControl => IsSessionOpen && _sendControl != null && !_controlBusy && !_isCapturing
+    public bool CanEnableControl => IsSessionOpen && _sendControl != null && _startPresence != null && _renewPresence != null && _endPresence != null && !_controlBusy && !_isCapturing
         && !_awaitingControlFrame && HasFreshControlFrame && ControlTargetAvailable
         && (IsLocalCapture ? AllowDesktopControl : !_pendingRequests.ContainsKey(ControlTargetUid!));
-    public bool CanSendControl => IsControlMode && CanEnableControl && ControlIntervalElapsed;
+    public bool CanSendControl => IsControlMode && _presenceConfirmed && CanEnableControl && ControlIntervalElapsed;
 
     private bool IsSessionOpen => !_disposed && _tabActive && !_sessionExpired && _sessionId != null
         && _timeProvider.GetElapsedTime(_sessionStarted) < SessionDuration;
@@ -740,7 +762,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         var command = new DesktopControlCommand
         {
             RequestId = Guid.NewGuid().ToString("N"), TargetUid = target,
-            FrameId = _currentControlFrame.Frame.FrameId, Action = action, X = x, Y = y, Key = key
+            FrameId = _currentControlFrame.Frame.FrameId, ControlId = _controlId!, Action = action, X = x, Y = y, Key = key
         };
         using var cancellation = new CancellationTokenSource();
         _controlCancellation = cancellation;
@@ -773,7 +795,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             if (version == _controlVersion)
                 ControlStatusText = "输入回执超时，执行状态未知；请刷新画面确认，不会自动重发";
             cancellation.Cancel();
-            await CancelRemoteControlAsync(session, local ? null : target);
+            await CancelRemoteControlAsync(session, local ? null : target, command.ControlId);
         }
         catch (OperationCanceledException)
         {
@@ -783,7 +805,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         {
             if (version == _controlVersion) ControlStatusText = $"输入结果未知：{ex.Message}；请刷新画面确认";
             cancellation.Cancel();
-            await CancelRemoteControlAsync(session, local ? null : target);
+            await CancelRemoteControlAsync(session, local ? null : target, command.ControlId);
         }
         finally
         {
@@ -798,11 +820,63 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private async Task MaintainPresenceAsync(string target, string frame, string controlId, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            var result = await _startPresence!(target, frame, controlId, cancellation.Token)
+                .WaitAsync(DesktopControlProtocol.RequestLifetime, _timeProvider, cancellation.Token);
+            if (cancellation.IsCancellationRequested || !ReferenceEquals(_presenceCancellation, cancellation)) return;
+            if (result.Status != "active" || result.TargetUid != target || result.ControlId != controlId)
+            {
+                DisableControlMode($"控制提示未确认：{result.Message}");
+                return;
+            }
+            _presenceConfirmed = true;
+            ControlStatusText = "控制提示已确认，可发送输入";
+            NotifyControlState();
+            while (true)
+            {
+                await Task.Delay(DesktopControlProtocol.PresenceRenewInterval, _timeProvider, cancellation.Token);
+                if (!IsSessionOpen || !ControlTargetAvailable)
+                {
+                    DisableControlMode("观看已结束，控制模式已关闭");
+                    return;
+                }
+                result = await _renewPresence!(target, frame, controlId, cancellation.Token)
+                    .WaitAsync(DesktopControlProtocol.RequestLifetime, _timeProvider, cancellation.Token);
+                if (cancellation.IsCancellationRequested || !ReferenceEquals(_presenceCancellation, cancellation)) return;
+                if (result.Status != "active" || result.TargetUid != target || result.ControlId != controlId)
+                {
+                    DisableControlMode($"控制提示续期失败：{result.Message}");
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(_presenceCancellation, cancellation))
+                DisableControlMode($"控制提示确认失败：{ex.Message}");
+        }
+        finally { cancellation.Dispose(); }
+    }
+
     private void DisableControlMode(string message)
     {
         var wasBusy = _controlBusy;
         var wasActive = _isControlMode || wasBusy;
         var target = _controlModeTarget;
+        var frame = _presenceFrameId;
+        var controlId = _controlId;
+        var presenceCancellation = _presenceCancellation;
+        _presenceCancellation = null;
+        _presenceConfirmed = false;
+        _presenceFrameId = null;
+        _controlId = null;
+        presenceCancellation?.Cancel();
+        if (target != null && frame != null && controlId != null && _endPresence != null)
+            _ = EndPresenceSafelyAsync(target, frame, controlId);
         _isControlMode = false;
         _controlModeTarget = null;
         ++_controlVersion;
@@ -813,16 +887,23 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         if (wasActive)
         {
             ControlStatusText = wasBusy ? $"{message}；已送入系统的输入无法撤回，请刷新确认" : message;
-            if (_sessionId is { } session && target != LocalKey) _ = CancelRemoteControlAsync(session, target);
+            if (_sessionId is { } session && target != LocalKey && controlId != null)
+                _ = CancelRemoteControlAsync(session, target, controlId);
         }
         NotifyControlState();
         ApplyTimerState();
     }
 
-    private async Task CancelRemoteControlAsync(string session, string? target)
+    private async Task EndPresenceSafelyAsync(string target, string frame, string controlId)
+    {
+        try { await _endPresence!(target, frame, controlId); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[桌面控制] 结束提示失败: {ex.Message}"); }
+    }
+
+    private async Task CancelRemoteControlAsync(string session, string? target, string controlId)
     {
         if (_cancelControl == null || target == null) return;
-        try { await _cancelControl(session, target); }
+        try { await _cancelControl(session, target, controlId); }
         catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[桌面控制] 取消请求失败: {ex.Message}"); }
     }
 

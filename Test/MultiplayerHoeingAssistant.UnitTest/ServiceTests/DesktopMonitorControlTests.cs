@@ -27,6 +27,31 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public sealed class DesktopMonitorControlTests
 {
     [Fact]
+    public Task PendingPresenceCannotSendAndLateConfirmationCannotReopen() => RunSta(async () =>
+    {
+        using var h = new Harness();
+        var pending = new TaskCompletionSource<DesktopControlPresenceResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ended = new List<string>();
+        SetField(h.Monitor, "_startPresence", (Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>>)
+            ((target, frame, id, token) => pending.Task));
+        SetField(h.Monitor, "_endPresence", (Func<string, string, string, Task>)((target, frame, id) =>
+        { ended.Add(id); return Task.CompletedTask; }));
+        h.Deliver();
+        h.Monitor.IsControlMode = true;
+        Assert.True(h.Monitor.IsControlMode);
+        Assert.False(h.Monitor.CanSendControl);
+        await h.Monitor.SendKeyAsync("Win+D");
+        Assert.Empty(h.Inputs);
+        var id = (string)Field(h.Monitor, "_controlId")!;
+        h.Monitor.IsControlMode = false;
+        Assert.Contains(id, ended);
+        pending.SetResult(new DesktopControlPresenceResult { TargetUid = "uidB", ControlId = id, Status = "active" });
+        await Dispatcher.Yield(DispatcherPriority.Background);
+        Assert.False(h.Monitor.IsControlMode);
+        Assert.False(h.Monitor.CanSendControl);
+    });
+
+    [Fact]
     public Task ControlStartsOff_RequiresLatestAuthorizedFrame_AndHistoryStaysReadOnly() => RunSta(async () =>
     {
         using var h = new Harness();
@@ -59,6 +84,21 @@ public sealed class DesktopMonitorControlTests
         Assert.False(h.Monitor.CanEnableControl);
         await h.Monitor.SendMouseAsync(new Point(50, 50), new Size(100, 100), new Size(100, 100));
         Assert.Empty(h.Inputs);
+    });
+
+    [Fact]
+    public Task ClosingAndReopeningControl_CancelsOnlyOldControlId() => RunSta(() =>
+    {
+        using var h = new Harness();
+        h.Deliver(); h.Monitor.IsControlMode = true;
+        var oldId = Assert.IsType<string>(Field(h.Monitor, "_controlId"));
+        h.Monitor.IsControlMode = false;
+        Assert.Equal(oldId, Assert.Single(h.Cancels).ControlId);
+        h.Deliver(); h.Monitor.IsControlMode = true;
+        var newId = Assert.IsType<string>(Field(h.Monitor, "_controlId"));
+        Assert.NotEqual(oldId, newId);
+        Assert.Equal(oldId, h.Cancels[0].ControlId);
+        return Task.CompletedTask;
     });
 
     [Theory]
@@ -246,7 +286,8 @@ public sealed class DesktopMonitorControlTests
         Assert.False(h.Monitor.IsControlMode);
         Assert.False(h.Monitor.ControlBusy);
         Assert.True(h.Inputs[0].Cancellation.IsCancellationRequested);
-        Assert.Contains(h.Cancels, cancel => cancel.Session == session && cancel.Target == "uidB");
+        Assert.Contains(h.Cancels, cancel => cancel.Session == session && cancel.Target == "uidB"
+            && cancel.ControlId == h.Inputs[0].Command.ControlId);
         h.Pending.TrySetResult(new DesktopControlResult
         {
             RequestId = h.Inputs[0].Command.RequestId, TargetUid = "uidB", Status = "executed"
@@ -343,8 +384,11 @@ public sealed class DesktopMonitorControlTests
         var oldSend = Field(monitor, "_sendControl");
         var oldCancel = Field(monitor, "_cancelControl");
         var oldConnected = Field(monitor, "_controlConnected");
+        var oldStart = Field(monitor, "_startPresence");
+        var oldRenew = Field(monitor, "_renewPresence");
+        var oldEnd = Field(monitor, "_endPresence");
         var inputs = new List<DesktopControlCommand>();
-        var cancels = new List<(string Session, string? Target)>();
+        var cancels = new List<(string Session, string Target, string ControlId)>();
         var settings = (DodocoSettingsService)Field(monitor, "_settings")!;
         var originalAllow = settings.Current.AllowDesktopControl;
         var oldObserver = main.Config!.ObserverMode;
@@ -361,12 +405,18 @@ public sealed class DesktopMonitorControlTests
                         RequestId = command.RequestId, TargetUid = command.TargetUid, Status = "denied", Message = "隔离假输入"
                     });
                 }));
-            SetField(monitor, "_cancelControl", (Func<string, string?, Task>)((session, target) =>
+            SetField(monitor, "_cancelControl", (Func<string, string, string, Task>)((session, target, controlId) =>
             {
-                cancels.Add((session, target));
+                cancels.Add((session, target, controlId));
                 return Task.CompletedTask;
             }));
             SetField(monitor, "_controlConnected", (Func<bool>)(() => true));
+            Func<string, string, string, CancellationToken, Task<DesktopControlPresenceResult>> confirmed =
+                (target, frame, id, cancellation) => Task.FromResult(new DesktopControlPresenceResult
+                    { TargetUid = target, ControlId = id, Status = "active" });
+            SetField(monitor, "_startPresence", confirmed);
+            SetField(monitor, "_renewPresence", confirmed);
+            SetField(monitor, "_endPresence", (Func<string, string, string, Task>)((target, frame, id) => Task.CompletedTask));
             config.ObserverMode = false;
             typeof(MainViewModel).GetMethod("OnPropertyChanged", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .Invoke(main, [nameof(MainViewModel.IsObserverMode)]);
@@ -449,6 +499,7 @@ public sealed class DesktopMonitorControlTests
 
             // 关闭控制时点击大图仍打开放大窗口，窗口只有查看行为。
             var image = (System.Windows.Controls.Image)page.FindName("MonitorImage");
+            Assert.Null(image.ToolTip);
             image.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
                 { RoutedEvent = UIElement.MouseLeftButtonUpEvent });
             var zoom = window.OwnedWindows.OfType<ImageZoomWindow>().Single();
@@ -484,6 +535,9 @@ public sealed class DesktopMonitorControlTests
             SetField(monitor, "_sendControl", oldSend);
             SetField(monitor, "_cancelControl", oldCancel);
             SetField(monitor, "_controlConnected", oldConnected);
+            SetField(monitor, "_startPresence", oldStart);
+            SetField(monitor, "_renewPresence", oldRenew);
+            SetField(monitor, "_endPresence", oldEnd);
         }
     }
 
@@ -498,7 +552,7 @@ public sealed class DesktopMonitorControlTests
         public MainViewModel Main { get; } = new();
         public ScreenshotViewModel Monitor { get; }
         public List<Input> Inputs { get; } = [];
-        public List<(string Session, string? Target)> Cancels { get; } = [];
+        public List<(string Session, string Target, string ControlId)> Cancels { get; } = [];
         public bool Connected { get; set; } = true;
         public bool HoldResult { get; set; }
         public string ResultStatus { get; set; } = "denied";
@@ -540,11 +594,16 @@ public sealed class DesktopMonitorControlTests
                         RequestId = command.RequestId, TargetUid = command.TargetUid,
                         Status = ResultStatus, Message = "隔离假输入"
                     });
-                }, (session, target) =>
+                }, (session, target, controlId) =>
                 {
-                    Cancels.Add((session, target));
+                    Cancels.Add((session, target, controlId));
                     return Task.CompletedTask;
-                }, () => Connected);
+                }, () => Connected,
+                (target, frame, id, cancellation) => Task.FromResult(new DesktopControlPresenceResult
+                    { TargetUid = target, ControlId = id, Status = "active" }),
+                (target, frame, id, cancellation) => Task.FromResult(new DesktopControlPresenceResult
+                    { TargetUid = target, ControlId = id, Status = "active" }),
+                (target, frame, id) => Task.CompletedTask);
             Monitor.SelectedMonitor = Monitor.MonitorOptions.Single(option => option.Key == (local ? "local" : "uidB"));
             Monitor.OnTabActivated();
         }

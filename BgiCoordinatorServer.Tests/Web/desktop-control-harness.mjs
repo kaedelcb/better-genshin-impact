@@ -81,7 +81,7 @@ export function dom() {
         addEventListener:(type,callback)=>listeners.push({target:'document',type,callback}),
     }};
 }
-export function harness({local=false,mobile=false,pointerEvents=false}={}) {
+export function harness({local=false,mobile=false,pointerEvents=false,autoPresence=true}={}) {
     let now=0,wall=0,serial=0;const timers=new Map(),requests=[],localCalls=[],windowListeners=[];
     const ui=dom();
     const schedule=(callback,delay,interval=0)=>{const id=++serial;timers.set(id,{callback,delay,at:now+delay,interval});return id;};
@@ -94,7 +94,12 @@ export function harness({local=false,mobile=false,pointerEvents=false}={}) {
         setTimeout:(fn,delay=0)=>schedule(fn,delay),setInterval:(fn,delay)=>schedule(fn,delay,delay),
         clearTimeout:id=>timers.delete(id),clearInterval:id=>timers.delete(id),
         players:[{playerUid:'alice',playerName:'成员甲',online:true},{playerUid:'bob',playerName:'成员乙',online:true}],roomReady:true,roomCode:'ROOM01',
-        connection:{invoke:async(_method,envelope)=>{requests.push(envelope);return {payload:{ack:true}};}},
+        connection:{invoke:async(_method,envelope)=>{
+            requests.push(envelope);
+            const p=envelope.name==='desktop.control.presence' && envelope.payload.presence;
+            if(p && p.action!=='end' && autoPresence) context.api.dodocoEvent({name:'desktop.control.presence.result',payload:{requestId:p.requestId,controlId:p.controlId,targetUid:p.targetUid,status:'active'}});
+            return {payload:{ack:true}};
+        }},
         makeEnvelope:(_type,name,payload)=>({name,payload}),checkGatewayError(){},newRequestId:()=>`other${++serial}`,
         escapeHtml:value=>String(value).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'),
         showHome(){},console,
@@ -109,6 +114,10 @@ export function harness({local=false,mobile=false,pointerEvents=false}={}) {
         execute:(operation,args,timeout,uid,signal)=>{
             const call={operation,args,timeout,uid,signal};localCalls.push(call);
             if(operation==='desktop.control.cancel')return Promise.resolve({});
+            if(operation==='desktop.control.presence'){
+                if(args.action==='end')return Promise.resolve({});
+                if(autoPresence)return {then(fn){fn({requestId:args.requestId,controlId:args.controlId,targetUid:args.targetUid,status:'active'});return {catch(){}};}};
+            }
             return new Promise((resolve,reject)=>{call.resolve=resolve;call.reject=reject;});
         },
     };}

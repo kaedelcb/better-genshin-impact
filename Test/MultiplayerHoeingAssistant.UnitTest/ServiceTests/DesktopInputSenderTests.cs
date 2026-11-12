@@ -7,6 +7,21 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 public class DesktopInputSenderTests
 {
     [Theory]
+    [InlineData("W", 0x57)]
+    [InlineData("S", 0x53)]
+    [InlineData("A", 0x41)]
+    [InlineData("D", 0x44)]
+    public void MovementButtonsSendOneMatchingKeyAndRelease(string key, int virtualKey)
+    {
+        var native = new FakeNative();
+        new DesktopInputSender(native).Send(Command("key", key), native.Geometry, default);
+        Assert.Equal(new[] { virtualKey, virtualKey }, native.Packets.Select(x => (int)x.Key));
+        Assert.Equal(0u, native.Packets[0].Flags & DesktopInputSender.KeyUp);
+        Assert.NotEqual(0u, native.Packets[1].Flags & DesktopInputSender.KeyUp);
+        Assert.Empty(native.Held);
+    }
+
+    [Theory]
     [InlineData("Win+D", 0x5B, 0x44)]
     [InlineData("Alt+F4", 0x12, 0x73)]
     public void ChordsPressAndReleaseInReverseOrder(string key, int modifier, int letter)
@@ -114,7 +129,7 @@ public class DesktopInputSenderTests
     private static DesktopControlCommand Command(string action, string key = "") => new()
     {
         RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = Guid.NewGuid().ToString("N"),
-        Action = action, Key = key, X = 0.5, Y = 0.5
+        ControlId = Guid.NewGuid().ToString("N"), Action = action, Key = key, X = 0.5, Y = 0.5
     };
 
     private sealed class FakeNative : IDesktopInputNative

@@ -14,7 +14,13 @@ function dodocoScreenSync() {
     if (!dodoco.active || dodoco.tab !== 'screen') { dodocoScreenLeave(); return; }
     if (dodoco.screenVisit) return;
     dodoco.screenVisit = { id:dodocoScreenId(), started:performance.now(), wallStarted:Date.now(), expired:false };
-    dodoco.screenTimer = setInterval(() => { dodocoScreenAllowed(); dodocoControlSync(); }, 1000);
+    dodoco.screenTimer = setInterval(() => {
+        dodocoScreenAllowed();
+        const p=dodocoControl.presence;
+        if(p?.active && Math.max(performance.now()-p.leaseStarted,Date.now()-p.leaseWallStarted)>=12000)
+            dodocoControlClose('控制提示租约已过期，控制已关闭。');
+        dodocoControlSync();
+    }, 1000);
 }
 function dodocoScreenLeave() {
     dodocoControlClose('已退出桌面监控，控制已关闭。');
@@ -79,12 +85,12 @@ function dodocoReady() {
     dodoco.uncertain=false;
     return true;
 }
-async function dodocoDispatch(name, payload) {
+async function dodocoDispatch(name, payload, transport=connection) {
     try {
-        const response = await connection.invoke('Dispatch', makeEnvelope('command', name, { roomCode, ...payload }));
+        const response = await transport.invoke('Dispatch', makeEnvelope('command', name, { roomCode, ...payload }));
         checkGatewayError(response);
     } catch (error) {
-        if (!roomReady || connection?.state === 'Disconnected' || connection?.state === 'Reconnecting')
+        if (!roomReady || transport?.state === 'Disconnected' || transport?.state === 'Reconnecting')
             throw new Error('连接已断开，结果未确认。');
         throw error;
     }
@@ -151,6 +157,7 @@ function dodocoEvent(env) {
     if (typeof rlEvent === 'function') rlEvent(env, 'own');
     const x=env.payload || {};
     if (env.name === 'desktop.control.result') { dodocoControlResult(x); return; }
+    if (env.name === 'desktop.control.presence.result') { dodocoPresenceResult(x); return; }
     if (env.name === 'log.batch' && x.uid === dodoco.subscribed && Array.isArray(x.lines)) {
         for (const line of x.lines) if (typeof line === 'string') dodoco.live.push({uid:x.uid, text:line, infoOnly:!!x.infoOnly});
         if (dodoco.live.length > dodocoMaxLines) dodoco.live.splice(0, dodoco.live.length-dodocoMaxLines);
@@ -295,7 +302,7 @@ function dodocoDrawMembers(){
  if(typeof dodocoRenderReport==='function') dodocoRenderReport(host);
 }
 // 控制仅作用于本次观看的最新单帧；不监听控制端实体键盘，也不发送 BGI 任务命令。
-const dodocoControlKeys = ['Esc','Enter','Space','Tab','F','Up','Down','Left','Right','F11','F12','Alt+F4','Win+D'];
+const dodocoControlKeys = ['Esc','Enter','Space','Tab','F','W','S','A','D','F11','F12','Alt+F4','Win+D'];
 const dodocoControl = { enabled:false, mode:'left', epoch:0, pending:null, lastSent:new Map(), usedFrames:new Set(), refreshTimer:null, cooldownTimer:null, refreshNotBefore:0, status:'本页控制默认关闭；点击画面可放大。' };
 function dodocoControlFrame() { return (dodoco.frames.get(dodoco.target)||[])[dodoco.frameSelection.get(dodoco.target)||0]; }
 function dodocoControlGeometry(g) {
@@ -358,8 +365,7 @@ function dodocoRemoteOrientation(){
 function dodocoRemoteOpen(){
     if(dodocoRemote.open)return;
     if(!dodocoScreenAllowed())return;
-    if(!dodocoControl.enabled){const reason=dodocoControlReason();if(reason){dodocoControl.status=reason;dodocoControlSync();return;}
-        dodocoControl.enabled=true;dodocoControl.status='全屏控制已开启；点按操作，拖动查看。';}
+    if(!dodocoControl.enabled && !dodocoPresenceStart())return;
     const dialog=d('dodocoRemoteDialog'),root=d('dodocoRemoteRoot');if(!dialog||!root)return;
     const epoch=++dodocoRemote.epoch;
     Object.assign(dodocoRemote,{open:true,uid:dodoco.target,visit:dodoco.screenVisit,generation:dodoco.generation,
@@ -503,8 +509,16 @@ for(const name of ['fullscreenchange','webkitfullscreenchange'])document.addEven
     if(active===root){dodocoRemote.nativeRoot=root;dodocoRemoteLayout();}
     else if(dodocoRemote.nativeRoot)dodocoControlClose('系统全屏已退出，控制已关闭。');
 });
+function dodocoPresenceCurrent(p) {
+    return !!p && dodocoControl.presence===p && p.visit===dodoco.screenVisit
+        && p.generation===dodoco.generation && p.epoch===dodocoControl.epoch
+        && p.uid===dodoco.target && p.roomCode===roomCode && p.local===dodocoIsLocal(p.uid)
+        && (p.local ? p.bridge===window.bgiLocalBridge : p.connection===connection) && dodocoTargetReady(p.uid)
+        && !document.hidden;
+}
 function dodocoControlReason() {
     const visit=dodoco.screenVisit, frame=dodocoControlFrame();
+    if (dodocoControl.enabled && !dodocoPresenceCurrent(dodocoControl.presence)) return '控制来源已变化，请重新开启控制。';
     if (!dodoco.active || dodoco.tab!=='screen' || !visit) return '请进入桌面监控。';
     if (visit.expired || Math.max(performance.now()-visit.started,Date.now()-visit.wallStarted)>=dodocoScreenLimitMs) return dodocoScreenExpiredText;
     if (!dodoco.target || dodoco.target==='*') return '选择单个在线成员并刷新最新画面后，才能开启控制。';
@@ -512,9 +526,12 @@ function dodocoControlReason() {
     if (d('dodocoZoomDialog')?.open) return '放大窗口仅供查看，请关闭后再控制主画面。';
     if ((dodoco.frameSelection.get(dodoco.target)||0)!==0) return '历史画面只供查看，请刷新最新画面。';
     if (!frame || frame.controlVisitId!==visit.id || frame.controlGeneration!==dodoco.generation
-        || frame.controlLocal!==dodocoIsLocal() || (frame.controlLocal && frame.controlBridge!==window.bgiLocalBridge)) return '请先刷新本次观看的最新画面。';
+        || frame.controlRoomCode!==roomCode || frame.controlLocal!==dodocoIsLocal()
+        || (frame.controlLocal ? frame.controlBridge!==window.bgiLocalBridge : frame.controlConnection!==connection)) return '请先刷新本次观看的最新画面。';
     if (frame.controlAllowed!==true) return '对方未开启“允许桌面控制”，请在对方助手本机开启；当前只能查看。';
     if (typeof frame.frameId!=='string' || !frame.frameId || frame.frameId.length>100 || !dodocoControlGeometry(frame.geometry)) return '此画面缺少有效控制信息，请刷新或更新对方助手。';
+    if (dodocoControl.enabled && !dodocoControl.presence?.active) return '等待对方确认控制提示…';
+    if (dodocoControl.enabled && Math.max(performance.now()-dodocoControl.presence.leaseStarted,Date.now()-dodocoControl.presence.leaseWallStarted)>=12000) return '控制提示租约已过期，请重新开启控制。';
     if (dodocoControl.pending) return '正在等待执行回执；自动刷新暂时暂停。';
     if (frame.controlUsed) return '此画面已经用于输入，请刷新新画面后再操作。';
     if (!Number.isFinite(frame.controlStarted) || !Number.isFinite(frame.controlWallStarted)
@@ -548,10 +565,62 @@ function dodocoControlCancel(p) {
     if (p.local) {
         p.bridge.execute('desktop.control.cancel',{requestId:p.id},3000,p.uid).catch(()=>{});
     } else if (roomReady) {
-        dodocoDispatch('desktop.control.cancel',{roomCode:p.roomCode,sessionId:p.visit.id,targetUid:p.uid}).catch(()=>{});
+        dodocoDispatch('desktop.control.cancel',{roomCode:p.roomCode,sessionId:p.visit.id,targetUid:p.uid,controlId:p.controlId,requestId:p.id},p.connection).catch(()=>{});
     }
 }
+// 请求和回执分别关联控制代次；结束使用独立调用，不复用可能已中止的输入 signal。
+function dodocoPresenceSend(p, action) {
+    const request={requestId:dodocoScreenId(),controlId:p.id,targetUid:p.local?'local':p.uid,frameId:p.frameId,action};
+    if(p.local && action!=='end')request.expiresAtUtc=new Date(Date.now()+3000).toISOString();
+    if(action!=='end') {
+        p.active=false;
+        p.wait={id:request.requestId,action,started:performance.now(),wallStarted:Date.now()};
+        clearTimeout(p.timeout);
+        p.timeout=setTimeout(()=>{if(dodocoControl.presence===p && p.wait?.id===request.requestId)
+            dodocoControlClose('等待对方确认控制提示超时，控制已关闭。');},3000);
+    }
+    const fail=error=>{if(action!=='end' && dodocoControl.presence===p && p.wait?.id===request.requestId)
+        dodocoControlClose('控制提示未确认，控制已关闭：'+(error?.message||'请求失败'));};
+    try {
+        if(p.local) p.bridge.execute('desktop.control.presence',request,3000,p.uid)
+            .then(result=>{if(action!=='end')dodocoPresenceResult(result,p);}).catch(fail);
+        else dodocoDispatch('desktop.control.presence',{roomCode:p.roomCode,presence:request},p.connection).catch(fail);
+    } catch(error) { fail(error); }
+}
+function dodocoPresenceStart() {
+    const reason=dodocoControlReason();
+    if(reason){dodocoControl.status=reason;dodocoControlSync();return false;}
+    const uid=dodoco.target,local=dodocoIsLocal(uid);
+    const p={id:dodocoScreenId(),uid,local,bridge:local?window.bgiLocalBridge:null,connection:local?null:connection,roomCode,
+        frameId:dodocoControlFrame().frameId,visit:dodoco.screenVisit,generation:dodoco.generation,epoch:dodocoControl.epoch,active:false,wait:null};
+    dodocoControl.presence=p;dodocoControl.enabled=true;dodocoControl.status='等待对方确认控制提示…';
+    dodocoPresenceSend(p,'start');dodocoControlSync();return dodocoControl.presence===p;
+}
+function dodocoPresenceResult(result, expected=null) {
+    const p=dodocoControl.presence,w=p?.wait;
+    if(!p || !w || (p.local ? expected!==p : expected!==null)
+        || result?.requestId!==w.id || result.controlId!==p.id
+        || result.targetUid!==(p.local?'local':p.uid))return;
+    if(!dodocoPresenceCurrent(p)){dodocoControlClose('控制来源已变化，控制已关闭。');return;}
+    if(!dodocoScreenAllowed())return;
+    if(Math.max(performance.now()-w.started,Date.now()-w.wallStarted)>=3000){dodocoControlClose('等待对方确认控制提示超时，控制已关闭。');return;}
+    clearTimeout(p.timeout);p.wait=null;
+    if(result.status!=='active'){dodocoControlClose('对方未确认控制提示，控制已关闭'+(result.message?'：'+result.message:'。'));return;}
+    p.active=true;p.leaseStarted=w.started;p.leaseWallStarted=w.wallStarted;
+    dodocoControl.status='控制已开启；输入前请确认最新画面。';
+    clearTimeout(p.renewTimer);
+    p.renewTimer=setTimeout(()=>{
+        if(dodocoControl.presence!==p)return;
+        if(!dodocoPresenceCurrent(p) || !dodocoScreenAllowed()){dodocoControlClose('连接或观看已结束，控制已关闭。');return;}
+        if(Math.max(performance.now()-p.leaseStarted,Date.now()-p.leaseWallStarted)>=12000){dodocoControlClose('控制提示租约已过期，控制已关闭。');return;}
+        dodocoPresenceSend(p,'renew');dodocoControlSync();
+    },4000);
+    dodocoControlSync();
+}
 function dodocoControlClose(message='本页控制已关闭；点击画面可放大。') {
+    const presence=dodocoControl.presence;
+    dodocoControl.presence=null;
+    if(presence){clearTimeout(presence.timeout);clearTimeout(presence.renewTimer);dodocoPresenceSend(presence,'end');}
     dodocoRemoteClose();
     const p=dodocoControl.pending;
     dodocoControl.epoch++;
@@ -573,6 +642,7 @@ function dodocoControlResult(result, expectedPending=null) {
         || result?.requestId!==p.id || result.targetUid!==p.commandTarget) return;
     // 网关 ACK/accepted 仍需等待终态；与输入服务一致，三秒后不再认领迟到回执。
     if (!['executed','denied','expired','cancelled','busy','rate_limited','error','timeout','unknown'].includes(result.status)) return;
+    if (!dodocoPresenceCurrent(dodocoControl.presence)) { dodocoControlClose('控制来源已变化，控制已关闭。'); return; }
     if (p.visit!==dodoco.screenVisit || p.generation!==dodoco.generation || p.epoch!==dodocoControl.epoch
         || p.uid!==dodoco.target || !dodocoScreenAllowed()) return;
     if (result.status!=='timeout' && Math.max(performance.now()-p.started,Date.now()-p.wallStarted)>=3000) { dodocoControlTimeout(p); return; }
@@ -607,17 +677,20 @@ function dodocoControlClick(event,image,uid,frame) {
 }
 function dodocoControlSend(action,x=0,y=0,key='') {
     if(!dodocoScreenAllowed())return;
+    if(dodocoControl.enabled && !dodocoPresenceCurrent(dodocoControl.presence)){dodocoControlClose('控制来源已变化，控制已关闭。');return;}
+    const presence=dodocoControl.presence;
+    if(presence?.active && Math.max(performance.now()-presence.leaseStarted,Date.now()-presence.leaseWallStarted)>=12000){dodocoControlClose('控制提示租约已过期，控制已关闭。');return;}
     const reason=dodocoControlReason();
     if(!dodocoControl.enabled || reason){dodocoControl.status=reason || '请先开启本页控制。';dodocoControlSync();return;}
     if (!['left','right','double','key'].includes(action) || !Number.isFinite(x) || !Number.isFinite(y)
         || (action==='key'?!dodocoControlKeys.includes(key):x<0 || x>1 || y<0 || y>1 || key!=='')) return;
     dodocoRemote.notice='';
     const frame=dodocoControlFrame(),uid=dodoco.target,id=dodocoScreenId(),local=dodocoIsLocal(uid);
-    const command={requestId:id,targetUid:local?'local':uid,frameId:frame.frameId,action,x,y,key};
+    const command={requestId:id,targetUid:local?'local':uid,frameId:frame.frameId,controlId:dodocoControl.presence.id,action,x,y,key};
     // 本机浏览器与助手共享系统时钟；保留点击时的截止，不能在 HTTP 处理时重新开始三秒。
     if(local)command.expiresAtUtc=new Date(Date.now()+3000).toISOString();
     const p={id,uid,commandTarget:command.targetUid,visit:dodoco.screenVisit,generation:dodoco.generation,epoch:dodocoControl.epoch,
-        roomCode,local,bridge:local?window.bgiLocalBridge:null,controller:null,timer:null,started:performance.now(),wallStarted:Date.now()};
+        roomCode,local,controlId:command.controlId,connection:local?null:connection,bridge:local?window.bgiLocalBridge:null,controller:null,timer:null,started:performance.now(),wallStarted:Date.now()};
     frame.controlUsed=true; dodocoControl.pending=p;
     dodocoControl.usedFrames.add(JSON.stringify([uid,frame.frameId]));
     if(dodocoControl.usedFrames.size>256)dodocoControl.usedFrames.delete(dodocoControl.usedFrames.values().next().value);
@@ -638,6 +711,7 @@ function dodocoControlSend(action,x=0,y=0,key='') {
 }
 // 页面卸载与浏览器往返缓存也要清掉控制；没有实体键盘监听。
 globalThis.window?.addEventListener?.('pagehide',()=>dodocoScreenLeave());
+document.addEventListener?.('visibilitychange',()=>{if(document.hidden) dodocoControlClose('页面已隐藏，控制已关闭。');});
 function dodocoStopAuto(){if(dodoco.autoTimer){clearInterval(dodoco.autoTimer);dodoco.autoTimer=null;}const checkbox=d('dodocoAuto');if(checkbox)checkbox.checked=false;}
 // BGI 快捷功能复用耕地机原入口；它不是桌面按键模拟，也不依赖截图控制授权。
 function dodocoBgiStatus(message){
@@ -667,7 +741,7 @@ function dodocoRenderScreen(){
  d('dodocoCapture').onclick=dodocoCapture;d('dodocoBgiHotkey').onclick=()=>dodocoBgiHotkey();d('dodocoZoomClose').onclick=()=>d('dodocoZoomDialog').close();
  d('dodocoZoomDialog').onclose=dodocoControlSync;
  d('dodocoRemoteEnter').onclick=dodocoRemoteOpen;dodocoRemoteBind();
- d('dodocoControlEnabled').onchange=e=>{if(!e.target.checked){dodocoControlClose();return;}const reason=dodocoControlReason();if(reason){dodocoControl.status=reason;dodocoControlSync();return;}dodocoControl.enabled=true;dodocoControl.status='本页控制已开启；单击主画面发送所选鼠标操作，也可点击固定键盘按钮。';dodocoControlSync();if(dodocoRemoteMobile())dodocoRemoteOpen();};
+ d('dodocoControlEnabled').onchange=e=>{if(!e.target.checked){dodocoControlClose();return;}if(dodocoPresenceStart() && dodocoRemoteMobile())dodocoRemoteOpen();};
  d('dodocoControlMode').onchange=e=>{if(['left','right','double'].includes(e.target.value))dodocoControl.mode=e.target.value;};
  d('dodocoControlKeys').querySelectorAll('[data-control-key]').forEach(b=>b.onclick=e=>{if(dodocoControlPointer(e))dodocoControlSend('key',0,0,b.dataset.controlKey);});
  d('dodocoZoomDialog').querySelector('.dd-zoom-stage').onwheel=e=>{e.preventDefault();const z=d('dodocoZoomDialog').querySelector('img');dodoco.zoom=Math.min(6,Math.max(1,(dodoco.zoom||1)*(e.deltaY<0?1.15:1/1.15)));z.style.transform=`scale(${dodoco.zoom})`;};
@@ -702,15 +776,17 @@ async function dodocoCaptureOne(uid){
  if(!dodocoScreenAllowed())throw new Error(dodocoScreenExpiredText);
  if(dodocoControl.pending || performance.now()<dodocoControl.refreshNotBefore)throw new Error('正在等待输入结果或桌面响应，请稍候刷新。');
  const visit=dodoco.screenVisit,generation=dodoco.generation,local=dodocoIsLocal(uid),bridge=window.bgiLocalBridge,
-  controlStarted=performance.now(),controlWallStarted=Date.now();
+  captureRoom=roomCode,captureConnection=local?null:connection,controlStarted=performance.now(),controlWallStarted=Date.now();
  const accept=(frame,frameId=frame.frameId)=>{
-  if(visit!==dodoco.screenVisit || generation!==dodoco.generation || !dodocoScreenAllowed()
-   || !dodocoTargetReady(uid) || local!==dodocoIsLocal(uid) || (local && bridge!==window.bgiLocalBridge))throw new Error('本次画面请求已结束。');
+  if(visit!==dodoco.screenVisit || generation!==dodoco.generation || captureRoom!==roomCode || !dodocoScreenAllowed()
+   || !dodocoTargetReady(uid) || local!==dodocoIsLocal(uid) || (local ? bridge!==window.bgiLocalBridge : captureConnection!==connection))throw new Error('本次画面请求已结束。');
   const history=dodoco.frames.get(uid)||[],previous=history.find(f=>f.frameId===frameId && f.controlVisitId===visit.id);
-  const stored={...frame,frameId,controlVisitId:visit.id,controlGeneration:generation,controlLocal:local,controlBridge:local?bridge:null,
+  const stored={...frame,frameId,controlVisitId:visit.id,controlGeneration:generation,controlRoomCode:captureRoom,controlConnection:captureConnection,controlLocal:local,controlBridge:local?bridge:null,
    controlStarted:previous?.controlStarted??controlStarted,controlWallStarted:previous?.controlWallStarted??controlWallStarted,
    controlUsed:dodocoControl.usedFrames.has(JSON.stringify([uid,frameId]))};
-  history.unshift(stored);history.length=Math.min(history.length,10);dodoco.frames.set(uid,history);dodoco.frameSelection.set(uid,0);return true;
+  history.unshift(stored);history.length=Math.min(history.length,10);dodoco.frames.set(uid,history);dodoco.frameSelection.set(uid,0);
+  if(frame.controlAllowed!==true && dodocoControl.presence?.uid===uid)dodocoControlClose('对方未授权控制，控制已关闭。');
+  return true;
  };
  if(local){const frame=await bridge.execute('screenshot.capture',{},20000,uid);if(!frame||typeof frame.jpegBase64!=='string'||!frame.jpegBase64||frame.jpegBase64.length>Math.ceil(1024*1024/3)*4)throw new Error('本机画面无效或超过大小限制');return accept(frame);}
  const id=`screen:${visit.id}:${dodocoScreenId()}`,wait=dodocoWait('frame',uid,id);

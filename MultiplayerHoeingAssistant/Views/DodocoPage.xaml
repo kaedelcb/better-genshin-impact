@@ -1577,8 +1577,7 @@
                         </StackPanel>
                         <Image x:Name="MonitorImage" Grid.Row="1" Source="{Binding Monitor.CurrentImage}" Stretch="Uniform"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Cursor="Hand" ToolTip="关闭控制时点击放大；开启控制后点击画面发送所选鼠标动作"
-                               MouseLeftButtonUp="MonitorImage_Click">
+                               Cursor="Hand" MouseLeftButtonUp="MonitorImage_Click">
                             <Image.Style>
                                 <Style TargetType="Image">
                                     <Setter Property="Visibility" Value="Collapsed"/>

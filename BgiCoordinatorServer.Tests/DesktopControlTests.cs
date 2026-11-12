@@ -37,8 +37,24 @@ public sealed class DesktopControlTests
         await s.H.Ops.ReportMemberScreenshotExAsync(Ctx("target"),s.Room,"targetUid","YQ==",1280,720,s.Time.GetUtcNow().UtcDateTime,id,geometry??Geometry,allowed);
         return id;
     }
-    private static DesktopControlCommand Command(string frame) => new()
-        { RequestId=Guid.NewGuid().ToString("N"), TargetUid="targetUid", FrameId=frame, Action="key", Key="Win+D" };
+    private static readonly string ViewerControl = Guid.NewGuid().ToString("N");
+    private static readonly string OtherControl = Guid.NewGuid().ToString("N");
+    private static DesktopControlCommand Command(string frame, string? controlId=null) => new()
+        { RequestId=Guid.NewGuid().ToString("N"), ControlId=controlId??ViewerControl, TargetUid="targetUid", FrameId=frame, Action="key", Key="Win+D" };
+    private static async Task Activate(Setup s, DesktopControlCommand command, string viewer="viewer")
+    {
+        var presence=new DesktopControlPresenceRequest { RequestId=Guid.NewGuid().ToString("N"), ControlId=command.ControlId,
+            TargetUid=command.TargetUid, FrameId=command.FrameId, Action="start" };
+        var requester=GatewayHandlerContext.V3(viewer); var target=GatewayHandlerContext.V3("target");
+        await s.H.Dispatcher.DispatchAsync(requester,GatewayTestHarness.HelloEnvelope());
+        await s.H.Dispatcher.DispatchAsync(target,GatewayTestHarness.HelloEnvelope());
+        Assert.Null(GatewayTestHarness.ErrorCode(await s.H.Dispatcher.DispatchAsync(requester,new GatewayEnvelope {
+            Type="command", Name="desktop.control.presence", Payload=GatewayEnvelope.ToPayload(new { roomCode=s.Room,presence }) })));
+        var result=new DesktopControlPresenceResult { RequestId=presence.RequestId, ControlId=presence.ControlId,
+            TargetUid=presence.TargetUid, Status="active" };
+        Assert.Null(GatewayTestHarness.ErrorCode(await s.H.Dispatcher.DispatchAsync(target,new GatewayEnvelope {
+            Type="command", Name="desktop.control.presenceResult", Payload=GatewayEnvelope.ToPayload(new { roomCode=s.Room,result }) })));
+    }
     private static string? Error(object response)
     {
         var node=GatewayEnvelope.ToPayload(response);
@@ -51,6 +67,7 @@ public sealed class DesktopControlTests
     public async Task ValidInput_IsOnlyForwardedToTarget_AndAckIsNotExecution()
     {
         var s=await Create(); var command=Command(await Frame(s));
+        await Activate(s,command);
         Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,command)));
         Assert.Equal(1,Events(s,"desktop.control.requested"));
         Assert.Equal(0,Events(s,"desktop.control.result"));
@@ -75,6 +92,7 @@ public sealed class DesktopControlTests
     public async Task SameFrameAndRepeatedRequest_NeverExecuteTwice()
     {
         var s=await Create(); var cmd=Command(await Frame(s));
+        await Activate(s,cmd);
         Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,cmd)));
         Assert.Equal("duplicate_request",Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,cmd)));
         s.Time.Advance(2);
@@ -84,13 +102,14 @@ public sealed class DesktopControlTests
     [Fact]
     public async Task TwoSecondLimit_IsSharedByAllViewers()
     {
-        var s=await Create(); var a=Command(await Frame(s));var b=Command(await Frame(s,"other"));
+        var s=await Create(); var a=Command(await Frame(s));var b=Command(await Frame(s,"other"),OtherControl);
+        await Activate(s,a); await Activate(s,b,"other");
         Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,a)));
         Assert.Equal("rate_limited",Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("other"),s.Room,b)));
         s.Time.Advance(1.999);
-        Assert.Equal("rate_limited",Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("other"),s.Room,Command(b.FrameId))));
+        Assert.Equal("rate_limited",Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("other"),s.Room,Command(b.FrameId,OtherControl))));
         s.Time.Advance(.001);
-        Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("other"),s.Room,Command(b.FrameId))));
+        Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("other"),s.Room,Command(b.FrameId,OtherControl))));
         Assert.Equal(2,Events(s,"desktop.control.requested"));
     }
     [Fact]
@@ -107,6 +126,7 @@ public sealed class DesktopControlTests
     {
         var s=await Create();await Frame(s);s.Time.Advance(179);
         var cmd=Command(await Frame(s));
+        await Activate(s,cmd);
         Assert.Null(Error(await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,cmd)));
         var sent=s.H.GatewayClientProxy.Invocations.Where(i=>i.Arguments[1] is object?[] a && a.FirstOrDefault() is GatewayEnvelope e && e.Name=="desktop.control.requested").Last();
         var env=(GatewayEnvelope)((object?[])sent.Arguments[1])[0]!;
@@ -122,10 +142,11 @@ public sealed class DesktopControlTests
     public async Task CancellationAndDisconnect_ClosePendingInputWithoutAffectingOtherViewer()
     {
         var s=await Create();var cmd=Command(await Frame(s));
+        await Activate(s,cmd);
         await s.H.Ops.RequestDesktopControlAsync(Ctx("viewer"),s.Room,cmd);
-        await s.H.Ops.CancelDesktopControlAsync(Ctx("other"),s.Room,s.Session,"targetUid");
+        await s.H.Ops.CancelDesktopControlAsync(Ctx("other"),s.Room,s.Session,"targetUid",cmd.ControlId);
         Assert.Equal(0,Events(s,"desktop.control.cancelled"));
-        await s.H.Ops.CancelDesktopControlAsync(Ctx("viewer"),s.Room,s.Session,"targetUid");
+        await s.H.Ops.CancelDesktopControlAsync(Ctx("viewer"),s.Room,s.Session,"targetUid",cmd.ControlId);
         Assert.Equal(1,Events(s,"desktop.control.cancelled"));
         Assert.Equal("invalid_request",Error(await s.H.Ops.RespondDesktopControlAsync(Ctx("target"),s.Room,
             new(){RequestId=cmd.RequestId,TargetUid="targetUid",Status="executed"})));
@@ -144,7 +165,7 @@ public sealed class DesktopControlTests
     [Fact]
     public async Task GatewayRoutesControlCommands_WithBoundedValidation()
     {
-        var s=await Create();var frame=await Frame(s);var ctx=GatewayHandlerContext.V3("viewer");
+        var s=await Create();var frame=await Frame(s);await Activate(s,Command(frame));var ctx=GatewayHandlerContext.V3("viewer");
         await s.H.Dispatcher.QueryAsync(ctx,GatewayTestHarness.HelloEnvelope());
         var invalid=await s.H.Dispatcher.DispatchAsync(ctx,new(){Type="command",Name="desktop.control.request",
             Payload=GatewayEnvelope.ToPayload(new{roomCode=s.Room,command=Command(frame) with{Action="shell"}})});

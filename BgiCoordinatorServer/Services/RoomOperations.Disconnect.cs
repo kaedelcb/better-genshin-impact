@@ -139,6 +139,7 @@ public sealed partial class RoomOperations
         }
 
         // 控制房间成员清理后释放截图窗口墓碑和在途帧；新物理连接独立计时。
+        await ClearControlPresenceConnectionAsync(ctx.ConnectionId);
         await ClearDesktopControlConnectionAsync(ctx.ConnectionId);
         ClearScreenshotConnection(ctx.ConnectionId);
 

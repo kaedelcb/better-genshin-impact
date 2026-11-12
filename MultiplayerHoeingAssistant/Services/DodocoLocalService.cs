@@ -29,6 +29,7 @@ internal sealed class DodocoLocalService : IDisposable
     private readonly Func<ScreenFrame?>? _captureOverride;
     private readonly DesktopControlService? _desktopControl;
     private readonly Dictionary<string, string> _controlRequests = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _presenceControls = new(StringComparer.Ordinal);
     private readonly object _gate = new();
     private readonly Queue<(long Sequence, LogEntry Entry, int Chars)> _recent = new();
     private readonly Dictionary<string, Dictionary<string, FileSelection>> _files = new(StringComparer.Ordinal);
@@ -93,6 +94,7 @@ internal sealed class DodocoLocalService : IDisposable
                 "log.chunk" => await ReadChunkAsync(request.SessionId, request.Args, cancellationToken).ConfigureAwait(false),
                 "screenshot.capture" => Capture(),
                 "desktop.control.input" => await ExecuteControlAsync(request, cancellationToken).ConfigureAwait(false),
+                "desktop.control.presence" => await ChangePresenceAsync(request, cancellationToken).ConfigureAwait(false),
                 "desktop.control.cancel" => CancelControl(request.Args),
                 _ when request.Operation.StartsWith("watch.", StringComparison.Ordinal)
                     || request.Operation.StartsWith("report.", StringComparison.Ordinal)
@@ -261,10 +263,27 @@ internal sealed class DodocoLocalService : IDisposable
         }
         try
         {
-            return await _desktopControl.ExecuteLocalAsync(command, expiresAtUtc,
+            return await _desktopControl.ExecuteBrowserAsync(request.SessionId, command, expiresAtUtc,
                 cancellationToken).ConfigureAwait(false);
         }
         finally { lock (_gate) _controlRequests.Remove(command.RequestId); }
+    }
+
+    private async Task<DesktopControlPresenceResult> ChangePresenceAsync(LocalBrowserRequest request, CancellationToken cancellationToken)
+    {
+        if (_desktopControl == null) throw new InvalidOperationException("本机桌面控制服务不可用");
+        var presence = request.Args.Deserialize<DesktopControlPresenceRequest>(GatewayJson.Options)
+            ?? throw new ArgumentException("缺少控制提示请求");
+        if (presence.TargetUid != "local" || !Guid.TryParseExact(presence.ControlId, "N", out _))
+            throw new ArgumentException("本机控制提示参数无效");
+        lock (_gate)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(DodocoLocalService));
+            if (!_presenceControls.TryGetValue(request.SessionId, out var ids))
+                _presenceControls.Add(request.SessionId, ids = new HashSet<string>(StringComparer.Ordinal));
+            ids.Add(presence.ControlId);
+        }
+        return await _desktopControl.ChangeBrowserPresenceAsync(request.SessionId, presence, cancellationToken).ConfigureAwait(false);
     }
 
     private object CancelControl(JsonObject args)
@@ -290,12 +309,21 @@ internal sealed class DodocoLocalService : IDisposable
     internal void ReleaseSession(string sessionId)
     {
         string[] controls;
+        string[] presenceIds;
         lock (_gate)
         {
             _files.Remove(sessionId);
+            presenceIds = _presenceControls.Remove(sessionId, out var ids) ? ids.ToArray() : [];
             controls = _controlRequests.Where(x => x.Value == sessionId).Select(x => x.Key).ToArray();
         }
         foreach (var requestId in controls) _desktopControl?.CancelLocal(requestId);
+        if (_desktopControl != null)
+        {
+            foreach (var id in presenceIds)
+                _ = _desktopControl.ChangeBrowserPresenceAsync(sessionId, new DesktopControlPresenceRequest
+                    { RequestId = Guid.NewGuid().ToString("N"), ControlId = id, TargetUid = "local", Action = "end" });
+            _ = _desktopControl.ClearBrowserPresenceAsync(sessionId);
+        }
         _relay.ReleaseLocalSession(sessionId);
     }
 
@@ -372,13 +400,16 @@ internal sealed class DodocoLocalService : IDisposable
     public void Dispose()
     {
         string[] controls;
+        string[] sessions;
         lock (_gate)
         {
             if (_disposed) return;
             _disposed = true;
             _files.Clear(); _recent.Clear();
             controls = _controlRequests.Keys.ToArray();
+            sessions = _presenceControls.Keys.ToArray();
         }
+        foreach (var session in sessions) ReleaseSession(session);
         foreach (var requestId in controls) _desktopControl?.CancelLocal(requestId);
         _tail.EntryReceived -= OnEntry;
         _tail.HistoryBatchReceived -= OnHistory;

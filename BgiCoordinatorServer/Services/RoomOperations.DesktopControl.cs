@@ -69,6 +69,8 @@ public sealed partial class RoomOperations
             target = _roomManager.GetConnectionIdByUid(group, command.TargetUid) ?? "";
             if (target.Length == 0 || target != frame.TargetConnection)
                 return ControlError("target_offline", "成员连接已变化，请刷新画面");
+            if (!HasConfirmedPresence(group, ctx.ConnectionId, command.TargetUid, target, frame.SessionId, command.ControlId, now))
+                return ControlError("presence_required", "对方的控制提示尚未确认或已结束，请重新开启控制");
             if (_controlLastInput.ContainsKey(target)) return ControlError("rate_limited", "每个被控端每两秒只能执行一次操作");
             if (_controlPending.ContainsKey((group, command.RequestId))) return ControlError("duplicate_request", "请求编号已被使用");
             _controlFrames.Remove(frameKey); // 一帧只执行一次；所有结果都要求新帧。
@@ -118,20 +120,32 @@ public sealed partial class RoomOperations
         return new { accepted = true };
     }
 
-    public async Task<object> CancelDesktopControlAsync(GatewayHandlerContext ctx, string roomCode, string sessionId, string? targetUid)
+    public async Task<object> CancelDesktopControlAsync(GatewayHandlerContext ctx, string roomCode, string sessionId, string? targetUid, string? controlId, string? requestId = null)
     {
         var group = $"CTRL_{roomCode}";
-        if (!Guid.TryParseExact(sessionId, "N", out _) || !IsScreenshotRequesterInRoom(group, ctx.ConnectionId))
+        if (!Guid.TryParseExact(sessionId, "N", out _) || !Guid.TryParseExact(controlId, "N", out _)
+            || (!string.IsNullOrEmpty(requestId) && !Guid.TryParseExact(requestId, "N", out _))
+            || targetUid is not { Length: > 0 and <= 128 } || !IsScreenshotRequesterInRoom(group, ctx.ConnectionId))
             return ControlError("invalid_request", "无效的控制会话");
         ControlPending[] cancelled;
         lock (_screenshotGate)
         {
+            var now = _screenshotTime.GetTimestamp();
+            PruneControlRecords(now);
+            if (!string.IsNullOrEmpty(requestId))
+            {
+                var seen = (group, ctx.ConnectionId, requestId);
+                if (!_controlSeen.ContainsKey(seen))
+                {
+                    if (_controlSeen.Count >= MaxControlRecords) return ControlError("busy", "控制请求过多，请稍后刷新画面");
+                    _controlSeen.Add(seen, now); // 取消先到时，迟到的同一输入也不能执行。
+                }
+            }
             cancelled = _controlPending.Values.Where(x => x.Group == group && x.Requester == ctx.ConnectionId
-                && x.SessionId == sessionId && (string.IsNullOrEmpty(targetUid) || x.Command.TargetUid == targetUid)).ToArray();
+                && x.SessionId == sessionId && x.Command.TargetUid == targetUid && x.Command.ControlId == controlId
+                && (string.IsNullOrEmpty(requestId) || x.Command.RequestId == requestId)).ToArray();
             foreach (var item in cancelled) _controlPending.Remove((item.Group, item.Command.RequestId));
-            foreach (var key in _controlFrames.Where(x => x.Key.Group == group && x.Key.Requester == ctx.ConnectionId
-                         && x.Value.SessionId == sessionId && (string.IsNullOrEmpty(targetUid) || x.Key.TargetUid == targetUid)).Select(x => x.Key).ToArray())
-                _controlFrames.Remove(key);
+            // 尚未消费的最新帧不属于某个 controlId；旧取消不能移除新会话的截图。
         }
         await NotifyControlCancelledAsync(cancelled);
         return new { accepted = true };

@@ -28,6 +28,7 @@ public class LocalDesktopControlTests
         Assert.Equal(3840, geometry!.Width);
         Assert.Equal(1280, next["width"]!.GetValue<int>());
         var command = f.Command() with { FrameId = id };
+        await StartPresence(local, command);
         var input = await local.ExecuteAsync(Request("desktop.control.input", Json(command)), default);
         Assert.Equal("ok", input.Status);
         Assert.Equal("executed", Json(input.Data)["status"]!.GetValue<string>());
@@ -43,7 +44,9 @@ public class LocalDesktopControlTests
         using var watch = new KeywordWatchService(tail, null, null, null, f.Root, () => f.Root);
         using var relay = new DodocoWebRelayService(f.Settings, watch, new DailyReportService(() => f.Root), () => null, () => f.Root);
         using var local = new DodocoLocalService(tail, relay, f.Screenshots, f.Settings, () => f.Root, _ => new { }, desktopControl: f.Control);
-        var args = Json(f.Command());
+        var command = f.Command();
+        await StartPresence(local, command);
+        var args = Json(command);
         args["expiresAtUtc"] = f.Clock.GetUtcNow().AddSeconds(-1).ToString("O");
         var response = await local.ExecuteAsync(Request("desktop.control.input", args), default);
         Assert.Equal("expired", Json(response.Data)["status"]!.GetValue<string>());
@@ -90,7 +93,9 @@ public class LocalDesktopControlTests
         using var entered = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         f.Sender.BeforeSend = (_, _) => { entered.Set(); Assert.True(release.Wait(TimeSpan.FromSeconds(5))); };
-        var task = local.ExecuteAsync(Request("desktop.control.input", Json(f.Command())), default);
+        var command = f.Command();
+        await StartPresence(local, command);
+        var task = local.ExecuteAsync(Request("desktop.control.input", Json(command)), default);
         try
         {
             Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
@@ -99,6 +104,16 @@ public class LocalDesktopControlTests
         finally { release.Set(); }
         Assert.Equal("cancelled", Json((await task).Data)["status"]!.GetValue<string>());
         Assert.Equal(0, f.Sender.Calls);
+    }
+
+    private static async Task StartPresence(DodocoLocalService local, DesktopControlCommand command)
+    {
+        var response = await local.ExecuteAsync(Request("desktop.control.presence", Json(new DesktopControlPresenceRequest
+        {
+            RequestId = Guid.NewGuid().ToString("N"), TargetUid = "local", FrameId = command.FrameId,
+            ControlId = command.ControlId, Action = "start", ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(3)
+        })), default);
+        Assert.Equal("active", Json(response.Data)["status"]!.GetValue<string>());
     }
 
     private static JsonObject Json(object? value) => JsonSerializer.SerializeToNode(value, GatewayJson.Options)!.AsObject();

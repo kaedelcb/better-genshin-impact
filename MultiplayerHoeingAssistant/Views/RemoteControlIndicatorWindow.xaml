@@ -1,0 +1,13 @@
+<Window x:Class="MultiplayerHoeingAssistant.Views.RemoteControlIndicatorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="True"
+        Background="Transparent" Width="190" Height="48"
+        ShowActivated="False" Focusable="False" IsHitTestVisible="False"
+        ShowInTaskbar="False" Topmost="True"
+        FontFamily="pack://application:,,,/MultiplayerHoeingAssistant;component/Assets/Fonts/#HarmonyOS Sans SC, Segoe UI, Microsoft YaHei">
+    <Border Background="#E0141C28" BorderBrush="#99D4AF37" BorderThickness="1" CornerRadius="10" Padding="16,8">
+        <TextBlock Text="正在被远程控制" Foreground="#F2E3B6" FontSize="14"
+                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
+    </Border>
+</Window>

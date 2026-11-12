@@ -109,7 +109,7 @@ public class DesktopInputSender
     private static ushort[] GetKeys(string key) => key switch
     {
         "Esc" => [0x1B], "Enter" => [0x0D], "Space" => [0x20], "Tab" => [0x09], "F" => [0x46],
-        "Up" => [0x26], "Down" => [0x28], "Left" => [0x25], "Right" => [0x27],
+        "W" => [0x57], "S" => [0x53], "A" => [0x41], "D" => [0x44],
         "F11" => [0x7A], "F12" => [0x7B], "Alt+F4" => [0x12, 0x73], "Win+D" => [0x5B, 0x44],
         _ => throw new ArgumentException("不支持的键盘按钮")
     };

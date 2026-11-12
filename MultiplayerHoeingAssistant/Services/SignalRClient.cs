@@ -128,6 +128,8 @@ public class SignalRClient : IAsyncDisposable
     public event Action<string, string>? OnMemberScreenshotRequested;
     public event Action<DesktopControlRequest>? OnDesktopControlRequested;
     public event Action<DesktopControlResult>? OnDesktopControlResult;
+    public event Action<DesktopControlPresenceRequest>? OnDesktopControlPresenceRequested;
+    public event Action<DesktopControlPresenceResult>? OnDesktopControlPresenceResult;
     public event Action<string>? OnDesktopControlCancelled;
     /// <summary>收到成员实时日志批（房间日志汇聚；服务端纯转发，含自己的批需按 uid 自滤）。</summary>
     public event Action<MemberLogBatch>? OnMemberLogBatch;
@@ -411,6 +413,8 @@ public class SignalRClient : IAsyncDisposable
                 case "desktop.control.requested":
                 case "desktop.control.result":
                 case "desktop.control.cancelled":
+                case "desktop.control.presence.requested":
+                case "desktop.control.presence.result":
                     DispatchDesktopControlEvent(env);
                     break;
                 case GatewayProtocol.Events.LogBatch:
@@ -929,6 +933,15 @@ public class SignalRClient : IAsyncDisposable
                 var result = env.DeserializePayload<DesktopControlResult>();
                 if (result != null) OnDesktopControlResult?.Invoke(result);
                 break;
+            case "desktop.control.presence.requested":
+                var presence = env.DeserializePayload<DesktopControlPresenceRequest>();
+                if (presence != null && presence.RoomCode == DesktopControlRoomCode && presence.TargetUid == DesktopControlUid)
+                    OnDesktopControlPresenceRequested?.Invoke(presence);
+                break;
+            case "desktop.control.presence.result":
+                var presenceResult = env.DeserializePayload<DesktopControlPresenceResult>();
+                if (presenceResult != null) OnDesktopControlPresenceResult?.Invoke(presenceResult);
+                break;
             case "desktop.control.cancelled":
                 var requestId = env.GetString("requestId");
                 if (Guid.TryParseExact(requestId, "N", out _)) OnDesktopControlCancelled?.Invoke(requestId);
@@ -936,14 +949,20 @@ public class SignalRClient : IAsyncDisposable
         }
     }
 
+    public virtual Task RequestDesktopControlPresenceAsync(DesktopControlPresenceRequest presence, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.presence", new { roomCode = DesktopControlRoomCode, presence }, cancellationToken);
+
+    public virtual Task ReportDesktopControlPresenceAsync(DesktopControlPresenceResult result, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.presenceResult", new { roomCode = DesktopControlRoomCode, result }, cancellationToken);
+
     public virtual Task RequestDesktopControlAsync(DesktopControlCommand command, CancellationToken cancellationToken = default)
         => SendDesktopControlAsync("desktop.control.request", new { roomCode = DesktopControlRoomCode, command }, cancellationToken);
 
     public virtual Task ReportDesktopControlAsync(DesktopControlResult result, CancellationToken cancellationToken = default)
         => SendDesktopControlAsync("desktop.control.respond", new { roomCode = DesktopControlRoomCode, result }, cancellationToken);
 
-    public virtual Task CancelDesktopControlAsync(string sessionId, string? targetUid = null, CancellationToken cancellationToken = default)
-        => SendDesktopControlAsync("desktop.control.cancel", new { roomCode = DesktopControlRoomCode, sessionId, targetUid }, cancellationToken);
+    public virtual Task CancelDesktopControlAsync(string sessionId, string targetUid, string controlId, string? requestId = null, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.cancel", new { roomCode = DesktopControlRoomCode, sessionId, targetUid, controlId, requestId }, cancellationToken);
 
     private async Task SendDesktopControlAsync(string operation, object payload, CancellationToken cancellationToken)
     {
