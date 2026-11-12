@@ -251,7 +251,7 @@ public partial class UpdateBgiWindow : Window
         => AddDirectories(_excludeDirs, "排除目录", "选择不参与覆盖的目录");
 
     private void AddBackupButton_Click(object sender, RoutedEventArgs e)
-        => AddDirectories(_backupDirs, "备份目录", "选择更新前备份的目录");
+        => AddDirectories(_backupDirs, "备份目录", "选择要备份的目录");
 
     private void AddDirectories(ObservableCollection<string> directories, string label, string title)
     {
@@ -301,6 +301,57 @@ public partial class UpdateBgiWindow : Window
             directories.Remove(dir);
     }
 
+    private async void ManualBackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var targetDir = BgiDir;
+        var directories = _backupDirs.ToArray();
+        SetBusy(true);
+        ManualBackupButtonText.Text = "备份中…";
+        StatusText.Text = "正在准备备份…";
+        // 排队中的进度只能更新本次操作，不能在终态之后覆盖结果或下一次操作。
+        bool reporting = true;
+        var progress = new Progress<string>(message =>
+        {
+            if (reporting) StatusText.Text = message;
+        });
+        try
+        {
+            var result = await BgiPackageUpdateService.BackupAsync(targetDir, directories, progress);
+            reporting = false;
+            if (result.Success)
+            {
+                var missing = result.MissingDirectories.Count == 0 ? ""
+                    : $"\n\n以下目录不存在，已跳过：{string.Join("、", result.MissingDirectories)}";
+                StatusText.Text = result.MissingDirectories.Count == 0 ? "手动备份完成。" : "备份已生成，部分目录不存在。";
+                MessageBox.Show(this, $"备份已保存到：\n{result.BackupDir}{missing}\n\n手动备份不会自动清理。",
+                    "手动备份", MessageBoxButton.OK,
+                    result.MissingDirectories.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            }
+            else
+            {
+                StatusText.Text = "手动备份未完成。";
+                var partial = result.BackupDir == null ? ""
+                    : $"\n\n未完成副本：{result.BackupDir}\n该副本不完整，请勿作为完整备份使用。";
+                var missing = result.MissingDirectories.Count == 0 ? ""
+                    : $"\n\n不存在的目录：{string.Join("、", result.MissingDirectories)}";
+                MessageBox.Show(this, $"{result.Error}{missing}{partial}", "手动备份",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "手动备份失败。";
+            MessageBox.Show(this, $"备份失败：{ex.Message}", "手动备份", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            reporting = false;
+            ManualBackupButtonText.Text = "立即备份";
+            EndOperation();
+        }
+    }
+
     // ===== 更新 =====
 
     private void PackageList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -323,7 +374,7 @@ public partial class UpdateBgiWindow : Window
         }
 
         using var operation = BgiPackageUpdateService.TryBeginPackageOperation();
-        if (operation == null) { StatusText.Text = "另一个 BGI 下载或更新正在进行。"; return; }
+        if (operation == null) { StatusText.Text = "另一个 BGI 下载、更新或备份正在进行。"; return; }
 
         SetBusy(true);
         try
@@ -438,7 +489,7 @@ public partial class UpdateBgiWindow : Window
     private async Task ApplyConfirmedUpdateAsync(BgiUpdatePackage package, string targetDir, string? downloadDirectory)
     {
         using var operation = BgiPackageUpdateService.TryBeginPackageOperation();
-        if (operation == null) { StatusText.Text = "另一个 BGI 下载或更新正在进行。"; return; }
+        if (operation == null) { StatusText.Text = "另一个 BGI 下载、更新或备份正在进行。"; return; }
         SetBusy(true, installing: true);
         try
         {
@@ -527,6 +578,7 @@ public partial class UpdateBgiWindow : Window
         AddExcludeButton.IsEnabled = !busy;
         ExcludeList.IsEnabled = !busy;
         AddBackupButton.IsEnabled = !busy;
+        ManualBackupButton.IsEnabled = !busy;
         BackupList.IsEnabled = !busy;
         BackupCheckBox.IsEnabled = !busy;
         PackageList.IsEnabled = !busy;

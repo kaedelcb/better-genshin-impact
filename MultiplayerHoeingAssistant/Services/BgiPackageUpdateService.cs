@@ -72,6 +72,10 @@ public sealed record BgiUpdateApplyResult(
         => new(false, 0, 0, 0, [], backupDir, error);
 }
 
+/// <summary>手动备份结果；失败时 BackupDir 可能指向未完成副本，不能作为完整备份使用。</summary>
+public sealed record BgiManualBackupResult(bool Success, string? BackupDir,
+    IReadOnlyList<string> MissingDirectories, string? Error);
+
 /// <summary>
 /// BGI 更新包扫描与解压覆盖（"更新BGI"弹窗后端）。
 /// 扫描：目录顶层 *.7z，经 <see cref="BgiUpdateDecisions"/> 校验文件名后按名称排序返回（只列合法包）。
@@ -212,6 +216,48 @@ public static class BgiPackageUpdateService
         IReadOnlyList<string> excludeDirs, IReadOnlyList<string> backupDirs,
         IProgress<string>? progress, CancellationToken ct = default)
         => Task.Run(() => Apply(archivePath, targetDir, excludeDirs, backupDirs, progress, ct), ct);
+
+    /// <summary>独立复制所选目录，不下载、不更新、不关闭 BGI，也不清理旧备份。</summary>
+    public static Task<BgiManualBackupResult> BackupAsync(string targetDir, IReadOnlyList<string> directories,
+        IProgress<string>? progress = null, CancellationToken ct = default)
+    {
+        var selected = directories.ToArray();
+        return Task.Run(() =>
+        {
+            using var operation = TryBeginPackageOperation();
+            if (operation == null)
+                return new BgiManualBackupResult(false, null, [], "另一个 BGI 下载、更新或备份正在进行。");
+
+            string? backupDir = null;
+            var missing = new List<string>();
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(targetDir) || !ReadBackupDirectory(targetDir))
+                    return new BgiManualBackupResult(false, null, [], "请先填写有效的 BGI 目录。");
+                if (selected.Length == 0)
+                    return new BgiManualBackupResult(false, null, [], "请先添加要备份的目录。");
+
+                var targetRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDir)) + Path.DirectorySeparatorChar;
+                BackupSelectedDirs(targetRoot, selected, progress, ct,
+                    () => backupDir = CreateBackupDirectory(targetRoot, manual: true), missing);
+                if (backupDir == null)
+                    return new BgiManualBackupResult(false, null, missing, "所选目录均不存在，未生成备份。");
+
+                ct.ThrowIfCancellationRequested();
+                // 完成前保留 .incomplete 标记；手动备份名称不会被更新备份的十天清理规则匹配。
+                var completedDir = backupDir[..^".incomplete".Length];
+                Directory.Move(backupDir, completedDir);
+                return new BgiManualBackupResult(true, completedDir, missing, null);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+                or NotSupportedException or OperationCanceledException)
+            {
+                return new BgiManualBackupResult(false, backupDir, missing,
+                    ex is OperationCanceledException ? "备份已取消。" : ex.Message);
+            }
+        }, ct);
+    }
 
     /// <summary>固定链接上的 CNB 包必须与所选版本一致；只读取将写入 BGI 根目录的主程序元数据。</summary>
     internal static void VerifyCnbPackageVersion(string archivePath, string inspectionPath, string expectedFileName, CancellationToken ct)
@@ -428,7 +474,8 @@ public static class BgiPackageUpdateService
     }
 
     private static string? BackupSelectedDirs(string targetRoot, IReadOnlyList<string> directories,
-        IProgress<string>? progress, CancellationToken ct)
+        IProgress<string>? progress, CancellationToken ct, Func<string>? createBackup = null,
+        List<string>? missingDirectories = null)
     {
         // 只接受目标根内的普通相对路径；备份仓库本身不能再被备份。
         var selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -464,23 +511,28 @@ public static class BgiPackageUpdateService
                 exists = false;
                 break;
             }
-            if (!exists) continue;
+            if (!exists)
+            {
+                missingDirectories?.Add(relative);
+                continue;
+            }
 
-            backupDir ??= CreateBackupDirectory(targetRoot);
+            backupDir ??= createBackup != null ? createBackup() : CreateBackupDirectory(targetRoot);
             progress?.Report($"正在备份 {relative}…");
             CopyDirectory(source, Path.Combine(backupDir, relative), ct);
         }
         return backupDir;
     }
 
-    private static string CreateBackupDirectory(string targetRoot)
+    private static string CreateBackupDirectory(string targetRoot, bool manual = false)
     {
         var root = Path.Combine(targetRoot, BackupRootDirName);
         if (!ReadBackupDirectory(root)) Directory.CreateDirectory(root);
         var timestamp = DateTime.Now;
         while (true)
         {
-            var path = Path.Combine(root, timestamp.ToString(BackupTimestampFormat, CultureInfo.InvariantCulture));
+            var name = timestamp.ToString(BackupTimestampFormat, CultureInfo.InvariantCulture);
+            var path = Path.Combine(root, manual ? $"manual-{name}-{Guid.NewGuid():N}.incomplete" : name);
             if (!ReadBackupDirectory(path))
             {
                 Directory.CreateDirectory(path);

@@ -392,8 +392,27 @@
                                             Style="{StaticResource Btn}" AutomationProperties.Name="添加备份目录" Click="AddBackupButton_Click"/>
                                 </Grid>
                                 <ItemsControl x:Name="BackupList" Style="{StaticResource DirectoryList}"/>
-                                <CheckBox x:Name="BackupCheckBox" Content="更新前备份" IsChecked="True" Margin="0,6,0,0" Cursor="Hand"
-                                          FontSize="13" FontWeight="SemiBold" Style="{StaticResource BackupToggle}"/>
+                                <Grid Margin="0,6,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox x:Name="BackupCheckBox" Content="更新前备份" IsChecked="True" Cursor="Hand"
+                                              FontSize="13" FontWeight="SemiBold" Style="{StaticResource BackupToggle}"/>
+                                    <!-- 按钮借用行内上下留白，不增加原复选框行的布局高度。 -->
+                                    <Button x:Name="ManualBackupButton" Grid.Column="1" Width="96" Height="24" Margin="0,-3,0,-3"
+                                            VerticalAlignment="Center" Padding="7,0" Style="{StaticResource Btn}"
+                                            Background="#393448" BorderBrush="#B8A269" Foreground="{StaticResource GoldText}"
+                                            AutomationProperties.Name="立即备份" Click="ManualBackupButton_Click"
+                                            ToolTip="立即备份上方目录，无需更新；手动备份不会自动清理。">
+                                        <StackPanel Orientation="Horizontal">
+                                            <Path Data="M 1,1 L 13,1 L 13,12 L 1,12 Z M 1,4 L 13,4 M 5,7 L 9,7"
+                                                  Stroke="{StaticResource Gold}" StrokeThickness="1" Width="13" Height="13"
+                                                  Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock x:Name="ManualBackupButtonText" Text="立即备份" FontSize="12" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
                                 <TextBlock Style="{StaticResource Hint}"
                                            Text="勾选后，解压前复制到 _update_backup；成功更新后清理超过 10 天的更新备份。按住 Ctrl 可多选。"/>
                             </StackPanel>
