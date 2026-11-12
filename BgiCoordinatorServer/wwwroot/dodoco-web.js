@@ -317,7 +317,7 @@ const dodocoRemote = {open:false,epoch:0,uid:'',visit:null,generation:0,landscap
     frame:null,painted:null,nativeRoot:null,orientationOwned:false,pointers:new Map(),gesture:null};
 function dodocoRemoteMobile(){return (typeof window.matchMedia==='function' && window.matchMedia('(pointer: coarse)').matches)
     || (Number.isFinite(window.innerWidth) && window.innerWidth<=700);}
-function dodocoRemoteMarkup(){return `<dialog id="dodocoRemoteDialog" class="dd-remote-dialog" aria-label="全屏远程控制"><div id="dodocoRemoteRoot" class="dd-remote-root"><div id="dodocoRemoteSafe" class="dd-remote-safe"><div id="dodocoRemoteShell" class="dd-remote-shell"><header class="dd-remote-toolbar"><strong id="dodocoRemoteTitle"></strong><select id="dodocoRemoteMode" aria-label="鼠标方式"><option value="left">左键</option><option value="right">右键</option><option value="double">双击</option></select><button type="button" id="dodocoRemoteRefresh">刷新</button><button type="button" id="dodocoRemoteKeyboard" aria-expanded="false">按键</button><details id="dodocoRemoteTools"><summary>工具</summary><div class="dd-remote-menu"><label><input id="dodocoRemoteLandscape" type="checkbox" checked>横屏布局</label><div class="dd-remote-zoom"><button type="button" id="dodocoRemoteZoomOut" aria-label="缩小画面">−</button><button type="button" id="dodocoRemoteFit">适应</button><button type="button" id="dodocoRemoteZoomIn" aria-label="放大画面">＋</button></div><button type="button" id="dodocoRemoteBgi">BGI 快捷功能</button><p>点按操作，拖动查看；每端两秒一次。横屏锁定不可用时自动使用旋转布局。</p></div></details><button type="button" id="dodocoRemoteExit">退出</button></header><div id="dodocoRemoteViewport" class="dd-remote-viewport"><div id="dodocoRemoteCanvas" class="dd-remote-canvas"><img id="dodocoRemoteImage" alt="可操作的最新桌面画面" draggable="false"></div></div><div id="dodocoRemoteKeys" class="dd-remote-keys" role="group" aria-label="固定键盘按钮" hidden>${dodocoControlKeys.map(key=>`<button type="button" data-remote-key="${key}"${key==='Alt+F4'?' class="dd-remote-danger"':''} title="${key==='Win+D'?'显示桌面':key==='Alt+F4'?'关闭当前窗口':key}">${key}</button>`).join('')}</div><p id="dodocoRemoteStatus" class="dd-remote-status" role="status" aria-live="polite"></p></div></div></div></dialog>`;}
+function dodocoRemoteMarkup(){return `<dialog id="dodocoRemoteDialog" class="dd-remote-dialog" aria-label="全屏远程控制"><div id="dodocoRemoteRoot" class="dd-remote-root"><div id="dodocoRemoteSafe" class="dd-remote-safe"><div id="dodocoRemoteShell" class="dd-remote-shell"><header class="dd-remote-toolbar"><strong id="dodocoRemoteTitle"></strong><select id="dodocoRemoteMode" aria-label="鼠标方式"><option value="left">左键</option><option value="right">右键</option><option value="double">双击</option></select><button type="button" id="dodocoRemoteRefresh" title="操作面板展开或点按时暂停定时刷新；操作后自动更新，也可手动刷新">刷新</button><button type="button" id="dodocoRemoteKeyboard" aria-expanded="false">按键</button><details id="dodocoRemoteTools"><summary>工具</summary><div class="dd-remote-menu"><label><input id="dodocoRemoteLandscape" type="checkbox" checked>横屏布局</label><div class="dd-remote-zoom"><button type="button" id="dodocoRemoteZoomOut" aria-label="缩小画面">−</button><button type="button" id="dodocoRemoteFit">适应</button><button type="button" id="dodocoRemoteZoomIn" aria-label="放大画面">＋</button></div><button type="button" id="dodocoRemoteBgi">BGI 快捷功能</button><p>点按操作，拖动查看；每端两秒一次。横屏锁定不可用时自动使用旋转布局。</p></div></details><button type="button" id="dodocoRemoteExit">退出</button></header><div id="dodocoRemoteViewport" class="dd-remote-viewport"><div id="dodocoRemoteCanvas" class="dd-remote-canvas"><img id="dodocoRemoteImage" alt="可操作的最新桌面画面" draggable="false"></div></div><div id="dodocoRemoteKeys" class="dd-remote-keys" role="group" aria-label="固定键盘按钮" hidden>${dodocoControlKeys.map(key=>`<button type="button" data-remote-key="${key}"${key==='Alt+F4'?' class="dd-remote-danger"':''} title="${key==='Win+D'?'显示桌面':key==='Alt+F4'?'关闭当前窗口':key}">${key}</button>`).join('')}</div><p id="dodocoRemoteStatus" class="dd-remote-status" role="status" aria-live="polite"></p></div></div></div></dialog>`;}
 function dodocoRemoteCurrent(){return dodocoRemote.open && dodocoRemote.uid===dodoco.target
     && dodocoRemote.visit===dodoco.screenVisit && dodocoRemote.generation===dodoco.generation;}
 function dodocoRemoteLayout(){
@@ -493,7 +493,8 @@ function dodocoRemoteSync(){
     const member=dodocoMembersList().find(p=>p.playerUid===dodoco.target);
     d('dodocoRemoteTitle').textContent=member?.playerName||dodoco.target;
     const reason=dodocoControlReason() || (dodocoRemote.painted!==frame?(dodocoRemote.paintError?'画面加载失败，请刷新。':'画面加载中…'):'');
-    const mode=d('dodocoRemoteMode');mode.value=dodocoControl.mode;mode.disabled=!!reason;
+    // 选择下一次鼠标方式不发送输入；刷新/解码/冷却时禁用原生 select 会关闭手机选择菜单。
+    const mode=d('dodocoRemoteMode');if(mode.value!==dodocoControl.mode)mode.value=dodocoControl.mode;mode.disabled=false;
     d('dodocoRemoteKeys').querySelectorAll('[data-remote-key]').forEach(button=>button.disabled=!!reason);
     d('dodocoRemoteRefresh').disabled=!!dodocoControl.pending||dodoco.autoBusy||performance.now()<dodocoControl.refreshNotBefore;
     const status=d('dodocoRemoteStatus');status.textContent=dodocoRemote.notice||reason||dodocoControl.status;
@@ -746,7 +747,7 @@ function dodocoRenderScreen(){
  d('dodocoControlKeys').querySelectorAll('[data-control-key]').forEach(b=>b.onclick=e=>{if(dodocoControlPointer(e))dodocoControlSend('key',0,0,b.dataset.controlKey);});
  d('dodocoZoomDialog').querySelector('.dd-zoom-stage').onwheel=e=>{e.preventDefault();const z=d('dodocoZoomDialog').querySelector('img');dodoco.zoom=Math.min(6,Math.max(1,(dodoco.zoom||1)*(e.deltaY<0?1.15:1/1.15)));z.style.transform=`scale(${dodoco.zoom})`;};
  d('dodocoClearFrames').onclick=()=>{dodocoControlClose('已清空画面历史，控制已关闭。');if(dodoco.target==='*')dodoco.frames.clear();else dodoco.frames.delete(dodoco.target);dodocoDrawFrames();dodocoStatus('已清空本网页所选成员的画面历史。');};
- const startAuto=()=>{dodocoStopAuto();if(!dodocoScreenAllowed())return;d('dodocoAuto').checked=true;dodoco.autoTimer=setInterval(()=>{if(!dodoco.autoBusy && !dodocoControl.pending && performance.now()>=dodocoControl.refreshNotBefore)dodocoCapture();},Math.max(1100,Number(d('dodocoInterval').value)));dodocoCapture();};
+ const startAuto=()=>{dodocoStopAuto();if(!dodocoScreenAllowed())return;d('dodocoAuto').checked=true;dodoco.autoTimer=setInterval(dodocoAutoCapture,Math.max(1100,Number(d('dodocoInterval').value)));dodocoAutoCapture();};
  d('dodocoAuto').onchange=e=>{if(e.target.checked)startAuto();else dodocoStopAuto();};d('dodocoInterval').onchange=()=>{if(d('dodocoAuto').checked)startAuto();};dodocoDrawFrames();dodocoScreenAllowed();dodocoControlSync();
 }
 function dodocoDrawFrames(){
@@ -792,6 +793,12 @@ async function dodocoCaptureOne(uid){
  const id=`screen:${visit.id}:${dodocoScreenId()}`,wait=dodocoWait('frame',uid,id);
  try{await dodocoDispatch('screenshot.request',{targetUid:uid,requestId:id});return accept(await wait,id);}
  catch(e){const p=dodoco.pending.get(id);if(p)dodocoFinish(p,e.message);throw e;}
+}
+function dodocoAutoCapture(){
+ // 交互期间推迟定时截图，避免按下到抬起之间换帧或禁用展开面板中的按键。
+ // 空闲时仍自动刷新；手动刷新和输入终态后的取帧不受此处影响。
+ if(dodocoRemoteCurrent() && (dodocoRemote.pointers.size || !d('dodocoRemoteKeys')?.hidden || d('dodocoRemoteTools')?.open))return;
+ if(!dodoco.autoBusy && !dodocoControl.pending && performance.now()>=dodocoControl.refreshNotBefore)dodocoCapture();
 }
 async function dodocoCapture(){
  if(!dodocoScreenAllowed())return;

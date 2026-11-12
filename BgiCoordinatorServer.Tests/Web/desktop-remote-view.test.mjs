@@ -26,6 +26,42 @@ test('手机启用控制自动打开横屏页面全屏；系统API缺失仍可�
  assert.equal(h.document.body.classList.contains('dd-remote-open'),false);
 });
 
+test('手机鼠标方式不随截图、解码和输入冷却禁用，面板节点保持原位',async()=>{
+ const h=await mobile();h.paint();
+ const dialog=h.element('dodocoRemoteDialog'),mode=h.element('dodocoRemoteMode'),keys=h.element('dodocoRemoteKeys');
+ h.element('dodocoRemoteKeyboard').click();h.element('dodocoRemoteTools').open=true;
+ mode.value='double';mode.onchange({target:mode});
+ const refresh=h.api.dodocoCapture();await flush();
+ assert.equal(h.api.dodoco.autoBusy,true);assert.equal(mode.disabled,false,'请求截图不应收起手机原生选择菜单');
+ mode.value='right';mode.onchange({target:mode});h.reply();await refresh;
+ assert.equal(h.api.dodocoRemoteReady(),false,'新图解码期间仍禁止对画面发输入');
+ assert.equal(mode.disabled,false);assert.equal(mode.value,'right');
+ assert.equal(h.element('dodocoRemoteDialog'),dialog);assert.equal(h.element('dodocoRemoteKeys'),keys);
+ assert.equal(keys.hidden,false);assert.equal(h.element('dodocoRemoteTools').open,true);
+ h.paint();keys.querySelector('[data-remote-key="W"]').click();assert.equal(h.inputs().length,1);
+ assert.equal(mode.disabled,false,'输入回执和两秒冷却不影响选择下一次鼠标方式');
+ mode.value='double';mode.onchange({target:mode});assert.equal(h.api.dodocoControl.mode,'double');
+});
+
+test('全屏交互期间推迟定时截图，空闲时恢复；输入后仍自动获取新画面',async()=>{
+ const h=harness({mobile:true,pointerEvents:true});
+ const auto=h.element('dodocoAuto');h.element('dodocoInterval').value='1000';auto.checked=true;auto.onchange({target:auto});
+ await flush();h.reply();await flush();assert.equal(h.api.dodoco.autoBusy,false);
+ h.enable();h.paint();const count=h.captures().length,img=image(h),visit=h.api.dodoco.screenVisit;
+ h.advance(900);img.onpointerdown(point());await h.tick(300);assert.equal(h.captures().length,count);img.onpointerup(point());
+ assert.equal(h.inputs().length,1);h.result();await h.tick(1100);
+ assert.equal(h.captures().length,count+1,'系统接受输入后仍会自动获取新画面');
+ h.reply();await flush();h.paint();h.element('dodocoRemoteKeyboard').click();await h.tick(3000);
+ assert.equal(h.captures().length,count+1,'按键抽屉展开时不穿插后台定时截图');
+ assert.equal(h.api.dodoco.screenVisit,visit);assert.equal(auto.checked,true);
+ h.element('dodocoRemoteKeyboard').click();await h.tick(1100);
+ assert.equal(h.captures().length,count+2,'全屏空闲时继续自动刷新');h.reply();await flush();h.paint();
+ h.element('dodocoRemoteTools').open=true;await h.tick(2200);
+ assert.equal(h.captures().length,count+2,'工具菜单展开时暂缓定时刷新');
+ h.element('dodocoRemoteTools').open=false;h.element('dodocoRemoteExit').click();await h.tick(1100);
+ assert.equal(h.captures().length,count+3,'退出全屏后保持原定时刷新设置');h.reply();await flush();
+});
+
 test('桌面保留原内联控制，显式全屏入口才进入大画面',async()=>{
  const h=harness();await h.capture();h.enable();assert.equal(h.api.dodocoRemote.open,false);
  h.element('dodocoRemoteEnter').click();assert.equal(h.api.dodocoRemote.open,true);
