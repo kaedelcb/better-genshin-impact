@@ -291,7 +291,7 @@ internal sealed class ExternalInterfaceEventObserver
                     return null;
                 }
 
-                return $"第{AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes}条线路: {AutoHoeingProgress.RouteFileName}";
+                return $"{AutoHoeingProgress.RoundPrefix}第{AutoHoeingProgress.CurrentRouteIndex}/{AutoHoeingProgress.TotalRoutes}条线路: {AutoHoeingProgress.RouteFileName}";
             }
         }
         catch
