@@ -70,25 +70,25 @@ public sealed class WorldPlanStartBoundaryTests
     }
 
     [Fact]
-    public async Task DisabledHostSwitchReturnsToTheOldStartupWithoutSendingAnyPlanRequest()
+    public async Task SavedDisabledSwitchStillStartsWorldPlan()
     {
         await using var client = await ClientInSourceRoom();
         var task = CreateTask();
-        Field<AutoHoeingConfig>(task, "_config").MultiWorldResumeEnabled = false;
-        var sent = new List<string>();
-        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        SetField(task, "_settingsOverride", new Dictionary<string, object?>
         {
-            sent.Add(request.Name);
-            throw new InvalidOperationException("Disabled preview must not send a request");
-        };
+            ["multiWorldResumeEnabled"] = false
+        });
+        typeof(AutoHoeingTask).GetMethod("ApplySettingsOverride", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(task, null);
+        var sent = new List<string>();
+        SeedNoWorkServer(client, sent, releasedStage: "NoWork", sourceReleased: true);
 
-        Assert.False(await Start(task, client));
+        Assert.True(await Start(task, client));
 
-        Assert.Empty(sent);
-        Assert.False(Field<bool>(task, "_worldPlanNoWorkConfirmed"));
-        Assert.False(Field<bool>(task, "_completedNormally"));
-        Assert.False(Field<bool>(task, "_multiplayerPartyReady"));
-        Assert.True(client.IsInRoom);
+        Assert.Equal(GatewayProtocol.Names.WorldPlanBegin, sent[0]);
+        Assert.True(Field<bool>(task, "_worldPlanNoWorkConfirmed"));
+        Assert.True(Field<bool>(task, "_completedNormally"));
+        Assert.False(client.IsInRoom);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class WorldPlanStartBoundaryTests
                     _ => throw new InvalidOperationException(request.Name)
                 };
                 var snapshot = new MultiWorldStartPlan { PlanId = "guard", Stage = stage,
-                    HostConfig = new() { MultiWorldEnabled = true, MultiWorldResumeEnabled = true, AutoUpdateRoutes = false } };
+                    HostConfig = new() { MultiWorldEnabled = true, AutoUpdateRoutes = false } };
                 return Task.FromResult(Response(request, new { planId = "guard", ticket = "guard-ticket", snapshot }));
             };
             Assert.False(await Start(task, client));
@@ -247,7 +247,7 @@ public sealed class WorldPlanStartBoundaryTests
         {
             PlayerUid = "A", PlayerName = "A", ExpectedPlayerCount = 4,
             MultiplayerEnabled = true, MultiplayerRole = "host",
-            MultiWorldEnabled = true, MultiWorldResumeEnabled = true,
+            MultiWorldEnabled = true,
             MultiWorldCount = 2, PartyTimeoutSeconds = 30
         });
         // A is not a candidate in this focused startup fixture, so no account or resource is read.
@@ -283,7 +283,7 @@ public sealed class WorldPlanStartBoundaryTests
             Players = client.CurrentPlayerList,
             HostConfig = new RoomConfig
             {
-                MultiWorldEnabled = true, MultiWorldResumeEnabled = true, MultiWorldCount = 2,
+                MultiWorldEnabled = true, MultiWorldCount = 2,
                 PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
             }
         };

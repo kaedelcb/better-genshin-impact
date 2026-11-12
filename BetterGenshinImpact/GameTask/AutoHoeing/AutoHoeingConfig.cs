@@ -627,15 +627,6 @@ public partial class AutoHoeingConfig : ObservableObject
     [ObservableProperty]
     private int _multiWorldCount = 4;
 
-    /// <summary>
-    /// 多世界续开重跑：每次开队先预判当前线路，全组直接进入原计划中首个有线路的世界。
-    /// 默认开启，由发起房主下发，服务端汇总本次结果；无线路的成员仍参队。
-    /// 关闭时保留逐世界进入检查的旧流程，单机不启用预判。
-    /// hoeing-multiworld-host-restart-resume-round Req 5。
-    /// </summary>
-    [ObservableProperty]
-    private bool _multiWorldResumeEnabled = true;
-
     // === 反复复苏双层兜底（multi-revival-rapid-recurrence-fallback spec, OQ-1 / OQ-2 默认值）===
 
     /// <summary>

@@ -226,7 +226,7 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 new { playerName = uids[0], playerUid = uids[0], expectedPlayerCount = 4, reportedVersion = version });
             var sourceCode = source.Payload!["roomCode"]!.GetValue<string>();
             await SendAsync(connections[0], Protocol.Names.RoomSetConfig,
-                new { config = new { multiWorldEnabled = true, multiWorldResumeEnabled = true, multiWorldCount = 4, partyTimeoutSeconds = 60 } },
+                new { config = new { multiWorldEnabled = true, multiWorldCount = 4, partyTimeoutSeconds = 60 } },
                 sourceCode);
             for (var i = 1; i < 4; i++)
                 Assert.True((await SendAsync(connections[i], Protocol.Names.RoomJoin,

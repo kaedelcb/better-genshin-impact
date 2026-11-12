@@ -639,20 +639,6 @@
                                       TextWrapping="Wrap" />
                     </StackPanel>
                 </ui:Card>
-                <!--  子卡片：重开续跑（房主侧，hoeing-multiworld-host-restart-resume-round）  -->
-                <ui:Card Margin="0,8,0,0" Padding="12">
-                    <StackPanel>
-                        <ui:TextBlock Margin="0,0,0,8"
-                                      FontTypography="BodyStrong"
-                                      Text="续开重跑（开队前跳过无线路世界）" />
-                        <ui:ToggleSwitch Margin="0,0,0,4"
-                                         Content="启用续开重跑"
-                                         IsChecked="{Binding MultiWorldResumeEnabled, Mode=TwoWay}" />
-                        <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="开启后，每次开队只计算各家当前可打的线路，仍在 CD 中的线路不计入。全组直接进入第一个有线路的世界，被跳过的房主仍然参队。关闭则从第 1 轮逐家进入并检查。预判无法确认时，全组回到逐家检查；仅房主设置生效。"
-                                      TextWrapping="Wrap" />
-                    </StackPanel>
-                </ui:Card>
                 <!--  子卡片：单人调试模式（纯本地，hoeing-multiplayer-solo-debug-mode）  -->
                 <ui:Card Margin="0,8,0,0" Padding="12">
                     <StackPanel>

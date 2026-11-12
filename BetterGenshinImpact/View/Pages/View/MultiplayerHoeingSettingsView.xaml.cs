@@ -1380,7 +1380,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             "fightTimeoutSeconds",
             // === 落后追赶调试参数（单机模式清除，hoeing-multiplayer-lagging-member-catchup）===
             "enableLaggingCatchUp", "lagSegmentThreshold",
-            // === 重开续跑开关（单机模式清除，hoeing-multiworld-host-restart-resume-round）===
+            // 续开重跑已固定启用，仅清理历史配置残留。
             "multiWorldResumeEnabled",
             // === 单人调试模式开关（单机模式清除，hoeing-multiplayer-solo-debug-mode）===
             "soloDebugMode",

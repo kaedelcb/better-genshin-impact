@@ -37,13 +37,13 @@ public partial class AutoHoeingTask
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            // A stated single-world/disabled setting must not depend on the new plan RPC.
+            // A stated single-world setting must not depend on the new plan RPC.
             // Still verify fixed-batch identity before returning to its original admission path.
             var hostConfig = await client.GetRoomConfigAsync(ct);
             if (hostConfig != null)
             {
                 RequireMatchingRoomBatch(hostConfig);
-                if (!hostConfig.MultiWorldEnabled || !hostConfig.MultiWorldResumeEnabled)
+                if (!hostConfig.MultiWorldEnabled)
                 {
                     if (hostConfigApplied)
                         throw new InvalidOperationException("本次已声明的多世界预判配置发生变化");

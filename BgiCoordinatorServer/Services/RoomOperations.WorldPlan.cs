@@ -30,7 +30,7 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("world_plan_manual_party_invalid");
             if (_worldPlansBySource.TryGetValue(room.SessionId, out var existing) && _worldPlans.TryGetValue(existing, out var current))
                 return Task.FromResult(current.Acquire(room.Players.Single(p => p.ConnectionId == ctx.ConnectionId).PlayerUid, _worldPlanTime.GetUtcNow().UtcDateTime));
-            if (room.IsStarted || room.HostConfig == null || !room.HostConfig.MultiWorldEnabled || !room.HostConfig.MultiWorldResumeEnabled)
+            if (room.IsStarted || room.HostConfig == null || !room.HostConfig.MultiWorldEnabled)
                 throw new InvalidOperationException("world_plan_config_invalid");
             if (room.Players.Count != room.ExpectedPlayerCount && !(forceLegacy && room.HoeingBatchId == null))
                 throw new InvalidOperationException("world_plan_roster_incomplete");

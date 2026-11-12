@@ -23,7 +23,7 @@ public sealed class WorldPlanGatewayTests
         await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig
         {
             HoeingBatchId = batch, ExpectedParticipantUids = participants ?? [],
-            MultiWorldEnabled = true, MultiWorldResumeEnabled = true, MultiWorldCount = rounds,
+            MultiWorldEnabled = true, MultiWorldCount = rounds,
             SelectedBuiltinRoute = "原房主线路", RouteFilterKeywords = "排除", PartyTimeoutSeconds = 60,
         });
         foreach (var uid in new[] { "B", "C", "D" })
@@ -55,6 +55,23 @@ public sealed class WorldPlanGatewayTests
             var s = await h.Ops.LeaveWorldPlanSourceAsync(C(new[] { "A", "B", "C", "D" }[i]), clients[i].PlanId, clients[i].Ticket);
             Assert.Equal(i == clients.Length - 1, s.SourceReleased);
         }
+    }
+
+    [Fact]
+    public async Task LegacyDisabledResumeFieldCannotDisableWorldPlan()
+    {
+        var h = new GatewayTestHarness();
+        await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 1,
+            reportedVersion: Version);
+        var config = System.Text.Json.JsonSerializer.Deserialize<RoomConfig>(
+            """{"multiWorldEnabled":true,"multiWorldResumeEnabled":false}""",
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        await h.Ops.SetRoomConfigAsync(C("A"), config);
+
+        var admission = await h.Ops.BeginWorldPlanAsync(C("A"));
+
+        Assert.Equal("Planning", admission.Snapshot.Stage);
+        Assert.DoesNotContain("MultiWorldResumeEnabled", System.Text.Json.JsonSerializer.Serialize(config));
     }
 
     [Fact]

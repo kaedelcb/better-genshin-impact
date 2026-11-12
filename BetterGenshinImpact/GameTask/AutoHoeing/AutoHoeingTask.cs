@@ -1152,7 +1152,6 @@ public partial class AutoHoeingTask : ISoloTask
                     KazuhaSecondApproachMaxSteps = _config.KazuhaSecondApproachMaxSteps,
                     PartyTimeoutSeconds = _config.PartyTimeoutSeconds,
                     MultiWorldEnabled = _config.MultiWorldEnabled,
-                    MultiWorldResumeEnabled = _config.MultiWorldResumeEnabled,
                     MultiWorldCount = _config.MultiWorldCount,
                     SelectedBuiltinRoute = _config.SelectedBuiltinRoute,
                     FightTimeoutSeconds = _config.FightTimeoutSeconds,
@@ -2719,7 +2718,6 @@ public partial class AutoHoeingTask : ISoloTask
                     _config.KazuhaSecondApproachMaxSteps = hostConfig.KazuhaSecondApproachMaxSteps;
                     _config.PartyTimeoutSeconds = hostConfig.PartyTimeoutSeconds;
                     _config.MultiWorldEnabled = hostConfig.MultiWorldEnabled;
-                    _config.MultiWorldResumeEnabled = hostConfig.MultiWorldResumeEnabled;
                     _config.MultiWorldCount = hostConfig.MultiWorldCount;
                     _config.SelectedBuiltinRoute = hostConfig.SelectedBuiltinRoute;
                     _config.FightExtraWaitSeconds = hostConfig.FightExtraWaitSeconds;
@@ -5374,7 +5372,6 @@ public partial class AutoHoeingTask : ISoloTask
         if (_settingsOverride.ContainsKey("selectedBuiltinRoute"))
             _config.SelectedBuiltinRoute = Get("selectedBuiltinRoute", _config.SelectedBuiltinRoute);
 
-        _config.MultiWorldResumeEnabled = Get("multiWorldResumeEnabled", _config.MultiWorldResumeEnabled);
         _config.MultiWorldEnabled = Get("multiWorldEnabled", _config.MultiWorldEnabled);
         _config.MultiWorldCount = Get("multiWorldCount", _config.MultiWorldCount);
 

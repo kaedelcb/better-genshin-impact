@@ -33,7 +33,6 @@ public partial class AutoHoeingTask
         _config.KazuhaSecondApproachMaxSteps = hostConfig.KazuhaSecondApproachMaxSteps;
         _config.PartyTimeoutSeconds = hostConfig.PartyTimeoutSeconds;
         _config.MultiWorldEnabled = hostConfig.MultiWorldEnabled;
-        _config.MultiWorldResumeEnabled = hostConfig.MultiWorldResumeEnabled;
         _config.MultiWorldCount = hostConfig.MultiWorldCount;
         _config.SelectedBuiltinRoute = hostConfig.SelectedBuiltinRoute;
         _config.FightExtraWaitSeconds = hostConfig.FightExtraWaitSeconds;
@@ -259,7 +258,7 @@ public partial class AutoHoeingTask
         if (!client.SupportsWorldPlan) return false;
         if (isHost && _config.SoloDebugMode)
         {
-            if (_config.MultiWorldEnabled && _config.MultiWorldResumeEnabled)
+            if (_config.MultiWorldEnabled)
                 await client.BeginWorldPlanAsync(_ct, forceLegacy: true);
             return false;
         }
@@ -272,7 +271,7 @@ public partial class AutoHoeingTask
         {
             if (isHost)
             {
-                if (!_config.MultiWorldEnabled || !_config.MultiWorldResumeEnabled) return false;
+                if (!_config.MultiWorldEnabled) return false;
                 bool ordinary = !BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive;
                 _partyWaitStarted = System.Diagnostics.Stopwatch.GetTimestamp();
                 var limit = Math.Max(1, _config.PartyTimeoutSeconds);

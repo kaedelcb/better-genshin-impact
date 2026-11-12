@@ -105,9 +105,6 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     [ObservableProperty] private bool _enableLaggingCatchUp;
     [ObservableProperty] private string _lagSegmentThreshold = "";
 
-    // ===== 调试（hoeing-multiworld-host-restart-resume-round）：重开续跑，房主侧 =====
-    [ObservableProperty] private bool _multiWorldResumeEnabled;
-
     // ===== 调试（hoeing-multiplayer-solo-debug-mode）：单人调试模式，纯本地 =====
     [ObservableProperty] private bool _soloDebugMode;
 
@@ -277,9 +274,6 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _enableLaggingCatchUp = GetBool("enableLaggingCatchUp", g.EnableLaggingCatchUp);
         _lagSegmentThreshold = GetInt("lagSegmentThreshold", g.LagSegmentThreshold).ToString();
 
-        // hoeing-multiworld-host-restart-resume-round：重开续跑开关（房主本地，默认开）
-        _multiWorldResumeEnabled = GetBool("multiWorldResumeEnabled", g.MultiWorldResumeEnabled);
-
         // hoeing-multiplayer-solo-debug-mode：单人调试模式开关（纯本地，默认关）
         _soloDebugMode = GetBool("soloDebugMode", g.SoloDebugMode);
         _autoLaunchAssistant = GetBool("autoLaunchAssistant", g.AutoLaunchAssistant);
@@ -352,8 +346,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["enableLaggingCatchUp"] = EnableLaggingCatchUp;
         if (int.TryParse(LagSegmentThreshold, out var lst)) settings["lagSegmentThreshold"] = lst;
 
-        // hoeing-multiworld-host-restart-resume-round：重开续跑开关
-        settings["multiWorldResumeEnabled"] = MultiWorldResumeEnabled;
+        // 续开重跑固定启用，保存时清除旧配置中的开关。
+        settings.Remove("multiWorldResumeEnabled");
         // hoeing-multiplayer-solo-debug-mode：单人调试模式开关（纯本地）
         settings["soloDebugMode"] = SoloDebugMode;
         // 自动启动联机助手（纯本地）

@@ -35,8 +35,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
             GroupIndex = 1,
             PartyTimeoutSeconds = 30,
             MultiplayerEnabled = true,
-            MultiWorldEnabled = true,
-            MultiWorldResumeEnabled = true
+            MultiWorldEnabled = true
         };
         _task = new AutoHoeingTask();
         SetField(_task, "_config", _config);
@@ -219,7 +218,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
     }
 
     [Fact]
-    public void SavedDisabledSwitchOverridesAnEnabledGlobalDefault()
+    public void RetiredSwitchIsIgnoredAndNotSerializedWithGlobalConfig()
     {
         var task = new AutoHoeingTask(settings: new Dictionary<string, object?>
         {
@@ -227,11 +226,17 @@ public sealed class WorldPlanPreviewTests : IDisposable
             ["multiWorldEnabled"] = true,
             ["multiWorldResumeEnabled"] = false
         });
-        var config = new AutoHoeingConfig { MultiWorldResumeEnabled = true };
+        var config = JsonSerializer.Deserialize<AutoHoeingConfig>("""{"MultiWorldResumeEnabled":false}""")!;
         SetField(task, "_config", config);
         Invoke(task, "ApplySettingsOverride");
-        Assert.False(config.MultiWorldResumeEnabled);
+        Assert.DoesNotContain("MultiWorldResumeEnabled", JsonSerializer.Serialize(config));
         Assert.True(config.MultiWorldEnabled);
+
+        var settings = new Dictionary<string, object?> { ["multiWorldResumeEnabled"] = false };
+        var viewModel = new BetterGenshinImpact.ViewModel.Pages.View.MultiplayerHoeingSettingsViewModel(
+            settings, config, new[] { "1" }, "1");
+        viewModel.WriteMultiplayerSettings(settings);
+        Assert.False(settings.ContainsKey("multiWorldResumeEnabled"));
     }
 
     private (bool Known, int Count) Preview()

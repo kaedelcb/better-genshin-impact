@@ -112,9 +112,11 @@ public sealed class WorldPlanMemberNegotiationTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ExistingPlanWinsEvenWhenHostIsReadyAndLocalDefaultsAreSingleWorld(bool arrivesAfterReadiness)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task ExistingPlanWinsEvenWhenHostIsReadyAndLocalDefaultsAreSingleWorld(
+        bool arrivesAfterReadiness, bool legacyDisabledConfig)
     {
         await using var client = await Member();
         var task = CreateTask();
@@ -135,7 +137,10 @@ public sealed class WorldPlanMemberNegotiationTests
                     break;
                 case GatewayProtocol.Names.RoomGetConfig:
                     configs++;
-                    payload = new { config = (RoomConfig?)null };
+                    payload = legacyDisabledConfig
+                        ? new { config = new { multiWorldEnabled = true, multiWorldResumeEnabled = false,
+                            autoUpdateRoutes = false, partyTimeoutSeconds = 30 } }
+                        : new { config = (RoomConfig?)null };
                     break;
                 case GatewayProtocol.Names.RoomGetState:
                     readiness++;
@@ -207,10 +212,8 @@ public sealed class WorldPlanMemberNegotiationTests
         Assert.False(Field<bool>(task, "_multiplayerPartyReady"));
     }
 
-    [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task ExplicitSingleWorldOrDisabledHostConfigDoesNotCallThePlanEndpoint(bool multiWorld, bool resume)
+    [Fact]
+    public async Task ExplicitSingleWorldHostConfigDoesNotCallThePlanEndpoint()
     {
         await using var client = await Member();
         var task = CreateTask(multiWorld: true);
@@ -221,7 +224,7 @@ public sealed class WorldPlanMemberNegotiationTests
             Assert.Equal(GatewayProtocol.Names.RoomGetConfig, request.Name);
             return System.Threading.Tasks.Task.FromResult(Response(request, new
             {
-                config = new RoomConfig { MultiWorldEnabled = multiWorld, MultiWorldResumeEnabled = resume }
+                config = new RoomConfig { MultiWorldEnabled = false }
             }));
         };
 
@@ -308,7 +311,7 @@ public sealed class WorldPlanMemberNegotiationTests
         Set(task, "_config", new AutoHoeingConfig
         {
             PlayerUid = "B", PlayerName = "B", MultiplayerRole = "member", MultiplayerEnabled = true,
-            MultiWorldEnabled = multiWorld, MultiWorldResumeEnabled = true, PartyTimeoutSeconds = 30,
+            MultiWorldEnabled = multiWorld, PartyTimeoutSeconds = 30,
             AutoUpdateRoutes = false
         });
         Set(task, "_ct", cancellation);
@@ -323,7 +326,7 @@ public sealed class WorldPlanMemberNegotiationTests
         Players = new() { new PlayerInfo { PlayerUid = "A" }, new PlayerInfo { PlayerUid = "B" } },
         HostConfig = new RoomConfig
         {
-            MultiWorldEnabled = true, MultiWorldResumeEnabled = true, MultiWorldCount = 1,
+            MultiWorldEnabled = true, MultiWorldCount = 1,
             PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
         }
     };
