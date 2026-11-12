@@ -950,7 +950,7 @@ function showMemberConfigSelect(uid, memberName, type) {
 }
 
 // ---------- 弹窗：快捷键选择 ----------
-function showHotkeySelect(uid, memberName) {
+function showHotkeySelect(uid, memberName, host = document.body, onError = null) {
     const member = players.find(p => p.playerUid === uid);
     const hotkeys = member ? member.hotkeys || [] : [];
     if (!hotkeys || hotkeys.length === 0) {
@@ -978,7 +978,7 @@ function showHotkeySelect(uid, memberName) {
                 <button class="btn btn-primary" id="hkOk">执行</button>
             </div>
         </div>`;
-    document.body.appendChild(overlay);
+    host.appendChild(overlay);
 
     let selected = null;
     const items = overlay.querySelectorAll('.list-item');
@@ -999,7 +999,10 @@ function showHotkeySelect(uid, memberName) {
         if (selected) {
             const cmd = makeCmd('hotkey_execute', { hotkeyConfigName: selected });
             cmd.target = [uid];
-            try { await sendTrackedCommand(cmd); } catch (err) { log('快捷键未完成: ' + err.message); }
+            try { await sendTrackedCommand(cmd); } catch (err) {
+                const message='快捷键未完成: ' + err.message;log(message);
+                if(typeof onError==='function')onError(message);
+            }
         }
         overlay.remove();
     });

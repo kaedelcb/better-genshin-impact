@@ -183,6 +183,7 @@ function dodocoEvent(env) {
     }
 }
 function dodocoRender() {
+    if(dodocoRemote.open)dodocoControlClose('页面已刷新，控制已关闭。');
     dodocoScreenSync();
     dodocoRoot.innerHTML = `<div class="dd-head"><nav class="dodoco-tabs" aria-label="嘟嘟可功能"><button data-tab="live">实时日志</button><button data-tab="files">日志浏览</button><button data-tab="watch">异常监控</button><button data-tab="members">锄地数据</button><button data-tab="screen">桌面监控</button></nav><div class="dd-head-target"><label for="dodocoMember">成员</label><select id="dodocoMember">${dodocoMemberOptions()}</select></div></div><p id="dodocoStatus" class="dodoco-status dd-status" role="status">${dodoco.uncertain?'先前请求因断线结果未确认。':''}${dodocoIsLocal()?(window.bgiLocalBridge.available?'本机直连。':'本机连接未就绪。'):roomReady?'请选择在线成员。':'连接未就绪。'}</p><div id="dodocoContent" class="dd-body"></div>`;
     dodocoRoot.querySelectorAll('[data-tab]').forEach(b => { b.classList.toggle('active',b.dataset.tab===dodoco.tab); b.onclick=()=>{ if(b.dataset.tab!==dodoco.tab)dodocoControlClose('已切换页面，控制已关闭。'); dodocoStopAuto(); dodoco.tab=b.dataset.tab; if(dodoco.target==='*' && dodoco.tab!=='screen')dodoco.target=''; dodocoRender(); dodocoSyncSubscription(); }; });
@@ -304,6 +305,204 @@ function dodocoControlGeometry(g) {
         && typeof g.displayId==='string' && g.displayId.length>0 && g.displayId.length<=256
         && typeof g.layoutId==='string' && g.layoutId.length>0 && g.layoutId.length<=256;
 }
+// 手机全屏远控独立于只读放大；横屏回退只旋转显示，不改变观看会话或输入协议。
+const dodocoRemote = {open:false,epoch:0,uid:'',visit:null,generation:0,landscape:true,rotated:false,zoom:1,
+    frame:null,painted:null,nativeRoot:null,orientationOwned:false,pointers:new Map(),gesture:null};
+function dodocoRemoteMobile(){return (typeof window.matchMedia==='function' && window.matchMedia('(pointer: coarse)').matches)
+    || (Number.isFinite(window.innerWidth) && window.innerWidth<=700);}
+function dodocoRemoteMarkup(){return `<dialog id="dodocoRemoteDialog" class="dd-remote-dialog" aria-label="全屏远程控制"><div id="dodocoRemoteRoot" class="dd-remote-root"><div id="dodocoRemoteSafe" class="dd-remote-safe"><div id="dodocoRemoteShell" class="dd-remote-shell"><header class="dd-remote-toolbar"><strong id="dodocoRemoteTitle"></strong><select id="dodocoRemoteMode" aria-label="鼠标方式"><option value="left">左键</option><option value="right">右键</option><option value="double">双击</option></select><button type="button" id="dodocoRemoteRefresh">刷新</button><button type="button" id="dodocoRemoteKeyboard" aria-expanded="false">按键</button><details id="dodocoRemoteTools"><summary>工具</summary><div class="dd-remote-menu"><label><input id="dodocoRemoteLandscape" type="checkbox" checked>横屏布局</label><div class="dd-remote-zoom"><button type="button" id="dodocoRemoteZoomOut" aria-label="缩小画面">−</button><button type="button" id="dodocoRemoteFit">适应</button><button type="button" id="dodocoRemoteZoomIn" aria-label="放大画面">＋</button></div><button type="button" id="dodocoRemoteBgi">BGI 快捷功能</button><p>点按操作，拖动查看；每端两秒一次。横屏锁定不可用时自动使用旋转布局。</p></div></details><button type="button" id="dodocoRemoteExit">退出</button></header><div id="dodocoRemoteViewport" class="dd-remote-viewport"><div id="dodocoRemoteCanvas" class="dd-remote-canvas"><img id="dodocoRemoteImage" alt="可操作的最新桌面画面" draggable="false"></div></div><div id="dodocoRemoteKeys" class="dd-remote-keys" role="group" aria-label="固定键盘按钮" hidden>${dodocoControlKeys.map(key=>`<button type="button" data-remote-key="${key}"${key==='Alt+F4'?' class="dd-remote-danger"':''} title="${key==='Win+D'?'显示桌面':key==='Alt+F4'?'关闭当前窗口':key}">${key}</button>`).join('')}</div><p id="dodocoRemoteStatus" class="dd-remote-status" role="status" aria-live="polite"></p></div></div></div></dialog>`;}
+function dodocoRemoteCurrent(){return dodocoRemote.open && dodocoRemote.uid===dodoco.target
+    && dodocoRemote.visit===dodoco.screenVisit && dodocoRemote.generation===dodoco.generation;}
+function dodocoRemoteLayout(){
+    if(!dodocoRemoteCurrent())return;
+    const safe=d('dodocoRemoteSafe'),shell=d('dodocoRemoteShell');if(!safe || !shell)return;
+    const box=safe.getBoundingClientRect(),width=safe.clientWidth||window.innerWidth||box.width,
+        height=safe.clientHeight||window.innerHeight||box.height;
+    if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)return;
+    const rotated=dodocoRemote.landscape && height>width;
+    const w=rotated?height:width,h=rotated?width:height;
+    if(dodocoRemote.rotated!==rotated || shell.style.width!==`${w}px` || shell.style.height!==`${h}px`){
+        dodocoRemote.gesture=null;dodocoRemote.pointers.clear();
+    }
+    dodocoRemote.rotated=rotated;shell.style.width=`${w}px`;shell.style.height=`${h}px`;
+    shell.style.transform=`translate(-50%,-50%) rotate(${rotated?90:0}deg)`;
+    dodocoRemoteSizeImage();
+}
+function dodocoRemoteSizeImage(){
+    const viewport=d('dodocoRemoteViewport'),canvas=d('dodocoRemoteCanvas');if(!viewport||!canvas)return;
+    const box=viewport.getBoundingClientRect();
+    const width=viewport.clientWidth||(dodocoRemote.rotated?box.height:box.width),
+        height=viewport.clientHeight||(dodocoRemote.rotated?box.width:box.height);
+    if(width>0 && height>0){canvas.style.width=`${width*dodocoRemote.zoom}px`;canvas.style.height=`${height*dodocoRemote.zoom}px`;}
+}
+function dodocoRemoteZoom(value){
+    const viewport=d('dodocoRemoteViewport'),box=viewport?.getBoundingClientRect();
+    const w=viewport?.clientWidth||(dodocoRemote.rotated?box?.height:box?.width)||0,
+        h=viewport?.clientHeight||(dodocoRemote.rotated?box?.width:box?.height)||0;
+    const x=((viewport?.scrollLeft||0)+w/2)/dodocoRemote.zoom,y=((viewport?.scrollTop||0)+h/2)/dodocoRemote.zoom;
+    dodocoRemote.zoom=Math.min(4,Math.max(1,value));dodocoRemote.gesture=null;
+    dodocoRemoteSizeImage();
+    if(viewport){viewport.scrollLeft=dodocoRemote.zoom===1?0:Math.max(0,x*dodocoRemote.zoom-w/2);
+        viewport.scrollTop=dodocoRemote.zoom===1?0:Math.max(0,y*dodocoRemote.zoom-h/2);}
+    dodocoRemoteSync();
+}
+function dodocoRemoteOrientation(){
+    const orientation=globalThis.screen?.orientation;
+    if(!dodocoRemote.landscape){if(dodocoRemote.orientationOwned){try{orientation?.unlock?.();}catch{}}dodocoRemote.orientationOwned=false;dodocoRemoteLayout();return;}
+    if(!dodocoRemote.nativeRoot || typeof orientation?.lock!=='function')return;
+    Promise.resolve().then(()=>orientation.lock('landscape')).then(()=>{
+        if(!dodocoRemote.open || !dodocoRemote.landscape){try{orientation.unlock?.();}catch{}return;}
+        dodocoRemote.orientationOwned=true;dodocoRemoteLayout();
+    }).catch(()=>{dodocoRemoteLayout();});
+}
+function dodocoRemoteOpen(){
+    if(dodocoRemote.open)return;
+    if(!dodocoScreenAllowed())return;
+    if(!dodocoControl.enabled){const reason=dodocoControlReason();if(reason){dodocoControl.status=reason;dodocoControlSync();return;}
+        dodocoControl.enabled=true;dodocoControl.status='全屏控制已开启；点按操作，拖动查看。';}
+    const dialog=d('dodocoRemoteDialog'),root=d('dodocoRemoteRoot');if(!dialog||!root)return;
+    const epoch=++dodocoRemote.epoch;
+    Object.assign(dodocoRemote,{open:true,uid:dodoco.target,visit:dodoco.screenVisit,generation:dodoco.generation,
+        landscape:true,rotated:false,zoom:1,frame:null,painted:null,nativeRoot:null,gesture:null,sawPointer:false,notice:''});
+    dodocoRemote.pointers.clear();
+    const landscape=d('dodocoRemoteLandscape');if(landscape)landscape.checked=true;
+    d('dodocoRemoteKeys').hidden=true;d('dodocoRemoteKeyboard').setAttribute('aria-expanded','false');
+    d('dodocoRemoteTools').open=false;
+    const viewport=d('dodocoRemoteViewport');if(viewport){viewport.scrollLeft=0;viewport.scrollTop=0;}
+    document.body?.classList?.toggle('dd-remote-open',true);
+    try{if(typeof dialog.showModal==='function')dialog.showModal();else{dialog.setAttribute('open','');dialog.open=true;}}
+    catch{dodocoRemote.open=false;document.body?.classList?.toggle('dd-remote-open',false);dodocoControlClose('无法打开全屏视图，请刷新网页。');return;}
+    dodocoRemoteLayout();dodocoControlSync();
+    const request=root.requestFullscreen||root.webkitRequestFullscreen;
+    if(typeof request==='function'){
+        try{Promise.resolve(request.call(root)).then(()=>{
+            if(!dodocoRemote.open || dodocoRemote.epoch!==epoch){
+                // 同一元素已被新的控制视图重新打开时，旧 promise 不得退出新视图。
+                if(dodocoRemoteCurrent()&&d('dodocoRemoteRoot')===root){dodocoRemote.nativeRoot=root;dodocoRemoteLayout();dodocoRemoteOrientation();}
+                else dodocoRemoteLeaveNative(root);
+                return;
+            }
+            dodocoRemote.nativeRoot=root;dodocoRemoteLayout();dodocoRemoteOrientation();
+        }).catch(()=>{if(dodocoRemoteCurrent())dodocoRemoteLayout();});}catch{}
+    }
+}
+function dodocoRemoteLeaveNative(root){
+    if(!root || (document.fullscreenElement||document.webkitFullscreenElement)!==root)return;
+    try{const exit=document.exitFullscreen||document.webkitExitFullscreen;Promise.resolve(exit?.call(document)).catch(()=>{});}catch{}
+}
+function dodocoRemoteClose(){
+    if(!dodocoRemote.open)return;
+    const root=dodocoRemote.nativeRoot||d('dodocoRemoteRoot'),dialog=d('dodocoRemoteDialog');
+    dodocoRemote.open=false;dodocoRemote.epoch++;dodocoRemote.frame=null;dodocoRemote.painted=null;
+    dodocoRemote.gesture=null;dodocoRemote.pointers.clear();dodocoRemote.nativeRoot=null;
+    if(dodocoRemote.orientationOwned){try{globalThis.screen?.orientation?.unlock?.();}catch{}dodocoRemote.orientationOwned=false;}
+    document.body?.classList?.toggle('dd-remote-open',false);
+    d('dodocoRemoteShell')?.querySelectorAll('.modal-overlay').forEach(modal=>modal.remove?.());
+    try{if(dialog?.open){if(typeof dialog.close==='function')dialog.close();else{dialog.open=false;dialog.removeAttribute?.('open');}}}catch{}
+    dodocoRemoteLeaveNative(root);
+}
+function dodocoRemotePoint(image,event,rotated=dodocoRemote.rotated){
+    const rect=image.getBoundingClientRect(),width=image.naturalWidth,height=image.naturalHeight;
+    let boxW=rect.width,boxH=rect.height,x=event.clientX-rect.left,y=event.clientY-rect.top;
+    if(rotated){boxW=rect.height;boxH=rect.width;x=event.clientY-rect.top;y=rect.left+rect.width-event.clientX;}
+    if(![boxW,boxH,x,y,width,height].every(Number.isFinite)||boxW<=0||boxH<=0||width<=0||height<=0)return null;
+    const scale=Math.min(boxW/width,boxH/height),w=width*scale,h=height*scale;
+    x=(x-(boxW-w)/2)/w;y=(y-(boxH-h)/2)/h;
+    return x>=0&&x<=1&&y>=0&&y<=1?{x,y}:null;
+}
+function dodocoRemoteReady(){return dodocoRemoteCurrent() && dodocoControl.enabled
+    && dodocoRemote.painted===dodocoControlFrame() && !dodocoControlReason();}
+function dodocoRemoteTap(event){
+    if(!dodocoRemoteReady())return;
+    dodocoRemote.notice='';
+    const point=dodocoRemotePoint(d('dodocoRemoteImage'),event);
+    if(!point){dodocoControl.status='留白区域不会发送输入。';dodocoControlSync();return;}
+    dodocoControlSend(dodocoControl.mode,point.x,point.y);
+}
+function dodocoRemoteBind(){
+    const dialog=d('dodocoRemoteDialog'),image=d('dodocoRemoteImage');if(!dialog||!image)return;
+    d('dodocoRemoteExit').onclick=()=>dodocoControlClose('已退出全屏控制；已发送的输入无法撤回。');
+    dialog.oncancel=event=>{event.preventDefault();dodocoControlClose('已退出全屏控制。');};
+    dialog.onclose=()=>{if(dodocoRemote.open)dodocoControlClose('已退出全屏控制。');};
+    d('dodocoRemoteRefresh').onclick=()=>{dodocoRemote.notice='';dodocoCapture();};
+    d('dodocoRemoteMode').onchange=event=>{if(['left','right','double'].includes(event.target.value)){dodocoControl.mode=event.target.value;dodocoControlSync();}};
+    d('dodocoRemoteKeyboard').onclick=()=>{const keys=d('dodocoRemoteKeys');keys.hidden=!keys.hidden;d('dodocoRemoteKeyboard').setAttribute('aria-expanded',String(!keys.hidden));};
+    d('dodocoRemoteLandscape').onchange=event=>{dodocoRemote.landscape=event.target.checked;dodocoRemote.gesture=null;dodocoRemoteOrientation();dodocoRemoteLayout();};
+    d('dodocoRemoteZoomIn').onclick=()=>dodocoRemoteZoom(dodocoRemote.zoom+.5);
+    d('dodocoRemoteZoomOut').onclick=()=>dodocoRemoteZoom(dodocoRemote.zoom-.5);
+    d('dodocoRemoteFit').onclick=()=>dodocoRemoteZoom(1);
+    d('dodocoRemoteBgi').onclick=()=>{d('dodocoRemoteTools').open=false;dodocoBgiHotkey(d('dodocoRemoteShell'));};
+    d('dodocoRemoteKeys').querySelectorAll('[data-remote-key]').forEach(button=>button.onclick=event=>{
+        if(dodocoControlPointer(event)&&dodocoRemoteReady())dodocoControlSend('key',0,0,button.dataset.remoteKey);
+    });
+    image.oncontextmenu=event=>event.preventDefault();image.ondragstart=event=>event.preventDefault();
+    image.onpointerdown=event=>{
+        if(!dodocoRemoteCurrent())return;
+        if(!event.compat)dodocoRemote.sawPointer=true;
+        dodocoRemote.pointers.set(event.pointerId,true);
+        if(d('dodocoRemoteTools').open){d('dodocoRemoteTools').open=false;dodocoRemote.gesture=null;return;}
+        if(dodocoRemote.pointers.size!==1 || event.isPrimary===false || event.button!==0){dodocoRemote.gesture=null;return;}
+        dodocoRemote.gesture={id:event.pointerId,x:event.clientX,y:event.clientY,started:performance.now(),frame:dodocoRemote.painted,epoch:dodocoRemote.epoch};
+    };
+    image.onpointermove=event=>{const g=dodocoRemote.gesture;if(g&&g.id===event.pointerId&&Math.hypot(event.clientX-g.x,event.clientY-g.y)>8)dodocoRemote.gesture=null;};
+    image.onpointerup=event=>{
+        const g=dodocoRemote.gesture;dodocoRemote.pointers.delete(event.pointerId);dodocoRemote.gesture=null;
+        if(!g || g.id!==event.pointerId || g.epoch!==dodocoRemote.epoch || g.frame!==dodocoRemote.painted
+            || dodocoRemote.pointers.size || Math.hypot(event.clientX-g.x,event.clientY-g.y)>8
+            || performance.now()-g.started>800 || event.button!==0)return;
+        event.preventDefault();dodocoRemoteTap(event);
+    };
+    image.onpointercancel=event=>{dodocoRemote.pointers.delete(event.pointerId);dodocoRemote.gesture=null;};
+    image.onpointerleave=event=>{if(event.pointerType==='mouse'){dodocoRemote.pointers.delete(event.pointerId);dodocoRemote.gesture=null;}};
+    // 无 PointerEvent 的浏览器也记录手势，不把滚动或长按产生的兼容 click 当成输入。
+    const legacy=()=>typeof window.PointerEvent!=='function'&&!dodocoRemote.sawPointer;
+    const touchActivity=()=>{dodocoRemote.ignoreMouseUntil=performance.now()+1000;};
+    const legacyMouse=event=>legacy()&&!event.sourceCapabilities?.firesTouchEvents
+        && performance.now()>=(dodocoRemote.ignoreMouseUntil||0);
+    const adapted=(event,touch,id)=>({pointerId:id,button:0,isPrimary:true,pointerType:touch?'touch':'mouse',compat:true,
+        clientX:(touch||event).clientX,clientY:(touch||event).clientY,preventDefault:()=>event.preventDefault()});
+    image.onmousedown=event=>{if(legacyMouse(event)&&event.button===0)image.onpointerdown(adapted(event,null,'mouse'));};
+    image.onmousemove=event=>{if(legacyMouse(event))image.onpointermove(adapted(event,null,'mouse'));};
+    image.onmouseup=event=>{if(legacyMouse(event)&&event.button===0)image.onpointerup(adapted(event,null,'mouse'));};
+    image.onmouseleave=()=>{if(legacy()){dodocoRemote.pointers.delete('mouse');dodocoRemote.gesture=null;}};
+    image.ontouchstart=event=>{if(legacy()){touchActivity();for(const touch of event.changedTouches){const p=adapted(event,touch,touch.identifier);p.isPrimary=event.touches.length===1;image.onpointerdown(p);}}};
+    image.ontouchmove=event=>{if(legacy()){touchActivity();for(const touch of event.changedTouches)image.onpointermove(adapted(event,touch,touch.identifier));}};
+    image.ontouchend=event=>{if(legacy()){touchActivity();for(const touch of event.changedTouches)image.onpointerup(adapted(event,touch,touch.identifier));}};
+    image.ontouchcancel=event=>{if(legacy()){touchActivity();for(const touch of event.changedTouches)image.onpointercancel(adapted(event,touch,touch.identifier));}};
+    image.onclick=event=>event.preventDefault();
+    d('dodocoRemoteViewport').onscroll=()=>{dodocoRemote.gesture=null;};
+}
+function dodocoRemoteSync(){
+    const entry=d('dodocoRemoteEnter');if(entry)entry.disabled=!dodocoControl.enabled&&!!dodocoControlReason();
+    if(!dodocoRemote.open)return;
+    if(!dodocoRemoteCurrent() || !dodocoControl.enabled || !d('dodocoRemoteDialog')){dodocoRemoteClose();return;}
+    const frame=dodocoControlFrame(),image=d('dodocoRemoteImage');
+    if(frame && image && frame!==dodocoRemote.frame){
+        dodocoRemote.frame=frame;dodocoRemote.painted=null;dodocoRemote.gesture=null;dodocoRemote.paintError=false;
+        const epoch=dodocoRemote.epoch;
+        image.onload=()=>{if(dodocoRemoteCurrent()&&epoch===dodocoRemote.epoch&&dodocoRemote.frame===frame){dodocoRemote.painted=frame;dodocoRemoteSync();}};
+        image.onerror=()=>{if(dodocoRemoteCurrent()&&dodocoRemote.frame===frame){dodocoRemote.painted=null;dodocoRemote.paintError=true;dodocoControl.status='画面加载失败，请刷新。';dodocoRemoteSync();}};
+        image.src='data:image/jpeg;base64,'+frame.jpegBase64;
+    }
+    const member=dodocoMembersList().find(p=>p.playerUid===dodoco.target);
+    d('dodocoRemoteTitle').textContent=member?.playerName||dodoco.target;
+    const reason=dodocoControlReason() || (dodocoRemote.painted!==frame?(dodocoRemote.paintError?'画面加载失败，请刷新。':'画面加载中…'):'');
+    const mode=d('dodocoRemoteMode');mode.value=dodocoControl.mode;mode.disabled=!!reason;
+    d('dodocoRemoteKeys').querySelectorAll('[data-remote-key]').forEach(button=>button.disabled=!!reason);
+    d('dodocoRemoteRefresh').disabled=!!dodocoControl.pending||dodoco.autoBusy||performance.now()<dodocoControl.refreshNotBefore;
+    const status=d('dodocoRemoteStatus');status.textContent=dodocoRemote.notice||reason||dodocoControl.status;
+    status.title=[dodocoRemote.notice,dodocoControl.status,reason].filter(Boolean).join(' ');
+    d('dodocoRemoteZoomOut').disabled=dodocoRemote.zoom<=1;d('dodocoRemoteZoomIn').disabled=dodocoRemote.zoom>=4;
+    dodocoRemoteSizeImage();
+}
+globalThis.window?.addEventListener?.('resize',dodocoRemoteLayout);
+globalThis.window?.visualViewport?.addEventListener?.('resize',dodocoRemoteLayout);
+for(const name of ['fullscreenchange','webkitfullscreenchange'])document.addEventListener?.(name,()=>{
+    if(!dodocoRemote.open)return;
+    const root=d('dodocoRemoteRoot'),active=document.fullscreenElement||document.webkitFullscreenElement;
+    if(active===root){dodocoRemote.nativeRoot=root;dodocoRemoteLayout();}
+    else if(dodocoRemote.nativeRoot)dodocoControlClose('系统全屏已退出，控制已关闭。');
+});
 function dodocoControlReason() {
     const visit=dodoco.screenVisit, frame=dodocoControlFrame();
     if (!dodoco.active || dodoco.tab!=='screen' || !visit) return '请进入桌面监控。';
@@ -340,6 +539,8 @@ function dodocoControlSync() {
         b.setAttribute?.('aria-disabled',String(enabled && !!reason));
         b.title=enabled?(reason || '点击画面发送一次所选鼠标操作'):'点击放大';
     });
+    const inlineKeys=d('dodocoControlKeys');if(inlineKeys)inlineKeys.hidden=dodocoRemoteMobile()&&!enabled;
+    dodocoRemoteSync();
 }
 function dodocoControlCancel(p) {
     if (!p) return;
@@ -351,6 +552,7 @@ function dodocoControlCancel(p) {
     }
 }
 function dodocoControlClose(message='本页控制已关闭；点击画面可放大。') {
+    dodocoRemoteClose();
     const p=dodocoControl.pending;
     dodocoControl.epoch++;
     dodocoControl.enabled=false; dodocoControl.pending=null; dodocoControl.status=message;
@@ -409,6 +611,7 @@ function dodocoControlSend(action,x=0,y=0,key='') {
     if(!dodocoControl.enabled || reason){dodocoControl.status=reason || '请先开启本页控制。';dodocoControlSync();return;}
     if (!['left','right','double','key'].includes(action) || !Number.isFinite(x) || !Number.isFinite(y)
         || (action==='key'?!dodocoControlKeys.includes(key):x<0 || x>1 || y<0 || y>1 || key!=='')) return;
+    dodocoRemote.notice='';
     const frame=dodocoControlFrame(),uid=dodoco.target,id=dodocoScreenId(),local=dodocoIsLocal(uid);
     const command={requestId:id,targetUid:local?'local':uid,frameId:frame.frameId,action,x,y,key};
     // 本机浏览器与助手共享系统时钟；保留点击时的截止，不能在 HTTP 处理时重新开始三秒。
@@ -437,23 +640,34 @@ function dodocoControlSend(action,x=0,y=0,key='') {
 globalThis.window?.addEventListener?.('pagehide',()=>dodocoScreenLeave());
 function dodocoStopAuto(){if(dodoco.autoTimer){clearInterval(dodoco.autoTimer);dodoco.autoTimer=null;}const checkbox=d('dodocoAuto');if(checkbox)checkbox.checked=false;}
 // BGI 快捷功能复用耕地机原入口；它不是桌面按键模拟，也不依赖截图控制授权。
-function dodocoBgiHotkey(){
+function dodocoBgiStatus(message){
+ dodocoStatus(message);
+ if(dodocoRemoteCurrent()){dodocoRemote.notice=message;dodocoRemoteSync();}
+}
+function dodocoBgiHotkey(host){
  let member;
  if(dodocoIsLocal()){
   const bridge=window.bgiLocalBridge,identity=bridge.localIdentity?.();
   if(bridge.available && identity?.uid && identity.clientInstanceId && identity.machineId)
    member=players.find(p=>p.playerUid===identity.uid && p.clientInstanceId===identity.clientInstanceId && p.machineId===identity.machineId);
  }else member=players.find(p=>p.playerUid===dodoco.target);
- if(!dodoco.active || dodoco.tab!=='screen' || !roomReady || !member?.online){dodocoStatus('请先选择一位房间内的在线成员，再执行 BGI 快捷功能；本机直连需与房间中的执行端身份一致。');return;}
- if(!Array.isArray(member.hotkeys) || !member.hotkeys.length){dodocoStatus('该成员尚未上报 BGI 快捷键，请等待状态更新。');return;}
- if(typeof showHotkeySelect!=='function'){dodocoStatus('BGI 快捷功能入口尚未加载，请刷新网页。');return;}
- showHotkeySelect(member.playerUid,member.playerName||member.playerUid);
+ if(!dodoco.active || dodoco.tab!=='screen' || !roomReady || !member?.online){dodocoBgiStatus('请先选择一位房间内的在线成员，再执行 BGI 快捷功能；本机直连需与房间中的执行端身份一致。');return;}
+ if(!Array.isArray(member.hotkeys) || !member.hotkeys.length){dodocoBgiStatus('该成员尚未上报 BGI 快捷键，请等待状态更新。');return;}
+ if(typeof showHotkeySelect!=='function'){dodocoBgiStatus('BGI 快捷功能入口尚未加载，请刷新网页。');return;}
+ dodocoRemote.notice='';
+ if(host && typeof host.appendChild==='function'){
+  const epoch=dodocoRemote.epoch;
+  showHotkeySelect(member.playerUid,member.playerName||member.playerUid,host,message=>{
+   if(dodocoRemoteCurrent()&&dodocoRemote.epoch===epoch)dodocoBgiStatus(message);
+  });
+ }else showHotkeySelect(member.playerUid,member.playerName||member.playerUid);
 }
 function dodocoRenderScreen(){
- const host=d('dodocoContent');host.innerHTML=`<section class="dd-card"><header class="dd-card-head"><div><h2>桌面监控</h2><p class="dodoco-hint">${window.bgiLocalBridge?'本机画面直连获取，其他成员按房间共享规则获取':'按需请求成员桌面画面'}；每次进入最多观看 3 分钟，到期需退出后重新进入。历史只保存在本网页，每人最多 10 帧。画面只在你请求时由成员采集，不录制、不保存到服务器</p></div><div class="dd-actions"><label class="dd-check"><input id="dodocoAuto" type="checkbox">自动刷新</label><label class="dd-field dd-inline"><span>间隔</span><select id="dodocoInterval"><option value="1000">1 秒</option><option value="3000" selected>3 秒</option><option value="5000">5 秒</option><option value="10000">10 秒</option></select></label><button id="dodocoBgiHotkey" class="dd-btn" title="复用耕地机快捷键，可手动暂停或停止所选成员的 BGI；无需开启桌面点击控制">BGI 快捷功能</button><button id="dodocoClearFrames" class="dd-btn dd-btn-quiet">清空本页画面历史</button><button id="dodocoCapture" class="dd-btn dd-btn-primary">刷新画面</button></div></header><div class="dd-control"><div class="dd-control-row"><label class="dd-check"><input id="dodocoControlEnabled" type="checkbox" aria-describedby="dodocoControlStatus dodocoControlHint">启用本页控制</label><label class="dd-field dd-inline" for="dodocoControlMode"><span>鼠标方式</span><select id="dodocoControlMode" disabled><option value="left">左键单击</option><option value="right">右键单击</option><option value="double">左键双击</option></select></label></div><p id="dodocoControlHint" class="dodoco-hint">输入作用于对方当前主屏桌面，每个成员两秒一次；需对方先开启“允许桌面控制”。BGI 或本机鼠标同时操作可能干扰，可手动暂停 BGI；不支持锁屏/UAC 安全桌面。不捕获你的实体键盘。</p><div id="dodocoControlKeys" class="dd-control-keys" role="group" aria-label="固定键盘按钮">${dodocoControlKeys.map(key=>`<button type="button" class="dd-btn${key==='Alt+F4'?' dd-btn-danger':''}" data-control-key="${key}" disabled>${key==='Alt+F4'?'Alt+F4（关闭窗口）':key==='Win+D'?'Win+D（显示桌面）':key}</button>`).join('')}</div><p id="dodocoControlStatus" class="dodoco-status" role="status" aria-live="polite"></p></div><div id="dodocoFrames"></div></section><dialog id="dodocoZoomDialog" class="dodoco-image-dialog"><header class="dd-zoom-head"><span class="dd-zoom-title"></span><span class="dodoco-hint">滚轮缩放 · 拖动查看</span><button id="dodocoZoomClose" class="dd-btn">关闭</button></header><div class="dd-zoom-stage"><img alt="放大的成员桌面截图"></div></dialog>`;
- d('dodocoCapture').onclick=dodocoCapture;d('dodocoBgiHotkey').onclick=dodocoBgiHotkey;d('dodocoZoomClose').onclick=()=>d('dodocoZoomDialog').close();
+ const host=d('dodocoContent');host.innerHTML=`<section class="dd-card"><header class="dd-card-head"><div><h2>桌面监控</h2><p class="dodoco-hint">${window.bgiLocalBridge?'本机画面直连获取，其他成员按房间共享规则获取':'按需请求成员桌面画面'}；每次进入最多观看 3 分钟，到期需退出后重新进入。历史只保存在本网页，每人最多 10 帧。画面只在你请求时由成员采集，不录制、不保存到服务器</p></div><div class="dd-actions"><label class="dd-check"><input id="dodocoAuto" type="checkbox">自动刷新</label><label class="dd-field dd-inline"><span>间隔</span><select id="dodocoInterval"><option value="1000">1 秒</option><option value="3000" selected>3 秒</option><option value="5000">5 秒</option><option value="10000">10 秒</option></select></label><button id="dodocoBgiHotkey" class="dd-btn" title="复用耕地机快捷键，可手动暂停或停止所选成员的 BGI；无需开启桌面点击控制">BGI 快捷功能</button><button id="dodocoClearFrames" class="dd-btn dd-btn-quiet">清空本页画面历史</button><button id="dodocoCapture" class="dd-btn dd-btn-primary">刷新画面</button></div></header><div class="dd-control"><div class="dd-control-row"><label class="dd-check"><input id="dodocoControlEnabled" type="checkbox" aria-describedby="dodocoControlStatus dodocoControlHint">启用本页控制</label><button type="button" id="dodocoRemoteEnter" class="dd-btn dd-btn-primary">全屏远控</button><label class="dd-field dd-inline" for="dodocoControlMode"><span>鼠标方式</span><select id="dodocoControlMode" disabled><option value="left">左键单击</option><option value="right">右键单击</option><option value="double">左键双击</option></select></label></div><p id="dodocoControlHint" class="dodoco-hint">输入作用于对方当前主屏桌面，每个成员两秒一次；需对方先开启“允许桌面控制”。BGI 或本机鼠标同时操作可能干扰，可手动暂停 BGI；不支持锁屏/UAC 安全桌面。不捕获你的实体键盘。</p><div id="dodocoControlKeys" class="dd-control-keys" role="group" aria-label="固定键盘按钮">${dodocoControlKeys.map(key=>`<button type="button" class="dd-btn${key==='Alt+F4'?' dd-btn-danger':''}" data-control-key="${key}" disabled>${key==='Alt+F4'?'Alt+F4（关闭窗口）':key==='Win+D'?'Win+D（显示桌面）':key}</button>`).join('')}</div><p id="dodocoControlStatus" class="dodoco-status" role="status" aria-live="polite"></p></div><div id="dodocoFrames"></div></section><dialog id="dodocoZoomDialog" class="dodoco-image-dialog"><header class="dd-zoom-head"><span class="dd-zoom-title"></span><span class="dodoco-hint">滚轮缩放 · 拖动查看</span><button id="dodocoZoomClose" class="dd-btn">关闭</button></header><div class="dd-zoom-stage"><img alt="放大的成员桌面截图"></div></dialog>${dodocoRemoteMarkup()}`;
+ d('dodocoCapture').onclick=dodocoCapture;d('dodocoBgiHotkey').onclick=()=>dodocoBgiHotkey();d('dodocoZoomClose').onclick=()=>d('dodocoZoomDialog').close();
  d('dodocoZoomDialog').onclose=dodocoControlSync;
- d('dodocoControlEnabled').onchange=e=>{if(!e.target.checked){dodocoControlClose();return;}const reason=dodocoControlReason();if(reason){dodocoControl.status=reason;dodocoControlSync();return;}dodocoControl.enabled=true;dodocoControl.status='本页控制已开启；单击主画面发送所选鼠标操作，也可点击固定键盘按钮。';dodocoControlSync();};
+ d('dodocoRemoteEnter').onclick=dodocoRemoteOpen;dodocoRemoteBind();
+ d('dodocoControlEnabled').onchange=e=>{if(!e.target.checked){dodocoControlClose();return;}const reason=dodocoControlReason();if(reason){dodocoControl.status=reason;dodocoControlSync();return;}dodocoControl.enabled=true;dodocoControl.status='本页控制已开启；单击主画面发送所选鼠标操作，也可点击固定键盘按钮。';dodocoControlSync();if(dodocoRemoteMobile())dodocoRemoteOpen();};
  d('dodocoControlMode').onchange=e=>{if(['left','right','double'].includes(e.target.value))dodocoControl.mode=e.target.value;};
  d('dodocoControlKeys').querySelectorAll('[data-control-key]').forEach(b=>b.onclick=e=>{if(dodocoControlPointer(e))dodocoControlSend('key',0,0,b.dataset.controlKey);});
  d('dodocoZoomDialog').querySelector('.dd-zoom-stage').onwheel=e=>{e.preventDefault();const z=d('dodocoZoomDialog').querySelector('img');dodoco.zoom=Math.min(6,Math.max(1,(dodoco.zoom||1)*(e.deltaY<0?1.15:1/1.15)));z.style.transform=`scale(${dodoco.zoom})`;};

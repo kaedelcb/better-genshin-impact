@@ -16,7 +16,7 @@ function harness(){
 test('监控页BGI快捷功能复用原选择器，与桌面输入授权和截图无关',()=>{
  const h=harness();h.api.dodocoBgiHotkey();assert.deepEqual(h.calls,[['alice','队友 A']]);
  assert.match(source, /id="dodocoBgiHotkey"/);
- assert.match(source, /d\('dodocoBgiHotkey'\)\.onclick=dodocoBgiHotkey/);
+ assert.match(source, /d\('dodocoBgiHotkey'\)\.onclick=\(\)=>dodocoBgiHotkey\(\)/);
 });
 test('本机合成UID按UID、实例和机器三项映射到原服务器快捷键入口',()=>{
  const h=harness(),identity={uid:'alice',clientInstanceId:'instance-a',machineId:'machine-a'};
