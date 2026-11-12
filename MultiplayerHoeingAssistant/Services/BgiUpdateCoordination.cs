@@ -45,6 +45,22 @@ internal static class BgiUpdateCoordination
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
     }
 
+    internal const string PreparingMessage = "BGI 正在更新，等待更新结束后恢复连接（未启动 BGI，未发送任务）";
+
+    internal static bool IsPreparing(string bgiDir) => Read(bgiDir) is { Phase: Preparing } state
+        && state.ExpiresUtc > DateTimeOffset.UtcNow;
+
+    internal static bool IsPreparingExecutable(string executable)
+    {
+        if (string.IsNullOrWhiteSpace(executable)) return false;
+        try { return Path.GetDirectoryName(Path.GetFullPath(executable)) is { } directory && IsPreparing(directory); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            // 无效启动路径仍由原启动入口报告，更新检查不向其外冒泡。
+            return false;
+        }
+    }
+
     private static void Write(string bgiDir, BgiUpdateCoordinationState state)
     {
         var path = PathFor(bgiDir);

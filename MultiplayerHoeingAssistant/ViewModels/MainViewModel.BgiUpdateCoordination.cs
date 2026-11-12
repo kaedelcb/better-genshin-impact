@@ -118,8 +118,8 @@ public partial class MainViewModel
         if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe)) return false;
         try
         {
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! })?.Dispose();
-            return true;
+            return BgiPackageUpdateService.TryLaunchWhileNotInstalling(exe, () =>
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe)! })?.Dispose());
         }
         catch (Exception ex) { AddLog("[更新BGI] 启动 BGI 失败：" + ex.Message); return false; }
     }

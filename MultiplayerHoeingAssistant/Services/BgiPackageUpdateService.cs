@@ -128,8 +128,10 @@ public static class BgiPackageUpdateService
     {
         lock (ExecutableGate)
         {
-            if (_webInstallExecutable != null && string.Equals(Path.GetFullPath(executable), _webInstallExecutable,
-                StringComparison.OrdinalIgnoreCase)) return false;
+            // 协作文件覆盖关闭等待期及跨助手/Windows 会话；本地安装预约只覆盖后续解压期。
+            if (BgiUpdateCoordination.IsPreparingExecutable(executable)
+                || (_webInstallExecutable != null && string.Equals(Path.GetFullPath(executable), _webInstallExecutable,
+                    StringComparison.OrdinalIgnoreCase))) return false;
             launch();
             return true;
         }

@@ -345,9 +345,12 @@ public class BgiProcessMonitor : IDisposable
     /// </summary>
     public bool RestartBgi(string? args = null)
     {
-        _userStopHeld = false;
-        _guardSuspended = false;
-        _guardSuppressUntilUtc = DateTime.UtcNow + StartupGrace;
+        // 更新关闭不是崩溃；所有启动来源都要让路，不能先解除更新 watcher 持有的暂停。
+        if (BgiUpdateCoordination.IsPreparingExecutable(_bgiPath))
+        {
+            _log?.Invoke(BgiUpdateCoordination.PreparingMessage);
+            return false;
+        }
 
         // [DUPLAUNCH_PROBE] 探针：记录每次 BGI 被启动的时间、参数、调用堆栈
         // 目的：确认远程一键锄地/上线人齐触发时，助手是否多次调用 RestartBgi 带 --startGroups
@@ -376,12 +379,18 @@ public class BgiProcessMonitor : IDisposable
                 UseShellExecute = true,
                 WindowStyle = ProcessWindowStyle.Normal
             };
-            if (_launchGuard != null && !_launchGuard(_bgiPath, () => Process.Start(startInfo)))
+            var launchGuard = _launchGuard ?? BgiPackageUpdateService.TryLaunchWhileNotInstalling;
+            if (!launchGuard(_bgiPath, () =>
+                {
+                    _userStopHeld = false;
+                    _guardSuspended = false;
+                    _guardSuppressUntilUtc = DateTime.UtcNow + StartupGrace;
+                    Process.Start(startInfo)?.Dispose();
+                }))
             {
                 _log?.Invoke("BGI 正在更新，未启动程序。");
                 return false;
             }
-            if (_launchGuard == null) Process.Start(startInfo);
             OnBgiStarted?.Invoke();
             return true;
         }
@@ -487,7 +496,8 @@ public class BgiProcessMonitor : IDisposable
         await _processGate.WaitAsync();
         try
         {
-            if (stopVersion != Volatile.Read(ref _userStopVersion)) return false;
+            if (stopVersion != Volatile.Read(ref _userStopVersion)
+                || BgiUpdateCoordination.IsPreparingExecutable(_bgiPath)) return false;
             // 让路窗口覆盖整个杀+等退出过程（最坏 10s）
             _guardSuppressUntilUtc = DateTime.UtcNow + TimeSpan.FromSeconds(15);
             _log?.Invoke($"[进程仲裁] 受控重启开始（{reason}），args={args ?? "(无)"}");
