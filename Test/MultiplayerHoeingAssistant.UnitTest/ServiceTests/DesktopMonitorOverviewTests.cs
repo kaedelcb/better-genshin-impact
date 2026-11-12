@@ -31,6 +31,7 @@ public sealed class DesktopMonitorOverviewTests
             MainWindow? window = null;
             try
             {
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
                 var config = new AssistConfig
                 {
                     DisclaimerAccepted = true,
@@ -151,12 +152,42 @@ public sealed class DesktopMonitorOverviewTests
                 Assert.True(monitor.HasFrame);
                 Assert.NotNull(monitor.CurrentImage);
 
+                Mark("验证复用耕地机快捷键弹窗");
+                mainVm.Members.Single(m => m.PlayerUid == "uidB").Hotkeys =
+                [System.Text.Json.JsonSerializer.SerializeToElement(new
+                    { configName = "SuspendHotkey", functionName = "暂停当前脚本/独立任务", hotkeyText = "D9" })];
+                var hotkeyDialogShown = false;
+                Exception? hotkeyDialogError = null;
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+                {
+                    Window? dialog = null;
+                    try
+                    {
+                        dialog = app.Windows.OfType<Window>().Single(w => w.Title == "选择快捷键");
+                        var panel = Assert.IsType<StackPanel>(dialog.Content);
+                        var list = panel.Children.OfType<ListBox>().Single();
+                        Assert.Equal("暂停当前脚本/独立任务 (D9)", list.Items[0]);
+                        hotkeyDialogShown = true;
+                        var cancel = panel.Children.OfType<StackPanel>().SelectMany(p => p.Children.OfType<Button>())
+                            .Single(b => Equals(b.Content, "取消"));
+                        cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    }
+                    catch (Exception ex) { hotkeyDialogError = ex; dialog?.Close(); }
+                }));
+                var hotkeyButton = Assert.IsType<Button>(page.FindName("MonitorBgiHotkeyButton"));
+                hotkeyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Null(hotkeyDialogError);
+                Assert.True(hotkeyDialogShown, "监控页必须复用原快捷键选择器，取消不得发出任何输入或任务指令。");
+
+                Mark("验证桌面控制真实 UI 入口");
+                DesktopMonitorControlTests.VerifyProductionControlUi(window, page, mainVm, clock, clock.Advance, stream.ToArray());
+                var retainedFrameCount = monitor.RemoteFrameCount;
                 monitor.SelectedMonitor = monitor.MonitorOptions.Single(option => option.Key == ScreenshotViewModel.OverviewKey);
                 config.PlayerUid = string.Empty;
                 monitor.RefreshForObserverModeChange();
                 Assert.Equal("未配置本机 UID，无法向执行端取图",
                     monitor.OverviewTiles.Single(tile => tile.Key == ScreenshotViewModel.LocalKey).Info);
-                Assert.Equal(2, monitor.RemoteFrameCount); // 监控端缺 UID 时不截当前桌面
+                Assert.Equal(retainedFrameCount, monitor.RemoteFrameCount); // 监控端缺 UID 时不截当前桌面
 
                 // 验证实际页面入口的三分钟约定；推进单调时钟，不等待三分钟、不截当前桌面。
                 // 自动刷新关闭时仍必须主动提示，重复激活/配置重载/切成员不能续期。
@@ -190,7 +221,7 @@ public sealed class DesktopMonitorOverviewTests
                 monitor.OnRemoteFrame(staleFrame);
                 Assert.Equal(sessionId, monitor.SessionId);
                 Assert.False(refreshTimer.IsEnabled);
-                Assert.Equal(2, monitor.RemoteFrameCount);
+                Assert.Equal(retainedFrameCount, monitor.RemoteFrameCount);
                 Assert.True(monitor.HasFrame); // 过期后依然可以查看历史画面
                 Assert.Single(monitor.Frames);
 
@@ -199,15 +230,15 @@ public sealed class DesktopMonitorOverviewTests
                 Assert.Null(monitor.SessionId);
                 monitor.OnRemoteFrame(staleFrame);
                 monitor.CaptureCommand.Execute(null);
-                Assert.Equal(2, monitor.RemoteFrameCount);
+                Assert.Equal(retainedFrameCount, monitor.RemoteFrameCount);
                 window.Dodoco.SelectedTabIndex = 4;
                 Assert.NotEqual(sessionId, monitor.SessionId);
                 Assert.DoesNotContain("已满", monitor.PrivacyNote);
                 monitor.OnRemoteFrame(staleFrame);
-                Assert.Equal(2, monitor.RemoteFrameCount);
+                Assert.Equal(retainedFrameCount, monitor.RemoteFrameCount);
                 staleFrame.RequestId = MemberScreenshotRelayService.CreateRequestId(monitor.SessionId!);
                 monitor.OnRemoteFrame(staleFrame);
-                Assert.Equal(3, monitor.RemoteFrameCount);
+                Assert.Equal(retainedFrameCount + 1, monitor.RemoteFrameCount);
 
                 // 离开整个嘟嘟可页面同样取消会话；排队中的旧超时回调不能结束新会话。
                 sessionId = monitor.SessionId!;
@@ -226,7 +257,7 @@ public sealed class DesktopMonitorOverviewTests
                 // 尚未调度 timer 回调时，手动入口也必须自行检查截止时间。
                 monitor.CaptureCommand.Execute(null);
                 Assert.Contains("已满 3 分钟", monitor.StatusText);
-                Assert.Equal(3, monitor.RemoteFrameCount);
+                Assert.Equal(retainedFrameCount + 1, monitor.RemoteFrameCount);
                 Mark("调度末次到期回调");
                 PumpDispatcher();
                 Mark("释放监控定时器");

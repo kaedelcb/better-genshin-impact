@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using BgiCoordinatorServer.Models;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -60,6 +62,21 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>每个目标各自等待应答，避免全员并行请求互相覆盖超时状态。</summary>
     private readonly Dictionary<string, DateTime> _pendingRequests = new();
     private readonly Dictionary<string, DateTime> _lastRequests = new();
+    private readonly Func<DesktopControlCommand, bool, CancellationToken, Task<DesktopControlResult>>? _sendControl;
+    private readonly Func<string, string?, Task>? _cancelControl;
+    private readonly Func<bool> _controlConnected;
+    private readonly Dictionary<string, long> _lastControlRequests = new();
+    private readonly HashSet<string> _usedControlFrames = new(StringComparer.Ordinal);
+    private FrameThumb? _currentControlFrame;
+    private CancellationTokenSource? _controlCancellation;
+    private ITimer? _controlStateTimer;
+    private SignalRClient? _controlConnection;
+    private int _controlVersion;
+    private bool _controlBusy;
+    private bool _awaitingControlFrame;
+    private string? _controlModeTarget;
+    private string? _controlRoomCode;
+    private static readonly TimeSpan ControlRefreshDelay = TimeSpan.FromMilliseconds(1100);
 
     /// <summary>历史帧分桶：画面源 Key（LocalKey 或成员 uid）→ 最近 10 帧（新帧在末尾）。
     /// 底部缩略图条 Frames 只是当前选中画面源对应桶的视图。</summary>
@@ -69,7 +86,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     internal int RemoteFrameCount => _history.Values.Sum(l => l.Count);
 
     public ScreenshotViewModel(ScreenshotService service, DodocoSettingsService settings, MainViewModel mainVm,
-        MemberScreenshotRelayService relay, TimeProvider? timeProvider = null)
+        MemberScreenshotRelayService relay, TimeProvider? timeProvider = null, DesktopControlService? desktopControl = null)
     {
         _timeProvider = timeProvider ?? TimeProvider.System;
         _dispatcher = Dispatcher.CurrentDispatcher;
@@ -77,18 +94,41 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         _settings = settings;
         _mainVm = mainVm;
         _relay = relay;
+        _controlConnected = () => _mainVm.SignalR?.DesktopControlReady == true;
+        if (desktopControl != null)
+        {
+            _sendControl = (command, local, cancellation) => local
+                ? desktopControl.ExecuteLocalAsync(command, _timeProvider.GetUtcNow() + DesktopControlProtocol.RequestLifetime, cancellation)
+                : desktopControl.RequestAsync(command, cancellation);
+            _cancelControl = desktopControl.CancelAsync;
+        }
         _autoTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(CurrentIntervalSeconds) };
         _autoTimer.Tick += (_, _) => _ = CaptureAsync();
 
         RebuildMonitorOptions();
         _mainVm.Members.CollectionChanged += OnMembersChanged;
         _mainVm.MemberOnlineChanged += OnMemberOnlineChanged;
+        _mainVm.PropertyChanged += OnControlContextChanged;
+        _settings.SettingsChanged += OnControlSettingsChanged;
+    }
+
+    // 测试只替换输入通道与连接状态，仍经过正式 ViewModel 的帧/会话/频率闸门。
+    internal ScreenshotViewModel(ScreenshotService service, DodocoSettingsService settings, MainViewModel mainVm,
+        MemberScreenshotRelayService relay, TimeProvider timeProvider,
+        Func<DesktopControlCommand, bool, CancellationToken, Task<DesktopControlResult>> sendControl,
+        Func<string, string?, Task> cancelControl, Func<bool> connected)
+        : this(service, settings, mainVm, relay, timeProvider)
+    {
+        _sendControl = sendControl;
+        _cancelControl = cancelControl;
+        _controlConnected = connected;
     }
 
     internal void ReloadConfigTransferSettings()
     {
         OnPropertyChanged(nameof(AutoRefresh));
         OnPropertyChanged(nameof(IntervalIndex));
+        OnControlSettingsChanged();
         ApplyTimerState();
     }
 
@@ -136,11 +176,13 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     });
 
     /// <summary>同步当前帧字节/时刻（每次更新 CurrentImage 时调用）。</summary>
-    private void SetCurrentFrame(byte[]? jpeg, DateTime? time)
+    private void SetCurrentFrame(byte[]? jpeg, DateTime? time, FrameThumb? controlFrame = null)
     {
         CurrentJpegBytes = jpeg;
         _currentFrameTime = time;
+        _currentControlFrame = controlFrame;
         OnPropertyChanged(nameof(CurrentJpegBytes));
+        NotifyControlState();
     }
 
     /// <summary>文件名非法字符替换为下划线（成员名可能含路径非法字符）。</summary>
@@ -171,6 +213,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         set
         {
             if (!SetProperty(ref _selectedThumb, value) || value == null) return;
+            DisableControlMode("历史帧仅供查看，请刷新后重新开启控制");
             // 点历史帧：大图切到该帧（停自动刷新期间查看历史不被顶掉是用户预期）
             CurrentImage = ToImage(value.Frame.JpegBytes);
             SetCurrentFrame(value.Frame.JpegBytes, value.Frame.Time);
@@ -214,6 +257,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         {
             if (!SetProperty(ref _selectedMonitor, value)) return;
             if (_rebuildingOptions) return;
+            DisableControlMode("画面源已切换，控制模式已关闭");
             NotifySelectionChanged();
             RefreshViewForSelection();
             ApplyTimerState();
@@ -223,6 +267,24 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     public bool IsOverviewSelected => SelectedMonitor?.Key == OverviewKey;
     public bool IsSingleSelected => !IsOverviewSelected;
     public string CaptureButtonText => IsOverviewSelected ? "📷 刷新全部" : "📷 刷新";
+
+    /// <summary>复用耕地机原有快捷键选择和执行链路，独立于截图输入模式。</summary>
+    public void ExecuteBgiHotkey()
+    {
+        var uid = IsLocalCapture ? _mainVm.Config?.PlayerUid : PullTargetUid;
+        var member = IsOverviewSelected ? null : _mainVm.Members.FirstOrDefault(m => m.PlayerUid == uid);
+        if (member == null || (!IsLocalCapture && !member.Online))
+        {
+            StatusText = "请先选择一位在线成员，再执行 BGI 快捷功能";
+            return;
+        }
+        if (member.Hotkeys.Count == 0)
+        {
+            StatusText = "该成员尚未上报 BGI 快捷键，请等待状态更新";
+            return;
+        }
+        _mainVm.ExecuteHotkeyCommand.Execute(member);
+    }
     private void NotifySelectionChanged()
     {
         OnPropertyChanged(nameof(IsOverviewSelected));
@@ -277,6 +339,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             selectedChanged |= PullTargetUid == tile.TargetUid;
         }
         if (layoutChanged) RebuildOverviewLayout();
+        if (!ControlTargetAvailable) DisableControlMode("成员已离线，控制模式已关闭");
         if (selectedChanged && !IsOverviewSelected) RefreshViewForSelection();
         if (becameOnline && _tabActive && IsOverviewSelected) _ = RefreshOverviewAsync();
     }
@@ -347,6 +410,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         {
             _rebuildingOptions = false;
         }
+        if ((_isControlMode || _controlBusy) && (_controlModeTarget != ControlTargetUid || !ControlTargetAvailable))
+            DisableControlMode("画面源或成员状态已变化，控制模式已关闭");
         RefreshViewForSelection();
         ApplyTimerState();
     }
@@ -354,6 +419,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>按当前选中画面源刷新大图区与历史缩略图条（历史条只显示该画面源的历史帧）。</summary>
     private void RefreshViewForSelection()
     {
+        if (_controlBusy) return;
         RebuildFramesView();
         if (IsOverviewSelected)
         {
@@ -367,9 +433,10 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         var label = SelectedMonitor?.Label ?? "主屏（本机）";
         if (_history.TryGetValue(CurrentSourceKey, out var list) && list.Count > 0)
         {
-            var f = list[^1].Frame;
+            var latest = list[^1];
+            var f = latest.Frame;
             CurrentImage = ToImage(f.JpegBytes);
-            SetCurrentFrame(f.JpegBytes, f.Time);
+            SetCurrentFrame(f.JpegBytes, f.Time, latest);
             HasFrame = true;
             if (IsLocalCapture)
             {
@@ -431,7 +498,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private void RequestRemoteFrame(string? uid, string? label)
     {
-        if (!CanCapture() || string.IsNullOrEmpty(uid)) return;
+        if (!CanCapture() || _controlBusy || string.IsNullOrEmpty(uid)) return;
         var sessionId = _sessionId!;
         if (_mainVm.IsStandaloneMode)
         {
@@ -449,6 +516,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         if (_lastRequests.TryGetValue(uid, out var last) && now - last < TimeSpan.FromMilliseconds(1100)) return;
         _lastRequests[uid] = now;
         _pendingRequests[uid] = now;
+        NotifyControlState();
         label ??= uid;
         var tile = OverviewTiles.FirstOrDefault(t => t.TargetUid == uid);
         if (tile != null) tile.Info = "请求中…";
@@ -461,6 +529,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             {
                 if (!CanCapture(sessionId) || !_pendingRequests.TryGetValue(uid, out var pending) || pending != now) return;
                 _pendingRequests.Remove(uid);
+                NotifyControlState();
                 if (tile != null && OverviewTiles.Contains(tile)) tile.Info = "未响应：对方可能离线或助手版本过旧";
                 if (!IsOverviewSelected && PullTargetUid == uid)
                     StatusText = $"{label} 未响应：对方可能离线、助手版本过旧或截图失败";
@@ -472,9 +541,16 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// 帧入该成员的历史桶；正在看该画面源时同步上大屏和历史缩略图条。</summary>
     internal void OnRemoteFrame(MemberScreenshotFrame frame)
     {
-        if (!CanCapture() || frame.RequestId?.StartsWith($"screen:{_sessionId}:", StringComparison.Ordinal) != true
+        if (!CanCapture() || frame.RequestId?.Length != 72
+            || frame.RequestId.StartsWith($"screen:{_sessionId}:", StringComparison.Ordinal) != true
+            || !Guid.TryParseExact(frame.RequestId[40..], "N", out _)
             || string.IsNullOrEmpty(frame.Uid) || string.IsNullOrEmpty(frame.JpegBase64)) return;
+        if (PullTargetUid == frame.Uid && !frame.ControlAllowed)
+            DisableControlMode("对方未授权桌面控制，控制模式已关闭");
+        if (_controlBusy && PullTargetUid == frame.Uid) return;
+        if (_history.TryGetValue(frame.Uid, out var existing) && existing.Any(item => item.Frame.FrameId == frame.RequestId)) return;
         var sessionId = _sessionId!;
+        var receivedAt = _timeProvider.GetTimestamp();
         byte[] bytes;
         try { bytes = Convert.FromBase64String(frame.JpegBase64); }
         catch { return; }
@@ -495,8 +571,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
         var localTime = frame.CapturedAt.ToLocalTime();
         var thumb = new FrameThumb(
-            new ScreenFrame { Time = localTime, JpegBytes = bytes, Width = frame.Width, Height = frame.Height },
-            thumbImage);
+            new ScreenFrame { Time = localTime, JpegBytes = bytes, Width = frame.Width, Height = frame.Height,
+                FrameId = frame.RequestId, Geometry = frame.Geometry },
+            thumbImage, receivedAt, frame.ControlAllowed, sessionId);
         var list = GetHistory(frame.Uid);
         list.Add(thumb);
         while (list.Count > ScreenshotService.HistoryCapacity) list.RemoveAt(0);
@@ -515,11 +592,336 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         if (PullTargetUid != frame.Uid) return;
         Frames.Add(thumb);
         while (Frames.Count > ScreenshotService.HistoryCapacity) Frames.RemoveAt(0);
+        _selectedThumb = null;
+        OnPropertyChanged(nameof(SelectedThumb));
+        _awaitingControlFrame = false;
         CurrentImage = fullImage;
-        SetCurrentFrame(bytes, localTime);
+        SetCurrentFrame(bytes, localTime, thumb);
         CurrentFrameInfo = $"远程成员画面（按需取图，点「📷 刷新」取新帧） · {localTime:HH:mm:ss}";
         HasFrame = true;
         StatusText = $"已收到 {SelectedMonitor?.Label ?? frame.Uid} 的画面";
+    }
+
+    // ========== 低频桌面控制 ==========
+
+    /// <summary>接收本机桌面输入的独立授权；共享截图不等于允许控制。</summary>
+    public bool AllowDesktopControl
+    {
+        get => _settings.Current.AllowDesktopControl;
+        set
+        {
+            if (!_settings.TryUpdate(s => s.AllowDesktopControl = value))
+                ControlStatusText = "桌面控制授权保存失败，请检查设置文件是否可写";
+            OnControlSettingsChanged();
+        }
+    }
+
+    public IReadOnlyList<string> ControlKeys => DesktopControlProtocol.Keys;
+    public IReadOnlyList<string> MouseActions { get; } = ["左键", "右键", "双击"];
+    private int _mouseActionIndex;
+    public int MouseActionIndex
+    {
+        get => _mouseActionIndex;
+        set { if (value is >= 0 and <= 2) SetProperty(ref _mouseActionIndex, value); }
+    }
+
+    private bool _isControlMode;
+    public bool IsControlMode
+    {
+        get => _isControlMode;
+        set
+        {
+            if (!value) { DisableControlMode("控制模式已关闭"); return; }
+            if (_isControlMode) return;
+            EnsureControlConnection();
+            if (!CanEnableControl)
+            {
+                ControlStatusText = "请选择已授权成员的新鲜最新画面，再开启控制";
+                OnPropertyChanged();
+                return;
+            }
+            _controlModeTarget = ControlTargetUid;
+            _isControlMode = true;
+            ControlStatusText = "控制已开启：点画面发送所选鼠标动作，或用鼠标点击下方键盘按钮";
+            NotifyControlState();
+        }
+    }
+
+    public string ControlNotice => "输入作用于对方当前桌面；BGI 或本机鼠标同时操作可能干扰，可手动暂停 BGI；不支持锁屏/UAC 安全桌面";
+    private string _controlStatusText = "控制模式默认关闭；仅最新画面可控，每个被控端两秒一次";
+    public string ControlStatusText { get => _controlStatusText; private set => SetProperty(ref _controlStatusText, value); }
+    public bool ControlBusy => _controlBusy;
+    public bool CanRefresh => !_controlBusy;
+    public bool CanToggleControl => IsControlMode || CanEnableControl;
+    public bool CanEnableControl => IsSessionOpen && _sendControl != null && !_controlBusy && !_isCapturing
+        && !_awaitingControlFrame && HasFreshControlFrame && ControlTargetAvailable
+        && (IsLocalCapture ? AllowDesktopControl : !_pendingRequests.ContainsKey(ControlTargetUid!));
+    public bool CanSendControl => IsControlMode && CanEnableControl && ControlIntervalElapsed;
+
+    private bool IsSessionOpen => !_disposed && _tabActive && !_sessionExpired && _sessionId != null
+        && _timeProvider.GetElapsedTime(_sessionStarted) < SessionDuration;
+    private string? ControlTargetUid => IsOverviewSelected ? null : IsLocalCapture ? LocalKey : PullTargetUid;
+    private bool ControlTargetAvailable => IsLocalCapture || (!_mainVm.IsStandaloneMode && _controlConnected()
+        && ControlTargetUid is { Length: > 0 } target
+        && _mainVm.Members.Any(member => member.PlayerUid == target && member.Online));
+    private bool ControlIntervalElapsed => ControlTargetUid is { } target
+        && (!_lastControlRequests.TryGetValue(target, out var last)
+            || _timeProvider.GetElapsedTime(last) >= DesktopControlProtocol.InputInterval);
+    private bool HasFreshControlFrame => !IsOverviewSelected && _currentControlFrame is { } frame
+        && frame.SessionId == _sessionId && frame.ControlAllowed && frame.Frame.Geometry?.IsValid == true
+        && !string.IsNullOrEmpty(frame.Frame.FrameId) && !_usedControlFrames.Contains(frame.Frame.FrameId)
+        && _history.TryGetValue(CurrentSourceKey, out var history) && ReferenceEquals(history.LastOrDefault(), frame)
+        && FrameRemaining(frame) > TimeSpan.Zero;
+
+    private TimeSpan FrameRemaining(FrameThumb frame)
+    {
+        var receivedAge = _timeProvider.GetElapsedTime(frame.ReceivedTimestamp);
+        // 远程 CapturedAt 属于另一台机器的墙钟，只用于显示；实际捕获帧龄由目标端登记校验。
+        // 查看端使用本机单调收帧时间，避免两机时钟偏差导致新图永远不可控制。
+        if (!IsLocalCapture) return DesktopControlProtocol.FrameLifetime - receivedAge;
+        var capturedAge = _timeProvider.GetUtcNow() - new DateTimeOffset(frame.Frame.Time.ToUniversalTime());
+        return DesktopControlProtocol.FrameLifetime - (receivedAge > capturedAge ? receivedAge : capturedAge);
+    }
+
+    /// <summary>WPF Uniform 内容区到 0..1 坐标；所有参数均为同一控件的 DIP，不乘观看端 DPI。</summary>
+    internal static bool TryMapControlPoint(Point position, Size viewport, Size image, out Point normalized)
+    {
+        normalized = default;
+        if (!double.IsFinite(position.X) || !double.IsFinite(position.Y)
+            || !double.IsFinite(viewport.Width) || !double.IsFinite(viewport.Height)
+            || !double.IsFinite(image.Width) || !double.IsFinite(image.Height)
+            || viewport.Width <= 0 || viewport.Height <= 0 || image.Width <= 0 || image.Height <= 0) return false;
+        var scale = Math.Min(viewport.Width / image.Width, viewport.Height / image.Height);
+        var width = image.Width * scale;
+        var height = image.Height * scale;
+        var x = (position.X - (viewport.Width - width) / 2) / width;
+        var y = (position.Y - (viewport.Height - height) / 2) / height;
+        if (!double.IsFinite(x) || !double.IsFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return false;
+        normalized = new Point(x, y);
+        return true;
+    }
+
+    internal Task SendMouseAsync(Point position, Size viewport, Size image)
+    {
+        if (!TryMapControlPoint(position, viewport, image, out var point))
+        {
+            ControlStatusText = "留白区域不能发送输入，请点击实际画面内部";
+            return Task.CompletedTask;
+        }
+        var action = MouseActionIndex switch { 1 => "right", 2 => "double", _ => "left" };
+        return SendControlAsync(action, point.X, point.Y);
+    }
+
+    internal Task SendKeyAsync(string key) => DesktopControlProtocol.Keys.Contains(key, StringComparer.Ordinal)
+        ? SendControlAsync("key", 0, 0, key) : Task.CompletedTask;
+
+    private async Task SendControlAsync(string action, double x, double y, string key = "")
+    {
+        EnsureControlConnection();
+        // 执行后的画面响应等待也属于 busy；重复点击不能覆盖已确认的执行结果。
+        if (_controlBusy) return;
+        if (!CanCapture() || !CanSendControl || _currentControlFrame == null)
+        {
+            ControlStatusText = "暂不能发送输入：请确认控制已开启、两秒间隔和新鲜最新画面";
+            return;
+        }
+        var local = IsLocalCapture;
+        var target = ControlTargetUid!;
+        var session = _sessionId!;
+        var version = ++_controlVersion;
+        var command = new DesktopControlCommand
+        {
+            RequestId = Guid.NewGuid().ToString("N"), TargetUid = target,
+            FrameId = _currentControlFrame.Frame.FrameId, Action = action, X = x, Y = y, Key = key
+        };
+        using var cancellation = new CancellationTokenSource();
+        _controlCancellation = cancellation;
+        _usedControlFrames.Add(command.FrameId); // 一经尝试，任何结果都不能再操作同一画面。
+        _lastControlRequests[target] = _timeProvider.GetTimestamp();
+        _awaitingControlFrame = true;
+        _controlBusy = true;
+        _autoTimer.Stop();
+        ControlStatusText = "正在等待系统输入回执…";
+        NotifyControlState();
+        var executed = false;
+        try
+        {
+            var result = await _sendControl!(command, local, cancellation.Token)
+                .WaitAsync(DesktopControlProtocol.RequestLifetime, _timeProvider, cancellation.Token);
+            if (version != _controlVersion || !CanCapture(session)) return;
+            if (result.RequestId != command.RequestId || result.TargetUid != target)
+            {
+                ControlStatusText = "回执与本次输入不匹配，执行状态未知；请刷新画面确认";
+                return;
+            }
+            executed = result.Status == "executed";
+            ControlStatusText = executed ? "系统已接受输入；请以刷新画面确认效果"
+                : $"输入结果：{result.Status} · {result.Message}；请刷新画面后再操作";
+            if (executed)
+                await Task.Delay(ControlRefreshDelay, _timeProvider, cancellation.Token);
+        }
+        catch (TimeoutException)
+        {
+            if (version == _controlVersion)
+                ControlStatusText = "输入回执超时，执行状态未知；请刷新画面确认，不会自动重发";
+            cancellation.Cancel();
+            await CancelRemoteControlAsync(session, local ? null : target);
+        }
+        catch (OperationCanceledException)
+        {
+            if (version == _controlVersion) ControlStatusText = "输入已取消；已送入系统的输入无法撤回，请刷新确认";
+        }
+        catch (Exception ex)
+        {
+            if (version == _controlVersion) ControlStatusText = $"输入结果未知：{ex.Message}；请刷新画面确认";
+            cancellation.Cancel();
+            await CancelRemoteControlAsync(session, local ? null : target);
+        }
+        finally
+        {
+            if (ReferenceEquals(_controlCancellation, cancellation)) _controlCancellation = null;
+            if (version == _controlVersion)
+            {
+                _controlBusy = false;
+                NotifyControlState();
+                if (executed && CanCapture(session)) await CaptureAsync();
+                ApplyTimerState();
+            }
+        }
+    }
+
+    private void DisableControlMode(string message)
+    {
+        var wasBusy = _controlBusy;
+        var wasActive = _isControlMode || wasBusy;
+        var target = _controlModeTarget;
+        _isControlMode = false;
+        _controlModeTarget = null;
+        ++_controlVersion;
+        _controlCancellation?.Cancel();
+        _controlCancellation = null;
+        _controlBusy = false;
+        _awaitingControlFrame = false;
+        if (wasActive)
+        {
+            ControlStatusText = wasBusy ? $"{message}；已送入系统的输入无法撤回，请刷新确认" : message;
+            if (_sessionId is { } session && target != LocalKey) _ = CancelRemoteControlAsync(session, target);
+        }
+        NotifyControlState();
+        ApplyTimerState();
+    }
+
+    private async Task CancelRemoteControlAsync(string session, string? target)
+    {
+        if (_cancelControl == null || target == null) return;
+        try { await _cancelControl(session, target); }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[桌面控制] 取消请求失败: {ex.Message}"); }
+    }
+
+    private void NotifyControlState()
+    {
+        OnPropertyChanged(nameof(IsControlMode));
+        OnPropertyChanged(nameof(CanEnableControl));
+        OnPropertyChanged(nameof(CanToggleControl));
+        OnPropertyChanged(nameof(CanSendControl));
+        OnPropertyChanged(nameof(ControlBusy));
+        OnPropertyChanged(nameof(CanRefresh));
+        _controlStateTimer?.Dispose();
+        _controlStateTimer = null;
+        if (!IsSessionOpen || _currentControlFrame == null) return;
+        var remaining = FrameRemaining(_currentControlFrame);
+        if (ControlTargetUid is { } target && _lastControlRequests.TryGetValue(target, out var last))
+        {
+            var interval = DesktopControlProtocol.InputInterval - _timeProvider.GetElapsedTime(last);
+            if (interval > TimeSpan.Zero && (remaining <= TimeSpan.Zero || interval < remaining)) remaining = interval;
+        }
+        if (remaining <= TimeSpan.Zero) return;
+        var version = _controlVersion;
+        _controlStateTimer = _timeProvider.CreateTimer(_ =>
+        {
+            if (_dispatcher.HasShutdownStarted) return;
+            _dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_disposed || version != _controlVersion) return;
+                if (IsControlMode && !_controlBusy && !_awaitingControlFrame && !HasFreshControlFrame)
+                    DisableControlMode("画面已过期，控制模式已关闭；请刷新后重新开启");
+                else NotifyControlState();
+            }));
+        }, null, remaining, Timeout.InfiniteTimeSpan);
+    }
+
+    private void OnControlSettingsChanged()
+    {
+        if (!_dispatcher.CheckAccess()) { _dispatcher.BeginInvoke(new Action(OnControlSettingsChanged)); return; }
+        if (_disposed) return;
+        OnPropertyChanged(nameof(AllowDesktopControl));
+        if (IsLocalCapture && !AllowDesktopControl) DisableControlMode("本机接收授权已关闭，控制已取消");
+        else NotifyControlState();
+    }
+
+    private void InvalidateControlFrames()
+    {
+        foreach (var frame in _history.Values.SelectMany(frames => frames))
+            if (!string.IsNullOrEmpty(frame.Frame.FrameId)) _usedControlFrames.Add(frame.Frame.FrameId);
+        _currentControlFrame = null;
+    }
+
+    private void OnControlContextChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(MainViewModel.IsObserverMode) or nameof(MainViewModel.IsStandaloneMode)
+            or nameof(MainViewModel.RoomCode))
+        {
+            InvalidateControlFrames();
+            DisableControlMode("连接或运行模式已变化，控制模式已关闭；请刷新画面");
+        }
+        if (e.PropertyName == nameof(MainViewModel.IsConnected) && !_controlConnected())
+            OnControlConnectionState(false);
+        EnsureControlConnection();
+    }
+
+    internal void EnsureControlConnection()
+    {
+        if (_disposed) return;
+        var client = _mainVm.SignalR;
+        var room = _mainVm.RoomCode;
+        if (ReferenceEquals(client, _controlConnection) && room == _controlRoomCode) return;
+        if (_controlConnection != null)
+        {
+            _controlConnection.OnConnectionStateChanged -= OnControlConnectionState;
+            _controlConnection.DesktopControlContextChanged -= OnControlTransportChanged;
+        }
+        var changed = _controlConnection != null || _controlRoomCode != null;
+        _controlConnection = client;
+        _controlRoomCode = room;
+        if (client != null)
+        {
+            client.OnConnectionStateChanged += OnControlConnectionState;
+            client.DesktopControlContextChanged += OnControlTransportChanged;
+        }
+        if (changed)
+        {
+            InvalidateControlFrames();
+            DisableControlMode("房间连接已变化，控制模式已关闭；请刷新画面");
+        }
+        else NotifyControlState();
+    }
+
+    private void OnControlTransportChanged() => OnControlConnectionState(false);
+
+    private void OnControlConnectionState(bool connected)
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(new Action(() => OnControlConnectionState(connected)));
+            return;
+        }
+        if (_disposed) return;
+        if (!connected)
+        {
+            InvalidateControlFrames();
+            DisableControlMode("连接已断开，控制模式已关闭");
+        }
+        else NotifyControlState();
     }
 
     // ========== 刷新控制 ==========
@@ -570,6 +972,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>清空当前画面源的历史帧（本机桶连带清空 ScreenshotService 的环形缓冲）。</summary>
     public RelayCommand ClearHistoryCommand => new(_ =>
     {
+        DisableControlMode("历史已清空，控制模式已关闭");
         if (CurrentSourceKey == LocalKey) _service.ClearHistory();
         _history.Remove(CurrentSourceKey);
         Frames.Clear();
@@ -599,6 +1002,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         _sessionExpired = false;
         _sessionId = Guid.NewGuid().ToString("N");
         _sessionStarted = _timeProvider.GetTimestamp();
+        _usedControlFrames.Clear();
+        _awaitingControlFrame = false;
+        EnsureControlConnection();
         _pendingRequests.Clear();
         _lastRequests.Clear();
         StatusText = "每次进入桌面监控最多查看 3 分钟";
@@ -617,10 +1023,13 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     internal void OnTabDeactivated()
     {
         _tabActive = false;
+        DisableControlMode("已离开桌面监控，控制模式已关闭");
         _sessionId = null;
         _autoTimer.Stop();
         _sessionTimer?.Dispose();
         _sessionTimer = null;
+        _controlStateTimer?.Dispose();
+        _controlStateTimer = null;
         _pendingRequests.Clear();
     }
 
@@ -630,7 +1039,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         if (_disposed || !_tabActive || _sessionId == null
             || (expectedSessionId != null && expectedSessionId != _sessionId)) return false;
         if (!_sessionExpired && _timeProvider.GetElapsedTime(_sessionStarted) < SessionDuration) return true;
+        if (_sessionExpired) return false;
         _sessionExpired = true;
+        DisableControlMode("桌面监控已满 3 分钟，控制模式已关闭");
         _autoTimer.Stop();
         _sessionTimer?.Dispose();
         _sessionTimer = null;
@@ -643,7 +1054,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private void ApplyTimerState()
     {
         // 单画面远程按需刷新；全员画面墙和本机/同 UID 执行端可自动刷新。
-        if (CanCapture() && AutoRefresh && (IsOverviewSelected || IsLocalSelected))
+        if (IsSessionOpen && !_controlBusy && AutoRefresh && (IsOverviewSelected || IsLocalSelected))
         {
             _autoTimer.Interval = TimeSpan.FromSeconds(CurrentIntervalSeconds);
             _autoTimer.Start();
@@ -657,7 +1068,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>刷新当前画面；全员模式同时刷新本机及各在线成员。</summary>
     private async Task CaptureAsync()
     {
-        if (!CanCapture()) return;
+        if (!CanCapture() || _controlBusy) return;
         if (IsOverviewSelected)
         {
             await RefreshOverviewAsync();
@@ -673,7 +1084,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private async Task RefreshOverviewAsync()
     {
-        if (!CanCapture() || !IsOverviewSelected) return;
+        if (!CanCapture() || _controlBusy || !IsOverviewSelected) return;
         var captureLocal = false;
         var remoteCount = 0;
         var connected = !_mainVm.IsStandaloneMode && _mainVm.SignalR?.IsConnected == true;
@@ -713,17 +1124,21 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>本机截图在后台执行，当前单画面或画面墙按选中状态分别更新。</summary>
     private async Task CaptureLocalAsync()
     {
-        if (!CanCapture() || _isCapturing) return;
+        if (!CanCapture() || _controlBusy || _isCapturing) return;
         var sessionId = _sessionId!;
         var started = _sessionStarted;
+        var capturedAt = _timeProvider.GetTimestamp();
+        var controlVersion = _controlVersion;
+        var allowed = AllowDesktopControl;
         _isCapturing = true;
+        NotifyControlState();
         if (!IsOverviewSelected) StatusText = "截图中…";
         try
         {
             var frame = await Task.Run(() =>
                 !_disposed && _tabActive && _sessionId == sessionId
                 && _timeProvider.GetElapsedTime(started) < SessionDuration ? _service.Capture() : null);
-            if (!CanCapture(sessionId)) return;
+            if (!CanCapture(sessionId) || _controlBusy || controlVersion != _controlVersion) return;
             if (frame == null)
             {
                 StatusText = "截图失败（会话可能已锁定或显示器不可用）";
@@ -731,7 +1146,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
                 if (missing != null) missing.Info = "本机截图失败";
                 return;
             }
-            var thumb = new FrameThumb(frame, ToImage(frame.JpegBytes, 160));
+            var thumb = new FrameThumb(frame, ToImage(frame.JpegBytes, 160), capturedAt,
+                allowed && _service.TryGetControlFrame(frame.FrameId, out _), sessionId);
             var list = GetHistory(LocalKey);
             list.Add(thumb);
             while (list.Count > ScreenshotService.HistoryCapacity) list.RemoveAt(0);
@@ -748,9 +1164,11 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             {
                 Frames.Add(thumb);
                 while (Frames.Count > ScreenshotService.HistoryCapacity) Frames.RemoveAt(0);
-                SelectedThumb = thumb;
+                _selectedThumb = null;
+                OnPropertyChanged(nameof(SelectedThumb));
+                _awaitingControlFrame = false;
                 CurrentImage = ToImage(frame.JpegBytes);
-                SetCurrentFrame(frame.JpegBytes, frame.Time);
+                SetCurrentFrame(frame.JpegBytes, frame.Time, thumb);
                 CurrentFrameInfo = $"{frame.Time:HH:mm:ss} · {frame.Width}×{frame.Height}";
                 HasFrame = true;
                 StatusText = $"最近截图 {frame.Time:HH:mm:ss} · 历史 {Frames.Count}/{ScreenshotService.HistoryCapacity} 帧";
@@ -763,6 +1181,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         finally
         {
             _isCapturing = false;
+            NotifyControlState();
         }
     }
 
@@ -781,10 +1200,19 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
         _disposed = true;
         OnTabDeactivated();
         _mainVm.Members.CollectionChanged -= OnMembersChanged;
         _mainVm.MemberOnlineChanged -= OnMemberOnlineChanged;
+        _mainVm.PropertyChanged -= OnControlContextChanged;
+        _settings.SettingsChanged -= OnControlSettingsChanged;
+        if (_controlConnection != null)
+        {
+            _controlConnection.OnConnectionStateChanged -= OnControlConnectionState;
+            _controlConnection.DesktopControlContextChanged -= OnControlTransportChanged;
+        }
+        _controlConnection = null;
     }
 }
 
@@ -823,14 +1251,21 @@ public sealed class MonitorTile : ViewModelBase
 /// <summary>历史帧缩略图项（底部缩略图条）。</summary>
 public sealed class FrameThumb
 {
-    public FrameThumb(ScreenFrame frame, BitmapImage thumb)
+    public FrameThumb(ScreenFrame frame, BitmapImage thumb, long receivedTimestamp = 0,
+        bool controlAllowed = false, string? sessionId = null)
     {
         Frame = frame;
         Thumb = thumb;
+        ReceivedTimestamp = receivedTimestamp;
+        ControlAllowed = controlAllowed;
+        SessionId = sessionId;
     }
 
     public ScreenFrame Frame { get; }
     public BitmapImage Thumb { get; }
+    internal long ReceivedTimestamp { get; }
+    internal bool ControlAllowed { get; }
+    internal string? SessionId { get; }
     public string TimeText => Frame.Time.ToString("HH:mm:ss");
 }
 

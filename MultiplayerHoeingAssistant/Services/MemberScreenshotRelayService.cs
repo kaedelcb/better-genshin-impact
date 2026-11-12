@@ -2,59 +2,39 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
-/// <summary>
-/// 成员截图按需取图（嘟嘟可 P5 pull 模式）：
-/// 1) 被查看端——已连接房间时收到 MemberScreenshotRequested，当场截一帧 JPEG
-///    带 requestId 应答（宽度走统一设置 ShareScreenshotWidth，默认 1280，质量 75），服务端按映射单播回请求方；
-/// 2) 观看端——RequestFrameAsync(targetUid, sessionId) 向目标成员请求一帧，应答帧经 OnMemberScreenshot 回来；
-/// 3) 接收——懒订阅 SignalRClient.OnMemberScreenshot/OnMemberScreenshotRequested（客户端实例懒解析，
-///    实例更换时自动换绑；懒绑定由 DodocoViewModel.FlushPending 200ms 节拍驱动 EnsureHooked，与日志族同款）。
-/// 尽力而为通道：截图/上报失败只记 Debug 日志，不影响主流程。
-/// </summary>
+/// <summary>按需获取成员主屏；并发观看者复用一次捕获，每个应答编号登记为该实际帧的别名。</summary>
 public sealed class MemberScreenshotRelayService : IDisposable
 {
-    /// <summary>共享帧 JPEG 质量（75：清晰度够读屏上文字，单帧 1280px 约 100~180KB）。</summary>
     private const long ShareJpegQuality = 75L;
-
     private readonly ScreenshotService _screenshotService;
     private readonly DodocoSettingsService _settingsService;
     private readonly Func<SignalRClient?> _clientProvider;
-
-    private SignalRClient? _hooked;
     private readonly object _requestLock = new();
-    private readonly List<string> _pendingRequestIds = [];
+    private readonly List<PendingCapture> _pending = [];
+    private SignalRClient? _hooked;
+    private string? _hookContext;
+    private Action<string, string>? _requestedHandler;
+    private Action<MemberScreenshotFrame>? _frameHandler;
     private bool _captureRunning;
+    private bool _disposed;
+    private sealed record PendingCapture(SignalRClient Client, string Context, string RequestId);
 
-    /// <summary>收到成员截图帧（回调线程为 SignalR 线程，订阅方自行 Dispatcher 到 UI）。</summary>
     public event Action<MemberScreenshotFrame>? FrameReceived;
 
-    public MemberScreenshotRelayService(
-        ScreenshotService screenshotService,
-        DodocoSettingsService settingsService,
-        Func<SignalRClient?> clientProvider)
-    {
-        _screenshotService = screenshotService;
-        _settingsService = settingsService;
-        _clientProvider = clientProvider;
-    }
+    public MemberScreenshotRelayService(ScreenshotService screenshotService,
+        DodocoSettingsService settingsService, Func<SignalRClient?> clientProvider)
+        => (_screenshotService, _settingsService, _clientProvider) = (screenshotService, settingsService, clientProvider);
 
-    /// <summary>
-    /// 观看端：请求目标成员的一帧桌面截图（生成一次性 requestId）。
-    /// 应答帧经 FrameReceived 回来（按 uid 认领）；对方离线/旧版或截图失败时无应答，由调用方超时提示。
-    /// </summary>
     public async Task RequestFrameAsync(string targetUid, string sessionId)
     {
         try
         {
+            EnsureHooked();
             var client = _clientProvider();
-            if (client?.IsConnected != true) return;
-            var requestId = CreateRequestId(sessionId);
-            await client.RequestMemberScreenshotAsync(targetUid, requestId);
+            if (_disposed || client?.IsConnected != true) return;
+            await client.RequestMemberScreenshotAsync(targetUid, CreateRequestId(sessionId)).ConfigureAwait(false);
         }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 请求截图失败: {ex.Message}");
-        }
+        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 请求截图失败: {ex.Message}"); }
     }
 
     internal static string CreateRequestId(string sessionId)
@@ -64,115 +44,106 @@ public sealed class MemberScreenshotRelayService : IDisposable
         return $"screen:{sessionId}:{Guid.NewGuid():N}";
     }
 
-    /// <summary>客户端实例懒解析换绑（_signalRClient 可能晚于本服务创建/被更换）。由外部节拍驱动。</summary>
     public void EnsureHooked()
     {
         var client = _clientProvider();
-        if (ReferenceEquals(client, _hooked)) return;
-        if (_hooked != null)
+        lock (_requestLock)
         {
-            _hooked.OnMemberScreenshot -= HandleFrame;
-            _hooked.OnMemberScreenshotRequested -= HandleRequested;
-        }
-        _hooked = client;
-        if (_hooked != null)
-        {
-            _hooked.OnMemberScreenshot += HandleFrame;
-            _hooked.OnMemberScreenshotRequested += HandleRequested;
-        }
-    }
-
-    /// <summary>被查看端：有房间成员请求桌面截图，已连房时截帧应答。</summary>
-    private void HandleRequested(string requesterUid, string requestId)
-    {
-        try
-        {
-            var client = _clientProvider();
-            if (client?.IsConnected != true) return;
-            if (string.IsNullOrEmpty(requestId)) return;
-            lock (_requestLock)
+            if (_disposed || (ReferenceEquals(client, _hooked) && client?.DesktopControlContext == _hookContext)) return;
+            Unhook();
+            _pending.Clear();
+            _hooked = client;
+            _hookContext = client?.DesktopControlContext;
+            if (client == null) return;
+            var context = _hookContext!;
+            _requestedHandler = (_, id) => HandleRequested(client, context, id);
+            _frameHandler = frame =>
             {
-                // 同一成员可能被多位房间成员同时观看。合并并发请求到同一帧，
-                // 每个 requestId 仍分别走服务端的一次性映射单播给原请求者。
-                if (_pendingRequestIds.Count >= 64) return;
-                _pendingRequestIds.Add(requestId);
-                if (_captureRunning) return;
-                _captureRunning = true;
-            }
-            // CopyFromScreen 可能耗时，放线程池截，避免堵 SignalR 回调线程。
-            _ = Task.Run(() => RespondToPendingAsync(client));
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 处理截图请求失败: {ex.Message}");
+                if (!IsCurrent(client, context)) return;
+                try { FrameReceived?.Invoke(frame); }
+                catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 帧分发失败: {ex.Message}"); }
+            };
+            client.OnMemberScreenshotRequested += _requestedHandler;
+            client.OnMemberScreenshot += _frameHandler;
         }
     }
 
-    private async Task RespondToPendingAsync(SignalRClient client)
+    private bool IsCurrent(SignalRClient client, string context)
+        => !_disposed && ReferenceEquals(client, _clientProvider()) && client.IsConnected
+            && context == client.DesktopControlContext;
+
+    private void HandleRequested(SignalRClient client, string context, string requestId)
+    {
+        if (!IsCurrent(client, context) || string.IsNullOrEmpty(requestId)) return;
+        lock (_requestLock)
+        {
+            if (_disposed || _pending.Count >= 64 || _pending.Any(x => x.RequestId == requestId)) return;
+            _pending.Add(new(client, context, requestId));
+            if (_captureRunning) return;
+            _captureRunning = true;
+        }
+        _ = Task.Run(RespondToPendingAsync);
+    }
+
+    private async Task RespondToPendingAsync()
     {
         while (true)
         {
-            string? jpegBase64 = null;
-            var width = 0;
-            var height = 0;
-            var capturedAt = DateTime.Now;
+            PendingCapture[] requests;
+            lock (_requestLock)
+            {
+                if (_disposed || _pending.Count == 0) { _captureRunning = false; return; }
+                requests = _pending.ToArray();
+                _pending.Clear();
+            }
             try
             {
+                var first = requests[0];
+                if (!IsCurrent(first.Client, first.Context)) continue;
                 var cfg = _settingsService.Current;
-                var jpeg = _screenshotService.CaptureJpeg(cfg.ShareScreenshotWidth, ShareJpegQuality, out width, out height);
-                if (jpeg is { Length: > 0 }) jpegBase64 = Convert.ToBase64String(jpeg);
-                capturedAt = DateTime.Now;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 截图失败: {ex.Message}");
-            }
-
-            string[] requests;
-            lock (_requestLock)
-            {
-                requests = _pendingRequestIds.ToArray();
-                _pendingRequestIds.Clear();
-            }
-            if (jpegBase64 != null)
-            {
-                foreach (var requestId in requests)
+                var frame = _screenshotService.CaptureDesktopFrame(cfg.ShareScreenshotWidth, ShareJpegQuality);
+                if (frame?.JpegBytes is not { Length: > 0 }) continue;
+                var jpegBase64 = Convert.ToBase64String(frame.JpegBytes);
+                foreach (var request in requests)
                 {
+                    if (!IsCurrent(request.Client, request.Context)) continue;
+                    var allowed = _settingsService.Current.AllowDesktopControl && request.Client.DesktopControlReady
+                        && frame.Geometry?.IsValid == true;
+                    if (allowed)
+                    {
+                        _screenshotService.RememberControlFrame(request.RequestId, frame.Geometry!, request.Context);
+                        allowed = _screenshotService.TryGetControlFrame(request.RequestId, request.Context, out _);
+                    }
                     try
                     {
-                        await client.ReportMemberScreenshotExAsync(jpegBase64, width, height, capturedAt, requestId);
+                        await request.Client.ReportMemberScreenshotExAsync(jpegBase64, frame.Width, frame.Height,
+                            frame.Time, request.RequestId, frame.Geometry, allowed).ConfigureAwait(false);
                     }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 应答截图失败: {ex.Message}");
-                    }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 应答截图失败: {ex.Message}"); }
                 }
             }
-            lock (_requestLock)
-            {
-                if (_pendingRequestIds.Count != 0) continue;
-                _captureRunning = false;
-                return;
-            }
+            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 截图失败: {ex.Message}"); }
         }
     }
 
-    private void HandleFrame(MemberScreenshotFrame frame)
+    private void Unhook()
     {
-        try { FrameReceived?.Invoke(frame); }
-        catch (Exception ex)
+        if (_hooked != null)
         {
-            System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 帧分发失败: {ex.Message}");
+            _hooked.OnMemberScreenshotRequested -= _requestedHandler;
+            _hooked.OnMemberScreenshot -= _frameHandler;
         }
+        _hooked = null;
+        _hookContext = null;
     }
 
     public void Dispose()
     {
-        if (_hooked != null)
+        lock (_requestLock)
         {
-            _hooked.OnMemberScreenshot -= HandleFrame;
-            _hooked.OnMemberScreenshotRequested -= HandleRequested;
-            _hooked = null;
+            _disposed = true;
+            Unhook();
+            _pending.Clear();
         }
     }
 }

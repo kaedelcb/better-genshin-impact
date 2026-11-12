@@ -100,6 +100,7 @@
 
   <ItemGroup>
     <Compile Include="..\BgiCoordinatorServer\Services\OpenSourceInfo.cs" Link="Services\Shared\OpenSourceInfo.cs" />
+    <Compile Include="..\BgiCoordinatorServer\Models\DesktopControlContracts.cs" Link="Models\DesktopControlContracts.cs" />
     <Compile Include="..\Mistletoe.Shared\ContinuousCliCommandRelay.cs" Link="Services\Shared\ContinuousCliCommandRelay.cs" />
     <Compile Include="..\Mistletoe.Shared\CoordinatedStopSignal.cs" Link="Services\Shared\CoordinatedStopSignal.cs" />
     <Compile Include="..\BetterGenshinImpact\Service\ExternalInterface\TerminalEffectJournal.cs" Link="Services\TaskCenter\TerminalEffectJournal.cs" />

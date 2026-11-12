@@ -63,7 +63,8 @@ public sealed partial class RoomOperations
     /// 负载上限 512KB base64。
     /// </summary>
     public async Task ReportMemberScreenshotExAsync(GatewayHandlerContext ctx, string roomCode, string uid,
-        string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
+        string jpegBase64, int width, int height, DateTime capturedAt, string requestId,
+        DesktopCaptureGeometry? geometry = null, bool controlAllowed = false)
     {
         try
         {
@@ -85,6 +86,7 @@ public sealed partial class RoomOperations
             // 认领并删除映射（一次性应答）；无映射 = 过期或伪造，丢弃
             if (!TryTakeScreenshotRequest(group, requestId, ctx.ConnectionId, uid, out var req)) return;
 
+            RememberControlFrame(group, requestId, req, geometry, controlAllowed);
             var payload = new
             {
                 uid,
@@ -92,7 +94,9 @@ public sealed partial class RoomOperations
                 jpegBase64,
                 width,
                 height,
-                capturedAt
+                capturedAt,
+                geometry,
+                controlAllowed
             };
             await _broadcaster.SendToConnectionAsync(req.RequesterConnectionId, "MemberScreenshot", payload, payload);
         }

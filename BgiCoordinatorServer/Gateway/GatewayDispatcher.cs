@@ -169,6 +169,7 @@ public sealed partial class GatewayDispatcher
         RegisterSession();
         RegisterControlRoom();
         RegisterMemberLog();
+        RegisterDesktopControl();
         RegisterDodoco();
         RegisterMistletoe();
         RegisterRerun();
@@ -189,6 +190,7 @@ public sealed partial class GatewayDispatcher
     partial void RegisterSession();
     partial void RegisterControlRoom();
     partial void RegisterMemberLog();
+    partial void RegisterDesktopControl();
     partial void RegisterDodoco();
     partial void RegisterMistletoe();
     partial void RegisterRerun();

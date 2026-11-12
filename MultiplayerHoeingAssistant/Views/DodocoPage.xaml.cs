@@ -19,7 +19,7 @@ namespace MultiplayerHoeingAssistant.Views;
 ///   自动跟尾 / 用户上翻暂停跟尾 / 滚回底部恢复；文本天然支持跨行拖选与复制；
 /// - 日志浏览：虚拟化 ListBox 承载整文件全量视图（多选 + Ctrl+C 复制、关键字高亮走绑定），
 ///   VM 的 NavigateRequested 事件驱动滚动定位（滚到底 / 选中并居中目标行）；
-/// - 桌面监控：点击大图/按钮打开放大窗口。
+/// - 桌面监控：关闭控制时点击大图放大；开启后仅将鼠标点击转为固定输入，放大窗口始终只读。
 /// </summary>
 public partial class DodocoPage : UserControl
 {
@@ -346,7 +346,38 @@ public partial class DodocoPage : UserControl
 
     // ========== 桌面监控：点击放大 ==========
 
-    private void MonitorImage_Click(object sender, MouseButtonEventArgs e) => OpenMonitorZoom();
+    private async void MonitorImage_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not DodocoViewModel vm) return;
+        if (!vm.Monitor.IsControlMode) { OpenMonitorZoom(); return; }
+        e.Handled = true;
+        if (sender is not Image image || image.Source == null || e.ClickCount > 1) return;
+        await vm.Monitor.SendMouseAsync(e.GetPosition(image), new Size(image.ActualWidth, image.ActualHeight),
+            new Size(image.Source.Width, image.Source.Height));
+    }
+
+    // 只在鼠标抬起时发送固定键；Button 的键盘 Click、快捷键及实体按键都不转发。
+    private async void MonitorKey_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        // 不吞掉抬起事件，让 ButtonBase 正常释放鼠标捕获和按下态；普通 Click 没有发送处理器。
+        if (sender is not Button { DataContext: string key, IsEnabled: true } button
+            || e.ChangedButton != MouseButton.Left) return;
+        await SendMonitorKeyPointerAsync(key, button.IsPressed, button.IsMouseOver, e.ClickCount);
+    }
+
+    // 预览抬起发生在 ButtonBase 清除 IsPressed 之前；拖出按钮松开是取消点击。
+    // 状态参数可在隔离测试中模拟，不需要移动用户实体鼠标。
+    internal Task SendMonitorKeyPointerAsync(string key, bool wasPressed, bool isMouseOver, int clickCount)
+    {
+        if (!wasPressed || !isMouseOver || clickCount != 1 || DataContext is not DodocoViewModel vm)
+            return Task.CompletedTask;
+        return vm.Monitor.SendKeyAsync(key);
+    }
+
+    private void MonitorBgiHotkey_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is DodocoViewModel vm) vm.Monitor.ExecuteBgiHotkey();
+    }
 
     private void MonitorZoom_Click(object sender, RoutedEventArgs e) => OpenMonitorZoom();
 

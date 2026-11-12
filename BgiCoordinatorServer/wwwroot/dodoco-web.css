@@ -155,6 +155,20 @@
 .dodoco-image{display:block;width:100%;max-height:60vh;object-fit:contain;margin:10px 0;border-radius:8px;background:#0e0f1a}
 .dodoco-image-dialog{max-width:96vw;max-height:95vh;padding:14px;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px}
 .dodoco-image-dialog::backdrop{background:#000b}
+/* 低频控制沿用卡片、标签与按钮；关闭时主画面仍按原方式点击放大。 */
+.dd-control{margin:0 0 14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--dd-inset)}
+.dd-control-row{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap}
+.dd-control-row .dd-field{min-width:130px}
+.dd-control-row select{min-height:44px}
+.dd-control-keys{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.dd-control-keys .dd-btn{min-width:44px;max-width:100%;min-height:44px;white-space:normal;touch-action:manipulation}
+.dd-control .dodoco-status{min-height:1.6em;margin:8px 0 0;line-height:1.6}
+.dd-control .dd-check{min-height:44px;white-space:normal}
+.dd-control :disabled{cursor:not-allowed}
+.dd-control :focus-visible,.dd-image-btn:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.dd-image-btn.is-control{cursor:crosshair;touch-action:manipulation}
+.dd-image-btn.is-control.is-control-wait,.dd-image-btn.is-control:disabled{cursor:not-allowed}
+@media(max-width:700px){.dd-control{padding:12px}.dd-control-row{align-items:stretch}.dd-control-row .dd-field{flex:1 1 100%;min-width:0}.dd-control-keys .dd-btn{flex:1 0 auto}}
 .dodoco-image-dialog img{display:block;max-width:90vw;max-height:80vh;margin-top:10px;object-fit:contain}
 
 @media(max-width:1100px){

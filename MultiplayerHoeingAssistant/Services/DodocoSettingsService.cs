@@ -30,6 +30,8 @@ public class DodocoSettings
     [JsonPropertyName("shareLogFiles")] public bool ShareLogFiles { get; set; } = true;
     /// <summary>允许同房成员远程访问异常监控及日报；默认关闭。</summary>
     [JsonPropertyName("shareDodocoWeb")] public bool ShareDodocoWeb { get; set; }
+    /// <summary>允许低频控制本机主屏；独立授权，默认关闭，不随共享截图开启。</summary>
+    [JsonPropertyName("allowDesktopControl")] public bool AllowDesktopControl { get; set; }
     /// <summary>事发录像总开关：开启后本机 BGI 运行期间后台按设定间隔截帧进环形缓冲；
     /// 命中标了"存快照"的监控规则时保存事发前后帧 + 触发日志到 log/incidents/。默认关。</summary>
     [JsonPropertyName("incidentSnapshotEnabled")] public bool IncidentSnapshotEnabled { get; set; }
@@ -91,6 +93,7 @@ public sealed class DodocoSettingsService
                     ShareLogInfoOnly = _settings.ShareLogInfoOnly,
                     ShareLogFiles = _settings.ShareLogFiles,
                     ShareDodocoWeb = _settings.ShareDodocoWeb,
+                    AllowDesktopControl = _settings.AllowDesktopControl,
                     IncidentSnapshotEnabled = _settings.IncidentSnapshotEnabled,
                     IncidentBufferSeconds = _settings.IncidentBufferSeconds,
                     IncidentCaptureIntervalSeconds = _settings.IncidentCaptureIntervalSeconds,

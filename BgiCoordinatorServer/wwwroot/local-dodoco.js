@@ -20,6 +20,7 @@
     const byId = id => document.getElementById(id);
     function markUnavailable(message) {
         available=false;session='';try{sessionStorage.removeItem(storageKey);}catch{}stopLog();
+        if(window.bgiLocalBridge && typeof dodocoControlClose==='function' && (dodocoIsLocal() || dodocoControl.pending?.local))dodocoControlClose('本机连接已断开，控制已关闭；已发送的输入结果可能未确认。');
         if(typeof watchStopAlerts==='function')watchStopAlerts('本机连接中断，告警监视已停止。');
         if(byId('connectionText'))byId('connectionText').textContent=roomReady?'本机连接已断开 · 远程已连接':'本机连接已断开';
         if(byId('connDot'))byId('connDot').className='dot dot-offline';
@@ -40,12 +41,15 @@
         if (dodoco.target === '*' && players.some(p => p.playerUid === uid && matches(p))) return;
         throw new Error('本机目标身份未确认；未改走服务器。');
     }
-    async function call(operation, args = {}, timeout = 20000, routeUid = dodoco.target) {
+    async function call(operation, args = {}, timeout = 20000, routeUid = dodoco.target, signal) {
         // localStatus 供槲寄生区分「确定未执行」与「结果未确认」；嘟嘟可只读 message。
         if (!available || !session) throw Object.assign(new Error('本机连接未就绪，请从助手重新打开。'), { localStatus:'not_sent' });
         if (operation !== 'local.identity' && !operation.startsWith('mistletoe.')) validateTarget(routeUid);
-        const requestId = crypto.randomUUID().replaceAll('-', ''), controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
+        if (signal?.aborted) throw Object.assign(new Error('本机请求已取消。'), { localStatus:'not_sent' });
+        const requestId = dodocoScreenId(), controller = new AbortController();
+        const abort = () => controller.abort();
+        signal?.addEventListener('abort', abort, { once:true });
+        const timer = setTimeout(abort, timeout);
         try {
             const response = await fetch('/api/execute', { method:'POST', cache:'no-store', credentials:'omit', signal:controller.signal,
                 headers:{'Content-Type':'application/json','X-BGI-Session':session}, body:JSON.stringify({requestId,operation,args}) });
@@ -66,7 +70,7 @@
             if (error.name === 'AbortError') throw new Error('等待本机回复超时，结果未确认；未改走服务器。');
             if (error instanceof TypeError) { markUnavailable('本机连接中断，结果未确认；未改走服务器。'); throw new Error('本机连接中断，结果未确认；未改走服务器。'); }
             throw error;
-        } finally { clearTimeout(timer); }
+        } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
     }
     function stopLog() { logEpoch++; clearTimeout(logTimer); logTimer=null; logCursor=null; }
     function startLog(uid) {

@@ -43,6 +43,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly LocalPeerSyncService _peerSync;
     private readonly DiagnosticPackageService _diagService;
     private readonly MemberScreenshotRelayService _screenshotRelay;
+    private readonly DesktopControlService _desktopControl;
     private readonly MemberLogRelayService _logRelay;
     /// <summary>远程日志下载·被下载端（应答文件列表 / 分块上行）。</summary>
     private readonly MemberLogShareService _logShare;
@@ -117,7 +118,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             _screenshotService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
         _screenshotRelay.FrameReceived += frame =>
             Application.Current.Dispatcher.BeginInvoke(() => Monitor.OnRemoteFrame(frame));
-        Monitor = new ScreenshotViewModel(_screenshotService, _settingsService, _mainVm, _screenshotRelay);
+        _desktopControl = new DesktopControlService(_screenshotService, _settingsService,
+            () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
+        Monitor = new ScreenshotViewModel(_screenshotService, _settingsService, _mainVm, _screenshotRelay,
+            desktopControl: _desktopControl);
 
         // 房间实时日志汇聚：本机上报（500ms 合批）+ 成员日志批接收 → 实时日志 Tab 多来源
         _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
@@ -134,7 +138,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         // 嘟嘟可修改类远程操作与槲寄生共用同一份本人授权。
         _webRelay.OwnerVerifier = (browserId, secret) => _mainVm.WebOwners.Verify(browserId, secret);
         LocalBrowserService = new DodocoLocalService(_tailService, _webRelay, _screenshotService, _settingsService,
-            () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath), BuildLocalBrowserIdentity);
+            () => BgiLogTailService.ResolveBgiLogDir(_mainVm.Config?.BgiPath), BuildLocalBrowserIdentity,
+            desktopControl: _desktopControl);
         RebuildLogSources();
         _mainVm.Members.CollectionChanged += OnMembersChanged;
         // 成员 Online 是原地更新（不触发 CollectionChanged），靠这个事件驱动离线退订/上线重订
@@ -920,6 +925,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _webRelay.EnsureHooked();
         // 截图按需取图两端（观看/被查看）的 SignalR 懒绑定同款（原 10s 上报 Timer 已随 pull 化删除）
         _screenshotRelay.EnsureHooked();
+        _desktopControl.EnsureHooked();
+        Monitor.EnsureControlConnection();
         Browser.EnsureSignalRHooked();
         // 观看人数指示：轮询 relay 的订阅数，变化才更新避免无谓 INPC
         var watchers = _logRelay.SubscriberCount;
@@ -1172,6 +1179,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _logRelay.BatchReceived -= OnLogBatchReceived;
         Browser.Dispose();
         Monitor.Dispose();
+        _desktopControl.Dispose();
         Stats.Dispose();
         _screenshotRelay.Dispose();
         _logShare.Dispose();

@@ -171,6 +171,8 @@ public class MemberScreenshotFrame
     public int Width { get; set; }
     public int Height { get; set; }
     public DateTime CapturedAt { get; set; }
+    public BgiCoordinatorServer.Models.DesktopCaptureGeometry? Geometry { get; set; }
+    public bool ControlAllowed { get; set; }
 }
 
 /// <summary>成员实时日志批（房间日志汇聚，SignalR MemberLogBatch 事件的负载）。

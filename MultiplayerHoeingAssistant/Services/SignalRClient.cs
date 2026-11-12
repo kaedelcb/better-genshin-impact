@@ -1,3 +1,4 @@
+using BgiCoordinatorServer.Models;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services.Gateway;
 
@@ -37,6 +38,13 @@ public class SignalRClient : IAsyncDisposable
     private volatile bool _retired;
     internal bool IsControlRoomReady => _roomReady && !_retired && IsConnected;
     internal string CurrentRoomCode => _roomCode;
+    private readonly string _desktopControlInstance = Guid.NewGuid().ToString("N");
+    private long _desktopControlEpoch;
+    internal virtual bool DesktopControlReady => !_disposed && IsControlRoomReady;
+    internal virtual long DesktopControlEpoch => Interlocked.Read(ref _desktopControlEpoch);
+    internal virtual string DesktopControlRoomCode => _roomCode;
+    internal virtual string DesktopControlUid => _playerUid;
+    internal string DesktopControlContext => $"{_desktopControlInstance}:{DesktopControlEpoch}:{DesktopControlRoomCode}";
     internal bool IsRetired => _retired;
     internal bool JoinAttempted { get; private set; }
     internal string ControlContext { get; set; } = "";
@@ -45,13 +53,19 @@ public class SignalRClient : IAsyncDisposable
         CancellationToken, Task<CoordinatedBatchSnapshot>>? CoordinateBatchUpdate { get; set; }
     internal Func<TimeSpan?>? RemainingBatchRecoveryBudget { get; set; }
     internal event Action? ControlConnectionLost;
+    internal event Action? DesktopControlContextChanged;
+
+    private void InvalidateDesktopControlContext()
+    {
+        Interlocked.Increment(ref _desktopControlEpoch);
+        DesktopControlContextChanged?.Invoke();
+    }
 
     internal void RetireForReplacement()
     {
         _retired = true;
-        _roomReady = false;
         _connectionLifetime.Cancel();
-        ControlConnectionLost?.Invoke();
+        InvalidateControlRoom();
     }
 
     private CancellationTokenSource CreateRecoveryBudget(CancellationToken ct)
@@ -67,6 +81,7 @@ public class SignalRClient : IAsyncDisposable
     private void InvalidateControlRoom()
     {
         _roomReady = false;
+        InvalidateDesktopControlContext();
         ControlConnectionLost?.Invoke();
     }
 
@@ -111,6 +126,9 @@ public class SignalRClient : IAsyncDisposable
     public event Action<MemberScreenshotFrame>? OnMemberScreenshot;
     /// <summary>有成员请求我的一帧桌面截图（截图按需取图·被查看端）。参数：requesterUid, requestId。</summary>
     public event Action<string, string>? OnMemberScreenshotRequested;
+    public event Action<DesktopControlRequest>? OnDesktopControlRequested;
+    public event Action<DesktopControlResult>? OnDesktopControlResult;
+    public event Action<string>? OnDesktopControlCancelled;
     /// <summary>收到成员实时日志批（房间日志汇聚；服务端纯转发，含自己的批需按 uid 自滤）。</summary>
     public event Action<MemberLogBatch>? OnMemberLogBatch;
     /// <summary>我的日志订阅数变化（观众驱动上报：0→停发，&gt;0→开始发）。服务端在订阅/退订/订阅者断线时推送。</summary>
@@ -157,6 +175,8 @@ public class SignalRClient : IAsyncDisposable
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
         bool bypassSystemProxy = false, CancellationToken cancellationToken = default)
     {
+        _roomReady = false;
+        InvalidateDesktopControlContext();
         _roomCode = roomCode;
         _playerUid = playerUid;
         _playerName = playerName;
@@ -196,11 +216,19 @@ public class SignalRClient : IAsyncDisposable
 
         var gateway = new MhaGatewayClient { AdvertisedCapabilitiesForTest = AdvertisedCapabilitiesForTest };
 
-        gateway.EnvelopeReceived += DispatchEvt;
+        gateway.EnvelopeReceived += env =>
+        {
+            // 桌面控制只消费当前传输连接的事件；旧实例的已排队回调不能转到新房间。
+            if ((env.Name.StartsWith("desktop.control.", StringComparison.Ordinal)
+                || env.Name is GatewayProtocol.Events.ScreenshotMember or GatewayProtocol.Events.ScreenshotRequested)
+                && !ReferenceEquals(gateway, _gateway)) return;
+            DispatchEvt(env);
+        };
 
         // 重连中（SignalR 内置自动重连尝试期间）
         gateway.Reconnecting += error =>
         {
+            if (!ReferenceEquals(gateway, _gateway)) return Task.CompletedTask;
             InvalidateControlRoom();
             if (_retired) return Task.CompletedTask;
             // 必须落 OnLog：此前只有 Debug.WriteLine，断线时 UI/文件零痕迹，
@@ -215,7 +243,7 @@ public class SignalRClient : IAsyncDisposable
         // SignalR 内置自动重连成功
         gateway.Reconnected += async _ =>
         {
-            if (_retired) return;
+            if (_retired || !ReferenceEquals(gateway, _gateway)) return;
             try
             {
                 OnLog?.Invoke("[连接] SignalR 已重连，重新加入控制房间");
@@ -247,6 +275,8 @@ public class SignalRClient : IAsyncDisposable
         //   启动，且始终对同一连接 StartAsync，绝不 Dispose/重建连接。
         gateway.Closed += exception =>
         {
+            // 旧传输实例释放后的 Closed 不能撤销当前连接的房间/桌面控制代次。
+            if (!ReferenceEquals(gateway, _gateway)) return Task.CompletedTask;
             // 手动刷新/重建连接时 DisposeAsync 会先置 _disposed 再 Dispose 连接，
             // Dispose 触发的 Closed 不是真实断连：不打"自动重连已耗尽"误导日志、不转离线状态
             InvalidateControlRoom();
@@ -377,6 +407,11 @@ public class SignalRClient : IAsyncDisposable
                 }
                 case GatewayProtocol.Events.ScreenshotRequested:
                     OnMemberScreenshotRequested?.Invoke(env.GetString("requesterUid"), env.GetString("requestId"));
+                    break;
+                case "desktop.control.requested":
+                case "desktop.control.result":
+                case "desktop.control.cancelled":
+                    DispatchDesktopControlEvent(env);
                     break;
                 case GatewayProtocol.Events.LogBatch:
                 {
@@ -519,6 +554,7 @@ public class SignalRClient : IAsyncDisposable
             token.ThrowIfCancellationRequested();
             if (_retired) throw new ControlChannelUnavailableException("旧控制连接已撤销");
             _roomReady = false;
+            InvalidateDesktopControlContext();
             if (hello) await gateway.HelloAsync(token);
             JoinAttempted = true; // Even an unknown response may already have replaced the old connection.
             await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote, token);
@@ -855,7 +891,8 @@ public class SignalRClient : IAsyncDisposable
 
     /// <summary>应答成员的截图请求，带 requestId 上报一帧（截图按需取图·被查看端），服务端按映射单播回请求方。
     /// 未连接/未入房时静默跳过；服务端无此消息名时首次 GatewayErrorException 后停重试（复用 _screenshotRequestUnsupported 标记）。</summary>
-    public async Task ReportMemberScreenshotExAsync(string jpegBase64, int width, int height, DateTime capturedAt, string requestId)
+    public async Task ReportMemberScreenshotExAsync(string jpegBase64, int width, int height, DateTime capturedAt, string requestId,
+        DesktopCaptureGeometry? geometry = null, bool controlAllowed = false)
     {
         if (_screenshotRequestUnsupported) return;
         if (_gateway == null) return;
@@ -863,7 +900,7 @@ public class SignalRClient : IAsyncDisposable
         try
         {
             await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ScreenshotReportEx,
-                new { roomCode = _roomCode, uid = _playerUid, jpegBase64, width, height, capturedAt, requestId });
+                new { roomCode = _roomCode, uid = _playerUid, jpegBase64, width, height, capturedAt, requestId, geometry, controlAllowed });
         }
         catch (GatewayErrorException ex)
         {
@@ -874,6 +911,50 @@ public class SignalRClient : IAsyncDisposable
         {
             OnLog?.Invoke($"ReportMemberScreenshotExAsync 调用失败: {ex.Message}");
         }
+    }
+
+    /// <summary>仅由当前连接的即时事件通道调用，不经过嘟嘟可的日志/文件请求队列。</summary>
+    internal void DispatchDesktopControlEvent(GatewayEnvelope env)
+    {
+        if (!DesktopControlReady || env.Type != "event" || env.RoomCode != DesktopControlRoomCode) return;
+        switch (env.Name)
+        {
+            case "desktop.control.requested":
+                var request = env.DeserializePayload<DesktopControlRequest>();
+                if (request != null && request.RoomCode == DesktopControlRoomCode
+                    && request.Command != null && request.Command.TargetUid == DesktopControlUid)
+                    OnDesktopControlRequested?.Invoke(request);
+                break;
+            case "desktop.control.result":
+                var result = env.DeserializePayload<DesktopControlResult>();
+                if (result != null) OnDesktopControlResult?.Invoke(result);
+                break;
+            case "desktop.control.cancelled":
+                var requestId = env.GetString("requestId");
+                if (Guid.TryParseExact(requestId, "N", out _)) OnDesktopControlCancelled?.Invoke(requestId);
+                break;
+        }
+    }
+
+    public virtual Task RequestDesktopControlAsync(DesktopControlCommand command, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.request", new { roomCode = DesktopControlRoomCode, command }, cancellationToken);
+
+    public virtual Task ReportDesktopControlAsync(DesktopControlResult result, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.respond", new { roomCode = DesktopControlRoomCode, result }, cancellationToken);
+
+    public virtual Task CancelDesktopControlAsync(string sessionId, string? targetUid = null, CancellationToken cancellationToken = default)
+        => SendDesktopControlAsync("desktop.control.cancel", new { roomCode = DesktopControlRoomCode, sessionId, targetUid }, cancellationToken);
+
+    private async Task SendDesktopControlAsync(string operation, object payload, CancellationToken cancellationToken)
+    {
+        var gateway = _gateway;
+        var epoch = DesktopControlEpoch;
+        var roomCode = DesktopControlRoomCode;
+        if (gateway == null || !DesktopControlReady) throw new InvalidOperationException("控制房间尚未连接");
+        await gateway.InvokeCommandAsync(operation, payload, roomCode, cancellationToken).ConfigureAwait(false);
+        if (!ReferenceEquals(gateway, _gateway) || epoch != DesktopControlEpoch || roomCode != DesktopControlRoomCode)
+            throw new InvalidOperationException("控制连接已变化，操作结果未确认");
+        // 此处只有 accepted ACK；执行成功仅由 desktop.control.result 确认。
     }
 
     /// <summary>上报本机实时日志批（房间日志汇聚）。未连接/未入房时静默跳过；

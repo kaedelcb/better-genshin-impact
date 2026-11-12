@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
+using BgiCoordinatorServer.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -16,6 +17,8 @@ public sealed class ScreenFrame
     /// <summary>缩放后尺寸（显示布局用）。</summary>
     public int Width { get; init; }
     public int Height { get; init; }
+    public string FrameId { get; init; } = "";
+    public DesktopCaptureGeometry? Geometry { get; init; }
 }
 
 /// <summary>
@@ -23,9 +26,8 @@ public sealed class ScreenFrame
 /// Graphics.CopyFromScreen 截主屏全屏 → 缩放到配置宽度 → JPEG(质量 ~70) 输出字节；
 /// 环形保留最近 10 帧，超出丢弃（帧只存字节，无未释放位图）。
 ///
-/// DPI 适配：进程启动时 App.xaml.cs 已调 DpiAwarenessController.EnsureDpiAware()
-/// （SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE)），进程为 Per-Monitor 感知，
-/// 因此此处用 GetSystemMetrics 取到的就是主屏物理像素，高分屏不会截不全。
+/// DPI 适配：主屏捕获在同步线程内临时进入 PerMonitorV2，获取实际主屏物理像素；
+/// 退出时恢复原上下文，不改变 WPF 窗口及进程的 DPI 行为。
 ///
 /// 截图在调用方线程执行（约几十~几百毫秒），UI 层务必放后台线程调用，不要阻塞 UI。
 /// Capture() 的历史帧只在本机使用；CaptureJpeg() 可由房间截图应答服务调用并单播给请求者。
@@ -40,11 +42,30 @@ public sealed class ScreenshotService
     private readonly Func<int> _thumbnailWidthProvider;
     private readonly object _lock = new();
     private readonly List<ScreenFrame> _history = [];
+    private readonly TimeProvider _time;
+    private readonly Func<DesktopCaptureGeometry?>? _geometryProvider;
+    private readonly Func<int, long, ScreenFrame?>? _captureOverride;
+    private readonly Dictionary<string, FrameRegistration> _controlFrames = new(StringComparer.Ordinal);
+    // 别名共享原始捕获时间及消费位；不能通过同一 JPEG 的其他编号再次输入。
+    private readonly Dictionary<string, long> _frameIds = new(StringComparer.Ordinal);
+    private sealed class ControlFrame(DesktopCaptureGeometry geometry, long captured)
+    {
+        public readonly DesktopCaptureGeometry Geometry = geometry;
+        public readonly long Captured = captured;
+        public bool Used;
+    }
+    private sealed record FrameRegistration(ControlFrame Frame, string? RemoteContext = null);
 
     /// <param name="thumbnailWidthProvider">缩略宽度提供者（读取统一设置，改宽度后下一帧生效）。</param>
-    public ScreenshotService(Func<int> thumbnailWidthProvider)
+    public ScreenshotService(Func<int> thumbnailWidthProvider) : this(thumbnailWidthProvider, TimeProvider.System) { }
+
+    internal ScreenshotService(Func<int> thumbnailWidthProvider, TimeProvider timeProvider,
+        Func<DesktopCaptureGeometry?>? geometryProvider = null, Func<int, long, ScreenFrame?>? captureOverride = null)
     {
         _thumbnailWidthProvider = thumbnailWidthProvider;
+        _time = timeProvider;
+        _geometryProvider = geometryProvider;
+        _captureOverride = captureOverride;
     }
 
     /// <summary>历史帧（新的在尾部）。线程安全快照。</summary>
@@ -63,16 +84,8 @@ public sealed class ScreenshotService
         var targetW = _thumbnailWidthProvider();
         if (targetW is < 320 or > 3840) targetW = 1280;
 
-        var jpeg = CaptureJpeg(targetW, JpegQuality, out var w, out var h);
-        if (jpeg == null) return null;
-
-        var frame = new ScreenFrame
-        {
-            Time = DateTime.Now,
-            JpegBytes = jpeg,
-            Width = w,
-            Height = h
-        };
+        var frame = CaptureDesktopFrame(targetW, JpegQuality);
+        if (frame == null) return null;
 
         lock (_lock)
         {
@@ -89,15 +102,149 @@ public sealed class ScreenshotService
     /// </summary>
     public byte[]? CaptureJpeg(int targetWidth, long quality, out int outWidth, out int outHeight)
     {
-        outWidth = 0;
-        outHeight = 0;
-        // Per-Monitor 感知进程下 GetSystemMetrics 返回物理像素（高分屏截全的关键）
-        var w = GetSystemMetrics(SM_CXSCREEN);
-        var h = GetSystemMetrics(SM_CYSCREEN);
-        if (w <= 0 || h <= 0) return null;
-        using var full = CaptureRegion(0, 0, w, h);
-        return full == null ? null : EncodeJpeg(full, targetWidth, quality, out outWidth, out outHeight);
+        var frame = CaptureDesktopFrame(targetWidth, quality);
+        outWidth = frame?.Width ?? 0;
+        outHeight = frame?.Height ?? 0;
+        return frame?.JpegBytes;
     }
+
+    /// <summary>截主屏并登记可信帧。布局不可确认时仍尽力截图，但不附可控制的 geometry。</summary>
+    public ScreenFrame? CaptureDesktopFrame(int targetWidth, long quality)
+    {
+        var captured = _time.GetTimestamp();
+        ScreenFrame? raw;
+        if (_captureOverride != null) raw = _captureOverride(targetWidth, quality);
+        else
+        {
+            try
+            {
+                using var dpi = DesktopDisplayLayout.EnterPerMonitorV2();
+                var geometry = DesktopDisplayLayout.GetGeometry();
+                var w = geometry?.Width ?? GetSystemMetrics(SM_CXSCREEN);
+                var h = geometry?.Height ?? GetSystemMetrics(SM_CYSCREEN);
+                if (w <= 0 || h <= 0) return null;
+                using var full = CaptureRegion(geometry?.Left ?? 0, geometry?.Top ?? 0, w, h);
+                if (full == null) return null;
+                // 显示器热插拔、主屏切换或缩放改变时，只提供查看画面。
+                if (geometry != null && geometry != DesktopDisplayLayout.GetGeometry()) geometry = null;
+                var jpeg = EncodeJpeg(full, targetWidth, quality, out var width, out var height);
+                if (jpeg == null) return null;
+                raw = new ScreenFrame { JpegBytes = jpeg, Width = width, Height = height, Geometry = geometry };
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScreenshotService] 桌面截图失败: {ex.Message}");
+                return null;
+            }
+        }
+        if (raw == null) return null;
+        // 每次捕获拥有自己的元数据实例，别名只能关联这一实际捕获，不能关联较新的相同布局帧。
+        var geometryCopy = raw.Geometry?.IsValid == true ? raw.Geometry with { } : null;
+        var frame = new ScreenFrame { FrameId = Guid.NewGuid().ToString("N"), Time = _time.GetLocalNow().LocalDateTime,
+            JpegBytes = raw.JpegBytes, Width = raw.Width, Height = raw.Height, Geometry = geometryCopy };
+        if (geometryCopy != null)
+        {
+            lock (_lock)
+            {
+                PruneFrames();
+                if (_controlFrames.Count < 512 && _frameIds.Count < 4096)
+                {
+                    _controlFrames.Add(frame.FrameId, new(new(geometryCopy, captured)));
+                    _frameIds.Add(frame.FrameId, captured);
+                }
+            }
+        }
+        return frame;
+    }
+
+    /// <summary>远程应答别名只关联本服务实际捕获的 geometry 实例，且沿用原捕获时间。</summary>
+    public void RememberControlFrame(string frameId, DesktopCaptureGeometry geometry)
+        => RememberControlFrame(frameId, geometry, null);
+
+    internal void RememberControlFrame(string frameId, DesktopCaptureGeometry geometry, string? remoteContext)
+    {
+        if (!ValidFrameId(frameId) || geometry?.IsValid != true) return;
+        lock (_lock)
+        {
+            PruneFrames();
+            if (_frameIds.ContainsKey(frameId) || _controlFrames.Count >= 512 || _frameIds.Count >= 4096) return;
+            var source = _controlFrames.Values.Select(x => x.Frame)
+                .FirstOrDefault(f => !f.Used && ReferenceEquals(f.Geometry, geometry));
+            if (source == null) return;
+            _controlFrames.Add(frameId, new(source, remoteContext));
+            _frameIds.Add(frameId, source.Captured);
+        }
+    }
+
+    public bool TryGetControlFrame(string frameId, out DesktopCaptureGeometry? geometry)
+        => TryGetControlFrame(frameId, null, out geometry);
+
+    internal bool TryGetControlFrame(string frameId, string? remoteContext, out DesktopCaptureGeometry? geometry)
+    {
+        lock (_lock)
+        {
+            PruneFrames();
+            if (frameId != null && _controlFrames.TryGetValue(frameId, out var registration)
+                && !registration.Frame.Used && (remoteContext == null || registration.RemoteContext == remoteContext))
+            { geometry = registration.Frame.Geometry; return true; }
+        }
+        geometry = null;
+        return false;
+    }
+
+    internal bool TryGetControlFrameAge(string frameId, string remoteContext, out TimeSpan age)
+    {
+        lock (_lock)
+        {
+            PruneFrames();
+            if (_controlFrames.TryGetValue(frameId, out var registration) && !registration.Frame.Used
+                && registration.RemoteContext == remoteContext)
+            {
+                age = _time.GetElapsedTime(registration.Frame.Captured);
+                return true;
+            }
+        }
+        age = default;
+        return false;
+    }
+
+    internal bool TryConsumeControlFrame(string frameId)
+    {
+        lock (_lock)
+        {
+            PruneFrames();
+            if (!_controlFrames.TryGetValue(frameId, out var registration) || registration.Frame.Used) return false;
+            registration.Frame.Used = true;
+            return true;
+        }
+    }
+
+    internal bool IsControlFrameFresh(string frameId, DesktopCaptureGeometry geometry)
+    {
+        lock (_lock)
+        {
+            PruneFrames();
+            return _controlFrames.TryGetValue(frameId, out var registration)
+                && ReferenceEquals(registration.Frame.Geometry, geometry);
+        }
+    }
+
+    public DesktopCaptureGeometry? GetCurrentGeometry()
+        => _geometryProvider != null ? _geometryProvider() : DesktopDisplayLayout.GetGeometry();
+
+    private void PruneFrames()
+    {
+        var now = _time.GetTimestamp();
+        foreach (var item in _controlFrames.Where(x => _time.GetElapsedTime(x.Value.Frame.Captured, now) >= DesktopControlProtocol.FrameLifetime).ToArray())
+            _controlFrames.Remove(item.Key);
+        foreach (var item in _frameIds.Where(x => _time.GetElapsedTime(x.Value, now) > TimeSpan.FromMinutes(10)).ToArray())
+            _frameIds.Remove(item.Key);
+    }
+
+    private static bool ValidFrameId(string? id) => Guid.TryParseExact(id, "N", out _)
+        || (id is { Length: 72 } && id.StartsWith("screen:", StringComparison.Ordinal)
+            && Guid.TryParseExact(id.Substring(7, 32), "N", out _) && id[39] == ':'
+            && Guid.TryParseExact(id[40..], "N", out _));
 
     /// <summary>游戏进程名（国服 Yuanshen / 国际服 GenshinImpact）。</summary>
     private static readonly string[] GameProcessNames = ["Yuanshen", "GenshinImpact"];
@@ -179,9 +326,10 @@ public sealed class ScreenshotService
     /// <summary>截虚拟屏上一块区域为位图（调用方负责 Dispose）。失败返回 null。</summary>
     private static Bitmap? CaptureRegion(int x, int y, int width, int height)
     {
+        Bitmap? bmp = null;
         try
         {
-            var bmp = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+            bmp = new Bitmap(width, height, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.CopyFromScreen(x, y, 0, 0, new Size(width, height), CopyPixelOperation.SourceCopy);
@@ -190,6 +338,7 @@ public sealed class ScreenshotService
         }
         catch (Exception ex)
         {
+            bmp?.Dispose();
             System.Diagnostics.Debug.WriteLine($"[ScreenshotService] 区域截图失败: {ex.Message}");
             return null;
         }

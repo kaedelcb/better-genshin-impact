@@ -107,7 +107,9 @@ public sealed partial class GatewayDispatcher
                 GetInt(env, "width"),
                 GetInt(env, "height"),
                 GetDateTime(env, "capturedAt"),
-                GetString(env, "requestId"));
+                GetString(env, "requestId"),
+                Get<Models.DesktopCaptureGeometry>(env, "geometry"),
+                GetBool(env, "controlAllowed"));
             return new { ack = true };
         };
     }

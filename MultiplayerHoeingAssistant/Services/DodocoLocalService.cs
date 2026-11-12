@@ -2,9 +2,12 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Win32.SafeHandles;
 using MultiplayerHoeingAssistant.Models;
+using BgiCoordinatorServer.Models;
+using MultiplayerHoeingAssistant.Services.Gateway;
 
 namespace MultiplayerHoeingAssistant.Services;
 
@@ -24,6 +27,8 @@ internal sealed class DodocoLocalService : IDisposable
     private readonly Func<string> _assistantLogDir;
     private readonly Func<string, object> _identity;
     private readonly Func<ScreenFrame?>? _captureOverride;
+    private readonly DesktopControlService? _desktopControl;
+    private readonly Dictionary<string, string> _controlRequests = new(StringComparer.Ordinal);
     private readonly object _gate = new();
     private readonly Queue<(long Sequence, LogEntry Entry, int Chars)> _recent = new();
     private readonly Dictionary<string, Dictionary<string, FileSelection>> _files = new(StringComparer.Ordinal);
@@ -36,12 +41,14 @@ internal sealed class DodocoLocalService : IDisposable
 
     public DodocoLocalService(BgiLogTailService tail, DodocoWebRelayService relay, ScreenshotService screenshots,
         DodocoSettingsService settings, Func<string?> bgiLogDir, Func<string, object> identity,
-        Func<string>? assistantLogDir = null, Func<ScreenFrame?>? captureOverride = null)
+        Func<string>? assistantLogDir = null, Func<ScreenFrame?>? captureOverride = null,
+        DesktopControlService? desktopControl = null)
     {
         (_tail, _relay, _screenshots, _settings, _bgiLogDir, _identity) =
             (tail, relay, screenshots, settings, bgiLogDir, identity);
         _assistantLogDir = assistantLogDir ?? (() => LogFileBrowser.AssistantLogDir);
         _captureOverride = captureOverride;
+        _desktopControl = desktopControl;
         _tail.EntryReceived += OnEntry;
         _tail.HistoryBatchReceived += OnHistory;
     }
@@ -85,6 +92,8 @@ internal sealed class DodocoLocalService : IDisposable
                 "log.files" => EnumerateFiles(request.SessionId, cancellationToken),
                 "log.chunk" => await ReadChunkAsync(request.SessionId, request.Args, cancellationToken).ConfigureAwait(false),
                 "screenshot.capture" => Capture(),
+                "desktop.control.input" => await ExecuteControlAsync(request, cancellationToken).ConfigureAwait(false),
+                "desktop.control.cancel" => CancelControl(request.Args),
                 _ when request.Operation.StartsWith("watch.", StringComparison.Ordinal)
                     || request.Operation.StartsWith("report.", StringComparison.Ordinal)
                     => await _relay.ExecuteLocalAsync(request.Operation, request.Args, request.SessionId, cancellationToken).ConfigureAwait(false),
@@ -222,23 +231,50 @@ internal sealed class DodocoLocalService : IDisposable
 
     private object Capture()
     {
-        byte[]? jpeg;
-        int width, height;
-        DateTime capturedAt;
-        if (_captureOverride != null)
+        var frame = _captureOverride != null ? _captureOverride()
+            : _screenshots.CaptureDesktopFrame(_settings.Current.ThumbnailWidth, 70);
+        if (frame?.JpegBytes is not { Length: > 0 } || frame.Width <= 0 || frame.Height <= 0)
+            throw new InvalidOperationException("本机画面采集失败或当前会话不可用");
+        if (frame.JpegBytes.Length > 1024 * 1024) throw new InvalidOperationException("本机画面超过 1 MiB，请调低截图宽度");
+        var allowed = _desktopControl != null && _settings.Current.AllowDesktopControl && frame.Geometry?.IsValid == true
+            && _screenshots.TryGetControlFrame(frame.FrameId, out _);
+        return new { jpegBase64 = Convert.ToBase64String(frame.JpegBytes), width = frame.Width, height = frame.Height,
+            capturedAt = frame.Time, frameId = frame.FrameId, geometry = frame.Geometry, controlAllowed = allowed };
+    }
+
+    private async Task<DesktopControlResult> ExecuteControlAsync(LocalBrowserRequest request, CancellationToken cancellationToken)
+    {
+        if (_desktopControl == null) throw new InvalidOperationException("本机桌面控制服务不可用");
+        var command = request.Args.Deserialize<DesktopControlCommand>(GatewayJson.Options)
+            ?? throw new ArgumentException("缺少控制指令");
+        if (!DesktopControlProtocol.IsValid(command) || command.TargetUid != "local")
+            throw new ArgumentException("本机输入只接受 local 目标及固定按钮");
+        if (request.Args["expiresAtUtc"] is not JsonValue deadlineNode || !deadlineNode.TryGetValue<string>(out var deadlineText)
+            || !DateTimeOffset.TryParse(deadlineText, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var expiresAtUtc))
+            throw new ArgumentException("本机输入缺少点击时的有效期，请刷新网页");
+        lock (_gate)
         {
-            var frame = _captureOverride();
-            jpeg = frame?.JpegBytes; width = frame?.Width ?? 0; height = frame?.Height ?? 0;
-            capturedAt = frame?.Time ?? DateTime.Now;
+            if (_disposed) throw new ObjectDisposedException(nameof(DodocoLocalService));
+            if (_controlRequests.ContainsKey(command.RequestId)) throw new InvalidOperationException("该输入请求正在处理");
+            _controlRequests.Add(command.RequestId, request.SessionId);
         }
-        else
+        try
         {
-            jpeg = _screenshots.CaptureJpeg(_settings.Current.ThumbnailWidth, 70, out width, out height);
-            capturedAt = DateTime.Now;
+            return await _desktopControl.ExecuteLocalAsync(command, expiresAtUtc,
+                cancellationToken).ConfigureAwait(false);
         }
-        if (jpeg is not { Length: > 0 } || width <= 0 || height <= 0) throw new InvalidOperationException("本机画面采集失败或当前会话不可用");
-        if (jpeg.Length > 1024 * 1024) throw new InvalidOperationException("本机画面超过 1 MiB，请调低截图宽度");
-        return new { jpegBase64 = Convert.ToBase64String(jpeg), width, height, capturedAt };
+        finally { lock (_gate) _controlRequests.Remove(command.RequestId); }
+    }
+
+    private object CancelControl(JsonObject args)
+    {
+        if (_desktopControl == null) throw new InvalidOperationException("本机桌面控制服务不可用");
+        var requestId = args["requestId"]?.GetValue<string>() ?? "";
+        if (!Guid.TryParseExact(requestId, "N", out _)) throw new ArgumentException("控制请求编号无效");
+        // fetch abort 只终止浏览器等待；明确的写类 cancel 才建立输入取消墓碑。
+        _desktopControl.CancelLocal(requestId);
+        return new { cancelled = true };
     }
 
     private static long GetInteger(JsonNode node)
@@ -253,7 +289,13 @@ internal sealed class DodocoLocalService : IDisposable
 
     internal void ReleaseSession(string sessionId)
     {
-        lock (_gate) _files.Remove(sessionId);
+        string[] controls;
+        lock (_gate)
+        {
+            _files.Remove(sessionId);
+            controls = _controlRequests.Where(x => x.Value == sessionId).Select(x => x.Key).ToArray();
+        }
+        foreach (var requestId in controls) _desktopControl?.CancelLocal(requestId);
         _relay.ReleaseLocalSession(sessionId);
     }
 
@@ -329,7 +371,15 @@ internal sealed class DodocoLocalService : IDisposable
 
     public void Dispose()
     {
-        lock (_gate) { if (_disposed) return; _disposed = true; _files.Clear(); _recent.Clear(); }
+        string[] controls;
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _files.Clear(); _recent.Clear();
+            controls = _controlRequests.Keys.ToArray();
+        }
+        foreach (var requestId in controls) _desktopControl?.CancelLocal(requestId);
         _tail.EntryReceived -= OnEntry;
         _tail.HistoryBatchReceived -= OnHistory;
     }
