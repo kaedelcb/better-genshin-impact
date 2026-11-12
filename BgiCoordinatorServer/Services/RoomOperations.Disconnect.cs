@@ -138,6 +138,9 @@ public sealed partial class RoomOperations
             _logger.LogWarning(ex, "清理控制房间 Group 时发生异常");
         }
 
+        // 控制房间成员清理后释放截图窗口墓碑和在途帧；新物理连接独立计时。
+        ClearScreenshotConnection(ctx.ConnectionId);
+
         // 清理 group 跟踪表，避免静态字典内存泄漏
         _connectionGroups.TryRemove(ctx.ConnectionId, out _);
 

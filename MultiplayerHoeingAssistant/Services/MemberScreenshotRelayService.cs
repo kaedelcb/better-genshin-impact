@@ -6,7 +6,7 @@ namespace MultiplayerHoeingAssistant.Services;
 /// 成员截图按需取图（嘟嘟可 P5 pull 模式）：
 /// 1) 被查看端——已连接房间时收到 MemberScreenshotRequested，当场截一帧 JPEG
 ///    带 requestId 应答（宽度走统一设置 ShareScreenshotWidth，默认 1280，质量 75），服务端按映射单播回请求方；
-/// 2) 观看端——RequestFrameAsync(targetUid) 向目标成员请求一帧，应答帧经 OnMemberScreenshot 回来；
+/// 2) 观看端——RequestFrameAsync(targetUid, sessionId) 向目标成员请求一帧，应答帧经 OnMemberScreenshot 回来；
 /// 3) 接收——懒订阅 SignalRClient.OnMemberScreenshot/OnMemberScreenshotRequested（客户端实例懒解析，
 ///    实例更换时自动换绑；懒绑定由 DodocoViewModel.FlushPending 200ms 节拍驱动 EnsureHooked，与日志族同款）。
 /// 尽力而为通道：截图/上报失败只记 Debug 日志，不影响主流程。
@@ -42,19 +42,26 @@ public sealed class MemberScreenshotRelayService : IDisposable
     /// 观看端：请求目标成员的一帧桌面截图（生成一次性 requestId）。
     /// 应答帧经 FrameReceived 回来（按 uid 认领）；对方离线/旧版或截图失败时无应答，由调用方超时提示。
     /// </summary>
-    public async Task RequestFrameAsync(string targetUid)
+    public async Task RequestFrameAsync(string targetUid, string sessionId)
     {
         try
         {
             var client = _clientProvider();
             if (client?.IsConnected != true) return;
-            var requestId = Guid.NewGuid().ToString("N");
+            var requestId = CreateRequestId(sessionId);
             await client.RequestMemberScreenshotAsync(targetUid, requestId);
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MemberScreenshotRelay] 请求截图失败: {ex.Message}");
         }
+    }
+
+    internal static string CreateRequestId(string sessionId)
+    {
+        if (!Guid.TryParseExact(sessionId, "N", out _))
+            throw new ArgumentException("监控会话标识必须为 Guid N。", nameof(sessionId));
+        return $"screen:{sessionId}:{Guid.NewGuid():N}";
     }
 
     /// <summary>客户端实例懒解析换绑（_signalRClient 可能晚于本服务创建/被更换）。由外部节拍驱动。</summary>

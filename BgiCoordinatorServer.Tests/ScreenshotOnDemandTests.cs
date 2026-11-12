@@ -24,6 +24,223 @@ public class ScreenshotOnDemandTests
     /// <summary>拼装一个合法尺寸内的 base64 负载（内容不重要，链路只认长度上限）。</summary>
     private static string SmallBase64() => Convert.ToBase64String(new byte[64]);
 
+    private sealed class ScreenshotClock : TimeProvider
+    {
+        private long _ticks;
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _ticks;
+        public void Advance(TimeSpan elapsed) => _ticks += elapsed.Ticks;
+    }
+
+    private static string RequestId(string session) => $"screen:{session}:{Guid.NewGuid():N}";
+
+    private static void VerifyRequests(GatewayTestHarness h, int count)
+        => h.LegacyClientProxy.Verify(p => p.SendCoreAsync("MemberScreenshotRequested",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(count));
+
+    private static void VerifyFrames(GatewayTestHarness h, int count)
+        => h.LegacyClientProxy.Verify(p => p.SendCoreAsync("MemberScreenshot",
+            It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Exactly(count));
+
+    // 这些测试决定桌面监控能否按固定三分钟停止；推进单调时钟，不实际等待或构建运行产物。
+    // 原有测试仅覆盖一帧路由与限流，不能证明边界、重入、迟到帧或旧客户端不会续期。
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FixedWindow_StopsAtThreeMinutes_AndRequestsDoNotRenew(bool legacy)
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        var session = Guid.NewGuid().ToString("N");
+        string NextId() => legacy ? Guid.NewGuid().ToString("N") : RequestId(session);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", NextId());
+        clock.Advance(TimeSpan.FromSeconds(178));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", NextId());
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var last = NextId();
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", last);
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, last);
+        VerifyRequests(h, 3);
+        VerifyFrames(h, 1);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", NextId());
+        clock.Advance(TimeSpan.FromHours(1));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", NextId());
+        VerifyRequests(h, 3);
+    }
+
+    [Fact]
+    public async Task NewSessionReenters_ButOldSessionAndLateFramesStayExpired()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        var oldSession = Guid.NewGuid().ToString("N");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(oldSession));
+        clock.Advance(TimeSpan.FromSeconds(179));
+        var late = RequestId(oldSession);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", late);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, late);
+        VerifyFrames(h, 0);
+        var fresh = RequestId(Guid.NewGuid().ToString("N"));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", fresh);
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, fresh);
+        VerifyFrames(h, 1);
+        clock.Advance(TimeSpan.FromSeconds(2));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(oldSession));
+        VerifyRequests(h, 3);
+    }
+
+    [Fact]
+    public async Task SameSessionAcrossTargetsAndSameUidViewers_HasIndependentConnectionWindows()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewerA", room, pwd, "sameUid", "观众A");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewerB"), room, pwd, "sameUid", "观众B", isRemote: true);
+        await JoinAsync(h, "targetB", room, pwd, "uidB", "目标B");
+        await JoinAsync(h, "targetC", room, pwd, "uidC", "目标C");
+        var session = Guid.NewGuid().ToString("N");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewerA"), room, "uidB", RequestId(session));
+        clock.Advance(TimeSpan.FromSeconds(60));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewerA"), room, "uidC", RequestId(session));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewerB"), room, "uidC", RequestId(session));
+        VerifyRequests(h, 3);
+        clock.Advance(TimeSpan.FromSeconds(120));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewerA"), room, "uidC", RequestId(session));
+        var b = RequestId(session);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewerB"), room, "uidC", b);
+        var viewerA = new Mock<ISingleClientProxy>();
+        var viewerB = new Mock<ISingleClientProxy>();
+        foreach (var proxy in new[] { viewerA, viewerB })
+            proxy.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+        h.LegacyHub.Setup(x => x.Clients.Client("viewerA")).Returns(viewerA.Object);
+        h.LegacyHub.Setup(x => x.Clients.Client("viewerB")).Returns(viewerB.Object);
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("targetC"), room, "uidC", SmallBase64(), 1, 1, DateTime.UtcNow, b);
+        viewerB.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        viewerA.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        VerifyRequests(h, 4);
+    }
+
+    [Fact]
+    public async Task OfflineFirstRequestStillStartsWindow()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        var session = Guid.NewGuid().ToString("N");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(session));
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(session));
+        VerifyRequests(h, 0);
+    }
+
+    [Fact]
+    public async Task DisconnectDropsPendingFrames_NewPhysicalConnectionHasIndependentWindow()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer"), room, pwd, "viewerUid", "观众", isRemote: true);
+        var session = Guid.NewGuid().ToString("N");
+        var pending = RequestId(session);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", pending);
+        await h.Ops.HandleDisconnectAsync(Ctx("viewer"), null);
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, pending);
+        VerifyFrames(h, 0);
+        clock.Advance(TimeSpan.FromMinutes(4));
+        await h.Ops.JoinControlRoomAsync(Ctx("viewer-new"), room, pwd, "viewerUid", "观众", isRemote: true);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer-new"), room, "targetUid", RequestId(session));
+        VerifyRequests(h, 2);
+    }
+
+    [Fact]
+    public async Task MoreThan128ReentriesRemainAvailable_EvictedFramesDrop_AndCurrentWindowDoesNotRenew()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", "legacy-first");
+        clock.Advance(TimeSpan.FromSeconds(1));
+        var first = RequestId(Guid.NewGuid().ToString("N"));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", first);
+        var currentSession = "";
+        var currentRequest = "";
+        for (var i = 1; i < 140; i++)
+        {
+            clock.Advance(TimeSpan.FromSeconds(1));
+            currentSession = Guid.NewGuid().ToString("N");
+            currentRequest = RequestId(currentSession);
+            await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", currentRequest);
+        }
+        VerifyRequests(h, 141);
+        // 首帧尚未到180秒，但其会话历史已被淘汰，相关在途帧也必须删除。
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, first);
+        VerifyFrames(h, 0);
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, currentRequest);
+        VerifyFrames(h, 1);
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(currentSession));
+        // 旧格式的连接级窗口永不逐出，混用新格式也不能使它自动续期。
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", "legacy-after-rollover");
+        VerifyRequests(h, 141);
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", RequestId(Guid.NewGuid().ToString("N")));
+        VerifyRequests(h, 142);
+    }
+
+    [Fact]
+    public async Task LegacyUnsolicitedReport_NeverBroadcastsOrUnicasts()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        await h.Ops.RequestMemberScreenshotAsync(Ctx("viewer"), room, "targetUid", "legacy-request");
+        h.GatewayGroupProxy.Invocations.Clear();
+        await h.Ops.ReportMemberScreenshotAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow);
+        VerifyFrames(h, 0);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+        h.GatewayGroupProxy.Verify(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GatewayAccepts72CharacterRequestId_AndAppliesDeadlineToReply()
+    {
+        var clock = new ScreenshotClock();
+        var h = new GatewayTestHarness(screenshotTimeProvider: clock);
+        var (room, pwd) = NewRoom();
+        await JoinAsync(h, "viewer", room, pwd, "viewerUid", "观众");
+        await JoinAsync(h, "target", room, pwd, "targetUid", "目标");
+        var ctx = GatewayHandlerContext.V3("viewer");
+        await h.Dispatcher.QueryAsync(ctx, GatewayTestHarness.HelloEnvelope());
+        var id = RequestId(Guid.NewGuid().ToString("N"));
+        Assert.Equal(72, id.Length);
+        var result = await h.Dispatcher.DispatchAsync(ctx, new GatewayEnvelope
+        {
+            Type = GatewayProtocol.MessageTypes.Command,
+            Name = GatewayProtocol.Names.ScreenshotRequest,
+            Payload = GatewayEnvelope.ToPayload(new { roomCode = room, targetUid = "targetUid", requestId = id })
+        });
+        Assert.Null(GatewayTestHarness.ErrorCode(result));
+        VerifyRequests(h, 1);
+        clock.Advance(TimeSpan.FromMinutes(3));
+        await h.Ops.ReportMemberScreenshotExAsync(Ctx("target"), room, "targetUid", SmallBase64(), 1, 1, DateTime.UtcNow, id);
+        h.GatewayClientProxy.Verify(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     [Fact]
     public async Task Request_ForwardsToTargetConnection_WithRequesterUidAndRequestId()
     {

@@ -165,6 +165,7 @@ public class ExceptionRecord
 /// 属性名与服务端匿名负载 camelCase 对应（SignalR JSON 反序列化不区分大小写）。</summary>
 public class MemberScreenshotFrame
 {
+    public string RequestId { get; set; } = "";
     public string Uid { get; set; } = "";
     public string JpegBase64 { get; set; } = "";
     public int Width { get; set; }

@@ -38,7 +38,8 @@ public sealed partial class RoomOperations
         IClientCapabilityLookup? capabilityLookup = null,
         RoomLogContext? roomLogContext = null,
         RoomHoeingHistory? hoeingHistory = null,
-        TimeProvider? worldPlanTimeProvider = null)
+        TimeProvider? worldPlanTimeProvider = null,
+        TimeProvider? screenshotTimeProvider = null)
     {
         _roomManager = roomManager;
         _logger = logger;
@@ -48,6 +49,7 @@ public sealed partial class RoomOperations
         _roomLogContext = roomLogContext;
         _hoeingHistory = hoeingHistory;
         _worldPlanTime = worldPlanTimeProvider ?? TimeProvider.System;
+        _screenshotTime = screenshotTimeProvider ?? TimeProvider.System;
     }
 
     private void ObserveRoomLog(Action<RoomLogContext> observation)

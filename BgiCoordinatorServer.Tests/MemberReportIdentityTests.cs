@@ -30,7 +30,7 @@ public class MemberReportIdentityTests
         await h.Ops.ReportMemberLogBatchAsync(Ctx("executor"), room, "uidA", "real", ["real"], false);
         await h.Ops.ReportMemberScreenshotAsync(Ctx("executor"), room, "uidA", "AA==", 1, 1, DateTime.UtcNow);
         h.LegacyMultiClientProxy.Verify(p => p.SendCoreAsync("MemberLogBatch", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
-        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -46,6 +46,6 @@ public class MemberReportIdentityTests
         await h.Ops.ReportMemberLogBatchAsync(Ctx("observer"), room, "uidA", "observer", ["same uid"], false);
         h.LegacyMultiClientProxy.Verify(p => p.SendCoreAsync("MemberLogBatch", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
         await h.Ops.ReportMemberScreenshotAsync(Ctx("observer"), room, "uidA", "AA==", 1, 1, DateTime.UtcNow);
-        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("MemberScreenshot", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

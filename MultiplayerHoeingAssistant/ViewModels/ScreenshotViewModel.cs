@@ -43,6 +43,16 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     private readonly MainViewModel _mainVm;
     private readonly MemberScreenshotRelayService _relay;
     private readonly DispatcherTimer _autoTimer;
+    private readonly TimeProvider _timeProvider;
+    private readonly Dispatcher _dispatcher;
+    private ITimer? _sessionTimer;
+    private static readonly TimeSpan SessionDuration = TimeSpan.FromMinutes(3);
+    private const string SessionExpiredText = "桌面监控已满 3 分钟，请退出后重新进入以继续查看";
+    private long _sessionStarted;
+    private string? _sessionId;
+    private bool _sessionExpired;
+    private bool _disposed;
+    internal string? SessionId => _sessionId;
     private bool _isCapturing;
     /// <summary>Tab 是否可见（离开时自动刷新暂停，回来恢复）。</summary>
     private bool _tabActive;
@@ -59,8 +69,10 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     internal int RemoteFrameCount => _history.Values.Sum(l => l.Count);
 
     public ScreenshotViewModel(ScreenshotService service, DodocoSettingsService settings, MainViewModel mainVm,
-        MemberScreenshotRelayService relay)
+        MemberScreenshotRelayService relay, TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _dispatcher = Dispatcher.CurrentDispatcher;
         _service = service;
         _settings = settings;
         _mainVm = mainVm;
@@ -419,7 +431,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private void RequestRemoteFrame(string? uid, string? label)
     {
-        if (string.IsNullOrEmpty(uid)) return;
+        if (!CanCapture() || string.IsNullOrEmpty(uid)) return;
+        var sessionId = _sessionId!;
         if (_mainVm.IsStandaloneMode)
         {
             StatusText = "单机模式：不请求远程画面";
@@ -440,13 +453,13 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         var tile = OverviewTiles.FirstOrDefault(t => t.TargetUid == uid);
         if (tile != null) tile.Info = "请求中…";
         if (!IsOverviewSelected) StatusText = $"已请求 {label} 的桌面画面…";
-        _ = _relay.RequestFrameAsync(uid);
+        _ = _relay.RequestFrameAsync(uid, sessionId);
         // 请求可能被旧版助手忽略；超时只更新对应成员，避免覆盖其他成员的结果。
         Task.Delay(5000).ContinueWith(_ =>
         {
             Application.Current?.Dispatcher.BeginInvoke(() =>
             {
-                if (!_pendingRequests.TryGetValue(uid, out var pending) || pending != now) return;
+                if (!CanCapture(sessionId) || !_pendingRequests.TryGetValue(uid, out var pending) || pending != now) return;
                 _pendingRequests.Remove(uid);
                 if (tile != null && OverviewTiles.Contains(tile)) tile.Info = "未响应：对方可能离线或助手版本过旧";
                 if (!IsOverviewSelected && PullTargetUid == uid)
@@ -459,7 +472,9 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// 帧入该成员的历史桶；正在看该画面源时同步上大屏和历史缩略图条。</summary>
     internal void OnRemoteFrame(MemberScreenshotFrame frame)
     {
-        if (string.IsNullOrEmpty(frame.Uid) || string.IsNullOrEmpty(frame.JpegBase64)) return;
+        if (!CanCapture() || frame.RequestId?.StartsWith($"screen:{_sessionId}:", StringComparison.Ordinal) != true
+            || string.IsNullOrEmpty(frame.Uid) || string.IsNullOrEmpty(frame.JpegBase64)) return;
+        var sessionId = _sessionId!;
         byte[] bytes;
         try { bytes = Convert.FromBase64String(frame.JpegBase64); }
         catch { return; }
@@ -475,6 +490,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             fullImage = PullTargetUid == frame.Uid ? ToImage(bytes) : null;
         }
         catch { return; }
+        if (!CanCapture(sessionId)) return;
         _pendingRequests.Remove(frame.Uid);
 
         var localTime = frame.CapturedAt.ToLocalTime();
@@ -545,7 +561,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>房间内桌面可见性提示。</summary>
-    public string PrivacyNote => "加入房间后，成员可按需查看彼此的桌面；画面只发给请求者";
+    public string PrivacyNote => _sessionExpired ? SessionExpiredText
+        : "加入房间后，成员可按需查看彼此的桌面；画面只发给请求者；每次进入最多查看 3 分钟";
 
     private string _statusText = "";
     public string StatusText { get => _statusText; set => SetProperty(ref _statusText, value); }
@@ -577,8 +594,21 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>Tab 激活：恢复自动刷新（若开关开着）。由 DodocoViewModel Tab 切换驱动。</summary>
     internal void OnTabActivated()
     {
-        if (_tabActive) return;
+        if (_disposed || _tabActive) return;
         _tabActive = true;
+        _sessionExpired = false;
+        _sessionId = Guid.NewGuid().ToString("N");
+        _sessionStarted = _timeProvider.GetTimestamp();
+        _pendingRequests.Clear();
+        _lastRequests.Clear();
+        StatusText = "每次进入桌面监控最多查看 3 分钟";
+        OnPropertyChanged(nameof(PrivacyNote));
+        var sessionId = _sessionId;
+        _sessionTimer = _timeProvider.CreateTimer(_ =>
+        {
+            if (_dispatcher.HasShutdownStarted) return;
+            _dispatcher.BeginInvoke(new Action(() => { CanCapture(sessionId); }));
+        }, null, SessionDuration, Timeout.InfiniteTimeSpan);
         RefreshViewForSelection();
         ApplyTimerState();
     }
@@ -587,13 +617,33 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     internal void OnTabDeactivated()
     {
         _tabActive = false;
+        _sessionId = null;
         _autoTimer.Stop();
+        _sessionTimer?.Dispose();
+        _sessionTimer = null;
+        _pendingRequests.Clear();
+    }
+
+    // 所有取图入口与异步返回共用单调截止时间；刷新设置、重连和重复激活不续期。
+    private bool CanCapture(string? expectedSessionId = null)
+    {
+        if (_disposed || !_tabActive || _sessionId == null
+            || (expectedSessionId != null && expectedSessionId != _sessionId)) return false;
+        if (!_sessionExpired && _timeProvider.GetElapsedTime(_sessionStarted) < SessionDuration) return true;
+        _sessionExpired = true;
+        _autoTimer.Stop();
+        _sessionTimer?.Dispose();
+        _sessionTimer = null;
+        _pendingRequests.Clear();
+        StatusText = SessionExpiredText;
+        OnPropertyChanged(nameof(PrivacyNote));
+        return false;
     }
 
     private void ApplyTimerState()
     {
         // 单画面远程按需刷新；全员画面墙和本机/同 UID 执行端可自动刷新。
-        if (AutoRefresh && _tabActive && (IsOverviewSelected || IsLocalSelected))
+        if (CanCapture() && AutoRefresh && (IsOverviewSelected || IsLocalSelected))
         {
             _autoTimer.Interval = TimeSpan.FromSeconds(CurrentIntervalSeconds);
             _autoTimer.Start();
@@ -607,6 +657,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>刷新当前画面；全员模式同时刷新本机及各在线成员。</summary>
     private async Task CaptureAsync()
     {
+        if (!CanCapture()) return;
         if (IsOverviewSelected)
         {
             await RefreshOverviewAsync();
@@ -622,7 +673,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     private async Task RefreshOverviewAsync()
     {
-        if (!_tabActive || !IsOverviewSelected) return;
+        if (!CanCapture() || !IsOverviewSelected) return;
         var captureLocal = false;
         var remoteCount = 0;
         var connected = !_mainVm.IsStandaloneMode && _mainVm.SignalR?.IsConnected == true;
@@ -650,6 +701,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
             else
                 tile.Info = tile.Image == null ? "未连接房间，暂无画面" : $"未连接房间 · {tile.LastFrameText}";
         }
+        if (!CanCapture()) return;
         StatusText = remoteCount > 0 && !connected
             ? "未连接房间，无法刷新远程成员画面"
             : remoteCount > 0
@@ -661,12 +713,17 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
     /// <summary>本机截图在后台执行，当前单画面或画面墙按选中状态分别更新。</summary>
     private async Task CaptureLocalAsync()
     {
-        if (_isCapturing) return;
+        if (!CanCapture() || _isCapturing) return;
+        var sessionId = _sessionId!;
+        var started = _sessionStarted;
         _isCapturing = true;
         if (!IsOverviewSelected) StatusText = "截图中…";
         try
         {
-            var frame = await Task.Run(() => _service.Capture());
+            var frame = await Task.Run(() =>
+                !_disposed && _tabActive && _sessionId == sessionId
+                && _timeProvider.GetElapsedTime(started) < SessionDuration ? _service.Capture() : null);
+            if (!CanCapture(sessionId)) return;
             if (frame == null)
             {
                 StatusText = "截图失败（会话可能已锁定或显示器不可用）";
@@ -701,7 +758,7 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            StatusText = $"截图异常: {ex.Message}";
+            if (CanCapture(sessionId)) StatusText = $"截图异常: {ex.Message}";
         }
         finally
         {
@@ -724,7 +781,8 @@ public sealed class ScreenshotViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
-        _autoTimer.Stop();
+        _disposed = true;
+        OnTabDeactivated();
         _mainVm.Members.CollectionChanged -= OnMembersChanged;
         _mainVm.MemberOnlineChanged -= OnMemberOnlineChanged;
     }
