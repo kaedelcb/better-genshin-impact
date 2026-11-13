@@ -143,7 +143,12 @@ public partial class SettingsWindow : Window
             OnlineHoeingCompletionPolicy = _configCopy?.OnlineHoeingCompletionPolicy ?? "resume",
             OnlineHoeingSpecifiedTaskType = _configCopy?.OnlineHoeingSpecifiedTaskType ?? "group",
             OnlineHoeingSpecifiedTaskName = _configCopy?.OnlineHoeingSpecifiedTaskName ?? "",
-            OnlineHoeingSpecifiedTaskPriority = _configCopy?.OnlineHoeingSpecifiedTaskPriority ?? 0
+            OnlineHoeingSpecifiedTaskPriority = _configCopy?.OnlineHoeingSpecifiedTaskPriority ?? 0,
+            OnlineHoeingSpecifiedStartMode = _configCopy?.OnlineHoeingSpecifiedStartMode ?? "default",
+            OnlineHoeingSpecifiedStartTaskId = _configCopy?.OnlineHoeingSpecifiedStartTaskId ?? "",
+            OnlineHoeingSpecifiedStartTaskName = _configCopy?.OnlineHoeingSpecifiedStartTaskName ?? "",
+            OnlineHoeingSpecifiedConfigRevision = _configCopy?.OnlineHoeingSpecifiedConfigRevision ?? "",
+            OnlineHoeingSpecifiedWorkflowId = _configCopy?.OnlineHoeingSpecifiedWorkflowId ?? ""
         };
     }
 

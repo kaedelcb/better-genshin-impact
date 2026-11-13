@@ -38,20 +38,30 @@ public sealed record CoordinatedBatchResetResult
 }
 
 /// <summary>成员已有“绑定”完成动作的只读展示，不是另一份设置。</summary>
-public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority)
+public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority,
+    string StartMode = "default", string StartTaskId = "", string StartTaskName = "", string ConfigRevision = "", string WorkflowId = "")
 {
     public bool IsValid() => Policy is "resume" or "stop" or "runSpecified"
-        && TaskType is "group" or "onedragon" && TaskName != null && TaskName.Length <= 1024
-        && (Policy != "runSpecified" || !string.IsNullOrWhiteSpace(TaskName));
+        && TaskType is "group" or "onedragon" or "workflow" && TaskName != null && TaskName.Length <= 1024
+        && StartMode is "default" or "beginning" or "node"
+        && StartTaskId != null && StartTaskName != null && ConfigRevision != null && WorkflowId != null
+        && StartTaskId.Length <= 1024 && StartTaskName.Length <= 1024 && ConfigRevision.Length <= 1024 && WorkflowId.Length <= 1024
+        && (Policy != "runSpecified" || !string.IsNullOrWhiteSpace(TaskName)
+            && (StartMode == "default" || !string.IsNullOrWhiteSpace(ConfigRevision))
+            && (StartMode != "node" || !string.IsNullOrWhiteSpace(StartTaskId))
+            && (TaskType != "workflow" || StartMode != "default" && !string.IsNullOrWhiteSpace(WorkflowId)));
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string Description => !IsValid() ? "动作配置不完整"
         : Policy == "resume" ? "恢复原任务"
         : Policy == "stop" ? "锄完停止"
-        : $"执行{(TaskType == "onedragon" ? "一条龙" : "配置组")}「{TaskName}」";
+        : $"执行{(TaskType == "workflow" ? "计划表" : TaskType == "onedragon" ? "一条龙" : "配置组")}「{TaskName}」"
+            + (StartMode == "beginning" ? "（从头）" : StartMode == "node" ? $"（从「{StartTaskName}」）" : "");
 
     public static CoordinatedCompletionAction FromSettings(Models.TaskConflictPolicySettings settings) => new(
         settings.Policy switch { Models.TaskConflictPolicy.Resume => "resume",
             Models.TaskConflictPolicy.RunSpecified => "runSpecified", _ => "stop" },
-        settings.SpecifiedTaskType ?? "group", settings.SpecifiedTaskName?.Trim() ?? "", settings.SpecifiedTaskPriority);
+        settings.SpecifiedTaskType ?? "group", settings.SpecifiedTaskName?.Trim() ?? "", settings.SpecifiedTaskPriority,
+        settings.SpecifiedStartMode ?? "default", settings.SpecifiedStartTaskId ?? "", settings.SpecifiedStartTaskName ?? "",
+        settings.SpecifiedConfigRevision ?? "", settings.SpecifiedWorkflowId ?? "");
 }

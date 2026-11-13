@@ -20,7 +20,7 @@ const { fixture } = require('./web-gengdi-fixture.cjs');
         await p.locator('#addBinding').click(); await p.locator('#saveBindings').click();
         await p.waitForFunction(() => document.querySelector('#bindingResult').textContent.includes('已确认'));
         await p.locator('#completionPolicy').selectOption('runSpecified');
-        await p.locator('#completionTask').selectOption(JSON.stringify(['group', '精英']));
+        await p.locator('#completionTask').selectOption(JSON.stringify(['group', '精英', '']));
         await p.locator('#completionPriority').fill('7'); await p.locator('#savePolicy').click();
         await p.waitForFunction(() => document.querySelector('#policyResult').textContent.includes('已确认'));
         await p.locator('[data-quick-index="0"]').selectOption(JSON.stringify(['group', '精英']));

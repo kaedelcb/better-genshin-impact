@@ -302,7 +302,7 @@ function renderMemberSettings(p, host) {
         <section class="panel"><h2>联机任务顺序</h2><p class="note">同轮成员的任务数量、每个位置的类型必须一致，任务名称可以不同。</p><div id="bindingRows"></div><label class="field">添加配置组或一条龙<select id="bindingChoice">${taskOptions(p)}</select></label><button class="btn btn-secondary" id="addBinding">添加到末尾</button><button class="btn btn-primary" id="saveBindings">保存绑定</button><div class="form-result" id="bindingResult" role="status"></div></section>
         <section class="panel"><h2>定时上线</h2><label class="field">执行端本地时间<input type="time" id="scheduledTime" value="${webEscapeHtml(p.scheduledOnlineTime || '')}"></label><p class="note">按该执行端的本地时间触发；留空保存即可取消定时。</p><button class="btn btn-primary" id="saveSchedule">保存时间</button><div class="form-result" id="scheduleResult" role="status"></div></section>
         <section class="panel"><h2>成员快捷绑定</h2><p class="note">保存到该成员的助手。与“网页任务”中的浏览器本地绑定相互独立。</p><div id="quickBindingRows"></div></section>
-        </div><section class="panel"><div class="panel-header"><h2>锄地后动作</h2><button class="text-button" id="reloadPolicy">重新读取</button></div><p class="note">先读取执行端现有设置，再编辑。恢复、停止和指定任务沿用 PC 规则。</p><div id="policyFields"><label class="field">完成后<select id="completionPolicy" disabled><option value="resume">恢复原任务</option><option value="stop">锄完停止</option><option value="runSpecified">执行指定任务</option></select></label><label class="field" id="specifiedTaskField" hidden>指定任务<select id="completionTask" disabled>${taskOptions(p)}</select></label><label class="field" id="priorityField" hidden>任务优先级<input type="number" id="completionPriority" step="1" min="-2147483648" max="2147483647" disabled></label></div><button class="btn btn-primary" id="savePolicy" disabled>保存结束动作</button><div class="form-result" id="policyResult" role="status">正在读取执行端设置…</div></section></div>`;
+        </div><section class="panel" id="completionSettings"></section></div>`;
     let savedBinding = originalBinding;
     const drawBindings = () => {
         const rows = host.querySelector('#bindingRows');
@@ -363,54 +363,216 @@ function renderMemberSettings(p, host) {
             return result;
         });
     });
-    let loadedPolicy = null;
-    const policySelect = host.querySelector('#completionPolicy'), taskSelect = host.querySelector('#completionTask');
-    const priority = host.querySelector('#completionPriority'), savePolicy = host.querySelector('#savePolicy');
-    const policyStatus = host.querySelector('#policyResult'), reload = host.querySelector('#reloadPolicy');
-    const updateFields = () => {
-        host.querySelector('#specifiedTaskField').hidden = policySelect.value !== 'runSpecified';
-        host.querySelector('#priorityField').hidden = policySelect.value !== 'runSpecified';
+    initializeCompletionPolicyEditor(uid, host.querySelector('#completionSettings'));
+}
+
+// 与联机任务顺序、快捷绑定的 taskOptions 分开；计划表只用于完成后动作。
+function completionTargetOptions(member, type, catalog, action) {
+    const entries = type === 'workflow' ? (catalog?.workflows || []).map(flow => [flow.name, flow.workflowId])
+        : ((type === 'onedragon' ? member?.oneClickConfigs : member?.configGroups) || []).map(name => [name, '']);
+    if (action?.taskType === type && action.taskName && !entries.some(([name, id]) => name === action.taskName && id === action.workflowId))
+        entries.push([action.taskName, action.workflowId]);
+    return '<option value="">请选择任务</option>' + entries.map(([name, id]) =>
+        `<option value="${webEscapeHtml(completionTargetKey(type, name, id))}">${webEscapeHtml(name)}</option>`).join('');
+}
+function initializeCompletionPolicyEditor(uid, host) {
+    host.innerHTML = `<div class="panel-header"><h2>锄地后动作</h2><button class="text-button" id="reloadPolicy">重新读取</button></div><p class="note">选择完成后要执行的配置组、一条龙或计划表，可从头开始，也可从其中一个启用的任务开始。</p>
+        <div id="policyFields"><label class="field">完成后<select id="completionPolicy" disabled><option value="resume">恢复原任务</option><option value="stop">锄完停止</option><option value="runSpecified">执行指定任务</option></select></label>
+        <div id="specifiedTaskField" hidden><label class="field">任务类型<select id="completionTaskType" disabled><option value="group">配置组</option><option value="onedragon">一条龙</option><option value="workflow">计划表</option></select></label>
+        <label class="field">指定任务<select id="completionTask" disabled><option value="">请选择任务</option></select></label><div class="form-result" id="completionCatalogResult" role="status"></div>
+        <label class="field">执行起点<select id="completionStartMode" disabled><option value="default" disabled>沿用原入口（旧配置）</option><option value="beginning">从头开始</option><option value="node">从指定任务开始</option></select></label>
+        <label class="field" id="completionStartTaskField" hidden>开始执行的任务<select id="completionStartTask" disabled><option value="">请选择起点任务</option></select></label>
+        <p class="note" id="completionStartHint" role="status"></p><button class="btn btn-secondary" id="confirmCompletionStart" hidden>确认当前起点</button></div>
+        <label class="field" id="priorityField" hidden>任务优先级<input type="number" id="completionPriority" step="1" min="-2147483648" max="2147483647" disabled></label></div>
+        <p class="note" id="completionPreview"></p><button class="btn btn-primary" id="savePolicy" disabled>保存结束动作</button><div class="form-result" id="policyResult" role="status">正在读取执行端设置…</div>`;
+    const field = id => host.querySelector('#' + id);
+    const policySelect = field('completionPolicy'), typeSelect = field('completionTaskType'), taskSelect = field('completionTask');
+    const startSelect = field('completionStartMode'), nodeSelect = field('completionStartTask'), priority = field('completionPriority');
+    const save = field('savePolicy'), reload = field('reloadPolicy'), status = field('policyResult');
+    let loadedPolicy = null, action = null, catalog = null, version = null;
+    let busy = false, catalogLoading = false, mustReload = false, generation = 0, pullQueue = Promise.resolve();
+    const live = () => host.isConnected && document.getElementById('completionSettings') === host
+        && activeMemberUid === uid && detailSection === 'settings';
+    const currentRequest = token => live() && token === generation;
+    // 同类远程命令逐个关联；新选择使旧请求失效，排队的旧请求不再发送。
+    const pull = (query, token) => {
+        const result = pullQueue.then(() => currentRequest(token)
+            ? sendMemberOperation(uid, 'task_policy.pull', query, 'task_policy.data') : null);
+        pullQueue = result.catch(() => {});
+        return result;
     };
-    policySelect.onchange = updateFields;
+    const matchingTarget = () => catalog?.target && action && completionTargetKey(catalog.target.type, catalog.target.name, catalog.target.workflowId)
+        === completionTargetKey(action.taskType, action.taskName, action.workflowId) ? catalog.target : null;
+    const drawNodes = () => {
+        const nodes = matchingTarget()?.nodes || [];
+        nodeSelect.innerHTML = '<option value="">请选择起点任务</option>' + nodes.map((node, i) =>
+            `<option value="${webEscapeHtml(node.taskId)}" ${node.enabled ? '' : 'disabled'}>${i + 1}. ${webEscapeHtml(node.name)}${node.enabled ? '' : '（已禁用）'}</option>`).join('');
+        if (action?.startTaskId && !nodes.some(node => node.taskId === action.startTaskId))
+            nodeSelect.add(new Option('原起点已失效 · ' + action.startTaskName, action.startTaskId));
+        nodeSelect.value = action?.startTaskId || '';
+    };
+    const updateFields = () => {
+        const specified = action?.policy === 'runSpecified', editable = !!loadedPolicy && version === '1' && !busy && !mustReload;
+        field('specifiedTaskField').hidden = !specified; field('priorityField').hidden = !specified;
+        field('completionStartTaskField').hidden = action?.startMode !== 'node';
+        policySelect.disabled = !editable; typeSelect.disabled = !editable; taskSelect.disabled = !editable; priority.disabled = !editable;
+        startSelect.disabled = !editable || catalogLoading; nodeSelect.disabled = !editable || catalogLoading;
+        save.disabled = !editable || catalogLoading; reload.disabled = busy;
+        field('completionPreview').textContent = action ? '结束后：' + hoeingCompletionDescription(action) : '';
+        let hint = '';
+        if (specified && action.startMode === 'default') hint = '旧配置沿用原入口，不保证从头执行。保存前请选择从头开始或指定任务。';
+        else if (specified && !catalogLoading) {
+            try { validateCompletionSelection(action, catalog); }
+            catch (err) { hint = err.message; }
+        }
+        field('completionStartHint').textContent = hint;
+        const target = matchingTarget();
+        const canConfirm = specified && action.startMode !== 'default' && target && target.revision !== action.configRevision
+            && (action.startMode === 'beginning' || target.nodes.some(node => node.taskId === action.startTaskId && node.enabled));
+        field('confirmCompletionStart').hidden = !canConfirm;
+        field('confirmCompletionStart').disabled = !editable || catalogLoading;
+    };
+    const drawAction = () => {
+        policySelect.value = action.policy; typeSelect.value = action.taskType; priority.value = action.priority;
+        taskSelect.innerHTML = completionTargetOptions(currentMember(uid), action.taskType, catalog, action);
+        taskSelect.value = action.taskName ? completionTargetKey(action.taskType, action.taskName, action.workflowId) : '';
+        startSelect.value = action.startMode; drawNodes(); updateFields();
+    };
+    const applyRead = data => {
+        const nextAction = normalizePolicy(data), nextCatalog = normalizeCompletionCatalog(data);
+        loadedPolicy = { ...nextAction }; action = { ...nextAction }; catalog = nextCatalog;
+        version = data.completionStartVersion; mustReload = false;
+        if (currentMember(uid)) currentMember(uid).hoeingCompletionAction = { ...nextAction };
+        field('completionCatalogResult').textContent = nextCatalog?.error || (nextCatalog?.target ? '已读取该成员的任务目录' : '选择目标后读取任务目录');
+        drawAction();
+    };
     const loadPolicy = async () => {
-        reload.disabled = true; savePolicy.disabled = true; policySelect.disabled = true; taskSelect.disabled = true; priority.disabled = true; loadedPolicy = null;
-        policyStatus.textContent = '正在读取执行端设置…';
+        if (busy) return;
+        const token = ++generation; busy = true; catalogLoading = false; loadedPolicy = null; action = null; catalog = null;
+        updateFields(); status.textContent = '正在读取执行端设置…';
         try {
-            const result = await sendMemberOperation(uid, 'task_policy.pull', {}, 'task_policy.data');
-            if (!host.querySelector('#policyResult') || activeMemberUid !== uid || detailSection !== 'settings') return;
-            if (result.status !== 'success') throw new Error(result.message);
-            loadedPolicy = normalizePolicy(result.data);
-            policySelect.value = loadedPolicy.policy; priority.value = loadedPolicy.priority;
-            taskSelect.value = JSON.stringify([loadedPolicy.taskType, loadedPolicy.taskName]);
-            if (loadedPolicy.policy === 'runSpecified' && !taskSelect.value) {
-                const option = new Option('原任务（当前目录未上报） · ' + loadedPolicy.taskName, JSON.stringify([loadedPolicy.taskType, loadedPolicy.taskName]));
-                taskSelect.add(option); taskSelect.value = option.value;
-            }
-            policySelect.disabled = false; taskSelect.disabled = false; priority.disabled = false; savePolicy.disabled = false;
-            updateFields(); policyStatus.textContent = '已读取执行端当前设置';
-        } catch (err) { policyStatus.textContent = '读取未完成：' + err.message + '；未使用默认值覆盖原配置'; }
-        finally { reload.disabled = false; }
+            const result = await pull({}, token);
+            if (!currentRequest(token)) return;
+            if (result?.status !== 'success') throw new Error(result?.message || '执行端未确认设置');
+            applyRead(result.data);
+            status.textContent = version === '1' ? '已读取执行端当前设置' : '已读取旧版设置，仅供查看；请更新该成员助手后重新读取再保存';
+        } catch (err) {
+            if (currentRequest(token)) status.textContent = '读取未完成：' + err.message + '；未使用默认值覆盖原配置';
+        } finally { if (currentRequest(token)) { busy = false; updateFields(); } }
+    };
+    const loadTarget = async () => {
+        const token = ++generation;
+        if (!action.taskName) {
+            catalogLoading = false; catalog = catalog ? { ...catalog, target: null, error: null } : null;
+            field('completionCatalogResult').textContent = '请选择该成员的任务'; drawNodes(); updateFields(); return;
+        }
+        const query = { catalogType: action.taskType, catalogName: action.taskName, catalogWorkflowId: action.workflowId };
+        catalogLoading = true; catalog = catalog ? { ...catalog, target: null, error: null } : null;
+        field('completionCatalogResult').textContent = '正在读取该成员的目标与任务起点…'; drawNodes(); updateFields();
+        try {
+            const result = await pull(query, token);
+            if (!currentRequest(token)) return;
+            if (result?.status !== 'success') throw new Error(result?.message || '读取任务目录未确认');
+            if (result.data?.completionStartVersion !== '1') throw new Error('执行端未支持明确起点，请更新助手后重新读取');
+            catalog = normalizeCompletionCatalog(result.data);
+            // 计划表按稳定 ID 查询，用户新选目标时采用目录的当前名称。
+            if (action.taskType === 'workflow' && catalog.target?.type === 'workflow' && catalog.target.workflowId === action.workflowId)
+                action.taskName = catalog.target.name;
+            const target = matchingTarget();
+            if (!target) throw new Error(catalog.error || '返回的目录与所选任务不一致');
+            action.configRevision = target.revision;
+            taskSelect.innerHTML = completionTargetOptions(currentMember(uid), action.taskType, catalog, action);
+            taskSelect.value = completionTargetKey(action.taskType, action.taskName, action.workflowId);
+            field('completionCatalogResult').textContent = catalog.error || '已读取该成员的任务目录';
+        } catch (err) {
+            if (currentRequest(token)) { catalog = catalog ? { ...catalog, target: null, error: err.message } : null; field('completionCatalogResult').textContent = err.message; }
+        } finally { if (currentRequest(token)) { catalogLoading = false; drawNodes(); updateFields(); } }
+    };
+    const clearStart = () => { action.startMode = 'beginning'; action.startTaskId = ''; action.startTaskName = ''; action.configRevision = ''; startSelect.value = action.startMode; };
+    policySelect.onchange = () => { if (busy || !action) return; action.policy = policySelect.value; updateFields(); };
+    typeSelect.onchange = () => {
+        if (busy || !action) return;
+        action.taskType = typeSelect.value; action.taskName = ''; action.workflowId = ''; clearStart();
+        taskSelect.innerHTML = completionTargetOptions(currentMember(uid), action.taskType, catalog); taskSelect.value = '';
+        field('completionCatalogResult').textContent = '请选择该成员的任务'; return loadTarget();
+    };
+    taskSelect.onchange = () => {
+        if (busy || !action) return;
+        const [type, name, id] = taskSelect.value ? JSON.parse(taskSelect.value) : [typeSelect.value, '', ''];
+        action.taskType = type; action.taskName = name; action.workflowId = id; clearStart(); return loadTarget();
+    };
+    startSelect.onchange = () => {
+        if (busy || !action || !['beginning', 'node'].includes(startSelect.value)) return;
+        action.startMode = startSelect.value; action.startTaskId = ''; action.startTaskName = '';
+        action.configRevision = matchingTarget()?.revision || ''; drawNodes(); updateFields();
+    };
+    nodeSelect.onchange = () => {
+        if (busy || !action) return;
+        const target = matchingTarget(), node = target?.nodes.find(item => item.taskId === nodeSelect.value && item.enabled);
+        action.startTaskId = node?.taskId || ''; action.startTaskName = node?.name || ''; action.configRevision = target?.revision || ''; updateFields();
+    };
+    field('confirmCompletionStart').onclick = () => {
+        if (busy || !action) return;
+        const target = matchingTarget(), node = target?.nodes.find(item => item.taskId === action.startTaskId && item.enabled);
+        if (!target || action.startMode === 'node' && !node) return;
+        action.configRevision = target.revision;
+        if (node) action.startTaskName = node.name;
+        updateFields();
     };
     reload.onclick = loadPolicy;
-    savePolicy.onclick = event => runFormButton(event.currentTarget, policyStatus, async () => {
-        if (!loadedPolicy) throw new Error('请先成功读取执行端设置');
-        const policy = policySelect.value;
-        let type = loadedPolicy.taskType, name = loadedPolicy.taskName;
-        if (policy === 'runSpecified') {
-            if (!taskSelect.value) throw new Error('请选择结束后执行的任务');
-            [type, name] = JSON.parse(taskSelect.value);
-            validateBinding([name], [type], currentMember(uid));
-        }
-        const rank = policy === 'runSpecified' ? Number(priority.value) : loadedPolicy.priority;
-        if (!Number.isInteger(rank) || rank < -2147483648 || rank > 2147483647) throw new Error('任务优先级必须为有效整数');
-        const result = await sendMemberOperation(uid, 'task_policy.push', { policy, specifiedType: type, specifiedName: name, specifiedPriority: String(rank) }, 'task_policy.push_result');
-        if (result.status === 'success') {
-            loadedPolicy = { policy, taskType: type, taskName: name, priority: rank };
-            if (currentMember(uid)) currentMember(uid).hoeingCompletionAction = { ...loadedPolicy };
-        }
+    const finishSave = result => {
+        status.textContent = formatResult(result);
+        rememberMemberResult(uid, 'task_policy.push', result.status, result.message);
+        log(`${currentMember(uid)?.playerName || uid} · 保存结束动作最终结果：${formatResult(result)}`);
         return result;
-    });
-    loadPolicy();
+    };
+    save.onclick = async () => {
+        if (save.disabled || !loadedPolicy) return;
+        const token = ++generation; busy = true; let writeStarted = false;
+        updateFields(); status.textContent = '正在核对执行端当前设置与任务起点…';
+        try {
+            requireOnlineTargets([uid]);
+            const submitted = { ...action, priority: action.policy === 'runSpecified' ? Number(priority.value) : loadedPolicy.priority };
+            if (submitted.policy === 'runSpecified' && !priority.value.trim() || !Number.isInteger(submitted.priority)
+                || submitted.priority < -2147483648 || submitted.priority > 2147483647) throw new Error('任务优先级必须为有效整数');
+            const params = completionPolicyParams(submitted, version);
+            const before = await pull(submitted.policy === 'runSpecified'
+                ? { catalogType: submitted.taskType, catalogName: submitted.taskName, catalogWorkflowId: submitted.workflowId } : {}, token);
+            if (!currentRequest(token)) return;
+            if (before?.status !== 'success') throw new Error(before?.message || '保存前读取设置未确认');
+            if (before.data?.completionStartVersion !== '1') throw new Error('执行端未确认起点协议版本，请更新助手后重新读取');
+            if (completionActionSignature(normalizePolicy(before.data)) !== completionActionSignature(loadedPolicy)) {
+                mustReload = true; throw new Error('成员结束动作已在其他端改变，请重新读取后编辑');
+            }
+            catalog = normalizeCompletionCatalog(before.data); drawNodes();
+            validateCompletionSelection(submitted, catalog);
+            writeStarted = true;
+            const result = await sendMemberOperation(uid, 'task_policy.push', params, 'task_policy.push_result');
+            if (!currentRequest(token)) return;
+            if (result.status !== 'success') {
+                mustReload = result.status === 'unknown'; return finishSave(result);
+            }
+            // 回执自身也要包含本次字段；仅有 ok 或通用 ack 不能确认保存。
+            if (result.data?.completionStartVersion !== '1'
+                || completionActionSignature(normalizePolicy(result.data)) !== completionActionSignature(submitted))
+                throw new Error('执行端保存回执缺少起点版本或与本次提交不一致');
+            const after = await pull({}, token);
+            if (!currentRequest(token)) return;
+            if (after?.status !== 'success' || after.data?.completionStartVersion !== '1') throw new Error(after?.message || '保存后的设置回读未确认');
+            const confirmed = normalizePolicy(after.data), confirmedCatalog = normalizeCompletionCatalog(after.data);
+            if (completionActionSignature(confirmed) !== completionActionSignature(submitted)) throw new Error('保存后的回读值与本次提交不一致');
+            validateCompletionSelection(confirmed, confirmedCatalog);
+            applyRead(after.data);
+            const success = { status: 'success', message: '执行端已保存并回读确认：' + hoeingCompletionDescription(confirmed) };
+            return finishSave(success);
+        } catch (err) {
+            if (!currentRequest(token)) return;
+            if (writeStarted) mustReload = true;
+            const result = { status: writeStarted ? 'unknown' : 'failed', message: err.message + (writeStarted ? '；请重新读取设置' : '') };
+            return finishSave(result);
+        } finally { if (currentRequest(token)) { busy = false; updateFields(); } }
+    };
+    return loadPolicy();
 }
 
 function snapshotForStart(targets) {
@@ -419,7 +581,7 @@ function snapshotForStart(targets) {
         hoeingCompletionAction: p.hoeingCompletionAction ? { ...p.hoeingCompletionAction } : null }));
 }
 function startSettingsSignature(p, key) {
-    return JSON.stringify({ binding: key ? p.quickCommands?.[key] : memberBinding(p), action: p.hoeingCompletionAction });
+    return JSON.stringify({ binding: key ? p.quickCommands?.[key] : memberBinding(p), action: completionActionSignature(p.hoeingCompletionAction) });
 }
 function showCoordinatedConfirm(label) {
     const ids = [...selectedMemberUids];

@@ -1377,7 +1377,8 @@ public partial class CommandExecutor
     private async Task<QueueStartEarly> TryStartViaQueueEarlyAsync(
         BgiExternalClient ext, string? groupName, string? configName, int startFromIndex, int generation,
         string? batchGroupNames = null, string? startFromTaskId = null, CancellationToken cancellationToken = default,
-        CancellationToken hostLifetimeToken = default, bool forAdmission = false)
+        CancellationToken hostLifetimeToken = default, bool forAdmission = false, string? completionRevision = null,
+        BgiEpoch? completionEpoch = null)
     {
         var desc = groupName != null ? $"配置组「{groupName}」" : $"一条龙「{configName}」";
         if (ext is not { State: BgiExternalLinkState.Ready }
@@ -1395,8 +1396,9 @@ public partial class CommandExecutor
                 startFromTaskId: startFromTaskId,
                 cancellationToken: cancellationToken,
                 idempotencyKey: string.IsNullOrWhiteSpace(_requestContext.Value?.CommandId) ? null : _requestContext.Value.CommandId,
-                expectedConfigRevision: GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
-                bgiEpoch: _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
+                expectedConfigRevision: completionRevision ?? GetStringParam(_requestContext.Value?.Params, "expectedConfigRevision"),
+                bgiEpoch: completionEpoch is not null ? new { processId = completionEpoch.ProcessId,
+                    startTicksUtc = completionEpoch.StartTicksUtc } : _requestContext.Value?.Params?.GetValueOrDefault("bgiEpoch"),
                 expiresAtUtc: _requestContext.Value?.ExpiresAtUtc).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsQueueTransportFault(ex))
@@ -1753,13 +1755,14 @@ public partial class CommandExecutor
         TryStartViaQueueEarlyForAdmissionAsync(
             string? groupName, string? configName, int startFromIndex, int generation,
             string? batchGroupNames, string? startFromTaskId, CancellationToken cancellationToken,
-            CancellationToken hostLifetimeToken)
+            CancellationToken hostLifetimeToken, string? completionRevision = null, BgiEpoch? completionEpoch = null)
     {
         var ext = _externalClientProvider?.Invoke();
         if (ext is null)
             return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         var early = await TryStartViaQueueEarlyAsync(ext, groupName, configName, startFromIndex, generation,
-            batchGroupNames, startFromTaskId, cancellationToken, hostLifetimeToken, forAdmission: true).ConfigureAwait(false);
+            batchGroupNames, startFromTaskId, cancellationToken, hostLifetimeToken, forAdmission: true,
+            completionRevision: completionRevision, completionEpoch: completionEpoch).ConfigureAwait(false);
         if (early.Kind == QueueStartEarlyKind.ChannelUnavailable)
             return (ExternalStartExecution.RejectedWith("task_queue_unavailable", evidenceSource: "adapter:queue_precheck"), null);
         return MapQueueEarlyToAdmission(early);
@@ -2264,6 +2267,7 @@ public partial class CommandExecutor
 
     internal async Task<bool> CancelHoeingPolicyExecutionAsync(HoeingPolicyExecution execution)
     {
+        if (execution.WorkflowRunId is not null) return false; // Only TaskCenterHost may stop a workflow run.
         static bool SameJob(string? left, string? right) => Guid.TryParse(left, out var a)
             && Guid.TryParse(right, out var b) && a == b;
         try
@@ -3559,6 +3563,8 @@ public partial class CommandExecutor
         Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? admission, Func<Task>? beforeStart,
         CancellationToken cancellationToken = default, Func<CommandResult, bool, Task>? executionAccepted = null)
     {
+        if (policy.SpecifiedTaskType is not ("group" or "onedragon"))
+            return new CommandResult { ErrorCode = "invalid_request", Message = "计划表完成动作必须经任务中心运行入口执行" };
         var isOneDragon = policy.SpecifiedTaskType == "onedragon";
         var name = policy.SpecifiedTaskName?.Trim() ?? "";
         if (name.Length == 0)
@@ -3605,6 +3611,8 @@ public partial class CommandExecutor
             });
         }
 
+        if (policy.SpecifiedTaskType is not ("group" or "onedragon"))
+            return Task.FromResult(new CommandResult { ErrorCode = "invalid_request", Message = "指定类型不能经 BGI 配置启动通道执行" });
         var isOneDragon = string.Equals(policy.SpecifiedTaskType, "onedragon", StringComparison.Ordinal);
         var name = policy.SpecifiedTaskName?.Trim() ?? "";
         if (string.IsNullOrWhiteSpace(name))
@@ -3630,16 +3638,28 @@ public partial class CommandExecutor
             {
                 if (cancellationToken.IsCancellationRequested || sendToken.IsCancellationRequested)
                     return (ExternalStartExecution.RejectedWith("start_cancelled", evidenceSource: "adapter:cancelled_before_send"), null);
-                var epoch = _externalClientProvider?.Invoke()?.ServerEpoch;
+                var external = _externalClientProvider?.Invoke();
+                var epoch = external?.ServerEpoch;
+                CompletionStart? start = null;
+                if (policy.SpecifiedStartMode is not (null or "default") || !string.IsNullOrWhiteSpace(policy.SpecifiedConfigRevision))
+                {
+                    if (external is not { State: BgiExternalLinkState.Ready } || epoch is null)
+                        return (ExternalStartExecution.RejectedWith("state_unavailable", evidenceSource: "adapter:completion_directory"), null);
+                    try { start = await DescribeCompletionStartAsync(policy, external, epoch, sendToken).ConfigureAwait(false); }
+                    catch (CompletionStartException ex)
+                    { return (ExternalStartExecution.RejectedWith(ex.Code, evidenceSource: "adapter:completion_directory"), null); }
+                }
+                if (cancellationToken.IsCancellationRequested || sendToken.IsCancellationRequested)
+                    return (ExternalStartExecution.RejectedWith("start_cancelled", evidenceSource: "adapter:cancelled_before_send"), null);
                 var early = await TryStartViaQueueEarlyForAdmissionAsync(
                     isOneDragon ? null : name,
                     isOneDragon ? name : null,
-                    startFromIndex: 0,
+                    startFromIndex: start?.Index ?? 0,
                     generation: 0,
                     batchGroupNames: null,
-                    startFromTaskId: null,
+                    startFromTaskId: start?.TaskId,
                     CancellationToken.None, // Once sent, retain the early receipt even if this batch is stopped.
-                    hostToken).ConfigureAwait(false)
+                    hostToken, completionRevision: start?.Revision, completionEpoch: epoch).ConfigureAwait(false)
                 ?? (ExternalStartExecution.RejectedWith("numbered_channel_required",
                         evidenceSource: "adapter:queue_required"), null);
                 if (early.Early.Kind == ExternalStartExecutionKind.Accepted && early.Early.JobId is { } job

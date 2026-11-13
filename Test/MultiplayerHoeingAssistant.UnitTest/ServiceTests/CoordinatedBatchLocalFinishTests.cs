@@ -46,7 +46,7 @@ public sealed class CoordinatedBatchLocalFinishTests
             Batch = new OnlineHoeingBatch(new("local-finish", 19, 0, 0, 0, "registering", "")
             {
                 Protocol = "hoeing.start.v2", Source = "manual", ParticipantUids = ["self", "peer"],
-                PriorityRecovery = priorityRecovery,
+                PriorityRecovery = priorityRecovery, StateContinuation = priorityRecovery,
                 Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>>
                 {
                     ["self"] = items, ["peer"] = items
@@ -85,6 +85,21 @@ public sealed class CoordinatedBatchLocalFinishTests
             Prepare = _ => Task.CompletedTask,
             Takeover = _ => { Batch.TakeoverTicket = "owned"; return Task.CompletedTask; },
             Exchange = Exchange,
+            // 正式优先恢复批次始终使用状态接续：先按原键确认不存在，再允许首次发送。
+            ReadBoundEpoch = !Batch.PriorityRecoveryEnabled ? null : () => Current,
+            ResolveOriginal = !Batch.PriorityRecoveryEnabled ? null : (key, _) =>
+            {
+                var job = _jobs.Values.SingleOrDefault(item => item.IdempotencyKey == key);
+                return Task.FromResult<BgiTaskQueueStatus?>(job is null
+                    ? new() { Status = "not_found", Epoch = Current, IdempotencyKey = key }
+                    : new()
+                    {
+                        Status = Terminal.Status, Epoch = Current, IdempotencyKey = key, TaskHandle = job.JobId,
+                        ExecutionExitConfirmed = Terminal.ExecutionExitConfirmed, Cancelled = Terminal.Cancelled,
+                        HoeingEvidence = Terminal.HoeingEvidence, ErrorCode = Terminal.ErrorCode, ErrorMessage = Terminal.ErrorMessage
+                    });
+            },
+            Acknowledge = !Batch.PriorityRecoveryEnabled ? null : (_, _, _, _) => Task.FromResult(true),
             ReadJobs = _ =>
             {
                 if (Submits > 0 && (AlwaysJobsUnavailable || Volatile.Read(ref JobReadsUnavailable) > 0))

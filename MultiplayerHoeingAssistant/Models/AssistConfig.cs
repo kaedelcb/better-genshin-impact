@@ -169,7 +169,7 @@ public class AssistConfig : IJsonOnDeserialized
     [JsonPropertyName("onlineHoeingCompletionPolicy")]
     public string OnlineHoeingCompletionPolicy { get; set; } = "resume";
 
-    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙），仅 "runSpecified" 使用。</summary>
+    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙 / "workflow"=计划表），仅 "runSpecified" 使用。</summary>
     [JsonPropertyName("onlineHoeingSpecifiedTaskType")]
     public string OnlineHoeingSpecifiedTaskType { get; set; } = "group";
 
@@ -180,6 +180,22 @@ public class AssistConfig : IJsonOnDeserialized
     /// <summary>上线锄地完成后指定任务的普通仲裁优先级（int32，大者优先；缺省 0）。</summary>
     [JsonPropertyName("onlineHoeingSpecifiedTaskPriority")]
     public int OnlineHoeingSpecifiedTaskPriority { get; set; }
+
+    /// <summary>default 保留旧入口语义；beginning 明确从头；node 从稳定任务节点开始。</summary>
+    [JsonPropertyName("onlineHoeingSpecifiedStartMode")]
+    public string OnlineHoeingSpecifiedStartMode { get; set; } = "default";
+
+    [JsonPropertyName("onlineHoeingSpecifiedStartTaskId")]
+    public string OnlineHoeingSpecifiedStartTaskId { get; set; } = "";
+
+    [JsonPropertyName("onlineHoeingSpecifiedStartTaskName")]
+    public string OnlineHoeingSpecifiedStartTaskName { get; set; } = "";
+
+    [JsonPropertyName("onlineHoeingSpecifiedConfigRevision")]
+    public string OnlineHoeingSpecifiedConfigRevision { get; set; } = "";
+
+    [JsonPropertyName("onlineHoeingSpecifiedWorkflowId")]
+    public string OnlineHoeingSpecifiedWorkflowId { get; set; } = "";
 
     // 注意：成员卡片 6 个按键（配置组/一条龙/快捷键/停止/启动BGI/关闭游戏）的策略为固定行为：
     // 本机忙时一律「立即执行 + 执行完停止」（suspend 抢占 → 执行键动作 → 清上下文不恢复），无 UI、无配置项、不持久化。

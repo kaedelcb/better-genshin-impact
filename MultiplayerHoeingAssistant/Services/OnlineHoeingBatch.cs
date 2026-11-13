@@ -3,7 +3,7 @@ using MultiplayerHoeingAssistant.Models;
 namespace MultiplayerHoeingAssistant.Services;
 
 internal sealed record HoeingPolicyExecution(string JobId, BgiEpoch Epoch, bool RegisteredJob,
-    CommandExecutor.ExecutionIdentity? NativeRoot = null);
+    CommandExecutor.ExecutionIdentity? NativeRoot = null, string? WorkflowRunId = null);
 internal sealed record LocalTaskFailureReport(int Index, int Attempt, string JobId, string RequestKey,
     BgiEpoch Epoch, string Reason);
 
@@ -163,6 +163,7 @@ public sealed class OnlineHoeingBatch
             LocalTasksFailed = LocalTasksFailed, CoordinatedSucceeded = CoordinatedSucceeded,
             LocalReleased = LocalExecutionReleased, PolicyStartAttempted = _policyStartAttempted,
             NativeResumeRetryPending = NativeResumeRetryPending, ManagedRunId = ManagedRunId,
+            CompletionIntentTimestamp = CompletionIntentTimestamp,
             ManagedPlanSnapshot = ManagedPlanSnapshot,
             CompletionRecoveryReservationAcquired = CompletionRecoveryReservationAcquired,
             PolicyAttempt = _policyAttempt, FailedPolicyAttempts = _failedPolicyAttempts.ToArray(),
@@ -181,6 +182,7 @@ public sealed class OnlineHoeingBatch
         {
             _recoveryRevision = saved.Revision, _policyAttempt = saved.PolicyAttempt,
             NativeResumeRetryPending = saved.NativeResumeRetryPending, ManagedRunId = saved.ManagedRunId,
+            CompletionIntentTimestamp = saved.CompletionIntentTimestamp,
             ManagedPlanSnapshot = saved.ManagedPlanSnapshot,
             RecoveryOwnerPid = saved.OwnerPid, RecoveryOwnerStartTicks = saved.OwnerStartTicks,
             CompletionRecoveryReservationAcquired = saved.CompletionRecoveryReservationAcquired,
@@ -252,6 +254,8 @@ public sealed class OnlineHoeingBatch
         + (_policyAttempt == 0 ? "" : "/attempt/" + _policyAttempt);
 
     internal bool NativeResumeRetryPending { get; set; }
+    // Captured with the batch, never minted when its automatic successor starts.
+    internal long CompletionIntentTimestamp { get; private set; } = System.Diagnostics.Stopwatch.GetTimestamp();
     internal string? ManagedRunId { get; set; }
     internal bool RetryFailedCompletion(bool allowNativeResume = false)
     {
@@ -563,7 +567,8 @@ public sealed class OnlineHoeingBatch
         {
             if (_policyExecution is { } previous && (previous.JobId != execution.JobId
                 || previous.Epoch.ProcessId != execution.Epoch.ProcessId
-                || previous.Epoch.StartTicksUtc != execution.Epoch.StartTicksUtc))
+                || previous.Epoch.StartTicksUtc != execution.Epoch.StartTicksUtc
+                || previous.WorkflowRunId != execution.WorkflowRunId))
                 throw new InvalidOperationException("同批收尾出现不同后继身份，保留责任待核对");
             _policyExecution = execution;
         }
@@ -649,6 +654,9 @@ public sealed class OnlineHoeingBatch
         {
             Policy = policy.Policy, SpecifiedTaskType = policy.SpecifiedTaskType,
             SpecifiedTaskName = policy.SpecifiedTaskName, SpecifiedTaskPriority = policy.SpecifiedTaskPriority,
+            SpecifiedStartMode = policy.SpecifiedStartMode, SpecifiedStartTaskId = policy.SpecifiedStartTaskId,
+            SpecifiedStartTaskName = policy.SpecifiedStartTaskName, SpecifiedConfigRevision = policy.SpecifiedConfigRevision,
+            SpecifiedWorkflowId = policy.SpecifiedWorkflowId,
         };
     }
 

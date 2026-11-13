@@ -29,6 +29,7 @@ function harness({ current = members(), selected = clone(current.slice(0, 2)), c
         } },
         localStorage: { getItem() { return null; } },
         crypto: { randomUUID() { return 'test-request-' + ++requestNumber; } },
+        batchPhaseName: phase => phase,
         __current: current, __selected: selected, __caps: clone(caps), __logs: logs,
         __invoke: async (method, envelope) => {
             calls.push({ method, envelope: clone(envelope) });
@@ -122,6 +123,22 @@ test('a displayed completion action changing requires confirmation again', async
     assert.equal(h.calls.length, 0);
     assert.ok(h.logs.some(message => message.includes('已改变')));
 });
+
+for (const quickKey of [quickKeys[0], '']) {
+    for (const changedField of ['startTaskId', 'startTaskName', 'configRevision', 'workflowId']) {
+        test('a changed completion ' + changedField + ' requires confirmation again; quick=' + Boolean(quickKey), async () => {
+            const current = members();
+            current[1].hoeingCompletionAction = { policy: 'runSpecified', taskType: 'workflow', taskName: '收尾计划', priority: 1,
+                startMode: 'node', startTaskId: 'stable-task', startTaskName: '任务二', configRevision: 'revision-1', workflowId: 'flow-1' };
+            const selected = clone(current.slice(0, 2));
+            current[1].hoeingCompletionAction[changedField] = 'changed';
+            const h = harness({ current, selected });
+            await h.begin(quickKey);
+            assert.equal(h.calls.length, 0);
+            assert.ok(h.logs.some(message => message.includes('已改变')));
+        });
+    }
+}
 
 test('an explicit gateway rejection never queries current state or resends begin', async () => {
     const h = harness({ invoke: async () => ({ payload: { error: { code: 'previous_batch_active', message: 'previous_batch_active' } } }) });

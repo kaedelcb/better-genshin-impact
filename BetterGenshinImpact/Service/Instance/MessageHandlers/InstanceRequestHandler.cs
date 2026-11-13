@@ -878,6 +878,23 @@ internal sealed class InstanceRequestHandler
         }
     }
 
+    /// <summary>显式起点只作用于本次执行副本，不消费或改写用户保存的其他起点。</summary>
+    internal static List<BetterGenshinImpact.Core.Script.Group.ScriptGroupProject> SelectExplicitGroupStart(
+        BetterGenshinImpact.Core.Script.Group.ScriptGroup group, int startFromIndex, bool isResume = false)
+    {
+        var matches = group.Projects.Where(project => project.Index == startFromIndex).ToArray();
+        // 恢复游标可以指向刚完成任务后的禁用项目，由执行器跳过；用户选点则必须启用。
+        if (startFromIndex <= 0 || matches.Length != 1 || !isResume && matches[0].Status != "Enabled")
+            throw new InvalidOperationException("指定起点已不存在、被禁用或身份有歧义");
+        var start = group.Projects.IndexOf(matches[0]);
+        for (var i = 0; i < group.Projects.Count; i++)
+        {
+            group.Projects[i].NextFlag = false;
+            group.Projects[i].SkipFlag = i < start;
+        }
+        return group.Projects.ToList();
+    }
+
     /// <summary>
     /// [切片7] task.start 执行段（从 HandleTaskStart 原样抽出，v2 handler 与 BgiTaskCoordinator
     /// pump 共用的单一事实源，行为逐字节等价）：先在主线程 Cancel()+CancelTokenOnly() 中断当前任务，
@@ -967,23 +984,16 @@ internal sealed class InstanceRequestHandler
                         throw new ExecutionNotStartedException(jobId, "启动前已停止");
                     for (var i = 0; i < group.Projects.Count; i++) group.Projects[i].Index = i + 1;
                     if (group.Projects.Count == 0) throw new InvalidOperationException("no_work: 配置组为空");
-                    if (startFromIndex > 0 && !group.Projects.Any(p => p.Index == startFromIndex))
-                        throw new InvalidOperationException("恢复位置已不存在");
+                    var explicitProjects = startFromIndex > 0
+                        ? SelectExplicitGroupStart(group, startFromIndex, isResume: source == JobSource.Resume) : null;
                     using var root = ExecutionScope.Start(descriptor);
                     // R4.6 E2-9：expectedUid 复验——执行权已取得、首个资源副作用前；不符抛 AccountMismatchException（不释放执行权再排队）
                     await BetterGenshinImpact.Service.OneDragon.ExpectedUidGate.VerifyOrThrowAsync(descriptor.ExpectedUid, cancellationToken);
-                    if (startFromIndex > 0)
-                    {
-                        var project = group.Projects.FirstOrDefault(p => p.Index == startFromIndex)
-                            ?? throw new InvalidOperationException("恢复位置已不存在");
-                        BetterGenshinImpact.GameTask.TaskContext.Instance().Config.NextScheduledTask =
-                            [(groupName, startFromIndex, project.FolderName, project.Name)];
-                    }
                     var progress = new BetterGenshinImpact.GameTask.TaskProgress.TaskProgress { CurrentScriptGroupName = groupName };
                     BetterGenshinImpact.GameTask.RunnerContext.Instance.taskProgress = progress;
                     var projects = prepared.SingleIndex is { } only
                         ? group.Projects.Where(p => p.Index == only).ToList()
-                        : BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
+                        : explicitProjects ?? BetterGenshinImpact.ViewModel.Pages.ScriptControlViewModel.GetNextProjects(group);
                     if (projects.Count == 0) throw new InvalidOperationException("no_work");
                     FinishCoordinated(await scriptService.RunMulti(projects, groupName, progress, descriptor));
                 }

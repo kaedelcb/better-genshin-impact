@@ -874,7 +874,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             var observed = await CoordinatedBatchReads.ReadAsync(read, budget.Token);
             if (observed is not null)
             {
-                _observationUnavailableSince = null;
+                // 作业列表可读不代表终态已确认；完整观测成功后由调用方重置补查预算。
                 _observationUnavailableTimestamp = null;
                 if (_epoch is { } epoch) io.ExecutorObserved?.Invoke(epoch);
             }

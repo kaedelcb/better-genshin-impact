@@ -22,6 +22,11 @@ internal static class ConfigTransferSchedulePolicy
             || local.OnlineHoeingCompletionPolicy != imported.OnlineHoeingCompletionPolicy
             || local.OnlineHoeingSpecifiedTaskType != imported.OnlineHoeingSpecifiedTaskType
             || local.OnlineHoeingSpecifiedTaskName != imported.OnlineHoeingSpecifiedTaskName
-            || local.OnlineHoeingSpecifiedTaskPriority != imported.OnlineHoeingSpecifiedTaskPriority;
+            || local.OnlineHoeingSpecifiedTaskPriority != imported.OnlineHoeingSpecifiedTaskPriority
+            || local.OnlineHoeingSpecifiedStartMode != imported.OnlineHoeingSpecifiedStartMode
+            || local.OnlineHoeingSpecifiedStartTaskId != imported.OnlineHoeingSpecifiedStartTaskId
+            || local.OnlineHoeingSpecifiedStartTaskName != imported.OnlineHoeingSpecifiedStartTaskName
+            || local.OnlineHoeingSpecifiedConfigRevision != imported.OnlineHoeingSpecifiedConfigRevision
+            || local.OnlineHoeingSpecifiedWorkflowId != imported.OnlineHoeingSpecifiedWorkflowId;
     }
 }

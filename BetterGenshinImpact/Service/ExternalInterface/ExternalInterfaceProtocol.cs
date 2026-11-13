@@ -165,6 +165,7 @@ internal static class ExternalInterfaceProtocol
             ["capabilities"] = new JObject
             {
                 ["task.start"] = true,
+                ["task.start.explicitGroupStart.v1"] = true,
                 ["task.stateContinuation.v1"] = true,
                 ["task.stop"] = true,
                 ["task.suspend"] = true,

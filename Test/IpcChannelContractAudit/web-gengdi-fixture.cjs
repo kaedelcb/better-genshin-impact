@@ -1,10 +1,26 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
-const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = path.resolve(__dirname, '../../BgiCoordinatorServer/wwwroot');
 const mock = `
 window.gatewayCalls=[];window.noAck=false;window.rejectJoin=false;window.failPolicy=false;
+window.completionVersionSupported=true;
+window.testWorkflows=[{workflowId:'flow-1',name:'联机收尾计划',revision:'flow-rev-1',nodes:[
+ {taskId:'flow-node-1',name:'领取奖励',enabled:true},{taskId:'flow-node-2',name:'联机收尾',enabled:true},
+ {taskId:'flow-node-off',name:'已禁用任务',enabled:false}]}];
+window.savedPolicies={};
+function completionCatalog(params, policy){
+ const type=params.catalogType??policy.specifiedType, name=params.catalogName??policy.specifiedName;
+ const workflowId=params.catalogWorkflowId??policy.specifiedWorkflowId;
+ let target=null;
+ if(type==='workflow') { const flow=testWorkflows.find(f=>f.workflowId===workflowId); if(flow)target={...flow,type,name:flow.name}; }
+ else if(type==='group'&&name==='精英')target={type,name,workflowId:'',revision:'group-rev-1',nodes:[
+  {taskId:'group-task-1',name:'任务甲',enabled:true},{taskId:'group-task-2',name:'任务乙',enabled:true},
+  {taskId:'group-task-off',name:'已禁用任务',enabled:false}]};
+ else if(type==='onedragon'&&name==='收尾')target={type,name,workflowId:'',revision:'dragon-rev-1',nodes:[
+  {taskId:'guid-1',name:'领取',enabled:true},{taskId:'guid-2',name:'收尾',enabled:true}]};
+ return {workflows:testWorkflows,target};
+}
 window.testMembers=['a','b','off'].map((uid,i)=>({playerUid:uid,playerName:['成员甲','成员乙','离线成员'][i],online:i<2,
  bgiStatus:'running',bgiVersion:'test',taskStatusAvailable:true,taskRunning:i===0,currentTaskName:i===0?'当前任务':'',currentRouteDisplay:'第 2 条线路',
  configGroups:['精英','特殊<任务>"名称'],oneClickConfigs:['收尾'],configGroupTasks:{'精英':['任务甲','任务乙']},
@@ -31,7 +47,15 @@ window.transport={on(name,fn){handlers[name]=fn},onreconnecting(fn){this.reconne
   if(noAck)return {payload:{ack:true}};
   queueMicrotask(()=>{
    if(cmd.cmd==='task_policy.pull'||cmd.cmd==='task_policy.push'){
-    emit('control.remoteCommand',{command:{cmd:cmd.cmd==='task_policy.pull'?'task_policy.data':'task_policy.push_result',commandId:cmd.commandId,senderUid:cmd.target[0],params:{ok:failPolicy?'false':'true',policy:'resume',specifiedType:'group',specifiedName:'',specifiedPriority:'0',message:failPolicy?'读取失败':'已应用'}}});
+    const uid=cmd.target[0];
+    const policy=savedPolicies[uid]||{policy:'resume',specifiedType:'group',specifiedName:'',specifiedPriority:'0',
+     specifiedStartMode:'default',specifiedStartTaskId:'',specifiedStartTaskName:'',specifiedConfigRevision:'',specifiedWorkflowId:''};
+    if(cmd.cmd==='task_policy.push'&&!failPolicy) savedPolicies[uid]={...policy,...cmd.params};
+    const applied=savedPolicies[uid]||policy;
+    const result={...applied,ok:failPolicy?'false':'true',message:failPolicy?'读取失败':'已应用'};
+    if(completionVersionSupported){result.completionStartVersion='1';result.catalog=JSON.stringify(completionCatalog(cmd.params||{},applied));}
+    else {delete result.completionStartVersion;delete result.catalog;}
+    emit('control.remoteCommand',{command:{cmd:cmd.cmd==='task_policy.pull'?'task_policy.data':'task_policy.push_result',commandId:cmd.commandId,senderUid:uid,params:result}});
    }else if(cmd.cmd==='set_task_enabled'){
     emit('control.remoteCommandResult',{cmd:cmd.cmd,commandId:cmd.commandId,targetUid:cmd.target[0],status:'success',configRevision:'rev-2',targetProcessId:55,targetStartTicksUtc:'638937012345678901'});
    }else for(const uid of cmd.target)receipt(uid,'success',cmd.commandId);
@@ -41,14 +65,19 @@ window.transport={on(name,fn){handlers[name]=fn},onreconnecting(fn){this.reconne
 }};
 window.signalR={HubConnectionBuilder:class{withUrl(){return this}withAutomaticReconnect(){return this}build(){return transport}}};
 `;
-async function fixture() {
+async function startServer(port = 0) {
     const server = http.createServer((req, res) => {
         const file = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).slice(1) || 'index.html';
-        if (!/^(index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js|remote-logs\.js)|mistletoe-(?:core|startup|startup-view|taskcenter|web)\.js|mistletoe-web\.css|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(file)) { res.writeHead(404); res.end(); return; }
+        if (!/^(index\.html|control-room(?:-commands|-ui)?\.(js|css)|dodoco-(?:web\.(js|css)|log-worker\.js|operations\.js|remote-logs\.js)|mistletoe-(?:core|registers|composition|startup|startup-view|taskcenter|taskcenter-jump|taskcenter-flowchart|web)\.js|mistletoe-web\.css|project-star\.css|bgi-update-web\.js|signalr\.min\.js|gengdi-avatars\/[A-Za-z]+\.png)$/.test(file)) { res.writeHead(404); res.end(); return; }
         res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.css') ? 'text/css' : file.endsWith('.png') ? 'image/png' : 'text/html');
         res.end(file === 'signalr.min.js' ? fs.readFileSync(path.join(root, file), 'utf8') + '\n;' + mock : fs.readFileSync(path.join(root, file)));
     });
-    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+    return server;
+}
+async function fixture() {
+    const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+    const server = await startServer();
     const browser = await chromium.launch({ channel: 'msedge', headless: true });
     const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     const errors = []; page.on('pageerror', err => errors.push(err.message));
@@ -60,4 +89,9 @@ async function fixture() {
     };
     return { page, errors, login, close: async () => { await browser.close(); await new Promise(resolve => server.close(resolve)); } };
 }
-module.exports = { fixture };
+module.exports = { fixture, startServer };
+if (require.main === module) {
+    startServer(8946).then(server => {
+        console.log(`Isolated synthetic control-room fixture: http://127.0.0.1:${server.address().port}`);
+    }).catch(error => { console.error(error); process.exitCode = 1; });
+}

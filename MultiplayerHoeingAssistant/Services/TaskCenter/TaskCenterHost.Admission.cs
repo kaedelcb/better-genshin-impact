@@ -1345,6 +1345,8 @@ public sealed partial class TaskCenterHost
         var workflowId = d.Candidate.WorkflowId;
         lock (_gate)
         {
+            if (d.CallerToken.IsCancellationRequested)
+                return new SendOutcome.Rejected("start_cancelled", false, "host:caller_cancelled");
             if (_shutdown) return new SendOutcome.Rejected("host_shutdown", false, "host:shutdown");
             if (CapabilityBlockReason() is { } cap) return new SendOutcome.Rejected("capability_blocked", false, "host:" + cap);
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
@@ -1353,6 +1355,8 @@ public sealed partial class TaskCenterHost
             try { preparedRun = _runs.Load(runId); }
             catch (Exception) { return new SendOutcome.Unknown("prepared_run_unreadable"); }
             if (preparedRun is null) return new SendOutcome.Unknown("prepared_run_missing");
+            if (preparedRun.StopRequested || preparedRun.State != WorkflowRunState.Planned)
+                return new SendOutcome.Rejected("start_cancelled", false, "host:prepared_run_not_startable");
             if (IsExecutionResetReleased(preparedRun)) return new SendOutcome.Rejected("execution_reset", false, "host:execution-reset");
             if (ValidateManagedFlowSnapshot(workflowId, preparedRun.WorkflowRevision) is { } flowUnavailable)
                 return new SendOutcome.Rejected("flow_changed", false, "host:" + flowUnavailable);

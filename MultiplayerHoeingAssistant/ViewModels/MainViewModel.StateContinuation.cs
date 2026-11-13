@@ -22,14 +22,16 @@ public partial class MainViewModel
         internal Func<CancellationToken, Task<bool>>? ConfirmRetryReservationReleased { get; init; }
         internal Func<string?>? ExpectedRequestKey { get; init; }
         internal bool RegisteredJob { get; init; } = true;
+        internal bool WorkflowRun { get; init; }
     }
 
     // The same worker is used by the actual UI path and deterministic transport fixtures.
     internal static async Task RunCompletionContinuationAsync(OnlineHoeingBatch batch,
         CompletionContinuationPorts io, CancellationToken ct)
     {
-        static bool SameJob(string? a, string? b) => Guid.TryParse(a, out var left)
-            && Guid.TryParse(b, out var right) && left == right;
+        bool SameJob(string? a, string? b) => io.WorkflowRun
+            ? !string.IsNullOrWhiteSpace(a) && string.Equals(a, b, StringComparison.Ordinal)
+            : Guid.TryParse(a, out var left) && Guid.TryParse(b, out var right) && left == right;
         string? ExpectedKey() => io.ExpectedRequestKey?.Invoke()
             ?? (io.RetainedResult ? batch.PolicyRequestKey : null);
         var noExecutionNeeded = false;
@@ -116,7 +118,10 @@ public partial class MainViewModel
                                 + "：" + (observed.ErrorMessage ?? observed.ErrorCode ?? observed.Status);
                         continue;
                     }
-                    io.Waiting?.Invoke("联机锄地已完成，后续任务执行中");
+                    io.Waiting?.Invoke(io.WorkflowRun
+                        ? observed?.Status is null or "result_unknown" ? "计划表原执行事实待核对，保留原运行"
+                            : "计划表完成动作尚未结束，等待整段运行终态"
+                        : "联机锄地已完成，后续任务执行中");
                 }
                 else if (noExecutionNeeded)
                 {
@@ -135,7 +140,7 @@ public partial class MainViewModel
                                 || !CoordinatedBatchLoop.SameEpoch(original.Epoch, batch.ExecutionEpoch))
                                 throw new IOException("原完成动作的编号或进程尚未确认");
                             batch.RecordPolicyExecution(new HoeingPolicyExecution(original.TaskHandle,
-                                original.Epoch!, true));
+                                original.Epoch!, io.RegisteredJob, WorkflowRunId: io.WorkflowRun ? original.TaskHandle : null));
                             batch.PolicySendUnknown = false;
                             continue;
                         }
@@ -154,7 +159,8 @@ public partial class MainViewModel
                             var epoch = new BgiEpoch { ProcessId = pid, StartTicksUtc = ticks };
                             if (!CoordinatedBatchLoop.SameEpoch(epoch, batch.ExecutionEpoch))
                                 throw new ControlContextRevokedException("完成动作回执来自其他 BGI，禁止重放", ct);
-                            batch.RecordPolicyExecution(new HoeingPolicyExecution(job, epoch, io.RegisteredJob));
+                            batch.RecordPolicyExecution(new HoeingPolicyExecution(job, epoch, io.RegisteredJob,
+                                WorkflowRunId: io.WorkflowRun ? job : null));
                             batch.PolicySendUnknown = false;
                         }
                         ct.ThrowIfCancellationRequested();
@@ -215,6 +221,7 @@ public partial class MainViewModel
         lock (_taskCenterHostGate) host = _taskCenterHost;
         var runId = host?.OnlineHoeingManagedRun(batch.Generation) ?? batch.ManagedRunId;
         var policy = batch.Policy ?? throw new InvalidOperationException("本批完成策略未冻结");
+        var workflowSuccessor = policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" };
         var nativeResume = policy.Policy == TaskConflictPolicy.Resume && runId is null && batch.ManagedRunId is null
             && CommandExecutor.TryReadNativeResumeSnapshot(batch.SuspendedRawData, out _);
         var epoch = batch.ExecutionEpoch ?? throw new IOException("原 BGI 进程尚未确认");
@@ -363,6 +370,8 @@ public partial class MainViewModel
         {
             try
             {
+                if (workflowSuccessor && (batch.PolicyExecution is not null || batch.PolicyStartAttempted))
+                    return host is not null; // A run is recovered by its Host, never queried/replayed as a BGI job.
                 if (batch.PriorityRecoveryEnabled && policy.Policy == TaskConflictPolicy.Resume
                     && runId is not null && host is not null && batch.ManagedPlanSnapshot is null && host.Runs.Load(runId) is null
                     && await RejectExitedUnrecoverablePlan("原计划记录与安排快照均已丢失，保留失败，不构造其他任务", token).ConfigureAwait(false))
@@ -499,6 +508,9 @@ public partial class MainViewModel
         async Task<CommandResult> Start(CancellationToken token)
         {
             RequireAuthority();
+            if (workflowSuccessor)
+                return host is null ? new CommandResult { ErrorCode = "state_unavailable", Message = "等待原计划表执行宿主" }
+                    : await host.StartCompletionWorkflowAsync(batch, token).ConfigureAwait(false);
             if (policy.Policy == TaskConflictPolicy.RunSpecified)
                 return await executor.StartRetainedCompletionActionAsync(batch, token).ConfigureAwait(false);
             if (policy.Policy == TaskConflictPolicy.Stop || gapResume)
@@ -525,6 +537,11 @@ public partial class MainViewModel
 
         async Task<BgiTaskQueueStatus?> Query(CancellationToken token)
         {
+            if (workflowSuccessor)
+            {
+                RequireAuthority();
+                return host is null ? null : await host.QueryCompletionWorkflowAsync(batch, token).ConfigureAwait(false);
+            }
             var ext = External();
             if (CompletionRequestKey() is { } key)
             {
@@ -546,7 +563,9 @@ public partial class MainViewModel
             };
         }
 
-        batch.ConfigurePolicyCancellation(executor.CancelHoeingPolicyExecutionAsync);
+        batch.ConfigurePolicyCancellation(execution => execution.WorkflowRunId is not null
+            ? host?.CancelCompletionWorkflowAsync(execution) ?? Task.FromResult(false)
+            : executor.CancelHoeingPolicyExecutionAsync(execution));
         batch.ConfigurePolicyCleanup(async () =>
         {
             await FinishCancelledCoordinatedPolicyAsync(batch, executor, host, runId).ConfigureAwait(false);
@@ -560,13 +579,14 @@ public partial class MainViewModel
                 RequireAuthority = RequireAuthority, Prepare = Prepare, Start = Start, Query = Query,
                 Reconcile = ReconcileWithPriority, Waiting = Waiting, EnsureExecutor = EnsureExecutor,
                 ExpectedRequestKey = CompletionRequestKey,
-                RegisteredJob = true, CanRetryNativeResume = nativeResume,
+                RegisteredJob = !workflowSuccessor, WorkflowRun = workflowSuccessor, CanRetryNativeResume = nativeResume,
                 ConfirmRetryReservationReleased = async token =>
                 {
                     await executor.ReconcileCompletionTicketAsync(batch, token).ConfigureAwait(false);
                     return executor.TakeoverTicketSnapshot is null;
                 },
-                Acknowledge = (result, token) => runId is not null && batch.PolicyRequestIdentity is not null
+                Acknowledge = (result, token) => workflowSuccessor ? Task.FromResult(true) // RunStore owns the full run result.
+                    : runId is not null && batch.PolicyRequestIdentity is not null
                     ? Task.FromResult(true) // The original Runner owns its ordinary retried job's result.
                     : result.Epoch is { } original
                     && CommandExecutor.ProbeOriginalBgiProcess(original) == false ? Task.FromResult(true)

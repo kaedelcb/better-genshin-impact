@@ -620,21 +620,32 @@ function showQuickCommandConfirm(key) {
 }
 
 function isValidCompletionAction(action) {
-    return action && ['resume', 'stop', 'runSpecified'].includes(action.policy)
-        && ['group', 'onedragon'].includes(action.taskType)
-        && typeof action.taskName === 'string' && action.taskName.length <= 1024
-        && (action.policy !== 'runSpecified' || action.taskName.trim().length > 0);
+    if (!action || !['resume', 'stop', 'runSpecified'].includes(action.policy)
+        || !['group', 'onedragon', 'workflow'].includes(action.taskType)
+        || typeof action.taskName !== 'string' || action.taskName.length > 1024) return false;
+    const mode = action.startMode === undefined ? 'default' : action.startMode;
+    const fields = ['startTaskId', 'startTaskName', 'configRevision', 'workflowId'];
+    if (!['default', 'beginning', 'node'].includes(mode)
+        || fields.some(key => action[key] !== undefined && (typeof action[key] !== 'string' || action[key].length > 1024))) return false;
+    if (action.policy !== 'runSpecified') return true;
+    const [id, name, revision, workflowId] = fields.map(key => action[key] ?? '');
+    if (!action.taskName.trim() || (action.taskType === 'workflow' ? !workflowId.trim() : workflowId.length > 0)) return false;
+    if (mode === 'default') return action.taskType !== 'workflow' && !id && !name && !revision;
+    if (!revision.trim()) return false;
+    return mode === 'beginning' ? !id && !name : !!id.trim() && !!name.trim();
 }
 
-// 成员已有绑定动作的只读说明；开关不会创建或修改配置。
+// default 只兼容旧配置入口，不能将其描述为保证从头执行。
 function hoeingCompletionDescription(action) {
     if (!action) return '尚未上报（需更新该成员助手）';
+    if (!isValidCompletionAction(action)) return '动作配置不完整';
     if (action.policy === 'resume') return '恢复原任务';
     if (action.policy === 'stop') return '锄完停止';
-    if (action.policy === 'runSpecified' && ['group', 'onedragon'].includes(action.taskType)
-        && typeof action.taskName === 'string' && action.taskName.trim())
-        return `执行${action.taskType === 'onedragon' ? '一条龙' : '配置组'}「${action.taskName}」`;
-    return '动作配置不完整';
+    const type = { group: '配置组', onedragon: '一条龙', workflow: '计划表' }[action.taskType];
+    const mode = action.startMode ?? 'default';
+    const start = mode === 'node' ? `从任务「${action.startTaskName}」开始`
+        : mode === 'beginning' ? '从头开始' : '沿用原入口（旧配置）';
+    return `执行${type}「${action.taskName}」 · ${start}`;
 }
 
 // 一键锄地与PC共用服务端批次；全部成员准备完成后才允许接管和执行。
@@ -697,9 +708,9 @@ async function beginCoordinatedQuickCommand(targets, useCompletionActions, quick
         log(label + '未下发：有成员已离线，请重新确认');
         return;
     }
-    if (quickCommandKey && targets.some(p => {
+    if ((quickCommandKey || useCompletionActions) && targets.some(p => {
         const current = players.find(latest => latest.playerUid === p.playerUid);
-        return current?.quickCommands?.[quickCommandKey] !== p.quickCommands?.[quickCommandKey]
+        return quickCommandKey && current?.quickCommands?.[quickCommandKey] !== p.quickCommands?.[quickCommandKey]
             || JSON.stringify(current?.hoeingCompletionAction) !== JSON.stringify(p.hoeingCompletionAction);
     })) {
         log(label + '未下发：成员绑定或锄地后动作已改变，请重新确认');

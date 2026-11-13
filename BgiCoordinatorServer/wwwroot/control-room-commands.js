@@ -37,7 +37,9 @@ function sendTrackedCommand(cmd, expectedReply = null) {
             resolve(result);
         };
         const timer = setTimeout(() => finish({ status: 'unknown', message: '执行回执超时；未自动重发' }), 90000);
-        pendingMemberCommands.set(cmd.commandId, { uid, cmd: cmd.cmd, expectedReply, finish });
+        pendingMemberCommands.set(cmd.commandId, { uid, cmd: cmd.cmd, expectedReply, finish,
+            completionStartVersion: cmd.cmd === 'task_policy.push' ? cmd.params?.completionStartVersion : null,
+            completionPolicy: cmd.cmd === 'task_policy.push' ? { ...cmd.params } : null });
         Promise.resolve().then(() => sendRemoteCommand(cmd)).catch(err =>
             finish({ status: 'unknown', message: '发送或执行结果未确认：' + err.message }));
     });
@@ -52,6 +54,19 @@ function consumeMemberReply(cmd) {
     if (!pending || pending.uid !== cmd.senderUid) return;
     if (pending.expectedReply && cmd.cmd === pending.expectedReply) {
         const ok = cmd.params?.ok === true || cmd.params?.ok === 'true';
+        if (ok && pending.completionStartVersion === '1' && cmd.params?.completionStartVersion !== '1') {
+            pending.finish({ status: 'unknown', message: '执行端未确认起点协议版本，保存结果未确认；请更新执行端后重新读取设置', data: cmd.params });
+            return;
+        }
+        if (ok && pending.completionStartVersion === '1') {
+            try {
+                if (completionActionSignature(normalizePolicy(cmd.params)) !== completionActionSignature(normalizePolicy(pending.completionPolicy)))
+                    throw new Error('执行端回传的结束动作与本次提交不一致');
+            } catch (err) {
+                pending.finish({ status: 'unknown', message: '保存结果未确认：' + err.message + '；请重新读取设置', data: cmd.params });
+                return;
+            }
+        }
         pending.finish({ status: ok ? 'success' : 'failed',
             message: cmd.params?.message || (ok ? '执行端已确认' : '执行端拒绝操作'), data: cmd.params });
     } else if (cmd.cmd === 'ack') {
@@ -95,11 +110,71 @@ function memberBinding(member) {
     const types = member.onlineHoeingGroupTypes?.length ? member.onlineHoeingGroupTypes : names.map(() => 'group');
     return { names: [...names], types: [...types] };
 }
+function completionActionSignature(action) {
+    return JSON.stringify([action?.policy, action?.taskType, action?.taskName, action?.priority ?? 0,
+        action?.startMode ?? 'default', action?.startTaskId ?? '', action?.startTaskName ?? '',
+        action?.configRevision ?? '', action?.workflowId ?? '']);
+}
 function normalizePolicy(data) {
+    if (data?.completionStartVersion === '1' && (['specifiedStartMode', 'specifiedStartTaskId',
+        'specifiedStartTaskName', 'specifiedConfigRevision', 'specifiedWorkflowId'].some(key => typeof data[key] !== 'string')
+        || data.specifiedPriority == null || String(data.specifiedPriority).trim() === ''))
+        throw new Error('执行端返回的起点字段不完整');
     const action = { policy: data?.policy, taskType: data?.specifiedType,
-        taskName: data?.specifiedName, priority: Number(data?.specifiedPriority ?? 0) };
+        taskName: data?.specifiedName, priority: Number(data?.specifiedPriority ?? 0),
+        startMode: data?.specifiedStartMode === undefined ? 'default' : data.specifiedStartMode,
+        startTaskId: data?.specifiedStartTaskId === undefined ? '' : data.specifiedStartTaskId,
+        startTaskName: data?.specifiedStartTaskName === undefined ? '' : data.specifiedStartTaskName,
+        configRevision: data?.specifiedConfigRevision === undefined ? '' : data.specifiedConfigRevision,
+        workflowId: data?.specifiedWorkflowId === undefined ? '' : data.specifiedWorkflowId };
     if (!isValidCompletionAction(action) || !Number.isInteger(action.priority)
         || action.priority < -2147483648 || action.priority > 2147483647)
         throw new Error('执行端返回的结束动作不完整，未填入默认值覆盖原设置');
     return action;
+}
+// 完成动作目录只来自目标成员的 task_policy.pull；不复用任务中心或其他成员的目录。
+function normalizeCompletionCatalog(data) {
+    if (data?.completionStartVersion !== '1') return null;
+    let catalog;
+    try { catalog = JSON.parse(data.catalog); }
+    catch { throw new Error('执行端未返回有效的完成动作目录'); }
+    const text = (value, empty = false) => typeof value === 'string' && value.length <= 1024 && (empty || value.trim().length > 0);
+    const nodesValid = nodes => Array.isArray(nodes) && nodes.every(node => node && text(node.taskId)
+        && text(node.name) && typeof node.enabled === 'boolean') && new Set(nodes.map(node => node.taskId)).size === nodes.length;
+    if (!catalog || !Array.isArray(catalog.workflows) || !catalog.workflows.every(flow => flow && text(flow.workflowId)
+        && text(flow.name) && text(flow.revision) && nodesValid(flow.nodes))
+        || new Set(catalog.workflows.map(flow => flow.workflowId)).size !== catalog.workflows.length
+        || catalog.target !== null && (!catalog.target || !['group', 'onedragon', 'workflow'].includes(catalog.target.type)
+            || !text(catalog.target.name) || !text(catalog.target.workflowId, catalog.target.type !== 'workflow')
+            || catalog.target.type !== 'workflow' && catalog.target.workflowId !== ''
+            || !text(catalog.target.revision) || !nodesValid(catalog.target.nodes))
+        || catalog.error != null && typeof catalog.error !== 'string')
+        throw new Error('执行端返回的完成动作目录不完整');
+    return catalog;
+}
+function completionTargetKey(type, name, workflowId = '') { return JSON.stringify([type, name, workflowId]); }
+function validateCompletionSelection(action, catalog) {
+    if (!isValidCompletionAction(action)) throw new Error('结束动作或执行起点不完整');
+    if (action.policy !== 'runSpecified' || action.startMode === 'default') return;
+    const target = catalog?.target;
+    if (catalog?.error) throw new Error(catalog.error);
+    if (!target || completionTargetKey(target.type, target.name, target.workflowId)
+        !== completionTargetKey(action.taskType, action.taskName, action.workflowId))
+        throw new Error('目标目录未确认，请重新读取或选择任务');
+    if (target.revision !== action.configRevision) throw new Error('任务配置已修订，请重新选择执行起点');
+    if (action.startMode === 'node' && !target.nodes.some(node => node.taskId === action.startTaskId && node.name === action.startTaskName && node.enabled))
+        throw new Error('指定起点已失效或被禁用，请重新选择；未改成从头执行');
+    if (!target.nodes.some(node => node.enabled)) throw new Error('目标没有可执行任务，请先在执行端启用任务');
+}
+function completionPolicyParams(action, version) {
+    if (!isValidCompletionAction(action) || !Number.isInteger(action.priority)
+        || action.priority < -2147483648 || action.priority > 2147483647) throw new Error('结束动作或执行起点不完整');
+    if (version !== '1') throw new Error('执行端尚不支持明确起点，请更新该成员助手后重新读取');
+    if (action.policy === 'runSpecified' && action.startMode === 'default')
+        throw new Error('旧配置沿用原入口；保存前请选择从头开始或指定任务');
+    const params = { policy: action.policy, specifiedType: action.taskType, specifiedName: action.taskName,
+        specifiedPriority: String(action.priority) };
+    return { ...params, completionStartVersion: '1', specifiedStartMode: action.startMode,
+        specifiedStartTaskId: action.startTaskId, specifiedStartTaskName: action.startTaskName,
+        specifiedConfigRevision: action.configRevision, specifiedWorkflowId: action.workflowId };
 }

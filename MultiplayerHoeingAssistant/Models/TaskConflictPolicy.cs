@@ -25,7 +25,7 @@ public class TaskConflictPolicySettings
     /// <summary>冲突策略（默认 Stop，与按键任务策略默认值一致）。</summary>
     public TaskConflictPolicy Policy { get; set; } = TaskConflictPolicy.Stop;
 
-    /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙。仅 RunSpecified 策略使用。</summary>
+    /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙，"workflow"=计划表。仅 RunSpecified 策略使用。</summary>
     public string SpecifiedTaskType { get; set; } = "group";
 
     /// <summary>指定任务名称。仅 RunSpecified 策略使用；执行时校验存在性，不存在则日志报错退化为停止。</summary>
@@ -33,6 +33,13 @@ public class TaskConflictPolicySettings
 
     /// <summary>指定任务的普通仲裁优先级（int32，大者优先；缺省 0）。</summary>
     public int SpecifiedTaskPriority { get; set; }
+
+    /// <summary>default 仅兼容旧入口，beginning 明确从头，node 指定稳定节点。</summary>
+    public string SpecifiedStartMode { get; set; } = "default";
+    public string SpecifiedStartTaskId { get; set; } = "";
+    public string SpecifiedStartTaskName { get; set; } = "";
+    public string SpecifiedConfigRevision { get; set; } = "";
+    public string SpecifiedWorkflowId { get; set; } = "";
 
     /// <summary>策略显示名（日志用）。</summary>
     public string PolicyDisplayName => Policy switch

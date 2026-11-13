@@ -146,6 +146,10 @@ public sealed partial class RoomOperations
                     new CoordinatedBatchBinding(name, p.OnlineHoeingGroupTypes.Count == 0 ? "group" : p.OnlineHoeingGroupTypes[i])).ToArray(),
                 StringComparer.Ordinal);
         }
+        if (useCompletionActions)
+            foreach (var player in selected)
+                if (player.HoeingCompletionAction?.IsValid() != true)
+                    throw new InvalidOperationException("hoeing_completion_action_invalid:" + player.PlayerUid);
         var instances = selected.ToDictionary(p => p.PlayerUid, p => p.ClientInstanceId, StringComparer.Ordinal);
         var generation = Interlocked.Increment(ref _nextBatchGeneration);
         if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");

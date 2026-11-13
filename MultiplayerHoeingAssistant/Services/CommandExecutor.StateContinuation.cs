@@ -119,54 +119,29 @@ public partial class CommandExecutor
             || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
             return new CommandResult { ErrorCode = "state_unavailable", Message = "原 BGI 通道暂不可用，保留完成动作" };
 
-        var frozen = batch.PolicySubmitPayload;
-        if (frozen is null)
+        CompletionStart start;
+        try
         {
-            var name = policy.SpecifiedTaskName?.Trim() ?? "";
-            var oneDragon = policy.SpecifiedTaskType == "onedragon";
-            if (name.Length == 0) return new CommandResult { ErrorCode = "specified_task_missing", Message = "完成动作未配置任务名称" };
-            var listed = await SendIpcPreferredAsync("config.list", null, 3000).ConfigureAwait(false);
-            if (listed is not { Success: true, Data: not null })
-                return new CommandResult { ErrorCode = "state_unavailable", Message = "完成动作配置暂不可读，保留原动作" };
-            using var doc = JsonDocument.Parse(listed.Data);
-            if (!doc.RootElement.TryGetProperty(oneDragon ? "oneClickConfigs" : "configGroups", out var names)
-                || names.ValueKind != JsonValueKind.Array
-                || !names.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String && item.GetString() == name))
-                return new CommandResult { ErrorCode = "specified_task_missing", Message = "完成动作配置不存在：" + name };
-            var described = await ext.SendCommandAsync("ext.config.describe", new
+            if (batch.PolicySubmitPayload is null)
             {
-                groupName = oneDragon ? null : name,
-                configName = oneDragon ? name : null
-            }, cancellationToken: cancellationToken).ConfigureAwait(false);
-            string? revision = null;
-            if (described is { Success: true, Data: not null })
-            {
-                using var config = JsonDocument.Parse(described.Data);
-                if (TryParseEpoch(described.Data, out var pid, out var ticks)
-                    && pid == epoch.ProcessId && ticks == epoch.StartTicksUtc
-                    && config.RootElement.TryGetProperty("configRevision", out var value) && value.ValueKind == JsonValueKind.String
-                    && config.RootElement.TryGetProperty("tasks", out var tasks) && tasks.ValueKind == JsonValueKind.Array
-                    && tasks.EnumerateArray().Any(item => item.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.True))
-                    revision = value.GetString();
+                start = await DescribeCompletionStartAsync(policy, ext, epoch, cancellationToken).ConfigureAwait(false);
+                batch.PolicySubmitPayload = FreezeCompletionStart(start);
             }
-            if (string.IsNullOrWhiteSpace(revision))
-                return new CommandResult { ErrorCode = "state_unavailable", Message = "完成动作配置版本暂不可读，保留原动作" };
-            batch.PolicySubmitPayload = new Dictionary<string, object?>
-            {
-                ["name"] = name, ["oneDragon"] = oneDragon, ["revision"] = revision
-            };
-            frozen = batch.PolicySubmitPayload!;
+            start = ReadFrozenCompletionStart(batch.PolicySubmitPayload!);
         }
+        catch (CompletionStartException ex)
+        { return new CommandResult { ErrorCode = ex.Code, Message = ex.Message }; }
+        if (!start.OneDragon && start.Index > 0 && !ext.HasCapability("task.start.explicitGroupStart.v1"))
+            return new CommandResult { ErrorCode = "explicit_group_start_unsupported", Message = "BGI 不支持配置组明确起点，保留原起点且未发送" };
         cancellationToken.ThrowIfCancellationRequested();
         if (batch.ExplicitStopRequested || !CoordinatedBatchLoop.SameEpoch(epoch, ext.ServerEpoch))
             return new CommandResult { ErrorCode = "completion_not_authorized", Message = "原完成动作已撤销，未发送" };
-        var frozenName = (string)frozen["name"]!;
-        var frozenOneDragon = (bool)frozen["oneDragon"]!;
         batch.PolicyStartAttempted = true;
         batch.PersistRecovery?.Invoke();
-        var submitted = await ext.SubmitTaskStartAsync(frozenOneDragon ? null : frozenName,
-            frozenOneDragon ? frozenName : null, 0, 0, cancellationToken: cancellationToken,
-            idempotencyKey: batch.PolicyRequestKey, expectedConfigRevision: (string)frozen["revision"]!,
+        var submitted = await ext.SubmitTaskStartAsync(start.OneDragon ? null : start.Name,
+            start.OneDragon ? start.Name : null, start.Index, 0, cancellationToken: cancellationToken,
+            startFromTaskId: start.TaskId,
+            idempotencyKey: batch.PolicyRequestKey, expectedConfigRevision: start.Revision,
             bgiEpoch: new { processId = epoch.ProcessId, startTicksUtc = epoch.StartTicksUtc },
             retainUntilAcknowledged: true, expectedStopVersion: batch.StateContinuationStopVersion).ConfigureAwait(false);
         if (!submitted.Success || string.IsNullOrWhiteSpace(submitted.TaskHandle))
@@ -174,7 +149,7 @@ public partial class CommandExecutor
         return new CommandResult
         {
             Status = "success", JobId = submitted.TaskHandle, TargetProcessId = epoch.ProcessId,
-            TargetStartTicksUtc = epoch.StartTicksUtc.ToString(), Message = "原完成动作已受理：" + frozenName
+            TargetStartTicksUtc = epoch.StartTicksUtc.ToString(), Message = "原完成动作已受理：" + start.Name
         };
     }
 }

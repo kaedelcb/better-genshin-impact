@@ -42,6 +42,7 @@ internal sealed record CoordinatedRecoverySnapshot
     public bool CoordinatedSucceeded { get; init; }
     public bool LocalReleased { get; init; }
     public bool NativeResumeRetryPending { get; init; }
+    public long CompletionIntentTimestamp { get; init; }
     public string? ManagedRunId { get; init; }
     public PriorityPlanRecoverySnapshot? ManagedPlanSnapshot { get; init; }
     public bool CompletionRecoveryReservationAcquired { get; init; }

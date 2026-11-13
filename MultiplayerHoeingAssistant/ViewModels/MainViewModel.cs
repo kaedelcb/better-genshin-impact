@@ -2023,15 +2023,13 @@ public partial class MainViewModel : INotifyPropertyChanged
     private async Task HandleTaskPolicyPullAsync(RemoteCommand cmd)
     {
         if (_signalRClient == null) return;
-        var replyParams = new Dictionary<string, object>
-        {
-            ["ok"] = "true",
-            ["policy"] = _config?.OnlineHoeingCompletionPolicy ?? "resume",
-            ["specifiedType"] = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
-            ["specifiedName"] = _config?.OnlineHoeingSpecifiedTaskName ?? "",
-            ["specifiedPriority"] = (_config?.OnlineHoeingSpecifiedTaskPriority ?? 0)
-                .ToString(System.Globalization.CultureInfo.InvariantCulture)
-        };
+        var replyParams = CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy());
+        replyParams["ok"] = "true";
+        var catalogType = GetRemoteParam(cmd.Params, "catalogType") ?? _config?.OnlineHoeingSpecifiedTaskType ?? "group";
+        var catalogName = GetRemoteParam(cmd.Params, "catalogName") ?? _config?.OnlineHoeingSpecifiedTaskName ?? "";
+        var catalogWorkflowId = GetRemoteParam(cmd.Params, "catalogWorkflowId") ?? _config?.OnlineHoeingSpecifiedWorkflowId ?? "";
+        var catalog = await GetCompletionTargetCatalogService().LoadAsync(catalogType, catalogName, catalogWorkflowId);
+        replyParams["catalog"] = JsonSerializer.Serialize(catalog);
         var reply = new RemoteCommand
         {
             Cmd = "task_policy.data",
@@ -2051,33 +2049,61 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task HandleTaskPolicyPushAsync(RemoteCommand cmd)
     {
-        var applied = new List<string>();
-
-        // 上线锄地「完成后动作」（持久化）
-        var policy = GetRemoteParam(cmd.Params, "policy");
-        if (policy is "resume" or "stop" or "runSpecified" && _config != null)
+        var ok = false;
+        var message = "无可应用字段（参数为空或非法）";
+        var version = GetRemoteParam(cmd.Params, "completionStartVersion");
+        try
         {
-            _config.OnlineHoeingCompletionPolicy = policy;
-            var specifiedType = GetRemoteParam(cmd.Params, "specifiedType");
-            if (specifiedType is "group" or "onedragon")
-                _config.OnlineHoeingSpecifiedTaskType = specifiedType;
-            var specifiedName = GetRemoteParam(cmd.Params, "specifiedName");
-            if (specifiedName != null)
-                _config.OnlineHoeingSpecifiedTaskName = specifiedName;
-            var specifiedPriority = GetRemoteParam(cmd.Params, "specifiedPriority");
-            if (int.TryParse(specifiedPriority, System.Globalization.NumberStyles.Integer,
-                    System.Globalization.CultureInfo.InvariantCulture, out var parsedPriority))
-                _config.OnlineHoeingSpecifiedTaskPriority = parsedPriority;
-            _configManager?.Save(_config);
-            applied.Add("上线锄地完成后动作（已持久化）");
+            var current = SnapshotOnlineHoeingPolicy();
+            var policy = GetRemoteParam(cmd.Params, "policy");
+            var type = GetRemoteParam(cmd.Params, "specifiedType");
+            var name = GetRemoteParam(cmd.Params, "specifiedName");
+            if (_config == null || _configManager == null) throw new InvalidOperationException("本机配置存储未就绪。");
+            if (policy is not ("resume" or "stop" or "runSpecified")) throw new InvalidOperationException("未知完成后动作。");
+            if (type is not ("group" or "onedragon" or "workflow") || name == null) throw new InvalidOperationException("指定任务类型或名称不合法。");
+            if (!int.TryParse(GetRemoteParam(cmd.Params, "specifiedPriority"), System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var priority)) throw new InvalidOperationException("任务优先级必须是 32 位整数。");
+            if (version != null && version != "1") throw new InvalidOperationException("不支持的执行起点协议版本。");
+            var fields = new[] { "specifiedStartMode", "specifiedStartTaskId", "specifiedStartTaskName", "specifiedConfigRevision", "specifiedWorkflowId" };
+            if (version == "1" && fields.Any(f => GetRemoteParam(cmd.Params, f) == null)) throw new InvalidOperationException("执行起点参数不完整，未保存任何字段。");
+            if (version == null && (type == "workflow" || current.SpecifiedStartMode != "default" || current.SpecifiedTaskType == "workflow"
+                    || fields.Any(f => GetRemoteParam(cmd.Params, f) != null)))
+                throw new InvalidOperationException("旧端不支持计划表或执行起点，请升级后重试。");
+            var candidate = new TaskConflictPolicySettings
+            {
+                Policy = PolicyFromString(policy), SpecifiedTaskType = type, SpecifiedTaskName = name,
+                SpecifiedTaskPriority = priority,
+                SpecifiedStartMode = GetRemoteParam(cmd.Params, "specifiedStartMode") ?? "default",
+                SpecifiedStartTaskId = GetRemoteParam(cmd.Params, "specifiedStartTaskId") ?? "",
+                SpecifiedStartTaskName = GetRemoteParam(cmd.Params, "specifiedStartTaskName") ?? "",
+                SpecifiedConfigRevision = GetRemoteParam(cmd.Params, "specifiedConfigRevision") ?? "",
+                SpecifiedWorkflowId = GetRemoteParam(cmd.Params, "specifiedWorkflowId") ?? ""
+            };
+            if (candidate.SpecifiedStartMode is not ("default" or "beginning" or "node"))
+                throw new InvalidOperationException("未知执行起点。");
+            if (candidate.Policy == TaskConflictPolicy.RunSpecified && version == CompletionTargetCatalogService.Version
+                && candidate.SpecifiedStartMode is not ("beginning" or "node"))
+                throw new InvalidOperationException("新设置必须明确选择从头或从某个任务开始。");
+            // 恢复/停止不消费指定任务起点，保留传来的旧配置字段，不隐式升级为 beginning。
+            var validation = candidate.Policy == TaskConflictPolicy.RunSpecified
+                ? await GetCompletionTargetCatalogService().ValidateAsync(candidate) : null;
+            if (validation != null) throw new InvalidOperationException(validation);
+            var before = CompletionPolicyFields.Parameters(current);
+            if (CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy()).Any(p => !Equals(before[p.Key], p.Value)))
+                throw new InvalidOperationException("完成动作配置已变化，请重新读取后保存。");
+            SaveOnlineHoeingPolicy(candidate);
+            ok = true;
+            message = "已应用上线锄地完成后动作（已持久化）";
             _ = ReportStatusAsync();
         }
-
-        var ok = applied.Count > 0;
-        var message = ok ? $"已应用: {string.Join("、", applied)}" : "无可应用字段（参数为空或非法）";
+        catch (Exception ex) { message = ex.Message; }
         AddLog($"收到 {cmd.Sender} 远程修改任务策略：{message}");
 
         if (_signalRClient == null) return;
+        var result = ok ? CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy())
+            : new Dictionary<string, object> { ["completionStartVersion"] = CompletionTargetCatalogService.Version };
+        result["ok"] = ok ? "true" : "false";
+        result["message"] = message;
         var reply = new RemoteCommand
         {
             Cmd = "task_policy.push_result",
@@ -2085,7 +2111,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             SenderUid = _config?.PlayerUid ?? "",
             Target = [cmd.SenderUid],
             CommandId = cmd.CommandId,
-            Params = new Dictionary<string, object> { ["ok"] = ok ? "true" : "false", ["message"] = message }
+            Params = result
         };
         await _signalRClient.SendRemoteCommandAsync(reply);
     }
@@ -3626,26 +3652,14 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
         }
 
-        if (allGroups.Count == 0 && allOneClicks.Count == 0)
-        {
-            MessageBox.Show(isSelf
-                ? "未获取到 BGI 配置组或一条龙列表，请确认 BGI 已启动且配置组/一条龙目录存在。"
-                : $"未获取到 {targetMember?.PlayerName ?? "对方"} 的配置组或一条龙列表（可能对方尚未上报配置组）。",
-                "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
         // [任务策略] 「完成后动作」初始值：执行端改自己=读本机持久化配置；
         // 改别人 / 遥控器模式改自己=先定向拉取执行端当前配置（超时则显示默认值）。
         // [fix 2026-09-13] 遥控器模式改自己必须实拉：权威副本在执行端，本机 _config 只是镜像，
         // 历史上初始值直接读本机镜像导致监控端打开自己的绑定弹窗恒显示"恢复执行"（本次回归根因）。
         // 路由依据：pull 只投执行端连接（FR-3，监控端不收执行类命令），回复按 47116892 双投回监控端。
-        var initPolicy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy);
-        var initSpecifiedType = _config?.OnlineHoeingSpecifiedTaskType ?? "group";
-        var initSpecifiedName = _config?.OnlineHoeingSpecifiedTaskName ?? "";
-        var initSpecifiedPriority = _config?.OnlineHoeingSpecifiedTaskPriority ?? 0;
-        // 拉取失败时：弹窗里的「完成后动作」并非对方真实值，直接保存会把默认值覆盖到对方配置上。
-        // 因此此时不静默放过，而是在弹窗内显示醒目警告 + 默认禁止保存，由用户显式确认后才允许提交。
+        var initialCompletion = SnapshotOnlineHoeingPolicy();
+        var completionStartSupported = true;
+        // 拉取失败或未确认起点协议时，禁用完成动作保存，不能用本机镜像覆盖执行端配置。
         var policyPullFailed = false;
         string? policyPullUid = null;
         var policyPullDesc = "";
@@ -3672,26 +3686,36 @@ public partial class MainViewModel : INotifyPropertyChanged
                 var pulled = await GetTaskPolicySync().PullAsync(policyPullUid);
                 if (pulled != null)
                 {
-                    initPolicy = PolicyFromString(pulled.GetValueOrDefault("policy"));
-                    initSpecifiedType = pulled.GetValueOrDefault("specifiedType") ?? "group";
-                    initSpecifiedName = pulled.GetValueOrDefault("specifiedName") ?? "";
-                    if (int.TryParse(pulled.GetValueOrDefault("specifiedPriority"),
-                            System.Globalization.NumberStyles.Integer,
-                            System.Globalization.CultureInfo.InvariantCulture, out var pulledPriority))
-                        initSpecifiedPriority = pulledPriority;
+                    completionStartSupported = pulled.GetValueOrDefault("completionStartVersion") == CompletionTargetCatalogService.Version;
+                    initialCompletion = new TaskConflictPolicySettings
+                    {
+                        Policy = PolicyFromString(pulled.GetValueOrDefault("policy")),
+                        SpecifiedTaskType = pulled.GetValueOrDefault("specifiedType") ?? "group",
+                        SpecifiedTaskName = pulled.GetValueOrDefault("specifiedName") ?? "",
+                        SpecifiedTaskPriority = int.TryParse(pulled.GetValueOrDefault("specifiedPriority"),
+                            System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture,
+                            out var pulledPriority) ? pulledPriority : 0,
+                        SpecifiedStartMode = pulled.GetValueOrDefault("specifiedStartMode") ?? "default",
+                        SpecifiedStartTaskId = pulled.GetValueOrDefault("specifiedStartTaskId") ?? "",
+                        SpecifiedStartTaskName = pulled.GetValueOrDefault("specifiedStartTaskName") ?? "",
+                        SpecifiedConfigRevision = pulled.GetValueOrDefault("specifiedConfigRevision") ?? "",
+                        SpecifiedWorkflowId = pulled.GetValueOrDefault("specifiedWorkflowId") ?? ""
+                    };
                 }
                 else
                 {
                     policyPullFailed = true;
-                    AddLog($"拉取 {policyPullDesc} 的策略配置超时/失败，弹窗显示默认值；保存将覆盖对方配置");
+                    AddLog($"拉取 {policyPullDesc} 的策略配置超时/失败，完成后动作暂不能保存");
                 }
             }
             else
             {
                 policyPullFailed = true;
-                AddLog($"{policyPullDesc} 不在线或连接不可用，「完成后动作」显示默认值；保存将覆盖对方配置");
+                AddLog($"{policyPullDesc} 不在线或连接不可用，「完成后动作」暂不能保存");
             }
         }
+
+        if (policyPullFailed) completionStartSupported = false;
 
         // 构建可排序的深色主题绑定弹窗
         // 使用与主窗口一致的深色原神主题风格
@@ -4135,13 +4159,23 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
         var completionPanel = new CompletionActionPanel(
-            initPolicy, initSpecifiedType, initSpecifiedName, initSpecifiedPriority, allGroups, allOneClicks,
+            initialCompletion, allGroups, allOneClicks,
             isSelf
                 ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
-                : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。");
+                : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。",
+            async (type, name, workflowId) =>
+            {
+                if (policyPullUid == null)
+                    return await GetCompletionTargetCatalogService().LoadAsync(type, name, workflowId);
+                var data = await GetTaskPolicySync().PullAsync(policyPullUid, type, name, workflowId);
+                if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
+                    return new CompletionTargetCatalog([], null, "执行端未确认执行起点协议，请更新并重新打开绑定。");
+                var json = data.GetValueOrDefault("catalog");
+                return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CompletionTargetCatalog>(json);
+            }, completionStartSupported, () => NewDarkCombo());
         scrollContent.Children.Add(completionPanel.Root);
 
-        // 拉取失败警告：说明下方「完成后动作」不是对方真实值，保存会覆盖；需显式确认才允许提交
+        // 未确认执行端当前配置时只提示重读，不提供默认值覆盖入口。
         var policyWarnBox = new System.Windows.Controls.Border
         {
             CornerRadius = new System.Windows.CornerRadius(6),
@@ -4155,20 +4189,11 @@ public partial class MainViewModel : INotifyPropertyChanged
         var policyWarnPanel = new System.Windows.Controls.StackPanel();
         policyWarnPanel.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Text = $"⚠ 未取到 {targetMember?.PlayerName ?? "对方"} 当前的「完成后动作」配置，下方显示的是默认值而非对方实际设置。",
+            Text = $"未取到 {policyPullDesc} 当前的「完成后动作」配置。请确认执行端在线并重新打开绑定，再保存完成后动作。",
             FontSize = 11,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xB0, 0x8A)),
             TextWrapping = System.Windows.TextWrapping.Wrap
         });
-        var policyWarnCheck = new System.Windows.Controls.CheckBox
-        {
-            Content = "我已确认要用当前显示的动作覆盖对方的配置",
-            FontSize = 11,
-            Margin = new System.Windows.Thickness(0, 6, 0, 0),
-            Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
-            Cursor = System.Windows.Input.Cursors.Hand
-        };
-        policyWarnPanel.Children.Add(policyWarnCheck);
         policyWarnBox.Child = policyWarnPanel;
         scrollContent.Children.Add(policyWarnBox);
 
@@ -4308,127 +4333,79 @@ public partial class MainViewModel : INotifyPropertyChanged
                     "是否强制保存？\n「是」= 强制保存　「否」= 返回修改",
                     "绑定结构不一致", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
                 if (force != MessageBoxResult.Yes) return;
-                AddLog($"已强制保存结构不一致的绑定（{targetMember?.PlayerName ?? _config?.PlayerName ?? "本机"}：{OnlineHoeingBindingValidator.DescribeLayout(bindingValidation.Types)}）；所有成员结构统一前无法开始联机锄地");
+                AddLog($"已选择继续保存结构不一致的绑定（{targetMember?.PlayerName ?? _config?.PlayerName ?? "本机"}：{OnlineHoeingBindingValidator.DescribeLayout(bindingValidation.Types)}）；所有成员结构统一前无法开始联机锄地");
             }
 
-            // 「完成后动作」取值（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）
-            var completionPolicy = completionPanel.Policy;
-            var completionType = completionPanel.SpecifiedType;
-            var completionName = completionPanel.SpecifiedName;
-            var completionPriority = initSpecifiedPriority;
-            if (completionPolicy == TaskConflictPolicy.RunSpecified && string.IsNullOrEmpty(completionName))
+            if (!completionPanel.TryGetChanges(out var completion, out var completionError))
             {
-                MessageBox.Show("已选择「执行动作 → 执行指定任务」，但未填写指定任务名称。\n请填写或改选其他完成后动作。",
-                    "提示", MessageBoxButton.OK, MessageBoxImage.Information);
-                return; // 不关闭弹窗，让用户补填
+                MessageBox.Show(completionError, "完成后动作无法保存", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
-            var priorityTextValid = int.TryParse(completionPanel.SpecifiedPriorityText,
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture, out var parsedCompletionPriority);
-            if (priorityTextValid) completionPriority = parsedCompletionPriority;
-            if (completionPolicy == TaskConflictPolicy.RunSpecified && !priorityTextValid)
+            if (completion is { Policy: TaskConflictPolicy.RunSpecified } && policyPullUid == null)
             {
-                MessageBox.Show("指定任务优先级必须是 32 位整数。数值越大，优先级越高。",
-                    "优先级格式错误", MessageBoxButton.OK, MessageBoxImage.Information);
-                return; // 不关闭弹窗，让用户修正
+                completionError = await GetCompletionTargetCatalogService().ValidateAsync(completion);
+                if (completionError != null)
+                {
+                    MessageBox.Show(completionError, "完成后动作无法保存", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
             }
-            var completionDesc = completionPolicy switch
-            {
-                TaskConflictPolicy.Stop => "执行动作-停止",
-                TaskConflictPolicy.RunSpecified => $"执行动作-执行指定任务（{(completionType == "onedragon" ? "一条龙" : "配置组")}「{completionName}」）",
-                _ => "恢复任务"
-            };
-
-            // 拉取失败时「完成后动作」显示的是默认值而非对方实际配置，直接保存会静默覆盖对方设置。
-            // 要求用户勾选确认才允许提交（名单部分不受影响，可正常保存）。
-            if (policyPullFailed && !isSelf && policyWarnCheck.IsChecked == true)
-            {
-                AddLog($"已确认以默认值覆盖 {targetMember?.PlayerName ?? "对方"} 的「完成后动作」配置");
-            }
-            else if (policyPullFailed && !isSelf && policyWarnCheck.IsChecked != true)
-            {
-                var keep = MessageBox.Show(
-                    $"未能读取 {targetMember?.PlayerName ?? "对方"} 当前的「完成后动作」配置，弹窗中显示的是默认值。\n\n" +
-                    $"若继续保存，对方原有的「完成后动作」设置将被当前的「{completionDesc}」覆盖（无法自动还原）。\n\n" +
-                    "是否仍要继续保存？（建议先确认对方在线后重新打开本弹窗）",
-                    "确认覆盖对方配置", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                if (keep != MessageBoxResult.Yes) return; // 不关闭弹窗，让用户重新选择
-            }
+            var completionDesc = completion == null ? null : CoordinatedCompletionAction.FromSettings(completion).Description;
 
             if (names.Count > 0)
             {
-                if (isSelf)
+                try
                 {
-                    if (_config?.ObserverMode == true)
+                    if (isSelf && _config?.ObserverMode != true)
                     {
-                        // 遥控器模式：通过 SignalR 下发命令给同 UID 的执行端
-                        if (_signalRClient != null)
-                        {
-                            var cmd = new RemoteCommand
-                            {
-                                Cmd = "bind_hoeing_group",
-                                Sender = _config?.PlayerName ?? "",
-                                SenderUid = _config?.PlayerUid ?? "",
-                                Target = [_config.PlayerUid],
-                                CommandId = "local_" + DateTime.Now.Ticks,
-                                Params = new Dictionary<string, object>
-                                {
-                                    { "groupNames", names },
-                                    { "groupTypes", types },
-                                    { "groupIndex", 0 }
-                                }
-                            };
-                            AddLog($"遥控器模式: 向执行端下发绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
-                            await _signalRClient.SendRemoteCommandAsync(cmd);
-                        }
+                        SaveOnlineHoeingBindings(names, types);
+                        AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
+                        _ = ReportStatusAsync();
                     }
                     else
                     {
-                        // 改自己：直接保存到本机配置
-                        _config.OnlineHoeingGroupNames = names;
-                        _config.OnlineHoeingGroupTypes = types;
-                        _config.OnlineHoeingGroupIndex = 0;
-                        _configManager?.Save(_config);
-                        AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
-                        // 立即上报给服务端，让所有人可见
-                        _ = ReportStatusAsync();
+                        var bindUid = isSelf ? _config?.PlayerUid : targetMember?.PlayerUid;
+                        if (string.IsNullOrEmpty(bindUid) || _signalRClient is not { IsConnected: true })
+                            throw new InvalidOperationException("SignalR 未连接或目标不可用，绑定名单未发送。");
+                        await _signalRClient.SendRemoteCommandAsync(new RemoteCommand
+                        {
+                            Cmd = "bind_hoeing_group",
+                            Sender = _config?.PlayerName ?? "",
+                            SenderUid = _config?.PlayerUid ?? "",
+                            Target = [bindUid],
+                            CommandId = "local_" + DateTime.Now.Ticks,
+                            Params = new Dictionary<string, object>
+                            {
+                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 }
+                            }
+                        });
+                        AddLog($"已发送绑定联机锄地配置组（尚未确认执行端保存）: {string.Join(" → ", names)}");
                     }
                 }
-                else if (targetMember != null && _signalRClient != null)
+                catch (Exception ex)
                 {
-                    // 改别人：通过 SignalR 下发命令，让对方保存到本机配置
-                    var cmd = new RemoteCommand
-                    {
-                        Cmd = "bind_hoeing_group",
-                        Sender = _config?.PlayerName ?? "",
-                        SenderUid = _config?.PlayerUid ?? "",
-                        Target = [targetMember.PlayerUid],
-                        CommandId = "local_" + DateTime.Now.Ticks,
-                        Params = new Dictionary<string, object>
-                        {
-                            { "groupNames", names },
-                            { "groupTypes", types },
-                            { "groupIndex", 0 }
-                        }
-                    };
-                    AddLog($"向 {targetMember.PlayerName} 下发绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
-                    await _signalRClient.SendRemoteCommandAsync(cmd);
+                    MessageBox.Show(ex.Message, "绑定名单未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
             }
 
-            // 「完成后动作」持久化/回传（与配置组名单解耦：不改名单只改动作也能保存）
-            if (isSelf && _config?.ObserverMode != true)
+            // 未编辑或旧端不可编辑时只保存名单，不发送完成动作、不宣称完成动作已保存。
+            if (completion == null)
             {
-                // 改自己（执行模式）：落到本机 AssistConfig 并保存，重启保留
-                if (_config != null)
+                AddLog("完成后动作未修改，保留原设置。");
+            }
+            else if (isSelf && _config?.ObserverMode != true)
+            {
+                try
                 {
-                    _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
-                    _config.OnlineHoeingSpecifiedTaskType = completionType;
-                    _config.OnlineHoeingSpecifiedTaskName = completionName;
-                    _config.OnlineHoeingSpecifiedTaskPriority = completionPriority;
-                    _configManager?.Save(_config);
+                    SaveOnlineHoeingPolicy(completion);
                     AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
                     _ = ReportStatusAsync();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "完成后动作未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
                 }
             }
             else
@@ -4439,13 +4416,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (!string.IsNullOrEmpty(pushUid) && _signalRClient is { IsConnected: true })
                 {
                     AddLog($"正在向 {pushName} 回传上线锄地「完成后动作」: {completionDesc}");
-                    var pushResult = await GetTaskPolicySync().PushAsync(pushUid, new Dictionary<string, object>
-                    {
-                        ["policy"] = PolicyToString(completionPolicy),
-                        ["specifiedType"] = completionType,
-                        ["specifiedName"] = completionName,
-                        ["specifiedPriority"] = completionPriority.ToString(System.Globalization.CultureInfo.InvariantCulture)
-                    });
+                    var pushResult = await GetTaskPolicySync().PushAsync(pushUid, CompletionPolicyFields.Parameters(completion));
                     AddLog(pushResult switch
                     {
                         null => $"回传 {pushName} 的「完成后动作」超时（对方可能已离线），修改可能未生效",
@@ -4456,18 +4427,23 @@ public partial class MainViewModel : INotifyPropertyChanged
                     // 本机副本驱动设置页展示与执行端离线时的兜底显示，不镜像则永远停留旧值
                     // （与 OnSetScheduledOnlineTime 的本地镜像模式同款）。push 失败不镜像：
                     // 本机副本不得比执行端权威值"更新"。弹窗初始值已在打开时实拉执行端，不依赖本镜像。
-                    if (isSelf && _config?.ObserverMode == true && pushResult is { ok: true })
+                    if (pushResult is not { ok: true }) return;
+                    if (isSelf && _config?.ObserverMode == true)
                     {
-                        _config.OnlineHoeingCompletionPolicy = PolicyToString(completionPolicy);
-                        _config.OnlineHoeingSpecifiedTaskType = completionType;
-                        _config.OnlineHoeingSpecifiedTaskName = completionName;
-                        _config.OnlineHoeingSpecifiedTaskPriority = completionPriority;
-                        _configManager?.Save(_config);
+                        try { SaveOnlineHoeingPolicy(completion); }
+                        catch (Exception ex)
+                        {
+                            AddLog("执行端已保存，但本机镜像未确认：" + ex.Message);
+                            MessageBox.Show("执行端已保存，但本机镜像未确认：" + ex.Message,
+                                "本机镜像未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            return;
+                        }
                     }
                 }
                 else
                 {
                     AddLog("SignalR 未连接或目标不可用，「完成后动作」未回传");
+                    return;
                 }
             }
             window.Close();
@@ -4557,191 +4533,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             combo.ItemContainerStyle = itemStyle;
         if (width > 0) combo.Width = width;
         return combo;
-    }
-
-    /// <summary>
-    /// 「完成后动作」两层选项 UI 块（上线锄地绑定弹窗用，代码构建深色风格）：
-    /// 第一层「恢复任务（默认）｜执行动作」；选「执行动作」展开第二层「停止｜执行指定任务」；
-    /// 指定任务 = 类型（配置组/一条龙）+ 名称（候选来自对应范围的配置清单，可手动输入；执行时校验存在性）。
-    /// 映射：恢复任务=Resume、执行动作+停止=Stop、执行动作+执行指定任务=RunSpecified。
-    /// </summary>
-    private sealed class CompletionActionPanel
-    {
-        private readonly ComboBox _layer1Combo;    // 0=恢复任务 1=执行动作
-        private readonly ComboBox _layer2Combo;    // 0=停止 1=执行指定任务
-        private readonly ComboBox _typeCombo;      // 0=配置组 1=一条龙
-        private readonly ComboBox _nameCombo;      // IsEditable，候选随类型切换
-        private readonly TextBox _specifiedPriorityBox;
-        private readonly StackPanel _layer2Panel;
-        private readonly StackPanel _specifiedPanel;
-        private readonly StackPanel _root;
-        private readonly List<string> _groups;
-        private readonly List<string> _oneClicks;
-        private bool _initializing = true;
-
-        public UIElement Root => _root;
-
-        public CompletionActionPanel(TaskConflictPolicy policy, string specifiedType, string specifiedName, int specifiedPriority,
-            List<string> groups, List<string> oneClicks, string description)
-        {
-            _groups = groups;
-            _oneClicks = oneClicks;
-            var gold = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D));
-            var dim = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0));
-
-            _root = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-            var border = new Border
-            {
-                CornerRadius = new CornerRadius(8),
-                BorderThickness = new Thickness(1),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0xD4, 0xAF, 0x37)),
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xCC, 0x26, 0x23, 0x4E)),
-                Padding = new Thickness(10, 8, 10, 10)
-            };
-            _root.Children.Add(border);
-            var inner = new StackPanel();
-            border.Child = inner;
-
-            inner.Children.Add(new TextBlock
-            {
-                Text = "完成后动作",
-                FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = gold
-            });
-            inner.Children.Add(new TextBlock
-            {
-                Text = description,
-                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 8)
-            });
-
-            // 第一层：恢复任务（默认）｜执行动作
-            _layer1Combo = NewDarkCombo();
-            _layer1Combo.Items.Add("恢复任务");
-            _layer1Combo.Items.Add("执行动作");
-            inner.Children.Add(_layer1Combo);
-
-            // 第二层（选「执行动作」时显示）：停止｜执行指定任务
-            _layer2Panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            _layer2Combo = NewDarkCombo();
-            _layer2Combo.Items.Add("停止");
-            _layer2Combo.Items.Add("执行指定任务");
-            _layer2Panel.Children.Add(_layer2Combo);
-
-            // 指定任务行（选「执行指定任务」时显示）：类型 + 名称（可手动输入）
-            _specifiedPanel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            var specifiedRow = new Grid();
-            specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            specifiedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            _typeCombo = NewDarkCombo(96);
-            _typeCombo.Margin = new Thickness(0, 0, 8, 0);
-            _typeCombo.Items.Add("配置组");
-            _typeCombo.Items.Add("一条龙");
-            Grid.SetColumn(_typeCombo, 0);
-            specifiedRow.Children.Add(_typeCombo);
-            _nameCombo = NewDarkCombo();
-            _nameCombo.IsEditable = true; // BGI 未启动时允许手动输入；执行时校验存在性，不存在退化为停止
-            Grid.SetColumn(_nameCombo, 1);
-            specifiedRow.Children.Add(_nameCombo);
-            _specifiedPanel.Children.Add(specifiedRow);
-            _specifiedPanel.Children.Add(new TextBlock
-            {
-                Text = "候选来自该成员的 BGI 配置清单；未获取到时可直接手动输入。执行时校验存在性，不存在退化为停止并打日志。",
-                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 4, 0, 0)
-            });
-            var priorityRow = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-            priorityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            priorityRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            priorityRow.Children.Add(new TextBlock
-            {
-                Text = "任务优先级",
-                FontSize = 11,
-                Foreground = gold,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0)
-            });
-            _specifiedPriorityBox = new TextBox
-            {
-                Text = specifiedPriority.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                MinWidth = 96,
-                Padding = new Thickness(6, 3, 6, 3),
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x1F, 0x1D, 0x3A)),
-                Foreground = System.Windows.Media.Brushes.White,
-                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x56, 0x50, 0x78))
-            };
-            Grid.SetColumn(_specifiedPriorityBox, 1);
-            priorityRow.Children.Add(_specifiedPriorityBox);
-            _specifiedPanel.Children.Add(priorityRow);
-            _specifiedPanel.Children.Add(new TextBlock
-            {
-                Text = "32 位整数；数值越大越优先，默认 0。",
-                FontSize = 10, Foreground = dim, TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 3, 0, 0)
-            });
-            _layer2Panel.Children.Add(_specifiedPanel);
-            inner.Children.Add(_layer2Panel);
-
-            // 初始值
-            _layer1Combo.SelectedIndex = policy == TaskConflictPolicy.Resume ? 0 : 1;
-            _layer2Combo.SelectedIndex = policy == TaskConflictPolicy.RunSpecified ? 1 : 0;
-            _typeCombo.SelectedIndex = specifiedType == "onedragon" ? 1 : 0;
-            RefreshNameCandidates();
-            _nameCombo.Text = specifiedName;
-            _layer2Panel.Visibility = _layer1Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-            _specifiedPanel.Visibility = _layer2Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-
-            _layer1Combo.SelectionChanged += (_, _) =>
-            {
-                if (_initializing) return;
-                _layer2Panel.Visibility = _layer1Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-            };
-            _layer2Combo.SelectionChanged += (_, _) =>
-            {
-                if (_initializing) return;
-                _specifiedPanel.Visibility = _layer2Combo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-            };
-            _typeCombo.SelectionChanged += (_, _) =>
-            {
-                if (_initializing) return;
-                // 注意 SelectedIndex 已是新值：旧类型候选取反。旧名称若是从候选里选的（在旧候选中），
-                // 切换类型后必须刷新，否则"类型=一条龙 + 名称=配置组A"错配会被随手保存（实机反馈 2026-09-13）；
-                // 旧名称不在旧候选中 = 用户手动输入的自定义名，跨类型保留由用户决定。
-                var oldCandidates = _typeCombo.SelectedIndex == 1 ? _groups : _oneClicks;
-                var current = _nameCombo.Text;
-                RefreshNameCandidates();
-                if (string.IsNullOrWhiteSpace(current) || oldCandidates.Contains(current))
-                {
-                    _nameCombo.Text = _nameCombo.Items.Count > 0 ? _nameCombo.Items[0] as string ?? "" : "";
-                }
-                else
-                {
-                    _nameCombo.Text = current;
-                }
-            };
-            _initializing = false;
-        }
-
-        private void RefreshNameCandidates()
-        {
-            var candidates = _typeCombo.SelectedIndex == 1 ? _oneClicks : _groups;
-            _nameCombo.Items.Clear();
-            foreach (var name in candidates)
-                _nameCombo.Items.Add(name);
-        }
-
-        /// <summary>当前选择的策略（恢复任务=Resume / 执行动作+停止=Stop / 执行动作+执行指定任务=RunSpecified）。</summary>
-        public TaskConflictPolicy Policy => _layer1Combo.SelectedIndex != 1
-            ? TaskConflictPolicy.Resume
-            : _layer2Combo.SelectedIndex == 1 ? TaskConflictPolicy.RunSpecified : TaskConflictPolicy.Stop;
-
-        /// <summary>指定任务类型："group"=配置组，"onedragon"=一条龙。</summary>
-        public string SpecifiedType => _typeCombo.SelectedIndex == 1 ? "onedragon" : "group";
-
-        /// <summary>指定任务名称（手动输入或候选选择）。</summary>
-        public string SpecifiedName => _nameCombo.Text.Trim();
-
-        /// <summary>指定任务优先级原文；调用方按 int32 严格校验后持久化。</summary>
-        public string SpecifiedPriorityText => _specifiedPriorityBox.Text.Trim();
     }
 
     /// <summary>完全退出助手软件（先弹确认框）。</summary>
@@ -6555,13 +6346,41 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>[任务策略] 上线锄地完成后动作快照（持久化字段 → 不可变快照，传给 CommandExecutor 收尾用；
     /// 批次末尾与 10s resume 定时器两处共用）。</summary>
-    private TaskConflictPolicySettings SnapshotOnlineHoeingPolicy() => new()
+    private TaskConflictPolicySettings SnapshotOnlineHoeingPolicy() => CompletionPolicyFields.Snapshot(_config);
+
+    private void SaveOnlineHoeingBindings(List<string> names, List<string> types)
     {
-        Policy = PolicyFromString(_config?.OnlineHoeingCompletionPolicy),
-        SpecifiedTaskType = _config?.OnlineHoeingSpecifiedTaskType ?? "group",
-        SpecifiedTaskName = _config?.OnlineHoeingSpecifiedTaskName ?? "",
-        SpecifiedTaskPriority = _config?.OnlineHoeingSpecifiedTaskPriority ?? 0
-    };
+        if (_configManager == null || _config == null) throw new InvalidOperationException("本机配置存储未就绪。");
+        var candidate = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(_config))
+            ?? throw new InvalidDataException("无法创建绑定配置副本。");
+        candidate.OnlineHoeingGroupNames = names.ToList();
+        candidate.OnlineHoeingGroupTypes = types.ToList();
+        candidate.OnlineHoeingGroupIndex = 0;
+        _configManager.Save(candidate);
+        var saved = JsonSerializer.Deserialize<AssistConfig>(_configManager.ReadRawJson(),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        if (saved == null || !names.SequenceEqual(saved.OnlineHoeingGroupNames ?? [])
+            || !types.SequenceEqual(saved.OnlineHoeingGroupTypes ?? []) || saved.OnlineHoeingGroupIndex != 0)
+            throw new IOException("绑定名单写入结果未确认，请重新读取核对。");
+        _config.OnlineHoeingGroupNames = names.ToList();
+        _config.OnlineHoeingGroupTypes = types.ToList();
+        _config.OnlineHoeingGroupIndex = 0;
+    }
+
+    private void SaveOnlineHoeingPolicy(TaskConflictPolicySettings settings)
+    {
+        if (_configManager == null || _config == null) throw new InvalidOperationException("本机配置存储未就绪。");
+        CompletionPolicyFields.SaveChecked(_configManager, _config, settings);
+    }
+
+    /// <summary>目录初始化只读保存的计划；不经 TaskCenterHost getter 的旧配置迁移路径。</summary>
+    private CompletionTargetCatalogService GetCompletionTargetCatalogService()
+    {
+        var store = new WorkflowStore(WorkflowStore.DefaultFlowsDir());
+        var client = GetBoundTaskCenterClient();
+        return new CompletionTargetCatalogService(store.List, store.LoadSnapshot,
+            client == null ? null : new BgiExternalCatalogTransport(client, AddLog));
+    }
 
     /// <summary>任务策略远程互改通道（惰性构造，与 RemoteConfigEditService 同模式）。</summary>
     private TaskPolicySyncService GetTaskPolicySync()

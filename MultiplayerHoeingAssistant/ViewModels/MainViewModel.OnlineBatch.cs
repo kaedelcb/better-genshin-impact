@@ -221,7 +221,7 @@ public partial class MainViewModel
 
     private async Task ApplyCoordinatedPolicyTeardownAsync(OnlineHoeingBatch batch, string description, string? ticket)
     {
-        if (batch.StateContinuationEnabled)
+        if (batch.StateContinuationEnabled || batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" })
         {
             await ApplyStateContinuationPolicyTeardownAsync(batch, description, ticket);
             return;
@@ -232,7 +232,9 @@ public partial class MainViewModel
         var runId = host?.OnlineHoeingManagedRun(batch.Generation);
         var token = batch.Cts.Token;
         var policy = batch.Policy ?? SnapshotOnlineHoeingPolicy();
-        batch.ConfigurePolicyCancellation(executor.CancelHoeingPolicyExecutionAsync);
+        batch.ConfigurePolicyCancellation(execution => execution.WorkflowRunId is not null
+            ? host?.CancelCompletionWorkflowAsync(execution) ?? Task.FromResult(false)
+            : executor.CancelHoeingPolicyExecutionAsync(execution));
         batch.ConfigurePolicyCleanup(async () =>
         {
             await FinishCancelledCoordinatedPolicyAsync(batch, executor, host, runId);
@@ -608,7 +610,9 @@ public partial class MainViewModel
                     preparation.SendGateClosed = true;
                 }
                 if (preparation.Executor is { } restoredExecutor)
-                    batch.ConfigurePolicyCancellation(restoredExecutor.CancelHoeingPolicyExecutionAsync);
+                    batch.ConfigurePolicyCancellation(execution => execution.WorkflowRunId is not null
+                        ? preparation.Host?.CancelCompletionWorkflowAsync(execution) ?? Task.FromResult(false)
+                        : restoredExecutor.CancelHoeingPolicyExecutionAsync(execution));
             }
             await RunCoordinatedBatchAsync(batch,
                 ct => PrepareCoordinatedStartAsync(batch, preparation, ct),
@@ -725,7 +729,7 @@ public partial class MainViewModel
                 throw new OperationCanceledException("本批收尾权限已被本机停止或重置撤销");
         if (!batch.LocalCompletionReady || batch.PriorityRecoveryEnabled && !batch.CoordinatedSucceeded)
             throw new InvalidOperationException("全队锄地尚未完成，不提前执行绑定后续");
-        if (batch.StateContinuationEnabled)
+        if (batch.StateContinuationEnabled || batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" })
         {
             await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", false, batch.TakeoverTicket);
             ct.ThrowIfCancellationRequested();
@@ -795,13 +799,24 @@ public partial class MainViewModel
             if (batch.PolicyExecution is { } policyExecution)
             {
                 // A known policy successor is observed by its own identity; cleanup never stops it.
-                if (!policyExecution.RegisteredJob || _externalClient is not { State: BgiExternalLinkState.Ready } ext
-                    || !CoordinatedBatchLoop.SameEpoch(policyExecution.Epoch, ext.ServerEpoch)) return false;
-                var (_, job) = await ext.QueryJobStatusAsync(policyExecution.JobId, ct);
-                if (job is null || !Guid.TryParse(job.JobId, out var observedJob)
-                    || !Guid.TryParse(policyExecution.JobId, out var expectedJob) || observedJob != expectedJob
-                    || !CoordinatedBatchLoop.SameEpoch(job.Epoch, policyExecution.Epoch) || !job.ExecutionExitConfirmed
-                    || !BgiJobTerminalPolling.IsTerminal(job.State)) return false;
+                if (policyExecution.WorkflowRunId is { } successorRun)
+                {
+                    TaskCenterHost? successorHost;
+                    lock (_taskCenterHostGate) successorHost = _taskCenterHost;
+                    var saved = successorHost?.Runs.Load(successorRun);
+                    if (saved is null || !TaskCenterHost.CompletionWorkflowStatus(saved, batch.PolicyRequestKey).ExecutionExitConfirmed)
+                        return false;
+                }
+                else
+                {
+                    if (!policyExecution.RegisteredJob || _externalClient is not { State: BgiExternalLinkState.Ready } ext
+                        || !CoordinatedBatchLoop.SameEpoch(policyExecution.Epoch, ext.ServerEpoch)) return false;
+                    var (_, job) = await ext.QueryJobStatusAsync(policyExecution.JobId, ct);
+                    if (job is null || !Guid.TryParse(job.JobId, out var observedJob)
+                        || !Guid.TryParse(policyExecution.JobId, out var expectedJob) || observedJob != expectedJob
+                        || !CoordinatedBatchLoop.SameEpoch(job.Epoch, policyExecution.Epoch) || !job.ExecutionExitConfirmed
+                        || !BgiJobTerminalPolling.IsTerminal(job.State)) return false;
+                }
             }
             if (batch.TakeoverTicket is { } oldTicket && executor.TakeoverTicketSnapshot == oldTicket)
             {
@@ -963,6 +978,13 @@ public partial class MainViewModel
                     ?? throw new IOException("原 BGI 停止状态暂不可读，保留同一准备请求");
                 if (batch.PriorityRecoveryEnabled) batch.ExecutionEpoch ??= originalEpoch;
             }
+        }
+        if (batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" }
+            && batch.StateContinuationStopVersion is null)
+        {
+            var originalEpoch = ext.ServerEpoch ?? throw new IOException("计划表完成动作缺少原 BGI 身份");
+            batch.StateContinuationStopVersion = await ext.ReadStateContinuationStopVersionAsync(originalEpoch, ct)
+                ?? throw new IOException("计划表完成动作缺少原批次停止基线，未接管当前执行");
         }
         if (batch.PriorityRecoveryEnabled)
             await ext.EnsureCoordinatedRecoveryStopAsync(batch, ct);

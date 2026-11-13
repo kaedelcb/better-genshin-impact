@@ -44,8 +44,10 @@ public static partial class ConfigTransferResources
                     if (map.TryGetValue(Text(names[i]), out var renamed)) { names[i] = renamed; changed = true; }
                 }
             }
-            var specifiedMap = Text(Get(obj, "onlineHoeingSpecifiedTaskType")) == "onedragon" ? dragons : groups;
-            if (specifiedMap.TryGetValue(Text(Get(obj, "onlineHoeingSpecifiedTaskName")), out var specified))
+            var specifiedType = Text(Get(obj, "onlineHoeingSpecifiedTaskType"));
+            var specifiedMap = specifiedType == "onedragon" ? dragons : groups;
+            if (specifiedType is "group" or "onedragon"
+                && specifiedMap.TryGetValue(Text(Get(obj, "onlineHoeingSpecifiedTaskName")), out var specified))
             { Set(obj, "onlineHoeingSpecifiedTaskName", specified); changed = true; }
             var startupMap = kind == "startOneClick" ? dragons : groups;
             if (kind is "startGroup" or "startOneClick" && startupMap.TryGetValue(Text(Get(obj, "taskName")), out var startupName))

@@ -1,6 +1,33 @@
 namespace BgiCoordinatorServer.Services;
 
-public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority);
+public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority,
+    string StartMode = "default", string StartTaskId = "", string StartTaskName = "",
+    string ConfigRevision = "", string WorkflowId = "")
+{
+    // 只验证传输合同；目标目录、节点启用状态和修订仍须由该成员本地执行端核对。
+    public bool IsValid()
+    {
+        if (Policy is not ("resume" or "stop" or "runSpecified")
+            || TaskType is not ("group" or "onedragon" or "workflow")
+            || TaskName is null || TaskName.Length > 1024
+            || StartMode is not ("default" or "beginning" or "node")
+            || StartTaskId is null || StartTaskId.Length > 1024
+            || StartTaskName is null || StartTaskName.Length > 1024
+            || ConfigRevision is null || ConfigRevision.Length > 1024
+            || WorkflowId is null || WorkflowId.Length > 1024) return false;
+        if (Policy != "runSpecified") return true;
+        if (string.IsNullOrWhiteSpace(TaskName)) return false;
+        if (TaskType == "workflow" ? string.IsNullOrWhiteSpace(WorkflowId) : WorkflowId.Length > 0) return false;
+        return StartMode switch
+        {
+            "default" => TaskType != "workflow" && StartTaskId.Length == 0 && StartTaskName.Length == 0 && ConfigRevision.Length == 0,
+            "beginning" => !string.IsNullOrWhiteSpace(ConfigRevision) && StartTaskId.Length == 0 && StartTaskName.Length == 0,
+            "node" => !string.IsNullOrWhiteSpace(ConfigRevision) && !string.IsNullOrWhiteSpace(StartTaskId)
+                && !string.IsNullOrWhiteSpace(StartTaskName),
+            _ => false
+        };
+    }
+}
 
 public sealed record CoordinatedBatchBinding(string Name, string Type);
 public sealed record CoordinatedBatchMemberSnapshot(string Uid, string Stage, string Reason)
