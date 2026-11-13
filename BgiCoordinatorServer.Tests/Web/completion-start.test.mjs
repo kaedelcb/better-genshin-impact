@@ -35,7 +35,7 @@ function wire(a) {
         specifiedStartTaskName: a.startTaskName, specifiedConfigRevision: a.configRevision, specifiedWorkflowId: a.workflowId };
 }
 function harness({ initial = action(), initialData, operation, catalogTransform } = {}) {
-    const elements = new Map(), calls = [], remote = [], logs = [], timers = new Map();
+    const elements = new Map(), calls = [], remote = [], logs = [], timers = new Map(), delays = [];
     const selects = new Set(['completionPolicy', 'completionTaskType', 'completionTask', 'completionStartMode', 'completionStartTask']);
     let stored = initialData ? copy(initialData) : wire(initial), nextId = 0;
     const element = id => {
@@ -67,7 +67,7 @@ function harness({ initial = action(), initialData, operation, catalogTransform 
         window: { addEventListener() {}, CSS: { supports: () => true } },
         localStorage: { getItem: () => null }, crypto: { randomUUID: () => 'test-' + ++nextId },
         Option: function(text, value) { this.text = text; this.value = value; this.disabled = false; },
-        setTimeout(fn) { const id = ++nextId; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
+        setTimeout(fn, delay) { const id = ++nextId; timers.set(id, fn); delays.push(delay); return id; }, clearTimeout(id) { timers.delete(id); },
         __members: [member, { ...copy(member), playerUid: 'u1' }], __logs: logs,
         __sendRemote: async cmd => { remote.push(copy(cmd)); }
     });
@@ -84,6 +84,10 @@ function harness({ initial = action(), initialData, operation, catalogTransform 
         const type = params.catalogType ?? stored.specifiedType, nameOfTarget = params.catalogName ?? stored.specifiedName;
         const id = params.catalogWorkflowId ?? stored.specifiedWorkflowId ?? '';
         let catalog = { workflows: copy(flows), target: nameOfTarget ? target(type, nameOfTarget, id) : null, error: null };
+        if (params.ensureBgiReady === 'true') {
+            catalog.configGroups = [names.group, '配置 B']; catalog.oneClickConfigs = [names.onedragon];
+            if (!nameOfTarget) catalog.error = '请选择执行目标。';
+        }
         if (catalogTransform) catalog = catalogTransform(catalog, params);
         return { status: 'success', message: '已读取', data: { ...copy(stored), ok: 'true', catalog: JSON.stringify(catalog) } };
     };
@@ -93,7 +97,7 @@ function harness({ initial = action(), initialData, operation, catalogTransform 
     };
     evaluate('sendMemberOperation = __operation');
     return {
-        calls, remote, logs, timers, member, context, evaluate, element,
+        calls, remote, logs, timers, delays, member, context, evaluate, element,
         mount() { return evaluate('initializeCompletionPolicyEditor("u0", document.getElementById("completionSettings"))'); },
         change(id, value) { const el = element(id); el.value = value; return Promise.resolve(el.onchange?.()); },
         click(id) { const el = element(id); return el.disabled ? Promise.resolve() : Promise.resolve(el.onclick?.()); },
@@ -305,6 +309,195 @@ for (const failure of ['version', 'fields', 'node']) {
         h.reply(reply); assert.equal((await pending).status, 'unknown'); assert.equal(h.timers.size, 0);
     });
 }
+
+for (const type of ['group', 'onedragon', 'workflow']) {
+    test(type + ' refresh alone requests readiness when needed and preserves unsaved node and priority edits', async () => {
+        const h = harness({ initial: action(type, 'node') }); await h.mount();
+        h.element('completionPriority').value = '41';
+        await h.click('refreshCompletionCatalog');
+        const request = h.calls.at(-1);
+        assert.equal(request.uid, 'u0'); assert.equal(request.name, 'task_policy.pull');
+        assert.equal(request.params.ensureBgiReady, type === 'workflow' ? undefined : 'true');
+        assert.equal(h.element('completionTask').value, key(type, names[type], type === 'workflow' ? 'flow-1' : ''));
+        assert.equal(h.element('completionStartMode').value, 'node');
+        assert.equal(h.element('completionStartTask').value, target(type).nodes[1].taskId);
+        assert.equal(h.element('completionPriority').value, '41');
+        assert.equal(h.pushes().length, 0);
+        assert.ok(h.calls.every(call => call.name === 'task_policy.pull' && call.uid === 'u0'));
+        assert.ok(h.calls.slice(0, -1).every(call => call.params.ensureBgiReady === undefined));
+        await h.click('reloadPolicy');
+        assert.equal(h.calls.at(-1).params.ensureBgiReady, undefined);
+    });
+}
+
+for (const type of ['group', 'onedragon']) {
+    test(type + ' refresh works without cached names or a selected target and never chooses the first result', async () => {
+        const h = harness({ initial: action(type, 'beginning', { policy: 'resume', taskName: '', configRevision: '' }) });
+        h.member.configGroups = []; h.member.oneClickConfigs = [];
+        await h.mount(); await h.change('completionPolicy', 'runSpecified');
+        assert.equal(h.element('completionTask').options.length, 1);
+        assert.equal(h.element('refreshCompletionCatalog').disabled, false);
+        await h.click('refreshCompletionCatalog');
+        const request = h.calls.at(-1);
+        assert.equal(request.uid, 'u0'); assert.equal(request.name, 'task_policy.pull');
+        assert.equal(request.params.catalogType, type); assert.equal(request.params.catalogName, '');
+        assert.equal(request.params.ensureBgiReady, 'true');
+        assert.ok(h.element('completionTask').options.some(option => option.value === key(type, names[type])));
+        assert.equal(h.element('completionTask').value, '');
+        assert.equal(h.element('completionStartTask').value, '');
+        assert.match(h.element('completionCatalogResult').textContent, /请选择/);
+        assert.doesNotMatch(h.element('completionCatalogResult').textContent, /已读取|已刷新|就绪/);
+        assert.equal(h.pushes().length, 0);
+        assert.ok(h.calls.every(call => call.name === 'task_policy.pull' && call.uid === 'u0'));
+        // 选择目标后的普通读不再启动，也不丢掉刚刷新的候选。
+        await h.change('completionTask', key(type, names[type]));
+        assert.equal(h.calls.at(-1).params.ensureBgiReady, undefined);
+        assert.equal(h.element('completionTask').value, key(type, names[type]));
+        assert.ok(h.element('completionTask').options.some(option => option.value === key(type, names[type])));
+        await h.change('completionTaskType', type === 'group' ? 'onedragon' : 'group');
+        assert.ok(h.element('completionTask').options.length > 1);
+        assert.equal(h.element('completionTask').value, '');
+        assert.equal(h.pushes().length, 0);
+    });
+}
+
+test('changing completion mode to stop revokes the queued refresh without saving or replacing the current selection', async () => {
+    const h = harness({ initial: action('group', 'node') }); await h.mount(); h.useTracked();
+    const refreshing = h.click('refreshCompletionCatalog'); await flush(); const original = h.remote[0];
+    await h.change('completionPolicy', 'stop'); await refreshing; await flush();
+    assert.equal(h.remote.length, 2);
+    assert.equal(h.remote[1].params.cancelCatalogRefresh, original.commandId);
+    assert.deepEqual(h.remote[1].target, ['u0']);
+    assert.equal(h.element('completionPolicy').value, 'stop');
+    assert.equal(h.element('completionTask').value, key('group', names.group));
+    assert.equal(h.element('completionStartTask').value, target('group').nodes[1].taskId);
+    assert.equal(h.element('savePolicy').disabled, false);
+    assert.equal(h.pushes().length, 0);
+});
+
+test('an explicitly empty live name list replaces stale member candidates without selecting anything', async () => {
+    const h = harness({ initial: action('group', 'beginning', { policy: 'resume', taskName: '', configRevision: '' }),
+        catalogTransform: (catalog, params) => params.ensureBgiReady === 'true'
+            ? { ...catalog, configGroups: [], oneClickConfigs: [], target: null, error: '请选择执行目标。' } : catalog });
+    h.member.configGroups = ['过期缓存'];
+    await h.mount(); await h.change('completionPolicy', 'runSpecified');
+    assert.match(h.element('completionTask').innerHTML, /过期缓存/);
+    await h.click('refreshCompletionCatalog');
+    assert.equal(h.element('completionTask').options.length, 1);
+    assert.equal(h.element('completionTask').value, '');
+    assert.doesNotMatch(h.element('completionTask').innerHTML, /过期缓存/);
+    assert.match(h.element('completionCatalogResult').textContent, /请选择/);
+    assert.equal(h.pushes().length, 0);
+});
+
+test('missing live name fields cannot claim a successful refresh for an empty target', async () => {
+    const h = harness({ initial: action('group', 'beginning', { policy: 'resume', taskName: '', configRevision: '' }),
+        catalogTransform: catalog => { delete catalog.configGroups; delete catalog.oneClickConfigs; return catalog; } });
+    h.member.configGroups = [];
+    await h.mount(); await h.change('completionPolicy', 'runSpecified'); await h.click('refreshCompletionCatalog');
+    assert.equal(h.element('completionTask').options.length, 1);
+    assert.equal(h.element('completionTask').value, '');
+    assert.doesNotMatch(h.element('completionCatalogResult').textContent, /已读取|已刷新|就绪/);
+    assert.equal(h.pushes().length, 0);
+});
+
+test('optional live names accept old catalogs but reject malformed or duplicate candidate lists', () => {
+    const h = harness();
+    const base = { workflows: flows, target: null, error: '请选择执行目标。' };
+    for (const value of [undefined, null, [], ['配置 A']]) {
+        const data = { ...base, configGroups: value, oneClickConfigs: value };
+        assert.doesNotThrow(() => h.evaluate('normalizeCompletionCatalog(__data)', {
+            __data: { completionStartVersion: '1', catalog: JSON.stringify(data) }
+        }));
+    }
+    for (const value of ['配置 A', [''], ['配置 A', 3], ['重复', '重复']]) {
+        assert.throws(() => h.evaluate('normalizeCompletionCatalog(__data)', {
+            __data: { completionStartVersion: '1', catalog: JSON.stringify({ ...base, configGroups: value }) }
+        }), /不完整/);
+    }
+});
+
+test('pending refresh blocks duplicate clicks and a startup failure retains the unsaved selection', async () => {
+    let release;
+    const h = harness({ initial: action('group', 'node'), operation: request => request.params.ensureBgiReady === 'true'
+        ? new Promise(resolve => { release = () => resolve({ status: 'success', data: { ...wire(action()), ok: 'true',
+            catalog: JSON.stringify({ workflows: flows, target: null, error: 'BGI 启动失败' }) } }); }) : request.fallback() });
+    await h.mount();
+    const loading = h.click('refreshCompletionCatalog'); await flush();
+    assert.equal(h.element('refreshCompletionCatalog').disabled, true);
+    assert.equal(h.element('savePolicy').disabled, true);
+    assert.match(h.element('completionCatalogResult').textContent, /180/);
+    await h.click('refreshCompletionCatalog'); assert.equal(h.calls.length, 2);
+    release(); await loading;
+    assert.equal(h.element('completionStartMode').value, 'node');
+    assert.equal(h.element('completionStartTask').value, target('group').nodes[1].taskId);
+    assert.match(h.element('completionCatalogResult').textContent, /启动失败/);
+    assert.doesNotMatch(h.element('completionCatalogResult').textContent, /已读取|已刷新/);
+    assert.equal(h.pushes().length, 0);
+});
+
+test('refresh never silently confirms a changed revision or replaces the current policy with the reply', async () => {
+    const h = harness({ initial: action('group', 'node'), operation: async request => {
+        const result = await request.fallback();
+        if (request.params.ensureBgiReady === 'true') {
+            result.data.policy = 'stop';
+            const catalog = JSON.parse(result.data.catalog); catalog.target.revision = 'new-revision';
+            result.data.catalog = JSON.stringify(catalog);
+        }
+        return result;
+    } });
+    await h.mount(); await h.click('refreshCompletionCatalog');
+    assert.equal(h.element('completionPolicy').value, 'runSpecified');
+    assert.equal(h.element('completionStartMode').value, 'node');
+    assert.equal(h.element('confirmCompletionStart').hidden, false);
+    assert.match(h.element('completionStartHint').textContent, /修订/);
+    assert.equal(h.pushes().length, 0);
+});
+
+test('a late explicit refresh cannot replace a new target and automatic target reads stay read only', async () => {
+    let release;
+    const h = harness({ operation: request => request.params.ensureBgiReady === 'true'
+        ? new Promise(resolve => { release = async () => resolve(await request.fallback()); }) : request.fallback() });
+    await h.mount(); const refreshing = h.click('refreshCompletionCatalog'); await flush();
+    const changing = h.change('completionTask', key('group', '配置 B'));
+    await release(); await refreshing; await changing;
+    assert.equal(h.element('completionTask').value, key('group', '配置 B'));
+    assert.equal(h.calls.at(-1).params.ensureBgiReady, undefined);
+    assert.ok(h.calls.every(call => call.uid === 'u0'));
+});
+
+test('readiness pulls wait 180 seconds for a typed reply from the original UID while ordinary pulls wait 8', async () => {
+    const h = harness(); h.useTracked();
+    const ordinary = h.evaluate('sendMemberOperation("u0", "task_policy.pull", {}, "task_policy.data")');
+    await flush(); assert.equal(h.delays.at(-1), 8000);
+    h.reply({ ok: 'true' }, h.remote[0], 'u0', 'task_policy.data'); await ordinary;
+    let done = false;
+    const refreshing = h.evaluate('sendMemberOperation("u0", "task_policy.pull", { catalogType: "group", catalogName: "配置 A", ensureBgiReady: "true" }, "task_policy.data")')
+        .then(result => { done = true; return result; });
+    await flush(); const original = h.remote.at(-1);
+    assert.equal(h.delays.at(-1), 180000); assert.deepEqual(original.target, ['u0']);
+    assert.ok(Date.parse(original.expiresAtUtc) > Date.now() + 150000);
+    h.reply({ status: 'success' }, original, 'u0', 'ack');
+    h.reply({ ok: 'true' }, original, 'u1', 'task_policy.data');
+    await flush(); assert.equal(done, false);
+    h.reply({ ok: 'true', catalog: JSON.stringify({ workflows: flows, target: target('group'), error: null }) }, original, 'u0', 'task_policy.data');
+    assert.equal((await refreshing).status, 'success');
+});
+
+test('leaving the editor revokes the original executor refresh and ignores its later catalog', async () => {
+    const h = harness(); await h.mount(); h.useTracked();
+    h.evaluate('document.body = {}; globalThis.MutationObserver = class { constructor(callback) { globalThis.__changed = callback; } observe() {} disconnect() {} };');
+    const refreshing = h.click('refreshCompletionCatalog'); await flush(); const original = h.remote[0];
+    h.evaluate('activeMemberUid = "u1"; __changed();'); await refreshing; await flush();
+    assert.equal(h.remote.length, 2);
+    assert.deepEqual(h.remote[1].target, ['u0']);
+    assert.equal(h.remote[1].cmd, 'task_policy.pull');
+    assert.equal(h.remote[1].params.cancelCatalogRefresh, original.commandId);
+    assert.equal(h.remote[1].params.ensureBgiReady, undefined);
+    h.reply({ ok: 'true' }, original, 'u0', 'task_policy.data'); await flush();
+    assert.equal(h.pushes().length, 0);
+    assert.equal(h.timers.size, 0);
+});
 
 test('every explicit start identity field participates in the confirmation signature', () => {
     const h = harness({ initial: action('workflow', 'node') });

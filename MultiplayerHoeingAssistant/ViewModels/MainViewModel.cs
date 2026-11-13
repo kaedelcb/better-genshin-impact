@@ -2024,12 +2024,36 @@ public partial class MainViewModel : INotifyPropertyChanged
     private async Task HandleTaskPolicyPullAsync(RemoteCommand cmd)
     {
         if (_signalRClient == null) return;
+        if (GetRemoteParam(cmd.Params, "cancelCatalogRefresh") is { Length: > 0 } cancelledId)
+        {
+            CancelCompletionCatalogRefresh(cmd.SenderUid, cancelledId);
+            return;
+        }
         var replyParams = CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy());
-        replyParams["ok"] = "true";
+        replyParams["ok"] = "true"; // 配置快照读取成功；目录是否就绪仅由 catalog.Target/Error 表达。
         var catalogType = GetRemoteParam(cmd.Params, "catalogType") ?? _config?.OnlineHoeingSpecifiedTaskType ?? "group";
         var catalogName = GetRemoteParam(cmd.Params, "catalogName") ?? _config?.OnlineHoeingSpecifiedTaskName ?? "";
         var catalogWorkflowId = GetRemoteParam(cmd.Params, "catalogWorkflowId") ?? _config?.OnlineHoeingSpecifiedWorkflowId ?? "";
-        var catalog = await GetCompletionTargetCatalogService().LoadAsync(catalogType, catalogName, catalogWorkflowId);
+        CompletionTargetCatalog catalog;
+        if (GetRemoteParam(cmd.Params, "ensureBgiReady") == "true" && catalogType is ("group" or "onedragon"))
+        {
+            using var cancellation = new CancellationTokenSource();
+            var key = (cmd.SenderUid, cmd.CommandId);
+            if (!TryRegisterCompletionCatalogRefresh(key, cancellation))
+                catalog = new([], null, "该目录刷新请求正在执行，请等待原请求结果。");
+            else
+            {
+                try
+                {
+                    catalog = cmd.ExpiresAtUtc <= DateTimeOffset.UtcNow
+                        ? new([], null, "目录刷新请求已过期，未启动 BGI。")
+                        : await RefreshCompletionCatalogAsync(catalogType, catalogName, catalogWorkflowId, cancellation.Token, cmd.ExpiresAtUtc);
+                }
+                finally { _completionCatalogRefreshes.TryRemove(key, out _); }
+            }
+        }
+        else
+            catalog = await GetCompletionTargetCatalogService().LoadAsync(catalogType, catalogName, catalogWorkflowId);
         replyParams["catalog"] = JsonSerializer.Serialize(catalog);
         var reply = new RemoteCommand
         {
@@ -4187,7 +4211,23 @@ public partial class MainViewModel : INotifyPropertyChanged
                     return new CompletionTargetCatalog([], null, "执行端未确认执行起点协议，请更新并重新打开绑定。");
                 var json = data.GetValueOrDefault("catalog");
                 return string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CompletionTargetCatalog>(json);
-            }, completionStartSupported, () => NewDarkCombo());
+            }, completionStartSupported, () => NewDarkCombo(),
+            refreshCatalog: async (type, name, workflowId, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                if (policyPullUid == null)
+                    return await RefreshCompletionCatalogAsync(type, name, workflowId, ct);
+                var data = await GetTaskPolicySync().PullAsync(policyPullUid, type, name, workflowId,
+                    cancellationToken: ct, ensureBgiReady: true);
+                ct.ThrowIfCancellationRequested();
+                if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
+                    return new CompletionTargetCatalog([], null, "执行端未确认目录刷新，请确认目标成员在线并重试。");
+                var json = data.GetValueOrDefault("catalog");
+                var catalog = string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CompletionTargetCatalog>(json);
+                return catalog == null
+                    ? new CompletionTargetCatalog([], null, "执行端未返回任务目录，未确认刷新成功。")
+                    : CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, catalog);
+            });
         scrollContent.Children.Add(completionPanel.Root);
 
         // 未确认执行端当前配置时只提示重读，不提供默认值覆盖入口。

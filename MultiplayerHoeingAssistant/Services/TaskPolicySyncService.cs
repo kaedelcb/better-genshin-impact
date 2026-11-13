@@ -14,6 +14,9 @@ public class TaskPolicySyncService
 {
     /// <summary>pull 回复（task_policy.data）超时。</summary>
     private static readonly TimeSpan PullTimeout = TimeSpan.FromSeconds(8);
+    /// <summary>显式目录刷新覆盖执行端共享确保门的 150 秒冷启动预算。</summary>
+    internal static TimeSpan CatalogRefreshTimeout => TimeSpan.FromSeconds(180);
+    internal static TimeSpan GetPullTimeout(bool ensureBgiReady) => ensureBgiReady ? CatalogRefreshTimeout : PullTimeout;
     /// <summary>push 回复（task_policy.push_result）超时。</summary>
     private static readonly TimeSpan PushResultTimeout = TimeSpan.FromSeconds(10);
 
@@ -55,15 +58,25 @@ public class TaskPolicySyncService
     /// 拉取对方上线锄地「完成后动作」配置。返回 null = 超时/发送失败/对方应答失败；
     /// 否则为对方回传的键值表（policy/specifiedType/specifiedName）。
     /// </summary>
-    public async Task<Dictionary<string, string>?> PullAsync(string targetUid, string? catalogType = null,
-        string? catalogName = null, string? catalogWorkflowId = null)
+    public Task<Dictionary<string, string>?> PullAsync(string targetUid, string? catalogType = null,
+        string? catalogName = null, string? catalogWorkflowId = null, bool ensureBgiReady = false)
+        => PullAsync(targetUid, catalogType, catalogName, catalogWorkflowId, CancellationToken.None, ensureBgiReady);
+
+    public async Task<Dictionary<string, string>?> PullAsync(string targetUid, string? catalogType,
+        string? catalogName, string? catalogWorkflowId, CancellationToken cancellationToken, bool ensureBgiReady = false)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var parameters = new Dictionary<string, object>();
         if (catalogType != null) parameters["catalogType"] = catalogType;
         if (catalogName != null) parameters["catalogName"] = catalogName;
         if (catalogWorkflowId != null) parameters["catalogWorkflowId"] = catalogWorkflowId;
+        // 计划表目录来自执行端本地保存；普通查询和计划表刷新都没有启动副作用。
+        var ensure = ensureBgiReady && catalogType is ("group" or "onedragon");
+        if (ensure) parameters["ensureBgiReady"] = "true";
         var pull = NewCommand("task_policy.pull", targetUid, parameters);
-        var (reply, sent) = await SendAndWaitReplyAsync(pull, PullTimeout);
+        if (ensure) pull.ExpiresAtUtc = DateTimeOffset.UtcNow.Add(CatalogRefreshTimeout);
+        var (reply, sent) = await SendAndWaitReplyAsync(pull, GetPullTimeout(ensure), cancellationToken,
+            ensure ? () => { _ = CancelCatalogRefreshAsync(pull); } : null);
         if (!sent || reply == null || GetStringParam(reply.Params, "ok") != "true")
         {
             _completionStartPeers.TryRemove(targetUid, out _);
@@ -117,6 +130,20 @@ public class TaskPolicySyncService
         return (GetStringParam(reply.Params, "ok") == "true", GetStringParam(reply.Params, "message") ?? "");
     }
 
+    private async Task CancelCatalogRefreshAsync(RemoteCommand original)
+    {
+        try
+        {
+            await _sendAsync(new RemoteCommand
+            {
+                Cmd = "task_policy.pull", Sender = original.Sender, SenderUid = original.SenderUid,
+                Target = original.Target?.ToList(), CommandId = Guid.NewGuid().ToString("N"),
+                Params = new() { ["cancelCatalogRefresh"] = original.CommandId }
+            });
+        }
+        catch { /* Cancellation is best effort on disconnect; the executor still has its own bounded budget. */ }
+    }
+
     private RemoteCommand NewCommand(string cmdName, string targetUid, Dictionary<string, object> prms) => new()
     {
         Cmd = cmdName,
@@ -127,25 +154,46 @@ public class TaskPolicySyncService
         Params = prms
     };
 
-    /// <summary>注册等待 → 发送 → 等回复。sent=false 表示 SignalR 未连接未能发出。</summary>
-    private async Task<(RemoteCommand? reply, bool sent)> SendAndWaitReplyAsync(RemoteCommand cmd, TimeSpan timeout)
+    /// <summary>注册等待与撤销 → 发送 → 等回复；发送和回复共用原预算。sent=false 表示未能发出。</summary>
+    private async Task<(RemoteCommand? reply, bool sent)> SendAndWaitReplyAsync(RemoteCommand cmd, TimeSpan timeout,
+        CancellationToken cancellationToken = default, Action? cancelRemote = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var tcs = new TaskCompletionSource<RemoteCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
         _pendingReplies[cmd.CommandId] = tcs;
+        using var waiting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        waiting.CancelAfter(timeout);
+        var cancellationGate = new object();
+        var finishedOrRevoked = false;
+        void RevokeRemoteOnce()
+        {
+            lock (cancellationGate)
+            {
+                if (finishedOrRevoked) return;
+                finishedOrRevoked = true;
+                // 先发起原 key 撤销，再结束本地等待；无需等原发送回执，也不等待撤销的网络回执。
+                cancelRemote?.Invoke();
+            }
+        }
+        using var registration = cancelRemote == null ? default : waiting.Token.Register(RevokeRemoteOnce);
         try
         {
-            if (!await _sendAsync(cmd))
-            {
+            waiting.Token.ThrowIfCancellationRequested();
+            if (!await _sendAsync(cmd).WaitAsync(waiting.Token))
                 return (null, false);
-            }
-            return (await tcs.Task.WaitAsync(timeout), true);
+            var reply = await tcs.Task.WaitAsync(waiting.Token);
+            waiting.Token.ThrowIfCancellationRequested();
+            return (reply, true);
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException) when (waiting.IsCancellationRequested)
         {
+            RevokeRemoteOnce();
+            cancellationToken.ThrowIfCancellationRequested();
             return (null, true);
         }
         finally
         {
+            lock (cancellationGate) finishedOrRevoked = true;
             _pendingReplies.TryRemove(cmd.CommandId, out _);
         }
     }

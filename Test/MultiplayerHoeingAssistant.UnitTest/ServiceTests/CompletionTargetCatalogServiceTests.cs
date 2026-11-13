@@ -94,6 +94,32 @@ public sealed class CompletionTargetCatalogServiceTests
         Assert.Null(CompletionTargetCatalogService.ValidateShape(legacy));
     }
 
+    [Theory]
+    [InlineData("group")]
+    [InlineData("onedragon")]
+    public void ExplicitRefreshCannotTreatAnOldSingleTargetReplyAsACompleteLiveDirectory(string type)
+    {
+        var oldReply = new CompletionTargetCatalog([], new(type, "收尾", "", "r1", [new("a", "任务", true)]));
+        var rejected = CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, oldReply);
+        Assert.Null(rejected.Target);
+        Assert.Contains("未确认刷新成功", rejected.Error!);
+        var complete = oldReply with { ConfigGroups = ["收尾"], OneClickConfigs = ["一条龙"] };
+        Assert.Same(complete, CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, complete));
+        var malformed = complete with { ConfigGroups = ["重复", "重复"] };
+        Assert.Null(CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, malformed).Target);
+        var failed = complete with { Error = "BGI 启动失败" };
+        var error = CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, failed);
+        Assert.Null(error.Target);
+        Assert.Equal("BGI 启动失败", error.Error);
+    }
+
+    [Fact]
+    public void ExplicitWorkflowRefreshDoesNotRequireBgiNameLists()
+    {
+        var workflow = new CompletionTargetCatalog([], new("workflow", "本地计划", "wf", "r1", []));
+        Assert.Same(workflow, CompletionTargetCatalogService.ValidateExplicitRefreshCatalog("workflow", workflow));
+    }
+
     private static TaskConflictPolicySettings Settings(string type) => new()
     {
         Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskType = type, SpecifiedTaskName = "收尾",

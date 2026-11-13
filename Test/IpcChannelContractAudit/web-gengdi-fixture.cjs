@@ -5,6 +5,7 @@ const root = path.resolve(__dirname, '../../BgiCoordinatorServer/wwwroot');
 const mock = `
 window.gatewayCalls=[];window.noAck=false;window.rejectJoin=false;window.failPolicy=false;
 window.completionVersionSupported=true;
+window.catalogBgiReady=true;window.catalogBgiStarts=0;window.catalogStartupFailure=false;
 window.testWorkflows=[{workflowId:'flow-1',name:'联机收尾计划',revision:'flow-rev-1',nodes:[
  {taskId:'flow-node-1',name:'领取奖励',enabled:true},{taskId:'flow-node-2',name:'联机收尾',enabled:true},
  {taskId:'flow-node-off',name:'已禁用任务',enabled:false}]}];
@@ -12,6 +13,13 @@ window.savedPolicies={};
 function completionCatalog(params, policy){
  const type=params.catalogType??policy.specifiedType, name=params.catalogName??policy.specifiedName;
  const workflowId=params.catalogWorkflowId??policy.specifiedWorkflowId;
+ const needsBgi=type==='group'||type==='onedragon';
+ const explicitRefresh=String(params.ensureBgiReady)==='true'&&needsBgi;
+ if(explicitRefresh){
+  if(catalogStartupFailure)return {workflows:testWorkflows,target:null,error:'模拟 BGI 启动失败'};
+  if(!catalogBgiReady){catalogBgiStarts++;catalogBgiReady=true;}
+ }
+ if(needsBgi&&!catalogBgiReady)return {workflows:testWorkflows,target:null,error:'执行端 BGI 目录未就绪'};
  let target=null;
  if(type==='workflow') { const flow=testWorkflows.find(f=>f.workflowId===workflowId); if(flow)target={...flow,type,name:flow.name}; }
  else if(type==='group'&&name==='精英')target={type,name,workflowId:'',revision:'group-rev-1',nodes:[
@@ -19,7 +27,9 @@ function completionCatalog(params, policy){
   {taskId:'group-task-off',name:'已禁用任务',enabled:false}]};
  else if(type==='onedragon'&&name==='收尾')target={type,name,workflowId:'',revision:'dragon-rev-1',nodes:[
   {taskId:'guid-1',name:'领取',enabled:true},{taskId:'guid-2',name:'收尾',enabled:true}]};
- return {workflows:testWorkflows,target};
+ return {workflows:testWorkflows,target,
+  ...(explicitRefresh?{configGroups:['精英','特殊<任务>"名称'],oneClickConfigs:['收尾']}:{}),
+  ...(explicitRefresh&&!name?{error:'请选择执行目标。'}:{})};
 }
 window.testMembers=['a','b','off'].map((uid,i)=>({playerUid:uid,playerName:['成员甲','成员乙','离线成员'][i],online:i<2,
  bgiStatus:'running',bgiVersion:'test',taskStatusAvailable:true,taskRunning:i===0,currentTaskName:i===0?'当前任务':'',currentRouteDisplay:'第 2 条线路',

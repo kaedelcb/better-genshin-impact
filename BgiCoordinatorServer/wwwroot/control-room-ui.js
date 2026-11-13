@@ -369,7 +369,8 @@ function renderMemberSettings(p, host) {
 // 与联机任务顺序、快捷绑定的 taskOptions 分开；计划表只用于完成后动作。
 function completionTargetOptions(member, type, catalog, action) {
     const entries = type === 'workflow' ? (catalog?.workflows || []).map(flow => [flow.name, flow.workflowId])
-        : ((type === 'onedragon' ? member?.oneClickConfigs : member?.configGroups) || []).map(name => [name, '']);
+        : ((type === 'onedragon' ? catalog?.oneClickConfigs ?? member?.oneClickConfigs
+            : catalog?.configGroups ?? member?.configGroups) || []).map(name => [name, '']);
     if (action?.taskType === type && action.taskName && !entries.some(([name, id]) => name === action.taskName && id === action.workflowId))
         entries.push([action.taskName, action.workflowId]);
     return '<option value="">请选择任务</option>' + entries.map(([name, id]) =>
@@ -379,7 +380,7 @@ function initializeCompletionPolicyEditor(uid, host) {
     host.innerHTML = `<div class="panel-header"><h2>锄地后动作</h2><button class="text-button" id="reloadPolicy">重新读取</button></div><p class="note">选择完成后要执行的配置组、一条龙或计划表，可从头开始，也可从其中一个启用的任务开始。</p>
         <div id="policyFields"><label class="field">完成后<select id="completionPolicy" disabled><option value="resume">恢复原任务</option><option value="stop">锄完停止</option><option value="runSpecified">执行指定任务</option></select></label>
         <div id="specifiedTaskField" hidden><label class="field">任务类型<select id="completionTaskType" disabled><option value="group">配置组</option><option value="onedragon">一条龙</option><option value="workflow">计划表</option></select></label>
-        <label class="field">指定任务<select id="completionTask" disabled><option value="">请选择任务</option></select></label><div class="form-result" id="completionCatalogResult" role="status"></div>
+        <label class="field">指定任务<select id="completionTask" disabled><option value="">请选择任务</option></select></label><button class="btn btn-secondary" id="refreshCompletionCatalog" disabled>刷新任务目录</button><div class="form-result" id="completionCatalogResult" role="status"></div>
         <label class="field">执行起点<select id="completionStartMode" disabled><option value="default" disabled>沿用原入口（旧配置）</option><option value="beginning">从头开始</option><option value="node">从指定任务开始</option></select></label>
         <label class="field" id="completionStartTaskField" hidden>开始执行的任务<select id="completionStartTask" disabled><option value="">请选择起点任务</option></select></label>
         <p class="note" id="completionStartHint" role="status"></p><button class="btn btn-secondary" id="confirmCompletionStart" hidden>确认当前起点</button></div>
@@ -389,17 +390,42 @@ function initializeCompletionPolicyEditor(uid, host) {
     const policySelect = field('completionPolicy'), typeSelect = field('completionTaskType'), taskSelect = field('completionTask');
     const startSelect = field('completionStartMode'), nodeSelect = field('completionStartTask'), priority = field('completionPriority');
     const save = field('savePolicy'), reload = field('reloadPolicy'), status = field('policyResult');
+    const refresh = field('refreshCompletionCatalog');
     let loadedPolicy = null, action = null, catalog = null, version = null;
-    let busy = false, catalogLoading = false, mustReload = false, generation = 0, pullQueue = Promise.resolve();
+    let busy = false, catalogLoading = false, mustReload = false, generation = 0, pullQueue = Promise.resolve(), activeRefresh = null;
     const live = () => host.isConnected && document.getElementById('completionSettings') === host
         && activeMemberUid === uid && detailSection === 'settings';
     const currentRequest = token => live() && token === generation;
     // 同类远程命令逐个关联；新选择使旧请求失效，排队的旧请求不再发送。
     const pull = (query, token) => {
-        const result = pullQueue.then(() => currentRequest(token)
-            ? sendMemberOperation(uid, 'task_policy.pull', query, 'task_policy.data') : null);
+        const result = pullQueue.then(async () => {
+            if (!currentRequest(token)) return null;
+            const pending = sendMemberOperation(uid, 'task_policy.pull', query, 'task_policy.data');
+            let observer = null;
+            const cancel = () => pending.cancelCatalogRefresh?.();
+            if (query.ensureBgiReady === 'true') {
+                activeRefresh = pending;
+                // 离开成员设置即撤销原刷新，不能在旧页面退出后迟到拉起执行端。
+                if (typeof MutationObserver !== 'undefined') {
+                    observer = new MutationObserver(() => { if (!currentRequest(token)) cancel(); });
+                    observer.observe(document.body, { childList: true, subtree: true });
+                }
+                window.addEventListener('beforeunload', cancel);
+            }
+            try { return await pending; }
+            finally {
+                observer?.disconnect(); window.removeEventListener?.('beforeunload', cancel);
+                if (activeRefresh === pending) activeRefresh = null;
+            }
+        });
         pullQueue = result.catch(() => {});
         return result;
+    };
+    // 后续普通目标查询不携带实时名称；保留本编辑器从同一执行端显式刷新的候选。
+    const readCatalog = (data, preserveNames = true) => {
+        const next = normalizeCompletionCatalog(data);
+        return next && { ...next, configGroups: next.configGroups ?? (preserveNames ? catalog?.configGroups : null),
+            oneClickConfigs: next.oneClickConfigs ?? (preserveNames ? catalog?.oneClickConfigs : null) };
     };
     const matchingTarget = () => catalog?.target && action && completionTargetKey(catalog.target.type, catalog.target.name, catalog.target.workflowId)
         === completionTargetKey(action.taskType, action.taskName, action.workflowId) ? catalog.target : null;
@@ -417,7 +443,9 @@ function initializeCompletionPolicyEditor(uid, host) {
         field('completionStartTaskField').hidden = action?.startMode !== 'node';
         policySelect.disabled = !editable; typeSelect.disabled = !editable; taskSelect.disabled = !editable; priority.disabled = !editable;
         startSelect.disabled = !editable || catalogLoading; nodeSelect.disabled = !editable || catalogLoading;
-        save.disabled = !editable || catalogLoading; reload.disabled = busy;
+        save.disabled = !editable || catalogLoading; reload.disabled = busy || catalogLoading;
+        refresh.disabled = !editable || !specified || catalogLoading;
+        refresh.textContent = catalogLoading ? '正在读取任务目录…' : '刷新任务目录';
         field('completionPreview').textContent = action ? '结束后：' + hoeingCompletionDescription(action) : '';
         let hint = '';
         if (specified && action.startMode === 'default') hint = '旧配置沿用原入口，不保证从头执行。保存前请选择从头开始或指定任务。';
@@ -439,7 +467,7 @@ function initializeCompletionPolicyEditor(uid, host) {
         startSelect.value = action.startMode; drawNodes(); updateFields();
     };
     const applyRead = data => {
-        const nextAction = normalizePolicy(data), nextCatalog = normalizeCompletionCatalog(data);
+        const nextAction = normalizePolicy(data), nextCatalog = readCatalog(data);
         loadedPolicy = { ...nextAction }; action = { ...nextAction }; catalog = nextCatalog;
         version = data.completionStartVersion; mustReload = false;
         if (currentMember(uid)) currentMember(uid).hoeingCompletionAction = { ...nextAction };
@@ -460,27 +488,46 @@ function initializeCompletionPolicyEditor(uid, host) {
             if (currentRequest(token)) status.textContent = '读取未完成：' + err.message + '；未使用默认值覆盖原配置';
         } finally { if (currentRequest(token)) { busy = false; updateFields(); } }
     };
-    const loadTarget = async () => {
+    const loadTarget = async (explicitRefresh = false) => {
+        activeRefresh?.cancelCatalogRefresh?.();
         const token = ++generation;
-        if (!action.taskName) {
+        if (!action.taskName && !explicitRefresh) {
             catalogLoading = false; catalog = catalog ? { ...catalog, target: null, error: null } : null;
             field('completionCatalogResult').textContent = '请选择该成员的任务'; drawNodes(); updateFields(); return;
         }
         const query = { catalogType: action.taskType, catalogName: action.taskName, catalogWorkflowId: action.workflowId };
-        catalogLoading = true; catalog = catalog ? { ...catalog, target: null, error: null } : null;
-        field('completionCatalogResult').textContent = '正在读取该成员的目标与任务起点…'; drawNodes(); updateFields();
+        if (explicitRefresh && ['group', 'onedragon'].includes(action.taskType)) query.ensureBgiReady = 'true';
+        catalogLoading = true;
+        if (!explicitRefresh) catalog = catalog ? { ...catalog, target: null, error: null } : null;
+        field('completionCatalogResult').textContent = query.ensureBgiReady
+            ? '正在刷新该成员的任务目录，必要时启动 BGI 并等待通道就绪（最长约 180 秒）…'
+            : '正在读取该成员的目标与任务起点…'; drawNodes(); updateFields();
         try {
             const result = await pull(query, token);
             if (!currentRequest(token)) return;
             if (result?.status !== 'success') throw new Error(result?.message || '读取任务目录未确认');
             if (result.data?.completionStartVersion !== '1') throw new Error('执行端未支持明确起点，请更新助手后重新读取');
-            catalog = normalizeCompletionCatalog(result.data);
-            // 计划表按稳定 ID 查询，用户新选目标时采用目录的当前名称。
+            catalog = readCatalog(result.data, !explicitRefresh);
+            if (explicitRefresh) {
+                if (['group', 'onedragon'].includes(action.taskType)
+                    && (catalog.configGroups == null || catalog.oneClickConfigs == null))
+                    throw new Error((catalog.error ? catalog.error + '；' : '') + '执行端未返回实时任务名称目录，未确认刷新成功');
+                taskSelect.innerHTML = completionTargetOptions(currentMember(uid), action.taskType, catalog, action);
+                taskSelect.value = action.taskName ? completionTargetKey(action.taskType, action.taskName, action.workflowId) : '';
+                if (!action.taskName && ['group', 'onedragon'].includes(action.taskType)) {
+                    if (catalog.target !== null) throw new Error('执行端返回了未选择的任务，未采用该目标');
+                    field('completionCatalogResult').textContent = catalog.error || '请选择执行目标。';
+                    return; // 已有实时名称也不自动选第一项，不产生节点或任务启动。
+                }
+            }
+            if (catalog.error) throw new Error(catalog.error);
+            // 计划表按稳定 ID 查询，采用目录的当前名称。
             if (action.taskType === 'workflow' && catalog.target?.type === 'workflow' && catalog.target.workflowId === action.workflowId)
                 action.taskName = catalog.target.name;
             const target = matchingTarget();
-            if (!target) throw new Error(catalog.error || '返回的目录与所选任务不一致');
-            action.configRevision = target.revision;
+            if (!target) throw new Error('返回的目录与所选任务不一致');
+            // 刷新保留用户的目标、节点与修订确认；目录变化仍需明确确认起点。
+            if (!explicitRefresh) action.configRevision = target.revision;
             taskSelect.innerHTML = completionTargetOptions(currentMember(uid), action.taskType, catalog, action);
             taskSelect.value = completionTargetKey(action.taskType, action.taskName, action.workflowId);
             field('completionCatalogResult').textContent = catalog.error || '已读取该成员的任务目录';
@@ -489,7 +536,14 @@ function initializeCompletionPolicyEditor(uid, host) {
         } finally { if (currentRequest(token)) { catalogLoading = false; drawNodes(); updateFields(); } }
     };
     const clearStart = () => { action.startMode = 'beginning'; action.startTaskId = ''; action.startTaskName = ''; action.configRevision = ''; startSelect.value = action.startMode; };
-    policySelect.onchange = () => { if (busy || !action) return; action.policy = policySelect.value; updateFields(); };
+    policySelect.onchange = () => {
+        if (busy || !action) return;
+        action.policy = policySelect.value;
+        if (action.policy !== 'runSpecified') {
+            activeRefresh?.cancelCatalogRefresh?.(); ++generation; catalogLoading = false;
+        }
+        updateFields();
+    };
     typeSelect.onchange = () => {
         if (busy || !action) return;
         action.taskType = typeSelect.value; action.taskName = ''; action.workflowId = ''; clearStart();
@@ -520,6 +574,7 @@ function initializeCompletionPolicyEditor(uid, host) {
         updateFields();
     };
     reload.onclick = loadPolicy;
+    refresh.onclick = () => { if (!refresh.disabled) return loadTarget(true); };
     const finishSave = result => {
         status.textContent = formatResult(result);
         rememberMemberResult(uid, 'task_policy.push', result.status, result.message);
@@ -544,7 +599,7 @@ function initializeCompletionPolicyEditor(uid, host) {
             if (completionActionSignature(normalizePolicy(before.data)) !== completionActionSignature(loadedPolicy)) {
                 mustReload = true; throw new Error('成员结束动作已在其他端改变，请重新读取后编辑');
             }
-            catalog = normalizeCompletionCatalog(before.data); drawNodes();
+            catalog = readCatalog(before.data); drawNodes();
             validateCompletionSelection(submitted, catalog);
             writeStarted = true;
             const result = await sendMemberOperation(uid, 'task_policy.push', params, 'task_policy.push_result');
@@ -559,7 +614,7 @@ function initializeCompletionPolicyEditor(uid, host) {
             const after = await pull({}, token);
             if (!currentRequest(token)) return;
             if (after?.status !== 'success' || after.data?.completionStartVersion !== '1') throw new Error(after?.message || '保存后的设置回读未确认');
-            const confirmed = normalizePolicy(after.data), confirmedCatalog = normalizeCompletionCatalog(after.data);
+            const confirmed = normalizePolicy(after.data), confirmedCatalog = readCatalog(after.data);
             if (completionActionSignature(confirmed) !== completionActionSignature(submitted)) throw new Error('保存后的回读值与本次提交不一致');
             validateCompletionSelection(confirmed, confirmedCatalog);
             applyRead(after.data);

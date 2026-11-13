@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using Xunit;
@@ -100,6 +101,136 @@ public sealed class CompletionPolicySyncTests
         Assert.Equal("wf-picked", sent.Params["catalogWorkflowId"]);
         Assert.Equal("wf-original", result!["specifiedWorkflowId"]);
         Assert.Equal("node-b", result["specifiedStartTaskId"]);
+    }
+
+    [Theory]
+    [InlineData("group", true, "收尾")]
+    [InlineData("onedragon", true, "收尾")]
+    [InlineData("workflow", false, "收尾")]
+    [InlineData("group", true, "")]
+    [InlineData("onedragon", true, "")]
+    public async Task OnlyExplicitBgiCatalogRefreshCarriesStartupIntentToTheSelectedUid(string type, bool ensure, string name)
+    {
+        RemoteCommand? sent = null;
+        TaskPolicySyncService sync = null!;
+        sync = new TaskPolicySyncService(command =>
+        {
+            sent = command;
+            sync.TryComplete(command.CommandId, new RemoteCommand { Params = new() { ["ok"] = "true" } });
+            return Task.FromResult(true);
+        }, () => "controller", () => "遥控端");
+        await sync.PullAsync("original-executor", type, name, "wf-1", ensureBgiReady: true);
+        Assert.Equal(new[] { "original-executor" }, sent!.Target);
+        Assert.Equal("task_policy.pull", sent.Cmd);
+        Assert.Equal(type, sent.Params!["catalogType"]);
+        Assert.Equal(name, sent.Params["catalogName"]);
+        Assert.Equal(ensure, sent.Params.ContainsKey("ensureBgiReady"));
+        if (ensure)
+        {
+            Assert.Equal("true", sent.Params["ensureBgiReady"]);
+            Assert.True(sent.ExpiresAtUtc > DateTimeOffset.UtcNow.AddSeconds(150));
+        }
+        await sync.PullAsync("original-executor", type, name, "wf-1");
+        Assert.False(sent!.Params!.ContainsKey("ensureBgiReady"));
+        Assert.Null(sent.ExpiresAtUtc);
+        Assert.Equal(TimeSpan.FromSeconds(8), TaskPolicySyncService.GetPullTimeout(false));
+        Assert.Equal(TimeSpan.FromSeconds(180), TaskPolicySyncService.GetPullTimeout(true));
+    }
+
+    [Fact]
+    public async Task CancellingAnInFlightRefreshRevokesThatRequestOnTheSameExecutor()
+    {
+        var sent = new List<RemoteCommand>();
+        using var cancellation = new CancellationTokenSource();
+        var sync = new TaskPolicySyncService(command => { sent.Add(command); return Task.FromResult(true); },
+            () => "controller", () => "遥控端");
+        var pending = sync.PullAsync("original-executor", "group", "收尾", "", cancellation.Token, ensureBgiReady: true);
+        var original = Assert.Single(sent);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.Equal(2, sent.Count);
+        var cancel = sent[1];
+        Assert.Equal(new[] { "original-executor" }, cancel.Target);
+        Assert.Equal(original.CommandId, cancel.Params!["cancelCatalogRefresh"]);
+        Assert.False(cancel.Params.ContainsKey("ensureBgiReady"));
+        Assert.False(sync.TryComplete(original.CommandId, new RemoteCommand { Params = new() { ["ok"] = "true" } }));
+    }
+
+    // 真实同步服务的发送回执故意挂起；撤销和本地取消必须在它完成前发生，否则不能交付关闭/换目标行为。
+    [Fact]
+    public async Task CancellationDuringSendRevokesTheDeliveredRequestBeforeItsSendAcknowledgement()
+    {
+        var sent = new ConcurrentQueue<RemoteCommand>();
+        var delivered = new TaskCompletionSource<RemoteCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var revoked = new TaskCompletionSource<RemoteCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sendAcknowledgement = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var senderUid = "original-controller";
+        using var cancellation = new CancellationTokenSource();
+        var sync = new TaskPolicySyncService(command =>
+        {
+            sent.Enqueue(command);
+            if (command.Params!.ContainsKey("cancelCatalogRefresh"))
+            {
+                revoked.TrySetResult(command);
+                return Task.FromResult(true);
+            }
+            delivered.TrySetResult(command);
+            return sendAcknowledgement.Task;
+        }, () => senderUid, () => "遥控端");
+        var pending = sync.PullAsync("original-executor", "group", "收尾", "", cancellation.Token, ensureBgiReady: true);
+        try
+        {
+            var original = await delivered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.False(sendAcknowledgement.Task.IsCompleted);
+            senderUid = "replacement-controller";
+            cancellation.Cancel();
+            var cancel = await revoked.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(2)));
+            Assert.False(sendAcknowledgement.Task.IsCompleted);
+            Assert.Equal(original.SenderUid, cancel.SenderUid);
+            Assert.Equal(original.Target, cancel.Target);
+            Assert.Equal(original.CommandId, cancel.Params!["cancelCatalogRefresh"]);
+            Assert.False(cancel.Params.ContainsKey("ensureBgiReady"));
+            Assert.False(sync.TryComplete(original.CommandId, new RemoteCommand { Params = new() { ["ok"] = "true" } }));
+            sendAcknowledgement.SetResult(true);
+            Assert.Equal(2, sent.Count);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            sendAcknowledgement.TrySetResult(true);
+        }
+    }
+
+    [Fact]
+    public async Task SuccessfulRefreshDoesNotSendRevocationEvenWhenItsCallerLaterCancels()
+    {
+        var sent = new List<RemoteCommand>();
+        using var cancellation = new CancellationTokenSource();
+        TaskPolicySyncService sync = null!;
+        sync = new TaskPolicySyncService(command =>
+        {
+            sent.Add(command);
+            sync.TryComplete(command.CommandId, new RemoteCommand { Params = new() { ["ok"] = "true", ["catalog"] = "{}" } });
+            return Task.FromResult(true);
+        }, () => "controller", () => "遥控端");
+        var result = await sync.PullAsync("executor", "group", "收尾", "", cancellation.Token, ensureBgiReady: true)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.NotNull(result);
+        cancellation.Cancel();
+        var original = Assert.Single(sent);
+        Assert.Equal("true", original.Params!["ensureBgiReady"]);
+        Assert.False(original.Params.ContainsKey("cancelCatalogRefresh"));
+    }
+
+    [Fact]
+    public async Task CancellationBeforeSendCannotEnqueueStartupOrCancellationMessages()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var sync = new TaskPolicySyncService(_ => throw new InvalidOperationException("取消后不能发送"), () => "self", () => "本机");
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sync.PullAsync("executor", "group", "收尾", "",
+            cancellation.Token, ensureBgiReady: true));
     }
 
     private static TaskConflictPolicySettings Settings() => new()

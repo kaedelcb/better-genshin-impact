@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Input;
+using System.Windows.Markup;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 
@@ -10,8 +12,10 @@ namespace MultiplayerHoeingAssistant.Views;
 internal sealed class CompletionActionPanel
 {
     private readonly Func<string, string, string, Task<CompletionTargetCatalog?>> _loadCatalog;
-    private readonly IReadOnlyList<string> _groups;
-    private readonly IReadOnlyList<string> _oneClicks;
+    private readonly Func<string, string, string, CancellationToken, Task<CompletionTargetCatalog?>>? _refreshCatalog;
+    private CancellationTokenSource? _refreshCancellation;
+    private IReadOnlyList<string> _groups;
+    private IReadOnlyList<string> _oneClicks;
     private readonly bool _supported;
     private readonly TaskConflictPolicySettings _initialSettings;
     private (string Type, string Key) _targetIdentity;
@@ -40,20 +44,26 @@ internal sealed class CompletionActionPanel
     internal Button RefreshButton { get; }
     internal Task CatalogLoadTask { get; private set; } = Task.CompletedTask;
 
-    private sealed record WorkflowChoice(string Id, string Label);
+    private sealed record WorkflowChoice(string Id, string Label)
+    {
+        public override string ToString() => Label;
+    }
     private sealed record NodeChoice(CompletionTargetNode Node, int Index)
     {
         public string Label => $"{Index + 1}. {Node.Name}";
+        public override string ToString() => Label;
     }
 
     internal CompletionActionPanel(TaskConflictPolicySettings settings, IReadOnlyList<string> groups,
         IReadOnlyList<string> oneClicks, string description,
         Func<string, string, string, Task<CompletionTargetCatalog?>> loadCatalog, bool supported = true,
-        Func<ComboBox>? createCombo = null)
+        Func<ComboBox>? createCombo = null,
+        Func<string, string, string, CancellationToken, Task<CompletionTargetCatalog?>>? refreshCatalog = null)
     {
         _groups = groups;
         _oneClicks = oneClicks;
         _loadCatalog = loadCatalog;
+        _refreshCatalog = refreshCatalog;
         _supported = supported;
         _initialSettings = CopySettings(settings);
         _workflowId = settings.SpecifiedWorkflowId;
@@ -101,7 +111,41 @@ internal sealed class CompletionActionPanel
         NodeCombo.DisplayMemberPath = nameof(NodeChoice.Label);
         NodeCombo.Margin = new Thickness(0, 6, 0, 0);
         _specifiedPanel.Children.Add(NodeCombo);
-        RefreshButton = new Button { Content = "刷新任务目录", Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(6, 3, 6, 3), HorizontalAlignment = HorizontalAlignment.Left };
+        RefreshButton = new Button
+        {
+            Content = "刷新任务目录", Margin = new Thickness(0, 8, 0, 0), Padding = new Thickness(12, 5, 12, 5),
+            HorizontalAlignment = HorizontalAlignment.Left, Height = 32, FontSize = 12, FontWeight = FontWeights.Medium,
+            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0x27, 0x4E)), Foreground = gold,
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xD4, 0xAF, 0x37)), BorderThickness = new Thickness(1),
+            Cursor = Cursors.Hand, FocusVisualStyle = null,
+            ToolTip = "重新读取所选目标的任务目录；配置组或一条龙的 BGI 未运行时会自动启动。",
+            Template = (ControlTemplate)XamlReader.Parse("""
+                <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="Button">
+                    <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="7" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Content" RecognizesAccessKey="True"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#35305F"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Chrome" Property="BorderBrush" Value="#F2E3B6"/>
+                            <Setter TargetName="Chrome" Property="Background" Value="#35305F"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#40365F"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+                """)
+        };
         _specifiedPanel.Children.Add(RefreshButton);
         _catalogStatus = Text("", dim);
         _specifiedPanel.Children.Add(_catalogStatus);
@@ -177,9 +221,18 @@ internal sealed class CompletionActionPanel
         };
         RefreshButton.Click += (_, _) =>
         {
-            // 刷新不把过期节点自动改成从头；由用户重新选择起点确认当前版本。
-            _revision = "";
-            CatalogLoadTask = RefreshCatalogAsync();
+            if (_loading) return;
+            // 保留已有确认和节点；同版本刷新无需重选，版本改变仍需用户确认。
+            CatalogLoadTask = RefreshCatalogAsync(
+                confirmNewTarget: StartModeCombo.SelectedIndex == 0 && string.IsNullOrEmpty(_revision),
+                explicitRefresh: true);
+        };
+        Root.Unloaded += (_, _) =>
+        {
+            ++_request;
+            CancelCurrentRefresh();
+            _loading = false;
+            RefreshButton.IsEnabled = _supported;
         };
         if (!supported)
             Root.Children.Add(Text("对方尚未支持执行起点设置，请更新执行端并重新打开绑定。", gold, 11));
@@ -239,29 +292,67 @@ internal sealed class CompletionActionPanel
         CatalogLoadTask = RefreshCatalogAsync(confirmNewTarget: true, debounce: true);
     }
 
-    internal async Task RefreshCatalogAsync(bool confirmNewTarget = false, bool debounce = false)
+    private void CancelCurrentRefresh()
+    {
+        var cancellation = Interlocked.Exchange(ref _refreshCancellation, null);
+        if (cancellation == null) return;
+        try { cancellation.Cancel(); }
+        catch (ObjectDisposedException) { }
+    }
+
+    internal async Task RefreshCatalogAsync(bool confirmNewTarget = false, bool debounce = false,
+        bool explicitRefresh = false)
     {
         var request = ++_request;
+        CancelCurrentRefresh();
         var (type, name, id) = (Type, Name, WorkflowId);
         var identity = TargetIdentity;
+        using var cancellation = explicitRefresh && _refreshCatalog != null ? new CancellationTokenSource() : null;
+        _refreshCancellation = cancellation;
+        var token = cancellation?.Token ?? CancellationToken.None;
         _loading = true;
-        _catalogStatus.Text = "正在读取执行端任务目录…";
+        RefreshButton.IsEnabled = false;
+        _catalogStatus.Text = explicitRefresh && type is ("group" or "onedragon")
+            ? "正在刷新目录，必要时启动执行端 BGI 并等待连接…" : "正在读取执行端任务目录…";
         CompletionTargetCatalog? catalog;
         try
         {
-            if (debounce) await Task.Delay(250);
+            if (debounce) await Task.Delay(250, token);
             if (request != _request) return;
-            catalog = await _loadCatalog(type, name, id);
+            catalog = explicitRefresh && _refreshCatalog != null
+                ? await _refreshCatalog(type, name, id, token)
+                : await _loadCatalog(type, name, id);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            if (request == _request)
+            {
+                _loading = false;
+                RefreshButton.IsEnabled = _supported;
+                _catalogStatus.Text = "目录刷新已取消。";
+            }
+            return;
         }
         catch (Exception ex) { catalog = new([], null, "读取目录失败：" + ex.Message); }
+        finally
+        {
+            if (ReferenceEquals(_refreshCancellation, cancellation)) _refreshCancellation = null;
+        }
         if (request != _request || identity != TargetIdentity) return;
         _loading = false;
+        RefreshButton.IsEnabled = _supported;
         _catalog = catalog ?? new([], null, "未取得执行端任务目录，请重新读取。");
         if (_catalog.Target is { } target
             && (target.Type, target.Type == "workflow" ? target.WorkflowId : target.Name.Trim()) != identity)
             _catalog = _catalog with { Target = null, Error = "目录目标不匹配，请重新读取。" };
         _updating = true;
-        if (type == "workflow") SetNames(name);
+        if (_catalog.ConfigGroups != null)
+            _groups = _catalog.ConfigGroups.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.Ordinal).ToArray();
+        if (_catalog.OneClickConfigs != null)
+            _oneClicks = _catalog.OneClickConfigs.Where(n => !string.IsNullOrWhiteSpace(n)).Distinct(StringComparer.Ordinal).ToArray();
+        if (type == "workflow" || type == "group" && _catalog.ConfigGroups != null
+            || type == "onedragon" && _catalog.OneClickConfigs != null)
+            SetNames(name); // 刷新候选但不自动选择第一个目标；原目标与节点保持不变。
         var choices = (_catalog.Target?.Nodes ?? []).Select((n, i) => new NodeChoice(n, i)).Where(n => n.Node.Enabled).ToArray();
         NodeCombo.ItemsSource = choices;
         NodeCombo.SelectedItem = choices.FirstOrDefault(n => n.Node.TaskId == _nodeId);
@@ -362,6 +453,13 @@ internal sealed class CompletionActionPanel
 
     private void UpdateVisibility()
     {
+        if (Policy != TaskConflictPolicy.RunSpecified && _refreshCancellation != null)
+        {
+            ++_request;
+            CancelCurrentRefresh();
+            _loading = false;
+            RefreshButton.IsEnabled = _supported;
+        }
         _layer2Panel.Visibility = PolicyCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         _specifiedPanel.Visibility = ActionCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         NodeCombo.Visibility = StartModeCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;

@@ -306,9 +306,10 @@ public partial class MainViewModel
 
     /// <summary>统一探测入口（会诊三轮 重要1/2 处置）：
     /// - 通道门排队计入调用方预算（deadlineUtc null=无预算），取门后、开探测前复核期限——预算耗尽绝不开启新一轮 SDK 探测；
-    /// - forceProbe（仅任务中心显式执行请求）在门内清零退避——与探测同人同门，无锁外覆写竞态；
+    /// - forceProbe（显式执行或完成动作目录刷新）在门内清零退避——与探测同人同门，无锁外覆写竞态；
     /// - 本轮结果在门内读取随返回值绑定调用方；Core 内 SDK 调用不可中途中断，由其自身连接超时兜底（诚实边界），返回后复核取消。</summary>
-    private async Task<ProbeOutcome> TryProbeExternalChannelAsync(DateTime? deadlineUtc, bool forceProbe, CancellationToken ct)
+    private async Task<ProbeOutcome> TryProbeExternalChannelAsync(DateTime? deadlineUtc, bool forceProbe, CancellationToken ct,
+        bool preserveConfiguredPath = false)
     {
         // 会诊四轮 阻断修复：预算耗尽判定仅限有预算调用——InfiniteTimeSpan(-1ms) 会被 <= Zero 误判耗尽（轮询路径永禁）
         var remaining = deadlineUtc is { } d ? d - DateTime.UtcNow : Timeout.InfiniteTimeSpan;
@@ -322,7 +323,7 @@ public partial class MainViewModel
                 return new ProbeOutcome(false, null, true); // 取门后复核：预算耗尽不开新探测
             if (forceProbe)
                 _externalNextProbeUtc = DateTime.MinValue; // 门内强制：显式执行请求不吃 1 分钟退避
-            var active = await TryEstablishExternalChannelCoreAsync().ConfigureAwait(false);
+            var active = await TryEstablishExternalChannelCoreAsync(preserveConfiguredPath).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             return new ProbeOutcome(active, _lastProbeState, false);
         }
@@ -334,21 +335,27 @@ public partial class MainViewModel
 
     /// <summary>
     /// 任务中心执行环境确保（2026-09-20 修复：任务中心启动时 BGI 未运行不会被拉起，启动被「BGI 离线」直接拒绝）。
-    /// 仅由任务中心执行入口（Start/Resume/启动移交）在就绪检查前调用；纯查询/监控路径不触达（监控端零副作用合同不破）。
+    /// 由任务中心执行入口（Start/Resume/启动移交）或用户明确的完成动作目录刷新调用；普通目录读取/监控不触达。
     /// 顺序：已 Ready 直接通过 → 本会话无 BGI 进程则 RestartBgi 拉起（复用成员卡片「启动BGI」同款语义：解除崩溃守护
     /// 「有意关闭」豁免+冷启动宽限期）→ 清零 1 分钟探测退避，有界等待 ext 通道 Ready（BGI 客户端自带 5s 重连循环）。
     /// 返回 null=就绪；非 null=响亮拒绝原因（未发送任何任务）。
     /// </summary>
-    private async Task<string?> EnsureTaskCenterExecutionReadyAsync(CancellationToken ct)
+    private Task<string?> EnsureTaskCenterExecutionReadyAsync(CancellationToken ct)
+        => EnsureTaskCenterExecutionReadyCoreAsync(ct);
+
+    // 显式目录刷新沿用同一确保门和预算，但保留当前 BgiPath，并在排队后复核最初的启动许可。
+    private async Task<string?> EnsureTaskCenterExecutionReadyCoreAsync(CancellationToken ct,
+        bool preserveConfiguredPath = false, Action? requireLaunchPermission = null)
     {
         ct.ThrowIfCancellationRequested();
+        requireLaunchPermission?.Invoke();
         if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
             return BgiUpdateCoordination.PreparingMessage;
         var binding = InspectTaskCenterClientBinding();
         if (binding.Client != null)
             return null;
 
-        EnsureSamePackageBgiPath();
+        if (!preserveConfiguredPath) EnsureSamePackageBgiPath();
         binding = InspectTaskCenterClientBinding();
         if (binding.Client != null)
             return null;
@@ -364,6 +371,8 @@ public partial class MainViewModel
             return "等待执行环境确保排队超时（前序请求的就绪等待未在预算内完成；未发送任何任务）";
         try
         {
+            ct.ThrowIfCancellationRequested();
+            requireLaunchPermission?.Invoke();
             if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
                 return BgiUpdateCoordination.PreparingMessage;
             binding = InspectTaskCenterClientBinding();
@@ -378,6 +387,8 @@ public partial class MainViewModel
             if (BgiProcessMonitor.GetCurrentSessionBgiProcesses().Length == 0)
             {
                 AddLog("[任务中心] BGI 未运行，正在启动（任务中心启动属「要求 BGI 运行」动作，解除有意关闭豁免）");
+                ct.ThrowIfCancellationRequested();
+                requireLaunchPermission?.Invoke();
                 if (_processMonitor is null || !_processMonitor.RestartBgi())
                     return "BGI 未运行且启动调用失败（请检查助手配置中的 BGI 路径；未发送任何任务）";
             }
@@ -387,12 +398,13 @@ public partial class MainViewModel
             while (DateTime.UtcNow < deadline)
             {
                 ct.ThrowIfCancellationRequested();
+                requireLaunchPermission?.Invoke();
                 if (BgiUpdateCoordination.IsLaunchBlocked(ResolveConfiguredBgiDirectory()))
                     return BgiUpdateCoordination.PreparingMessage;
                 BgiExternalLinkState? probeState;
                 try
                 {
-                    var probe = await TryProbeExternalChannelAsync(deadline, true, ct).ConfigureAwait(false);
+                    var probe = await TryProbeExternalChannelAsync(deadline, true, ct, preserveConfiguredPath).ConfigureAwait(false);
                     if (probe.BudgetExhausted) break; // 预算耗尽（含通道门排队/取门复核）→ 落超时结论，绝不开新探测
                     probeState = probe.ProbeState;
                 }
@@ -428,7 +440,7 @@ public partial class MainViewModel
             _bgiEnsureGate.Release();
         }
     }
-    private async Task<bool> TryEstablishExternalChannelCoreAsync()
+    private async Task<bool> TryEstablishExternalChannelCoreAsync(bool preserveConfiguredPath = false)
     {
         _lastProbeState = null; // 逐轮刷新：入口清空，出口按本轮结果赋值（杜绝历史 Legacy 残留误判）
         if (_config?.ObserverMode == true)
@@ -445,7 +457,7 @@ public partial class MainViewModel
                     return false;
                 }
 
-                EnsureSamePackageBgiPath();
+                if (!preserveConfiguredPath) EnsureSamePackageBgiPath();
                 var client = new BgiExternalClient(ResolveConfiguredBgiDirectory());
                 var state = await client.StartAsync();
                 if (state == BgiExternalLinkState.Ready)

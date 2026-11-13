@@ -25,7 +25,9 @@ public sealed record CompletionTarget(
 public sealed record CompletionTargetCatalog(
     [property: JsonPropertyName("workflows")] IReadOnlyList<CompletionWorkflowTarget> Workflows,
     [property: JsonPropertyName("target")] CompletionTarget? Target,
-    [property: JsonPropertyName("error")] string? Error = null);
+    [property: JsonPropertyName("error")] string? Error = null,
+    [property: JsonPropertyName("configGroups")] IReadOnlyList<string>? ConfigGroups = null,
+    [property: JsonPropertyName("oneClickConfigs")] IReadOnlyList<string>? OneClickConfigs = null);
 
 /// <summary>Only reads the selected executor's saved plans and live BGI descriptions; never writes task start settings.</summary>
 public sealed class CompletionTargetCatalogService
@@ -42,10 +44,22 @@ public sealed class CompletionTargetCatalogService
         Func<string, WorkflowSnapshot> load, IResourceCatalogTransport? transport)
         => (_list, _load, _transport) = (list, load, transport);
 
-    public async Task<CompletionTargetCatalog> LoadAsync(string type, string name, string workflowId = "",
+    public Task<CompletionTargetCatalog> LoadAsync(string type, string name, string workflowId = "",
         CancellationToken cancellationToken = default)
+        => LoadCoreAsync(type, name, workflowId, includeNames: false, cancellationToken: cancellationToken);
+
+    /// <summary>仅用于显式刷新；调用方先确保 BGI 就绪，此处只读实时名称和所选目标，不自动选择或执行。</summary>
+    public Task<CompletionTargetCatalog> RefreshAsync(string type, string name, string workflowId = "",
+        CancellationToken cancellationToken = default)
+        => LoadCoreAsync(type, name, workflowId, includeNames: true, cancellationToken: cancellationToken);
+
+    private async Task<CompletionTargetCatalog> LoadCoreAsync(string type, string name, string workflowId,
+        bool includeNames, CancellationToken cancellationToken)
     {
         var workflows = new List<CompletionWorkflowTarget>();
+        IReadOnlyList<string>? configGroups = null, oneClickConfigs = null;
+        CompletionTargetCatalog Result(CompletionTarget? target, string? error = null)
+            => new(workflows, target, error, configGroups, oneClickConfigs);
         try
         {
             foreach (var entry in _list().Where(e => e.Status == WorkflowFileStatus.Ready
@@ -70,19 +84,59 @@ public sealed class CompletionTargetCatalogService
             {
                 var flow = workflows.SingleOrDefault(w => w.WorkflowId == workflowId);
                 return flow is null
-                    ? new(workflows, null, "计划表已失效或不可执行，请重新选择。")
-                    : new(workflows, new(type, flow.Name, flow.WorkflowId, flow.Revision, flow.Nodes));
+                    ? Result(null, "计划表已失效或不可执行，请重新选择。")
+                    : Result(new(type, flow.Name, flow.WorkflowId, flow.Revision, flow.Nodes));
             }
-            if (type is not ("group" or "onedragon")) return new(workflows, null, "未知指定任务类型。 ");
-            if (string.IsNullOrWhiteSpace(name)) return new(workflows, null, "请选择执行目标。");
-            if (_transport is not { IsReady: true }) return new(workflows, null, "执行端 BGI 目录未就绪。");
+            if (type is not ("group" or "onedragon")) return Result(null, "未知指定任务类型。 ");
+            if (includeNames)
+            {
+                if (_transport is not { IsReady: true }) return Result(null, "执行端 BGI 目录未就绪。");
+                cancellationToken.ThrowIfCancellationRequested();
+                var listJson = await _transport.SendAsync(BgiExternalCatalogTransport.OpConfigList, new { }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(listJson)) return Result(null, "执行端未返回实时任务名称目录，请重试。");
+                using var list = JsonDocument.Parse(listJson);
+                var groups = ReadCatalogNames(list.RootElement, "configGroups");
+                var oneClicks = ReadCatalogNames(list.RootElement, "oneClickConfigs");
+                configGroups = groups;
+                oneClickConfigs = oneClicks;
+            }
+            if (string.IsNullOrWhiteSpace(name)) return Result(null, "请选择执行目标。");
+            if (_transport is not { IsReady: true }) return Result(null, "执行端 BGI 目录未就绪。");
+            cancellationToken.ThrowIfCancellationRequested();
             var json = await _transport.SendAsync(BgiExternalCatalogTransport.OpConfigDescribe,
                 new { groupName = type == "group" ? name : null, configName = type == "onedragon" ? name : null }, cancellationToken);
-            if (string.IsNullOrWhiteSpace(json)) return new(workflows, null, "执行目标不存在或无法读取目录。");
-            return new(workflows, ParseDescription(type, name, json));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(json)) return Result(null, "执行目标不存在或无法读取目录。");
+            return Result(ParseDescription(type, name, json));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
-        { return new(workflows, null, "读取完成动作目录失败：" + ex.Message); }
+        { return Result(null, "读取完成动作目录失败：" + ex.Message); }
+    }
+
+    /// <summary>显式 BGI 刷新必须带完整实时名称；旧端只返回单个目标时不能宣称刷新成功。</summary>
+    internal static CompletionTargetCatalog ValidateExplicitRefreshCatalog(string type, CompletionTargetCatalog catalog)
+    {
+        if (type is not ("group" or "onedragon")) return catalog;
+        if (!string.IsNullOrWhiteSpace(catalog.Error)) return catalog with { Target = null };
+        static bool ValidNames(IReadOnlyList<string>? names) => names != null
+            && names.All(name => !string.IsNullOrWhiteSpace(name) && name.Length <= 1024)
+            && names.Distinct(StringComparer.Ordinal).Count() == names.Count;
+        if (!ValidNames(catalog.ConfigGroups) || !ValidNames(catalog.OneClickConfigs))
+            return catalog with { Target = null, ConfigGroups = null, OneClickConfigs = null,
+                Error = "执行端未返回完整的实时任务名称目录，未确认刷新成功；请更新执行端后重试。" };
+        return catalog;
+    }
+
+    private static IReadOnlyList<string> ReadCatalogNames(JsonElement root, string property)
+    {
+        if (!root.TryGetProperty(property, out var names) || names.ValueKind != JsonValueKind.Array)
+            throw new InvalidOperationException("实时任务名称目录缺少 " + property + "。");
+        var result = names.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : null).ToArray();
+        if (result.Any(name => string.IsNullOrWhiteSpace(name) || name.Length > 1024)
+            || result.Distinct(StringComparer.Ordinal).Count() != result.Length)
+            throw new InvalidOperationException("实时任务名称目录中的名称不完整或重复。");
+        return result.Select(name => name!).ToArray();
     }
 
     public static CompletionTarget ParseDescription(string type, string name, string json)

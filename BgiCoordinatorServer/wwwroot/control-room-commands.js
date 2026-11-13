@@ -19,6 +19,10 @@ function rememberMemberResult(uid, cmd, status, message) {
     memberCommandResults.set(uid, { cmd, status, message, time: new Date().toLocaleTimeString() });
     if (typeof renderMemberResults === 'function') renderMemberResults();
 }
+function isCompletionCatalogRefresh(cmd) {
+    return cmd.cmd === 'task_policy.pull' && cmd.params?.ensureBgiReady === 'true'
+        && ['group', 'onedragon'].includes(cmd.params?.catalogType);
+}
 function sendTrackedCommand(cmd, expectedReply = null) {
     requireOnlineTargets(cmd.target);
     if (cmd.target.length !== 1) throw new Error('执行回执必须逐成员关联');
@@ -26,9 +30,20 @@ function sendTrackedCommand(cmd, expectedReply = null) {
     if (activeMemberWrites.has(writeKey)) throw new Error('该成员的同类操作正在等待结果');
     activeMemberWrites.add(writeKey);
     rememberMemberResult(uid, cmd.cmd, 'pending', '正在发送，等待执行端确认');
-    return new Promise(resolve => {
+    const refresh = isCompletionCatalogRefresh(cmd);
+    let cancelRefresh;
+    const pending = new Promise(resolve => {
+        let sent = false, cancellationSent = false;
+        const revokeRefresh = () => {
+            if (!refresh || !sent || cancellationSent) return;
+            cancellationSent = true;
+            const cancel = makeCmd('task_policy.pull', { cancelCatalogRefresh: cmd.commandId });
+            cancel.target = [uid];
+            Promise.resolve().then(() => sendRemoteCommand(cancel)).catch(() => {});
+        };
         const finish = result => {
             if (!pendingMemberCommands.delete(cmd.commandId)) return;
+            if (result.status !== 'success') revokeRefresh();
             clearTimeout(timer);
             activeMemberWrites.delete(writeKey);
             rememberMemberResult(uid, cmd.cmd, result.status, result.message || '执行端未提供说明');
@@ -36,13 +51,22 @@ function sendTrackedCommand(cmd, expectedReply = null) {
             log(`${name} · ${commandTitles[cmd.cmd] || cmd.cmd}：${result.status === 'success' ? '已确认' : result.status === 'unknown' ? '未确认' : '未完成'} ${result.message || ''}`);
             resolve(result);
         };
-        const timer = setTimeout(() => finish({ status: 'unknown', message: '执行回执超时；未自动重发' }), 90000);
+        // 普通目录查询沿用短等待；显式刷新覆盖执行端 150 秒启动确保预算。
+        const timeout = refresh ? 180000 : cmd.cmd === 'task_policy.pull' ? 8000 : 90000;
+        const timer = setTimeout(() => finish({ status: 'unknown', message: '执行回执超时；未自动重发' }), timeout);
+        cancelRefresh = refresh ? () => finish({ status: 'cancelled', message: '目录刷新等待已取消；已发送的请求正通知执行端撤销' }) : null;
         pendingMemberCommands.set(cmd.commandId, { uid, cmd: cmd.cmd, expectedReply, finish,
             completionStartVersion: cmd.cmd === 'task_policy.push' ? cmd.params?.completionStartVersion : null,
             completionPolicy: cmd.cmd === 'task_policy.push' ? { ...cmd.params } : null });
-        Promise.resolve().then(() => sendRemoteCommand(cmd)).catch(err =>
-            finish({ status: 'unknown', message: '发送或执行结果未确认：' + err.message }));
+        Promise.resolve().then(() => {
+            if (!pendingMemberCommands.has(cmd.commandId)) return;
+            sent = true;
+            if (refresh) cmd.expiresAtUtc = new Date(Date.now() + timeout).toISOString();
+            return sendRemoteCommand(cmd);
+        }).catch(err => finish({ status: 'unknown', message: '发送或执行结果未确认：' + err.message }));
     });
+    pending.cancelCatalogRefresh = cancelRefresh;
+    return pending;
 }
 function consumeMemberResult(result) {
     const pending = pendingMemberCommands.get(result?.commandId);
@@ -87,10 +111,12 @@ function interruptMemberWaits() {
         pending.reject(new Error('连接断开，配置应用未确认，未继续启动任务'));
     }
 }
-async function sendMemberOperation(uid, cmdName, params = {}, expectedReply = null) {
-    const cmd = makeCmd(cmdName, params);
-    cmd.target = [uid];
-    return sendTrackedCommand(cmd, expectedReply);
+function sendMemberOperation(uid, cmdName, params = {}, expectedReply = null) {
+    try {
+        const cmd = makeCmd(cmdName, params);
+        cmd.target = [uid];
+        return sendTrackedCommand(cmd, expectedReply);
+    } catch (err) { return Promise.reject(err); }
 }
 function validateBinding(names, types, member) {
     if (!names.length || names.length !== types.length) throw new Error('至少添加一项联机任务，且每项必须有明确类型');
@@ -141,6 +167,8 @@ function normalizeCompletionCatalog(data) {
     const text = (value, empty = false) => typeof value === 'string' && value.length <= 1024 && (empty || value.trim().length > 0);
     const nodesValid = nodes => Array.isArray(nodes) && nodes.every(node => node && text(node.taskId)
         && text(node.name) && typeof node.enabled === 'boolean') && new Set(nodes.map(node => node.taskId)).size === nodes.length;
+    const namesValid = names => names == null || Array.isArray(names) && names.every(name => text(name))
+        && new Set(names).size === names.length;
     if (!catalog || !Array.isArray(catalog.workflows) || !catalog.workflows.every(flow => flow && text(flow.workflowId)
         && text(flow.name) && text(flow.revision) && nodesValid(flow.nodes))
         || new Set(catalog.workflows.map(flow => flow.workflowId)).size !== catalog.workflows.length
@@ -148,7 +176,8 @@ function normalizeCompletionCatalog(data) {
             || !text(catalog.target.name) || !text(catalog.target.workflowId, catalog.target.type !== 'workflow')
             || catalog.target.type !== 'workflow' && catalog.target.workflowId !== ''
             || !text(catalog.target.revision) || !nodesValid(catalog.target.nodes))
-        || catalog.error != null && typeof catalog.error !== 'string')
+        || catalog.error != null && typeof catalog.error !== 'string'
+        || !namesValid(catalog.configGroups) || !namesValid(catalog.oneClickConfigs))
         throw new Error('执行端返回的完成动作目录不完整');
     return catalog;
 }
