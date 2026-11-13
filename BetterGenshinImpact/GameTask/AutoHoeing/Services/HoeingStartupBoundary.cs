@@ -72,7 +72,8 @@ internal static class HoeingStartupBoundary
         finally
         {
             lifetime.Cancel();
-            await reporter;
+            try { await reporter; }
+            finally { ct.ThrowIfCancellationRequested(); }
         }
 
         async Task ReportAsync()
@@ -90,7 +91,10 @@ internal static class HoeingStartupBoundary
             catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception ex)
             {
-                ready.TrySetException(new HoeingStartupException("全员进入世界上报", ex.Message, ex));
+                var failure = new HoeingStartupException("全员进入世界上报", ex.Message, ex);
+                ready.TrySetException(failure);
+                // AllWorldJoined 可能已同时到达，仍由调用方排空 reporter 时传播上报失败。
+                throw failure;
             }
         }
     }

@@ -310,6 +310,59 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 new { requireWorldPlanRoster = true }, targetCode);
             Assert.True(marked.Payload!["ack"]!.GetValue<bool>());
             Assert.True(server.Manager.GetRoom(targetCode)!.IsStarted);
+
+            // 生产故障顺序：新连接先到，旧连接尚未被断线回调移入宽限期。
+            // 不能放宽同 UID 在线保护；旧连接进入宽限后，重试应接回同一房间和世界准入。
+            HubConnection? replacement = await ConnectV2Async(1);
+            try
+            {
+                var oldId = connections[1].ConnectionId!;
+                var originalRoom = server.Manager.GetRoom(targetCode)!;
+                for (var attempt = 0; attempt < 2; attempt++)
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var denied = await replacement.InvokeAsync<Envelope>("Dispatch", new Envelope
+                    {
+                        Type = "command", Name = Protocol.Names.RoomJoin, RoomCode = targetCode,
+                        RequestId = Guid.NewGuid().ToString("N"), SentAtUtc = DateTime.UtcNow,
+                        Payload = Envelope.ToPayload(new { playerName = uids[1], playerUid = uids[1], reportedVersion = version })
+                    }, timeout.Token);
+                    Assert.False(denied.Payload!["success"]!.GetValue<bool>());
+                    Assert.Equal("world_plan_duplicate_participant", denied.Payload["error"]!.GetValue<string>());
+                    lock (originalRoom)
+                    {
+                        Assert.Equal(4, originalRoom.Players.Count);
+                        Assert.Equal(oldId, originalRoom.Players.Single(p => p.PlayerUid == uids[1]).ConnectionId);
+                        Assert.DoesNotContain(oldId, originalRoom.GracePendingMembers.Keys);
+                    }
+                }
+                await connections[1].DisposeAsync();
+                await WaitUntilAsync(() =>
+                {
+                    lock (originalRoom) return Task.FromResult(originalRoom.GracePendingMembers.ContainsKey(oldId));
+                });
+                Assert.True((await SendAsync(replacement, Protocol.Names.RoomJoin,
+                    new { playerName = uids[1], playerUid = uids[1], reportedVersion = version }, targetCode))
+                    .Payload!["success"]!.GetValue<bool>());
+                connections[1] = replacement;
+                replacement = null;
+                lock (originalRoom)
+                {
+                    Assert.Same(originalRoom, server.Manager.GetRoom(targetCode));
+                    Assert.Equal(targetSession, originalRoom.SessionId);
+                    Assert.True(originalRoom.IsStarted);
+                    Assert.Equal(4, originalRoom.Players.Count);
+                    Assert.DoesNotContain(oldId, originalRoom.WorldJoinedSet);
+                    Assert.Contains(connections[1].ConnectionId!, originalRoom.WorldJoinedSet);
+                    Assert.False(originalRoom.GracePendingMembers.ContainsKey(oldId));
+                }
+                Assert.Null(server.Manager.GetRoomByConnectionId(oldId).Room);
+                Assert.Same(originalRoom, server.Manager.GetRoomByConnectionId(connections[1].ConnectionId!).Room);
+            }
+            finally
+            {
+                if (replacement != null) await replacement.DisposeAsync();
+            }
             await ExpectErrorAsync(connections[0], Protocol.Names.WorldPlanAbort, Credential(0), "world_plan_startup_retired");
             Assert.NotNull(server.Manager.GetRoom(targetCode));
             Assert.All(closed, signal => Assert.False(signal.Task.IsCompleted));

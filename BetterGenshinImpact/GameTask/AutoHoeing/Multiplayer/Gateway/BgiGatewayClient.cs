@@ -32,6 +32,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     // State/SendAsync 均为不可重写成员，Moq 无法 mock，故用 Func 种子代替。
     internal Func<string, GatewayEnvelope, CancellationToken, Task>? _testSendOverride;
     internal Func<string, GatewayEnvelope, CancellationToken, Task<GatewayEnvelope>>? _testInvokeOverride;
+    internal Func<CancellationToken, Task>? _testReconnectStartOverride;
 
     /// <summary>evt 信封到达（服务器 → 客户端广播/定向）。在 SignalR 回调线程触发，订阅方不得外抛异常。</summary>
     public event Action<GatewayEnvelope>? EnvelopeReceived;
@@ -49,6 +50,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     public string[] ServerCapabilities { get; private set; } = [];
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+    internal string? ConnectionId => _connection?.ConnectionId;
 
     public bool SupportsCapability(string capability) => Array.IndexOf(ServerCapabilities, capability) >= 0;
 
@@ -163,7 +165,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
 
     /// <summary>重连自愈用：对已构建的连接重新 StartAsync（与旧 OnConnectionClosed 退避循环配套）。</summary>
     public Task ReconnectStartAsync(CancellationToken ct = default)
-        => _connection?.StartAsync(ct) ?? Task.CompletedTask;
+        => _testReconnectStartOverride?.Invoke(ct) ?? _connection?.StartAsync(ct) ?? Task.CompletedTask;
 
     /// <summary>
     /// command 调用（Hub.Dispatch）：返回响应信封；传输异常原样上抛；

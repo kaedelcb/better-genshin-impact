@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
@@ -142,6 +144,350 @@ public sealed class HoeingStartupBoundaryTests
         stop.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
         Assert.True(stopped);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorldReportRecoversOriginalRoomButStillRequiresRealAllWorldJoined(bool ioFailure)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await JoinStartupRoomAsync(client);
+        var failedSend = Signal();
+        var recoveryEntered = Signal();
+        var releaseRecovery = Signal();
+        var reported = Signal();
+        var reports = 0;
+        var restores = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, token) =>
+        {
+            if (request.Name == GatewayProtocol.Names.WorldReportJoined)
+            {
+                Assert.Equal("startup-room", request.RoomCode);
+                if (++reports == 1)
+                {
+                    await client.OnReconnecting(null);
+                    failedSend.TrySetResult(true);
+                    if (ioFailure) throw new IOException("world report send interrupted");
+                    throw new WebSocketException("world report send interrupted");
+                }
+                reported.TrySetResult(true);
+            }
+            if (request.Name == GatewayProtocol.Names.RoomJoin)
+            {
+                restores++;
+                Assert.Equal("startup-room", request.GetString("roomCode"));
+                recoveryEntered.TrySetResult(true);
+                await releaseRecovery.Task.WaitAsync(token);
+            }
+            return Response(request, new { success = true });
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await failedSend.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        var recovery = client.OnReconnected("new-connection");
+        await recoveryEntered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(waiting.IsCompleted);
+        releaseRecovery.TrySetResult(true);
+        await recovery.WaitAsync(TimeSpan.FromSeconds(3));
+        await reported.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, restores);
+        Assert.Equal(2, reports);
+        Assert.False(waiting.IsCompleted); // Hello + Join + 上报 ACK 均不能伪造全员就绪。
+        AllWorldJoined(client);
+        await waiting.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+
+    [Theory]
+    [InlineData(false, "not_in_room")]
+    [InlineData(true, "not_in_room")]
+    [InlineData(false, "handshake_required")]
+    [InlineData(true, "handshake_required")]
+    public async Task WorldReportBusinessRejectionFailsEvenWhenAllWorldJoinedArrivesTogether(bool readyTogether, string errorCode)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await JoinStartupRoomAsync(client);
+        var reports = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal(GatewayProtocol.Names.WorldReportJoined, request.Name);
+            reports++;
+            if (readyTogether) AllWorldJoined(client);
+            return Task.FromResult(Response(request,
+                new { error = new { code = errorCode, message = "原房间成员身份被拒绝" } }));
+        };
+        var failure = await Assert.ThrowsAsync<HoeingStartupException>(() =>
+            WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal("全员进入世界上报", failure.Stage);
+        Assert.Equal(errorCode, Assert.IsType<GatewayErrorException>(failure.InnerException).Code);
+        Assert.Equal(1, reports);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorldReportCancellationOrPartyTimeoutStopsTheRealPendingReporter(bool userStop)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await JoinStartupRoomAsync(client);
+        using var stop = new CancellationTokenSource();
+        var entered = Signal();
+        var reports = 0;
+        var stopped = false;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, token) =>
+        {
+            reports++;
+            entered.TrySetResult(true);
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            finally { stopped = token.IsCancellationRequested; }
+            return Response(request, new { success = true });
+        };
+        var waiting = WaitForRealWorldReadyAsync(client,
+            userStop ? TimeSpan.FromSeconds(5) : TimeSpan.FromMilliseconds(150), stop.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        if (userStop)
+        {
+            stop.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+        }
+        else
+        {
+            var failure = await Assert.ThrowsAsync<HoeingStartupException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.Equal("全员进入世界", failure.Stage);
+        }
+        Assert.True(stopped);
+        Assert.Equal(1, reports);
+    }
+
+    [Fact]
+    public async Task PartyTimeoutWhileRecoveringDoesNotRestartBudgetOrSendAnotherWorldReport()
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await JoinStartupRoomAsync(client);
+        var reports = 0;
+        var reporterStopped = false;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, _) =>
+        {
+            reports++;
+            await client.OnReconnecting(null);
+            throw new WebSocketException("world report send interrupted");
+        };
+        async Task Report(CancellationToken token)
+        {
+            try { await client.ReportWorldJoinedAsync(token); }
+            finally { reporterStopped = true; }
+        }
+        var failure = await Assert.ThrowsAsync<HoeingStartupException>(() =>
+            HoeingStartupBoundary.WaitForWorldReadyAsync(Signal(), Report,
+                TimeSpan.FromMilliseconds(150), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal("全员进入世界", failure.Stage);
+        Assert.True(reporterStopped);
+        Assert.Equal(1, reports);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UserStopDuringReadyReporterDrainWinsOverSuccessOrBusinessFailure(bool rejected)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await JoinStartupRoomAsync(client);
+        using var stop = new CancellationTokenSource();
+        var entered = Signal();
+        var reportCancelled = Signal();
+        var response = new TaskCompletionSource<GatewayEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
+        GatewayEnvelope? pending = null;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, token) =>
+        {
+            pending = request;
+            using var registration = token.Register(() => reportCancelled.TrySetResult(true));
+            entered.TrySetResult(true);
+            return await response.Task; // 模拟传输完成回调晚于全员就绪及本端取消。
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), stop.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        AllWorldJoined(client);
+        await reportCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(waiting.IsCompleted);
+        stop.Cancel();
+        response.SetResult(rejected
+            ? Response(pending!, new { error = new { code = "not_in_room", message = "late rejection" } })
+            : Response(pending!, new { success = true }));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EndedOrReplacedRoomCannotRedirectPendingWorldReport(bool replaceRoom)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await JoinStartupRoomAsync(client);
+        var oldEpoch = client.CurrentRoomEpoch;
+        var entered = Signal();
+        var failSend = Signal();
+        var reportRooms = new List<string?>();
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, _) =>
+        {
+            if (request.Name == GatewayProtocol.Names.WorldReportJoined)
+            {
+                reportRooms.Add(request.RoomCode);
+                entered.TrySetResult(true);
+                await failSend.Task;
+                throw new WebSocketException("old send completed after room ended");
+            }
+            return Response(request, new { success = true });
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        if (replaceRoom)
+            Assert.True(await client.JoinRoomAsync("next-room", "name", "uid"));
+        else
+            client.EndRoomSession("room-ended");
+        failSend.TrySetResult(true);
+        await Assert.ThrowsAsync<HoeingStartupException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal(new[] { "startup-room" }, reportRooms);
+        if (replaceRoom)
+        {
+            Assert.NotEqual(oldEpoch, client.CurrentRoomEpoch);
+            await client.WaitForBusinessReadyAsync(CancellationToken.None);
+            Assert.True(client.IsInRoom);
+        }
+        else Assert.False(client.IsInRoom);
+    }
+
+    [Fact]
+    public async Task MissingRosterMemberIsReadmittedEvenWhileTransportRemainsConnected()
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await JoinStartupRoomAsync(client);
+        var epoch = client.CurrentRoomEpoch;
+        client.CurrentPlayerList = new(); // 应用心跳清退，不触发传输 Reconnecting。
+        var reported = Signal();
+        var joins = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            if (request.Name == GatewayProtocol.Names.RoomJoin)
+            {
+                joins++;
+                Assert.Equal("startup-room", request.GetString("roomCode"));
+                Assert.Equal("uid", request.GetString("playerUid"));
+                client.CurrentPlayerList = new() { new() { PlayerUid = "uid", PlayerName = "name" } };
+            }
+            if (request.Name == GatewayProtocol.Names.WorldReportJoined)
+            {
+                Assert.Equal(1, joins);
+                reported.TrySetResult(true);
+            }
+            return Task.FromResult(Response(request, new { success = true }));
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await reported.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(waiting.IsCompleted);
+        Assert.Equal(epoch, client.CurrentRoomEpoch);
+        AllWorldJoined(client);
+        await waiting.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(1, joins);
+    }
+
+    [Fact]
+    public async Task ReportCrossingAnotherDisconnectWaitsForTheNewTransportHandshake()
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await JoinStartupRoomAsync(client);
+        var interrupted = Signal();
+        var reported = Signal();
+        var reports = 0;
+        var hellos = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, _) =>
+        {
+            if (request.Name == GatewayProtocol.Names.SessionHello) hellos++;
+            if (request.Name == GatewayProtocol.Names.WorldReportJoined)
+            {
+                if (++reports == 1)
+                {
+                    await client.OnReconnecting(null);
+                    interrupted.TrySetResult(true);
+                    return Response(request, new { error = new { code = "handshake_required", message = "transport replaced" } });
+                }
+                Assert.Equal(1, hellos);
+                reported.TrySetResult(true);
+            }
+            return Response(request, new { success = true });
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(waiting.IsCompleted);
+        await client.OnReconnected("new-transport");
+        await reported.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.False(waiting.IsCompleted);
+        AllWorldJoined(client);
+        await waiting.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(2, reports);
+    }
+
+    [Fact]
+    public async Task RecoveryJoinRefusalFailsStartupWithoutAnotherWorldReport()
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await JoinStartupRoomAsync(client);
+        var interrupted = Signal();
+        var reports = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = async (_, request, _) =>
+        {
+            if (request.Name == GatewayProtocol.Names.RoomJoin)
+                return Response(request, new { success = false, error = "房间不存在" });
+            if (request.Name == GatewayProtocol.Names.WorldReportJoined)
+            {
+                reports++;
+                await client.OnReconnecting(null);
+                interrupted.TrySetResult(true);
+                throw new WebSocketException("report interrupted");
+            }
+            return Response(request, new { success = true });
+        };
+        var waiting = WaitForRealWorldReadyAsync(client, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await client.OnReconnected("refused-connection");
+        var failure = await Assert.ThrowsAsync<HoeingStartupException>(() => waiting.WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal("全员进入世界上报", failure.Stage);
+        Assert.Equal(1, reports);
+        Assert.False(client.IsInRoom);
+    }
+
+    private static TaskCompletionSource<bool> Signal()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private static GatewayEnvelope Response(GatewayEnvelope request, object payload) => new()
+    {
+        Type = GatewayProtocol.MessageTypes.Response, Name = request.Name,
+        RoomCode = request.RoomCode, Payload = GatewayEnvelope.ToPayload(payload)
+    };
+
+    private static async Task JoinStartupRoomAsync(CoordinatorClient client)
+    {
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+            Task.FromResult(Response(request, new { success = true }));
+        Assert.True(await client.JoinRoomAsync("startup-room", "name", "uid"));
+        client.CurrentPlayerList = new() { new() { PlayerUid = "uid", PlayerName = "name" } };
+    }
+
+    private static void AllWorldJoined(CoordinatorClient client) => client.DispatchEvt(new GatewayEnvelope
+    {
+        Type = GatewayProtocol.MessageTypes.Event, Name = GatewayProtocol.Events.WorldAllJoined
+    });
+
+    private static async Task WaitForRealWorldReadyAsync(CoordinatorClient client, TimeSpan timeout, CancellationToken ct)
+    {
+        var ready = Signal();
+        void OnReady() => ready.TrySetResult(true);
+        client.AllWorldJoined += OnReady;
+        try
+        {
+            await HoeingStartupBoundary.WaitForWorldReadyAsync(ready,
+                token => client.ReportWorldJoinedAsync(token), timeout, ct, TimeSpan.FromHours(1));
+        }
+        finally { client.AllWorldJoined -= OnReady; }
     }
 
     [Theory]

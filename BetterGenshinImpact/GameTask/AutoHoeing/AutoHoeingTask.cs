@@ -1691,11 +1691,8 @@ public partial class AutoHoeingTask : ISoloTask
                         try
                         {
                             await HoeingStartupBoundary.WaitForWorldReadyAsync(waitTcs,
-                                async token =>
-                                {
-                                    HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(token), "房间成员登记", token);
-                                    await client.ReportWorldJoinedAsync(token);
-                                }, TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                                token => client.ReportWorldJoinedAsync(token),
+                                TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
                             _logger.LogInformation("[联机] 所有人已就绪，开始锄地");
                         }
                         finally
@@ -2787,11 +2784,8 @@ public partial class AutoHoeingTask : ISoloTask
                 try
                 {
                     await HoeingStartupBoundary.WaitForWorldReadyAsync(allJoinedTcs,
-                        async token =>
-                        {
-                            HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(token), "房间成员登记", token);
-                            await client.ReportWorldJoinedAsync(token);
-                        }, TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
+                        token => client.ReportWorldJoinedAsync(token),
+                        TimeSpan.FromSeconds(_config.PartyTimeoutSeconds), _ct);
                 }
                 finally { client.AllWorldJoined -= allJoinedHandler; }
             }
