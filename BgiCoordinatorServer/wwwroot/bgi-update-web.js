@@ -87,148 +87,186 @@
         const el = name => dlg.querySelector('[data-' + name + ']');
         const targetBox = el('target'), sources = el('source'), packages = el('package'), status = el('status');
         const option = (value, text) => new Option(text, value);
-        let target = preferred, data = null, job = null, pending = target && getPending(target), working = false;
-        let epoch = 0, pollTimer = 0, stopped = false;
-
-        function controls() {
+        const states = new Map();
+        let current = null, renderedState = null, renderedData = null, pollTimer = 0, stopped = false;
+        function stateFor(target) {
+            if (!states.has(target.key)) states.set(target.key, {
+                target, data: null, job: null, pending: getPending(target), working: false,
+                sourceId: hints.get(hintKey(target))?.sourceId, packageId: '', packageName: undefined,
+                closeBgi: true, message: '', canClear: false, needsReload: false
+            });
+            return states.get(target.key);
+        }
+        const visible = state => !stopped && current === state;
+        function render(state) {
+            if (!visible(state)) return;
+            const { data, job, pending, working } = state;
             const active = !!pending || (!!job && !job.done);
-            const pack = data?.packages?.find(p => p.id === packages.value);
+            const pack = data?.packages?.find(p => p.id === state.packageId);
+            // 只锁当前成员的操作；切换成员不取消已经交给执行端的更新。
+            targetBox.disabled = false;
+            if (renderedState !== state || renderedData !== data) {
+                sources.replaceChildren(...(data?.sources || []).map(x => option(x.id, x.name)));
+                packages.replaceChildren(...(data?.packages || []).map(p => option(p.id, p.fileName + ' · ' + p.size)));
+                renderedState = state; renderedData = data;
+            }
+            sources.value = state.sourceId || '';
+            packages.value = state.packageId;
+            el('version').textContent = data ? '当前版本：' + (data.currentVersion || '未知') + ' · BGI 目录：' + (data.targetDirectory || '未配置') : '';
+            el('package-note').textContent = data ? data.packageMessage || (data.packages.length ? '请选择一个安装包。' : '没有可用安装包。') : '';
+            status.textContent = state.message;
+            el('close-bgi').checked = state.closeBgi;
+            el('close-bgi').disabled = working || active;
             sources.disabled = working || active;
             packages.disabled = working || active;
-            targetBox.disabled = working || active;
             el('refresh').disabled = working;
             el('download').disabled = working || active || !pack?.canDownload;
             el('install').disabled = working || active || !pack || !data?.canInstall;
             el('cancel').hidden = !job?.canCancel;
             el('cancel').disabled = working || !job?.canCancel;
+            el('clear').hidden = !state.canClear;
+            el('clear').disabled = working;
         }
-        function showJob(value) {
-            job = value;
+        function showJob(state, value) {
+            state.job = value;
             if (!value) return;
-            status.textContent = value.message + (value.savedPath && value.done ? '\n保存位置：' + value.savedPath : '');
-            el('clear').hidden = true;
-            if (value.done && value.id === pending) {
-                const name = data?.packages?.find(p => p.id === packages.value)?.fileName;
-                const sourceId = sources.value;
-                pending = null; remember(target, null); data = null;
-                hints.delete(hintKey(target)); refreshHints();
-                setTimeout(() => load(sourceId, name), 0); // 发起后票据已消耗，刷新后可继续安装刚下载的包。
+            state.message = value.message + (value.savedPath && value.done ? '\n保存位置：' + value.savedPath : '');
+            state.canClear = false;
+            if (value.done && value.id === state.pending) {
+                state.pending = null; remember(state.target, null);
+                state.data = null; state.needsReload = true;
+                hints.delete(hintKey(state.target)); refreshHints();
             }
-            if (!value.done && !pending) { pending = value.id; remember(target, pending); }
+            if (!value.done && !state.pending) { state.pending = value.id; remember(state.target, value.id); }
         }
-        function schedule() {
+        function schedule(state) {
+            // 未选中成员的迟到回复只更新自己的记录，不能改动当前成员的轮询。
+            if (!visible(state)) return;
             clearTimeout(pollTimer);
-            if (!stopped && pending) pollTimer = setTimeout(checkStatus, 1700);
-        }
-        async function checkStatus() {
-            if (!pending || stopped || working) return;
-            const id = pending;
-            const selected = target;
-            working = true; controls();
-            try {
-                const reply = await mtSend('bgi.update.status', { id }, { target: selected });
-                if (stopped || target !== selected || id !== pending) return;
-                if (reply.status === 'ok' && reply.data?.id === id) showJob(reply.data);
-                else {
-                    status.textContent = reply.message || '执行端未确认结果。请核对后再操作。';
-                    el('clear').hidden = reply.status !== 'unknown';
-                }
-            } catch (e) { if (!stopped) status.textContent = '暂时无法核对更新状态：' + e.message; }
-            finally { working = false; if (!stopped) { controls(); schedule(); } }
-        }
-        async function load(sourceId, selectedName) {
-            if (!target || stopped || working) return;
-            const turn = ++epoch;
-            const selected = target;
-            working = true; controls();
-            try {
-                if (!mtTargetReady(selected)) throw new Error('执行端不在线或连接未就绪。');
-                status.textContent = '正在读取安装包…';
-                const reply = await mtRead('bgi.update.catalog', { sourceId }, { target: selected });
-                if (stopped || epoch !== turn) return;
-                data = reply.data;
-                sources.replaceChildren(...data.sources.map(x => option(x.id, x.name)));
-                sources.value = data.sourceId;
-                packages.replaceChildren(...data.packages.map(p => option(p.id, p.fileName + ' · ' + p.size)));
-                const chosenPackage = data.packages.find(p => p.fileName === selectedName);
-                if (chosenPackage) packages.value = chosenPackage.id; else packages.selectedIndex = -1;
-                el('version').textContent = '当前版本：' + (data.currentVersion || '未知') + ' · BGI 目录：' + (data.targetDirectory || '未配置');
-                el('package-note').textContent = data.packageMessage || (data.packages.length ? '请选择一个安装包。' : '没有可用安装包。');
-                if (data.job && (!pending || data.job.id === pending)) showJob(data.job);
-                else status.textContent = pending ? '正在核对上次更新操作…' : '';
-            } catch (e) {
-                if (!stopped) { data = null; packages.replaceChildren(); status.textContent = e.message; }
-            } finally {
-                working = false;
-                if (!stopped) { controls(); schedule(); }
+            if (state.needsReload && !state.working) {
+                void load(state); // 发起后票据已消耗，重新读取才能继续安装刚下载的包。
+            } else if (state.pending && !state.working) {
+                pollTimer = setTimeout(() => checkStatus(state), 1700);
             }
+        }
+        function finish(state) {
+            state.working = false;
+            render(state); schedule(state);
+        }
+        async function checkStatus(state) {
+            if (!state.pending || !visible(state) || state.working) return;
+            const id = state.pending;
+            state.working = true;
+            if (!state.message) state.message = '正在核对上次更新操作…';
+            render(state);
+            try {
+                const reply = await mtSend('bgi.update.status', { id }, { target: state.target });
+                if (stopped || id !== state.pending) return;
+                if (reply.status === 'ok' && reply.data?.id === id) showJob(state, reply.data);
+                else {
+                    state.message = reply.message || '执行端未确认结果。请核对后再操作。';
+                    state.canClear = reply.status === 'unknown';
+                }
+            } catch (e) { if (!stopped) state.message = '暂时无法核对更新状态：' + e.message; }
+            finally { finish(state); }
+        }
+        async function load(state, sourceId = state.sourceId) {
+            if (!visible(state) || state.working) return;
+            state.needsReload = false; state.sourceId = sourceId;
+            state.working = true; state.message = '正在读取安装包…'; render(state);
+            try {
+                if (!mtTargetReady(state.target)) throw new Error('执行端不在线或连接未就绪。');
+                const reply = await mtRead('bgi.update.catalog', { sourceId }, { target: state.target });
+                if (stopped) return;
+                const data = state.data = reply.data;
+                state.sourceId = data.sourceId;
+                const pack = data.packages.find(p => p.fileName === state.packageName);
+                state.packageId = pack?.id || '';
+                if (data.job && (!state.pending || data.job.id === state.pending)) showJob(state, data.job);
+                else state.message = state.pending ? '正在核对上次更新操作…' : '';
+            } catch (e) {
+                state.data = null; state.message = e.message;
+            } finally { finish(state); }
         }
 
-        async function start(install) {
-            const pack = data?.packages?.find(p => p.id === packages.value);
-            if (!pack || working || pending || (!install && !pack.canDownload) || (install && !data.canInstall)) return;
-            const closeBgi = install && el('close-bgi').checked;
-            if (install && !confirm('安装 ' + pack.fileName + '？\n执行端：' + target.name +
-                '\n目标目录：' + data.targetDirectory + (closeBgi
+        async function start(state, install) {
+            const pack = state.data?.packages?.find(p => p.id === state.packageId);
+            if (!pack || state.working || state.pending || (!install && !pack.canDownload) || (install && !state.data.canInstall)) return;
+            const closeBgi = install && state.closeBgi;
+            if (install && !confirm('安装 ' + pack.fileName + '？\n执行端：' + state.target.name +
+                '\n目标目录：' + state.data.targetDirectory + (closeBgi
                     ? '\n将先关闭执行端电脑上的所有 BGI（正在运行的任务会中断），再覆盖程序文件，保留 User 目录。\n完成后该电脑上的所有助手和原来运行的 BGI 会自动重启。'
                     : '\n请先退出执行端电脑上的所有 BGI。安装会覆盖程序文件，保留 User 目录。\n完成后该电脑上的所有助手和原来运行的 BGI 会自动重启。'))) return;
 
             const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), n => n.toString(16).padStart(2, '0')).join('');
-            pending = id; remember(target, id); job = null;
-            working = true; status.textContent = '正在向执行端发送…'; controls();
+            state.pending = id; remember(state.target, id); state.job = null; state.canClear = false;
+            state.working = true; state.message = '正在向执行端发送…'; render(state);
             try {
-                const reply = await mtSend('bgi.update.start', { id, ticket: pack.id, install, closeBgi }, { target });
+                const reply = await mtSend('bgi.update.start', { id, ticket: pack.id, install, closeBgi }, { target: state.target });
                 if (stopped) return;
-                if (reply.status === 'ok' && reply.data?.id === id) showJob(reply.data);
+                if (reply.status === 'ok' && reply.data?.id === id) showJob(state, reply.data);
                 else {
-                    status.textContent = reply.message || '执行端未确认受理。';
-                    if (['rejected', 'denied'].includes(reply.status)) { pending = null; remember(target, null); }
+                    state.message = reply.message || '执行端未确认受理。';
+                    if (['rejected', 'denied'].includes(reply.status)) { state.pending = null; remember(state.target, null); }
                 }
             } catch (e) {
-                if (!e.unconfirmed) { pending = null; remember(target, null); }
-                if (!stopped) status.textContent = e.message;
-            } finally {
-                working = false;
-                if (!stopped) { controls(); schedule(); }
-            }
+                if (stopped) return;
+                if (!e.unconfirmed) { state.pending = null; remember(state.target, null); }
+                state.message = e.message;
+            } finally { finish(state); }
         }
-        async function cancel() {
-            if (!job?.canCancel || working) return;
-            working = true; controls();
+        async function cancel(state) {
+            if (!state.job?.canCancel || state.working) return;
+            const id = state.job.id;
+            state.working = true; render(state);
             try {
-                const reply = await mtSend('bgi.update.cancel', { id: job.id }, { target });
-                if (!stopped && reply.status === 'ok' && reply.data?.id === job.id) showJob(reply.data);
-                else if (!stopped) status.textContent = reply.message || '取消结果未确认。';
-            } catch (e) { if (!stopped) status.textContent = e.message; }
-            finally { working = false; if (!stopped) { controls(); schedule(); } }
+                const reply = await mtSend('bgi.update.cancel', { id }, { target: state.target });
+                if (stopped) return;
+                if (reply.status === 'ok' && reply.data?.id === id) showJob(state, reply.data);
+                else state.message = reply.message || '取消结果未确认。';
+            } catch (e) { state.message = e.message; }
+            finally { finish(state); }
+        }
+        function select(target) {
+            clearTimeout(pollTimer);
+            current = stateFor(target);
+            render(current);
+            if (current.pending) void checkStatus(current);
+            else if (!current.data || current.needsReload) void load(current);
         }
         el('close').onclick = () => dlg.close();
         dlg.addEventListener('close', () => { stopped = true; clearTimeout(pollTimer); dlg.remove(); });
-        if (!target) {
+        if (!preferred) {
             el('notice').textContent = '没有已授权的执行端。请从助手打开本机网页，或先在槲寄生页面用自己的助手授权码绑定执行端。';
             el('fields').hidden = true;
         } else {
             targetBox.replaceChildren(...targets.map(t => option(t.key, (t.local ? '本机 · ' : '') + t.name + (t.uid ? ' · ' + t.uid : ''))));
-            targetBox.value = target.key;
+            targetBox.value = preferred.key;
             targetBox.onchange = () => {
-                const selected = targets.find(t => t.key === targetBox.value);
-                if (!selected || working || pending) return;
-                target = selected; data = null; job = null; pending = getPending(target); load();
+                const target = targets.find(t => t.key === targetBox.value);
+                if (target) select(target);
             };
-            sources.onchange = () => load(sources.value);
-            packages.onchange = controls;
-            el('refresh').onclick = () => pending ? checkStatus() : load(sources.value || undefined);
-            el('download').onclick = () => start(false);
-            el('install').onclick = () => start(true);
-            el('cancel').onclick = cancel;
+            sources.onchange = () => load(current, sources.value);
+            packages.onchange = () => {
+                current.packageId = packages.value;
+                current.packageName = current.data?.packages?.find(p => p.id === packages.value)?.fileName;
+                render(current);
+            };
+            el('close-bgi').onchange = () => { current.closeBgi = el('close-bgi').checked; };
+            el('refresh').onclick = () => current.pending ? checkStatus(current) : load(current);
+            el('download').onclick = () => start(current, false);
+            el('install').onclick = () => start(current, true);
+            el('cancel').onclick = () => cancel(current);
             el('clear').onclick = () => {
-                if (!pending || working || !confirm('执行端无法确认上次操作。只有在你已核对实际状态后才解除等待；不会重发。')) return;
-                pending = null; remember(target, null); job = null; el('clear').hidden = true;
-                status.textContent = '已解除等待；上次结果仍未确认。'; controls();
+                const state = current;
+                if (!state.pending || state.working || !confirm('执行端无法确认上次操作。只有在你已核对实际状态后才解除等待；不会重发。')) return;
+                state.pending = null; remember(state.target, null); state.job = null; state.canClear = false;
+                state.message = '已解除等待；上次结果仍未确认。';
+                render(state);
             };
         }
         dlg.showModal();
-        if (target) load(hints.get(hintKey(target))?.sourceId);
+        if (preferred) select(preferred);
     }
 
     window.bgiWebUpdate = { targetFor, open, renderVersion, refreshHints };
