@@ -33,6 +33,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private readonly Dictionary<string, PendingCommandResult> _pendingCommandResults = new();
     /// <summary>全局状态重置的代际栅栏：迟到旧 AllReady/reset 回调不得再次启动或取消新一轮。</summary>
     private int _resetFenceGeneration;
+    private int _resetRoomRefreshRunning;
     private string? _lastAppliedResetId;
     /// <summary>远端 reset_state 执行回执：一次重置事务按 resetId+目标 UID 等待，超时只报告未确认。</summary>
     private readonly Dictionary<string, TaskCompletionSource<CommandResult>> _pendingResetAcks = new();
@@ -2569,6 +2570,20 @@ public partial class MainViewModel : INotifyPropertyChanged
         var serverResetGeneration = expectedGeneration;
         var serverResetConfirmed = false;
 
+        // 先封住旧批次，再重建房间连接、接收完整成员状态；避免沿用失效身份发送重置。
+        // 刷新失败也要继续本机清理，不能把断线变成无法重置本机的条件。
+        if (!IsStandaloneMode)
+        {
+            AddLog("[状态重置] 正在刷新房间连接和成员状态...");
+            bool roomRefreshed;
+            Interlocked.Exchange(ref _resetRoomRefreshRunning, 1);
+            try { roomRefreshed = await RefreshAsync(); }
+            finally { Interlocked.Exchange(ref _resetRoomRefreshRunning, 0); }
+            AddLog(roomRefreshed
+                ? "[状态重置] 房间状态已刷新，继续重置执行状态"
+                : "[状态重置] 房间刷新未确认，将继续清理；服务端和远端结果以实际回执为准");
+        }
+
         // 服务端先失效共享批次；即使后续某个助手没有响应，也不会继续被服务端批次推进。
         if (_signalRClient != null)
         {
@@ -2919,7 +2934,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var tip = new TextBlock
         {
             Text = resetState
-                ? "将停止本机正在运行的单机和联机任务，清空任务中心运行状态，并恢复到可以重新组织联机锄地的初始状态。勾选下方选项后，还会向当前房间成员发送同样的重置请求。确定继续吗？"
+                ? "将先刷新房间连接和成员状态（单机模式跳过），再停止本机正在运行的单机和联机任务，清空任务中心运行状态，并恢复到可以重新组织联机锄地的初始状态。勾选下方选项后，还会向当前房间成员发送同样的重置请求。确定继续吗？"
                 : "确定要清除已上线状态吗？",
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
@@ -4652,18 +4667,18 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 玩家最新状态 → OnPlayersUpdated 刷新成员列表），等效于"重新加载页面"，用于界面异常时恢复。
     /// 刷新期间保留本机配置、本机命令执行器与连接参数（ServerUrl/房间码/密码/UID/队UID）。
     /// </summary>
-    private async Task RefreshAsync()
+    private async Task<bool> RefreshAsync()
     {
-        if (!TryEnterConfigTransferOperation("connection_refresh", out var transferOperation)) return;
+        if (!TryEnterConfigTransferOperation("connection_refresh", out var transferOperation)) return false;
         using var configTransferOperation = transferOperation;
         // 离线优先：单机模式下不发起连接，刷新无意义（本地状态采集循环独立运行，不靠刷新驱动）
         if (IsStandaloneMode)
         {
             AddLog("当前为单机模式，刷新已忽略（切到在线后再刷新）");
-            return;
+            return false;
         }
         // 防重入：连点"刷新房间"时后到的刷新不能把先建好的连接 Dispose 掉（详见 _refreshRunning 注释）
-        if (Interlocked.CompareExchange(ref _refreshRunning, 1, 0) != 0) return;
+        if (Interlocked.CompareExchange(ref _refreshRunning, 1, 0) != 0) return false;
         // 先建立新连接再切换所有权。旧连接在新连接成功前继续承载联机批次和远程控制，
         // 避免刷新动作制造“控制房间未连接”的人为断档。
         SignalRClient? old = null;
@@ -4694,7 +4709,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     pendingClient = null;
                     IsConnected = false;
                     AddLog("单机模式已开启，放弃本次刷新建立的连接");
-                    return;
+                    return false;
                 }
                 // The serialized connection helper has already adopted this client.
                 pendingClient = null; // 所有权已移交 _signalRClient
@@ -4702,6 +4717,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     try { await old.DisposeAsync(); } catch { /* 旧连接清理不影响新连接 */ }
                 }
+                return _signalRClient is { IsControlRoomReady: true };
             }
         }
         catch (Exception ex)
@@ -4735,6 +4751,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             _refreshRunning = 0;
         }
+        return false;
     }
 
     /// <summary>把 SignalR 的成员/命令/入房被拒事件接到 MainViewModel（在重建连接时复用同一组订阅逻辑）。</summary>
@@ -4906,7 +4923,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         };
         client.OnHoeingBatchStart += batch =>
         {
-            if (ReferenceEquals(_signalRClient, client) && client.IsControlRoomReady
+            // 重置前刷新只取房间状态，补查到的旧批次不得趁此重新启动执行。
+            if (Volatile.Read(ref _resetRoomRefreshRunning) == 0
+                && ReferenceEquals(_signalRClient, client) && client.IsControlRoomReady
                 && client.ControlContext == CurrentControlContext())
                 ObserveOnlineTask(OnCoordinatedBatchStartAsync(batch), "联机开始受理");
         };

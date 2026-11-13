@@ -324,20 +324,39 @@ public class SignalRClient : IAsyncDisposable
     /// <summary>加入控制房间（v3：control.joinRoom）。三处调用点：首连 EstablishAsync、
     /// 内置重连 Reconnected、P1-F 自愈成功后；每处调用前均已先完成 session.hello。
     /// clientInstanceId 语义保留（多实例/重连去重）。JoinRejected 走 evt 事件不走响应，与旧协议一致。</summary>
-    private Task JoinControlRoomAsync(MhaGatewayClient gateway, string roomCode, string password,
+    private async Task JoinControlRoomAsync(MhaGatewayClient gateway, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote,
         CancellationToken cancellationToken = default)
-        => gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
+    {
+        // joinRoom 的正常响应也可能伴随 JoinRejected；必须取得完整房间快照才算入房成功。
+        var joined = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void ObserveJoin(GatewayEnvelope envelope)
         {
-            roomCode,
-            password,
-            playerUid,
-            playerName,
-            allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
-            isRemote,
-            clientInstanceId = _clientInstanceId,
-            machineId = HostMachineIdentity.Current
-        }, ct: cancellationToken);
+            if (envelope.Name == GatewayProtocol.Events.ControlJoinRejected)
+                joined.TrySetResult(envelope.GetString("reason"));
+            else if (envelope.Name == GatewayProtocol.Events.ControlPlayersUpdated
+                && envelope.DeserializePayload<ControlRoomPlayersUpdate>() is { Full: true })
+                joined.TrySetResult(null);
+        }
+        gateway.EnvelopeReceived += ObserveJoin;
+        try
+        {
+            await gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
+            {
+                roomCode,
+                password,
+                playerUid,
+                playerName,
+                allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
+                isRemote,
+                clientInstanceId = _clientInstanceId,
+                machineId = HostMachineIdentity.Current
+            }, ct: cancellationToken);
+            if (await joined.Task.WaitAsync(cancellationToken) is { } rejection)
+                throw new ControlChannelUnavailableException("加入控制房间失败：" + rejection);
+        }
+        finally { gateway.EnvelopeReceived -= ObserveJoin; }
+    }
 
     /// <summary>
     /// evt 信封 → 13 个 C# 事件分发（迁移自旧 13 个 connection.On 订阅，
