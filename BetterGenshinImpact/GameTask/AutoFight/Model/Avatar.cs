@@ -797,13 +797,7 @@ public class Avatar
 
     private void AttackCore(int ms, CancellationToken? pickupStop)
 {
-    var isTimes = 0;
-    var qiTimes = 0;
-
-    // 新增：计时变量
     var lastChargeTime = DateTime.UtcNow;
-    var redTime = DateTime.UtcNow;
-    var qiTime = DateTime.UtcNow;
 
     while (ms >= 0)
     {
@@ -819,8 +813,13 @@ public class Avatar
             {
                 return;
             }
-            Avatar? alqn = CombatScenes.SelectAvatar("阿蕾奇诺");
             using var region1 = CaptureToRectArea();
+            // 保命 Q 必须先于闪 A、补 E 和收契，确认状态保存在 Avatar 上，跨短普攻段延续。
+            if (TryArlecchinoAutoBurst(region1) || ArlecchinoCombatStopped)
+            {
+                return;
+            }
+
             // 每隔5秒执行一次 Charge(350)
             if ((DateTime.UtcNow - lastChargeTime).TotalMilliseconds >= 1080)
             {
@@ -854,152 +853,13 @@ public class Avatar
                 InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
             }
             
-            if (!AutoFightSkill.AvatarSkillAsync(Logger, alqn, false, 1, Ct, region1, false).Result)
-            {
-                if (!IsQi(region1) && region1.Find(ElementAssets.Instance.PaimonMenuRo).IsExist())
-                {
-                    Logger.LogInformation("特化检测：阿蕾奇诺->空契放E");
-                    if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                    {
-                        return;
-                    }
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(50, Ct);
-                    InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                    Sleep(695, Ct);
-                    if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                    {
-                        return;
-                    }
-
-                    for (int i = 0; i < 4; i++)
-                    {
-                        Charge(450);
-                        Sleep(i==3?400:150, Ct);
-                        using var region13 = CaptureToRectArea();
-                        var bb = IsQi(region13);
-                        if (bb)
-                        {
-                            Logger.LogInformation("特化检测：阿蕾奇诺->回收契成功..");
-                            break;
-                        }
-                        Logger.LogInformation("特化检测：阿蕾奇诺->回收契失败，重试..");
-                    }
-                    
-                    return;
-                }
-            }
-
-            if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
+            if (TryCollectArlecchinoBond("特化检测") || ArlecchinoCombatStopped)
             {
                 return;
             }
-            
-            using var region99 = CaptureToRectArea();
-            var aa = CombatHealthDetector.IsRedBlood(region99);
-            var cc = alqn.GetSkillCurrentCd(region99);
-            var bb22 = (!IsQi(region99)) && ArlecchinoAutoEqDecisions.ShouldReleaseQByCd(cc, TaskContext.Instance().Config.AutoFightConfig.SkillCdForQ);
-            if (bb22 || aa)
-            {
-                // Logger.LogError("E-CD:{t}", cc);
-                if (isTimes > 2 || qiTimes > 2)
-                {
-                    isTimes = 0;
-                    qiTimes = 0;
-                    // Logger.LogError("放Q情况 {t1} {t2}", bb22, aa);
-                    using var region999 = CaptureToRectArea();
-                    var bb222 = !IsQi(region999);
-                    if (bb222 || aa)
-                    {
-                        Logger.LogInformation(aa?"特化检测：阿蕾奇诺->红血放Q..{t1} {t2} {t3}":"特化检测：阿蕾奇诺->契空放Q..{t1} {t2} {t3}",aa, bb22,cc);
-                        InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
-                        if (!IsReady(region999,1805,979,15,12,new Scalar(255,250,238),new Scalar(255,251,240),2))
-                        {
-                            Sleep(100, Ct); 
-                            using var imageAfterBurst = CaptureToRectArea();
-                            if (imageAfterBurst.Find(ElementAssets.Instance.PaimonMenuRo).IsEmpty())
-                            {
-                                Sleep(1995, Ct);
-                                if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                                {
-                                    return;
-                                }
 
-                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                                Sleep(50, Ct);
-                                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                                Sleep(795, Ct);
-                                if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                                {
-                                    return;
-                                }
-
-                                for (int i = 0; i < 3; i++)
-                                {
-                                    Charge(450);
-                                    Sleep(150, Ct);
-                                    using var region13 = CaptureToRectArea();
-                                    var bb2 = IsQi(region13);
-                                    if (bb2)
-                                    {
-                                        Logger.LogInformation("特化检测：阿蕾奇诺->回收契成功..");
-                                        break;
-                                    }
-
-                                    Logger.LogInformation("特化检测：阿蕾奇诺->回收契失败，重试..");
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (aa)
-                {
-                    if ((DateTime.UtcNow - redTime).TotalMilliseconds >= 100)
-                    {
-                        redTime = DateTime.UtcNow;
-                        isTimes += 2; 
-                    }
-                    else
-                    {
-                        isTimes = 0;
-                    }
-                }
-
-                if (bb22)
-                {
-                    if ((DateTime.UtcNow - qiTime).TotalMilliseconds >= 100)
-                    {
-                        qiTime = DateTime.UtcNow;
-                        qiTimes += 1; 
-                    }
-                    else
-                    {
-                        qiTimes = 0;
-                    }
-                }
-                
-                if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                {
-                    return;
-                }
-            }
-            else
-            {
-                if(!aa)isTimes = 0;
-                if(!bb22)qiTimes = 0;
-                InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
-                Sleep(100, Ct);
-            }
+            InputHub.Foreground.SimulateAction(GIActions.NormalAttack);
+            Sleep(100, Ct);
             
             
             if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
@@ -1022,26 +882,135 @@ public class Avatar
     }
 }
     
-    // 阿蕾奇诺契检测区域
-    private const int QiX = 840;//1030
-    private const int QiY = 1000;
-    private const int QiW = 220;//30
-    private const int QiH = 20;
+    private readonly ArlecchinoAutoEqState _arlecchinoAutoEq = new();
 
-    // 阿蕾奇诺契 BGR: (255, 144, 140) ±12
-    private static readonly Scalar QiLower = new Scalar(252, 120, 120);
-    private static readonly Scalar QiUpper = new Scalar(255, 160, 160);
-    public bool IsQi(ImageRegion ra)
+    public bool IsQi(ImageRegion ra) => ArlecchinoBondDetector.HasBond(ra.SrcMat, QiKong);
+
+    private bool ArlecchinoCombatStopped => Ct.IsCancellationRequested || AutoFightTask.FightEndTotoly;
+
+    private bool TryArlecchinoAutoBurst(ImageRegion region, bool allowEmptyBond = true)
     {
-        using var bloodRect = ra.DeriveCrop(QiX, QiY, QiW-QiKong, QiH);
-        using var mask = OpenCvCommonHelper.Threshold(bloodRect.SrcMat, QiLower, QiUpper);
-        using var labels = new Mat();
-        using var stats = new Mat();
-        using var centroids = new Mat();
-        var numLabels = Cv2.ConnectedComponentsWithStats(mask, labels, stats, centroids,
-            connectivity: PixelConnectivity.Connectivity4, ltype: MatType.CV_32S);
-        // Logger.LogWarning("numLabelsQ : {t}", numLabels);
-        return numLabels >= 3;
+        if (ArlecchinoCombatStopped || region.Find(ElementAssets.Instance.PaimonMenuRo).IsEmpty())
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        _arlecchinoAutoEq.Observe(CombatHealthDetector.IsRedBlood(region), IsQi(region), now);
+        var cd = allowEmptyBond && !_arlecchinoAutoEq.IsRedBloodConfirmed && _arlecchinoAutoEq.IsEmptyBondConfirmed
+            ? GetSkillCurrentCd(region) : 0;
+        if (!_arlecchinoAutoEq.ShouldTryBurst(now, cd,
+                TaskContext.Instance().Config.AutoFightConfig.SkillCdForQ, allowEmptyBond) ||
+            IsBurstReadyByClassify(region) != BurstReadyState.Ready)
+        {
+            return false;
+        }
+
+        _arlecchinoAutoEq.BurstAttempted(now);
+        if (_arlecchinoAutoEq.IsRedBloodConfirmed)
+        {
+            Logger.LogInformation("特化检测：阿蕾奇诺->红血放Q");
+        }
+        else
+        {
+            Logger.LogInformation("特化检测：阿蕾奇诺->契空放Q，E-CD:{Cd}", cd);
+        }
+        InputHub.Foreground.SimulateAction(GIActions.ElementalBurst);
+        Sleep(100, Ct);
+        if (ArlecchinoCombatStopped)
+        {
+            return true;
+        }
+
+        using var after = CaptureToRectArea();
+        ThrowWhenDefeated(after, Ct);
+        if (after.Find(ElementAssets.Instance.PaimonMenuRo).IsEmpty() ||
+            IsBurstReadyByClassify(after) == BurstReadyState.Cooldown)
+        {
+            Sleep(1995, Ct);
+        }
+        else
+        {
+            Logger.LogDebug("特化检测：阿蕾奇诺->Q已发送，释放尚未确认");
+        }
+
+        return true;
+    }
+
+    private bool TryCollectArlecchinoBond(string logPrefix)
+    {
+        if (ArlecchinoCombatStopped || !_arlecchinoAutoEq.CanCollect(DateTime.UtcNow))
+        {
+            return false;
+        }
+
+        using var before = CaptureToRectArea();
+        if (TryArlecchinoAutoBurst(before))
+        {
+            return true;
+        }
+
+        if (ArlecchinoCombatStopped || IsQi(before) ||
+            before.Find(ElementAssets.Instance.PaimonMenuRo).IsEmpty() ||
+            IsESkillReadyByClassify(before).State != SkillCdState.Ready)
+        {
+            return false;
+        }
+
+        try
+        {
+            Logger.LogInformation("{Prefix}：阿蕾奇诺->空契放E", logPrefix);
+            for (var tap = 0; tap < 3; tap++)
+            {
+                if (ArlecchinoCombatStopped) return true;
+                InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
+                Sleep(50, Ct);
+            }
+
+            Sleep(600, Ct);
+            if (ArlecchinoCombatStopped) return true;
+            using var afterSkill = CaptureToRectArea();
+            if (TryArlecchinoAutoBurst(afterSkill, allowEmptyBond: false)) return true;
+            if (IsESkillReadyByClassify(afterSkill).State != SkillCdState.Cooldown)
+            {
+                Logger.LogInformation("{Prefix}：阿蕾奇诺->E释放未确认，跳过收契", logPrefix);
+                return true;
+            }
+
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                if (ArlecchinoCombatStopped) return true;
+                using var beforeCharge = CaptureToRectArea();
+                ThrowWhenDefeated(beforeCharge, Ct);
+                if (TryArlecchinoAutoBurst(beforeCharge, allowEmptyBond: false)) return true;
+                if (beforeCharge.Find(ElementAssets.Instance.PaimonMenuRo).IsEmpty()) return true;
+                if (IsQi(beforeCharge))
+                {
+                    Logger.LogInformation("{Prefix}：阿蕾奇诺->已检测到契，结束收契", logPrefix);
+                    return true;
+                }
+
+                Charge(450);
+                Sleep(attempt == 3 ? 400 : 150, Ct);
+                if (ArlecchinoCombatStopped) return true;
+                using var afterCharge = CaptureToRectArea();
+                if (TryArlecchinoAutoBurst(afterCharge, allowEmptyBond: false)) return true;
+                if (IsQi(afterCharge))
+                {
+                    Logger.LogInformation("{Prefix}：阿蕾奇诺->回收契成功..", logPrefix);
+                    return true;
+                }
+
+                Logger.LogInformation("{Prefix}：阿蕾奇诺->回收契失败，重试..", logPrefix);
+            }
+
+            return true;
+        }
+        finally
+        {
+            // 收契结束后留出退避时间；后续普攻仍先检查红血 Q。
+            _arlecchinoAutoEq.CollectionFinished(DateTime.UtcNow);
+        }
     }
 
     public static bool IsReady(ImageRegion ra, int x, int y, int w, int h, Scalar lower, Scalar upper, int num = 1)
@@ -1063,7 +1032,6 @@ public class Avatar
     /// </summary>
     public bool IsMotorcycle() => AvatarCombatSpecialization.IsMotorcycle(Name);
 
-    private bool _arlecchino = false;
     /// <summary>
     /// 使用元素战技 E
     /// </summary>
@@ -1083,49 +1051,21 @@ public class Avatar
             
             var mwk = false;
             
-            if (!_arlecchino && ArlecchinoAutoEnabled && Name == "阿蕾奇诺")
+            if (ArlecchinoAutoEnabled && Name == "阿蕾奇诺")
             {
-                _arlecchino = true;
-                Avatar? alqn = CombatScenes.SelectAvatar("阿蕾奇诺");
-                var region1 = CaptureToRectArea();
-                if (!AutoFightSkill.AvatarSkillAsync(Logger, alqn, false, 1, Ct, region1, false).Result)
+                using var region1 = CaptureToRectArea();
+                if (TryArlecchinoAutoBurst(region1)) return;
+                if (!IsQi(region1) && !ArlecchinoCombatStopped)
                 {
-                    if (region1.Find(ElementAssets.Instance.PaimonMenuRo).IsExist())
-                    {
-                        Logger.LogInformation("特化检测UseSkill：阿蕾奇诺->空契放E");
-                        if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                        {
-                            return;
-                        }
-                        Sleep(50, Ct);
-                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                        Sleep(50, Ct);
-                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                        Sleep(50, Ct);
-                        InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
-                        Sleep(600, Ct);
-                        if (Ct is { IsCancellationRequested: true } || AutoFightTask.FightEndTotoly)
-                        {
-                            return;
-                        }
-
-                        for (int jj = 0; jj < 3; jj++)
-                        {
-                            Charge(350);
-                            Sleep(i==3?400:150, Ct);
-                            using var region13 = CaptureToRectArea();
-                            var bb = IsQi(region13);
-                            if (bb)
-                            {
-                                Logger.LogInformation("特化检测UseSkill：阿蕾奇诺->回收契成功..");
-                                break;
-                            }
-                            Logger.LogInformation("特化检测UseSkill：阿蕾奇诺->回收契失败，重试..");
-                        }
-                        
-                        return;
-                    }
+                    // 显式 E 入口也先复核，不能把单帧漏检直接变成一组重击。
+                    Sleep(120, Ct);
+                    if (ArlecchinoCombatStopped) return;
+                    using var confirmed = CaptureToRectArea();
+                    if (TryArlecchinoAutoBurst(confirmed)) return;
+                    TryCollectArlecchinoBond("特化检测UseSkill");
                 }
+
+                return;
             }
             else if (Name == "玛薇卡")
             {
@@ -1195,7 +1135,6 @@ public class Avatar
             }
             else
             {
-                if(_arlecchino)return;
                 pickupStop?.ThrowIfCancellationRequested();
                 InputHub.Foreground.SimulateAction(GIActions.ElementalSkill);
             }
