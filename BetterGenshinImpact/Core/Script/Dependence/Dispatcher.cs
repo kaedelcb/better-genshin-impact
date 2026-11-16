@@ -57,13 +57,12 @@ using BetterGenshinImpact.GameTask.Common;
 
 namespace BetterGenshinImpact.Core.Script.Dependence;
 
-public class Dispatcher
+public partial class Dispatcher
 {
     private readonly ILogger<Dispatcher> _logger = App.GetLogger<Dispatcher>();
 
     private readonly object _config;
     
-    public static bool IsCustomCts { get; set; } = false;
 
     private AllConfig AllConfig { get; set; } = TaskContext.Instance().Config;
     
@@ -140,15 +139,6 @@ public class Dispatcher
         {
             throw new ArgumentException($"添加实时任务失败: {realtimeTimer.Name}", nameof(realtimeTimer.Name));
         }
-    }
-
-    public async Task RunTask(SoloTask soloTask, CancellationTokenSource customCts)
-    {
-        // 创建链接的取消令牌源，任何一个取消都会触发
-        CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-            customCts.Token,
-            CancellationContext.Instance.Cts.Token);
-        await RunTask(soloTask, linkedCts.Token);
     }
 
     public async Task<List<string>> RunTask(SoloTask soloTask,bool isWoodExecute)
@@ -248,20 +238,7 @@ public class Dispatcher
     }
 
 
-    /// <summary>
-    /// 运行独立任务
-    /// </summary>
-    /// <param name="soloTask">
-    /// 支持的任务名称:
-    /// - AutoGeniusInvokation: 启动自动七圣召唤任务
-    /// - AutoWood: 启动自动伐木任务
-    /// - AutoFight: 启动自动战斗任务
-    /// - AutoDomain: 启动自动秘境任务
-    /// </param>
-    /// <param name="customCt">自定义取消令牌，允许从JS控制任务取消</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentException"></exception>
-    public async Task<object?> RunTask(SoloTask soloTask, CancellationToken? customCt = null)
+    private async Task<object?> RunTaskCore(SoloTask soloTask, CancellationToken? customCt)
     {
         if (soloTask == null)
         {
@@ -275,21 +252,7 @@ public class Dispatcher
         }
 
 
-        CancellationToken cancellationToken;
-
-        if (customCt != null)
-        {
-            // Logger.LogError("使用自定义取消令牌");
-            IsCustomCts = true;
-            cancellationToken = customCt.Value;
-        }
-        else
-        {
-            // 如果没有自定义令牌，就使用全局令牌
-            // Logger.LogError("使用全局取消令牌");
-            IsCustomCts = false;
-            cancellationToken = CancellationContext.Instance.Cts.Token;
-        }
+        CancellationToken cancellationToken = customCt ?? CancellationContext.Instance.Cts.Token;
 
         // 根据名称执行任务
         switch (soloTask.Name)

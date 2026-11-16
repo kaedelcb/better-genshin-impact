@@ -88,11 +88,7 @@ internal class AutoFightHandler : IActionHandler
 
             ApplyWaypointRewardEndDetection(taskParams, waypointForTrack);
 
-            if(Dispatcher.IsCustomCts)
-            {
-                _logger.LogWarning("异步战斗任务，关闭打开队伍的战斗结束检测");
-                taskParams.FightFinishDetectEnabled = false;
-            }
+            ApplyCustomCtsFightFinishPolicy(taskParams, _logger);
 
             // 联机模式：房主同步的战斗超时覆盖（不修改原始配置）
             if (PathingConditionConfig.MultiplayerFightTimeoutOverride.HasValue)
@@ -205,6 +201,15 @@ internal class AutoFightHandler : IActionHandler
         
         var fightSoloTask = CombatTaskFactoryProvider.GetFactory(taskParams.CombatStrategyPath).CreateTask(taskParams);
         await fightSoloTask.Start(ct);
+    }
+
+    internal static void ApplyCustomCtsFightFinishPolicy(AutoFightParam taskParams, ILogger logger)
+    {
+        if (Dispatcher.IsCustomCts)
+        {
+            logger.LogWarning("异步战斗任务，关闭打开队伍的战斗结束检测");
+            taskParams.FightFinishDetectEnabled = false;
+        }
     }
 
     private AutoFightParam GetFightAutoFightParam(AutoFightConfig? config)
