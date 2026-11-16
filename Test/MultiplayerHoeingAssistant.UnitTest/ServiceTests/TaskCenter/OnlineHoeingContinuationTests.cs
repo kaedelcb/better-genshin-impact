@@ -50,6 +50,72 @@ public sealed class OnlineHoeingContinuationTests : IDisposable
         Assert.True(host.CanOpenOnlineSendAfterBatch);
     }
 
+    [Fact]
+    public async Task PhysicalResetWithUnavailableOwner_PreservesUnknownAndAllowsNextPreparationAfterReload()
+    {
+        var runsPath = Path.Combine(_root, "runs");
+        var host = new TaskCenterHost(Path.Combine(_root, "flows"), runsPath,
+            Path.Combine(_root, "catalog.json"), () => null, null, null, () => (true, null),
+            onlineEpochProvider: () => new BgiEpoch { ProcessId = 42, StartTicksUtc = 100 });
+        try
+        {
+            var run = host.Runs.CreateRun("old-flow", "rev-1");
+            run.State = WorkflowRunState.Unknown;
+            run.Note = "原始未知事实不能伪造成功";
+            run.OnlineHoeingHandoff = new() { Phase = "unknown", Epoch = "42:100", Ticket = "original-ticket" };
+            host.Runs.Update(run);
+            var file = Path.Combine(runsPath, run.RunId + ".run.json");
+            var original = File.ReadAllBytes(file);
+            // This store cannot perform normal owner-fenced bookkeeping. The human
+            // physical-reset barrier must still be durable before releasing the gate.
+            typeof(TaskCenterHost).GetField("_runs", System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Instance)!.SetValue(host, new RunStore(runsPath, requireOwnership: true));
+            await host.BeginManualResetAsync(default);
+            var reset = await host.CompleteManualResetAfterPhysicalBgiResetAsync("fixture:physical-reset");
+            Assert.True(reset.SendGateOpened);
+            Assert.Equal(original, File.ReadAllBytes(file));
+            Assert.True(host.CanOpenOnlineSendAfterBatch);
+            var reloaded = new RunStore(runsPath);
+            Assert.True(reloaded.IsPhysicallyAbandoned(reloaded.Load(run.RunId)!));
+            Assert.Equal(WorkflowRunState.Unknown, reloaded.Load(run.RunId)!.State);
+            await host.CloseOnlineHoeingSendAsync();
+            var prepared = host.PrepareOnlineHoeing(2,
+                new CommandExecutor.ExecutionBoundarySnapshot(true, false, 42, 100, null));
+            Assert.True(prepared.Ready, prepared.Reason);
+            Assert.Null(prepared.ManagedRunId);
+            Assert.Equal(0, (await host.RecoverOnlineHandoffsBeforeStartAsync()).RemainingHandoffs);
+        }
+        finally { await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public void PhysicalResetReplacesCorruptBarrier_PreservesBytesAndExcludesOnlyCapturedRunIds()
+    {
+        var path = Path.Combine(_root, "runs");
+        var runs = new RunStore(path);
+        var old = runs.CreateRun("old-flow", "rev-1");
+        var original = File.ReadAllBytes(Path.Combine(path, old.RunId + ".run.json"));
+        var marker = Path.Combine(path, ".physical-reset.json");
+        byte[] broken = [0x7b, 0xff, 0x00];
+        File.WriteAllBytes(marker, broken);
+        runs.PublishPhysicalResetBarrier(DateTimeOffset.UtcNow.AddDays(1));
+        var evidence = Assert.Single(Directory.GetFiles(path, ".physical-reset.json.invalid-*"));
+        Assert.Equal(broken, File.ReadAllBytes(evidence));
+        var reloaded = new RunStore(path);
+        Assert.True(reloaded.IsPhysicallyAbandoned(old));
+        var fresh = reloaded.CreateRun("old-flow", "rev-1");
+        Assert.False(reloaded.IsPhysicallyAbandoned(fresh));
+        Assert.Equal(original, File.ReadAllBytes(Path.Combine(path, old.RunId + ".run.json")));
+        var authority = new TaskCenterDriveAuthority();
+        using (authority.Enter())
+        {
+            authority.Revoke();
+            old.Note = "迟到旧写入";
+            Assert.Throws<RunRecordConflictException>(() => reloaded.Update(old));
+        }
+        Assert.Equal(original, File.ReadAllBytes(Path.Combine(path, old.RunId + ".run.json")));
+    }
+
     private sealed class ResumePort : IBgiExecutionPort
     {
         public BgiJobInfo? Resumed { get; set; }

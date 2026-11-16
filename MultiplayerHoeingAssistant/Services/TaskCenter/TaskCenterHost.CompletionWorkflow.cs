@@ -106,7 +106,7 @@ public sealed partial class TaskCenterHost
                     if (_shutdown || _manualResetActive != 0 || _reservedWorkflows.Contains(policy.SpecifiedWorkflowId)
                         || _drives.ContainsKey(policy.SpecifiedWorkflowId)
                         || _runs.List().Any(r => r.WorkflowId == policy.SpecifiedWorkflowId && ActiveStates.Contains(r.State)
-                            && !IsExecutionResetReleased(r)) || HasBlockingUnknownRun(policy.SpecifiedWorkflowId))
+                            && !IsExecutionUnavailable(r)) || HasBlockingUnknownRun(policy.SpecifiedWorkflowId))
                         return new CommandResult { ErrorCode = "state_unavailable", Message = "计划表原运行尚未退出，保留同一完成动作" };
                     RequireCompletionWorkflowAuthority(batch, ct);
                     if (ValidateManagedFlowSnapshot(policy.SpecifiedWorkflowId, snapshot.Revision) is { } changed)

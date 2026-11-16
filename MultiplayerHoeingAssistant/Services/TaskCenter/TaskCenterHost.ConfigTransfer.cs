@@ -15,7 +15,7 @@ public sealed partial class TaskCenterHost
             var runs = _runs.ListWithIntegrity("config-transfer");
             if (_shutdown || _configurationTransfer || _configurationOperations != 0 || _drives.Count != 0
                 || _reservedWorkflows.Count != 0 || _recoverTask is { IsCompleted: false } || occupied || unknown
-                || runs.UnknownFiles.Count > 0 || runs.Records.Any(r => !IsExecutionResetReleased(r)
+                || runs.UnknownFiles.Count > 0 || runs.Records.Any(r => !IsExecutionUnavailable(r)
                     && (ActiveStates.Contains(r.State) || r.State == WorkflowRunState.Unknown)))
                 throw new InvalidOperationException("任务中心有活动、等待或结果未确认的执行责任，暂不能迁移设置。");
             _configurationTransfer = true;

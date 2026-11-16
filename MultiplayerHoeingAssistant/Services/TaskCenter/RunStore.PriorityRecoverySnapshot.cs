@@ -60,6 +60,7 @@ public sealed partial class RunStore
                 }
                 File.WriteAllText(temporary, JsonSerializer.Serialize(captured, JsonOptions), Utf8NoBom);
                 _owner?.Store.VerifyOwnerFence(_owner);
+                using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
                 File.Move(temporary, path, overwrite: true);
                 RememberProgress(captured);
                 return CopyProgress(captured);

@@ -6,47 +6,55 @@ public sealed partial class TaskCenterHost
 {
     private readonly SemaphoreSlim _controlOwnershipGate = new(1, 1);
     private readonly AsyncLocal<ControlCall?> _controlCall = new();
-    private int _controlCalls;
-    private sealed class ControlCall { public bool Active = true; }
+    private readonly HashSet<ControlCall> _controlCalls = [];
+    private sealed class ControlCall
+    {
+        public bool Active = true;
+        public TaskCenterDriveAuthority? Authority = TaskCenterDriveAuthority.Current;
+    }
     private sealed class ControlScope(Action release) : IDisposable { public void Dispose() => release(); }
 
     private IDisposable EnterControlCall()
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
+        var authorityScope = EnterExecutionAuthorityScope();
         var previous = _controlCall.Value;
-        if (previous?.Active == true) return new ControlScope(() => { });
+        if (previous?.Active == true) return new ControlScope(authorityScope.Dispose);
         if (!IsAutomaticLeaseRecovery)
             lock (_gate) Interlocked.Increment(ref _controlRevision);
         var call = new ControlCall();
         _controlCall.Value = call;
-        Interlocked.Increment(ref _controlCalls);
+        lock (_gate) _controlCalls.Add(call);
         return new ControlScope(() =>
         {
             call.Active = false;
             _controlCall.Value = previous;
-            Interlocked.Decrement(ref _controlCalls);
+            lock (_gate) _controlCalls.Remove(call);
+            authorityScope.Dispose();
         });
     }
 
     // Explicit or narrowly qualified automatic recovery installs a new capability;
     // it never upgrades a retained runner/store capability.
-    private async Task EnsureControlOwnershipAsync()
+    private async Task EnsureControlOwnershipAsync(CancellationToken cancellationToken = default)
     {
         if (!_admissionWired) return;
-        await _controlOwnershipGate.WaitAsync(_shutdownCts.Token).ConfigureAwait(false);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        await _controlOwnershipGate.WaitAsync(budget.Token).ConfigureAwait(false);
         try
         {
             ThrowIfAutomaticRecoverySuperseded();
-            if (_admission is null) await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+            if (_admission is null) await EnsureAdmissionFacadeAsync(budget.Token).ConfigureAwait(false);
             try { _runs.VerifyBoundOwner(); CompleteDeferredAdministrativeRecovery(); return; }
             catch (RunRecordConflictException) { }
 
             lock (_gate)
             {
-                if (_shutdown || Volatile.Read(ref _controlCalls) > 1 || _drives.Count != 0 || _driveCompletions.Count != 0
+                if (_shutdown || _controlCalls.Count(call => call.Authority?.IsRevoked != true) > 1 || _drives.Count != 0 || _driveCompletions.Count != 0
                     || _reservedWorkflows.Any(id => !_executionResetWorkflows.Contains(id))
                     || _recoverTask is { IsCompleted: false })
                     throw new InvalidOperationException("旧驱动或受理仍在收敛，保留原身份，请稍后重试。");
-                if (_runs.List().Any(run => _runs.HasUnpublishedPriorityProgress(run.RunId)))
+                if (_runs.List().Any(run => !IsExecutionUnavailable(run) && _runs.HasUnpublishedPriorityProgress(run.RunId)))
                     throw new InvalidOperationException("原联机恢复仍有未落盘进度，不能替换原写者。");
                 if (_admission?.TryRetireForRecovery() != true)
                     throw new InvalidOperationException("原仲裁仍有在途操作，不能替换原写者。");
@@ -60,7 +68,7 @@ public sealed partial class TaskCenterHost
             }
             // The existing observer waits a complete TTL and rechecks generation/heartbeat
             // under the physical lock. A different healthy owner is never stolen from.
-            await EnsureAdmissionFacadeAsync(_shutdownCts.Token).ConfigureAwait(false);
+            await EnsureAdmissionFacadeAsync(budget.Token).ConfigureAwait(false);
             _runs.VerifyBoundOwner();
             ThrowIfAutomaticRecoverySuperseded();
             TryLog("[任务中心] 显式控制已重新取得租约；旧写者仍失效，原任务须按原身份核对，不自动重发。");
@@ -73,7 +81,7 @@ public sealed partial class TaskCenterHost
         lock (_gate)
         {
             var run = _runs.Load(runId);
-            if (run is null || IsExecutionResetReleased(run) || run.OnlineHoeingHandoff is not null
+            if (run is null || IsExecutionUnavailable(run) || run.OnlineHoeingHandoff is not null
                 || run.OnlineHoeingGateParked || _drives.ContainsKey(run.WorkflowId)
                 || _reservedWorkflows.Contains(run.WorkflowId) && !_executionResetWorkflows.Contains(run.WorkflowId)
                 || _driveCompletions.Any(d => d.WorkflowId == run.WorkflowId)

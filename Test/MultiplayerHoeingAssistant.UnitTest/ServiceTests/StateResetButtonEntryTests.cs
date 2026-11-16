@@ -66,8 +66,11 @@ public sealed class StateResetButtonEntryTests
         MainWindow? window = null;
         MainViewModel? vm = null;
         DispatcherTimer? confirmTimer = null;
+        IAsyncDisposable? heldOldSend = null;
         var physicalEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var oldBatchExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var oldCallbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseOldCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var dialogConfirmed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var physicalResets = 0;
         var confirmations = 0;
@@ -83,6 +86,12 @@ public sealed class StateResetButtonEntryTests
             });
             var oldBatch = Batch("old-reset-batch", 21, uid);
             oldBatch.RunTask = oldBatchExited.Task;
+            // An uncooperative old callback and call stack must not veto recovery.
+            oldBatch.Cts.Token.Register(() =>
+            {
+                oldCallbackEntered.TrySetResult();
+                releaseOldCallback.Task.GetAwaiter().GetResult();
+            });
             Set(vm, "_activeBatch", oldBatch);
             var executor = new CommandExecutor(null!, isolatedBgi, () => external, logger: vm.AddLog)
             {
@@ -97,7 +106,6 @@ public sealed class StateResetButtonEntryTests
                     Assert.True(blockedStart.IsCompletedSuccessfully);
                     Assert.Equal("reset_in_progress", blockedStart.Result.ErrorCode);
                     physicalEntered.TrySetResult();
-                    oldBatchExited.TrySetResult();
                     return Task.FromResult(true);
                 },
                 ResetStatusQueryOverrideForTest = _ => Task.FromResult<IpcResponse?>(Ready()),
@@ -128,6 +136,8 @@ public sealed class StateResetButtonEntryTests
             Assert.True(resetButton.IsVisible && resetButton.ActualWidth > 0 && resetButton.ActualHeight > 0);
             Assert.NotNull(resetButton.Command);
             Assert.Same(self, resetButton.CommandParameter);
+            heldOldSend = await Field<TaskCenterOnlineSendGate>(vm.TaskCenterHost, "_onlineSendGate")
+                .EnterAsync(CancellationToken.None);
 
             confirmTimer = new DispatcherTimer(DispatcherPriority.Background)
             { Interval = TimeSpan.FromMilliseconds(30) };
@@ -168,7 +178,9 @@ public sealed class StateResetButtonEntryTests
             Assert.Equal(1, physicalResets);
             Assert.True(oldBatch.CleanupConfirmed);
             Assert.False(oldBatch.IsAlive);
-            Assert.True(oldBatch.RunTask.IsCompletedSuccessfully);
+            await oldCallbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.False(releaseOldCallback.Task.IsCompleted);
+            Assert.False(oldBatch.RunTask.IsCompleted);
             Assert.Null(Field<OnlineHoeingBatch?>(vm, "_activeBatch"));
             Assert.Null(executor.TakeoverTicketSnapshot);
             Assert.False(self.OnlineReady);
@@ -209,7 +221,9 @@ public sealed class StateResetButtonEntryTests
         finally
         {
             confirmTimer?.Stop();
+            releaseOldCallback.TrySetResult();
             oldBatchExited.TrySetResult();
+            if (heldOldSend is not null) await heldOldSend.DisposeAsync();
             if (window != null)
             {
                 window.Pet.Shutdown();

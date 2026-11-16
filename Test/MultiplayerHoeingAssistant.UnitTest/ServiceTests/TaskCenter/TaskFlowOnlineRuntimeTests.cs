@@ -8,6 +8,48 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public sealed class TaskFlowOnlineRuntimeTests
 {
     [Fact]
+    public async Task PhysicalResetDropsExternallyDeliveredOldLogCallback()
+    {
+        using var f = new Fixture();
+        var authority = new TaskCenterDriveAuthority();
+        using (authority.Enter())
+        {
+            await f.Runtime.ExecuteAsync(f.Run, Flow(f.Log), 0, () => { }, default);
+            _ = await f.Runtime.BeginTaskAsync(f.Run, Resource(), Occurrence(), 1, () => { }, default);
+        }
+        var original = Assert.Single(f.Source.Sessions);
+        authority.Revoke();
+        // Observation threads do not carry the driver's AsyncLocal context.
+        Task callback;
+        using (ExecutionContext.SuppressFlow()) callback = Task.Run(original.Hit);
+        await callback;
+        Assert.Equal(0, f.Value(1));
+        f.Runtime.ForgetRevokedDrivesAfterPhysicalReset();
+        Assert.Empty(f.Runtime.List());
+    }
+
+    [Fact]
+    public async Task PhysicalResetReleasesLostProgramReplyGate_AndOldChainCannotWriteAfterReply()
+    {
+        using var f = new Fixture();
+        var authority = new TaskCenterDriveAuthority();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reply = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Runtime.StartProgramAsync = (_, _) => { entered.TrySetResult(); return reply.Task; };
+        Task old;
+        using (authority.Enter())
+            old = f.Runtime.RunStepsAsync([StartupStepKinds.Create(StartupStepKinds.StartProgram), Write(2, 1)], default);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        authority.Revoke();
+        f.Runtime.ForgetRevokedDrivesAfterPhysicalReset();
+        await f.Runtime.RunStepsAsync([Write(1, 1)], default).WaitAsync(TimeSpan.FromSeconds(2));
+        reply.TrySetResult();
+        await Assert.ThrowsAsync<RunRecordConflictException>(() => old);
+        Assert.Equal(1, f.Value(1));
+        Assert.Equal(0, f.Value(2));
+    }
+
+    [Fact]
     public async Task SamePidEpochChangeCannotInvokeLiveCallbackBeforeFreezeFindsTheGap()
     {
         var dir = Path.Combine(Path.GetTempPath(), "flow-online-epoch-live-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(dir);

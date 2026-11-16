@@ -471,14 +471,16 @@ public sealed class ArbitrationAdmissionService
         public void Dispose() => restore();
     }
     private readonly object _lifetimeGate = new();
-    private int _activeResponsibilities;
+    private readonly Dictionary<object, TaskCenterDriveAuthority?> _activeResponsibilities = [];
     private bool _retiredForRecovery;
 
     internal bool TryRetireForRecovery()
     {
         lock (_lifetimeGate)
         {
-            if (_activeResponsibilities != 0) return false;
+            // Physical reset has already revoked these contexts at every publication/port
+            // boundary. A lost old reply cannot retain ownership recovery forever.
+            if (_activeResponsibilities.Values.Any(authority => authority?.IsRevoked != true)) return false;
             _retiredForRecovery = true;
             return true;
         }
@@ -486,17 +488,19 @@ public sealed class ArbitrationAdmissionService
 
     private IDisposable BeginOwnerResponsibility()
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
         var previous = _ownerResponsibility.Value;
+        var identity = new object();
         lock (_lifetimeGate)
         {
             if (_retiredForRecovery) throw new InvalidOperationException("原仲裁实例已隔离，禁止继续旧执行。");
-            _activeResponsibilities++;
+            _activeResponsibilities.Add(identity, TaskCenterDriveAuthority.Current);
         }
         _ownerResponsibility.Value = previous ?? new OwnerResponsibility(Volatile.Read(ref _ownership));
         return new ResponsibilityScope(() =>
         {
             _ownerResponsibility.Value = previous;
-            lock (_lifetimeGate) _activeResponsibilities--;
+            lock (_lifetimeGate) _activeResponsibilities.Remove(identity);
         });
     }
     public LeaseOwnerCapability? Ownership => Volatile.Read(ref _ownership);

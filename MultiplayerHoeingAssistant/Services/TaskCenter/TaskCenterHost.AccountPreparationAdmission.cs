@@ -9,7 +9,7 @@ public sealed partial class TaskCenterHost
         var runId = request.Candidate.RunId;
         if (string.IsNullOrEmpty(runId) || request.RunBinding != runId) return null;
         var run = _runs.Load(runId);
-        if (run is null || run.StopRequested || IsExecutionResetReleased(run)
+        if (run is null || run.StopRequested || IsExecutionUnavailable(run)
             || run.AccountPreparationProcessContinuations.Count == 0
             || run.WorkflowId != request.Candidate.WorkflowId
             || run.AdmissionSourceScope != request.Candidate.Scope) return null;

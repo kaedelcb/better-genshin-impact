@@ -905,6 +905,7 @@ public sealed class ArbitrationLeaseStore
 
     internal IDisposable AcquireOwnerFence(LeaseOwnerCapability owner)
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
         if (Volatile.Read(ref _lockOwnerThreadId) == Environment.CurrentManagedThreadId)
         {
             VerifyOwnerFence(owner);
@@ -1001,6 +1002,7 @@ public sealed class ArbitrationLeaseStore
     /// <summary>原子发布：UTF8 无 BOM + 临时文件（同目录 ".guid.tmp"）→ 同目录原子替换（overwrite），finally 清残件。</summary>
     private void Publish(LogicalOwnerLeaseFile file)
     {
+        using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
         file.Version = SupportedVersion; // v5：发布必须保留受理认领字段、历史归档与校验合同
         var detail = !ValidateLeaseSegment(file.Lease, out var leaseDetail)
             ? leaseDetail

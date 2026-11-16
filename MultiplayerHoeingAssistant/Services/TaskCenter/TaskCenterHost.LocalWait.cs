@@ -24,7 +24,7 @@ public sealed partial class TaskCenterHost
         {
             foreach (var run in snapshot.Records)
                 if (run.State is WorkflowRunState.LocalWaitParking or WorkflowRunState.Interrupted
-                    && !run.StopRequested && HasValidParkedDecision(run, out var binding) && binding is not null)
+                    && !IsExecutionUnavailable(run) && !run.StopRequested && HasValidParkedDecision(run, out var binding) && binding is not null)
                     _recoveredWaitRuns.Add(run.RunId);
         }
     }
@@ -42,6 +42,7 @@ public sealed partial class TaskCenterHost
 
     private async Task MonitorLocalWaitAsync()
     {
+        using var maintenance = TaskCenterDriveAuthority.EnterHostMaintenance();
         var ct = _shutdownCts.Token;
         var wasIdle = false;
         var nextSafetyNet = DateTimeOffset.UtcNow.AddSeconds(30);
@@ -74,11 +75,13 @@ public sealed partial class TaskCenterHost
 
     private void QueueLocalWaitReevaluation(LocalWaitReevaluationTriggerPoint trigger)
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
         if (!_admissionWired || !_successorAdmissionWired) return;
         lock (_gate)
         {
             if (_shutdown || _localWaitMonitorTask is null) return;
             _pendingWaitTriggers.Add(trigger);
+            using var authority = _driveAuthority.Enter();
             _localWaitReevaluationTask ??= Task.Run(DrainLocalWaitReevaluationsAsync);
         }
     }
@@ -125,7 +128,7 @@ public sealed partial class TaskCenterHost
         var snapshot = _runs.ListWithIntegrity("local-wait-select");
         if (snapshot.UnknownFiles.Count != 0) return;
         var currentEpoch = CurrentBgiEpoch();
-        if (snapshot.Records.Any(run => !IsExecutionResetReleased(run) && RunStore.HasUnresolvedExternalFact(run)
+        if (snapshot.Records.Any(run => !IsExecutionUnavailable(run) && RunStore.HasUnresolvedExternalFact(run)
             && (run.AdmissionSourceScope == "bgi:local:" + currentEpoch
                 || run.StopAuthority?.Epoch == currentEpoch
                 || run.CurrentSubmission?.Epoch == currentEpoch
@@ -194,7 +197,7 @@ public sealed partial class TaskCenterHost
         var matches = records.Where(r => r.LocalWaitDecision?.Binding?.ItemId == item.ItemId).ToList();
         if (matches.Count != 1) return null;
         var run = matches[0];
-        if (IsExecutionResetReleased(run)) return null;
+        if (IsExecutionUnavailable(run)) return null;
         lock (_gate)
         {
             if (_shutdown || _drives.ContainsKey(run.WorkflowId) || _reservedWorkflows.Contains(run.WorkflowId)

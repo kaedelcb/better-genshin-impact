@@ -67,6 +67,52 @@ public sealed class WorkflowExecutionResetTests : IDisposable
     }
 
     [Fact]
+    public async Task PhysicalResetDetachesLostDriver_AndItsLateFinallyCannotRemoveSameWorkflowSuccessor()
+    {
+        var (id, revision) = Seed();
+        var host = Host();
+        var oldReply = new TaskCompletionSource<WorkflowRunRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var newReply = new TaskCompletionSource<WorkflowRunRecord>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new WorkflowRunner(host.Workflows, host.Runs, new RecordingBoundary(), new NoopPrerequisite(), new NoopTerminal());
+        var launch = typeof(TaskCenterHost).GetMethod("LaunchDrive", System.Reflection.BindingFlags.NonPublic
+            | System.Reflection.BindingFlags.Instance)!;
+        Task Completion()
+        {
+            var drives = (System.Collections.IDictionary)typeof(TaskCenterHost).GetField("_drives",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(host)!;
+            var entry = drives[id]!;
+            return ((TaskCompletionSource)entry.GetType().GetProperty("Completion")!.GetValue(entry)!).Task;
+        }
+        var old = AddRun(host, id, revision, WorkflowRunState.Unknown, "原未知保留");
+        WorkflowRunRecord? successor = null;
+        try
+        {
+            launch.Invoke(host, [id, runner, (Func<CancellationTokenSource, Task<WorkflowRunRecord>>)(_ => oldReply.Task), "old", old.RunId]);
+            var oldCompletion = Completion();
+            await host.BeginManualResetAsync(default).WaitAsync(TimeSpan.FromSeconds(1));
+            Assert.True((await host.CompleteManualResetAfterPhysicalBgiResetAsync("fixture" )).SendGateOpened);
+            Assert.False(host.IsDriving(id));
+            successor = AddRun(host, id, revision, WorkflowRunState.Running);
+            launch.Invoke(host, [id, runner, (Func<CancellationTokenSource, Task<WorkflowRunRecord>>)(_ => newReply.Task), "new", successor.RunId]);
+            var successorCompletion = Completion();
+            oldReply.TrySetResult(old);
+            await oldCompletion.WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.True(host.IsDriving(id));
+            Assert.False(successorCompletion.IsCompleted);
+            Assert.False(host.Runs.IsPhysicallyAbandoned(successor));
+            Assert.Equal(WorkflowRunState.Unknown, host.Runs.Load(old.RunId)!.State);
+            newReply.TrySetResult(successor);
+            await successorCompletion.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            oldReply.TrySetResult(old);
+            newReply.TrySetResult(successor ?? old);
+            await host.ShutdownAsync();
+        }
+    }
+
+    [Fact]
     public async Task Interrupted_ResetPreservesDefinitionAndFailureHistory_AndNewRunStartsAtFirstNode()
     {
         var (id, revision) = Seed(resourceNodes: true);

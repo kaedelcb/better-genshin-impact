@@ -50,7 +50,7 @@ public sealed partial class TaskCenterHost
                 OnlineHoeingHandoff: null, OnlineHoeingGateParked: false,
                 CurrentSubmission: { Intent: SubmitIntentState.Accepted, SendAttempted: true,
                     JobId.Length: > 0, AcceptedSendIdentity.Length: > 0, OriginalRequestEvidence: not null } }
-                && !IsExecutionResetReleased(run) ? run.RunId : null;
+                && !IsExecutionUnavailable(run) ? run.RunId : null;
         }
         catch (Exception ex)
         {
@@ -105,7 +105,7 @@ public sealed partial class TaskCenterHost
                 OnlineHoeingHandoff: null, OnlineHoeingGateParked: false,
                 CurrentSubmission: { Intent: SubmitIntentState.Accepted, SendAttempted: true,
                     JobId.Length: > 0, OriginalRequestEvidence: not null } sub }
-                || IsExecutionResetReleased(run) || IsDriving(run.WorkflowId)
+                || IsExecutionUnavailable(run) || IsDriving(run.WorkflowId)
                 || _clientAccessor() is not { } client) return false;
             using var slice = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
             slice.CancelAfter(TimeSpan.FromSeconds(2));

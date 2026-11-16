@@ -703,6 +703,7 @@ public sealed class LocalWaitQueueStore
     /// <summary>调用方须持有该文件的规范路径锁；items 与 generationHighWater 必须来自同一根快照。</summary>
     private void Persist(List<LocalWaitItem> items, long generationHighWater)
     {
+        using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
 #if DEBUG
         // 测试专用探针（Release／生产构建下**编译期不存在**）：用于证明「写盘前物化」确实生效。
         // 会诊第二轮 #2 的判别力取证需要确定性复现「校验通过后、序列化前改写调用方实例」这一窗口；

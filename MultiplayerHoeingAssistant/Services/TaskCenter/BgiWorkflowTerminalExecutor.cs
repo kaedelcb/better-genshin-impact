@@ -39,7 +39,7 @@ public sealed class BgiWorkflowTerminalExecutor : IWorkflowTerminalExecutor
     internal BgiWorkflowTerminalExecutor(IBgiExecutionPort port, RunStore runs,
         ITerminalEffectObserver? effects = null, TaskCenterOnlineSendGate? onlineSendGate = null)
     {
-        _port = port ?? throw new ArgumentNullException(nameof(port));
+        _port = new TaskCenterFencedExecutionPort(port ?? throw new ArgumentNullException(nameof(port)));
         _runs = runs ?? throw new ArgumentNullException(nameof(runs));
         _effects = effects ?? new WindowsTerminalEffectObserver();
         _onlineSendGate = onlineSendGate;

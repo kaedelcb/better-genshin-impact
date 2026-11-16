@@ -510,6 +510,66 @@ public class CoordinatedBatchGatewayTests
     }
 
     [Fact]
+    public async Task ReplacementExecutorNeedsNewExplicitResetBeforeItCanCleanOldBatch()
+    {
+        var (h, clients, room) = await Setup();
+        var old = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "before-replacement", ["u0"], expectedBatchId: old.BatchId);
+        await h.Ops.HandleDisconnectAsync(clients[0], null);
+        var replacement = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(replacement, GatewayTestHarness.HelloEnvelope());
+        await h.Ops.JoinControlRoomAsync(replacement, room, "pw", "u0", "replacement", clientInstanceId: "replacement-instance");
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(replacement,
+            Command(GatewayProtocol.Names.ControlBatchResetCleaned, new { resetId = "before-replacement", batchId = old.BatchId }))));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, replacement, old, stage: "registered")));
+        await h.Ops.ResetCoordinatedBatchAsync(replacement, "replacement-reset", ["u0"],
+            expectedGeneration: old.Generation, expectedBatchId: old.BatchId);
+        var cleaned = Snapshot(await h.Dispatcher.DispatchAsync(replacement,
+            Command(GatewayProtocol.Names.ControlBatchResetCleaned, new { resetId = "replacement-reset", batchId = old.BatchId })));
+        Assert.True(cleaned.CleanupComplete);
+        await h.Ops.ReportControlStatusAsync(replacement, new ControlStatus
+        {
+            RoomCode = room, PlayerUid = "u0", ExpectedHoeingPlayers = 1,
+            OnlineHoeingGroupNames = ["group0"], OnlineHoeingGroupTypes = ["group"],
+        });
+        var next = Snapshot(await Begin(h, replacement, "next"));
+        Assert.NotEqual(old.BatchId, next.BatchId);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, clients[0], next, stage: "registered")));
+        Assert.Equal("registering", h.Ops.CurrentCoordinatedBatch(replacement)!.Phase);
+    }
+
+    [Fact]
+    public async Task LostResetReceiptCanBeReauthorizedAndOldMemberCannotBlockOrMutateNextBatch()
+    {
+        var (h, clients, _) = await Setup(2);
+        var old = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "lost-reset", ["*"],
+            expectedGeneration: old.Generation, expectedBatchId: old.BatchId);
+        var receipts = (System.Collections.IDictionary)typeof(RoomOperations)
+            .GetField("_processedResetResults", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(h.Ops)!;
+        receipts.Clear(); // Simulate reset-receipt eviction while physical BGI reset is in flight.
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(clients[1],
+            Command(GatewayProtocol.Names.ControlBatchResetCleaned, new { resetId = "lost-reset", batchId = old.BatchId }))));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0", "u1"])));
+        foreach (var client in clients)
+        {
+            var repairId = "repair-" + client.ConnectionId;
+            var repair = await h.Ops.ResetCoordinatedBatchAsync(client, repairId, ["*"],
+                expectedGeneration: old.Generation, expectedBatchId: old.BatchId);
+            Assert.Equal(old.BatchId, repair.BatchId);
+            Snapshot(await h.Dispatcher.DispatchAsync(client, Command(GatewayProtocol.Names.ControlBatchResetCleaned,
+                new { resetId = repairId, batchId = old.BatchId })));
+        }
+        Assert.True(h.Ops.CurrentCoordinatedBatch(clients[0])!.CleanupComplete);
+        var next = Snapshot(await Begin(h, clients[0], "next", ["u0", "u1"]));
+        Assert.NotEqual(old.BatchId, next.BatchId);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, clients[1], old, "u1", stage: "cleaned")));
+        Assert.Equal(next.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
+        Assert.Equal("registering", h.Ops.CurrentCoordinatedBatch(clients[0])!.Phase);
+    }
+
+    [Fact]
     public async Task WebBeginRequiresSuccessfulPasswordJoinAndCannotCrossRoomsBySenderPrefix()
     {
         var (h, clients, room) = await Setup();

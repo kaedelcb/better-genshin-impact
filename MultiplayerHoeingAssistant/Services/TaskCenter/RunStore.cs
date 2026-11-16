@@ -49,6 +49,7 @@ public sealed partial class RunStore
     {
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (_owner is null) throw new RunRecordConflictException("运行写者未取得原所有者能力。");
             using var fence = _owner.Store.AcquireOwnerFence(_owner);
         }
@@ -554,7 +555,7 @@ public sealed partial class RunStore
         var recovered = new List<WorkflowRunRecord>();
         foreach (var rec in List())
         {
-            if (ExecutionResetEvidence.Valid(rec)) continue;
+            if (ExecutionResetEvidence.Valid(rec) || IsPhysicallyAbandoned(rec)) continue;
             if (rec.PendingCompletion is { TerminalEffectToken: not null })
             {
                 try { BgiWorkflowTerminalExecutor.ReconcileDurableEffect(this, rec, TerminalEffectObserverForTest); }
@@ -818,6 +819,7 @@ public sealed partial class RunStore
                 {
                     ThrowIfFileFaultInjected("publish");
                     if (!authorizedDiagnostic) _owner?.Store.VerifyOwnerFence(_owner);
+                    using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
                     File.Move(tmp, file, overwrite: true);
                 });
             }

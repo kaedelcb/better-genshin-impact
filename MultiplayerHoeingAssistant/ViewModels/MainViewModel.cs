@@ -3131,19 +3131,18 @@ public partial class MainViewModel : INotifyPropertyChanged
             using var gateBudget = new CancellationTokenSource(TimeSpan.FromSeconds(45));
             var closeGate = resetHost.BeginManualResetAsync(gateBudget.Token);
             var physicalReset = _commandExecutor.ForceResetAllAsync(AddLog);
-            var stopDrivers = resetHost.StopAllRunsForUserAsync();
-            var cancelBatch = batchToWait is null ? Task.CompletedTask : Task.Run(() => batchToWait.Cancel());
+            Task<IReadOnlyList<string>> stopDrivers;
+            using (resetHost.EnterExecutionAuthorityScope())
+                stopDrivers = Task.Run(() => resetHost.StopAllRunsForUserAsync());
+            var cancelBatch = batchToWait?.CancelForManualResetAsync() ?? Task.CompletedTask;
+            ObserveOnlineTask(stopDrivers, "状态重置旧驱动停止");
+            ObserveOnlineTask(cancelBatch, "状态重置旧批次取消");
             try { StopAllAutomationRequested?.Invoke(); }
             catch (Exception ex) { AddLog("[状态重置] 自动流程取消异常：" + ex.Message); }
             var result = await physicalReset;
-            await stopDrivers;
             await closeGate;
-            try { await cancelBatch.WaitAsync(TimeSpan.FromSeconds(5)); }
-            catch (Exception ex)
-            {
-                result.Status = "failed"; result.ErrorCode = "reset_cancel_pending";
-                result.Message = "BGI 已处理，但旧批次取消回调尚未退出：" + ex.Message;
-            }
+            // Physical replacement plus revoked host authority is the reset boundary.
+            // Cooperative cancellation remains observed but no longer vetoes recovery.
             await ClearLocalOnline(preserveScheduledOnline: true);
             var taskCenterReset = await resetHost.ForceAbandonOnlineHoeingForManualResetAsync(
                 "全局状态重置", openSendGate: result.Status == "success");
@@ -3153,33 +3152,52 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 result.Status = "failed";
                 result.ErrorCode = "task_center_gate_not_open";
-                result.Message = "BGI 已复位，但任务中心仍有驱动或未停止的活动运行，发送闸门保持关闭";
+                result.Message = "BGI 已复位，但任务中心复位屏障尚未确认，发送闸门保持关闭；请查看任务中心日志";
             }
+            if (result.Status == "success") batchToWait?.ConfirmManualResetExecutionReleased();
             if (result.Status == "success" && batchToWait?.RunTask is { IsCompleted: false } unfinished)
-            {
-                try { await unfinished.WaitAsync(TimeSpan.FromSeconds(20)); }
-                catch (Exception ex)
-                {
-                    result.Status = "failed"; result.ErrorCode = "old_batch_callback_pending";
-                    result.Message = "BGI 已复位，但旧批次回调尚未退出：" + ex.Message;
-                }
-            }
+                ObserveOnlineTask(unfinished, "状态重置已隔离的旧批次");
             if (result.Status == "success" && !string.IsNullOrWhiteSpace(resetId)
-                && !string.IsNullOrWhiteSpace(expectedBatchId) && _signalRClient?.SupportsCoordinatedStart == true)
+                && !string.IsNullOrWhiteSpace(expectedBatchId) && !IsStandaloneMode)
             {
                 try
                 {
-                    await _signalRClient.ConfirmCoordinatedResetCleanedAsync(resetId, expectedBatchId);
+                    var resetClient = _signalRClient ?? throw new IOException("控制房间连接不可用");
+                    var resetContext = resetClient.ControlContext;
+                    void RequireResetAuthority()
+                    {
+                        if (!ReferenceEquals(resetClient, _signalRClient) || !resetClient.IsConnected
+                            || !resetClient.SupportsCoordinatedStart || resetClient.ControlContext != resetContext
+                            || resetContext != CurrentControlContext())
+                            throw new IOException("控制房间身份或连接已变化，原批次清理尚未确认");
+                    }
+                    await ConfirmManualResetCleanupAsync(resetId, expectedBatchId, _config.PlayerUid,
+                        async (id, batchId) =>
+                        {
+                            RequireResetAuthority();
+                            await resetClient.ConfirmCoordinatedResetCleanedAsync(id, batchId);
+                            RequireResetAuthority();
+                        },
+                        async () =>
+                        {
+                            RequireResetAuthority();
+                            var current = await resetClient.GetCurrentCoordinatedBatchAsync();
+                            RequireResetAuthority();
+                            return current;
+                        },
+                        async (id, generation, batchId, uid) =>
+                        {
+                            RequireResetAuthority();
+                            var repair = await resetClient.ResetCoordinatedBatchAsync(
+                                id, [uid], expectedGeneration: generation, expectedBatchId: batchId);
+                            RequireResetAuthority();
+                            return repair;
+                        });
                 }
                 catch (Exception ex)
                 {
-                    // 服务器明确无此批次（例如已重启）时不冒认其他批次，也不保留假的旧权限。
-                    var current = await _signalRClient.GetCurrentCoordinatedBatchAsync();
-                    if (current != null)
-                    {
-                        result.Status = "failed"; result.ErrorCode = "reset_cleanup_unconfirmed";
-                        result.Message = "本机已复位，服务端同批清理未确认：" + ex.Message;
-                    }
+                    result.Status = "failed"; result.ErrorCode = "reset_cleanup_unconfirmed";
+                    result.Message = "本机已复位，服务端同批清理未确认：" + ex.Message;
                 }
             }
             if (result.Status == "success")
@@ -3187,7 +3205,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (batchToWait != null)
                 {
                     batchToWait.CleanupConfirmed = true;
-                    batchToWait.MarkSettled();
+                    batchToWait.MarkSettled(waitForCallbacks: false);
                     _intentLifecycle.FinishCoordinatedBatch(batchToWait.BatchId, "人工重置已完成");
                     lock (_batchGate)
                     {
@@ -4980,7 +4998,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 || client.ControlContext != CurrentControlContext()) return;
             OnlineHoeingBatch? pending;
             lock (_batchGate) pending = _activeBatch;
-            if (pending?.RunTask?.IsCompleted == true)
+            if (pending is not null && (pending.LocalExecutionReleased || pending.RunTask?.IsCompleted == true))
                 ObserveOnlineTask(RetryCoordinatedCleanupAsync(pending), "重连后批次清理确认");
         };
 

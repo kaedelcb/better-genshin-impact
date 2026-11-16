@@ -505,6 +505,16 @@ public sealed class OnlineHoeingBatch
             CompletionActionWarning ??= "锄地已完成，普通任务有错误，仍按设定执行后续：" + FailureReason;
         }
     }
+    internal void ConfirmManualResetExecutionReleased()
+    {
+        // This is physical exit and revocation evidence, not a successful task result.
+        Volatile.Write(ref _localExecutionReleased, 1);
+        CleanupConfirmed = true;
+        LocalCleanupConfirmed = true;
+        PolicyTicketReleased = true;
+        PersistRecovery?.Invoke();
+    }
+
     internal bool LocalExecutionReleased => Volatile.Read(ref _localExecutionReleased) != 0;
     internal BgiEpoch? ExecutionEpoch { get; set; }
     internal BgiEpoch? LocalSuccessEpoch { get; private set; }
@@ -690,12 +700,13 @@ public sealed class OnlineHoeingBatch
     public bool LocalCleanupConfirmed { get; set; }
     public bool Prepared { get; set; }
     public bool TakenOver { get; set; }
-    public void MarkSettled()
+    public void MarkSettled(bool waitForCallbacks = true)
     {
         lock (_policyGate) Interlocked.Exchange(ref _settled, 1);
         RecoveryStopSignal?.Stop();
         PersistRecovery?.Invoke();
-        _policyCancellationRegistration.Dispose();
+        if (waitForCallbacks) _policyCancellationRegistration.Dispose();
+        else _policyCancellationRegistration.Unregister();
         RecoveryStopSignal?.Dispose();
         RecoveryStopSignal = null;
     }
@@ -716,26 +727,35 @@ public sealed class OnlineHoeingBatch
     /// <summary>批次是否已被请求取消。</summary>
     public bool IsCancellationRequested => Cts.IsCancellationRequested;
 
+    // CancelAsync publishes cancellation before scheduling callbacks. A stuck callback
+    // cannot keep manual reset waiting while holding the batch's policy lock.
+    internal Task CancelForManualResetAsync()
+    {
+        Volatile.Write(ref _explicitStopRequested, 1);
+        RecoveryStopSignal?.Stop();
+        Outcome = "cancelled";
+        return Cts.CancelAsync();
+    }
+
     /// <summary>请求取消批次（幂等；批次循环在下一次迭代检查点退出）。</summary>
     public void Cancel(bool userInitiated = true)
     {
         lock (_policyGate)
         {
-        if (Volatile.Read(ref _settled) != 0 || !userInitiated && (StateContinuationEnabled || LocalExecutionReleased)) return;
-        if (userInitiated)
-        {
-            Volatile.Write(ref _explicitStopRequested, 1);
-            RecoveryStopSignal?.Stop();
-            Outcome = "cancelled";
+            if (Volatile.Read(ref _settled) != 0 || !userInitiated && (StateContinuationEnabled || LocalExecutionReleased)) return;
+            if (userInitiated)
+            {
+                Volatile.Write(ref _explicitStopRequested, 1);
+                RecoveryStopSignal?.Stop();
+                Outcome = "cancelled";
+            }
         }
-        try
-        {
-            Cts.Cancel();
-        }
+        // User callbacks may block. They must not retain the policy lock required
+        // to persist or retire this batch during a subsequent manual reset.
+        try { Cts.Cancel(); }
         catch (ObjectDisposedException)
         {
             // 防御：理论上不 Dispose 不会命中，保留兜底
-        }
         }
         if (userInitiated) PersistRecovery?.Invoke();
     }

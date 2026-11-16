@@ -23,6 +23,7 @@ public sealed partial class TaskCenterHost
     private sealed record OnlineResumeSignal(string? JobId, string? FailureReason);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<OnlineResumeSignal>> _onlineResumeSignals = new();
     private int _manualResetActive;
+    private long _manualResetRevision;
     private int _priorityWaiterWakePending;
     private Task? _priorityWaiterWakeTask;
     private readonly SemaphoreSlim _onlineWaiterWakeGate = new(1, 1);
@@ -50,7 +51,7 @@ public sealed partial class TaskCenterHost
     {
         var currentEpoch = WorkflowStopAuthority.Epoch(
             _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch);
-        IReadOnlyList<WorkflowRunRecord> before = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList();
+        IReadOnlyList<WorkflowRunRecord> before = _runs.List().Where(run => !IsExecutionUnavailable(run)).ToList();
         var pendingTerminal = (_admissionWired ? before : Array.Empty<WorkflowRunRecord>()).Where(r => r.State == WorkflowRunState.Cancelled
             && r.StopRequested && r.TerminalRelease is null
             && r.OnlineHoeingHistory.Any(h => h.Phase == "stopped"
@@ -64,7 +65,7 @@ public sealed partial class TaskCenterHost
         await EnsureRecoveredAsync().ConfigureAwait(false);
         // 同一助手进程中 BGI 单独退出时，启动恢复扫描已执行过；无驱动的旧停驻记录
         // 仍需在原身份下标 Unknown，随后才可按已确认的取消/退出事实结清。
-        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
+        foreach (var run in _runs.List().Where(run => !IsExecutionUnavailable(run)).ToList())
         {
             if (run.State != WorkflowRunState.OnlineHoeingParking
                 || run.OnlineHoeingHandoff is not { } old
@@ -85,7 +86,7 @@ public sealed partial class TaskCenterHost
             }
         }
         var settled = new List<string>();
-        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
+        foreach (var run in _runs.List().Where(run => !IsExecutionUnavailable(run)).ToList())
         {
             if (run.OnlineHoeingHandoff is not { } handoff
                 || !OriginalOnlineHandoffProcessExited(handoff, currentEpoch)) continue;
@@ -142,7 +143,7 @@ public sealed partial class TaskCenterHost
                     + runId + " " + result.Message);
             }
         }
-        var remaining = _runs.List().Where(run => !IsExecutionResetReleased(run)).Count(r => r.OnlineHoeingHandoff is not null);
+        var remaining = _runs.List().Where(run => !IsExecutionUnavailable(run)).Count(r => r.OnlineHoeingHandoff is not null);
         return new OnlineHandoffRecoveryResult(settled.Count, remaining, pendingReconciliations);
     }
 
@@ -176,7 +177,7 @@ public sealed partial class TaskCenterHost
             {
                 var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
                 var epoch = WorkflowStopAuthority.Epoch(current);
-                return _runs.List().Where(run => !IsExecutionResetReleased(run)).Any(r => BlocksCurrentOnlineBatch(r, epoch));
+                return _runs.List().Where(run => !IsExecutionUnavailable(run)).Any(r => BlocksCurrentOnlineBatch(r, epoch));
             }
             catch { return true; } // 运行台账不可读不等于没有待恢复责任。
         }
@@ -191,7 +192,7 @@ public sealed partial class TaskCenterHost
             {
                 var current = _onlineEpochProvider?.Invoke() ?? _clientAccessor()?.ServerEpoch;
                 var epoch = WorkflowStopAuthority.Epoch(current);
-                return _runs.List().Where(run => !IsExecutionResetReleased(run)).All(r => !BlocksCurrentOnlineBatch(r, epoch)
+                return _runs.List().Where(run => !IsExecutionUnavailable(run)).All(r => !BlocksCurrentOnlineBatch(r, epoch)
                     || r.OnlineHoeingHandoff?.Phase is "resumeAccepted" or "observing" or "terminal");
             }
             catch { return false; }
@@ -210,15 +211,15 @@ public sealed partial class TaskCenterHost
         await FlowRuntime.SuspendForOnlineAsync(ct).ConfigureAwait(false);
     }
 
-    internal async Task BeginManualResetAsync(CancellationToken ct)
+    internal Task BeginManualResetAsync(CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
+        using var permission = TaskCenterDriveAuthority.EnterPublication();
+        Interlocked.Increment(ref _manualResetRevision);
         Interlocked.Exchange(ref _manualResetActive, 1);
-        try { await _onlineSendGate.CloseAsync(ct).ConfigureAwait(false); }
-        catch
-        {
-            Interlocked.Exchange(ref _manualResetActive, 0);
-            throw;
-        }
+        // 全局复位会物理重建 BGI；只封住新发送，不等待丢失回执的旧发送租约。
+        _onlineSendGate.CloseForPriority();
+        return Task.CompletedTask;
     }
 
     // Physical exclusion belongs to the closed send gate and BGI's targeted suspend.
@@ -260,7 +261,7 @@ public sealed partial class TaskCenterHost
 
         WorkflowRunRecord? target = null;
         var currentRuns = (priorityRecovery ? _runs.ReadPriorityPreparationRecords() : _runs.List())
-            .Where(run => !IsExecutionResetReleased(run)).ToList();
+            .Where(run => !IsExecutionUnavailable(run)).ToList();
         if (currentRuns.Any(r => BlocksCurrentOnlineBatch(r, epoch)))
             return new OnlineHoeingPreparation(false, null, "上一轮计划接管或恢复作业尚未结清");
         var runs = currentRuns.Where(r => !r.IsTerminal).ToList();
@@ -353,6 +354,7 @@ public sealed partial class TaskCenterHost
         if (stateContinuation) _stateContinuationRuns[target.RunId] = generation;
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             _onlineHoeingRunId = target.RunId;
             _onlineHoeingGeneration = generation;
             _pendingPriorityPreparation = null;
@@ -406,7 +408,7 @@ public sealed partial class TaskCenterHost
         if (pending is not { } original || original.Generation != generation || original.RunId != runId) return true;
         if (Volatile.Read(ref _manualResetActive) != 0) return false;
         var saved = _runs.Load(runId);
-        if (saved is null || saved.StopRequested || saved.IsTerminal || IsExecutionResetReleased(saved)) return false;
+        if (saved is null || saved.StopRequested || saved.IsTerminal || IsExecutionUnavailable(saved)) return false;
         if (saved.OnlineHoeingHandoff is { } linked)
             return linked.Generation == generation;
         var prepared = PrepareOnlineHoeing(generation, original.Snapshot, stateContinuation: true, priorityRecovery: true);
@@ -468,13 +470,13 @@ public sealed partial class TaskCenterHost
         {
             if (!await RestorePriorityPlanRecoveryAsync(batch).ConfigureAwait(false)) return null;
             if (batch.ManagedRunId is { } oldRun && _runs.Load(oldRun) is { StopRequested: false } oldPlan
-                && !IsExecutionResetReleased(oldPlan)) return oldRun;
+                && !IsExecutionUnavailable(oldPlan)) return oldRun;
             return null;
         }
         await EnsureRecoveredAsync().ConfigureAwait(false);
         if (!await RestorePriorityPlanRecoveryAsync(batch).ConfigureAwait(false)) return null;
         if (batch.ManagedRunId is { } managed && _runs.Load(managed) is { } savedIntent
-            && (savedIntent.StopRequested || IsExecutionResetReleased(savedIntent)))
+            && (savedIntent.StopRequested || IsExecutionUnavailable(savedIntent)))
         { batch.Cancel(); return null; }
         string? wire = null;
         if (batch.SuspendedRawData is { } raw)
@@ -487,7 +489,7 @@ public sealed partial class TaskCenterHost
             }
             catch (JsonException) { return null; }
         }
-        var matches = _runs.List().Where(run => !run.StopRequested && !IsExecutionResetReleased(run)
+        var matches = _runs.List().Where(run => !run.StopRequested && !IsExecutionUnavailable(run)
             && (batch.ManagedRunId is null || run.RunId == batch.ManagedRunId)
             && run.OnlineHoeingHandoff is { StateContinuation: true, PriorityRecovery: true } h
             && h.Generation == batch.Generation && h.Epoch == WorkflowStopAuthority.Epoch(currentEpoch)
@@ -503,6 +505,7 @@ public sealed partial class TaskCenterHost
                 ticket, batch.SuspendedRawData)) return null;
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (_shutdown || _manualResetActive != 0 || _onlineHoeingGeneration > batch.Generation
                 || _onlineHoeingGeneration == batch.Generation && _onlineHoeingRunId is { } other && other != original.RunId)
                 return null;
@@ -545,7 +548,7 @@ public sealed partial class TaskCenterHost
         if (originalKey is null && !HasPriorityProcessContinuation(batch, runId)) return true;
         var run = _runs.Load(runId);
         if (run is null) return false;
-        if (run.StopRequested || IsExecutionResetReleased(run)) { batch.Cancel(); return false; }
+        if (run.StopRequested || IsExecutionUnavailable(run)) { batch.Cancel(); return false; }
         var handoff = run.OnlineHoeingHandoff is { } active && active.Generation == batch.Generation
                 && (originalKey is null || active.ResumeKey == originalKey) ? active
             : run.OnlineHoeingHistory.LastOrDefault(h => h.Generation == batch.Generation
@@ -598,6 +601,7 @@ public sealed partial class TaskCenterHost
         if (Volatile.Read(ref _manualResetActive) != 0 || !_runs.HasPriorityProgress(runId)) return false;
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (_onlineHoeingGeneration != generation || _onlineHoeingRunId != runId) return false;
             var original = _runs.Load(runId);
             if (original is null || original.StopRequested) return false;
@@ -632,6 +636,7 @@ public sealed partial class TaskCenterHost
         {
             if (_shutdown || Volatile.Read(ref _priorityWaiterWakePending) == 0 || _onlineSendGate.IsClosed
                 || Volatile.Read(ref _manualResetActive) != 0 || _priorityWaiterWakeTask is { IsCompleted: false }) return;
+            using var authority = _driveAuthority.Enter();
             _priorityWaiterWakeTask = Task.Run(async () =>
             {
                 try { await WakeOnlineHoeingWaitersAsync(null).ConfigureAwait(false); }
@@ -649,9 +654,9 @@ public sealed partial class TaskCenterHost
         finally { _onlineWaiterWakeGate.Release(); }
     }
 
-    private static bool IsPendingOnlineWaiter(WorkflowRunRecord run)
+    private bool IsPendingOnlineWaiter(WorkflowRunRecord run)
         => !run.StopRequested && run.OnlineHoeingGateParked && run.OnlineHoeingHandoff is null
-            && !IsExecutionResetReleased(run) && !RunStore.HasUnresolvedExternalFact(run)
+            && !IsExecutionUnavailable(run) && !RunStore.HasUnresolvedExternalFact(run)
             && run.State is WorkflowRunState.LocalWaitParking or WorkflowRunState.Interrupted;
 
     private async Task WakeOnlineHoeingWaitersCoreAsync(string? skipAutoRunId)
@@ -686,6 +691,9 @@ public sealed partial class TaskCenterHost
     internal async Task<(int Abandoned, bool SendGateOpened)> ForceAbandonOnlineHoeingForManualResetAsync(
         string reason, bool openSendGate)
     {
+        if (openSendGate)
+            return await CompleteManualResetAfterPhysicalBgiResetAsync(reason).ConfigureAwait(false);
+
         // 全局复位也必须先经过任务中心现有的所有者获取/恢复屏障。
         // 重置按钮可能早于第一次 Start/Resume 被点击；直接写 RunStore 会被所有者护栏拒绝，
         // 并把可预期的阻断冒泡成未处理 UI 异常。取得失败时保守保持发送闸门关闭。
@@ -701,7 +709,7 @@ public sealed partial class TaskCenterHost
 
         // 先给所有当前有驱动/等待状态的任务登记 Stop；BGI 随后由全局复位受控重建，
         // 这样普通单机/一条龙的宿主驱动也不会在复位后继续发下一项。
-        var activeRunIds = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList()
+        var activeRunIds = _runs.List().Where(run => !IsExecutionUnavailable(run)).ToList()
             .Where(r => ActiveStates.Contains(r.State))
             .Select(r => r.RunId)
             .Where(static id => !string.IsNullOrWhiteSpace(id))
@@ -724,7 +732,7 @@ public sealed partial class TaskCenterHost
         }
 
         var abandoned = 0;
-        foreach (var run in _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList())
+        foreach (var run in _runs.List().Where(run => !IsExecutionUnavailable(run)).ToList())
         {
             if (run.OnlineHoeingHandoff is null && !run.OnlineHoeingGateParked)
                 continue;
@@ -754,6 +762,7 @@ public sealed partial class TaskCenterHost
 
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             _onlineHoeingRunId = null;
             _onlineHoeingGeneration = 0;
             foreach (var signal in _onlineResumeSignals.Values)
@@ -761,34 +770,128 @@ public sealed partial class TaskCenterHost
             _onlineResumeSignals.Clear();
         }
 
-        var sendGateOpened = false;
-        if (openSendGate)
-        {
-            var driversSettled = false;
-            for (var i = 0; i < 20; i++)
-            {
-                lock (_gate) driversSettled = _drives.Count == 0;
-                if (driversSettled) break;
-                await Task.Delay(250).ConfigureAwait(false);
-            }
+        NotifyStateChanged();
+        return (abandoned, false);
+    }
 
-            // 只看进程内驱动数量会漏掉未驱动但仍处于活动态的耐久运行。
-            // 这些运行必须至少已落盘停止意图，否则不能宣称任务中心复位完成。
-            var unstoppedRuns = _runs.List().Where(run => !IsExecutionResetReleased(run)).ToList()
-                .Where(r => ActiveStates.Contains(r.State) && !r.StopRequested)
-                .Select(r => r.RunId).ToArray();
-            if (driversSettled && unstoppedRuns.Length == 0)
+    /// <summary>
+    /// 调用方已经确认旧 BGI 物理复位后的宿主收尾。先撤销旧代，再释放新代；
+    /// 旧驱动/所有者恢复不拥有否决新联机的权力。运行台账写回失败仍保留原件与 Unknown。
+    /// </summary>
+    internal async Task<(int Abandoned, bool SendGateOpened)> CompleteManualResetAfterPhysicalBgiResetAsync(string reason)
+    {
+        TaskCenterDriveAuthority.VerifyCurrent();
+        TaskCenterDriveAuthority previous;
+        long resetRevision;
+        lock (_gate)
+        {
+            TaskCenterDriveAuthority.VerifyCurrent();
+            if (_shutdown) return (0, false);
+            resetRevision = Interlocked.Increment(ref _manualResetRevision);
+            Interlocked.Exchange(ref _manualResetActive, 1);
+            Interlocked.Increment(ref _controlRevision);
+            previous = _driveAuthority;
+        }
+        // No Host lock while draining synchronous publications. This never waits for
+        // a gate mutex, remote response, cancellation callback or drive completion.
+        previous.Revoke();
+        TaskCenterDriveAuthority successor;
+        DriveEntry[] detached;
+        var resetAt = DateTimeOffset.UtcNow;
+        lock (_gate)
+        {
+            if (_shutdown || resetRevision != Interlocked.Read(ref _manualResetRevision)) return (0, false);
+            successor = _driveAuthority = new TaskCenterDriveAuthority();
+            detached = _driveCompletions.Where(d => ReferenceEquals(d.Authority, previous)).ToArray();
+            foreach (var entry in detached)
             {
-                await _onlineSendGate.OpenAsync().ConfigureAwait(false);
-                sendGateOpened = true;
-                Interlocked.Exchange(ref _manualResetActive, 0);
+                if (_drives.TryGetValue(entry.WorkflowId, out var current) && ReferenceEquals(current, entry))
+                    _drives.Remove(entry.WorkflowId);
+                _driveCompletions.Remove(entry);
+                _reservedWorkflows.Remove(entry.WorkflowId);
             }
-            else
-                _log?.Invoke("[任务中心] 全局复位后仍有运行驱动或未登记停止的活动运行，发送闸门保持关闭"
-                    + (unstoppedRuns.Length == 0 ? "" : "：" + string.Join(",", unstoppedRuns)));
+            _reservedWorkflows.Clear();
+            _recoverTask = null;
+            _onlineHoeingRunId = null;
+            _pendingPriorityPreparation = null;
+            _stateContinuationRuns.Clear();
+            foreach (var signal in _onlineResumeSignals.Values)
+                signal.TrySetResult(new OnlineResumeSignal(null, "用户物理复位 BGI，原驱动已撤权"));
+            _onlineResumeSignals.Clear();
+            Interlocked.Exchange(ref _priorityWaiterWakePending, 0);
+        }
+        using var resetAuthority = successor.Enter();
+        foreach (var entry in detached) _ = CancelIsolatedAsync(entry.Cts);
+        FlowRuntime.ForgetRevokedDrivesAfterPhysicalReset();
+
+        var abandoned = 0;
+        // Owner acquisition and bookkeeping share one deadline; neither a stale owner
+        // nor a missing reply can retain the physical reset's closed gate forever.
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(_shutdownCts.Token);
+        budget.CancelAfter(TimeSpan.FromSeconds(5));
+        var barrier = Task.Run(() => _runs.PublishPhysicalResetBarrier(resetAt));
+        try { await barrier.WaitAsync(budget.Token).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            _ = ObserveManualResetBookkeepingAsync(barrier);
+            TryLog("[任务中心] 旧驱动已撤权，但物理复位屏障未能持久化，发送闸门仍关闭：" + ex.Message);
+            return (0, false);
+        }
+        var bookkeeping = Task.Run(async () =>
+        {
+            using var authorityScope = successor.Enter();
+            var oldRuns = _runs.List().Where(run => _runs.IsPhysicallyAbandoned(run) && !IsExecutionResetReleased(run)
+                && (ActiveStates.Contains(run.State) || run.OnlineHoeingHandoff is not null || run.OnlineHoeingGateParked))
+                .Select(run => run.RunId).ToArray();
+            await EnsureControlOwnershipAsync(budget.Token).ConfigureAwait(false);
+            foreach (var runId in oldRuns)
+            {
+                budget.Token.ThrowIfCancellationRequested();
+                if (_runs.UpdateMergingIf(runId, latest =>
+                    {
+                        if (IsExecutionResetReleased(latest)) return false;
+                        if (latest.OnlineHoeingHandoff is { } handoff)
+                        {
+                            handoff.Phase = "manual_abandoned";
+                            latest.OnlineHoeingHistory.Add(handoff.Archived());
+                            latest.OnlineHoeingHandoff = null;
+                        }
+                        latest.OnlineHoeingGateParked = false;
+                        latest.StopRequested = true;
+                        if (!latest.IsTerminal) latest.State = WorkflowRunState.Unknown;
+                        latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
+                            + "用户已物理复位 BGI，旧驱动已撤权；原始历史与未知结果保留，禁止自动续跑。"
+                            + (string.IsNullOrWhiteSpace(reason) ? "" : "原因：" + reason);
+                        return true;
+                    }, out _)) Interlocked.Increment(ref abandoned);
+            }
+        });
+        try { await bookkeeping.WaitAsync(budget.Token).ConfigureAwait(false); }
+        catch (Exception ex)
+        {
+            // Observe a late fault too. Its context keeps this exact generation and may
+            // update only the captured old runs; the next reset revokes it as usual.
+            _ = ObserveManualResetBookkeepingAsync(bookkeeping);
+            TryLog("[任务中心] 物理复位已完成，旧驱动已隔离；原运行记录待恢复，未伪造成功：" + ex.Message);
+        }
+
+        lock (_gate)
+        {
+            TaskCenterDriveAuthority.VerifyCurrent();
+            if (_shutdown || resetRevision != Interlocked.Read(ref _manualResetRevision)
+                || !ReferenceEquals(_driveAuthority, successor)) return (Volatile.Read(ref abandoned), false);
+            _onlineSendGate.ResetAfterPhysicalBgiReset();
+            FlowRuntime.OnlineSendOpened();
+            Interlocked.Exchange(ref _manualResetActive, 0);
         }
         NotifyStateChanged();
-        return (abandoned, sendGateOpened);
+        return (Volatile.Read(ref abandoned), true);
+    }
+
+    private async Task ObserveManualResetBookkeepingAsync(Task bookkeeping)
+    {
+        try { await bookkeeping.ConfigureAwait(false); }
+        catch (Exception ex) { TryLog("[任务中心] 物理复位后的原运行记录写回未确认：" + ex.Message); }
     }
 
     internal async Task<bool> FinishOnlineGapAfterReleaseAsync(string runId, string ticket)
@@ -905,6 +1008,7 @@ public sealed partial class TaskCenterHost
         var withdrewPreparation = false;
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (_onlineHoeingGeneration != generation || _onlineHoeingRunId != runId) return false;
             withdrewPreparation = _runs.UpdateMergingIf(runId, latest =>
             {
@@ -1054,6 +1158,7 @@ public sealed partial class TaskCenterHost
         var finalized = false;
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             finalized = _runs.UpdateMergingIf(runId, latest =>
             {
                 if (!Matches(latest) || !latest.IsTerminal && !latest.StopRequested || _drives.ContainsKey(latest.WorkflowId)
@@ -1158,6 +1263,7 @@ public sealed partial class TaskCenterHost
     {
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (_onlineHoeingGeneration != generation || _onlineHoeingRunId != runId) return;
             _onlineHoeingRunId = null;
             if (_onlineResumeSignals.TryRemove(runId, out var signal))

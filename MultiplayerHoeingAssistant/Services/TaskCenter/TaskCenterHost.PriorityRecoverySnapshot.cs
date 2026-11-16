@@ -44,7 +44,7 @@ public sealed partial class TaskCenterHost
         {
             if (_runs.Load(runId) is { } intact)
             {
-                if (intact.StopRequested || IsExecutionResetReleased(intact)) { batch.Cancel(); return false; }
+                if (intact.StopRequested || IsExecutionUnavailable(intact)) { batch.Cancel(); return false; }
                 ValidatePriorityPlanIdentity(batch, intact);
                 if (_workflows.LoadSnapshot(intact.WorkflowId).Revision == intact.WorkflowRevision) return true;
             }
@@ -86,12 +86,12 @@ public sealed partial class TaskCenterHost
             WorkflowRunRecord? existing;
             try { existing = _runs.Load(runId); }
             catch (JsonException) { existing = null; }
-            if (existing is { StopRequested: true } || existing is not null && IsExecutionResetReleased(existing))
+            if (existing is { StopRequested: true } || existing is not null && IsExecutionUnavailable(existing))
             { batch.Cancel(); return false; }
             using var workflowWindow = _workflows.AcquireMigrationWindow();
             RestorePriorityWorkflowBytes(captured, workflowBytes);
             var restored = _runs.RestorePriorityRecoverySnapshot(captured);
-            if (restored.StopRequested || IsExecutionResetReleased(restored))
+            if (restored.StopRequested || IsExecutionUnavailable(restored))
             { batch.Cancel(); return false; }
             return restored.RunId == runId;
         }

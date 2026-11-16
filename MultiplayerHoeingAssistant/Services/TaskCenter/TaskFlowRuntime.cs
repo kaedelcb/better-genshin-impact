@@ -19,7 +19,7 @@ public sealed class TaskFlowRuntime
     private readonly ConcurrentDictionary<string, Active> _active = new();
     private readonly ConcurrentDictionary<string, string> _faults = new();
     private readonly ConcurrentDictionary<string, byte> _preparedOnlineRuns = new();
-    private readonly SemaphoreSlim _effectGate = new(1, 1);
+    private SemaphoreSlim _effectGate = new(1, 1);
     private readonly object _onlineStateGate = new();
     private CancellationTokenSource _onlineInterrupt = new();
     private volatile bool _onlineSuspended;
@@ -44,6 +44,7 @@ public sealed class TaskFlowRuntime
         public required TaskFlowTriggerSnapshot View;
         public required string Scope;
         public required int Round;
+        public TaskCenterDriveAuthority? Authority = TaskCenterDriveAuthority.Current;
         public CancellationTokenSource Stop = new();
         public SemaphoreSlim Serial = new(1, 1);
         public Task Pump = Task.CompletedTask;
@@ -88,11 +89,17 @@ public sealed class TaskFlowRuntime
     /// <summary>联机命令发出前封住副作用并冻结本段日志。排队动作保留，不把联机日志记入原任务。</summary>
     public async Task SuspendForOnlineAsync(CancellationToken ct = default)
     {
-        _onlineSuspended = true;
-        _preparedOnlineRuns.Clear();
-        lock (_onlineStateGate) _onlineInterrupt.Cancel();
-        await _effectGate.WaitAsync(ct).ConfigureAwait(false);
-        _effectGate.Release(); // 只等待正在进行的同步副作用，不等待整个等待/回调链。
+        CancellationTokenSource interrupt;
+        using (TaskCenterDriveAuthority.EnterPublication())
+        {
+            _onlineSuspended = true;
+            _preparedOnlineRuns.Clear();
+            lock (_onlineStateGate) interrupt = _onlineInterrupt;
+        }
+        await interrupt.CancelAsync().ConfigureAwait(false);
+        var effectGate = _effectGate;
+        await effectGate.WaitAsync(ct).ConfigureAwait(false);
+        effectGate.Release(); // 只等待正在进行的同步副作用，不等待整个等待/回调链。
         foreach (var a in _active.Values.ToArray())
         {
             await a.ObservationGate.WaitAsync(ct).ConfigureAwait(false);
@@ -127,22 +134,24 @@ public sealed class TaskFlowRuntime
     /// <summary>宿主已核对票据、原节点和纪元，在恢复作业发送之前建立新观察段。</summary>
     public async Task PrepareOnlineResumeAsync(string runId, CancellationToken ct = default)
     {
-        _preparedStatusAfter[runId] = DateTimeOffset.UtcNow;
+        using (TaskCenterDriveAuthority.EnterPublication()) _preparedStatusAfter[runId] = DateTimeOffset.UtcNow;
         foreach (var a in _active.Values.Where(a => a.View.RunId == runId).ToArray())
             await ResumeObservationAsync(a, ct).ConfigureAwait(false);
-        _preparedOnlineRuns[runId] = 0; // 此运行的恢复任务可先回调；普通后继派发仍由宿主发送门控制。
+        using (TaskCenterDriveAuthority.EnterPublication()) _preparedOnlineRuns[runId] = 0; // 此运行的恢复任务可先回调；普通后继派发仍由宿主发送门控制。
         Notify();
     }
 
     /// <summary>仅布防。必须在资源派发门已真正打开后再调用 OnlineSendOpened。</summary>
     public async Task ResumeAfterOnlineAsync(CancellationToken ct = default)
     {
-        Interlocked.Exchange(ref _statusFreshAfterTicks, DateTimeOffset.UtcNow.Ticks);
+        using (TaskCenterDriveAuthority.EnterPublication())
+            Interlocked.Exchange(ref _statusFreshAfterTicks, DateTimeOffset.UtcNow.Ticks);
         foreach (var a in _active.Values.ToArray()) await ResumeObservationAsync(a, ct).ConfigureAwait(false);
     }
 
     public void OnlineSendOpened()
     {
+        using var permission = TaskCenterDriveAuthority.EnterPublication();
         lock (_onlineStateGate)
         {
             if (!_onlineSuspended && !_onlineInterrupt.IsCancellationRequested) return;
@@ -150,6 +159,28 @@ public sealed class TaskFlowRuntime
             _onlineInterrupt = new CancellationTokenSource();
             previous.Dispose();
             _onlineSuspended = false;
+        }
+        Notify();
+    }
+
+    internal void ForgetRevokedDrivesAfterPhysicalReset()
+    {
+        // A lost auxiliary-program reply may retain the old effect semaphore.
+        // Its finally releases that captured semaphore, never the successor gate.
+        lock (_onlineStateGate) _effectGate = new SemaphoreSlim(1, 1);
+        _preparedOnlineRuns.Clear();
+        _preparedStatusAfter.Clear();
+        foreach (var a in _active.Values.Where(a => a.Authority?.IsRevoked == true).ToArray())
+        {
+            _active.TryRemove(a.View.RuntimeId, out _);
+            a.Cancelled = true;
+            _ = Task.Run(async () =>
+            {
+                try { await a.Stop.CancelAsync().ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine(ex); }
+                try { await CloseAsync(a, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception ex) { Debug.WriteLine(ex); }
+            });
         }
         Notify();
     }
@@ -218,6 +249,7 @@ public sealed class TaskFlowRuntime
         foreach (var step in steps)
         {
             if (!step.Enabled) continue;
+            TaskCenterDriveAuthority.VerifyCurrent();
             ct.ThrowIfCancellationRequested();
             if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
             var key = $"taskFlowStep:{node.NodeId}:{round}:{step.Id}";
@@ -281,7 +313,8 @@ public sealed class TaskFlowRuntime
             }
             else
             {
-                await _effectGate.WaitAsync(ct).ConfigureAwait(false);
+                var effectGate = _effectGate;
+                await effectGate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
                     if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
@@ -296,7 +329,7 @@ public sealed class TaskFlowRuntime
                     }
                     else await RunActionAsync(step, ct).ConfigureAwait(false);
                 }
-                finally { _effectGate.Release(); }
+                finally { effectGate.Release(); }
             }
             run.ExtensionData[key] = JsonSerializer.SerializeToElement("done"); save();
         }
@@ -318,13 +351,14 @@ public sealed class TaskFlowRuntime
             try { return await EvaluateAsync(step, interrupted.Token).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested && pauseToken.IsCancellationRequested) { throw new TaskFlowOnlineParkException(); }
         }
-        await _effectGate.WaitAsync(ct).ConfigureAwait(false);
+        var effectGate = _effectGate;
+        await effectGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
             return await EvaluateAsync(step, ct).ConfigureAwait(false);
         }
-        finally { _effectGate.Release(); }
+        finally { effectGate.Release(); }
     }
 
     private sealed record Binding(string FlowNodeId, int Round, StartupStep Step);
@@ -359,14 +393,15 @@ public sealed class TaskFlowRuntime
                 while (true)
                 {
                     await WaitForCallbackPermissionAsync(null, ct).ConfigureAwait(false);
-                    await _effectGate.WaitAsync(ct).ConfigureAwait(false);
+                    var effectGate = _effectGate;
+                    await effectGate.WaitAsync(ct).ConfigureAwait(false);
                     try
                     {
                         if (IsOnlineClosed) continue;
                         mounted.Add(await ArmAsync(run, binding, node.NodeId + ":" + occurrence.Occurrence + ":" + attempt, ct).ConfigureAwait(false));
                         break;
                     }
-                    finally { _effectGate.Release(); }
+                    finally { effectGate.Release(); }
                 }
             }
             return new TaskScope(async () =>
@@ -414,13 +449,15 @@ public sealed class TaskFlowRuntime
             a.Observation = await source.ArmLiveAsync(a.View.RuntimeId, s.LogKeyword,
                 _ => QueueFire(a), ct).ConfigureAwait(false);
         }
-        _active[a.View.RuntimeId] = a; Notify();
+        using (TaskCenterDriveAuthority.EnterPublication()) _active[a.View.RuntimeId] = a;
+        Notify();
         if (kind != "log") a.Pump = PumpAsync(a);
         return a;
     }
 
     private void QueueFire(Active a)
     {
+        if (a.Authority?.IsRevoked == true) return;
         lock (a.CallbackGate)
         {
             if (a.Stop.IsCancellationRequested || !a.View.Step.WatchRepeat && a.OnceAccepted) return;
@@ -445,11 +482,13 @@ public sealed class TaskFlowRuntime
 
     private async Task FireAsync(Active a)
     {
+        using var authority = a.Authority?.Enter();
         var entered = false;
         try
         {
             await a.Serial.WaitAsync(a.Stop.Token).ConfigureAwait(false);
             entered = true;
+            TaskCenterDriveAuthority.VerifyCurrent();
             a.Stop.Token.ThrowIfCancellationRequested();
             if (!a.View.Step.WatchRepeat && a.Fired > 0) return;
             await RunStepsCoreAsync(a.View.Step.FireSteps, a.View.RunId, a.Stop.Token).ConfigureAwait(false);
@@ -463,6 +502,7 @@ public sealed class TaskFlowRuntime
 
     private async Task PumpAsync(Active a)
     {
+        using var authority = a.Authority?.Enter();
         var s = a.View.Step;
         try
         {
@@ -542,13 +582,19 @@ public sealed class TaskFlowRuntime
 
     private async Task WaitForCallbackPermissionAsync(string? runId, CancellationToken ct)
     {
-        while (CallbackBlocked(runId)) await Task.Delay(25, ct).ConfigureAwait(false);
+        TaskCenterDriveAuthority.VerifyCurrent();
+        while (CallbackBlocked(runId))
+        {
+            await Task.Delay(25, ct).ConfigureAwait(false);
+            TaskCenterDriveAuthority.VerifyCurrent();
+        }
     }
 
     private async Task RunStepsCoreAsync(IEnumerable<StartupStep> steps, string? runId, CancellationToken ct)
     {
         foreach (var s in steps.Where(s => s.Enabled))
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             ct.ThrowIfCancellationRequested();
             if (s.Kind == StartupStepKinds.Wait)
             {
@@ -570,26 +616,31 @@ public sealed class TaskFlowRuntime
             while (true)
             {
                 await WaitForCallbackPermissionAsync(runId, ct).ConfigureAwait(false);
-                await _effectGate.WaitAsync(ct).ConfigureAwait(false);
+                var effectGate = _effectGate;
+                await effectGate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
                     if (CallbackBlocked(runId)) continue;
                     await RunActionAsync(s, ct).ConfigureAwait(false);
                     break;
                 }
-                finally { _effectGate.Release(); }
+                finally { effectGate.Release(); }
             }
         }
     }
 
     private async Task RunActionAsync(StartupStep s, CancellationToken ct)
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
         switch (s.Kind)
         {
-            case StartupStepKinds.SetRegister: (Registers ?? throw new InvalidOperationException("寄存器宿主未接线")).Set(s.RegisterWrite ?? throw new InvalidOperationException("设置参数缺失"), ct); break;
+            case StartupStepKinds.SetRegister:
+                using (TaskCenterDriveAuthority.EnterPublication())
+                    (Registers ?? throw new InvalidOperationException("寄存器宿主未接线")).Set(s.RegisterWrite ?? throw new InvalidOperationException("设置参数缺失"), ct);
+                break;
             case StartupStepKinds.StartProgram:
                 if (StartProgramAsync is null) throw new InvalidOperationException("当前执行端未授权启动此辅助程序");
-                await StartProgramAsync(s, ct).ConfigureAwait(false); break;
+                await TaskCenterDriveAuthority.StartPortCall(() => StartProgramAsync(s, ct)).ConfigureAwait(false); break;
             default: throw new InvalidOperationException("此子链不支持节点：" + s.Kind);
         }
     }
@@ -603,14 +654,15 @@ public sealed class TaskFlowRuntime
             var fenced = step.Kind is StartupStepKinds.BgiTaskName or StartupStepKinds.BgiTaskRunning
                 && (runId is not null && _preparedStatusAfter.ContainsKey(runId) || StatusFreshAfterUtc is not null);
             if (fenced) checkedStatus = await AwaitFreshTaskStatusAsync(step, runId, ct, false).ConfigureAwait(false);
-            await _effectGate.WaitAsync(ct).ConfigureAwait(false);
+            var effectGate = _effectGate;
+            await effectGate.WaitAsync(ct).ConfigureAwait(false);
             try
             {
                 if (CallbackBlocked(runId)) continue;
                 if (checkedStatus is not null) return StartupFlowRunner.EvaluateCondition(step, checkedStatus).passed;
                 return await EvaluateAsync(step, ct).ConfigureAwait(false);
             }
-            finally { _effectGate.Release(); }
+            finally { effectGate.Release(); }
         }
     }
 
@@ -618,6 +670,7 @@ public sealed class TaskFlowRuntime
     {
         while (true)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             ct.ThrowIfCancellationRequested();
             if (park && IsOnlineClosed) throw new TaskFlowOnlineParkException();
             if (!park) await WaitForCallbackPermissionAsync(runId, ct).ConfigureAwait(false);

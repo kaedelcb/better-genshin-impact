@@ -44,6 +44,25 @@ internal interface IBgiExecutionPort
 
 }
 
+/// <summary>最后一次外发边界核对驱动代；不跨远端 await 持锁，迟到取消也不能作用于新 BGI。</summary>
+internal sealed class TaskCenterFencedExecutionPort(IBgiExecutionPort inner) : IBgiExecutionPort
+{
+    public bool IsReady => inner.IsReady;
+    public bool HasCapability(string name) => inner.HasCapability(name);
+    public BgiEpoch? ServerEpoch => inner.ServerEpoch;
+    public string? TakeoverTicket => inner.TakeoverTicket;
+    public Task<BgiExternalResponse> SendCommandAsync(string operation, object? payload, CancellationToken ct)
+        => TaskCenterDriveAuthority.StartPortCall(() => inner.SendCommandAsync(operation, payload, ct));
+    public Task<BgiJobListSnapshot?> QueryJobListAsync(CancellationToken ct)
+    { TaskCenterDriveAuthority.VerifyCurrent(); return inner.QueryJobListAsync(ct); }
+    public Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
+    { TaskCenterDriveAuthority.VerifyCurrent(); return inner.QueryJobStatusAsync(jobId, ct); }
+    public Task CancelOwnedTaskAsync(string jobId, CancellationToken ct)
+        => TaskCenterDriveAuthority.StartPortCall(() => inner.CancelOwnedTaskAsync(jobId, ct));
+    public Task CancelOriginalJobAsync(string jobId, BgiJobTerminalPolling.FrozenIdentity identity, CancellationToken ct)
+        => TaskCenterDriveAuthority.StartPortCall(() => inner.CancelOriginalJobAsync(jobId, identity, ct));
+}
+
 /// <summary>生产实现：直连 <see cref="BgiExternalClient"/> 的最薄转发（行为与端口化之前逐字等价）。</summary>
 internal sealed class BgiExternalClientPort : IBgiExecutionPort
 {

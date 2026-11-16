@@ -29,6 +29,7 @@ public sealed partial class RunStore
         lock (_gate)
         {
             using var ownerFence = _owner?.Store.AcquireOwnerFence(_owner);
+            using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
             using var publication = AcquirePublicationLock();
             var policy = TryReadAllTextOrNull(OwnerPolicyPath, "read-owner-policy");
             if ((_requireOwnership || policy is not null) && _owner is null

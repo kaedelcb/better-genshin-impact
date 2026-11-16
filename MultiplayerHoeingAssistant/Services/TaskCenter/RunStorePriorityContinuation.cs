@@ -117,6 +117,7 @@ public sealed partial class RunStore
 
     private IDisposable? PriorityOwnerFence()
     {
+        TaskCenterDriveAuthority.VerifyCurrent();
         if (_requireOwnership && _owner is null)
             throw new RunRecordConflictException("原计划当前写者没有所有者能力，不能以内存记录接续。");
         return _owner?.Store.AcquireOwnerFence(_owner);
@@ -192,7 +193,7 @@ public sealed partial class RunStore
     {
         lock (_gate)
         {
-            var next = _priorityProgress.Values.Where(p => p.Unpublished.Count > 0)
+            var next = _priorityProgress.Values.Where(p => p.Unpublished.Count > 0 && !IsPhysicallyAbandoned(p.Current))
                 .OrderBy(p => p.NextPublish).FirstOrDefault();
             if (next is null) return false;
             using var fence = PriorityOwnerFence();
@@ -212,6 +213,7 @@ public sealed partial class RunStore
     {
         lock (_gate)
         {
+            TaskCenterDriveAuthority.VerifyCurrent();
             if (!_priorityProgress.TryGetValue(rec.RunId, out var progress))
             {
                 PersistDisk(rec, expectedRecordRevision, authorizedNoSend, authorizedSeal, authorizedRecoveryAssociation,
@@ -221,6 +223,7 @@ public sealed partial class RunStore
                 return;
             }
             using var fence = PriorityOwnerFence();
+            using var drivePermission = TaskCenterDriveAuthority.EnterPublication();
             var current = progress.Current;
             if (authorizedDiagnostic || rec.NonExecutingDiagnostic || expectedRecordRevision == 0
                 || expectedRecordRevision != current.RecordRevision || rec.RecordRevision != expectedRecordRevision

@@ -7,6 +7,7 @@ public sealed partial class RoomOperations
     private readonly object _batchGate = new();
     private readonly Dictionary<string, CoordinatedBatchState> _controlBatches = new(StringComparer.Ordinal);
     private readonly Dictionary<string, CoordinatedBatchResetResult> _processedResetResults = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, string>> _resetCleanupExecutors = new(StringComparer.Ordinal);
 
     private static int _nextBatchGeneration = checked((int)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     private readonly Dictionary<string, CoordinatedBatchState> _batchRequests = new(StringComparer.Ordinal);
@@ -257,7 +258,10 @@ public sealed partial class RoomOperations
                 || !reset.Found || reset.Reason == "stale_reset" || reset.BatchId != batchId
                 || !reset.TargetUids.Contains(player.PlayerUid, StringComparer.Ordinal)
                 || !_controlBatches.TryGetValue(group, out state!) || state.BatchId != batchId
-                || !state.MatchesExecutor(player.PlayerUid, player.ClientInstanceId))
+                || !(state.MatchesExecutor(player.PlayerUid, player.ClientInstanceId)
+                    || _resetCleanupExecutors.TryGetValue(group + "\0" + resetId, out var executors)
+                        && executors.TryGetValue(player.PlayerUid, out var instance)
+                        && instance == player.ClientInstanceId))
                 throw new InvalidOperationException("batch_reset_cleanup_not_authorized");
             snapshot = state.ConfirmResetCleaned(player.PlayerUid);
         }
@@ -288,6 +292,8 @@ public sealed partial class RoomOperations
         var wasActive = false;
         var stale = false;
         var resetKey = group + "\0" + resetId;
+        CoordinatedBatchResetResult result;
+        IReadOnlyList<string> targetUids;
         lock (_batchGate)
         {
             if (_processedResetResults.TryGetValue(resetKey, out var processed))
@@ -309,49 +315,53 @@ public sealed partial class RoomOperations
                     snapshot = state.Snapshot();
                 }
             }
-        }
 
-        var targetUids = requested.Contains("*", StringComparer.Ordinal)
-            ? (participants.Count > 0
-                ? participants
-                : _roomManager.GetControlRoomPlayers(group).Select(p => p.PlayerUid)
-                    .Where(static uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.Ordinal).ToArray())
-            : requested;
+            targetUids = requested.Contains("*", StringComparer.Ordinal)
+                ? (participants.Count > 0
+                    ? participants
+                    : _roomManager.GetControlRoomPlayers(group).Select(p => p.PlayerUid)
+                        .Where(static uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.Ordinal).ToArray())
+                : requested;
 
-        var result = new CoordinatedBatchResetResult
-        {
-            ResetId = resetId,
-            Found = snapshot != null,
-            BatchId = snapshot?.BatchId ?? "",
-            Generation = snapshot?.Generation ?? 0,
-            Phase = snapshot?.Phase ?? "none",
-            Reason = stale ? "stale_reset" : snapshot?.Reason ?? "no_active_batch",
-            TargetUids = targetUids,
-            MissingRegistrationUids = snapshot?.MissingRegistrationUids ?? []
-        };
-        lock (_batchGate)
-        {
-            if (_processedResetResults.TryGetValue(resetKey, out var processed))
-                return processed;
+            // A replaced assistant may not continue an old batch. An explicit new reset
+            // can authorize its unique, currently connected executor to attest physical
+            // cleanup, without changing the old batch's execution identity or tokens.
+            var cleanupExecutors = _roomManager.GetControlRoomPlayers(group)
+                .Where(p => p.Online && targetUids.Contains(p.PlayerUid, StringComparer.Ordinal))
+                .GroupBy(p => p.PlayerUid, StringComparer.Ordinal)
+                .Where(players => players.Count() == 1 && !string.IsNullOrWhiteSpace(players.First().ClientInstanceId))
+                .ToDictionary(players => players.Key, players => players.First().ClientInstanceId, StringComparer.Ordinal);
+            result = new CoordinatedBatchResetResult
+            {
+                ResetId = resetId,
+                Found = snapshot != null,
+                BatchId = snapshot?.BatchId ?? "",
+                Generation = snapshot?.Generation ?? 0,
+                Phase = snapshot?.Phase ?? "none",
+                Reason = stale ? "stale_reset" : snapshot?.Reason ?? "no_active_batch",
+                TargetUids = targetUids,
+                MissingRegistrationUids = snapshot?.MissingRegistrationUids ?? []
+            };
             _processedResetResults[resetKey] = result;
+            if (!stale) _resetCleanupExecutors[resetKey] = cleanupExecutors;
             if (_processedResetResults.Count > 1024)
-                _processedResetResults.Remove(_processedResetResults.Keys.First());
+            {
+                var expiredKey = _processedResetResults.Keys.First();
+                _processedResetResults.Remove(expiredKey);
+                _resetCleanupExecutors.Remove(expiredKey);
+            }
+            if (stale) return result;
+
+            // 与批次核对共用锁，不能在核对旧批次后清掉并发新一轮的就绪边沿。
+            // 共享批次被任一成员重置后，整轮参与者均解除服务端就绪边沿。
+            var disarmUids = wasActive && participants.Count > 0 ? participants : targetUids;
+            if (disarmUids.Count > 0)
+                _roomManager.DisarmOnlineEvents(group, disarmUids);
+            if (wasActive) _roomManager.MarkExhausted(group);
         }
 
-        if (stale)
-            return result;
-
-        // 共享批次一旦被任一成员重置，整轮参与者都必须解除服务端就绪边沿；
-        // 只清点击者会把其他成员的旧 generation 留在服务端，下一次上报可能幻影开新轮。
-        var disarmUids = wasActive && participants.Count > 0 ? participants : targetUids;
-        if (disarmUids.Count > 0)
-            _roomManager.DisarmOnlineEvents(group, disarmUids);
-        if (wasActive)
-        {
-            _roomManager.MarkExhausted(group);
-            if (resetBatch is not null && snapshot is not null)
-                await PublishBatchSnapshotAsync(group, resetBatch, snapshot, GatewayProtocol.Events.ControlBatchState);
-        }
+        if (wasActive && resetBatch is not null && snapshot is not null)
+            await PublishBatchSnapshotAsync(group, resetBatch, snapshot, GatewayProtocol.Events.ControlBatchState);
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 
         _logger.LogInformation(

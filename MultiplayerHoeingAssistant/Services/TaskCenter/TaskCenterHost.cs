@@ -78,6 +78,7 @@ public sealed partial class TaskCenterHost
     private readonly bool _resolveLiveResourceRevisions;
     private readonly object _gate = new();
     private readonly TaskCenterOnlineSendGate _onlineSendGate = new();
+    private TaskCenterDriveAuthority _driveAuthority = new();
     private readonly Dictionary<string, DriveEntry> _drives = new(StringComparer.Ordinal); // key=workflowId（互斥保证唯一）
     private readonly HashSet<DriveEntry> _driveCompletions = [];
     private readonly HashSet<string> _reservedWorkflows = new(StringComparer.Ordinal); // 预留（CreateRun 窗口覆盖）
@@ -92,6 +93,7 @@ public sealed partial class TaskCenterHost
     private sealed class DriveEntry
     {
         public long ControlRevision { get; init; }
+        public required TaskCenterDriveAuthority Authority { get; init; }
         public required string WorkflowId { get; init; }
         /// <summary>准确运行身份（R4.9 移交路径已知；面板 Start 路径运行由引擎自建、为 null，收敛倒查兜底）。</summary>
         public string? RunId { get; init; }
@@ -150,6 +152,16 @@ public sealed partial class TaskCenterHost
     /// <summary>运行状态变更通知（终态/动作后触发；UI 以 2s 轮询为主、本事件为辅）。</summary>
     public event EventHandler? StateChanged;
 
+    /// <summary>跨端批次与子回调保留开始时的宿主代，不能在物理复位后借用新代权限。</summary>
+    internal IDisposable EnterExecutionAuthorityScope()
+    {
+        lock (_gate)
+        {
+            TaskCenterDriveAuthority.VerifyCurrent();
+            return (TaskCenterDriveAuthority.Current ?? _driveAuthority).Enter();
+        }
+    }
+
     public WorkflowStore Workflows => _workflows;
     public RunStore Runs => _runs;
     public ResourceCatalogService Catalog => _catalog;
@@ -193,6 +205,7 @@ public sealed partial class TaskCenterHost
     /// 扫描失败重置为 null，下次调用重新扫描（不留永久假屏障）。</summary>
     private async Task EnsureRecoveredAsync()
     {
+        using var authorityScope = EnterExecutionAuthorityScope();
         // 每个合法首调独立观察租约；只共享取得资格之后的运行恢复扫描。
         if (_admissionWired)
         {
@@ -223,11 +236,13 @@ public sealed partial class TaskCenterHost
                     TryLog($"[任务中心] 恢复扫描完成：需关注运行 {recovered.Count} 条（结果未确认 {unknown}、可显式恢复 {interrupted}、其他 {recovered.Count - unknown - interrupted}）；原记录与执行身份保留，未自动重跑。");
                 }
             }).ConfigureAwait(false);
+            TaskCenterDriveAuthority.VerifyCurrent();
             StartLocalWaitContinuation();
         }
         catch
         {
-            lock (_gate) _recoverTask = null; // 失败允许重试
+            lock (_gate)
+                if (TaskCenterDriveAuthority.Current?.IsRevoked != true) _recoverTask = null; // 失败允许重试
             throw;
         }
     }
@@ -431,14 +446,14 @@ public sealed partial class TaskCenterHost
     /// <summary>活动运行（占用槽位或需关注：Planned/Running/Waiting/Completing/Paused/Unknown/Interrupted，UpdatedAt 倒序）。</summary>
     public IReadOnlyList<WorkflowRunRecord> ListActiveRuns()
         => _runs.List()
-            .Where(r => !IsExecutionResetReleased(r) && (ActiveStates.Contains(r.State)
+            .Where(r => !IsExecutionUnavailable(r) && (ActiveStates.Contains(r.State)
                         || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted)) // [批次 20／Wave3／C11] 停驻运行经 ActiveStates 含于活动清单（冗余析取移除——R46 建议-2）
             .OrderByDescending(r => r.UpdatedAt).ToList();
 
     /// <summary>历史运行（终态，UpdatedAt 倒序，至多 historyLimit 条只读展示）。</summary>
     public IReadOnlyList<WorkflowRunRecord> ListHistoryRuns(int historyLimit = 20)
         => _runs.List()
-            .Where(r => IsExecutionResetReleased(r) || !ActiveStates.Contains(r.State)
+            .Where(r => IsExecutionUnavailable(r) || !ActiveStates.Contains(r.State)
                         && r.State is not (WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
             .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList();
 
@@ -447,10 +462,10 @@ public sealed partial class TaskCenterHost
         IReadOnlySet<string> ClearedRunTraceIds) ListRunOverview(int historyLimit = 20)
     {
         var records = _runs.List();
-        var active = records.Where(r => !IsExecutionResetReleased(r) && (ActiveStates.Contains(r.State)
+        var active = records.Where(r => !IsExecutionUnavailable(r) && (ActiveStates.Contains(r.State)
                                || r.State is WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
                 .OrderByDescending(r => r.UpdatedAt).ToList();
-        var history = records.Where(r => IsExecutionResetReleased(r) || !ActiveStates.Contains(r.State)
+        var history = records.Where(r => IsExecutionUnavailable(r) || !ActiveStates.Contains(r.State)
                                && r.State is not (WorkflowRunState.Unknown or WorkflowRunState.Interrupted))
                 .OrderByDescending(r => r.UpdatedAt).Take(historyLimit).ToList();
         return (active, history, _runs.ListClearedRunTraceIds(active.Concat(history)));
@@ -549,6 +564,7 @@ public sealed partial class TaskCenterHost
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId, string? entryNodeId = null, string? expectedRevision = null,
         string? stopAfterNodeId = null)
     {
+        using var authorityScope = EnterExecutionAuthorityScope();
         using var configurationOperation = TryBeginConfigurationOperation();
         if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
         var explicitIntentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -624,7 +640,7 @@ public sealed partial class TaskCenterHost
             client = _clientAccessor();
 
             // 同流程互斥（一轮 B4）：活动态/Unknown/本进程预留+驱动 全集合检查
-            var sameFlow = _runs.List().Where(r => r.WorkflowId == workflowId && !IsExecutionResetReleased(r)).ToList();
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == workflowId && !IsExecutionUnavailable(r)).ToList();
             if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
                 return HostActionResult.Unavailable("该流程已有活动运行（同流程同时只允许一个运行）");
             if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
@@ -669,7 +685,7 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("非执行终态诊断不可恢复");
         if (run.StopRequested)
             return HostActionResult.Unavailable("原运行已有停止意图，禁止恢复旧任务；请先停止结清或重置后重新开始。");
-        if (IsExecutionResetReleased(run))
+        if (IsExecutionUnavailable(run))
             return HostActionResult.Unavailable("此运行已重置执行状态；旧任务不会恢复，请重新开始计划。");
         if (run.State == WorkflowRunState.Unknown
             && run.CurrentSubmission is not { Intent: SubmitIntentState.Accepted, SendAttempted: true,
@@ -744,7 +760,7 @@ public sealed partial class TaskCenterHost
                 return HostActionResult.Unavailable(readiness.Reason!);
             client = _clientAccessor();
             // 二轮（阻断5）：与 Start 同一互斥判定——同流程其他活动运行/Unknown 一律拒绝（仅排除自身这条可恢复记录）
-            var sameFlow = _runs.List().Where(r => r.WorkflowId == run.WorkflowId && r.RunId != runId && !IsExecutionResetReleased(r)).ToList();
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == run.WorkflowId && r.RunId != runId && !IsExecutionUnavailable(r)).ToList();
             if (sameFlow.Any(r => ActiveStates.Contains(r.State)))
                 return HostActionResult.Unavailable("该流程已有其他活动运行（同流程同时只允许一个运行）");
             if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
@@ -813,7 +829,7 @@ public sealed partial class TaskCenterHost
             if (_shutdown) return HostActionResult.Unavailable("任务中心宿主已关闭");
             if (CapabilityBlockReason(action == WorkflowRunAction.Stop) is { } blocked) return HostActionResult.Unavailable(blocked);
         }
-        if (IsExecutionResetReleased(run))
+        if (IsExecutionUnavailable(run))
             return action == WorkflowRunAction.Stop
                 ? HostActionResult.Effective("此旧运行已重置执行状态，无可恢复或停止的执行责任。")
                 : HostActionResult.Unavailable("此旧运行已重置执行状态，请重新开始计划。");
@@ -1631,7 +1647,7 @@ public sealed partial class TaskCenterHost
         }
         if (_admissionWired)
         {
-            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionResetReleased(r)).ToList();
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionUnavailable(r)).ToList();
             if (CurrentArbitrationFacts().F11Active)
                 return RejectedWithLedgerRecheck(request, HandoffReasonCodes.NotReady, "F11 独立停止闸门激活（租约零副作用）");
             if (request.Mode == StartupHandoffModes.Resume)
@@ -1706,7 +1722,7 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, readiness.Reason!);
             ct.ThrowIfCancellationRequested(); // 取消检查贴近提交点（I3）
 
-            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionResetReleased(r)).ToList();
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionUnavailable(r)).ToList();
             // 未接线的旧测试/兼容宿主没有仲裁责任快照，只能沿用保守的历史 Unknown 门；
             // 生产仲裁路径按当前 Submission 判断，已隔离历史不再阻塞新启动。
             var hasBlockingUnknown = _admissionWired
@@ -1819,7 +1835,7 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.NotReady, readiness.Reason!);
             ct.ThrowIfCancellationRequested();
 
-            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionResetReleased(r)).ToList();
+            var sameFlow = _runs.List().Where(r => r.WorkflowId == request.WorkflowId && !IsExecutionUnavailable(r)).ToList();
             if (sameFlow.Any(r => r.State == WorkflowRunState.Unknown))
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.Unknown,
                     "该流程存在结果不确定（Unknown）的运行，需先对账再恢复");
@@ -2047,7 +2063,7 @@ public sealed partial class TaskCenterHost
                         ExecutionOccupied = facts.ExecutionOccupied || facts.ExecutionFactsUnknown,
                         F11Cooldown = facts.F11Active,
                         ActiveTicket = facts.ActiveTicket is not null,
-                        FixedScheduleDeclared = _runs.List().Any(r => !IsExecutionResetReleased(r) && WorkflowNodeSchedule.FixedDeclared(r, DateTimeOffset.Now)),
+                        FixedScheduleDeclared = _runs.List().Any(r => !IsExecutionUnavailable(r) && WorkflowNodeSchedule.FixedDeclared(r, DateTimeOffset.Now)),
                     };
                 },
                 ObservationSource = ObservationLogTail is {} tail
@@ -2079,7 +2095,8 @@ public sealed partial class TaskCenterHost
         if (!client.HasCapability("action.closeGame")) return (false, "BGI 版本不支持远程关闭游戏，未关闭游戏");
         // 到点能否重新拉起游戏取决于 BGI「联动启动原神」与安装路径；读不到或未开启时不关游戏，避免到点无法执行。
         if (LinkedGameStartUnavailable() is { } noRestart) return (false, noRestart + "，未关闭游戏");
-        var response = await client.SendCommandAsync("ext.action.closeGame", new { }, cancellationToken: ct).ConfigureAwait(false);
+        var response = await TaskCenterDriveAuthority.StartPortCall(() =>
+            client.SendCommandAsync("ext.action.closeGame", new { }, cancellationToken: ct)).ConfigureAwait(false);
         if (!response.Success) return (false, "关闭游戏失败：" + (response.ErrorMessage ?? response.ErrorCode ?? "未知原因"));
         TryLog("[任务中心] 等待执行时段期间已关闭游戏，到点后由 BGI 自动启动游戏执行任务。");
         return (true, "已关闭游戏，到点后自动启动游戏");
@@ -2118,15 +2135,17 @@ public sealed partial class TaskCenterHost
     {
         var cts = new CancellationTokenSource();
         var started = new TaskCompletionSource<WorkflowRunRecord>(); // Preserve synchronous fault convergence outside the Host gate.
-        var entry = new DriveEntry { ControlRevision = Interlocked.Read(ref _controlRevision), WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = started.Task };
+        DriveEntry entry;
         lock (_gate)
         {
-            if (_shutdown || AutomaticRecoverySuperseded())
+            if (_shutdown || Volatile.Read(ref _manualResetActive) != 0 || AutomaticRecoverySuperseded()
+                || TaskCenterDriveAuthority.Current?.IsRevoked == true)
             {
-                _reservedWorkflows.Remove(workflowId);
+                if (TaskCenterDriveAuthority.Current?.IsRevoked != true) _reservedWorkflows.Remove(workflowId);
                 cts.Dispose();
                 return HostActionResult.Unavailable("任务中心宿主已关闭（未启动驱动）");
             }
+            entry = new DriveEntry { Authority = _driveAuthority, ControlRevision = Interlocked.Read(ref _controlRevision), WorkflowId = workflowId, RunId = knownRunId, Runner = runner, Cts = cts, Task = started.Task };
             // Register the full lifecycle before any synchronous prefix of start can run.
             _drives[workflowId] = entry;
             _driveCompletions.Add(entry);
@@ -2135,6 +2154,7 @@ public sealed partial class TaskCenterHost
         // lifetime (including its later online handoff and explicit controls).
         var automaticRecovery = _automaticLeaseRecovery.Value;
         _automaticLeaseRecovery.Value = null;
+        using var authorityScope = entry.Authority.Enter();
         try
         {
             _ = ObserveDriveAsync(entry);
@@ -2207,6 +2227,7 @@ public sealed partial class TaskCenterHost
         }
         catch (Exception ex)
         {
+            if (entry.Authority.IsRevoked) return;
             // 一轮 B5 + 二轮 I1/I4：驱动异常收敛——未决外部事实→Unknown（结果不可考），否则→Interrupted（等价崩溃语义，可显式恢复）
             recoverExpiredRun = FindExpiredDriveRecovery(entry, ex);
             ConvergeDriveException(entry, ex);
@@ -2218,14 +2239,17 @@ public sealed partial class TaskCenterHost
         {
             lock (_gate)
             {
-                _drives.Remove(entry.WorkflowId);
-                if (!_executionResetWorkflows.Contains(entry.WorkflowId)) _reservedWorkflows.Remove(entry.WorkflowId);
+                if (_drives.TryGetValue(entry.WorkflowId, out var current) && ReferenceEquals(current, entry))
+                {
+                    _drives.Remove(entry.WorkflowId);
+                    if (!_executionResetWorkflows.Contains(entry.WorkflowId)) _reservedWorkflows.Remove(entry.WorkflowId);
+                }
             }
             try
             {
-                RetireUnknownAdmissionIfAny(terminalRunId);
+                if (!entry.Authority.IsRevoked) RetireUnknownAdmissionIfAny(terminalRunId);
                 // A parked/nonterminal drive does not own a later explicit Stop transaction.
-                if (reconcileObservedTerminal)
+                if (!entry.Authority.IsRevoked && reconcileObservedTerminal)
                     await MarkAdmissionTerminalIfAnyAsync(terminalRunId).ConfigureAwait(false);
             }
             finally
@@ -2233,10 +2257,10 @@ public sealed partial class TaskCenterHost
                 lock (_gate) _driveCompletions.Remove(entry);
                 entry.Cts.Dispose();
                 entry.Completion.TrySetResult();
-                try { ObserveLocalWaitDriveCompletion(terminalRunId, reconcileObservedTerminal); }
+                try { if (!entry.Authority.IsRevoked) ObserveLocalWaitDriveCompletion(terminalRunId, reconcileObservedTerminal); }
                 catch (Exception ex) { TryLog("[任务中心] 等待接续观察暂未完成：" + ex.Message); }
                 NotifyStateChanged();
-                if (recoverExpiredRun is not null)
+                if (!entry.Authority.IsRevoked && recoverExpiredRun is not null)
                     _ = Task.Run(() => RecoverExpiredDriveAsync(recoverExpiredRun, entry.ControlRevision));
             }
         }

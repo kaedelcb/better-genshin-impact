@@ -12,7 +12,7 @@ public sealed partial class TaskCenterHost
             || request.Candidate.RunId is not { } runId || parent.RunId != runId
             || parent.Scope != request.Candidate.Scope) return null;
         var run = _runs.Load(runId);
-        if (run is null || run.StopRequested || IsExecutionResetReleased(run)
+        if (run is null || run.StopRequested || IsExecutionUnavailable(run)
             || run.WorkflowId != parent.WorkflowId || run.PriorityProcessContinuations.Count == 0) return null;
         return WorkflowStopAuthority.Current(run)?.Epoch;
     }
@@ -33,7 +33,7 @@ public sealed partial class TaskCenterHost
         if (batch.RestoredFromRecovery && !await RestorePriorityPlanRecoveryAsync(batch).ConfigureAwait(false)) return false;
         var run = _runs.Load(runId);
         if (run is null) return false;
-        if (run.StopRequested || IsExecutionResetReleased(run)) { batch.Cancel(); return false; }
+        if (run.StopRequested || IsExecutionUnavailable(run)) { batch.Cancel(); return false; }
         ValidatePriorityPlanIdentity(batch, run);
         var alreadyBound = HasPriorityProcessContinuation(batch, runId);
         lock (_gate)

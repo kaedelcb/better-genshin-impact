@@ -14,6 +14,9 @@ public sealed partial class TaskCenterHost
 
     public static bool IsExecutionResetReleased(WorkflowRunRecord run) => ExecutionResetEvidence.Valid(run);
 
+    private bool IsExecutionUnavailable(WorkflowRunRecord run)
+        => IsExecutionResetReleased(run) || _runs.IsPhysicallyAbandoned(run);
+
     /// <summary>放弃选中计划的旧执行；计划和业务历史不动，只有退出/零发送事实及仲裁隔离均确认后才解除占用。</summary>
     public async Task<HostActionResult> ResetWorkflowExecutionStateAsync(string workflowId)
     {
@@ -49,7 +52,7 @@ public sealed partial class TaskCenterHost
             if (drive is not null)
             {
                 var runId = drive.RunId ?? _runs.List().Where(r => r.WorkflowId == workflowId
-                    && ActiveStates.Contains(r.State) && !IsExecutionResetReleased(r))
+                    && ActiveStates.Contains(r.State) && !IsExecutionUnavailable(r))
                     .OrderByDescending(r => r.CreatedAt).FirstOrDefault()?.RunId;
                 if (runId is null) return HostActionResult.Unavailable("在途驱动的运行身份不可确认，未重置执行状态。");
                 var stop = await RequestRunActionAsync(runId, WorkflowRunAction.Stop).ConfigureAwait(false);
@@ -67,7 +70,7 @@ public sealed partial class TaskCenterHost
             var changed = 0;
             foreach (var original in records)
             {
-                if (IsExecutionResetReleased(original)) continue;
+                if (IsExecutionUnavailable(original)) continue;
                 if (original.ExecutionResetRelease is not null)
                     return HostActionResult.Unavailable("已有重置证据与运行事实冲突，原件保留，未宣告重置完成。");
                 // A fully settled historical failure/success is immutable and needs no new audit record.
@@ -168,7 +171,7 @@ public sealed partial class TaskCenterHost
             }
 
             var finalRecords = ReadResetRecords(workflowId);
-            if (finalRecords.Any(run => !IsExecutionResetReleased(run)
+            if (finalRecords.Any(run => !IsExecutionUnavailable(run)
                     && (!run.IsTerminal || RunStore.HasUnresolvedTerminalResponsibility(run)))
                 || finalRecords.Any(run => HasUnclosedResetAdmission(run.RunId))
                 || LocalWaitQueue.Load().Any(item => item.WorkflowId == workflowId && item.State == LocalWaitItemState.Waiting))

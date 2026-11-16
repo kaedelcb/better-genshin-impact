@@ -502,9 +502,16 @@ public partial class MainViewModel
         OnlineHoeingBatch? batch;
         lock (_batchGate) batch = _activeBatch;
         if (batch?.BatchId != state.BatchId) return;
+        if (batch.LocalExecutionReleased && _localResetGate.CurrentCount > 0)
+        {
+            ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "已释放批次清理回执补报");
+            return;
+        }
         if (batch.StateContinuationEnabled && state.Phase == "aborted" && OnlineHoeingBatch.IsExplicitStopReason(state.Reason))
         {
-            batch.Cancel();
+            if (state.Reason == "manual_reset")
+                ObserveOnlineTask(batch.CancelForManualResetAsync(), "服务端人工重置取消");
+            else batch.Cancel();
             return;
         }
         if (batch.RunTask?.IsCompleted == true && _localResetGate.CurrentCount > 0)
@@ -564,7 +571,7 @@ public partial class MainViewModel
 
     private void UpdateHoeingBatchStatus(OnlineHoeingBatch batch, string phase, string message)
     {
-        if (batch.Phase == phase && batch.Message == message) return;
+        if (!batch.IsAlive || batch.Phase == phase && batch.Message == message) return;
         batch.Phase = phase;
         batch.Message = message;
         AddLog($"[联机开始] {batch.BatchId} {message}");
@@ -587,6 +594,9 @@ public partial class MainViewModel
 
     private async Task RunAcceptedHoeingBatchAsync(OnlineHoeingBatch batch)
     {
+        // All child callbacks retain the captured authority; manual reset revokes it
+        // before admitting a successor even if this call stack has not returned.
+        using var executionAuthority = IsExecutorMode ? TaskCenterHost.EnterExecutionAuthorityScope() : null;
         var preparation = new HoeingStartPreparation();
         if (_commandExecutor is { } recoveryExecutor && batch.PriorityRecoveryEnabled)
             recoveryExecutor.CoordinatedTakeoverAllocated = (ticket, epoch) =>
@@ -660,27 +670,30 @@ public partial class MainViewModel
         }
         finally
         {
-            if (batch.RestoredFromRecovery && batch.IsCancellationRequested && batch.PolicyExecution is not null)
-                batch.CleanupConfirmed &= await batch.WaitPolicyCancellationAsync();
-            if (batch.IsCancellationRequested && batch.HasPolicyCleanup)
-                batch.CleanupConfirmed = await batch.WaitCancelledPolicyCleanupAsync();
-            if (!batch.LocalExecutionReleased && preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch != true)
-                batch.CleanupConfirmed = false;
-            if (!batch.LocalExecutionReleased && preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch == true)
+            if (batch.IsAlive)
             {
-                try { await preparation.Host.OpenOnlineHoeingSendAsync(); }
-                catch (Exception ex) { batch.CleanupConfirmed = false; AddLog("[联机开始] 原计划发送闸门尚未恢复：" + ex.Message); }
+                if (batch.RestoredFromRecovery && batch.IsCancellationRequested && batch.PolicyExecution is not null)
+                    batch.CleanupConfirmed &= await batch.WaitPolicyCancellationAsync();
+                if (batch.IsCancellationRequested && batch.HasPolicyCleanup)
+                    batch.CleanupConfirmed = await batch.WaitCancelledPolicyCleanupAsync();
+                if (!batch.LocalExecutionReleased && preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch != true)
+                    batch.CleanupConfirmed = false;
+                if (!batch.LocalExecutionReleased && preparation.SendGateClosed && preparation.Host?.CanOpenOnlineSendAfterBatch == true)
+                {
+                    try { await preparation.Host.OpenOnlineHoeingSendAsync(); }
+                    catch (Exception ex) { batch.CleanupConfirmed = false; AddLog("[联机开始] 原计划发送闸门尚未恢复：" + ex.Message); }
+                }
+                batch.LocalCleanupConfirmed |= batch.CleanupConfirmed;
+                if (batch.LocalCleanupConfirmed && !batch.LocalCompletionReady && (batch.LocalTasksFailed || batch.PendingBindingsSkipped))
+                    UpdateHoeingBatchStatus(batch, batch.LocalTasksFailed ? "failed" : "partialCompleted",
+                        batch.Message + "；本端清理已完成，可手动执行，等待队友收口");
+                if (batch.LocalCleanupConfirmed && _localResetGate.CurrentCount > 0)
+                    await RetryCoordinatedCleanupAsync(batch);
+                else UpdateHoeingBatchStatus(batch, "cleanupPending", batch.LocalCompletionReady
+                    ? "本端锄地已完成，旧收尾待核对；不会重跑锄地或完成动作"
+                    : "联机批次清理尚未确认，请核对状态；不会启动另一批次");
+                ObserveOnlineTask(ReportStatusAsync(), "联机批次终态上报");
             }
-            batch.LocalCleanupConfirmed |= batch.CleanupConfirmed;
-            if (batch.LocalCleanupConfirmed && !batch.LocalCompletionReady && (batch.LocalTasksFailed || batch.PendingBindingsSkipped))
-                UpdateHoeingBatchStatus(batch, batch.LocalTasksFailed ? "failed" : "partialCompleted",
-                    batch.Message + "；本端清理已完成，可手动执行，等待队友收口");
-            if (batch.LocalCleanupConfirmed && _localResetGate.CurrentCount > 0)
-                await RetryCoordinatedCleanupAsync(batch);
-            else UpdateHoeingBatchStatus(batch, "cleanupPending", batch.LocalCompletionReady
-                ? "本端锄地已完成，旧收尾待核对；不会重跑锄地或完成动作"
-                : "联机批次清理尚未确认，请核对状态；不会启动另一批次");
-            ObserveOnlineTask(ReportStatusAsync(), "联机批次终态上报");
         }
     }
 
@@ -849,13 +862,18 @@ public partial class MainViewModel
     private async Task RetryCoordinatedCleanupAsync(OnlineHoeingBatch batch)
     {
         if (_localResetGate.CurrentCount == 0) return;
+        TaskCenterHost? cleanupHost;
+        lock (_taskCenterHostGate) cleanupHost = _taskCenterHost;
+        // Reconnect callbacks also retain their starting generation while queued.
+        // They cannot reopen a successor's gate after a physical reset.
+        using var executionAuthority = cleanupHost?.EnterExecutionAuthorityScope();
         await _coordinatedCleanupAckGate.WaitAsync();
         try
         {
             if (_localResetGate.CurrentCount == 0) return;
             lock (_batchGate) { if (!ReferenceEquals(_activeBatch, batch)) return; }
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            if (batch.IsCancellationRequested && batch.HasPolicyCleanup
+            if (!batch.LocalExecutionReleased && batch.IsCancellationRequested && batch.HasPolicyCleanup
                 && !await batch.WaitCancelledPolicyCleanupAsync().WaitAsync(timeout.Token)) return;
             if (!await ReconcileLocalCoordinatedCleanupAsync(batch, timeout.Token)) return;
             var authority = _signalRClient;
@@ -907,14 +925,14 @@ public partial class MainViewModel
         lock (_batchGate)
         {
             if (!ReferenceEquals(_activeBatch, batch)
-                || batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
+                || !batch.LocalExecutionReleased && batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
         }
         _intentLifecycle.FinishCoordinatedBatch(batch.BatchId, batch.Message);
         lock (_batchGate)
         {
             if (!ReferenceEquals(_activeBatch, batch)
-                || batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
-            batch.MarkSettled();
+                || !batch.LocalExecutionReleased && batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
+            batch.MarkSettled(waitForCallbacks: !batch.LocalExecutionReleased);
             _lastHoeingBatchId = batch.BatchId;
             _lastHoeingStartPhase = batch.LocalCompletionReady ? "completed" : batch.Outcome;
             _lastHoeingStartMessage = batch.Outcome switch
