@@ -713,6 +713,16 @@ public class SignalRClient : IAsyncDisposable
         return response.DeserializePayload<CoordinatedBatchSnapshot>();
     }
 
+    public async Task<CoordinatedBatchSnapshot> CancelCoordinatedBeginAsync(
+        string requestId, string batchId, int generation, CancellationToken ct = default)
+    {
+        if (!IsControlRoomReady) throw new ControlChannelUnavailableException("控制房间业务身份暂不可用");
+        var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchCancelBegin,
+            new { requestId, batchId, generation }, ct: ct);
+        return response.DeserializePayload<CoordinatedBatchSnapshot>()
+            ?? throw new InvalidOperationException("原开始请求撤销响应为空");
+    }
+
     public async Task<CoordinatedBatchResetResult> ResetCoordinatedBatchAsync(
         string resetId, IReadOnlyList<string> targetUids, int? expectedGeneration = null,
         string? expectedBatchId = null, CancellationToken ct = default)

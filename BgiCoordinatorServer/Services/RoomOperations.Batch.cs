@@ -73,6 +73,37 @@ public sealed partial class RoomOperations
         lock (_batchGate) return batch.Snapshot();
     }
 
+    // Cancelling an accepted Begin is not a physical reset. Only the original sender's
+    // exact request may be revoked; registered executors still owe their real cleanup.
+    public async Task<CoordinatedBatchSnapshot> CancelCoordinatedBeginAsync(GatewayHandlerContext ctx,
+        string requestId, string batchId, int generation)
+    {
+        var group = _roomManager.GetControlRoomGroupOrRemote(ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_control_room_required");
+        var senderUid = _roomManager.GetUidByConnectionId(group, ctx.ConnectionId)
+            ?? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
+            ?? throw new InvalidOperationException("batch_identity_required");
+        CoordinatedBatchState state;
+        CoordinatedBatchSnapshot snapshot;
+        lock (_batchGate)
+        {
+            if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128
+                || !_batchRequests.TryGetValue(group + "\0manual\0" + senderUid + ":" + requestId, out state!)
+                || state.BatchId != batchId || state.Generation != generation)
+                throw new InvalidOperationException("batch_request_identity_mismatch");
+            // A replay is answered from its original request, never from a successor.
+            if (!_controlBatches.TryGetValue(group, out var current) || !ReferenceEquals(current, state)
+                || state.IsTerminal) return state.Snapshot();
+            state.CancelBegin();
+            snapshot = state.Snapshot();
+            _roomManager.DisarmOnlineEvents(group, state.ParticipantUids);
+            _roomManager.MarkExhausted(group);
+        }
+        await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
+        await BroadcastControlRoomPlayersAsync(group, forceFull: true);
+        return snapshot;
+    }
+
     // 只负责受理。拒绝新请求不得修改旧批次，包括尚未完成清理的终态批次。
     private CoordinatedBatchState BeginCoordinatedBatch(string group, string source, string requestKey,
         string requestId, IReadOnlyList<string> uids, IReadOnlyDictionary<string, int>? intentGenerations,

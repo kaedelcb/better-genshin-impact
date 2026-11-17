@@ -67,6 +67,19 @@ public sealed partial class GatewayDispatcher
                 GetString(env, "quickCommandKey"));
         };
 
+        _commands[GatewayProtocol.Names.ControlBatchCancelBegin] = async (env, ctx) =>
+        {
+            try
+            {
+                return await _ops.CancelCoordinatedBeginAsync(ctx, GetString(env, "requestId"),
+                    GetString(env, "batchId"), GetInt(env, "generation"));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = ex.Message } };
+            }
+        };
+
         _commands[GatewayProtocol.Names.ControlBatchCurrent] = (env, ctx) => Task.FromResult<object?>(
             _ops.CurrentCoordinatedBatch(ctx, GetString(env, "batchId")));
 

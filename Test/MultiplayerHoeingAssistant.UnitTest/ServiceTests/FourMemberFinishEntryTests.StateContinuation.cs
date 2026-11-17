@@ -63,6 +63,7 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.BgiRunningProbeOverride = () => true;
             executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
             executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止停止真实进程");
@@ -83,7 +84,7 @@ public sealed partial class FourMemberFinishEntryTests
                 Assert.True(clients[i].SupportsStateContinuation);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[i], PlayerName = "增强隔离成员" + i, BgiStatus = "running",
+                    PlayerUid = uids[i], PlayerName = "增强隔离成员" + i, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = bindings.Append(completion).ToList(), OnlineHoeingGroupNames = bindings.ToList(),
                     OnlineHoeingGroupTypes = bindings.Select(_ => "group").ToList(), ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = i == 0 ? new("runSpecified", "group", completion, 0)

@@ -223,7 +223,7 @@ public sealed class OnlineHoeingBatch
         get => Volatile.Read(ref _stateContinuationEnabled) != 0;
         set => Volatile.Write(ref _stateContinuationEnabled, value ? 1 : 0);
     }
-    internal static bool IsExplicitStopReason(string reason) => reason is "manual_reset" or "user_stop_all";
+    internal static bool IsExplicitStopReason(string reason) => reason is "manual_reset" or "user_stop_all" or "begin_cancelled";
     internal bool ExplicitStopRequested => Volatile.Read(ref _explicitStopRequested) != 0;
     private long? _stateContinuationStopVersion;
     internal long? StateContinuationStopVersion

@@ -182,6 +182,20 @@ public sealed class CoordinatedBatchState
         Revision++;
     }
 
+    internal void CancelBegin()
+    {
+        if (IsTerminal || Reason is "manual_reset" or "user_stop_all" or "begin_cancelled") return;
+        if (!ExecutionEnded) Abort("begin_cancelled");
+        else
+        {
+            // Explicit cancellation also revokes retained post-task responsibility.
+            // Keep member results and every outstanding physical-reset receipt intact.
+            Phase = "aborted";
+            Reason = "begin_cancelled";
+            Revision++;
+        }
+    }
+
     public void CheckTimeout(DateTime now)
     {
         // Elapsed server time cannot prove that the original BGI request failed or exited.

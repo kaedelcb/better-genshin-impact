@@ -26,7 +26,7 @@ public sealed partial class FourMemberFinishEntryTests
                     uids.ToList(), clientInstanceId: Guid.NewGuid().ToString("N"), bypassSystemProxy: true);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running",
+                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = ["隔离绑定"], OnlineHoeingGroupNames = ["隔离绑定"],
                     OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = new("stop", "group", "", 0),
@@ -58,7 +58,7 @@ public sealed partial class FourMemberFinishEntryTests
             var cancelled = (await clients[1].GetCurrentCoordinatedBatchAsync())!;
             Assert.Equal(originalBatch!.BatchId, cancelled.BatchId);
             Assert.Equal("aborted", cancelled.Phase);
-            Assert.Equal("manual_reset", cancelled.Reason);
+            Assert.Equal("begin_cancelled", cancelled.Reason);
             Assert.True(cancelled.CleanupComplete); // None of the four members had registered for execution.
             Assert.Null(Active(vm));
             // Temporary remote cleanup did not evict any real member or change its instance identity.
@@ -66,6 +66,13 @@ public sealed partial class FourMemberFinishEntryTests
                 DateTimeOffset.UtcNow.AddMinutes(1));
             Assert.NotEqual(cancelled.BatchId, next.BatchId);
             Assert.Equal(uids, next.ParticipantUids);
+            var replay = await clients[0].CancelCoordinatedBeginAsync(request,
+                originalBatch.BatchId, originalBatch.Generation);
+            Assert.Equal(originalBatch.BatchId, replay.BatchId);
+            var successor = (await clients[1].GetCurrentCoordinatedBatchAsync())!;
+            Assert.Equal(next.BatchId, successor.BatchId);
+            Assert.Equal(next.Revision, successor.Revision);
+            Assert.Equal(next.Phase, successor.Phase);
             await clients[1].ResetCoordinatedBatchAsync(Guid.NewGuid().ToString("N"), uids, next.Generation, next.BatchId);
             await using var newRoom = new SignalRClient();
             await newRoom.ConnectAsync(server.Url, room + "-new", "isolated-cancel", uids[0], "新房间观察",

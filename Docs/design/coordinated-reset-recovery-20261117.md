@@ -21,6 +21,7 @@ DC54A4 在游戏中止后发生人工重置与重新开始交错：部分执行�
 | 离线目标 | 不缓存 reset_state，不虚构已物理清理。已按既有合同释放的离线完成等待不因未投递重置而重新阻塞；原本未知执行/已在途物理重置仍继续等待。 |
 | 重置确认与本地 gate 释放交错 | 新开始等待完整本地复位 gate，再复核停止、代次和当前批次，不因短窗口向整队上报准备失败。 |
 | 多轮重置 | 最新 resetId 仅替代该轮目标的清理授权；旧确认不能清掉后续重置，重置无关成员不能中止当前批次。 |
+| 撤销原开始请求 | 精确匹配原发起者、requestId、batchId、generation；不建立物理重置屏障。未登记者普通终止，已注册/已运行/收尾者须真正清理，旧撤销不影响后继。已有物理重置等待不能被撤销绕过。 |
 | 远程命令 | generation、batchId、目标和执行实例须匹配服务端 receipt，不信任客户端自报的虚高代次；离线不排队。 |
 
 无当前批次的独立重置也获得可信代次，本地 gate 负责其开始交错；本次未新增全局无批次重置屏障。服务端重启导致代次小于本地历史代次时仍保守拒绝，本次未引入服务端 epoch 协议。
@@ -34,7 +35,8 @@ DC54A4 在游戏中止后发生人工重置与重新开始交错：部分执行�
 - `StateResetButtonEntryTests`：生产窗口成员卡按钮、确认框、在途重复请求、本地 gate 等待、重置后重新发送、迟到回调和后继保护。仅替换物理 BGI 重建与状态查询。
 - `CoordinatedBatchGatewayTests` / `ResetStateAckRoutingTests`：真实服务端入口的屏障、逐目标 receipt、伪造/过期/实例替换、离线与重复确认。结束判据为未物理确认时拒绝开始、确认后可开始，不影响无关批次。
 - `UnifiedHoeingNativeEntryTests`：本地服务进程、真实 SignalR、生产 MainViewModel 和私有 BGI 管道串联；新增本地旧批次通过有效人工重置恢复、重置中拒绝新开始、完成后启动下一批、旧重置不影响后继的整链。BGI 为协议替身，不算游戏内效果。
-- `FourMemberFinishEntryTests`：复用四人完成动作、断线、停止及后继生命周期回归，保护本次未改的收尾合同。
+- `FourMemberFinishEntryTests`：复用四人完成动作、断线、停止及后继生命周期回归，保护本次未改的收尾合同；末尾两场通过生产 MainVM 和真实网关验证换房撤销（含受理回执丢失）、原房间立即可再开批、旧撤销重放不碰后继、新房间不误收旧请求。
+- 撤销开始新增服务端 17 个输入/阶段用例及助手 3 个明确取消原因用例：错误身份不改状态；注册、运行、收尾均须真实清理；取消不创建物理重置授权，也不能绕过已有物理屏障。结束判据不是仅得到取消 ACK，而是原责任按其实际阶段收口并可开始后继。
 - `ResetStateGatewayTests` / `ResetRoomRefreshEntryTests`：真实网关 ACK 回投、监控端发起、失败成员报告、刷新后恢复；刷新失败不能报成功。
 - 实际助手 exe 使用显式隔离根、单机配置和不存在的 BGI 路径，验证启动、窗口交互、正常退出、重启和配置保留。不连接真实房间、不操作真实 BGI 或 User。
 
@@ -51,8 +53,45 @@ DC54A4 在游戏中止后发生人工重置与重新开始交错：部分执行�
 - `Build/validation-runs/df93020bbbc04ada8a0cff74c1a3cd5c/records`：服务端 693 项通过、1 项失败。替换执行端测试未断开旧实例，旧实例合法收到自己的授权；已补断线，不删除断言。
 - `Build/validation-runs/d3696acd9ea847bcbcdda0fc12870652/records`：服务端 694 项、助手恢复链 258 项、窗口入口 1 项通过；原生整链在首批准备失败，旧协议替身缺少当前跨进程停止能力，尚未运行到新增重置段。已补停止信号协议；另将原生测试服务器 DLL 显式绑定本轮隔离输出，避免误用默认旧产物。后续四人、网关和实际 exe 步骤未在该轮执行。
 
+## 超时续修诊断（阶段记录）
+
+- `Build/validation-runs/48babeafcbdf4479bb4a804b3d18622d/records`：原生入口在服务端启动阶段失败。旧夹具只隔离房间日志，仍打开默认线路库；上轮隔离服务器残留占用 `.route-package-owner`。后续夹具改用独立线路库和服务器密钥根，不读取或修改真实线路库。
+- `Build/validation-runs/11ca169468cc48e3b911e4554f90ca4f/records`：建连和显式状态上报完成，首批在准入时得到 `hoeing_required_version_unconfigured`；随后资源释放未结束，外层三分钟超时掩盖原始错误。这一轮未执行到业务批次，不能据此断言产品恢复链失败或成功。
+- `Build/validation-runs/208480d01d9d4b57af03b0a9776b9d4f/records`：合法版本与隔离线路库通过准入，首批进入 takeover；协议替身把 `stopVersion=0` 的 `lastManualStopTimestamp` 返回为 `0`，而真实协议在从未手动停止时应为空，生产解析器因此保守拒绝接管。另安全进程探针仍查询真实 BetterGI 而非私有替身，已统一接入现有测试探针。此轮所有资源在约 70 ms 内正常释放，未再次出现外层三分钟清理超时；原始 35 秒断言失败保留。后续仅修正夹具停止事实格式与存在性接线，不放松产品协议校验。
+- 已给原生与四人入口准备严格精确的隔离 BGI 版本、合法微型线路 ZIP 和已发布 catalog，仍经过生产服务器的归档、哈希和版本准入校验；不关闭生产门禁。原生夹具增加逐资源释放记录，并提前禁止真实进程启动/停止。具体释放阻塞和最终结果以续跑证据为准。
+- 旧隔离服务器 PID 45664 已按完整命令和创建来源核实；结束该旧进程的工具调用被权限系统拒绝，未执行，不能记为已清理。后续测试使用独立数据根，不绕过该拒绝。新增超时收口仅面向新测试自身 `Process.Start` 所拥有的子进程。
+
+- `Build/validation-runs/c5375425fe8243a1a448a7a1ec4d6614/records`：窗口重置入口 1 项、真实网关 2 项、刷新入口 1 项（内部 3 个条件）通过；原生入口 36 秒失败，四人入口 2 分 54 秒失败，实际 exe 已启动并成功打开设置页，但退出确认框定位超时，未完成重启。整批保留失败退出码，不将独立通过项冒充整链通过。
+- 原生入口的旧协议替身缺少当前默认优先恢复所需的保留请求查询；只有 `ext.job.list` 为空不能证明未发送。本轮补齐同 epoch/key 的权威 `not_found`、幂等接续、终态确认和 ACK，并按当前逐线路/尝试身份检查 `hoeingBatchId`，不降低产品准入要求。
+- 四人入口查出真实兼容缺口：BGI 配置平面把 `FileNotFoundException("configuration_not_found")` 包成 `configuration_failed`，助手误判为状态未知而一直保留收尾占用。仅将精确的缺失码或 `configuration_failed` + `configuration_not_found` 组合映射成明确未启动；一般配置损坏或临时 IO 错误仍保留未知，不误释放。夹具按真实响应返回，不伪造理想错误码。
+
+- `Build/validation-runs/4b9dd51784e84336b77fa4fc7172ac9f/records`：服务端与助手隔离编译 0 错误；过宽的 `FullyQualifiedName~Completion` 合并选择未在整批 900 秒预算内返回，没有生成 TRX，也未进入原生、四人或 exe 步骤。具体挂起用例未确认，不能归为新产品故障或记为通过；同一 Job 已记录 `active_processes=0` 的异常收口证明。后续按本次实际变更选择 `CompletionStartExecutionTests`、`CompletionStateContinuationTests` 与原恢复组，原生和四人先行，逐组启用 VSTest 挂起诊断，避免某组阻挡后续所有验证；不延长单用例原有预算。
+
+- `Build/validation-runs/8bdca5ebf653450f915522cd2790ad5b/records`：隔离编译 0 错误；原生 1 项（连续五批，31 秒）、相关回归 314 项、真实 exe 两轮设置交互/正常退出/重启/配置保留通过。四人整套仍失败：前九场景已执行，第十换房撤销开始时 `CleanupComplete=false`，第十一未执行；不将独立通过项写为整批通过。
+- 第十场景暴露普通撤销开批误用了物理重置 RPC：服务端建立在线目标的 `resetCleaned` 屏障，但调用方不发送物理 `reset_state`，房间永久等待。本轮新增精确 `control.batch.cancelBegin`，只认原发起者 UID、requestId、batchId、generation；未注册者按普通终止收口，已注册者仍须真正清理；旧撤销不广播、不解除后继就绪，也不生成物理重置授权。`begin_cancelled` 明确撤销原批次续办，原有物理重置屏障不放宽。必须配套更新助手与服务端；旧服务器不支持时明确失败，不回退到物理重置或伪造清理。
+
 本次源码预检所继承的原基线为 `3788073b6bebf559f15ff8f32bc9e78cb39c3825`。仅在修复完成、相关验证通过并提交后前移外部源码接续基线；不将其当作整版产品验收。
 
 构建均须指定 `-p:DeployToBgiTools=false`，由 `tools/mistletoe/validate_command.py` 分配 `{artifacts}`；testhost 启动前设置独立 `NEXUSBGI_DATA_ROOT` 与 `ROOM_LOG_ROOT`。隔离生成二进制由共享 Session 回收，保留命令、TRX、必要日志、截图及失败结论。
 
+## 最终定向验证（2026-11-17）
+
+`Build/validation-runs/c487315ac6e041dc824f5dbfcafd969c/records/result.json` 的整批退出码为 **0**，`validation-stderr.log` 为空；七份原始 TRX 核对为 **1034/1034 通过、0 失败、0 未执行**：
+
+| 验证组 | 结果 |
+| --- | --- |
+| 服务端完整测试 | 711/711，含新增撤销开始 17 项 |
+| 助手本次相关恢复/完成动作回归 | 317/317，含新增精确配置缺失 5 项、明确取消原因 3 项 |
+| 原生生产入口 | 1/1，连续五批完整执行，约 31 秒；所有本测试资源正常释放 |
+| 四人生产入口 | 1/1，内部 11 场景全部执行，约 2 分 41 秒；包括两种换房撤销和旧撤销重放 |
+| 正式重置按钮入口 | 1/1 |
+| 真实重置网关入口 | 2/2 |
+| 房间刷新重置入口 | 1/1，内部 3 条件 |
+
+真实助手 exe 另完成 **两轮**启动 → 打开设置 → 正式退出确认 → ExitCode=0 → 同数据根重启；配置保留，第二轮设置页与退出截图已实际查看。数据根、BGI 路径、房间服务和管道均明确隔离，不操作真实 User 或游戏进程。编译 0 错误，既有警告保留。
+
+可复现入口为 `Build/reset-recovery-20261117/validate.ps1` 与 `app-smoke.ps1`；通过 `python -B tools/mistletoe/validate_command.py --root . --timeout 900 -- pwsh -NoProfile -STA -File Build/reset-recovery-20261117/validate.ps1 -Artifacts {artifacts}` 执行。`validation-inputs-cancel-begin.json` 保存验证前 HEAD 和 32 个实际输入 SHA256（包含当时未提交修复），提交前再核对一致。它不把旧失败记录改绑为当前通过结果，也不代表助手全项目所有测试或整版产品验收。
+
 本次没有部署线上服务端，没有覆盖真实运行目录；开发验证不代替游戏内实际联机效果。
+
+收尾已核同一 Job 的 `active_processes=0`；共享 Session 自动回收记录 `9eb1cdaa033a4a839841f1905d684737` 为 `complete`，核定输出路径为本轮 `artifacts`，移除 382 个可再生成文件，记录 `released_unique_bytes=372910558`（约 355.6 MiB；不是 NTFS 实际簇释放量）。命令、TRX、日志、截图及隔离配置保留；历史失败与被拒绝结束的旧进程不作已清理处理。

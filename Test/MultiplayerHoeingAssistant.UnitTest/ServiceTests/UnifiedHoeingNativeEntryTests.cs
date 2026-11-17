@@ -24,12 +24,32 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 [Collection("TaskCenterPipeTransport")]
 public sealed class UnifiedHoeingNativeEntryTests
 {
+    private static readonly ConcurrentQueue<string> Progress = new();
+
+    private static void RecordProgress(string message)
+    {
+        var line = $"{DateTimeOffset.Now:O} [thread {Environment.CurrentManagedThreadId}] {message}";
+        Progress.Enqueue(line);
+        File.AppendAllText(Path.Combine(AssistantDataDirectory.Root, "native-entry-progress.log"), line + Environment.NewLine);
+    }
+
+    private sealed class TracedResource(string name, Func<ValueTask> dispose) : IAsyncDisposable
+    {
+        public async ValueTask DisposeAsync()
+        {
+            RecordProgress("disposing " + name);
+            await dispose();
+            RecordProgress(name + " disposed");
+        }
+    }
+
     [Fact]
     public async Task ProductionEntry_RejectsConcurrentBegin_StopsOnlyExactBatch_AndStartsAgainAfterCleanup()
     {
         Assert.True(AssistantDataDirectory.IsExplicit,
             "必须先设置隔离 NEXUSBGI_DATA_ROOT，禁止在真实 User 上运行入口验证。");
         var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ownedServers = new ConcurrentBag<IsolatedCoordinator>();
         var thread = new Thread(() =>
         {
             try
@@ -39,7 +59,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                 SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
                 app.Dispatcher.InvokeAsync(async () =>
                 {
-                    try { await RunEntryAsync(); finished.TrySetResult(); }
+                    try { await RunEntryAsync(ownedServers.Add); finished.TrySetResult(); }
                     catch (Exception error) { finished.TrySetException(error); }
                     finally { app.Shutdown(); }
                 });
@@ -49,11 +69,17 @@ public sealed class UnifiedHoeingNativeEntryTests
         }) { IsBackground = true, Name = "UnifiedHoeingNativeEntry" };
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
-        await finished.Task.WaitAsync(TimeSpan.FromMinutes(3));
+        try { await finished.Task.WaitAsync(TimeSpan.FromMinutes(3)); }
+        catch (TimeoutException error)
+        {
+            // The STA can be stuck in disposal: do not leave our child server alive after the testhost exits.
+            foreach (var server in ownedServers) server.StopOwnedProcess();
+            throw new TimeoutException("原生整链未完成；最后阶段：\n" + string.Join("\n", Progress), error);
+        }
         Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "隔离 WPF Dispatcher 没有退出。");
     }
 
-    private static async Task RunEntryAsync()
+    private static async Task RunEntryAsync(Action<IsolatedCoordinator> ownServer)
     {
         Directory.CreateDirectory(AssistantDataDirectory.Root);
         const string uid = "100000001";
@@ -62,21 +88,31 @@ public sealed class UnifiedHoeingNativeEntryTests
         const string quickKey = "一键传奇";
         var previousIpc = IpcClient.PipeNameOverrideForTest;
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
-        await using var server = await IsolatedCoordinator.StartAsync();
-        await using var pipe = new BgiInstancePipeDouble();
-        using var script = new OwnedBatchPeer(groupName, quickGroupName);
+        RecordProgress("starting coordinator");
+        var server = await IsolatedCoordinator.StartAsync();
+        ownServer(server);
+        await using var serverScope = new TracedResource("coordinator", server.DisposeAsync);
+        RecordProgress("coordinator ready");
+        var pipe = new BgiInstancePipeDouble();
+        await using var pipeScope = new TracedResource("pipe", pipe.DisposeAsync);
+        var script = new OwnedBatchPeer(groupName, quickGroupName);
+        await using var scriptScope = new TracedResource("script", () => { script.Dispose(); return ValueTask.CompletedTask; });
         pipe.BodyForTest = script.Reply;
         pipe.Start();
         IpcClient.PipeNameOverrideForTest = pipe.PipeName;
         BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
-        using var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
-        using var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
+        var external = new BgiExternalClient(Path.GetDirectoryName(Environment.ProcessPath));
+        await using var externalScope = new TracedResource("external client", () => { external.Dispose(); return ValueTask.CompletedTask; });
+        var monitor = new BgiProcessMonitor(Environment.ProcessPath!);
+        await using var monitorScope = new TracedResource("process monitor", () => { monitor.Dispose(); return ValueTask.CompletedTask; });
         SignalRClient? client = null;
         MainViewModel? vm = null;
         try
         {
+            RecordProgress("connecting private BGI pipe");
             Assert.Equal(BgiExternalLinkState.Ready, await external.StartAsync());
             vm = new MainViewModel();
+            RecordProgress("view model created");
             var config = new AssistConfig
             {
                 ServerUrl = server.Url, PlayerUid = uid, PlayerName = "隔离入口执行端",
@@ -88,27 +124,36 @@ public sealed class UnifiedHoeingNativeEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external,
                 logger: vm.AddLog, isBatchInFlight: () => Active(vm)?.IsAlive == true);
+            executor.BgiRunningProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
+            executor.TaskStartBgiPresenceProbeOverride = () => true; // Only the private pipe peer exists in this test.
+            executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
+            executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止停止真实进程");
             Set(vm, "_config", config);
             Set(vm, "_externalClient", external);
             Set(vm, "_processMonitor", monitor);
             Set(vm, "_commandExecutor", executor);
             vm.RoomCode = "NATIVE-" + Guid.NewGuid().ToString("N")[..8];
             client = (SignalRClient)Call(vm, "CreateWiredSignalRClient")!;
+            RecordProgress("connecting production client");
             using (var connectionBudget = new CancellationTokenSource(TimeSpan.FromSeconds(20)))
                 await (Task)Call(vm, "ConnectSignalRWithConfigAsync", client, connectionBudget.Token,
                     "隔离正式开始生产建连入口", false)!;
+            RecordProgress("production client connected");
             Assert.True(client.SupportsCoordinatedStart);
             Assert.True(client.SupportsCompletionChoice);
+            RecordProgress("reporting initial control status");
             await client.ReportControlStatusAsync(new ControlStatus
             {
-                PlayerUid = uid, PlayerName = config.PlayerName, BgiStatus = "running",
+                PlayerUid = uid, PlayerName = config.PlayerName, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                 ConfigGroups = [groupName, quickGroupName], OnlineHoeingGroupNames = [groupName],
                 QuickCommands = new() { [quickKey] = "GROUP:" + quickGroupName },
                 OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 1,
                 HoeingCompletionAction = new("resume", "group", "", 0),
             });
 
+            RecordProgress("beginning first batch");
             var first = await BeginAsync(client, uid);
+            RecordProgress("first batch accepted; waiting for owned task");
             await WaitAsync(() => script.StartCount == 1 && Active(vm)?.BatchId == first.BatchId,
                 () => Diagnostics(vm, pipe, server));
             var firstActive = Active(vm)!;
@@ -121,7 +166,8 @@ public sealed class UnifiedHoeingNativeEntryTests
             Assert.True(firstActive.TakenOver);
             Assert.Equal("running", firstActive.Phase);
             var firstStart = Assert.Single(pipe.Received.Where(r => r.Operation == "ext.task.start")).Data!.Value;
-            Assert.Equal(first.BatchId, firstStart.GetProperty("hoeingBatchId").GetString());
+            Assert.True(firstActive.PriorityRecoveryEnabled);
+            Assert.Equal($"{first.BatchId}/0/0", firstStart.GetProperty("hoeingBatchId").GetString());
             Assert.Equal(uid, Assert.Single(firstStart.GetProperty("hoeingParticipantUids").EnumerateArray()).GetString());
             Assert.False(firstStart.TryGetProperty("preempt", out var preempt) && preempt.ValueKind == JsonValueKind.True);
             Assert.Equal(1, pipe.CountOf("task.suspend"));
@@ -312,9 +358,16 @@ public sealed class UnifiedHoeingNativeEntryTests
             await WaitAsync(() => Active(vm) == null, () => Diagnostics(vm, pipe, server));
             Assert.True((await client.GetCurrentCoordinatedBatchAsync())!.CleanupComplete);
             Assert.Equal(5, script.StartCount);
+            RecordProgress("all five batch assertions passed");
+        }
+        catch (Exception error)
+        {
+            RecordProgress("entry failed before cleanup: " + error);
+            throw;
         }
         finally
         {
+            RecordProgress("cleaning view model");
             // 仅向本夹具的私有管道作业收口；不调用 MainVM 通用强制重置或真实进程结束。
             if (vm != null)
             {
@@ -328,11 +381,14 @@ public sealed class UnifiedHoeingNativeEntryTests
                 foreach (var field in new[] { "_statusTimer", "_retryTimer", "_onlineTimer", "_resumeTimeoutTimer" })
                     (typeof(MainViewModel).GetField(field, BindingFlags.Instance | BindingFlags.NonPublic)!
                         .GetValue(vm) as IDisposable)?.Dispose();
+                RecordProgress("shutting down task center");
                 if (host != null) await host.ShutdownAsync();
             }
             IpcClient.PipeNameOverrideForTest = previousIpc;
             BgiExternalClient.PipeNameOverrideForTest = previousExt;
+            RecordProgress("disposing control client");
             if (client != null) await client.DisposeAsync();
+            RecordProgress("control client disposed; disposing pipe and coordinator");
         }
     }
 
@@ -387,6 +443,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         private string? _ticket;
         private readonly List<Mistletoe.Shared.CoordinatedStopSignal> _stopSignals = [];
         private long _manualStopVersion;
+        private long? _lastManualStopTimestamp;
         private int _cancelCount;
         public void Dispose()
         {
@@ -426,7 +483,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                     case "ext.hello":
                         return (true, null, null, new
                         {
-                            bgiVersion = "isolated-native-entry", sessionId = "private-pipe-only",
+                            bgiVersion = CoordinatorEntryServerData.BgiVersion, sessionId = "private-pipe-only",
                             windowsSessionId = Process.GetCurrentProcess().SessionId, processId = _pid, bgiEpoch = Epoch,
                             capabilities = new Dictionary<string, bool>
                             {
@@ -435,12 +492,13 @@ public sealed class UnifiedHoeingNativeEntryTests
                                 ["hoeing.finishEvidence.v1"] = true,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
                                 ["task.coordinatedRecoveryStop.v1"] = true,
+                                ["task.stateContinuation.v1"] = true,
                                 ["execution.manualStopFence.v1"] = true,
                             }
                         });
                     case "ext.execution.manualStopFence":
                         return (true, null, null, new { bgiEpoch = Epoch, stopVersion = _manualStopVersion,
-                            lastManualStopTimestamp = 0L, monotonicFrequency = Stopwatch.Frequency });
+                            lastManualStopTimestamp = _lastManualStopTimestamp, monotonicFrequency = Stopwatch.Frequency });
                     case "task.status":
                     case "ext.task.status":
                         return (true, null, null, new
@@ -501,6 +559,9 @@ public sealed class UnifiedHoeingNativeEntryTests
                         return (true, null, null, new { takeoverTicket = ticket, quiesceConfirmed = true,
                             liveTask = false, expectedExecutionInstanceId = (string?)null, expectedStateRevision = (long?)null });
                     case "ext.task.start":
+                        if (Value(data, "idempotencyKey") is { } retainedKey
+                            && _jobs.SingleOrDefault(j => j.Key == retainedKey) is { } adopted)
+                            return (true, null, null, new { status = "adopted", taskHandle = adopted.Id, queuePosition = 0 });
                         if (_ticket == null || Value(data, "takeoverTicket") != _ticket || active != null)
                             return (false, "task_busy", "替身票据或空闲条件不满足", null);
                         var job = new Job(Guid.NewGuid().ToString("N"), Value(data, "idempotencyKey")!,
@@ -508,10 +569,25 @@ public sealed class UnifiedHoeingNativeEntryTests
                         _jobs.Add(job);
                         return (true, null, null, new { status = "queued", taskHandle = job.Id, queuePosition = 0 });
                     case "ext.task.queueStatus":
-                        var queried = _jobs.SingleOrDefault(j => j.Id == Value(data, "taskHandle"));
-                        return queried == null ? (false, "not_found", "未知句柄", null)
-                            : (true, null, null, new { status = queried.Cancelled ? "completed" : "running",
-                                cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : null });
+                        var queryKey = Value(data, "idempotencyKey");
+                        var queried = _jobs.SingleOrDefault(j => queryKey != null ? j.Key == queryKey : j.Id == Value(data, "taskHandle"));
+                        if (queried == null)
+                            return (true, null, null, new { status = "not_found", taskHandle = (string?)null,
+                                idempotencyKey = queryKey, bgiEpoch = Epoch, executionExitConfirmed = false });
+                        return (true, null, null, new { status = queried.Cancelled ? "completed" : "running",
+                            taskHandle = queried.Id, idempotencyKey = queried.Key, bgiEpoch = Epoch,
+                            executionExitConfirmed = queried.Cancelled,
+                            cancelled = queried.Cancelled, errorCode = queried.Cancelled ? "user_cancelled" : null,
+                            hoeingEvidence = new { plannedNativeCount = 1, started = 1, completed = 0, failed = 0,
+                                cancelled = queried.Cancelled ? 1 : 0, active = queried.Cancelled ? 0 : 1,
+                                @sealed = queried.Cancelled, jobResult = queried.Cancelled ? "Cancelled" : null,
+                                revision = queried.Cancelled ? 2L : 1L } });
+                    case "ext.task.acknowledge":
+                        var acknowledged = _jobs.SingleOrDefault(j => j.Key == Value(data, "submissionKey")
+                            && j.Id == Value(data, "taskHandle"));
+                        if (acknowledged is not { Cancelled: true })
+                            return (false, "result_not_terminal", "结果未终结，不能确认", null);
+                        return (true, null, null, new { status = "acknowledged" });
                     case "ext.task.cancel":
                         var owned = _jobs.SingleOrDefault(j => j.Id == Value(data, "taskHandle"));
                         if (owned == null || Value(data, "ownedOnly") != "v1")
@@ -529,6 +605,7 @@ public sealed class UnifiedHoeingNativeEntryTests
                         _soloRunning = false;
                         _ticket = null;
                         _manualStopVersion++;
+                        _lastManualStopTimestamp = Stopwatch.GetTimestamp();
                         foreach (var signal in _stopSignals) signal.Stop();
                         return (true, null, null, new { status = "stop_requested" });
                     case "task.resume":
@@ -572,8 +649,7 @@ public sealed class UnifiedHoeingNativeEntryTests
             };
             start.ArgumentList.Add(serverDll);
             start.ArgumentList.Add("--urls"); start.ArgumentList.Add(url);
-            start.Environment["ROOM_LOG_ROOT"] = Path.Combine(Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT")!, "native-entry-room-logs");
-            start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+            CoordinatorEntryServerData.Configure(start, "native-entry");
             var process = new Process { StartInfo = start, EnableRaisingEvents = true };
             var owned = new IsolatedCoordinator(process, url);
             process.OutputDataReceived += (_, e) => { if (e.Data != null) owned._output.Enqueue(e.Data); };
@@ -597,13 +673,20 @@ public sealed class UnifiedHoeingNativeEntryTests
             catch { await owned.DisposeAsync(); throw; }
         }
 
+        private bool _disposed;
+        public void StopOwnedProcess()
+        {
+            // Only this Process.Start instance; callable outside the STA if its cleanup gets stuck.
+            lock (_process)
+                if (!_disposed && !_process.HasExited) _process.Kill(entireProcessTree: false);
+        }
+
         public async ValueTask DisposeAsync()
         {
-            // 只停止本测试 Process.Start 得到的实例；不查找或结束已有服务器/助手/BGI。
-            if (!_process.HasExited) { _process.Kill(entireProcessTree: false); await _process.WaitForExitAsync(); }
-            var root = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT")!;
-            await File.WriteAllTextAsync(Path.Combine(root, "native-entry-coordinator.log"), string.Join("\n", _output));
-            _process.Dispose();
+            StopOwnedProcess();
+            await _process.WaitForExitAsync();
+            await File.WriteAllTextAsync(Path.Combine(AssistantDataDirectory.Root, "native-entry-coordinator.log"), string.Join("\n", _output));
+            lock (_process) { _disposed = true; _process.Dispose(); }
         }
     }
 }

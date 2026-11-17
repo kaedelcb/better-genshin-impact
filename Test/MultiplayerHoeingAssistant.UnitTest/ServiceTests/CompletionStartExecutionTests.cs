@@ -1,6 +1,7 @@
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 using MultiplayerHoeingAssistant.ViewModels;
 using Xunit;
 
@@ -8,6 +9,7 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
 // These cases decide whether a saved starting point may execute or must be rejected. In
 // particular, an invalid stable ID must never turn into index zero or the saved cursor.
+[Collection("TaskCenterPipeTransport")]
 public sealed class CompletionStartExecutionTests
 {
     private static readonly BgiEpoch Epoch = new() { ProcessId = 41, StartTicksUtc = 410 };
@@ -95,15 +97,85 @@ public sealed class CompletionStartExecutionTests
         Assert.Equal(batch.CompletionIntentTimestamp, restored.CompletionIntentTimestamp);
     }
 
-    private static OnlineHoeingBatch Batch(TaskConflictPolicySettings? policy = null)
+    private static OnlineHoeingBatch Batch(TaskConflictPolicySettings? policy = null, BgiEpoch? epoch = null)
     {
         var batch = new OnlineHoeingBatch(new("completion-start", 8, 0, 0, 1, "completed", "")
         {
             Protocol = "hoeing.start.v2", ParticipantUids = ["self"],
             Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>> { ["self"] = [new("锄地", "group")] },
-        }, "self", policy ?? Policy("workflow")) { ExecutionEpoch = Epoch, StateContinuationEnabled = true };
-        batch.MarkLocalSuccess(Epoch);
+        }, "self", policy ?? Policy("workflow")) { ExecutionEpoch = epoch ?? Epoch, StateContinuationEnabled = true };
+        batch.MarkLocalSuccess(epoch ?? Epoch);
         return batch;
+    }
+
+    // The real SDK and CommandExecutor classify the configuration-plane reply before any start.
+    // Only proven absence releases the continuation; ordinary configuration/IO faults retain it.
+    [Theory]
+    [InlineData("configuration_failed", "configuration_not_found", true)]
+    [InlineData("configuration_not_found", "missing configuration", true)]
+    [InlineData("configuration_failed", "invalid_project_list", false)]
+    [InlineData("configuration_failed", "The process cannot access the file because it is being used by another process.", false)]
+    [InlineData("io_error", "configuration_not_found", false)]
+    public async Task ConfigurationDescribeFailureReleasesOnlyProvenMissingCompletion(
+        string errorCode, string errorMessage, bool missing)
+    {
+        await using var pipe = new BgiInstancePipeDouble { StateContinuationForTest = true };
+        pipe.BodyForTest = (operation, _) => operation == "ext.config.describe"
+            ? (false, errorCode, errorMessage, null) : null;
+        var previousPipe = BgiExternalClient.PipeNameOverrideForTest;
+        BgiExternalClient.PipeNameOverrideForTest = pipe.PipeName;
+        pipe.Start();
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try
+        {
+            using var client = new BgiExternalClient();
+            Assert.Equal(BgiExternalLinkState.Ready, await client.StartAsync().WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(client.HasCapability(BgiExternalClient.StateContinuationCapability));
+            var batch = Batch(Policy(mode: "default"), client.ServerEpoch!);
+            batch.PolicyTicketReleased = true; // Production Prepare releases the original ticket before Start.
+            var executor = new CommandExecutor(null!, "unused", () => client);
+            CommandResult? result = null;
+            var starts = 0;
+            var continuation = MainViewModel.RunCompletionContinuationAsync(batch, new()
+            {
+                RequireAuthority = () => { }, Prepare = _ => Task.FromResult(true),
+                Reconcile = _ => Task.FromResult(true),
+                Start = async ct =>
+                {
+                    starts++;
+                    return result = await executor.StartRetainedCompletionActionAsync(batch, ct);
+                },
+                Query = _ => throw new InvalidOperationException("A rejected description cannot have an accepted job."),
+                Acknowledge = (_, _) => throw new InvalidOperationException("No submitted result can be acknowledged."),
+                Delay = _ =>
+                {
+                    if (!missing) stop.Cancel(); // Observe one retryable failure without spinning or a wall-clock wait.
+                    return Task.CompletedTask;
+                },
+            }, stop.Token);
+            if (missing)
+                await continuation.WaitAsync(TimeSpan.FromSeconds(5));
+            else
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => continuation.WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.NotNull(result);
+            Assert.Equal(missing ? "specified_task_missing" : "state_unavailable", result.ErrorCode);
+            Assert.Equal(missing, batch.PolicyRejectedBeforeStart);
+            Assert.Equal(missing, batch.LocalExecutionReleased);
+            if (missing) Assert.Contains("配置不存在", batch.CompletionActionWarning);
+            else Assert.Equal(errorMessage, result.Message);
+            Assert.Equal(1, starts);
+            Assert.Equal(1, pipe.CountOf("ext.config.describe"));
+            Assert.Equal(0, pipe.CountOf("ext.task.start"));
+            Assert.False(batch.PolicyStartAttempted);
+            Assert.Null(batch.PolicySubmitPayload);
+            Assert.Null(batch.PolicyExecution);
+        }
+        finally
+        {
+            stop.Cancel();
+            BgiExternalClient.PipeNameOverrideForTest = previousPipe;
+        }
     }
 
     [Fact]

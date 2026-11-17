@@ -29,6 +29,7 @@ public sealed class CoordinatedStateContinuationTests
         internal volatile bool HoldPrepare, LoseAuthority, LoseReads, AllowFinish, LoseAcknowledgements;
         internal bool OrdinaryRegistryEmpty, OrdinaryRegistryUnavailable, LoseFirstReply, DropFirstRequest;
         internal bool ManualStopBeforeSend, ManualStopFenceReply;
+        internal volatile string? ServerAbortReason;
         internal volatile bool BoundEpochUnknown, CapabilitiesUnknown, HoldPeerPreparation;
         internal BgiEpoch? BoundEpochOverride;
         internal int FirstBusy, PrepareFailures;
@@ -87,11 +88,16 @@ public sealed class CoordinatedStateContinuationTests
             {
                 ct.ThrowIfCancellationRequested();
                 if (LoseAuthority) throw new ControlChannelUnavailableException("temporary control loss");
-                if (stage == "prepared" && !HoldPeerPreparation) _phase = "takeover";
-                if (stage == "takeoverConfirmed") _phase = "running";
-                if (result == "succeeded") _phase = "completed";
+                var abortReason = ServerAbortReason;
+                if (abortReason is not null) _phase = "aborted";
+                else
+                {
+                    if (stage == "prepared" && !HoldPeerPreparation) _phase = "takeover";
+                    if (stage == "takeoverConfirmed") _phase = "running";
+                    if (result == "succeeded") _phase = "completed";
+                }
                 return Task.FromResult(new CoordinatedBatchSnapshot(Batch.BatchId, Batch.Generation,
-                    _phase == "completed" ? 1 : 0, 0, Interlocked.Increment(ref _revision), _phase, "")
+                    _phase == "completed" ? 1 : 0, 0, Interlocked.Increment(ref _revision), _phase, abortReason ?? "")
                 { Protocol = "hoeing.start.v2", ParticipantUids = Batch.Start!.ParticipantUids, Bindings = Batch.Start.Bindings });
             },
             ReadBoundEpoch = () => BoundEpochUnknown ? null : BoundEpochOverride ?? Epoch,
@@ -146,6 +152,33 @@ public sealed class CoordinatedStateContinuationTests
                 VisibleStatuses.Add((phase, message));
             }
         }).RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Theory]
+    [InlineData("manual_reset")]
+    [InlineData("user_stop_all")]
+    [InlineData("begin_cancelled")]
+    public async Task ExplicitServerCancellationSettlesOnlyTheOriginalSubmittedJob(string reason)
+    {
+        var r = new Run(serverContinuation: true, priorityRecovery: true);
+        var pending = r.Start();
+        try
+        {
+            await Until(() => r.Executions == 1);
+            r.ServerAbortReason = reason;
+            Assert.False(await pending);
+            Assert.True(r.Batch.ExplicitStopRequested);
+            Assert.True(r.Batch.CleanupConfirmed);
+            Assert.Equal(1, r.Submissions);
+            Assert.Equal(1, r.Executions);
+            Assert.Equal(1, r.Cancels);
+            Assert.Equal(1, r.Releases);
+            Assert.Equal(0, r.Finalizations);
+        }
+        finally
+        {
+            if (!pending.IsCompleted) { r.Batch.Cancel(); await pending; }
+        }
     }
 
     [Fact]

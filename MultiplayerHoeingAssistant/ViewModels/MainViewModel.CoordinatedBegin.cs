@@ -65,7 +65,7 @@ public partial class MainViewModel
                 { throw new IOException("原房间撤销连接暂不可用", ex); }
             }
             // A room switch may have retired the UI connection. Reuse the existing remote
-            // protocol solely to query/reset the original request, without replacing a member.
+            // protocol solely to query/cancel the original request, without replacing a member.
             await using var cleanup = new SignalRClient();
             try
             {
@@ -97,8 +97,8 @@ public partial class MainViewModel
                 {
                     lock (_batchGate)
                         if (_activeBatch?.BatchId == accepted.BatchId) _activeBatch.Cancel();
-                    await InOriginalRoom(client => client.ResetCoordinatedBatchAsync("cancel_" + requestId, targets,
-                        accepted.Generation, accepted.BatchId, ct), ct);
+                    await InOriginalRoom(client => client.CancelCoordinatedBeginAsync(requestId,
+                        accepted.BatchId, accepted.Generation, ct), ct);
                 }, RequireContext,
                 message => { if (lastMessage != message) { lastMessage = message; AddLog(message); } }, pending.Token);
         }
@@ -132,7 +132,7 @@ public partial class MainViewModel
         while (true)
         {
             if (StopRequested() && !attempted) throw new OperationCanceledException(ct);
-            // Submission permission can end, but the original request's query/reset
+            // Submission permission can end, but the original request's query/cancel
             // responsibility remains until its late acceptance or absence is known.
             using var call = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var cancellationResolved = false;

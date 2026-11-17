@@ -111,6 +111,7 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.BgiRunningProbeOverride = () => true;
             executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
             executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("隔离验收禁止停止真实进程");
@@ -131,7 +132,7 @@ public sealed partial class FourMemberFinishEntryTests
                 Assert.True(clients[i].SupportsCoordinatedStart);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running",
+                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = [boundGroup, manualGroup], OnlineHoeingGroupNames = [boundGroup],
                     OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = new("stop", "group", "", 0),
@@ -212,7 +213,7 @@ public sealed partial class FourMemberFinishEntryTests
                 local = reconnected;
                 await local.ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
+                    PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = [boundGroup, manualGroup], OnlineHoeingGroupNames = [boundGroup],
                     OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = new("stop", "group", "", 0),
@@ -341,6 +342,7 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.BgiRunningProbeOverride = () => true;
             executor.TaskStartBgiPresenceProbeOverride = () => true; // The private pipe peer is the fixture's running BGI.
             executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("隔离验收禁止启动真实或额外进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("禁止触碰真实进程");
@@ -360,7 +362,7 @@ public sealed partial class FourMemberFinishEntryTests
                         clientInstanceId: Guid.NewGuid().ToString("N"), bypassSystemProxy: true);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[i], PlayerName = "隔离不同后置成员" + i, BgiStatus = "running",
+                    PlayerUid = uids[i], PlayerName = "隔离不同后置成员" + i, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
                     OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = i == 0 ? new("runSpecified", "group", manual, 0) : new("stop", "group", "", 0),
@@ -406,7 +408,7 @@ public sealed partial class FourMemberFinishEntryTests
             local = reconnected;
             await local.ReportControlStatusAsync(new ControlStatus
             {
-                PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running",
+                PlayerUid = uids[0], PlayerName = config.PlayerName, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                 ConfigGroups = [group, next, manual], OnlineHoeingGroupNames = [group, next],
                 OnlineHoeingGroupTypes = ["group", "group"], ExpectedHoeingPlayers = 4,
                 HoeingCompletionAction = new("runSpecified", "group", manual, 0),
@@ -713,7 +715,7 @@ public sealed partial class FourMemberFinishEntryTests
                     case "ext.hello":
                         return (true, null, null, new
                         {
-                            bgiVersion = "isolated-four-member-finish", sessionId = "private-pipe-only",
+                            bgiVersion = CoordinatorEntryServerData.BgiVersion, sessionId = "private-pipe-only",
                             windowsSessionId = Process.GetCurrentProcess().SessionId, processId = _pid, bgiEpoch = Epoch,
                             capabilities = new Dictionary<string, bool>
                             {
@@ -759,6 +761,10 @@ public sealed partial class FourMemberFinishEntryTests
                             .Where(n => n != null && (!CompletionConfigMissing || n != manualGroup)).ToArray(),
                             oneClickConfigs = manualIsOneDragon && !CompletionConfigMissing ? new[] { manualGroup } : Array.Empty<string>() });
                     case "ext.config.describe":
+                        // Retained completion resolves the revision-bound directory, not config.list.
+                        // Mirror the production configuration plane's missing-file response exactly.
+                        if (CompletionConfigMissing && (Value(data, "groupName") ?? Value(data, "configName")) == manualGroup)
+                            return (false, "configuration_failed", "configuration_not_found", null);
                         return (true, null, null, new { bgiEpoch = Epoch, configRevision = "finish-entry-r1",
                             tasks = nextBoundGroup != null && Value(data, "groupName") == boundGroup
                                 ? new[] { new { name = "联机native", enabled = true }, new { name = "回神像1", enabled = true }, new { name = "回神像2", enabled = true } }
@@ -957,9 +963,7 @@ public sealed partial class FourMemberFinishEntryTests
                 WorkingDirectory = Path.Combine(repo.FullName, "BgiCoordinatorServer")
             };
             start.ArgumentList.Add(serverDll); start.ArgumentList.Add("--urls"); start.ArgumentList.Add(url);
-            start.Environment["ROOM_LOG_ROOT"] = Path.Combine(Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT")!, "four-member-finish-" + caseName + "-room-logs");
-            start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-            start.Environment["Logging__EventLog__LogLevel__Default"] = "None"; // Console/fixture logs remain; no Windows Event Log permission is needed.
+            CoordinatorEntryServerData.Configure(start, "four-member-" + caseName);
             var process = new Process { StartInfo = start, EnableRaisingEvents = true };
             var owned = new IsolatedCoordinator(process, url, caseName);
             process.OutputDataReceived += (_, e) => { if (e.Data != null) owned._output.Enqueue(e.Data); };

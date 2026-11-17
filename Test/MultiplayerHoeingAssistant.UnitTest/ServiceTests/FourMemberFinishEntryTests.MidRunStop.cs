@@ -50,6 +50,7 @@ public sealed partial class FourMemberFinishEntryTests
             };
             var executor = new CommandExecutor(monitor, config.BgiPath, () => external, logger: vm.AddLog,
                 isBatchInFlight: () => vm.HasLocalCoordinatedExecutionResponsibility);
+            executor.BgiRunningProbeOverride = () => true;
             executor.TaskStartBgiPresenceProbeOverride = () => true;
             executor.TaskStartBgiLaunchOverride = () => throw new InvalidOperationException("禁止启动真实进程");
             executor.StopProcessOverrideForTest = _ => throw new InvalidOperationException("禁止停止真实进程");
@@ -68,7 +69,7 @@ public sealed partial class FourMemberFinishEntryTests
                         clientInstanceId: Guid.NewGuid().ToString("N"), bypassSystemProxy: true);
                 await clients[i].ReportControlStatusAsync(new ControlStatus
                 {
-                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running",
+                    PlayerUid = uids[i], PlayerName = "隔离成员" + i, BgiStatus = "running", BgiVersion = CoordinatorEntryServerData.BgiVersion,
                     ConfigGroups = [bound], OnlineHoeingGroupNames = [bound],
                     OnlineHoeingGroupTypes = ["group"], ExpectedHoeingPlayers = 4,
                     HoeingCompletionAction = new("stop", "group", "", 0),

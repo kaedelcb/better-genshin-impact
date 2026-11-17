@@ -61,8 +61,14 @@ public partial class CommandExecutor
         { groupName = oneDragon ? null : policy.SpecifiedTaskName, configName = oneDragon ? policy.SpecifiedTaskName : null },
             cancellationToken: ct).ConfigureAwait(false);
         if (described is not { Success: true, Data: not null })
-            throw new CompletionStartException(described.ErrorCode is "configuration_not_found" or "file_not_found"
-                ? "specified_task_missing" : "state_unavailable", described.ErrorMessage ?? "完成动作配置暂不可读");
+        {
+            // Older configuration planes wrap FileNotFoundException in configuration_failed.
+            // Only this exact missing-file response proves rejection before submission.
+            var missing = described.ErrorCode is "configuration_not_found" or "file_not_found"
+                || described is { ErrorCode: "configuration_failed", ErrorMessage: "configuration_not_found" };
+            throw new CompletionStartException(missing ? "specified_task_missing" : "state_unavailable",
+                missing ? $"指定配置不存在：{policy.SpecifiedTaskName}" : described.ErrorMessage ?? "完成动作配置暂不可读");
+        }
         if (!TryParseEpoch(described.Data, out var pid, out var ticks) || pid != epoch.ProcessId || ticks != epoch.StartTicksUtc)
             throw new CompletionStartException("stale_epoch", "配置目录不属于本批原 BGI");
         using var document = JsonDocument.Parse(described.Data);

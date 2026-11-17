@@ -65,6 +65,22 @@ public class CoordinatedBatchGatewayTests
         => h.Dispatcher.DispatchAsync(client, Command(GatewayProtocol.Names.ControlBatchResetCleaned,
             new { resetId, batchId }));
 
+    private static Task<GatewayEnvelope> CancelBegin(GatewayTestHarness h, GatewayHandlerContext client,
+        CoordinatedBatchSnapshot state, string? request = null, string? batchId = null, int? generation = null)
+        => h.Dispatcher.DispatchAsync(client, Command(GatewayProtocol.Names.ControlBatchCancelBegin,
+            new { requestId = request ?? state.RequestId, batchId = batchId ?? state.BatchId, generation = generation ?? state.Generation }));
+
+    private static void AssertNoResetGrants(GatewayTestHarness h)
+    {
+        foreach (var field in new[] { "_processedResetResults", "_resetCleanupExecutors" })
+        {
+            var grants = (System.Collections.IDictionary)typeof(RoomOperations)
+                .GetField(field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(h.Ops)!;
+            Assert.Empty(grants);
+        }
+    }
+
     private static int Events(GatewayTestHarness h, string name) => h.GatewayClientProxy.Invocations.Count(call =>
         call.Arguments.Count >= 2 && call.Arguments[0] as string == GatewayProtocol.Callbacks.Event
         && call.Arguments[1] is object?[] { Length: > 0 } args && args[0] is GatewayEnvelope e && e.Name == name);
@@ -282,6 +298,191 @@ public class CoordinatedBatchGatewayTests
         Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "another")));
         Assert.Equal(first.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
         Assert.Equal(first.Revision, h.Ops.CurrentCoordinatedBatch(clients[0])!.Revision);
+    }
+
+    // Ordinary begin cancellation is distinct from reset: only real registered executors
+    // owe cleaned, and replay/identity failures must never revoke an accepted successor.
+    [Fact]
+    public async Task CancelUnregisteredManualBegin_ReturnsTerminalSnapshotAndImmediatelyAllowsNextBatch()
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = Snapshot(await Begin(h, clients[0], "cancel-request", ["u0", "u1"]));
+        var cancelled = Snapshot(await CancelBegin(h, clients[0], state));
+        Assert.Equal(state.BatchId, cancelled.BatchId);
+        Assert.Equal(state.Generation, cancelled.Generation);
+        Assert.Equal("cancel-request", cancelled.RequestId);
+        Assert.Equal("manual", cancelled.Source);
+        Assert.Equal("aborted", cancelled.Phase);
+        Assert.Equal("begin_cancelled", cancelled.Reason);
+        Assert.True(cancelled.CleanupComplete);
+        Assert.All(cancelled.Members, member => Assert.Equal("cleaned", member.Stage));
+        Assert.Equal(clients.Length, Events(h, GatewayProtocol.Events.ControlBatchState));
+        AssertNoResetGrants(h);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, clients[0], state.RequestId, state.BatchId)));
+        var next = Snapshot(await Begin(h, clients[0], "next", ["u0", "u1"]));
+        Assert.NotEqual(state.BatchId, next.BatchId);
+        Assert.True(next.Generation > state.Generation);
+        Assert.Equal("registering", next.Phase);
+        Assert.Equal(2 * clients.Length, Events(h, GatewayProtocol.Events.ControlBatchStart));
+    }
+
+    [Theory]
+    [InlineData("partiallyRegistered")]
+    [InlineData("registered")]
+    [InlineData("running")]
+    [InlineData("completed")]
+    public async Task CancelRegisteredRunningOrCompletedManualBegin_RequiresRealCleanedAndPreservesResults(string phase)
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"]));
+        if (phase is "running" or "completed") state = await Run(h, clients, state);
+        else
+        {
+            state = Snapshot(await Update(h, clients[0], state, stage: "registered"));
+            if (phase == "registered") state = Snapshot(await Update(h, clients[1], state, "u1", stage: "registered"));
+        }
+        if (phase == "completed")
+        {
+            state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+            state = Snapshot(await Update(h, clients[1], state, "u1", result: "succeeded"));
+            Assert.Equal("completed", state.Phase);
+            Assert.False(state.CleanupComplete); // Retained post-task responsibility must also be revoked.
+        }
+        var cancelled = Snapshot(await CancelBegin(h, clients[0], state));
+        Assert.Equal("aborted", cancelled.Phase);
+        Assert.Equal("begin_cancelled", cancelled.Reason);
+        Assert.Equal(state.BatchId, cancelled.BatchId);
+        Assert.Equal(state.Generation, cancelled.Generation);
+        Assert.False(cancelled.CleanupComplete);
+        Assert.All(cancelled.Members, member =>
+        {
+            var original = state.Members.Single(m => m.Uid == member.Uid);
+            Assert.Equal(original.Result, member.Result);
+            Assert.Equal(original.Stage == "pending" ? "cleaned" : original.Stage, member.Stage);
+            Assert.False(member.CompletionWaitReleased);
+        });
+        AssertNoResetGrants(h);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0", "u1"])));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Update(h, clients[0], cancelled, stage: "cleaned", token: "wrong-token")));
+        var late = Snapshot(await Update(h, clients[0], cancelled, stage: "takeoverConfirmed", result: "succeeded"));
+        Assert.Equal(cancelled.Revision, late.Revision); // A late execution report cannot undo the cancellation.
+        Assert.Equal("aborted", late.Phase);
+        Assert.Equal("begin_cancelled", late.Reason);
+        var cleaned = Snapshot(await Update(h, clients[0], cancelled, stage: "cleaned"));
+        if (phase != "partiallyRegistered")
+        {
+            Assert.False(cleaned.CleanupComplete);
+            Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0", "u1"])));
+            cleaned = Snapshot(await Update(h, clients[1], cleaned, "u1", stage: "cleaned"));
+        }
+        Assert.True(cleaned.CleanupComplete); // Ordinary cleaned is sufficient: cancellation created no reset wait.
+        AssertNoResetGrants(h);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next", ["u0", "u1"])).BatchId);
+    }
+
+    [Theory]
+    [InlineData("request")]
+    [InlineData("batch")]
+    [InlineData("generation")]
+    [InlineData("uid")]
+    [InlineData("emptyRequest")]
+    [InlineData("emptyBatch")]
+    [InlineData("zeroGeneration")]
+    public async Task CancelBeginWithWrongIdentity_RejectsWithoutMutatingCurrentBatch(string mismatch)
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        var events = Events(h, GatewayProtocol.Events.ControlBatchState);
+        var rejected = await CancelBegin(h, mismatch == "uid" ? clients[1] : clients[0], state,
+            request: mismatch == "request" ? "other-request" : mismatch == "emptyRequest" ? "" : state.RequestId,
+            batchId: mismatch == "batch" ? "other-batch" : mismatch == "emptyBatch" ? "" : state.BatchId,
+            generation: mismatch == "generation" ? state.Generation + 1 : mismatch == "zeroGeneration" ? 0 : state.Generation);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(rejected));
+        var current = Snapshot(await h.Dispatcher.DispatchAsync(clients[0], Command(GatewayProtocol.Names.ControlBatchCurrent, new { })));
+        Assert.Equal(JsonSerializer.Serialize(state, GatewayJson.Options), JsonSerializer.Serialize(current, GatewayJson.Options));
+        Assert.Equal(events, Events(h, GatewayProtocol.Events.ControlBatchState));
+        Assert.Equal(clients.Length, Events(h, GatewayProtocol.Events.ControlBatchStart));
+        AssertNoResetGrants(h);
+    }
+
+    [Fact]
+    public async Task CancelOnlineBegin_CannotRevokeNonmanualBatch()
+    {
+        var (h, clients, _) = await Setup();
+        await h.Ops.ReportOnlineEventAsync(clients[0], 73, true);
+        var state = await Run(h, clients, h.Ops.CurrentCoordinatedBatch(clients[0])!);
+        Assert.Equal("online", state.Source);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await CancelBegin(h, clients[0], state)));
+        var current = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        Assert.Equal(JsonSerializer.Serialize(state, GatewayJson.Options), JsonSerializer.Serialize(current, GatewayJson.Options));
+        Assert.Equal(0, Events(h, GatewayProtocol.Events.ControlBatchState));
+        Assert.Equal(1, Events(h, GatewayProtocol.Events.ControlBatchStart));
+        AssertNoResetGrants(h);
+    }
+
+    [Fact]
+    public async Task CancelBeginReplay_ReturnsOriginalSnapshotWithoutMutatingOrDisarmingSuccessor()
+    {
+        var (h, clients, room) = await Setup(2);
+        var original = Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"]));
+        var cancelled = Snapshot(await CancelBegin(h, clients[0], original));
+        foreach (var client in clients) h.RoomManager.ReportOnlineEvent("CTRL_" + room, client.ConnectionId, 90);
+        var terminalEvents = Events(h, GatewayProtocol.Events.ControlBatchState);
+        var duplicate = Snapshot(await CancelBegin(h, clients[0], original));
+        Assert.Equal(cancelled.Revision, duplicate.Revision);
+        Assert.Equal(terminalEvents, Events(h, GatewayProtocol.Events.ControlBatchState));
+        Assert.All(h.RoomManager.GetControlRoomPlayers("CTRL_" + room), player => Assert.False(player.OnlineEventConsumed));
+        // The same request string belongs to a different initiating UID, so it is a new request.
+        var next = await Run(h, clients, Snapshot(await Begin(h, clients[1], targets: ["u0", "u1"])));
+        Assert.NotEqual(original.BatchId, next.BatchId);
+        foreach (var client in clients) h.RoomManager.ReportOnlineEvent("CTRL_" + room, client.ConnectionId, 91);
+        var events = Events(h, GatewayProtocol.Events.ControlBatchState);
+        for (var i = 0; i < 2; i++)
+        {
+            var replay = Snapshot(await CancelBegin(h, clients[0], original));
+            Assert.Equal(JsonSerializer.Serialize(cancelled, GatewayJson.Options), JsonSerializer.Serialize(replay, GatewayJson.Options));
+            var current = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+            Assert.Equal(JsonSerializer.Serialize(next, GatewayJson.Options), JsonSerializer.Serialize(current, GatewayJson.Options));
+            Assert.All(h.RoomManager.GetControlRoomPlayers("CTRL_" + room), player => Assert.False(player.OnlineEventConsumed));
+            Assert.Equal(events, Events(h, GatewayProtocol.Events.ControlBatchState));
+            Assert.Equal(2 * clients.Length, Events(h, GatewayProtocol.Events.ControlBatchStart));
+        }
+        AssertNoResetGrants(h);
+    }
+
+    [Theory]
+    [InlineData("unregistered")]
+    [InlineData("running")]
+    [InlineData("completed")]
+    public async Task CancelBeginDuringPhysicalReset_CannotBypassExistingResetCleanupBarrier(string phase)
+    {
+        var (h, clients, _) = await Setup();
+        var state = Snapshot(await Begin(h, clients[0]));
+        if (phase != "unregistered") state = await Run(h, clients, state);
+        if (phase == "completed")
+        {
+            state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+            state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+            Assert.True(state.CleanupComplete);
+        }
+        var resetReply = await h.Dispatcher.DispatchAsync(clients[0], Command(GatewayProtocol.Names.ControlBatchReset,
+            new { resetId = "physical-reset", targetUids = new[] { "u0" }, expectedBatchId = state.BatchId, expectedGeneration = state.Generation }));
+        Assert.Null(GatewayTestHarness.ErrorCode(resetReply));
+        Assert.True(resetReply.Payload!.Deserialize<CoordinatedBatchResetResult>(GatewayJson.Options)!.Found);
+        var cancelled = Snapshot(await CancelBegin(h, clients[0], state));
+        Assert.Equal(state.BatchId, cancelled.BatchId);
+        Assert.Equal(state.Generation, cancelled.Generation);
+        Assert.Equal("aborted", cancelled.Phase);
+        Assert.Equal(phase == "completed" ? "begin_cancelled" : "manual_reset", cancelled.Reason);
+        Assert.False(cancelled.CleanupComplete);
+        Assert.Equal(state.Members.Single().Result, cancelled.Members.Single().Result);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        Assert.False(Snapshot(await Update(h, clients[0], cancelled, stage: "cleaned")).CleanupComplete);
+        Assert.False(Snapshot(await CancelBegin(h, clients[0], state)).CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, clients[0], state.RequestId, state.BatchId)));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        Assert.True(Snapshot(await ResetCleaned(h, clients[0], "physical-reset", state.BatchId)).CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next")).BatchId);
     }
 
     [Fact]
