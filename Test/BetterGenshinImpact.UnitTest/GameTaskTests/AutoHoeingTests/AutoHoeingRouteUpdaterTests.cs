@@ -387,11 +387,25 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Theory]
-    [InlineData("http://example.com")]
     [InlineData("file:///tmp/routes")]
+    [InlineData("ftp://example.com")]
     [InlineData("https://user:secret@example.com")]
+    [InlineData("https://example.com/?x=1")]
+    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)")]
+    [InlineData("")]
     public void UnsafeServerAddressIsRejected(string address)
         => Assert.Throws<InvalidDataException>(() => AutoHoeingRouteUpdater.RequireServerUri(address));
+
+    [Theory]
+    [InlineData("http://www.autobgi.cn:8080", "https://www.autobgi.cn/")]
+    [InlineData("http://www.autobgi.cn:8080/hub", "https://www.autobgi.cn/")]
+    [InlineData("http://www.autobgi.cn:8080/HUB/", "https://www.autobgi.cn/")]
+    [InlineData("https://www.autobgi.cn", "https://www.autobgi.cn/")]
+    [InlineData("  https://www.autobgi.cn/ ", "https://www.autobgi.cn/")]
+    [InlineData("http://127.0.0.1:8080", "http://127.0.0.1:8080/")]
+    [InlineData("http://localhost:5000/hub", "http://localhost:5000/")]
+    public void MultiplayerServerAddressIsMappedToTheSameHostOverHttps(string address, string expected)
+        => Assert.Equal(expected, AutoHoeingRouteUpdater.RequireServerUri(address).AbsoluteUri);
 
     [Fact]
     public async Task ManifestIdentityAndPathEscapeAreRejectedWithoutTouchingOutsideFiles()

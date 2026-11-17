@@ -144,12 +144,21 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         finally { lease.Gate.Release(); }
     }
 
+    /// <summary>
+    /// 线路服务地址：联机助手与 BGI 共用同一个“协调服务器地址”配置，常见写法是 http://主机:8080 或 http://主机:8080/hub。
+    /// 线路只通过 HTTPS 提供（8080 是明文联机端口），所以按同一主机名改用 https://主机（默认 443 端口）；
+    /// 本机回环开发地址保持原样。已经是 https 的地址原样使用；带账号、查询或锚点的地址仍然拒绝。
+    /// </summary>
     public static Uri RequireServerUri(string address)
     {
-        if (!Uri.TryCreate(address?.Trim().TrimEnd('/') + "/", UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttps && !(uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback))
-            || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
-            throw new InvalidDataException("线路服务地址必须为 HTTPS（仅 loopback 开发地址允许 HTTP）");
+        var text = (address ?? "").Trim().TrimEnd('/');
+        if (text.EndsWith("/hub", StringComparison.OrdinalIgnoreCase)) text = text[..^4].TrimEnd('/');
+        if (!Uri.TryCreate(text + "/", UriKind.Absolute, out var uri)
+            || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)
+            || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+            throw new InvalidDataException("线路服务地址无效，请在联机设置里填写协调服务器地址，例如 https://www.autobgi.cn");
+        if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
+            uri = new UriBuilder(Uri.UriSchemeHttps, uri.Host).Uri;
         return uri;
     }
 
