@@ -357,7 +357,8 @@
             const deleting = kind === 'delete';
             $('actionSummary').textContent = `${packageName(pkg)}。` + (deleting ? '只删除未发布且未引用的草稿，此操作不可撤销。服务端记录固定删除原因。' :
                 (kind === 'restore' ? `将 ${action.paths.length} 个文件 / 目录前缀恢复到草稿 ${shortId(action.destination)} 的新副本，不直接发布；目录选择会替换该目录的内容。` : '将完整替换当前官方线路；进行中的轮次仍使用已锁定版本。') + ` 当前修订 ${action.revision}，服务端会核对是否已被其他操作改变。`);
-            $('actionReason').value = ''; $('actionReason').hidden = deleting; $('actionReason').disabled = deleting;
+            // 发布是日常操作，默认原因为“日常更新”，有特殊情况再改；回滚、恢复仍需手填，避免默认文案掩盖异常操作。
+            $('actionReason').value = kind === 'publish' ? '日常更新' : ''; $('actionReason').hidden = deleting; $('actionReason').disabled = deleting;
             $('actionReason').required = !deleting; $('actionReasonLabel').hidden = deleting;
             $('actionError').textContent = ''; $('actionDialog').showModal(); (deleting ? $('actionCancel') : $('actionReason')).focus();
         } catch (error) { status('globalStatus', error.message, true); }
