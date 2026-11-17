@@ -124,7 +124,9 @@ public static class RoutePackageRoutes
         var stream = store.OpenDownload(id, admin);
         context.Response.Headers.ETag = "\"" + descriptor.Sha256 + "\"";
         context.Response.Headers.CacheControl = admin ? "no-store" : "public,max-age=31536000,immutable";
-        return Results.File(stream, "application/zip", id + ".zip", lastModified: descriptor.CreatedAtUtc,
+        // 管理员下载的文件名带上创建日期（北京时间）；客户端按 URL 下载，不依赖文件名。
+        var fileName = admin ? $"routes-{descriptor.CreatedAtUtc.ToOffset(TimeSpan.FromHours(8)):yyyyMMdd}-{id[..8]}.zip" : id + ".zip";
+        return Results.File(stream, "application/zip", fileName, lastModified: descriptor.CreatedAtUtc,
             entityTag: new Microsoft.Net.Http.Headers.EntityTagHeaderValue("\"" + descriptor.Sha256 + "\""), enableRangeProcessing: true);
     }
 

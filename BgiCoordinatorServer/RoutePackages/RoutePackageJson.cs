@@ -100,8 +100,10 @@ internal static class RoutePackageJson
             {
                 var name = Path.GetFileNameWithoutExtension(parts[^1]);
                 var suffix = "_" + char.ToLowerInvariant(parts[^2][0]);
-                if (!name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) throw RoutePackageArchive.Invalid("变体文件名须与所在变体目录后缀一致");
-                var key = string.Join("/", parts.SkipLast(2)) + "/" + name[..^2];
+                // 与客户端 RouteVariantNaming.StripBaseName 一致：有后缀就去掉，没有就按原文件名配对。
+                // 实际线路目录里的变体文件可以不带 _a/_b 后缀，不能因此拒绝整个线路包。
+                var baseName = name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? name[..^suffix.Length] : name;
+                var key = string.Join("/", parts.SkipLast(2)) + "/" + baseName;
                 if (variants.TryGetValue(key, out var prior) && !prior.SequenceEqual(syncs)) throw RoutePackageArchive.Invalid("变体同步点顺序不一致: " + key);
                 variants[key] = syncs;
             }

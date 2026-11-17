@@ -87,7 +87,16 @@
         $('folderSummary').textContent = '选择目录后显示将要上传的路径与大小。';
         status('uploadStatus', '本机选择已清除，未删除任何本机文件。'); updateUploadControls();
     }
+    // 版本说明默认填写当天（北京时间）日期；管理员自己改过的内容不会被覆盖。
+    function todayStamp() {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).replaceAll('-', '');
+    }
+    function fillDescription() {
+        const box = $('uploadDescription');
+        if (!box.value.trim() || box.value === state.autoDescription) { state.autoDescription = todayStamp(); box.value = state.autoDescription; }
+    }
     $('folderInput').addEventListener('change', () => {
+        fillDescription();
         state.blob = null; state.plan = null; state.previewLimit = 100; state.uploaded = false; state.uploadUnknown = false;
         $('privacyConfirm').checked = false; $('uploadProgress').hidden = true; $('uploadResult').hidden = true; $('previewSearch').value = '';
         try {
@@ -103,6 +112,7 @@
         renderPreview(); updateUploadControls();
     });
     $('previewSearch').addEventListener('input', () => { state.previewLimit = 100; renderPreview(); });
+    fillDescription();
     $('morePreview').addEventListener('click', () => { state.previewLimit += 100; renderPreview(); });
     $('privacyConfirm').addEventListener('change', updateUploadControls);
     if (!admin) $('uploadToken').addEventListener('input', updateUploadControls);
@@ -302,7 +312,7 @@
             meta.append(node('dt', key), node('dd', value));
         detail.append(meta);
         const actions = node('div', undefined, 'actions'), download = node('a', '下载此版本单 ZIP', 'button-link');
-        download.href = '/api/admin/routes/' + encodeURIComponent(pkg.id) + '/download'; download.setAttribute('download', 'routes-' + pkg.id + '.zip'); actions.append(download);
+        download.href = '/api/admin/routes/' + encodeURIComponent(pkg.id) + '/download'; download.setAttribute('download', 'routes-' + todayStamp() + '-' + pkg.id.slice(0, 8) + '.zip'); actions.append(download);
         if (pkg.state === 'draft') actions.append(actionButton('发布此草稿', 'publish', pkg, 'primary'), actionButton('删除未发布草稿', 'delete', pkg, 'danger'));
         else if (state.catalog?.current?.package?.id !== pkg.id) actions.append(actionButton('回滚到此版本', 'rollback', pkg, 'primary'));
         detail.append(actions);
