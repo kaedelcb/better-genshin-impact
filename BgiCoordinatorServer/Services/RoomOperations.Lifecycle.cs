@@ -16,6 +16,8 @@ public sealed partial class RoomOperations
         string? hoeingBatchId = null, List<string>? expectedParticipantUids = null,
         List<string>? worldPlanParticipantUids = null)
     {
+        _routePackagePolicy?.RequireVersion(reportedVersion);
+        _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, reportedVersion, ctx.IsV3);
         if (worldPlanParticipantUids != null)
         {
             if (_capabilityLookup?.Supports(ctx.ConnectionId, WorldPlanState.Capability) != true)
@@ -61,11 +63,19 @@ public sealed partial class RoomOperations
     public async Task<(bool Success, string? Protocol, string? Error)> JoinRoomAsync(GatewayHandlerContext ctx,
         string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "", string? hoeingBatchId = null)
     {
+        try
+        {
+            _routePackagePolicy?.RequireVersion(reportedVersion);
+            _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, reportedVersion, ctx.IsV3);
+        }
+        catch (InvalidOperationException ex) { return (false, null, ex.Message); }
         var playerId = ctx.ConnectionId;
 
         var room0 = _roomManager.GetRoom(roomCode);
         if (room0 != null)
         {
+            try { RequireRoomRoutePackage(room0); }
+            catch (InvalidOperationException ex) { return (false, room0.Protocol, ex.Message); }
             if (!string.Equals(room0.HoeingBatchId ?? "", hoeingBatchId ?? "", StringComparison.Ordinal))
                 return (false, room0.Protocol, "hoeing_start_identity_mismatch");
             if (room0.HoeingBatchId is not null
@@ -219,6 +229,7 @@ public sealed partial class RoomOperations
                 ctx.ConnectionId, roomCode);
             return;
         }
+        RequireRoomRoutePackage(room);
         if (requireWorldPlanRoster && (roomCode != expectedRoomCode || room.WorldPlanParticipantUids == null))
             throw new InvalidOperationException("world_plan_target_identity");
         lock (room)
@@ -245,6 +256,7 @@ public sealed partial class RoomOperations
                         throw new InvalidOperationException("world_plan_roster_not_ready");
                     startupPlan?.RetireStartup(room.Code, room.SessionId, _worldPlanTime.GetUtcNow().UtcDateTime);
                 }
+                RequireRoomRoutePackage(room);
                 room.IsStarted = true;
                 room.StartedAtUtc = DateTime.UtcNow;
             }

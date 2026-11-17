@@ -103,6 +103,8 @@ public sealed partial class RoomOperations
         if (!_controlBatches.ContainsKey(group) && _controlBatches.Count >= 4096)
             throw new InvalidOperationException("batch_capacity");
         if (_batchRequests.Count >= 16384) throw new InvalidOperationException("batch_request_capacity");
+        // Only hoeing admission depends on the official route catalog; unrelated quick commands keep working.
+        if (quickCommandKey.Length == 0) _routePackagePolicy?.RequireConfigured();
         var players = _roomManager.GetCoordinatedStartPlayers(group);
         var selected = new List<Models.ControlRoomPlayer>();
         foreach (var uid in uids)
@@ -110,6 +112,8 @@ public sealed partial class RoomOperations
             var matches = players.Where(p => p.PlayerUid == uid && p.Online).ToArray();
             if (matches.Length != 1) throw new InvalidOperationException("batch_participant_unavailable_or_ambiguous:" + uid);
             var player = matches[0];
+            // Control connections belong to the assistant, whose hello version is not the BGI version.
+            if (quickCommandKey.Length == 0) _routePackagePolicy?.RequireVersion(player.BgiVersion);
             if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
                 throw new InvalidOperationException("hoeing_start_capability_required:" + uid);
             if (_capabilityLookup?.Supports(player.ConnectionId, GatewayProtocol.LocalFinishCapability) != true)

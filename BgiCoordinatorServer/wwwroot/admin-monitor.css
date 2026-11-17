@@ -41,6 +41,8 @@ small,.small,.label{font-size:12px}
 .brand-mark{color:var(--gold);font-size:32px;font-weight:400;line-height:1}
 .brand small,.sidebar .subtitle{display:block;color:var(--muted);font-size:12px;font-weight:400;letter-spacing:0}
 .navigation{display:grid;gap:8px}
+.navigation .monitor-route-link{display:flex;align-items:center;min-height:44px;padding:11px 13px;border:1px solid transparent;border-radius:9px;color:var(--muted);text-decoration:none}
+.navigation .monitor-route-link:hover{color:var(--gold);background:var(--raised);border-color:var(--line)}
 .navigation button{width:100%;text-align:left;background:transparent;border-color:transparent;padding:11px 13px;color:var(--muted)}
 .navigation button.active,.navigation button[aria-current=page],.navigation button[aria-pressed=true]{color:var(--gold);background:#35324a;border-color:#50475c}
 .sidebar-foot{margin-top:auto;color:var(--muted);font-size:12px;overflow-wrap:anywhere}

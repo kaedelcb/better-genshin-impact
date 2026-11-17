@@ -250,7 +250,7 @@ public partial class AutoHoeingConfig : ObservableObject
     private string _routeFilterKeywords = "";
 
     /// <summary>
-    /// 自动更新线路：执行联机锄地前自动调用一次「更新联机锄地线路」（AutoHoeingUpdater）。
+    /// 自动下载本轮官方整包。关闭时仍核验服务器 pin 和本地完整清单，缺包/损坏则明确失败。
     /// 默认 true（房主设置，同步给成员）。hoeing-autoupdate-routes spec。
     /// </summary>
     [ObservableProperty]

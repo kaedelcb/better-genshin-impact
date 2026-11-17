@@ -21,6 +21,7 @@ public sealed partial class RoomOperations
                     || !room.ExpectedParticipantUids.Order(StringComparer.Ordinal)
                         .SequenceEqual((config.ExpectedParticipantUids ?? []).Order(StringComparer.Ordinal)))
                     throw new InvalidOperationException("hoeing_start_config_identity_mismatch");
+                RequireRoomRoutePackage(room, proposedId: config.RoutePackageId);
                 config.ExpectedParticipantUids = room.ExpectedParticipantUids.ToList();
                 room.HostConfig = config;
             }
@@ -56,6 +57,7 @@ public sealed partial class RoomOperations
             // 两字段的写入对读侧表现为单一原子快照（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
             lock (room)
             {
+                RequireRoomRoutePackage(room);
                 room.HostRouteList = routeNames;
                 room.HostRouteListUploaded = true;
             }
@@ -72,7 +74,11 @@ public sealed partial class RoomOperations
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room != null && roomCode != null && room.HostConnectionId == ctx.ConnectionId)
         {
-            room.HostReady = true;
+            lock (room)
+            {
+                RequireRoomRoutePackage(room);
+                room.HostReady = true;
+            }
             _logger.LogInformation("房间 {Code} 房主已就绪", roomCode);
             ObservePhase(room, roomCode, "room.reportHostReady");
             await _broadcaster.BroadcastGroupAsync(roomCode, "HostReadyChanged", new { ready = true }, true);

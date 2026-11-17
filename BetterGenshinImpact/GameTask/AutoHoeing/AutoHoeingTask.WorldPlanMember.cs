@@ -18,11 +18,10 @@ public partial class AutoHoeingTask
         async Task ApplyConfigAsync(RoomConfig config)
         {
             RequireMatchingRoomBatch(config);
-            if (hostConfigApplied) return;
+            if (hostConfigApplied) { AdoptRoutePackagePin(config.RoutePackageId); return; }
             budget.CancelAfter(TimeSpan.FromSeconds(Math.Max(30, config.PartyTimeoutSeconds)));
-            var needsUpdate = config.AutoUpdateRoutes && !_config.AutoUpdateRoutes;
-            ApplyWorldHostConfig(config);
-            if (needsUpdate) await RunAutoUpdateRoutesAsync(operationToken: ct);
+            // 即使本机预取过 current，仍必须安装房主冻结的 pin；不能按本地开关跳过。
+            await ApplyPinnedHostConfigAsync(config, ct);
             ct.ThrowIfCancellationRequested();
             _firstHostConfig = config;
             hostConfigApplied = true;

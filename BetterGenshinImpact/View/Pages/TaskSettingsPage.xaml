@@ -7389,7 +7389,7 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <ui:Button Content="{Binding FolderName}"
+                                                <ui:Button Content="{Binding DisplayName}"
                                                           Margin="0,0,8,8"
                                                           Appearance="{Binding IsSelected, Converter={StaticResource BoolToButtonAppearanceConverter}}"
                                                           IsEnabled="{Binding IsEnabled}"

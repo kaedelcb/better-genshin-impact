@@ -249,19 +249,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
       - name: 🛠️ Build application
-        run: dotnet publish BetterGenshinImpact/BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile -p:Version=${{ needs.validate.outputs.version }}
+        run: dotnet publish BetterGenshinImpact/BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile -p:DeployToBgiTools=false -p:Version=${{ needs.validate.outputs.version }}
       - name: 🛠️ Build MultiplayerHoeingAssistant
-        run: dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Release
+        run: dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Release -p:DeployToBgiTools=false
       - name: 📦 Copy MultiplayerHoeingAssistant to Tools
         run: |
             $toolsDir = ".\dist\BetterGI\Tools\MultiplayerHoeingAssistant"
             New-Item -Path $toolsDir -ItemType Directory -Force
             Copy-Item ".\MultiplayerHoeingAssistant\bin\Release\net8.0-windows\*" -Destination $toolsDir -Recurse -Exclude "assistant-config.json"
-      - name: 📦 Copy AutoHoeingUpdater to Tools
-        run: |
-            $toolsDir = ".\dist\BetterGI\Tools\AutoHoeingUpdater"
-            New-Item -Path $toolsDir -ItemType Directory -Force
-            Copy-Item ".\AutoHoeingUpdater\*" -Destination $toolsDir -Recurse
       - name: 🧹 Clear & Move Files
         run: |
             $sourceDir = ".\BetterGenshinImpact\bin\x64\Release\net8.0-windows10.0.22621.0\publish\win-x64"
@@ -283,6 +278,17 @@ jobs:
         with:
           name: web_scripts_list
           path: dist/BetterGI/Assets/Web/ScriptRepo
+      # 官方联机线路由协调服务器分发；不能重新带入旧工具或同名兼容启动器。
+      - name: Verify native route package distribution
+        shell: pwsh
+        run: |
+          $retired = @(Get-ChildItem -LiteralPath "dist/BetterGI" -Recurse -Force | Where-Object {
+            $_.Name -ieq "AutoHoeingUpdater" -or $_.Name -ilike "AutoHoeingUpdater.*"
+          })
+          if ($retired.Count -gt 0) {
+            $retired.FullName | ForEach-Object { Write-Host $_ }
+            throw "发行包仍含已停用的第三方线路更新器，已停止打包；不得靠递归删除安装目录处理。"
+          }
       # 下载构建 repo 的内容补充数据
       - uses: actions/checkout@v4
         with:

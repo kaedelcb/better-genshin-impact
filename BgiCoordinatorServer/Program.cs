@@ -1,12 +1,18 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 using NexusBGI.Legal;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
+// 显式配置可为容器持久化或隔离验证指定 Cookie 密钥根；未配置保持既有行为。
+if (!string.IsNullOrWhiteSpace(builder.Configuration["ADMIN_MONITOR_KEY_ROOT"]))
+    builder.Services.AddDataProtection().PersistKeysToFileSystem(
+        new DirectoryInfo(Path.GetFullPath(builder.Configuration["ADMIN_MONITOR_KEY_ROOT"]!)));
 
 // 读取环境变量配置
 var maxRooms = int.TryParse(Environment.GetEnvironmentVariable("MAX_ROOMS"), out var mr) ? mr : 50;
@@ -17,6 +23,8 @@ var playerTimeoutSeconds = int.TryParse(
 var roomManager = new RoomManager(maxRooms);
 builder.Services.AddSingleton(roomManager);
 builder.Services.AddSingleton(new AdminMonitorAccess(builder.Configuration["ADMIN_MONITOR_PASSWORD"]));
+// Register the production policy even without a configured version/first package (fail closed for hoeing only).
+var routeForwarding = builder.Services.AddRoutePackageServices(builder.Configuration, builder.Environment);
 var roomLogRoot = builder.Configuration["ROOM_LOG_ROOT"];
 var resolvedRoomLogRoot = string.IsNullOrWhiteSpace(roomLogRoot)
     ? Path.Combine(builder.Environment.ContentRootPath, "data", "room-logs") : roomLogRoot;
@@ -67,6 +75,9 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0
         }));
+    options.AddPolicy("route-upload", context => RateLimitPartition.GetConcurrencyLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 }));
     options.RejectionStatusCode = 429;
 });
 builder.Services.AddHostedService<HeartbeatMonitor>();
@@ -99,6 +110,8 @@ var app = builder.Build();
 // 先接上房间生命周期观察，保证首个连接建房前即可保存历史关联。
 _ = app.Services.GetRequiredService<RoomLogContext>();
 
+if (routeForwarding) app.UseForwardedHeaders();
+app.UseRoutePackageBoundary();
 app.UseRouting();
 app.UseCors();
 app.UseRateLimiter();
@@ -111,7 +124,9 @@ app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value;
     if (string.Equals(path, "/admin-login.html", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(path, "/admin-monitor.html", StringComparison.OrdinalIgnoreCase))
+        string.Equals(path, "/admin-monitor.html", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(path, "/admin-routes.html", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(path, "/route-upload.html", StringComparison.OrdinalIgnoreCase))
     {
         context.Response.StatusCode = 404;
         return;
@@ -177,10 +192,11 @@ if (Directory.Exists(bgiUpdateRoot))
     });
 }
 
-// 映射 SignalR Hub：旧 /hub 不动（旧客户端零感知），新网关 /gateway（§4.8 URL 约定：配置只填基地址，SDK 内部拼路径）
+// 保留 /hub 与 /gateway 两个传输入口；锄地均由 RoomOperations 核验精确新版及线路 pin。
 app.MapHub<CoordinatorHub>("/hub");
 app.MapHub<GatewayHub>("/gateway");
 app.MapAdminMonitor(playerTimeoutSeconds);
+app.MapRoutePackages();
 
 // 健康检查移到 /health，避免与 UseDefaultFiles()（根路径服务 index.html）冲突
 app.MapGet("/health", () => Results.Ok(new { status = "BgiCoordinatorServer running", maxRooms, playerTimeoutSeconds }));

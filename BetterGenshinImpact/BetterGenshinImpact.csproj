@@ -29,6 +29,7 @@
 	</ItemGroup>-->
 
 	<ItemGroup>
+		<Compile Include="..\BgiCoordinatorServer\RoutePackages\*.cs" Link="GameTask\AutoHoeing\RoutePackages\%(Filename)%(Extension)" />
 		<Compile Include="..\Mistletoe.Shared\ContinuousCliCommandRelay.cs" Link="Shared\ContinuousCliCommandRelay.cs" />
 		<Compile Include="..\Mistletoe.Shared\CoordinatedStopSignal.cs" Link="Shared\CoordinatedStopSignal.cs" />
 		<Resource Include="Resources\Images\*.jpg" />
@@ -183,23 +184,6 @@
           SkipUnchangedFiles="true" />
     <NormalizeWindowsLauncherIntegrity Files="$(OutDir)Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe;$(OutDir)Tools\MultiplayerHoeingAssistant\NexusBGI.Startup.exe;$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\MultiplayerHoeingAssistant.exe;$(MSBuildProjectDirectory)\..\BetterGenshinImpact\bin\x64\$(Configuration)\net8.0-windows10.0.22621.0\Tools\MultiplayerHoeingAssistant\NexusBGI.Startup.exe" Condition="'$(OS)' == 'Windows_NT'" />
   </Target>
-
-	<!-- 编译后复制 AutoHoeingUpdater 工具到 BGI 输出目录下的 Tools\AutoHoeingUpdater 子目录（含空目录结构） -->
-	<Target Name="CopyAutoHoeingUpdater" AfterTargets="Build">
-		<Message Text="CopyAutoHoeingUpdater: 复制 AutoHoeingUpdater 到 $(OutDir)Tools\AutoHoeingUpdater" Importance="high" />
-		<ItemGroup>
-			<UpdaterOutput Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\**\*" />
-			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\01首次使用注意备份" />
-			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\02未选择仅下载会清空所有路线" />
-			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\03参考队伍与设置（截图）" />
-			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\04配置组添加自动脚本即实现自动更新" />
-			<UpdaterDirs Include="$(MSBuildProjectDirectory)\..\AutoHoeingUpdater\05自动更新脚本（自己修改路径）" />
-		</ItemGroup>
-		<MakeDir Directories="@(UpdaterDirs->'$(OutDir)Tools\AutoHoeingUpdater\%(Filename)%(Extension)')" />
-		<Copy SourceFiles="@(UpdaterOutput)"
-		      DestinationFiles="@(UpdaterOutput->'$(OutDir)Tools\AutoHoeingUpdater\%(RecursiveDir)%(Filename)%(Extension)')"
-		      SkipUnchangedFiles="true" />
-	</Target>
 
 	<ItemGroup>
 		<None Update="GameTask\**\Recognition.json">

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#141527"><meta name="referrer" content="no-referrer">
+  <title>联机锄地 · 提交线路草稿</title>
+  <link rel="stylesheet" href="/route-packages.css?v=20261117">
+  <script defer src="/route-packages-core.js?v=20261117"></script>
+  <script defer src="/route-packages-page.js?v=20261117"></script>
+</head>
+<body data-mode="uploader">
+<main class="uploader-workspace" id="main">
+  <header class="page-head"><div><h1>提交线路草稿</h1><p>仅提交线路，不能查看房间、日志、版本历史，也不能发布或回滚。</p></div><span class="brand-symbol" aria-hidden="true">◇</span></header>
+  <section class="upload-panel" aria-labelledby="uploadTitle">
+    <div class="section-heading"><h2 id="uploadTitle">选择并检查本机线路</h2><span class="tag">STORE ZIP · 未压缩</span></div>
+    <label for="uploadToken">专用上传令牌</label><input id="uploadToken" type="password" autocomplete="off" spellcheck="false" maxlength="512" aria-describedby="tokenHelp">
+    <p id="tokenHelp" class="help">由管理员单独提供，只用于创建草稿。令牌仅保留在本页内存，不保存到浏览器存储，不读取或发送管理员 Cookie。请勿填写管理员密码。</p>
+    <div class="upload-grid"><div>
+      <label for="folderInput">选择线路文件夹</label><input id="folderInput" type="file" webkitdirectory multiple aria-describedby="folderHelp">
+      <p id="folderHelp" class="help">根目录含线路 JSON 时映射为 builtin/所选根名/；否则保留子目录。也支持包含 builtin/、pathing/ 的标准目录。</p>
+      <label for="uploadDescription">版本说明</label><input id="uploadDescription" type="text" maxlength="500" placeholder="说明这次线路的变化" autocomplete="off">
+      <p class="help">仅允许线路 JSON、control.json5 和变体目录中的变体说明.txt（最多 16 KiB）。不要选择安装目录、User、账户配置或脚本目录。文件先留在本机，确认后只上传一个 ZIP，不逐文件上传。</p>
+    </div><div class="preview-box">
+      <h3>实际入包预览</h3><p id="folderSummary" class="muted">选择目录后显示将要上传的路径与大小。</p>
+      <label for="previewSearch">筛选入包路径</label><input id="previewSearch" type="search" placeholder="输入目录或文件名" disabled>
+      <ul id="folderPreview" class="file-list" aria-label="实际入包路径"></ul><button id="morePreview" type="button" class="quiet" hidden>显示更多文件</button>
+    </div></div>
+    <label class="check-line"><input id="privacyConfirm" type="checkbox"><span>我已检查入包预览，确认没有账户、配置或隐私文件；了解草稿仍需管理员校验和发布。</span></label>
+    <div class="actions"><button id="packButton" class="primary" type="button" disabled>校验并本机打包</button><button id="uploadButton" class="primary" type="button" disabled>上传为草稿</button><button id="cancelUpload" type="button" hidden>取消</button><button id="clearFolder" class="quiet" type="button">清除本机选择</button></div>
+    <progress id="uploadProgress" aria-label="本机打包或上传进度" hidden max="100"></progress><p id="uploadStatus" class="status" role="status" aria-live="polite">尚未选择文件夹。ZIP 最大 128 MiB，单文件最大 16 MiB，最多 10000 个文件。</p><div id="uploadResult" class="result" hidden></div>
+  </section>
+  <p class="help">本机只做路径与线路基本检查；服务端会重新计算完整清单与散列，校验控制合并、变体和引用。校验通过不代表游戏内实跑通过。</p>
+</main>
+</body></html>

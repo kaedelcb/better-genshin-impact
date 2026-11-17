@@ -25,6 +25,7 @@ public sealed partial class RoomOperations
     private readonly RoomLogContext? _roomLogContext;
     private readonly RoomHoeingHistory? _hoeingHistory;
     private readonly TimeProvider _worldPlanTime;
+    private readonly RoutePackagePolicy? _routePackagePolicy;
 
     /// <summary>客户端能力查询（route-anchor 门控用）。为 null 时按"不支持"处理：
     /// 宁可拒绝激活，也不允许"忘记接线导致静默半启用"。</summary>
@@ -39,8 +40,10 @@ public sealed partial class RoomOperations
         RoomLogContext? roomLogContext = null,
         RoomHoeingHistory? hoeingHistory = null,
         TimeProvider? worldPlanTimeProvider = null,
-        TimeProvider? screenshotTimeProvider = null)
+        TimeProvider? screenshotTimeProvider = null,
+        RoutePackagePolicy? routePackagePolicy = null)
     {
+        _routePackagePolicy = routePackagePolicy;
         _roomManager = roomManager;
         _logger = logger;
         _broadcaster = broadcaster;

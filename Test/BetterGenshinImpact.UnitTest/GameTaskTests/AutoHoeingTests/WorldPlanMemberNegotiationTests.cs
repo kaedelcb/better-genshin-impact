@@ -11,6 +11,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 [Collection("WorldPlanStartupState")]
 public sealed class WorldPlanMemberNegotiationTests
 {
+    private const string TestPin = "11111111111111111111111111111111";
     static WorldPlanMemberNegotiationTests()
     {
         var config = typeof(BetterGenshinImpact.Service.ConfigService).GetField(
@@ -139,7 +140,7 @@ public sealed class WorldPlanMemberNegotiationTests
                     configs++;
                     payload = legacyDisabledConfig
                         ? new { config = new { multiWorldEnabled = true, multiWorldResumeEnabled = false,
-                            autoUpdateRoutes = false, partyTimeoutSeconds = 30 } }
+                            autoUpdateRoutes = false, partyTimeoutSeconds = 30, routePackageId = TestPin } }
                         : new { config = (RoomConfig?)null };
                     break;
                 case GatewayProtocol.Names.RoomGetState:
@@ -284,10 +285,11 @@ public sealed class WorldPlanMemberNegotiationTests
         using var budget = new CancellationTokenSource();
         var task = CreateTask();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        task.UpdateHoeingRoutes = async (_, token) =>
+        task.UpdateHoeingRoutes = async (_, _, token) =>
         {
             started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return TestPin;
         };
         await using var client = await Member();
         var config = Plan("Planning").HostConfig!;
@@ -315,6 +317,12 @@ public sealed class WorldPlanMemberNegotiationTests
             AutoUpdateRoutes = false
         });
         Set(task, "_ct", cancellation);
+        task.UpdateHoeingRoutes = (pin, _, token) =>
+        {
+            token.ThrowIfCancellationRequested();
+            Assert.True(pin == null || pin == TestPin);
+            return Task.FromResult(TestPin);
+        };
         return task;
     }
 
@@ -327,6 +335,7 @@ public sealed class WorldPlanMemberNegotiationTests
         HostConfig = new RoomConfig
         {
             MultiWorldEnabled = true, MultiWorldCount = 1,
+            RoutePackageId = TestPin,
             PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
         }
     };

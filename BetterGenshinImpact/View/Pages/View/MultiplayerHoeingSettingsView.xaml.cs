@@ -59,7 +59,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
     private System.Windows.Controls.StackPanel? _importRow;
     private System.Windows.Controls.Panel? _builtinButtonPanel;
 
-    private readonly RouteDirectoryScanner _routeScanner = new();
+    private RouteDirectoryScanner _routeScanner => new(ViewModel.MultiplayerEnabled);
     private readonly ILogger<MultiplayerHoeingSettingsView> _logger = App.GetLogger<MultiplayerHoeingSettingsView>();
 
     public MultiplayerHoeingSettingsViewModel ViewModel { get; }
@@ -121,6 +121,14 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (!_remoteMode && e.PropertyName == nameof(ViewModel.MultiplayerEnabled))
+        {
+            RebuildBuiltinButtons();
+            BuildMemberRouteRolesHost();
+            _refreshVariantPanel?.Invoke();
+        }
+        if (!_remoteMode && e.PropertyName == nameof(ViewModel.FixedDebugRoutePath))
+            _refreshVariantPanel?.Invoke();
         // 等价现状 routeModeCombo.SelectionChanged + fixedRoutePathBox.TextChanged → UpdateButtonStates
         if (e.PropertyName is nameof(ViewModel.BuiltinButtonsEnabled)
             or nameof(ViewModel.RouteModeSelection) or nameof(ViewModel.FixedDebugRoutePath))
@@ -436,7 +444,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
         var openAssetsDirBtn = new System.Windows.Controls.Button
         {
-            Content = "内置目录",
+            Content = "打开线路来源目录",
             Margin = new Thickness(8, 8, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Left
         };
@@ -444,8 +452,18 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         {
             try
             {
-                var assetsDir = System.IO.Path.Combine(Global.Absolute("GameTask"), "AutoHoeing", "Assets");
-                System.IO.Directory.CreateDirectory(assetsDir);   // 目录不存在时创建（不删除任何内容）
+                var selected = GetStr("selectedBuiltinRoute", _globalCfg.SelectedBuiltinRoute);
+                var assetsDir = string.IsNullOrWhiteSpace(ViewModel.FixedDebugRoutePath)
+                    ? System.IO.Path.GetDirectoryName(AutoHoeingRoutePaths.ResolveSelection(selected, ViewModel.MultiplayerEnabled))!
+                    : ViewModel.FixedDebugRoutePath;
+                if (!System.IO.Directory.Exists(assetsDir))
+                {
+                    Toast.Warning(ViewModel.MultiplayerEnabled && !AutoHoeingRoutePaths.IsLocalSelection(selected)
+                        && string.IsNullOrWhiteSpace(ViewModel.FixedDebugRoutePath)
+                        ? "官方线路尚未安装，请先执行“更新联机锄地线路”；不会回退旧目录"
+                        : "所选本地线路目录不存在，请核对路径或重新导入");
+                    return;
+                }
                 Process.Start(new ProcessStartInfo(assetsDir) { UseShellExecute = true });
             }
             catch (Exception ex)
@@ -482,7 +500,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         {
             _builtinRouteContainer.Children.Add(new TextBlock
             {
-                Text = "内置线路快速选择",
+                Text = "线路快速选择（已标明来源）",
                 FontSize = 12,
                 Foreground = SystemColors.GrayTextBrush,
                 Margin = new Thickness(0, 8, 0, 4)
@@ -504,7 +522,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
                 var btn = new System.Windows.Controls.Button
                 {
-                    Content = folder.FolderName,
+                    Content = folder.DisplayName,
                     Margin = new Thickness(0, 0, 8, 0),
                     Tag = folder.FolderName
                 };
@@ -533,6 +551,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
                     btn.Background = SystemColors.HighlightBrush;
                     btn.Foreground = SystemColors.HighlightTextBrush;
                     _settings["selectedBuiltinRoute"] = btn.Tag.ToString();
+                    _refreshVariantPanel?.Invoke();
                 };
 
                 row.Children.Add(btn);
@@ -628,7 +647,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
                 return;
             }
 
-            var assetsDir = System.IO.Path.Combine(Global.Absolute("GameTask"), "AutoHoeing", "Assets");
+            var assetsDir = AutoHoeingRoutePaths.LocalRoot;
             var targetName = LocalRouteFolderImporter.ResolveTargetName(sourcePath);
             if (string.IsNullOrWhiteSpace(targetName))
             {
@@ -637,15 +656,16 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             }
             var targetPath = System.IO.Path.Combine(assetsDir, targetName);
 
-            // 源已在 Assets 内 → 跳过拷贝直接选中（Req 3.5）
+            // 只有源就是独立本地根中的目标目录时才跳过拷贝；官方 current 从不作为导入目标。
             bool copied = false;
-            if (!LocalRouteFolderImporter.IsInsideAssets(sourcePath, assetsDir))
+            if (!string.Equals(System.IO.Path.GetFullPath(sourcePath).TrimEnd('\\', '/'),
+                System.IO.Path.GetFullPath(targetPath).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
             {
                 // 重名确认（OQ-2 / Req 4.1）
                 if (LocalRouteFolderImporter.NeedsOverwriteConfirm(System.IO.Directory.Exists(targetPath)))
                 {
                     var r = ThemedMessageBox.Question(
-                        $"内置线路目录已存在同名文件夹「{targetName}」。\n是否覆盖其中的同名文件？（不会删除目标目录的其他文件）",
+                        $"本地导入目录已存在同名文件夹「{targetName}」。\n是否覆盖其中的同名文件？（不会删除目标目录的其他文件）",
                         "导入线路 - 重名确认",
                         MessageBoxButton.YesNo,
                         System.Windows.MessageBoxResult.No);
@@ -660,8 +680,8 @@ public partial class MultiplayerHoeingSettingsView : UserControl
                 catch (UnauthorizedAccessException ex)
                 {
                     // 无权限写入：记录并提示，不崩溃、不改选中（Req 6.3 / 6.4）
-                    _logger.LogWarning(ex, "[导入线路] 无权限拷贝到内置线路目录: {Target}", targetPath);
-                    Toast.Error("导入失败：无权限写入内置线路目录");
+                    _logger.LogWarning(ex, "[导入线路] 无权限拷贝到本地导入目录: {Target}", targetPath);
+                    Toast.Error("导入失败：无权限写入本地导入目录");
                     return;
                 }
                 catch (IOException ex)
@@ -674,14 +694,14 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             }
 
             // 成功：写选中 → 重建按钮组（高亮新文件夹）（Req 5.1/5.2/5.3）
-            _settings["selectedBuiltinRoute"] = targetName;
+            _settings["selectedBuiltinRoute"] = "local/" + targetName;
             RebuildBuiltinButtons();
 
             // 刷新变体偏好面板（仅当已展开，OQ-5）
             _refreshVariantPanel?.Invoke();
 
             // 成功提示 + 联机一致性前提 A2（Req 7.1 / 7.2）
-            Toast.Success(copied ? $"已导入线路「{targetName}」并设为当前内置线路" : $"已选中内置线路「{targetName}」");
+            Toast.Success(copied ? $"已导入并选中本地线路「{targetName}」" : $"已选中本地线路「{targetName}」");
             Toast.Information("提示：联机仅同步文件夹名并做 MD5 校验，不传输线路文件。请确保每位成员各自拥有同名、同内容的线路文件夹。", time: 6000);
         }
         catch (Exception ex)
@@ -814,7 +834,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         {
             panel.Children.Add(new TextBlock
             {
-                Text = "未发现内置线路文件夹",
+                Text = "未发现可用的官方或本地线路文件夹",
                 Foreground = SystemColors.GrayTextBrush,
                 Margin = new Thickness(0, 4, 0, 0)
             });
@@ -832,7 +852,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
 
             var nameText = new TextBlock
             {
-                Text = folder.FolderName,
+                Text = folder.DisplayName,
                 VerticalAlignment = VerticalAlignment.Center,
                 MinWidth = 220,
                 Margin = new Thickness(0, 0, 8, 0)
@@ -1170,7 +1190,12 @@ public partial class MultiplayerHoeingSettingsView : UserControl
         {
             var globalCfg = _globalCfg;
             var dirs = BetterGenshinImpact.GameTask.AutoHoeing.AutoHoeingTask
-                .ResolveAllHoeingRouteDirs(globalCfg);
+                .ResolveAllHoeingRouteDirs(new AutoHoeingConfig
+                {
+                    MultiplayerEnabled = ViewModel.MultiplayerEnabled,
+                    FixedDebugRoutePath = ViewModel.FixedDebugRoutePath,
+                    SelectedBuiltinRoute = GetStr("selectedBuiltinRoute", globalCfg.SelectedBuiltinRoute)
+                });
             // 按"总文件夹"分组：每个总文件夹 → 其下存在的变体子文件夹集合（A→B→C→D）
             var topFolders = BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.RouteVariantScanner
                 .ScanTopFolders(dirs, forceRefresh: true);

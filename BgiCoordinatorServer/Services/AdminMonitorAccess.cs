@@ -59,7 +59,8 @@ public static class AdminMonitorRoutes
 
             var identity = new ClaimsIdentity(
                 [new Claim(ClaimTypes.NameIdentifier, "local-admin"),
-                 new Claim(AdminMonitorAccess.RevisionClaim, access.Revision)],
+                 new Claim(AdminMonitorAccess.RevisionClaim, access.Revision),
+                 new Claim(RoutePackageAccess.SessionClaim, Guid.NewGuid().ToString("N"))],
                 CookieAuthenticationDefaults.AuthenticationScheme);
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(identity),

@@ -79,6 +79,25 @@ else
   echo "==> [提示] 未提供管理员密码；监控页保持关闭。"
 fi
 
+# 非秘密线路配置和上传 token 仅在显式部署时沿用，避免重建容器意外清空门槛/撤销上传凭据。
+# 不输出配置值；调用方显式设置（含空串）优先，便于撤销 token/关闭准入。
+existing_route_container="$(docker compose ps -a -q coordinator 2>/dev/null | head -n 1 || true)"
+if [ -n "$existing_route_container" ]; then
+  for key in HOEING_REQUIRED_CLIENT_VERSION ROUTE_UPLOAD_TOKEN ROUTE_PACKAGE_MAX_BYTES ROUTE_TRUSTED_PROXY_IPS; do
+    if [ "${!key+x}" != x ]; then
+      # Compose 的显式 .env（含空串撤销）优先于容器旧值，不 source/执行该文件。
+      if [ -n "${COMPOSE_ENV_FILES:-}" ] || { [ -f .env ] && grep -Eq "^[[:space:]]*(export[[:space:]]+)?${key}[[:space:]]*[:=]" .env; }; then
+        continue
+      fi
+      value="$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$existing_route_container" 2>/dev/null | sed -n "s/^${key}=//p" | head -n 1 || true)"
+      if [ -n "$value" ]; then
+        printf -v "$key" '%s' "$value"
+        export "$key"
+      fi
+    fi
+  done
+fi
+
 # 首次运行时自动生成 override 文件（覆盖宿主机端口为 8080，避免 80 占用冲突）
 # 使用 !override 标签强制替换（不是追加）主 compose 文件的 ports 列表，
 # 否则 docker compose 默认会把两边的 ports 合并，仍会尝试绑定 80。

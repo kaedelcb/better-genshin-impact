@@ -7,16 +7,25 @@ using System.IO;
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Services;
 
 /// <summary>
-/// 内置线路目录扫描服务，负责扫描和验证 Assets 目录下的线路文件夹
+/// 线路来源扫描服务，分别标识受管官方、独立本地导入及旧本地目录。
 /// </summary>
 public class RouteDirectoryScanner
 {
     private static readonly ILogger Logger = App.GetLogger<RouteDirectoryScanner>();
     private readonly string _assetsPath;
+    private readonly bool _multiplayer;
+    private readonly string _localRoot;
+    private readonly string _legacyRoot;
 
-    public RouteDirectoryScanner()
+    public RouteDirectoryScanner(bool multiplayer = true)
+        : this(AutoHoeingRoutePaths.BuiltinRoot, AutoHoeingRoutePaths.LocalRoot, AutoHoeingRoutePaths.LegacyLocalRoot, multiplayer) { }
+
+    internal RouteDirectoryScanner(string builtinRoot, string localRoot, string legacyRoot, bool multiplayer = true)
     {
-        _assetsPath = Path.Combine(Global.Absolute("GameTask"), "AutoHoeing", "Assets");
+        _multiplayer = multiplayer;
+        _localRoot = localRoot;
+        _legacyRoot = legacyRoot;
+        _assetsPath = multiplayer ? builtinRoot : legacyRoot;
     }
 
     /// <summary>
@@ -27,70 +36,36 @@ public class RouteDirectoryScanner
     {
         var folders = new List<BuiltinRouteFolder>();
 
-        if (!Directory.Exists(_assetsPath))
+        // 官方与用户线路使用不同根和持久化标识，缺官方包时仍允许明确选择本地线路。
+        var roots = new[]
         {
-            Logger.LogWarning("[内置线路扫描] Assets 目录不存在: {Path}", _assetsPath);
-            return folders;
-        }
-
-        try
+            (_assetsPath, "", _multiplayer ? "官方" : "本地旧目录"),
+            (_localRoot, "local/", "本地导入"),
+            (_multiplayer ? _legacyRoot : "", "legacy-local/", "本地旧目录")
+        };
+        foreach (var (root, prefix, source) in roots)
         {
-            // 首先添加 DebugRoutes 作为默认选项（如果存在）
-            var debugRoutesPath = Path.Combine(_assetsPath, "DebugRoutes");
-            if (Directory.Exists(debugRoutesPath))
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) continue;
+            try
             {
-                var debugRouteFiles = Directory.GetFiles(debugRoutesPath, "*.json");
-                if (debugRouteFiles.Length > 0)
+                // 递归识别纯变体目录；目录名 DebugRoutes 不再因无顶层 JSON 被漏扫。
+                foreach (var dir in Directory.GetDirectories(root))
                 {
+                    var count = Directory.GetFiles(dir, "*.json", SearchOption.AllDirectories).Length;
+                    if (count == 0) continue;
                     folders.Add(new BuiltinRouteFolder
                     {
-                        FolderName = "DebugRoutes",
-                        FullPath = debugRoutesPath,
-                        RouteCount = debugRouteFiles.Length
+                        FolderName = prefix + Path.GetFileName(dir), FullPath = dir, RouteCount = count,
+                        DisplayName = $"[{source}] {Path.GetFileName(dir)}"
                     });
-                    Logger.LogInformation("[内置线路扫描] 添加默认 DebugRoutes 目录，包含 {Count} 个路线文件", debugRouteFiles.Length);
                 }
             }
-
-            // 然后扫描其他子目录
-            var subdirs = Directory.GetDirectories(_assetsPath);
-            foreach (var dir in subdirs)
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
             {
-                var folderName = Path.GetFileName(dir);
-
-                // 跳过已经添加的 DebugRoutes 目录
-                if (folderName.Equals("DebugRoutes", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                // hoeing-variant-route-empty-json-crash-and-discovery-fix / EB-B：
-                // 递归统计（含变体子文件夹 A变体/B变体/... 内的 JSON），
-                // 使"只含变体子文件夹、无顶层 JSON"的纯变体目录也被识别为有效目录，
-                // 用户无需再往顶层放占位 JSON。真正的空目录（递归也无 JSON）仍跳过。
-                var routeFiles = Directory.GetFiles(dir, "*.json", SearchOption.AllDirectories);
-                if (routeFiles.Length == 0)
-                {
-                    Logger.LogDebug("[内置线路扫描] 跳过空文件夹: {Folder}", folderName);
-                    continue;
-                }
-
-                folders.Add(new BuiltinRouteFolder
-                {
-                    FolderName = folderName,
-                    FullPath = dir,
-                    RouteCount = routeFiles.Length
-                });
+                Logger.LogError(ex, "[线路扫描] 读取目录失败: {Path}", root);
             }
-
-            Logger.LogInformation("[内置线路扫描] 发现 {Count} 个有效线路文件夹", folders.Count);
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            Logger.LogError(ex, "[内置线路扫描] 无权限访问目录: {Path}", _assetsPath);
-        }
-        catch (IOException ex)
-        {
-            Logger.LogError(ex, "[内置线路扫描] 读取目录时发生 IO 错误: {Path}", _assetsPath);
-        }
+        folders.Sort((left, right) => string.Compare(left.FolderName, right.FolderName, StringComparison.Ordinal));
 
         return folders;
     }
@@ -151,6 +126,8 @@ public class BuiltinRouteFolder
     /// 文件夹名称（用作显示和标识）
     /// </summary>
     public string FolderName { get; set; } = "";
+
+    public string DisplayName { get; set; } = "";
 
     /// <summary>
     /// 文件夹完整路径

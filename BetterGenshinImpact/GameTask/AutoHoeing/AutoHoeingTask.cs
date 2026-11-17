@@ -597,7 +597,8 @@ public partial class AutoHoeingTask : ISoloTask
 
         // 缺必要资源必须失败；用户停止或失去执行归属优先于资源判断。
         HoeingMissingResourceBoundary.RequireScriptDirectory(_dataDir, ct,
-            static () => BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.ThrowIfStopped());
+            static () => BetterGenshinImpact.Service.Execution.ExecutionScope.Current?.ThrowIfStopped(),
+            requirePathing: !_config.MultiplayerEnabled);
 
         if (!string.IsNullOrEmpty(_groupName))
         {
@@ -616,10 +617,12 @@ public partial class AutoHoeingTask : ISoloTask
             // 详见 .kiro/specs/combat-scenes-recognition-stability-buffer/design.md §2.3
             BetterGenshinImpact.GameTask.AutoFight.AutoFightTask.ResetRecognitionStabilityBuffer();
 
-            // 自动更新线路：如果启用了 AutoUpdateRoutes，在开始执行前先调用一次更新联机锄地线路
-            if (_config.MultiplayerEnabled && _config.AutoUpdateRoutes)
+            // 在任何选线/世界预判前准备官方包。房主锁定 current，成员预取不构成 pin。
+            // 租约贯穿任务；另一 BGI/独立更新任务不得替换正在执行的 current。
+            if (_config.MultiplayerEnabled)
             {
-                await RunAutoUpdateRoutesAsync();
+                if (_config.MultiplayerRole != "member" || _config.AutoUpdateRoutes || _routePackageId.Length > 0)
+                    await RunAutoUpdateRoutesAsync(pinResult: _config.MultiplayerRole != "member" || _routePackageId.Length > 0);
             }
 
             await RunTask();
@@ -642,6 +645,16 @@ public partial class AutoHoeingTask : ISoloTask
                 try { await _coordinatorClientRef!.AbortWorldPlanAsync(_worldPlanAdmission, planCleanup.Token); }
                 catch (Exception ex) { _logger.LogDebug(ex, "[续开重跑] 终止原计划上报失败"); }
             }
+
+            // 所有线路读取/执行都已停止，才允许其它进程更新整包。
+            await _routePackagePreparation.WaitAsync();
+            try
+            {
+                _routePackageTaskEnded = true;
+                if (_routePackageLease != null) await _routePackageLease.DisposeAsync();
+                _routePackageLease = null;
+            }
+            finally { _routePackagePreparation.Release(); }
 
             // 清除全局联机锄地进度信号
             AutoHoeingProgress.Clear();
@@ -805,13 +818,6 @@ public partial class AutoHoeingTask : ISoloTask
             }
         }
 
-        // 更新器是否仍在写线路不明时，禁止守护重开或把本次执行当成功。
-        if (_routeUpdateCleanupFailure != null)
-        {
-            ct.ThrowIfCancellationRequested();
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(_routeUpdateCleanupFailure).Throw();
-        }
-
         // 团队批次保留原 Incomplete 路径；单机只对明确缺资源异常补齐失败传播。
         if (!teamManaged)
             HoeingMissingResourceBoundary.RethrowAfterCleanup(executionFailure, ct,
@@ -871,10 +877,7 @@ public partial class AutoHoeingTask : ISoloTask
                 }
                 catch { /* toast 失败不影响重开 */ }
 
-                var restart = new AutoHoeingTask(_partyConfig, _settingsOverride, _groupName)
-                {
-                    _isGuardRestartRun = true
-                };
+                var restart = CreateGuardRestartTask();
                 await restart.Start(ct);   // 复用原始外部 ct；重开的运行 isGuardRestartRun=true → 结束时不再重开（R3）
                 executionFailure = null; // 有限重开已经实际成功，原启动失败已恢复。
             }
@@ -1133,6 +1136,9 @@ public partial class AutoHoeingTask : ISoloTask
             // 配置同步：房主上传，成员拉取
             if (isHost)
             {
+                // 不能依赖调用入口碰巧已经预更新；第一次 SetRoomConfig 前必须确定本轮 pin。
+                if (_confirmedRoutePackageId.Length == 0 || _confirmedRoutePackageId != _routePackageId)
+                    await RunAutoUpdateRoutesAsync();
                 var roomConfig = new Multiplayer.Models.RoomConfig
                 {
                     HoeingBatchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId,
@@ -1181,6 +1187,7 @@ public partial class AutoHoeingTask : ISoloTask
                     GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
                     // === 自动更新线路上传（hoeing-autoupdate-routes）===
                     AutoUpdateRoutes = _config.AutoUpdateRoutes,
+                    RoutePackageId = _routePackageId,
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
                     // 上传源统一取房主当前配置组 _partyConfig（房主锄地实际生效实例，OQ-1）；
                     // _partyConfig 为 null 时退回全局 AutoFightConfig（AutoFight 类）或字段默认。
@@ -1226,7 +1233,7 @@ public partial class AutoHoeingTask : ISoloTask
                 }
                 
                 // 多世界模式下配置上传失败是严重错误，必须终止
-                if (!uploadSuccess && (_config.MultiWorldEnabled || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive))
+                if (!uploadSuccess)
                 {
                     _logger.LogError("[联机] 多世界模式：房主配置上传失败，终止多世界模式");
                     MarkPartyFailed("房主配置上传失败");
@@ -1647,7 +1654,7 @@ public partial class AutoHoeingTask : ISoloTask
                     if (hostConfig != null)
                     {
                         RequireMatchingRoomBatch(hostConfig);
-                        ApplyWorldHostConfig(hostConfig);
+                        await ApplyPinnedHostConfigAsync(hostConfig, _ct);
 
                         // 多世界模式：保存第一任房主的配置
                         if (_config.MultiWorldEnabled)
@@ -1671,7 +1678,7 @@ public partial class AutoHoeingTask : ISoloTask
                             MarkPartyFailed("无法获取房主配置");
                             return;
                         }
-                        _logger.LogWarning("[联机] 无法获取房主配置，使用本地配置");
+                        throw new HoeingStartupException("线路整包身份", "无法获取房主配置，不允许使用本地配置代替本轮 pin");
                     }
 
                     // 加入世界前先确认自己在房间花名册，掉了就用房间码重新加入（网络抖动容错）
@@ -1743,7 +1750,7 @@ public partial class AutoHoeingTask : ISoloTask
         }
         catch (Exception ex)
         {
-            if (ex is RouteUpdateProcessCleanupException) throw;
+            if (ex is HoeingStartupException) throw;
             _logger.LogError(ex, "[联机] 初始化失败");
             if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
             // 手动停止（OperationCanceledException）不标记组队失败——Start 尾部 userCancelled 会兜底不重开。
@@ -2036,7 +2043,8 @@ public partial class AutoHoeingTask : ISoloTask
 
         // 3. 加载怪物信息
         var monsterInfoPath = Path.Combine(_dataDir, "assets", "monsterInfo.json");
-        _monsterRepo.Load(monsterInfoPath);
+        // 联机的实际房主配置尚未同步：固定线路不依赖怪物表，普通选线在准备时严格要求。
+        if (!_config.MultiplayerEnabled) _monsterRepo.Load(monsterInfoPath);
 
         // 3.5 初始化并发服务
         var assetsDir = Path.Combine(_dataDir, "assets");
@@ -2740,7 +2748,9 @@ public partial class AutoHoeingTask : ISoloTask
                     _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
                     // === 自动更新线路同步（hoeing-autoupdate-routes，多世界轮换块，成员回填房主下发值）===
                     _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
-                        _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
+                    AdoptRoutePackagePin(hostConfig.RoutePackageId);
+                    await RunAutoUpdateRoutesAsync();
+                    _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
 
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2，多世界轮换块，R6）===
                     ApplyHostExecParams(hostConfig);
@@ -3506,7 +3516,7 @@ public partial class AutoHoeingTask : ISoloTask
                     _logger.LogDebug("[联机] 第一处映射命中 {Found}/{Host} 条，进入兜底重载",
                         found.Count, hostRouteNames.Count);
 
-                    var pathingDir = Path.Combine(_dataDir, "pathing");
+                    var pathingDir = PathingDirectory;
                     var allRoutes = RouteInfoLoader.LoadRoutes(pathingDir, _monsterRepo, _config.IgnoreRate, new List<string>());
 
                     // 兜底重载按变体「代表」(A→B→C→D) 收敛到单一文件，
@@ -3600,7 +3610,10 @@ public partial class AutoHoeingTask : ISoloTask
                     if (verified == false)
                     {
                         _logger.LogError("[联机] 路线一致性验证失败，两端路线不一致，尝试更新线路后重试...");
-                        await RunAutoUpdateRoutesAsync(waitMs: 5000);
+                        if (!string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath) || AutoHoeingRoutePaths.IsLocalSelection(_config.SelectedBuiltinRoute))
+                            throw new HoeingStartupException("路线一致性", "本地/自定义线路不一致，请核对各成员本地文件；不会覆盖本地目录");
+                        await RunAutoUpdateRoutesAsync(forceRepair: true);
+                        groupRoutes = ReloadPinnedRoutes(routes, groupRoutes);
                         _logger.LogInformation("[联机] 线路已更新，重新进行路线一致性验证...");
                         using var retryVerifyCts = CancellationTokenSource.CreateLinkedTokenSource(_ct);
                         retryVerifyCts.CancelAfter(TimeSpan.FromSeconds(120));
@@ -3730,6 +3743,9 @@ public partial class AutoHoeingTask : ISoloTask
             _logger.LogWarning("路径组{G} 没有可执行的路线（可能全部在CD中或未选中），跳过", targetGroup);
             return;
         }
+
+        // 从此刻起包括异步成员配置在内，所有安装调用都不得再替换本轮目录。
+        if (_config.MultiplayerEnabled) await SealRoutePackageForExecutionAsync(_ct);
 
         // 计算组内总计信息
         var totalElites = groupRoutes.Sum(r => r.EliteMonsterCount);
@@ -4719,123 +4735,130 @@ public partial class AutoHoeingTask : ISoloTask
     }
 
     /// <summary>
-    /// route-variant-sync-by-logical-id spec：解析锄地线路"所有可能的来源目录"。
-    /// 供 UI 变体偏好面板扫描用——用户可能用普通模式或固定调试线路模式，
-    /// 这里返回所有候选目录（存在的），UI 全部扫一遍合并，避免漏掉用户实际放变体的目录。
-    /// 与 LoadRoutesBasedOnConfig 的三级优先级目录保持一致。
+    /// 准备/核验本轮整包；关闭自动更新只禁止下载安装，不允许绕过 pin 和本地清单核验。
     /// </summary>
-    /// <summary>
-    /// route-variant-sync-by-logical-id spec：解析锄地线路"所有可能的来源目录"。
-    /// 供 UI 变体偏好面板扫描用——用户可能用普通模式或固定调试线路模式，
-    /// 这里返回所有候选目录（存在的），UI 全部扫一遍合并，避免漏掉用户实际放变体的目录。
-    /// 与 LoadRoutesBasedOnConfig 的三级优先级目录保持一致，并额外纳入整个 Assets 根目录
-    /// （递归扫描所有内置线路子目录，不依赖 SelectedBuiltinRoute 当前值）。
-    /// </summary>
-    /// <summary>
-    /// 执行"更新联机锄地线路"（AutoHoeingUpdater）。
-    /// 如果 waitMs > 0，则在更新完成后额外等待指定毫秒数（用于校验失败重试时等待更新落盘生效）。
-    /// 更新失败不影响调用方继续执行（仅记日志）。
-    /// </summary>
-    private async Task RunAutoUpdateRoutesAsync(int waitMs = 0, CancellationToken? operationToken = null)
+    private async Task RunAutoUpdateRoutesAsync(CancellationToken? operationToken = null, bool forceRepair = false, bool pinResult = true)
     {
         var token = operationToken ?? _ct;
-        _logger.LogInformation("[自动更新线路] 开始执行更新联机锄地线路...");
+        await _routePackagePreparation.WaitAsync(token);
         try
         {
-            _worldRoutesUpdateSucceeded = false;
-            await UpdateHoeingRoutes(AppContext.BaseDirectory, token);
-            _worldRoutesUpdateSucceeded = true;
-            _logger.LogInformation("[自动更新线路] 更新完成");
-            if (waitMs > 0)
+            token.ThrowIfCancellationRequested();
+            if (_routePackageTaskEnded) throw new InvalidOperationException("线路任务已经结束");
+            var pin = string.IsNullOrEmpty(_routePackageId) ? null : _routePackageId;
+            if (_routePackageExecutionStarted)
             {
-                _logger.LogInformation("[自动更新线路] 等待 {WaitMs}ms 让更新落盘生效...", waitMs);
-                await Task.Delay(waitMs, token);
+                if (forceRepair || pin == null || _confirmedRoutePackageId != pin)
+                    throw new InvalidOperationException("线路已经执行，不能重新安装或改变本轮线路包");
+                return; // 同轮异步配置只能确认已冻结身份，不能触发下载/恢复/目录替换。
             }
-        }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
-        {
             _worldRoutesUpdateSucceeded = false;
-            throw;
+            string installed;
+            if (UpdateHoeingRoutes != null)
+                installed = await UpdateHoeingRoutes(pin, forceRepair, token);
+            else
+            {
+                _routePackageUpdater ??= AutoHoeingRouteUpdateTask.CreateUpdater();
+                _routePackageLease ??= _routePackageUpdater.AcquireLease();
+                installed = await _routePackageUpdater.EnsureAsync(_config.CoordinatorServerUrl, pin, token,
+                    forceRepair, _routePackageLease, allowInstall: _config.AutoUpdateRoutes);
+            }
+            token.ThrowIfCancellationRequested();
+            if (!NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(installed) || (pin != null && installed != pin))
+                throw new InvalidDataException("安装器未确认房主锁定的线路包");
+            if (pinResult) AdoptRoutePackagePin(installed);
+            _confirmedRoutePackageId = installed;
+            _worldRoutesUpdateSucceeded = true;
+            _logger.LogInformation("[线路整包] 已校验完整清单，包 {Package}", installed);
         }
-        catch (RouteUpdateProcessCleanupException failure)
-        {
-            _routeUpdateCleanupFailure = failure;
-            _worldRoutesUpdateSucceeded = false;
-            throw;
-        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            _worldRoutesUpdateSucceeded = false;
-            _logger.LogWarning(ex, "[自动更新线路] 更新失败（不影响后续任务继续执行）");
+            throw new HoeingStartupException("线路整包更新", "未确认目标整包安装成功，停止本次任务：" + ex.Message, ex);
         }
+        finally { _routePackagePreparation.Release(); }
+    }
+
+    private async Task SealRoutePackageForExecutionAsync(CancellationToken ct)
+    {
+        await _routePackagePreparation.WaitAsync(ct);
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_routePackageTaskEnded || _routePackageId.Length == 0
+                || _confirmedRoutePackageId != _routePackageId || !_worldRoutesUpdateSucceeded)
+                throw new HoeingStartupException("线路整包身份", "尚未确认本轮 pin，不允许执行线路");
+            if (_routePackageLease != null) await _routePackageLease.SealForExecutionAsync(ct);
+            _routePackageExecutionStarted = true;
+        }
+        finally { _routePackagePreparation.Release(); }
     }
 
     public static List<string> ResolveAllHoeingRouteDirs(AutoHoeingConfig config)
     {
+        // 变体解析与执行来源一致；官方模式绝不从同名本地/旧 Assets 借用文件。
         var dirs = new List<string>();
-        var baseDir = AppContext.BaseDirectory;
-
-        // 1. 普通模式目录
-        var normalPathing = Path.Combine(Global.UserRoot, "JsScript", "AutoHoeingOneDragon", "pathing");
-        if (Directory.Exists(normalPathing)) dirs.Add(normalPathing);
-
-        // 2. 整个 Assets 根目录：RouteVariantScanner.ScanVariants 递归扫子目录，
-        //    一次性覆盖「传奇 / +6 / -6(3人) / DebugRoutes / ...」等所有内置线路子目录，
-        //    不依赖 SelectedBuiltinRoute 当前选了哪个（否则用户没选某目录就扫不到其中的变体）。
-        var assetsRoot = Path.Combine(baseDir, "GameTask", "AutoHoeing", "Assets");
-        if (Directory.Exists(assetsRoot)) dirs.Add(assetsRoot);
-
-        // 3. 用户手填的自定义调试路径（可能在 Assets 之外）
-        if (config != null
-            && !string.IsNullOrWhiteSpace(config.FixedDebugRoutePath)
-            && Directory.Exists(config.FixedDebugRoutePath))
+        if (!string.IsNullOrWhiteSpace(config.FixedDebugRoutePath)) dirs.Add(config.FixedDebugRoutePath);
+        else if (AutoHoeingRoutePaths.IsLocalSelection(config.SelectedBuiltinRoute))
+            dirs.Add(AutoHoeingRoutePaths.ResolveSelection(config.SelectedBuiltinRoute, config.MultiplayerEnabled));
+        else if (config.MultiplayerEnabled)
         {
-            dirs.Add(config.FixedDebugRoutePath);
+            dirs.Add(AutoHoeingRoutePaths.PathingRoot);
+            dirs.Add(AutoHoeingRoutePaths.BuiltinRoot);
         }
-
-        // 去重（按绝对路径，忽略大小写）
-        return dirs
-            .Select(d => Path.GetFullPath(d))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        else
+        {
+            dirs.Add(Path.Combine(Global.UserRoot, "JsScript", "AutoHoeingOneDragon", "pathing"));
+            dirs.Add(AutoHoeingRoutePaths.LegacyLocalRoot);
+            dirs.Add(AutoHoeingRoutePaths.LocalRoot);
+        }
+        return dirs.Where(Directory.Exists).Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    /// <summary>
-    /// 根据配置加载路线，实现三级优先级逻辑
-    /// 优先级 1: 手动输入的 FixedDebugRoutePath
-    /// 优先级 2: 选中的 SelectedBuiltinRoute
-    /// 优先级 3: 默认行为（DebugRoutes 或正常路线选择）
-    /// </summary>
     private List<RouteInfo> LoadRoutesBasedOnConfig()
     {
-        // 优先级 1: 手动输入的调试目录
         if (!string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath))
-        {
-            _logger.LogInformation("[线路加载] 使用手动指定路径: {Path}", _config.FixedDebugRoutePath);
             return LoadFixedDebugRoutes(_config.FixedDebugRoutePath);
-        }
-
-        // 优先级 2: 选中的内置线路
-        if (!string.IsNullOrWhiteSpace(_config.SelectedBuiltinRoute))
+        var path = ResolveSelectedRouteDirectory();
+        if (!Directory.Exists(path))
         {
-            var assetsPath = Path.Combine(AppContext.BaseDirectory, "GameTask", "AutoHoeing", "Assets");
-            var selectedPath = Path.Combine(assetsPath, _config.SelectedBuiltinRoute);
-
-            if (Directory.Exists(selectedPath))
-            {
-                _logger.LogInformation("[线路加载] 使用内置线路: {Route}", _config.SelectedBuiltinRoute);
-                return LoadFixedDebugRoutes(selectedPath);
-            }
-            else
-            {
-                _logger.LogWarning("[线路加载] 选中的内置线路不存在: {Route}，回退到默认行为", _config.SelectedBuiltinRoute);
-            }
+            if (_config.MultiplayerEnabled || AutoHoeingRoutePaths.IsLocalSelection(_config.SelectedBuiltinRoute))
+                throw new HoeingMissingResourceException("所选线路目录不存在：" + path + "。请更新整包或明确选择本地线路，不会回退旧 Assets。");
+            path = Path.Combine(AutoHoeingRoutePaths.LegacyLocalRoot, "DebugRoutes"); // 保持原单机默认行为。
         }
+        return LoadFixedDebugRoutes(path);
+    }
 
-        // 优先级 3: 默认行为（DebugRoutes 目录）
-        var defaultPath = Path.Combine(AppContext.BaseDirectory, "GameTask", "AutoHoeing", "Assets", "DebugRoutes");
-        _logger.LogInformation("[线路加载] 使用默认 DebugRoutes 目录");
-        return LoadFixedDebugRoutes(defaultPath);
+    private string ResolveSelectedRouteDirectory()
+    {
+        var path = AutoHoeingRoutePaths.ResolveSelection(_config.SelectedBuiltinRoute, _config.MultiplayerEnabled);
+        return _config.MultiplayerEnabled && !AutoHoeingRoutePaths.IsLocalSelection(_config.SelectedBuiltinRoute)
+            && _routePackageUpdater != null
+            ? Path.Combine(_routePackageUpdater.CurrentDirectory, "builtin", Path.GetFileName(path))
+            : path;
+    }
+
+    private List<RouteInfo> ReloadPinnedRoutes(List<RouteInfo> routes, List<RouteInfo> selected)
+    {
+        // 修复不能只重复散列旧 groupRoutes；完整重建所有元数据、代表路径与选中对象。
+        var current = _routePackageUpdater?.CurrentDirectory ?? Path.Combine(AutoHoeingRoutePaths.ManagedRoot, "current");
+        RouteVariantScanner.InvalidateUnderRoot(current);
+        BetterGenshinImpact.Core.Script.Utils.JsonMerger.InvalidateUnderRoot(current);
+        var refreshed = _config.OperationMode == "启用仅指定怪物模式"
+            ? PrepareTargetWorldRoutes(ParseChineseTags(_config.TargetMonsters), strict: true)
+            : _config.UseFixedDebugRoutes ? LoadRoutesBasedOnConfig() : PrepareNormalWorldRoutes(BuildGroupTags(), strict: true);
+        var byName = refreshed.GroupBy(r => r.FileName).ToDictionary(g => g.Key, g => g.First());
+        var result = selected.Select(old =>
+        {
+            if (!byName.TryGetValue(old.FileName, out var found))
+                throw new HoeingStartupException("线路整包修复", "锁定包缺少本次权威线路：" + old.FileName);
+            found.Group = old.Group;
+            found.Selected = old.Selected;
+            return found;
+        }).ToList();
+        routes.Clear();
+        routes.AddRange(refreshed);
+        return result;
     }
 
     /// <summary>
@@ -4860,9 +4883,12 @@ public partial class AutoHoeingTask : ISoloTask
         string[] files;
         if (!hasVariantLayout)
         {
-            // 老布局：仅顶层 *.json，行为与改前完全一致
-            files = Directory.GetFiles(dirPath, "*.json")
+            // 官方整包允许目录内递归布局；单机/自定义/本地目录保持原顶层扫描语义。
+            var official = _config.MultiplayerEnabled && string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath)
+                && !AutoHoeingRoutePaths.IsLocalSelection(_config.SelectedBuiltinRoute);
+            files = (official ? allJson : Directory.GetFiles(dirPath, "*.json"))
                 .OrderBy(f => Path.GetFileName(f), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(f => f, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
         else

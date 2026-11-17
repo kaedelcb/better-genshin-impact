@@ -11,6 +11,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 [Collection("WorldPlanStartupState")]
 public sealed class WorldPlanStartBoundaryTests
 {
+    private const string TestPin = "11111111111111111111111111111111";
     static WorldPlanStartBoundaryTests()
     {
         var configField = typeof(BetterGenshinImpact.Service.ConfigService).GetField(
@@ -194,7 +195,7 @@ public sealed class WorldPlanStartBoundaryTests
                     _ => throw new InvalidOperationException(request.Name)
                 };
                 var snapshot = new MultiWorldStartPlan { PlanId = "guard", Stage = stage,
-                    HostConfig = new() { MultiWorldEnabled = true, AutoUpdateRoutes = false } };
+                    HostConfig = new() { MultiWorldEnabled = true, AutoUpdateRoutes = false, RoutePackageId = TestPin } };
                 return Task.FromResult(Response(request, new { planId = "guard", ticket = "guard-ticket", snapshot }));
             };
             Assert.False(await Start(task, client));
@@ -253,6 +254,12 @@ public sealed class WorldPlanStartBoundaryTests
         // A is not a candidate in this focused startup fixture, so no account or resource is read.
         SetField(task, "_dataDir", Path.Combine(Path.GetTempPath(), "not-created-worldplan-start-boundary"));
         SetField(task, "_ct", CancellationToken.None);
+        task.UpdateHoeingRoutes = (pin, _, token) =>
+        {
+            token.ThrowIfCancellationRequested();
+            Assert.True(pin == null || pin == TestPin);
+            return Task.FromResult(TestPin);
+        };
         return task;
     }
 
@@ -284,6 +291,7 @@ public sealed class WorldPlanStartBoundaryTests
             HostConfig = new RoomConfig
             {
                 MultiWorldEnabled = true, MultiWorldCount = 2,
+                RoutePackageId = TestPin,
                 PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
             }
         };

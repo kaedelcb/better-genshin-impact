@@ -1386,6 +1386,7 @@ public class RoomManager
             {
                 PlayerUid = p.PlayerUid, PlayerName = p.PlayerName, ConnectionId = p.ConnectionId,
                 ClientInstanceId = p.ClientInstanceId, Online = p.Online,
+                BgiVersion = p.BgiVersion,
                 OnlineEventConsumed = p.OnlineEventConsumed, OnlineEventGeneration = p.OnlineEventGeneration,
                 OnlineHoeingGroupNames = p.OnlineHoeingGroupNames?.ToList() ?? [],
                 OnlineHoeingGroupTypes = p.OnlineHoeingGroupTypes?.ToList() ?? [],

@@ -143,6 +143,34 @@ class ArchiveOutputTests(IsolatedDirectoryTest):
         self.assertFalse(final.exists())
 
 
+class NativeRouteDistributionTests(IsolatedDirectoryTest):
+    """决定发行包能否放行：旧线路工具不得带回，正常程序更新器不得误伤。"""
+
+    def test_retired_executable_is_rejected_without_deleting_it(self):
+        tool = self.root / 'Tools' / 'AutoHoeingUpdater' / 'AutoHoeingUpdater.exe'
+        tool.parent.mkdir(parents=True)
+        tool.write_bytes(b'retired third-party input')
+        with self.assertRaisesRegex(RuntimeError, '第三方线路更新器'):
+            BUILD.require_native_route_distribution(self.root)
+        self.assertEqual(tool.read_bytes(), b'retired third-party input')
+
+    def test_case_variant_and_renamed_extension_are_rejected(self):
+        for name in ('AUTOHOEINGUPDATER.EXE', 'AutoHoeingUpdater.log', 'autohoeingupdater'):
+            with self.subTest(name=name):
+                candidate = self.root / name
+                candidate.write_bytes(b'unchanged')
+                with self.assertRaises(RuntimeError):
+                    BUILD.require_native_route_distribution(self.root)
+                self.assertEqual(candidate.read_bytes(), b'unchanged')
+                candidate.unlink()  # 仅本测试刚创建的文件。
+
+    def test_main_program_and_assistant_updaters_are_not_blocked(self):
+        for name in ('BetterGI.update.exe', 'MultiplayerHoeingAssistant.exe', '线路.json'):
+            (self.root / name).write_bytes(b'allowed release input')
+        BUILD.require_native_route_distribution(self.root)
+        self.assertEqual(len(list(self.root.iterdir())), 3)
+
+
 class OwnedTemporaryFilesTests(IsolatedDirectoryTest):
     def test_download_does_not_overwrite_or_delete_existing_destination(self):
         dest = self.root / 'existing-user-file.bin'

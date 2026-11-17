@@ -56,7 +56,7 @@ public sealed class PerRouteSwitchRolesProvider
             var prefix = folderFull.EndsWith(Path.DirectorySeparatorChar.ToString())
                 ? folderFull
                 : folderFull + Path.DirectorySeparatorChar;
-            if (routeFull.StartsWith(prefix))
+            if (routeFull.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase))
             {
                 var rel = Path.GetRelativePath(folderFull, routeFull).Replace('\\', '/');
                 return $"{folder.FolderName}/{rel}";
@@ -73,7 +73,9 @@ public sealed class PerRouteSwitchRolesProvider
         if (_perRouteSwitchRoles.Count == 0) return null;
         var routeId = DeriveRouteId(route);
         if (routeId == null) return null;
-        if (!_perRouteSwitchRoles.TryGetValue(routeId, out var entry)) return null;
+        if (!_perRouteSwitchRoles.TryGetValue(routeId, out var entry)
+            && !(routeId.StartsWith("legacy-local/", System.StringComparison.Ordinal)
+                && _perRouteSwitchRoles.TryGetValue(routeId[13..], out entry))) return null;
         if (!PerRouteSwitchRolesDecisions.RouteNeedsSwitch(entry)) return null;
 
         return new PerRouteSwitchHook

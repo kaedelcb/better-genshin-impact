@@ -453,6 +453,7 @@ public partial class TaskSettingsPageViewModel : ViewModel
         // 监听锄地配置变化
         Config.AutoHoeingConfig.PropertyChanged += (sender, e) =>
         {
+            if (e.PropertyName == nameof(Config.AutoHoeingConfig.MultiplayerEnabled)) InitializeBuiltinRoutes();
             if (e.PropertyName == nameof(Config.AutoHoeingConfig.UseFixedDebugRoutes) ||
                 e.PropertyName == nameof(Config.AutoHoeingConfig.FixedDebugRoutePath))
             {
@@ -488,7 +489,7 @@ public partial class TaskSettingsPageViewModel : ViewModel
     /// </summary>
     public void InitializeBuiltinRoutes()
     {
-        var scanner = new BetterGenshinImpact.GameTask.AutoHoeing.Services.RouteDirectoryScanner();
+        var scanner = new BetterGenshinImpact.GameTask.AutoHoeing.Services.RouteDirectoryScanner(Config.AutoHoeingConfig.MultiplayerEnabled);
         var folders = scanner.ScanBuiltinRoutes();
 
         BuiltinRoutes.Clear();
@@ -497,6 +498,7 @@ public partial class TaskSettingsPageViewModel : ViewModel
             BuiltinRoutes.Add(new BuiltinRouteViewModel
             {
                 FolderName = folder.FolderName,
+                DisplayName = folder.DisplayName,
                 FullPath = folder.FullPath,
                 RouteCount = folder.RouteCount,
                 IsSelected = false, // 初始状态不选中，后续通过UpdateBuiltinRouteButtonStates设置
@@ -1876,6 +1878,9 @@ public partial class BuiltinRouteViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private string _folderName = "";
+
+    [ObservableProperty]
+    private string _displayName = "";
 
     /// <summary>
     /// 文件夹完整路径

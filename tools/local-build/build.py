@@ -221,7 +221,7 @@ def snapshot(source, target, guard, commit=None):
 
 def untracked_sources(root=ROOT):
     dirs = ['BetterGenshinImpact', 'MultiplayerHoeingAssistant', 'BgiCoordinatorServer',
-            'Mistletoe.Shared', 'AutoHoeingUpdater', 'Test/OneDragonMigration/Core']
+            'Mistletoe.Shared', 'Test/OneDragonMigration/Core']
     output = capture(['git', '-C', str(root), 'ls-files', '--others', '--exclude-standard', '-z', '--', *dirs])
     return [os.fsdecode(x) for x in output.split(b'\0') if x and not is_user_default(Path(os.fsdecode(x)))]
 
@@ -274,6 +274,15 @@ def finalize_archive(partial, final):
     if os.name != 'nt':
         raise RuntimeError('此构建工具仅支持 Windows')
     os.rename(partial, final)
+
+
+def require_native_route_distribution(package):
+    # Fail closed if a project target reintroduces the retired updater. Never
+    # delete or rewrite an installed tool, user script, or third-party input.
+    for path in package.rglob('*'):
+        name = path.name.casefold()
+        if name == 'autohoeingupdater' or name.startswith('autohoeingupdater.'):
+            raise RuntimeError(f'发行包仍含已停用的第三方线路更新器，已停止打包：{path}')
 
 
 def main(version, reuse_web=None, output_root=None):
@@ -461,8 +470,8 @@ def main(version, reuse_web=None, output_root=None):
                 if temp.exists():
                     remove_owned_workspace(temp)
             web = retained_web
-            run('发布主程序', ['dotnet', 'publish', 'BetterGenshinImpact/BetterGenshinImpact.csproj', '-c', 'Release', '--disable-build-servers', '-p:UseSharedCompilation=false', '-p:PublishProfile=FolderProfile', f'-p:Version={version}', f'-p:SourceRevisionId={commit}'], source)
-            run('构建联机助手', ['dotnet', 'build', 'MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj', '-c', 'Release', '--disable-build-servers', '-p:UseSharedCompilation=false', f'-p:SourceRevisionId={commit}'], source)
+            run('发布主程序', ['dotnet', 'publish', 'BetterGenshinImpact/BetterGenshinImpact.csproj', '-c', 'Release', '--disable-build-servers', '-p:UseSharedCompilation=false', '-p:PublishProfile=FolderProfile', '-p:DeployToBgiTools=false', f'-p:Version={version}', f'-p:SourceRevisionId={commit}'], source)
+            run('构建联机助手', ['dotnet', 'build', 'MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj', '-c', 'Release', '--disable-build-servers', '-p:UseSharedCompilation=false', '-p:DeployToBgiTools=false', f'-p:SourceRevisionId={commit}'], source)
             pub = source / 'BetterGenshinImpact/bin/x64/Release/net8.0-windows10.0.22621.0/publish/win-x64'
             dist = work / 'dist'
             package = dist / 'BetterGI'
@@ -471,10 +480,10 @@ def main(version, reuse_web=None, output_root=None):
                 if p.is_file() and (p.suffix.lower() in ('.lib', '.pdb') or ('ffmpeg' in p.name.lower() and p.suffix.lower() == '.dll')):
                     p.unlink()
             shutil.copytree(source / 'MultiplayerHoeingAssistant/bin/Release/net8.0-windows', package / 'Tools/MultiplayerHoeingAssistant', dirs_exist_ok=True, ignore=shutil.ignore_patterns('assistant-config.json'))
-            shutil.copytree(source / 'AutoHoeingUpdater', package / 'Tools/AutoHoeingUpdater', dirs_exist_ok=True)
             shutil.copytree(pub, package, dirs_exist_ok=True)
             shutil.copytree(web[0], package / 'Assets/Map/Editor', dirs_exist_ok=True)
             shutil.copytree(web[1], package / 'Assets/Web/ScriptRepo', dirs_exist_ok=True)
+            require_native_route_distribution(package)
             guard.check(measure=True)
             run('生成在线更新器', [builder, 'pack', '-c', source / 'Build/kachina.config.json', '-o', 'BetterGI/BetterGI.update.exe'], dist)
             final_archive = output / f'BetterGI_v{version}.7z'

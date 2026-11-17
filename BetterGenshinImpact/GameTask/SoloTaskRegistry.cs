@@ -40,9 +40,7 @@ public static class SoloTaskRegistry
             "好感任务自动完成" => new AutoFriendshipTask(TaskContext.Instance().Config.AutoFriendshipConfig, partyConfig, settings, partyConfig?.AutoFightConfig),
             "OCR切换武器" => new OcrSwitchWeaponTask(partyConfig, settings, groupName),
             "配对界面切换角色" => new AutoSwitchRolesTask(partyConfig, settings, groupName),
-            "更新联机锄地线路" => new ShellTask(ShellTaskParam.BuildFromConfig(
-                @"Tools\AutoHoeingUpdater\AutoHoeingUpdater.exe --silent --target ""%CD%"" --force-download",
-                new ShellConfig { Timeout = 120, NoWindow = true, Output = true })),
+            "更新联机锄地线路" => new AutoHoeingRouteUpdateTask(),
             "联机锄地上线" => new NotifyOnlineTask(),
             _ => null
         };

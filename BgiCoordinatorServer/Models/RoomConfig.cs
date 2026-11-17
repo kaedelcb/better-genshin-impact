@@ -4,12 +4,14 @@ namespace BgiCoordinatorServer.Models;
 public class RoomConfig
 {
     public string? HoeingBatchId { get; set; }
+    /// <summary>本轮冻结的官方整包版本；多世界和守护续跑沿用同一 pin。</summary>
+    public string RoutePackageId { get; set; } = "";
     public List<string> ExpectedParticipantUids { get; set; } = [];
     public double SyncPointMinDistance { get; set; } = 30;
     public int StartRouteIndex { get; set; } = 0;
     /// <summary>线路关键词过滤（逗号分隔，全角/半角），文件名含任一关键词的线路跳过。默认空=不过滤。hoeing-route-keyword-filter，与客户端 RoomConfig 严格对称</summary>
     public string RouteFilterKeywords { get; set; } = "";
-    /// <summary>自动更新线路：执行联机锄地前自动调用一次「更新联机锄地线路」（AutoHoeingUpdater）。默认 true（房主设置，同步给成员）。hoeing-autoupdate-routes，与客户端 RoomConfig 严格对称</summary>
+    /// <summary>自动更新线路：执行联机锄地前由 BGI 自有整包服务准备本轮锁定线路；关闭时只核验本地完整包，不下载。默认 true（房主设置，同步给成员）。hoeing-autoupdate-routes，与客户端 RoomConfig 严格对称</summary>
     public bool AutoUpdateRoutes { get; set; } = true;
     /// <summary>线路重试模式关键词（逗号分隔，全角/半角），文件名含任一关键词的线路启用"任一成员复苏→全员回神像重跑本段"。默认空=不启用。hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员，与客户端 RoomConfig 严格对称</summary>
     public string RouteRetryModeKeywords { get; set; } = "";

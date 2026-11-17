@@ -3,17 +3,21 @@ using System.Text.Json;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
+using BetterGenshinImpact.GameTask.AutoHoeing.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 
 /// <summary>Runs the production read-only preview against isolated route and account files.</summary>
+[Collection("WorldPlanStartupState")]
 public sealed class WorldPlanPreviewTests : IDisposable
 {
     private const string Account = "world-plan-preview";
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "BetterGI-worldplan-preview-" + Guid.NewGuid().ToString("N"));
     private readonly AutoHoeingTask _task;
     private readonly AutoHoeingConfig _config;
+    private readonly System.Net.Http.HttpClient _http = new();
+    private string PathingDirectory => Path.Combine(_directory, "managed", "current", "pathing");
 
     static WorldPlanPreviewTests()
     {
@@ -40,6 +44,12 @@ public sealed class WorldPlanPreviewTests : IDisposable
         _task = new AutoHoeingTask();
         SetField(_task, "_config", _config);
         SetField(_task, "_dataDir", _directory);
+        // Pin confirmation is the separate installer boundary; preview may only inspect this fixture's root.
+        const string pin = "11111111111111111111111111111111";
+        SetField(_task, "_routePackageId", pin);
+        SetField(_task, "_confirmedRoutePackageId", pin);
+        SetField(_task, "_worldRoutesUpdateSucceeded", true);
+        SetField(_task, "_routePackageUpdater", new AutoHoeingRouteUpdater(_http, Path.Combine(_directory, "managed"), "preview-only"));
     }
 
     private string RouteDirectory => Path.Combine(_directory, "routes");
@@ -130,7 +140,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
     public void NormalSelectionWithoutMonsterTableCannotAuthorizeSkippingTheWorld()
     {
         _config.UseFixedDebugRoutes = false;
-        Directory.CreateDirectory(Path.Combine(_directory, "pathing"));
+        Directory.CreateDirectory(PathingDirectory);
         Assert.False(File.Exists(Path.Combine(_directory, "assets", "monsterInfo.json")));
         Assert.Equal((false, 0), Preview());
     }
@@ -141,7 +151,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
         _config.UseFixedDebugRoutes = false;
         _config.OperationMode = "启用仅指定怪物模式";
         _config.TargetMonsters = "丘丘人";
-        Directory.CreateDirectory(Path.Combine(_directory, "pathing"));
+        Directory.CreateDirectory(PathingDirectory);
         var monsterFile = Path.Combine(_directory, "assets", "monsterInfo.json");
         Directory.CreateDirectory(Path.GetDirectoryName(monsterFile)!);
         File.WriteAllText(monsterFile, """[{"name":"丘丘人","type":"普通","moraRate":1.0}]""");
@@ -150,6 +160,56 @@ public sealed class WorldPlanPreviewTests : IDisposable
         repository.Load(monsterFile);
         Assert.Single(repository.GetAll());
 
+        Assert.Equal((false, 0), Preview());
+    }
+
+    [Fact]
+    public void OfficialFixedRoutesIncludeNestedFilesAndRepairRebuildsMetadataAndSelection()
+    {
+        _config.FixedDebugRoutePath = "";
+        _config.SelectedBuiltinRoute = "官方";
+        var file = Path.Combine(_directory, "managed", "current", "builtin", "官方", "nested", "01.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+        File.WriteAllText(file, """{"info":{"description":"预计用时60秒"},"positions":[{"type":"path","x":1,"y":1}]}""");
+        var original = (List<RouteInfo>)Invoke(_task, "LoadRoutesBasedOnConfig")!;
+        var oldRoute = Assert.Single(original);
+        Assert.Equal(60d, oldRoute.EstimatedTime);
+        oldRoute.Group = 3;
+        var selected = new List<RouteInfo> { oldRoute };
+        File.WriteAllText(file, """{"info":{"description":"预计用时150秒"},"positions":[{"type":"path","x":1,"y":1}]}""");
+        var repaired = (List<RouteInfo>)Invoke(_task, "ReloadPinnedRoutes", original, selected)!;
+        var current = Assert.Single(repaired);
+        Assert.NotSame(oldRoute, current);
+        Assert.Equal(file, current.FullPath);
+        Assert.Equal(150d, current.EstimatedTime);
+        Assert.Equal(3, current.Group);
+        Assert.True(current.Selected);
+        Assert.Same(current, Assert.Single(original));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EmptyOrMalformedOfficialPathingCannotBecomeSuccessfulRuntimeNoWork(bool malformed)
+    {
+        _config.UseFixedDebugRoutes = false;
+        Directory.CreateDirectory(PathingDirectory);
+        var monsterFile = Path.Combine(_directory, "assets", "monsterInfo.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(monsterFile)!);
+        File.WriteAllText(monsterFile, """[{"name":"丘丘人","type":"普通","moraRate":1.0}]""");
+        if (malformed) File.WriteAllText(Path.Combine(PathingDirectory, "broken.json"), "{}");
+        var failure = Assert.Throws<TargetInvocationException>(() => Invoke(_task, "PrepareTargetWorldRoutes", new List<string> { "丘丘人" }, false));
+        Assert.True(failure.InnerException is HoeingMissingResourceException or InvalidDataException);
+        Assert.Equal((false, 0), Preview());
+    }
+
+    [Fact]
+    public void MissingOfficialSelectionNeverFallsBackToOtherRoots()
+    {
+        _config.FixedDebugRoutePath = "";
+        _config.SelectedBuiltinRoute = "missing-official-package";
+        var failure = Assert.Throws<TargetInvocationException>(() => Invoke(_task, "LoadRoutesBasedOnConfig"));
+        Assert.IsType<HoeingMissingResourceException>(failure.InnerException);
         Assert.Equal((false, 0), Preview());
     }
 
@@ -265,11 +325,12 @@ public sealed class WorldPlanPreviewTests : IDisposable
     private static void SetField(object instance, string name, object value)
         => typeof(AutoHoeingTask).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(instance, value);
 
-    private static object? Invoke(object instance, string name)
-        => typeof(AutoHoeingTask).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(instance, null);
+    private static object? Invoke(object instance, string name, params object?[] args)
+        => typeof(AutoHoeingTask).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(instance, args);
 
     public void Dispose()
     {
+        _http.Dispose();
         // This class only creates this unique directory; never touch the real User records.
         var target = Path.GetFullPath(_directory);
         var temporaryRoot = Path.GetFullPath(Path.GetTempPath());

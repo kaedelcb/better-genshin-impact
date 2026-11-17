@@ -10,10 +10,11 @@ internal sealed class HoeingMissingResourceException(string message) : InvalidOp
 
 internal static class HoeingMissingResourceBoundary
 {
-    internal static void RequireScriptDirectory(string directory, CancellationToken ct, Action? checkOwner = null)
+    internal static void RequireScriptDirectory(string directory, CancellationToken ct, Action? checkOwner = null, bool requirePathing = true)
     {
         CheckStop(ct, checkOwner);
-        if (!Directory.Exists(directory) || !Directory.Exists(Path.Combine(directory, "pathing")))
+        if (!Directory.Exists(directory) || (requirePathing && !Directory.Exists(Path.Combine(directory, "pathing")))
+            || (!requirePathing && !Directory.Exists(Path.Combine(directory, "assets"))))
             throw new HoeingMissingResourceException(
                 "锄地一条龙缺少必要脚本资源：" + directory + "。请在脚本仓库安装 AutoHoeingOneDragon 后重试。");
     }

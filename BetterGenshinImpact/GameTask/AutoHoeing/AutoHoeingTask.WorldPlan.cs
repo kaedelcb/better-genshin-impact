@@ -18,6 +18,7 @@ public partial class AutoHoeingTask
 
     private void ApplyWorldHostConfig(RoomConfig hostConfig)
     {
+        AdoptRoutePackagePin(hostConfig.RoutePackageId);
         _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
         _config.StartRouteIndex = hostConfig.StartRouteIndex;
         _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
@@ -75,10 +76,12 @@ public partial class AutoHoeingTask
 
     private List<RouteInfo> PrepareNormalWorldRoutes(List<List<string>> groupTags, bool strict = false)
     {
+        RequireMonsterMetadata();
         // 预处理路线
-        var pathingDir = Path.Combine(_dataDir, "pathing");
+        var pathingDir = PathingDirectory;
         var routes = RouteInfoLoader.LoadRoutes(
-            pathingDir, _monsterRepo, _config.IgnoreRate, groupTags[0], strict);
+            pathingDir, _monsterRepo, _config.IgnoreRate, groupTags[0], strict || _config.MultiplayerEnabled);
+        RequireOfficialPathingRoutes(routes);
 
         // 初始化CD和运行记录
         foreach (var route in routes)
@@ -109,9 +112,11 @@ public partial class AutoHoeingTask
 
     private List<RouteInfo> PrepareTargetWorldRoutes(List<string> targetMonsters, bool strict = false)
     {
-        var pathingDir = Path.Combine(_dataDir, "pathing");
+        RequireMonsterMetadata();
+        var pathingDir = PathingDirectory;
         var fakeGroupTags = Enumerable.Range(0, 10).Select(_ => new List<string>()).ToList();
-        var routes = RouteInfoLoader.LoadRoutes(pathingDir, _monsterRepo, _config.IgnoreRate, fakeGroupTags[0], strict);
+        var routes = RouteInfoLoader.LoadRoutes(pathingDir, _monsterRepo, _config.IgnoreRate, fakeGroupTags[0], strict || _config.MultiplayerEnabled);
+        RequireOfficialPathingRoutes(routes);
 
         foreach (var route in routes)
             _cdManager.InitializeRoute(route);
@@ -131,9 +136,71 @@ public partial class AutoHoeingTask
     private MultiWorldStartPlan? _worldStartPlan;
     private WorldPlanAdmission? _worldPlanAdmission;
     private bool _worldPlanNoWorkConfirmed;
-    private bool _worldRoutesUpdateSucceeded = true;
-    private RouteUpdateProcessCleanupException? _routeUpdateCleanupFailure;
-    internal Func<string, CancellationToken, Task> UpdateHoeingRoutes { get; set; } = AutoHoeingRouteUpdater.RunAsync;
+    private bool _worldRoutesUpdateSucceeded;
+    private string _routePackageId = "";
+    private AutoHoeingRouteUpdater? _routePackageUpdater;
+    private AutoHoeingRouteUpdater.Lease? _routePackageLease;
+    private readonly SemaphoreSlim _routePackagePreparation = new(1, 1);
+    private string _confirmedRoutePackageId = "";
+    private bool _routePackageExecutionStarted;
+    private bool _routePackageTaskEnded;
+    // 测试替身返回实际确认的包 ID；空值或不同 pin 不能授权预判/执行。
+    internal Func<string?, bool, CancellationToken, Task<string>>? UpdateHoeingRoutes { get; set; }
+
+    private string PathingDirectory
+    {
+        get
+        {
+            var path = _config.MultiplayerEnabled
+                ? Path.Combine(_routePackageUpdater?.CurrentDirectory ?? Path.Combine(AutoHoeingRoutePaths.ManagedRoot, "current"), "pathing")
+                : Path.Combine(_dataDir, "pathing");
+            if (_config.MultiplayerEnabled && !Directory.Exists(path))
+                throw new HoeingMissingResourceException("本轮线路包不含普通选线 pathing，不能按空世界跳过：" + path);
+            return path;
+        }
+    }
+
+    private void RequireOfficialPathingRoutes(List<RouteInfo> routes)
+    {
+        if (_config.MultiplayerEnabled && routes.Count == 0)
+            throw new HoeingMissingResourceException("本轮线路包的普通选线目录为空，不能按已完成世界跳过");
+    }
+
+    private void RequireMonsterMetadata()
+    {
+        if (!_config.MultiplayerEnabled || _monsterRepo.GetAll().Count > 0) return;
+        var path = Path.Combine(_dataDir, "assets", "monsterInfo.json");
+        try
+        {
+            _monsterRepo.Load(path);
+            if (_monsterRepo.GetAll().Count == 0) throw new InvalidDataException("怪物元数据为空");
+        }
+        catch (Exception ex)
+        {
+            throw new HoeingMissingResourceException("普通选线缺少有效怪物元数据：" + path + "；" + ex.Message);
+        }
+    }
+
+    private void AdoptRoutePackagePin(string pin)
+    {
+        if (!NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(pin)
+            || (_routePackageId.Length > 0 && _routePackageId != pin))
+            throw new HoeingStartupException("线路整包身份", "房主未提供有效包身份或同轮包身份发生变化");
+        _routePackageId = pin;
+    }
+
+    private AutoHoeingTask CreateGuardRestartTask() => new(_partyConfig, _settingsOverride, _groupName)
+    {
+        _isGuardRestartRun = true,
+        _routePackageId = _routePackageId,
+        UpdateHoeingRoutes = UpdateHoeingRoutes
+    };
+
+    private async Task ApplyPinnedHostConfigAsync(RoomConfig hostConfig, CancellationToken ct)
+    {
+        ApplyWorldHostConfig(hostConfig);
+        await RunAutoUpdateRoutesAsync(operationToken: ct);
+    }
 
     // Only set after the server confirmed a partial-party Legacy decision. Network and F2
     // assembly spend the same budget; the latter waits for the actual selected party.
@@ -204,7 +271,9 @@ public partial class AutoHoeingTask
         try
         {
             var account = string.IsNullOrEmpty(_config.AccountName) ? "默认账户" : _config.AccountName;
-            if (!_worldRoutesUpdateSucceeded) return (false, 0);
+            if (!_worldRoutesUpdateSucceeded || (_config.MultiplayerEnabled
+                && (!NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(_routePackageId)
+                    || _confirmedRoutePackageId != _routePackageId))) return (false, 0);
             _cdManager.Load(_dataDir, account);
             if (!_cdManager.LoadSucceeded) return (false, 0);
             if (!_config.UseFixedDebugRoutes)
@@ -230,7 +299,7 @@ public partial class AutoHoeingTask
                 if (!string.IsNullOrEmpty(_config.FixedDebugRoutePath) && !Directory.Exists(_config.FixedDebugRoutePath))
                     return (false, 0);
                 if (string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath) && !string.IsNullOrWhiteSpace(_config.SelectedBuiltinRoute)
-                    && !Directory.Exists(Path.Combine(AppContext.BaseDirectory, "GameTask", "AutoHoeing", "Assets", _config.SelectedBuiltinRoute)))
+                    && !Directory.Exists(ResolveSelectedRouteDirectory()))
                     return (false, 0); // 正式旧流程可尝试默认包，但不能据默认包的 CD 跳过用户指定的世界。
                 routes = LoadRoutesBasedOnConfig();
                 if (routes.Count == 0) return (false, 0); // Missing package is not a completed world.
@@ -304,7 +373,7 @@ public partial class AutoHoeingTask
             _isInitialHost = isHost;
             _firstHostConfig = admission.Snapshot.HostConfig;
             RequireMatchingRoomBatch(_firstHostConfig);
-            ApplyWorldHostConfig(_firstHostConfig);
+            await ApplyPinnedHostConfigAsync(_firstHostConfig, ct);
             var preview = _config.SoloDebugMode ? (Known: false, Count: 0)
                 : admission.Snapshot.CandidateHostUids.Contains(_config.PlayerUid)
                     ? PreviewOwnWorld() : (Known: true, Count: 0);

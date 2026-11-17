@@ -26,6 +26,7 @@ public sealed partial class RoomOperations
             throw new InvalidOperationException("world_plan_host_required");
         lock (room)
         {
+            RequireRoomRoutePackage(room);
             if (freezeCurrentParty && (!forceLegacy || room.HoeingBatchId != null))
                 throw new InvalidOperationException("world_plan_manual_party_invalid");
             if (_worldPlansBySource.TryGetValue(room.SessionId, out var existing) && _worldPlans.TryGetValue(existing, out var current))
@@ -69,6 +70,7 @@ public sealed partial class RoomOperations
         if (room == null) return Task.FromResult<WorldPlanAdmission?>(null);
         lock (room)
         {
+            RequireRoomRoutePackage(room);
             WorldPlanState? plan = null;
             if (_worldPlansBySource.TryGetValue(room.SessionId, out var id)) _worldPlans.TryGetValue(id, out plan);
             if (plan == null)
@@ -157,6 +159,7 @@ public sealed partial class RoomOperations
                 throw new InvalidOperationException("world_plan_target_invalid");
             lock (room)
             {
+                RequireRoomRoutePackage(room);
                 var current = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
                 var hostUid = snapshot.RemainingHostUids.FirstOrDefault();
                 if (!ReferenceEquals(current.Room, room) || !ReferenceEquals(_roomManager.GetRoom(code), room)
@@ -181,6 +184,9 @@ public sealed partial class RoomOperations
             if (_capabilityLookup?.Supports(ctx.ConnectionId, WorldPlanState.Capability) != true)
                 throw new InvalidOperationException("world_plan_capability_required");
             var player = plan.Players.Single(p => p.PlayerUid == uid);
+            _routePackagePolicy?.RequireVersion(player.ReportedVersion);
+            _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, player.ReportedVersion, ctx.IsV3);
+            _routePackagePolicy?.RequirePackage(plan.Config.RoutePackageId);
             var snapshot = plan.Snapshot(_worldPlanTime.GetUtcNow().UtcDateTime);
             if (uid != plan.InitialHostUid && !snapshot.SourceReleased)
                 throw new InvalidOperationException("world_plan_source_not_released");
@@ -189,6 +195,7 @@ public sealed partial class RoomOperations
                 var target = _roomManager.GetRoom(snapshot.TargetRoomCode);
                 if (target == null || target.SessionId != snapshot.TargetRoomSessionId)
                     throw new InvalidOperationException("world_plan_target_ended");
+                RequireRoomRoutePackage(target);
                 if (target.HostConnectionId != ctx.ConnectionId)
                 {
                     var joined = await JoinRoomAsync(ctx, target.Code, player.PlayerName, uid, player.ReportedVersion, plan.Config.HoeingBatchId);
@@ -217,6 +224,7 @@ public sealed partial class RoomOperations
                 plan.Config.HoeingBatchId == null ? null : plan.Participants,
                 plan.Participants, plan.Id, GatewayProtocol.RoomProtocols.V3, snapshot.HostConfig);
             var room = _roomManager.GetRoom(code)!;
+            RequireRoomRoutePackage(room);
             plan.SetTarget(code, room.SessionId);
             await LeaveAllGroupsAsync(ctx);
             await _broadcaster.AddToGroupAsync(ctx, code);

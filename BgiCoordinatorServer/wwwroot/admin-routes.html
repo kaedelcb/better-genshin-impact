@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#141527"><meta name="referrer" content="no-referrer">
+  <title>联机锄地 · 线路管理</title>
+  <link rel="stylesheet" href="/route-packages.css?v=20261117">
+  <script defer src="/route-packages-core.js?v=20261117"></script>
+  <script defer src="/route-packages-page.js?v=20261117"></script>
+</head>
+<body data-mode="admin">
+<a class="skip-link" href="#main">跳到线路管理</a>
+<div class="route-app">
+  <aside class="sidebar">
+    <div class="brand"><span aria-hidden="true">◇</span><div><strong>耕地机</strong><small>Nexus BGI · 全服监控</small></div></div>
+    <nav aria-label="管理导航"><a href="/admin/hoeing">实时房间 / 历史日志</a><a href="/admin/routes" aria-current="page">线路管理</a></nav>
+    <p class="sidebar-note">官方受管线路整包发布。<br>不修改成员的本地自定义线路。</p>
+  </aside>
+  <main id="main" class="workspace">
+    <header class="page-head"><div><h1>线路管理</h1><p>先校验草稿，再完整替换官方线路；历史版本始终可追溯。</p></div><button id="refreshCatalog" type="button">刷新清单</button></header>
+    <p id="globalStatus" class="status" role="status" aria-live="polite">正在读取线路清单…</p>
+    <a id="loginLink" href="/admin/login" hidden>管理员登录已失效，重新登录</a>
+    <section class="publication" aria-labelledby="publicationTitle"><h2 id="publicationTitle">当前发布</h2><p id="currentPublication">尚未读取</p><p id="requiredVersion" class="muted"></p><p id="storageUsage" class="muted">存储用量尚未读取</p></section>
+    <section class="upload-panel" aria-labelledby="uploadTitle">
+      <div class="section-heading"><div><h2 id="uploadTitle">从本机文件夹创建草稿</h2><p>文件先留在本机，确认预览后只上传一个 ZIP，不逐文件上传。</p></div><span class="tag">STORE ZIP · 未压缩</span></div>
+      <p class="help">专用上传入口：<a href="/routes/upload" target="_blank" rel="noopener noreferrer">打开上传者页面</a>。上传者只创建草稿；请由运维单独提供上传令牌，不要分享管理员密码。</p>
+      <div class="upload-grid"><div>
+        <label for="folderInput">选择线路文件夹</label><input id="folderInput" type="file" webkitdirectory multiple aria-describedby="folderHelp">
+        <p id="folderHelp" class="help">根目录含线路 JSON 时映射为 builtin/所选根名/；否则保留子目录。也支持包含 builtin/、pathing/ 的标准目录。</p>
+        <label for="uploadDescription">版本说明</label><input id="uploadDescription" type="text" maxlength="500" placeholder="例如：修正纳塔线路传送点" autocomplete="off">
+        <p class="help">仅允许线路 JSON、control.json5 和变体目录中的变体说明.txt（最多 16 KiB）。不要选择 BGI 安装目录、User、账户配置或脚本目录；遇到不支持的文件会整体拒绝，不会静默漏传。</p>
+      </div><div class="preview-box">
+        <h3>实际入包预览</h3><p id="folderSummary" class="muted">选择目录后显示将要上传的路径与大小。</p>
+        <label for="previewSearch">筛选入包路径</label><input id="previewSearch" type="search" placeholder="输入目录或文件名" disabled>
+        <ul id="folderPreview" class="file-list" aria-label="实际入包路径"></ul><button id="morePreview" type="button" class="quiet" hidden>显示更多文件</button>
+      </div></div>
+      <label class="check-line"><input id="privacyConfirm" type="checkbox"><span>我已检查入包预览，确认没有账户、配置或隐私文件；发布会完整替换官方受管线路，不会追加合并。</span></label>
+      <div class="actions"><button id="packButton" class="primary" type="button" disabled>校验并本机打包</button><button id="uploadButton" class="primary" type="button" disabled>上传为草稿</button><button id="cancelUpload" type="button" hidden>取消</button><button id="clearFolder" class="quiet" type="button">清除本机选择</button></div>
+      <progress id="uploadProgress" aria-label="本机打包或上传进度" hidden max="100"></progress><p id="uploadStatus" class="status" role="status" aria-live="polite">尚未选择文件夹。ZIP 最大 128 MiB，单文件最大 16 MiB，最多 10000 个文件。</p><div id="uploadResult" class="result" hidden></div>
+    </section>
+    <section aria-labelledby="catalogTitle">
+      <div class="section-heading"><div><h2 id="catalogTitle">草稿与版本历史</h2><p>发布和回滚均会检查修订号，防止覆盖其他管理员的操作。</p></div></div>
+      <div class="catalog-grid"><div class="package-directory"><label for="packageFilter">筛选版本</label><select id="packageFilter"><option value="all">全部版本</option><option value="draft">仅草稿</option><option value="history">已发布 / 历史</option></select><div id="packageList" class="package-list" aria-label="线路版本列表"><p class="muted">尚未读取</p></div></div>
+        <section id="packageDetail" class="package-detail" aria-label="所选线路版本" aria-busy="false"><h3>选择一个版本</h3><p class="muted">查看服务端校验清单、相对当前版的差异，以及发布、回滚与恢复操作。</p></section>
+      </div>
+    </section>
+    <section class="audit-panel" aria-labelledby="auditTitle"><div class="section-heading"><h2 id="auditTitle">操作审计</h2><button id="refreshAudit" type="button">刷新审计</button></div><p class="help">服务器返回有界历史，不包含密码或令牌。</p><ol id="auditList" class="audit-list"><li class="muted">尚未读取</li></ol><p id="auditStatus" class="status" role="status"></p></section>
+  </main>
+</div>
+<dialog id="actionDialog" aria-labelledby="actionTitle"><form id="actionForm"><h2 id="actionTitle">确认操作</h2><p id="actionSummary"></p><label id="actionReasonLabel" for="actionReason">操作原因（必填）</label><textarea id="actionReason" maxlength="500" rows="3" required></textarea><p id="actionError" class="error" role="alert"></p><div class="actions"><button id="actionConfirm" type="submit" class="primary">确认</button><button id="actionCancel" type="button">取消</button></div></form></dialog>
+</body></html>

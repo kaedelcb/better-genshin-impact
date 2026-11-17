@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using BetterGenshinImpact.GameTask.Common;
@@ -18,7 +19,20 @@ public class JsonMerger
     }
 
     // 用于存储多个文件的缓存
-    private static readonly Dictionary<string, CacheItem> _cache = new Dictionary<string, CacheItem>();
+    private static readonly ConcurrentDictionary<string, CacheItem> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>官方整包修复/恢复后不得沿用相同 mtime 的旧控制文件。</summary>
+    public static void InvalidateUnderRoot(string root)
+    {
+        var full = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var prefix = full + Path.DirectorySeparatorChar;
+        foreach (var path in _cache.Keys)
+        {
+            var cached = Path.GetFullPath(path);
+            if (string.Equals(cached, full, StringComparison.OrdinalIgnoreCase)
+                || cached.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) _cache.TryRemove(path, out _);
+        }
+    }
 
     /// <summary>
     /// 从缓存读取 JObject，如果文件有更新则重新读取解析

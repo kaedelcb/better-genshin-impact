@@ -30,6 +30,20 @@ public static class RouteVariantScanner
     private static readonly Dictionary<string, CacheEntry> _cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly object _lock = new();
 
+    /// <summary>整包替换即使保留了相同 mtime，也必须丢弃旧绝对路径及变体扫描结果。</summary>
+    public static void InvalidateUnderRoot(string root)
+    {
+        var full = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var prefix = full + Path.DirectorySeparatorChar;
+        lock (_lock)
+        {
+            foreach (var key in _cache.Keys.Where(key =>
+                string.Equals(Path.GetFullPath(key), full, StringComparison.OrdinalIgnoreCase)
+                || Path.GetFullPath(key).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToArray())
+                _cache.Remove(key);
+        }
+    }
+
     private sealed class CacheEntry
     {
         public Dictionary<string, DateTime> FileMtimes = new(StringComparer.OrdinalIgnoreCase);

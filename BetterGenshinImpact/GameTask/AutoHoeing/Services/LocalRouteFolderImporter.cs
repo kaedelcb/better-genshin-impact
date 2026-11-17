@@ -76,6 +76,14 @@ public static class LocalRouteFolderImporter
     /// </summary>
     public static void CopyDirectoryRecursive(string sourceDir, string targetDir, bool overwrite)
     {
+        var source = Path.GetFullPath(sourceDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var target = Path.GetFullPath(targetDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase)
+            || target.StartsWith(source + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || source.StartsWith(target + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            throw new IOException("导入源与目标目录不能相同或互相包含");
+        AutoHoeingRouteUpdater.RequireNoLinks(source);
+        AutoHoeingRouteUpdater.RequireNoLinks(target);
         Directory.CreateDirectory(targetDir);   // 确保目标目录存在（不删除已有内容）
         foreach (var file in Directory.GetFiles(sourceDir))
         {

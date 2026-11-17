@@ -12,6 +12,13 @@ services:
       # 管理页默认关闭；仅从部署环境传入私有密码，绝不写在本文件。
       - ADMIN_MONITOR_PASSWORD=${ADMIN_MONITOR_PASSWORD:-}
       - ROOM_LOG_ROOT=/app/data/room-logs
+      # 线路整包独立持久卷；未设置精确 BGI 版本/未发布首包时，仅新锄地准入关闭。
+      - ROUTE_PACKAGE_ROOT=/app/data/route-packages
+      - ROUTE_PACKAGE_MAX_BYTES=${ROUTE_PACKAGE_MAX_BYTES:-2147483648}
+      - HOEING_REQUIRED_CLIENT_VERSION=${HOEING_REQUIRED_CLIENT_VERSION:-}
+      - ROUTE_UPLOAD_TOKEN=${ROUTE_UPLOAD_TOKEN:-}
+      # 仅填写直接 TLS 代理的精确 IP，单跳并要求 X-Forwarded-For/Proto 数量对称。
+      - ROUTE_TRUSTED_PROXY_IPS=${ROUTE_TRUSTED_PROXY_IPS:-}
       # BGI 更新包目录（联机助手"网络"来源更新）：挂载后 /bgi-update/* 提供安装包下载，
       # /bgi-update/latest.json 自动生成（扫描目录取版本最新的 BetterGI_v*+lcb.*.7z）。
       # 用法：宿主机建 bgi-update 目录放茶包版 .7z，取消下面 volumes 注释并重启容器。
@@ -19,5 +26,6 @@ services:
     volumes:
       # 日志位于宿主机，更新或重建容器后仍可下载当天的记录。
       - ./room-logs:/app/data/room-logs
+      - ./route-packages:/app/data/route-packages
       # - ./bgi-update:/app/bgi-update:ro
     restart: always
