@@ -387,6 +387,22 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Theory]
+    [InlineData(null, "https://www.autobgi.cn")]
+    [InlineData("", "https://www.autobgi.cn")]
+    [InlineData("   ", "https://www.autobgi.cn")]
+    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", "https://www.autobgi.cn")]
+    [InlineData("www.autobgi.cn", "https://www.autobgi.cn")]
+    [InlineData("http://example.org:8080/hub", "http://example.org:8080/hub")]
+    [InlineData("https://routes.example.org", "https://routes.example.org")]
+    public void UnsetOrPlaceholderServerAddressUsesTheOfficialRouteService(string? configured, string expected)
+        => Assert.Equal(expected, AutoHoeingRouteUpdater.ResolveServerAddress(configured));
+
+    [Fact]
+    public void ConfiguredAddressWithCredentialsIsRejectedNotReplacedByTheOfficialOne()
+        => Assert.Throws<InvalidDataException>(() => AutoHoeingRouteUpdater.RequireServerUri(
+            AutoHoeingRouteUpdater.ResolveServerAddress("https://user:secret@example.com")));
+
+    [Theory]
     [InlineData("file:///tmp/routes")]
     [InlineData("ftp://example.com")]
     [InlineData("https://user:secret@example.com")]

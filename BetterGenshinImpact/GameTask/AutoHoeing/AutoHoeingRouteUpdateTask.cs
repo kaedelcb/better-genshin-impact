@@ -18,7 +18,7 @@ public sealed class AutoHoeingRouteUpdateTask : ISoloTask
     public async Task Start(CancellationToken ct)
     {
         var config = TaskContext.Instance().Config.AutoHoeingConfig;
-        await CreateUpdater().EnsureAsync(config.CoordinatorServerUrl, null, ct);
+        await CreateUpdater().EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(config.CoordinatorServerUrl), null, ct);
         ct.ThrowIfCancellationRequested();
     }
 }

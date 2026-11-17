@@ -4760,7 +4760,7 @@ public partial class AutoHoeingTask : ISoloTask
             {
                 _routePackageUpdater ??= AutoHoeingRouteUpdateTask.CreateUpdater();
                 _routePackageLease ??= _routePackageUpdater.AcquireLease();
-                installed = await _routePackageUpdater.EnsureAsync(_config.CoordinatorServerUrl, pin, token,
+                installed = await _routePackageUpdater.EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(_config.CoordinatorServerUrl), pin, token,
                     forceRepair, _routePackageLease, allowInstall: _config.AutoUpdateRoutes);
             }
             token.ThrowIfCancellationRequested();

@@ -149,6 +149,20 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
     /// 线路只通过 HTTPS 提供（8080 是明文联机端口），所以按同一主机名改用 https://主机（默认 443 端口）；
     /// 本机回环开发地址保持原样。已经是 https 的地址原样使用；带账号、查询或锚点的地址仍然拒绝。
     /// </summary>
+    /// <summary>官方线路服务地址：BGI 联机设置里没有填写有效地址时使用。</summary>
+    public const string OfficialServerAddress = "https://www.autobgi.cn";
+
+    /// <summary>
+    /// 设置里没填、或仍是默认示例文字（不是 http/https 地址）时使用官方地址；
+    /// 填了有效地址就用它（含非法的账号/查询部分，交给 RequireServerUri 明确拒绝，不悄悄换成官方地址）。
+    /// </summary>
+    public static string ResolveServerAddress(string? configured)
+    {
+        var text = (configured ?? "").Trim();
+        return Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && !string.IsNullOrEmpty(uri.Host)
+            ? text : OfficialServerAddress;
+    }
+
     public static Uri RequireServerUri(string address)
     {
         var text = (address ?? "").Trim().TrimEnd('/');
