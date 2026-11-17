@@ -39,6 +39,17 @@ public sealed class RoutePackageArchiveTests
         await Assert.ThrowsAsync<InvalidDataException>(() => RoutePackageArchive.ValidateAsync(data.Zip(("builtin/线路/a.json", RoutePackageTestData.Route), ("builtin/线路/任意文件.txt", "不允许"))));
     }
 
+    [Fact]
+    public async Task ReadmeIsBoundedDocumentationNotARouteOrArbitraryTextFile()
+    {
+        using var data = new RoutePackageTestData();
+        var path = data.Zip(("builtin/D规划：纯精英-6（4人）/README.md", "# 说明\n只用于展示。"), ("builtin/D规划：纯精英-6（4人）/001.json", RoutePackageTestData.Route));
+        Assert.Equal(2, (await RoutePackageArchive.ValidateAsync(path)).Count);
+        await Assert.ThrowsAsync<InvalidDataException>(() => RoutePackageArchive.ValidateAsync(data.Zip(("builtin/线路/a.json", RoutePackageTestData.Route), ("builtin/线路/readme.md", "大小写不同不放行"))));
+        await Assert.ThrowsAsync<InvalidDataException>(() => RoutePackageArchive.ValidateAsync(data.Zip(("builtin/线路/a.json", RoutePackageTestData.Route), ("builtin/线路/README.md", new string('a', 16385)))));
+        await Assert.ThrowsAsync<InvalidDataException>(() => RoutePackageArchive.ValidateAsync(data.Zip(("builtin/线路/a.json", RoutePackageTestData.Route), ("builtin/线路/README.md", "坏\u0001文本"))));
+    }
+
     [Theory]
     [InlineData("../escape.json")]
     [InlineData("/builtin/x/a.json")]

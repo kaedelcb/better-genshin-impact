@@ -108,6 +108,15 @@
     globalThis.AdminHoeingHistory = { runLabel, time, headline, overview, reasonText };
 })();
   </script>
+<script>
+// 线路管理只在 HTTPS 提供；从旧的 http:8080 监控页进入时，改用同域名的 HTTPS 地址。
+(function () {
+  var link = document.querySelector('.monitor-route-link');
+  var host = location.hostname;
+  if (link && location.protocol === 'http:' && /[a-z]/i.test(host) && !/^(localhost|\[::1\])$/i.test(host))
+    link.href = 'https://' + host + '/admin/routes';
+})();
+</script>
 <script src="/admin-monitor-ui.js?v=20261029-v2"></script>
 <script src="/admin-monitor-logs.js?v=20261029-b"></script>
 <script src="/admin-monitor-events.js?v=20261029-overview"></script>

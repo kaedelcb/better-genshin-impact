@@ -62,11 +62,12 @@
                 canonical.set(prefixKey, { path: prefix, directory });
             }
             const control = target[target.length - 1] === 'control.json5';
-            const description = target[target.length - 1] === '变体说明.txt' && target.length >= 4 && /^[ABCD]变体$/.test(target[target.length - 2]);
-            if (!control && !description && !/\.json$/i.test(path)) throw new Error('只允许线路 JSON、control.json5 和变体目录中的变体说明.txt，不会悄悄跳过文件：' + path);
+            const readme = target[target.length - 1] === 'README.md';
+            const description = readme || (target[target.length - 1] === '变体说明.txt' && target.length >= 4 && /^[ABCD]变体$/.test(target[target.length - 2]));
+            if (!control && !description && !/\.json$/i.test(path)) throw new Error('只允许线路 JSON、control.json5、README.md 和变体目录中的变体说明.txt，不会悄悄跳过文件：' + path);
             const fileLimit = description ? 16384 : MAX_FILE_BYTES;
             if (!Number.isSafeInteger(file.size) || file.size < 0 || (!description && file.size === 0) || file.size > fileLimit)
-                throw new Error(description ? '变体说明大小无效或超过 16 KiB：' + path : '单文件为空、大小无效或超过 16 MiB：' + path);
+                throw new Error(description ? '说明文档大小无效或超过 16 KiB：' + path : '单文件为空、大小无效或超过 16 MiB：' + path);
             if (!control && !description) routeCount++;
             expandedBytes += file.size;
             zipBytes += 76 + encoder.encode(path).length * 2 + file.size;
@@ -150,7 +151,7 @@
                 const text = await entry.file.text();
                 abortIfNeeded(signal);
                 if (entry.description) {
-                    if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(text)) throw new Error('变体说明须为普通 UTF-8 文本：' + entry.path);
+                    if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(text)) throw new Error('说明文档须为普通 UTF-8 文本：' + entry.path);
                 } else validateRoute(text, entry.path, { deferPositions });
             }
             abortIfNeeded(signal);

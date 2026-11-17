@@ -94,9 +94,12 @@ public static class RoutePackageArchive
             }
             var variantDescription = parts[^1] == "变体说明.txt" && parts.Length >= 4
                 && parts[^2] is "A变体" or "B变体" or "C变体" or "D变体";
-            if (!(path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || parts[^1] == "control.json5" || variantDescription)) throw Invalid("不允许非线路文件: " + path);
-            var fileLimit = variantDescription ? 16384 : MaxFileBytes;
-            if (entry.Length < 0 || entry.Length > fileLimit || entry.Length == 0 && !variantDescription) throw Invalid("单文件为空或超限");
+            // README.md 只是线路目录自带的说明文档：不参与线路执行，也不计入线路数。
+            var readme = parts[^1] == "README.md";
+            var documentation = variantDescription || readme;
+            if (!(path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || parts[^1] == "control.json5" || documentation)) throw Invalid("不允许非线路文件: " + path);
+            var fileLimit = documentation ? 16384 : MaxFileBytes;
+            if (entry.Length < 0 || entry.Length > fileLimit || entry.Length == 0 && !documentation) throw Invalid("单文件为空或超限");
             await using var input = entry.Open();
             using var bytes = new MemoryStream();
             var buffer = new byte[65536];
@@ -111,11 +114,11 @@ public static class RoutePackageArchive
             }
             if (bytes.Length != entry.Length || (crc ^ 0xffffffff) != checksums[entry.FullName]) throw Invalid("ZIP 长度/CRC 不一致");
             var content = bytes.ToArray();
-            if (variantDescription)
+            if (documentation)
             {
-                if (content.Length > 16384) throw Invalid("变体说明文本超限");
+                if (content.Length > 16384) throw Invalid("说明文档文本超限");
                 var description = new UTF8Encoding(false, true).GetString(content);
-                if (description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw Invalid("变体说明须为普通 UTF-8 文本");
+                if (description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw Invalid("说明文档须为普通 UTF-8 文本");
             }
             else nodes.Add(path, RoutePackageJson.Parse(content, parts[^1] == "control.json5"));
             files.Add(new RoutePackageFile { Path = path, SizeBytes = content.Length,

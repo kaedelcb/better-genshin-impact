@@ -146,6 +146,17 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Fact]
+    public async Task ReadmeDocumentationIsInstalledButNeverRequiredOrExecuted()
+    {
+        using var f = new Fixture();
+        var package = f.Add(("builtin/D规划：纯精英-6（4人）/001.json", Route),
+            ("builtin/D规划：纯精英-6（4人）/README.md", "# 说明"), ("pathing/01.json", Route));
+        Assert.Equal(package.Id, await f.Ensure());
+        Assert.Equal("# 说明", File.ReadAllText(Path.Combine(f.Current, "builtin", "D规划：纯精英-6（4人）", "README.md")));
+        Assert.Equal("001.json", Path.GetFileName(Directory.GetFiles(Path.Combine(f.Current, "builtin", "D规划：纯精英-6（4人）"), "*.json").Single()));
+    }
+
+    [Fact]
     public async Task UnmarkedNonemptyRootIsNeverAdoptedOrOverwritten()
     {
         using var f = new Fixture();

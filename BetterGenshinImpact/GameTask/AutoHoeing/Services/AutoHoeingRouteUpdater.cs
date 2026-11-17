@@ -341,7 +341,7 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         var variantDescription = parts[^1] == "变体说明.txt" && parts.Length >= 4
             && parts[^2] is "A变体" or "B变体" or "C变体" or "D变体";
         return path.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-            || parts[^1] == "control.json5" || variantDescription;
+            || parts[^1] == "control.json5" || parts[^1] == "README.md" || variantDescription;
     }
 
     private static async Task CopyBoundedAsync(System.IO.Stream input, System.IO.Stream output, long limit, CancellationToken ct)

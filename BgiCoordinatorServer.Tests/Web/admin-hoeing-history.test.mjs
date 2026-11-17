@@ -54,3 +54,19 @@ test('preparing after a completed run preserves the completed count', () => {
     assert.equal(view.headline(history), '准备开锄');
     assert.match(view.overview(history), /已完成 1 次/);
 });
+
+test('legacy HTTP monitor page sends line management to the same host over HTTPS', () => {
+    const redirect = html.match(/<script>\s*\/\/ 线路管理只在 HTTPS 提供[\s\S]*?<\/script>/);
+    assert.ok(redirect, 'monitor page contains the HTTPS link adapter');
+    const script = redirect[0].replace(/^<script>/, '').replace(/<\/script>$/, '');
+    const run = (protocol, hostname) => {
+        const link = { href: '/admin/routes' };
+        vm.runInNewContext(script, { document: { querySelector: () => link }, location: { protocol, hostname } });
+        return link.href;
+    };
+    assert.equal(run('http:', 'www.autobgi.cn'), 'https://www.autobgi.cn/admin/routes');
+    assert.equal(run('https:', 'www.autobgi.cn'), '/admin/routes');
+    assert.equal(run('http:', 'localhost'), '/admin/routes');
+    assert.equal(run('http:', '127.0.0.1'), '/admin/routes');
+    assert.equal(run('http:', '[::1]'), '/admin/routes');
+});

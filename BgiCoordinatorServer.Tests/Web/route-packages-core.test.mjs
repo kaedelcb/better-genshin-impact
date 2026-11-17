@@ -234,6 +234,18 @@ test('UTF-8 restore selection uses the real 2 MiB limit, not the smaller publish
     assert.ok(new TextEncoder().encode(command.body).length < C.MAX_RESTORE_BYTES);
 });
 
+test('README.md is accepted as bounded documentation but not counted as a route', async () => {
+    const route = file('D规划：纯精英-6（4人）/一.json');
+    const readme = file('D规划：纯精英-6（4人）/README.md', '# 说明\r\n只用于展示。');
+    const plan = C.planFiles([route, readme]);
+    assert.equal(plan.routeCount, 1);
+    const entries = await unpackStore(await C.makeZip(plan));
+    assert.deepEqual(entries.get('builtin/D规划：纯精英-6（4人）/README.md'), new TextEncoder().encode('# 说明\r\n只用于展示。'));
+    assert.throws(() => C.planFiles([route, file('D规划：纯精英-6（4人）/readme.md', '大小写不同')]), /只允许/);
+    assert.throws(() => C.planFiles([route, file('D规划：纯精英-6（4人）/README.md', 'a'.repeat(16385))]), /16 KiB/);
+    await assert.rejects(C.makeZip(C.planFiles([route, file('D规划：纯精英-6（4人）/README.md', '坏\u0001文本')])), /普通 UTF-8/);
+});
+
 test('variant descriptions are preserved, bounded and never counted or parsed as routes', async () => {
     const files = [file('库/甲/A变体/一_a.json'), file('库/甲/A变体/变体说明.txt', '中文说明\r\n只用于展示。')];
     const plan = C.planFiles(files);

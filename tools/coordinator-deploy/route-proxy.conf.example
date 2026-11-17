@@ -1,0 +1,40 @@
+# BGI 专用入口；由 NPM 支持的 /data/nginx/custom/http.conf 引入。
+# 不替换现有 proxy_host 站点。后端只发布到宿主机 loopback。
+map $http_upgrade $bgi_connection_upgrade {
+    default upgrade;
+    '' close;
+}
+
+upstream bgi_coordinator_private {
+    server 127.0.0.1:18080;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name www.autobgi.cn;
+    include /etc/nginx/conf.d/include/letsencrypt-acme-challenge.conf;
+    location / {
+        return 308 https://www.autobgi.cn$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name www.autobgi.cn;
+    ssl_certificate /etc/letsencrypt/live/bgi-coordinator-www-autobgi-cn/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bgi-coordinator-www-autobgi-cn/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    include /data/nginx/custom/bgi-coordinator-proxy.inc;
+}
+
+# 保留原助手的 HTTP 8080 入口；线路包仍由应用拒绝明文访问。
+# 这里覆盖不可信转发头，外网不能直达受信任代理后面的容器端口。
+server {
+    listen 8080;
+    listen [::]:8080;
+    server_name _;
+    include /data/nginx/custom/bgi-coordinator-proxy.inc;
+}
