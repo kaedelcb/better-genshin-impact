@@ -118,6 +118,70 @@ public sealed class AutoHoeingRouteUpdaterTests
         => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(value, Json), Encoding.UTF8, "application/json") };
 
     [Fact]
+    public async Task CurrentFolderBrieflyLockedIsRetriedAndThenReplaced()
+    {
+        using var f = new Fixture();
+        f.Add(("builtin/旧包/old.json", Route));
+        await f.Ensure();
+        var next = f.Add(("builtin/新包/new.json", Route));
+        var originalMove = AutoHoeingRouteUpdater.MoveDirectory;
+        var originalDelays = AutoHoeingRouteUpdater.MoveRetryDelays;
+        // 真实占用：独占打开旧 current 里的文件，Windows 会拒绝改名该目录；第二次尝试前释放。
+        var held = new FileStream(Path.Combine(f.Current, "builtin", "旧包", "old.json"), FileMode.Open, FileAccess.Read, FileShare.None);
+        var attempts = 0;
+        try
+        {
+            AutoHoeingRouteUpdater.MoveRetryDelays = [TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10)];
+            AutoHoeingRouteUpdater.MoveDirectory = (source, destination) =>
+            {
+                if (source == f.Current && ++attempts == 2) held.Dispose();
+                originalMove(source, destination);
+            };
+            Assert.Equal(next.Id, await f.Ensure());
+        }
+        finally
+        {
+            held.Dispose();
+            AutoHoeingRouteUpdater.MoveDirectory = originalMove;
+            AutoHoeingRouteUpdater.MoveRetryDelays = originalDelays;
+        }
+        Assert.True(attempts >= 2);
+        Assert.True(File.Exists(Path.Combine(f.Current, "builtin", "新包", "new.json")));
+        Assert.False(Directory.Exists(Path.Combine(f.Current, "builtin", "旧包")));
+        f.AssertNoPendingInstall();
+    }
+
+    [Fact]
+    public async Task CurrentFolderStillLockedGivesChineseReasonAndKeepsOldRoutes()
+    {
+        using var f = new Fixture();
+        var old = f.Add(("builtin/旧包/old.json", Route));
+        await f.Ensure();
+        f.Add(("builtin/新包/new.json", Route));
+        var originalDelays = AutoHoeingRouteUpdater.MoveRetryDelays;
+        var file = Path.Combine(f.Current, "builtin", "旧包", "old.json");
+        try
+        {
+            AutoHoeingRouteUpdater.MoveRetryDelays = [TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10)];
+            using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var error = await Assert.ThrowsAsync<IOException>(() => f.Ensure());
+                Assert.Contains("被其他程序占用", error.Message);
+                Assert.Contains("旧线路已保留", error.Message);
+            }
+        }
+        finally { AutoHoeingRouteUpdater.MoveRetryDelays = originalDelays; }
+        Assert.Equal(Route, File.ReadAllText(file));
+        Assert.False(Directory.Exists(Path.Combine(f.Current, "builtin", "新包")));
+        using var installed = JsonDocument.Parse(File.ReadAllText(Path.Combine(f.Managed, "installed.json")));
+        Assert.Equal(old.Id, installed.RootElement.GetProperty("id").GetString());
+        f.AssertNoPendingInstall();
+        // 占用解除后再次更新可以正常替换。
+        Assert.NotEqual(old.Id, await f.Ensure());
+        Assert.True(File.Exists(Path.Combine(f.Current, "builtin", "新包", "new.json")));
+    }
+
+    [Fact]
     public async Task CurrentInstallVerifiesEveryFileAndFullyReplacesOfficialContentOnly()
     {
         using var f = new Fixture();

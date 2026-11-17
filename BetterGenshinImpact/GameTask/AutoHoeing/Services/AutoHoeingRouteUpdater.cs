@@ -249,9 +249,10 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
             await RoutePackageArchive.ExtractAsync(archive, staging, ct);
             if (!await MatchesAsync(staging, target.Files, ct)) throw new InvalidDataException("线路暂存目录校验失败");
             ct.ThrowIfCancellationRequested();
-            // 此提交窗口无 await/取消点；即使进程被终止，下次也按 journal 完成或回退。
-            if (transaction.HadCurrent) Directory.Move(CurrentDirectory, Path.Combine(_root, "backup-" + transaction.Id));
-            Directory.Move(staging, CurrentDirectory);
+            // 此提交窗口无取消点；即使进程被终止，下次也按 journal 完成或回退。
+            // 旧 current 若被资源管理器、编辑器或杀毒软件短暂占用，Windows 会拒绝改名：重试几次，仍失败就给出中文原因。
+            if (transaction.HadCurrent) await MoveDirectoryWithRetryAsync(CurrentDirectory, Path.Combine(_root, "backup-" + transaction.Id));
+            await MoveDirectoryWithRetryAsync(staging, CurrentDirectory);
             WriteDurable(Path.Combine(_root, "installed.json"), target);
             Multiplayer.RouteVariantScanner.InvalidateUnderRoot(CurrentDirectory);
             BetterGenshinImpact.Core.Script.Utils.JsonMerger.InvalidateUnderRoot(CurrentDirectory);
@@ -262,6 +263,32 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         {
             await RecoverAsync();
             throw;
+        }
+    }
+
+    /// <summary>重试间隔；测试可缩短。共约 6 秒，覆盖杀毒扫描、缩略图生成等短暂占用。</summary>
+    internal static TimeSpan[] MoveRetryDelays { get; set; } =
+        [TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(500), TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2)];
+
+    /// <summary>测试注入点：模拟目录被占用。生产中为 Directory.Move。</summary>
+    internal static Action<string, string> MoveDirectory { get; set; } = Directory.Move;
+
+    private static async Task MoveDirectoryWithRetryAsync(string source, string destination)
+    {
+        // 不接受取消：这是提交窗口，半途停止由 journal 恢复；重试总时长有上限。
+        for (var attempt = 0; ; attempt++)
+        {
+            try { MoveDirectory(source, destination); return; }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < MoveRetryDelays.Length
+                && Directory.Exists(source) && !Directory.Exists(destination))
+            {
+                await Task.Delay(MoveRetryDelays[attempt]).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException("线路文件夹被其他程序占用，无法替换：" + source
+                    + "。请关闭打开着这个文件夹或其中文件的资源管理器窗口、编辑器或压缩软件后重试；旧线路已保留，没有被删除。", ex);
+            }
         }
     }
 
