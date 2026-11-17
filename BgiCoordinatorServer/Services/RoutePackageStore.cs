@@ -35,7 +35,7 @@ public sealed class RoutePackageStore : IDisposable
     public bool HasPublishedPackageForVersion(string version)
     {
         var snapshot = Volatile.Read(ref _catalog);
-        return snapshot.CurrentId is { } id && snapshot.Packages.Any(p => p.Id == id && p.RequiredClientVersion == version);
+        return snapshot.CurrentId is { } id && snapshot.Packages.Any(p => p.Id == id && (version.Length == 0 || p.RequiredClientVersion == version));
     }
     private const long ReserveBytes = 4L * 1024 * 1024;
     private const long DiskFloor = 64L * 1024 * 1024;
@@ -169,7 +169,8 @@ public sealed class RoutePackageStore : IDisposable
             var next = Copy();
             var package = Find(next, id, true);
             if (rollback && package.State == "draft") throw new RoutePackageException(409, "回滚只能选择历史已发布版本。");
-            if (!RoutePackagePolicy.IsExactVersion(RequiredClientVersion) || package.RequiredClientVersion != RequiredClientVersion)
+            // 未配置客户端版本时不限制；配置了精确版本才要求草稿与之相同（旧策略下上传的草稿需重新上传）。
+            if (RequiredClientVersion.Length > 0 && (!RoutePackagePolicy.IsExactVersion(RequiredClientVersion) || package.RequiredClientVersion != RequiredClientVersion))
                 throw new RoutePackageException(409, "请先配置精确正式版本；旧版本策略下的草稿请重新上传。");
             if (next.CurrentId == id) throw new RoutePackageException(409, "该版本已是当前发布版本。");
             // Revalidate before making a blob public; storage errors cannot become a successful publication.

@@ -46,10 +46,8 @@ public sealed class RoutePackageAdmissionTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
     [InlineData("alpha")]
-    public async Task UnconfiguredPolicyBlocksHoeingButNotControlRoomOrStatus(string? required)
+    public async Task InvalidPolicyVersionBlocksHoeingButNotControlRoomOrStatus(string? required)
     {
         using var data = new RoutePackageTestData();
         using var store = new RoutePackageStore(data.StoreRoot, required);
@@ -62,6 +60,22 @@ public sealed class RoutePackageAdmissionTests
         Assert.Single(h.RoomManager.GetControlRoomPlayers("CTRL_CONTROL"));
         var quick = await ops.BeginManualCoordinatedBatchAsync(ctx, "quick", ["uid"], null, quickCommandKey: "一键自定义");
         Assert.Equal("一键自定义", quick.QuickCommandKey);
+    }
+
+    [Fact]
+    public async Task UnpinnedVersionAllowsAnyClientOnceAPackageIsPublished()
+    {
+        using var data = new RoutePackageTestData();
+        using var store = new RoutePackageStore(data.StoreRoot, null);
+        var h = new GatewayTestHarness();
+        var ops = Operations(h, store);
+        var closed = await Assert.ThrowsAsync<InvalidOperationException>(() => ops.CreateRoomAsync(Hello(h, "host"), reportedVersion: "9.9.9"));
+        Assert.Equal("hoeing_route_package_uninitialized", closed.Message);
+        var draft = await data.Upload(store);
+        Assert.Equal("", draft.RequiredClientVersion);
+        await store.PublishAsync(draft.Id, 0, "日常更新", "admin");
+        var (code, _) = await ops.CreateRoomAsync(Hello(h, "host2"), "房主", playerUid: "A", expectedPlayerCount: 2, reportedVersion: "9.9.9");
+        Assert.False(string.IsNullOrEmpty(code));
     }
 
     [Fact]

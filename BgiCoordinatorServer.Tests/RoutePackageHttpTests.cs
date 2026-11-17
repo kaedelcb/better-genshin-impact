@@ -59,7 +59,7 @@ public sealed class RoutePackageHttpTests
         Assert.False(services.AddRoutePackageServices(config, environment.Object));
         using var provider = services.BuildServiceProvider();
         var policy = provider.GetRequiredService<RoutePackagePolicy>();
-        Assert.Equal("hoeing_required_version_unconfigured", Assert.Throws<InvalidOperationException>(policy.RequireConfigured).Message);
+        Assert.Equal("hoeing_route_package_uninitialized", Assert.Throws<InvalidOperationException>(policy.RequireConfigured).Message);
         Assert.Empty(provider.GetServices<IConfigureOptions<ForwardedHeadersOptions>>());
     }
 

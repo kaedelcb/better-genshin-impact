@@ -206,7 +206,7 @@
         if (!catalog) return;
         const current = catalog.current;
         $('currentPublication').textContent = current?.package ? `${packageName(current.package)} · 修订 ${current.revision}` : '尚无发布版本。请上传、校验并发布首个线路包。';
-        $('requiredVersion').textContent = '正式客户端精确版本：' + (catalog.requiredClientVersion || '未配置（新联机入口不可用）');
+        $('requiredVersion').textContent = catalog.requiredClientVersion ? '正式客户端精确版本：' + catalog.requiredClientVersion : '未限制客户端版本（发布后所有版本均可使用）';
         $('storageUsage').textContent = `线路包存储 ${C.formatBytes(catalog.storageBytes)} / ${C.formatBytes(catalog.maxStorageBytes)}；历史版本不会因回滚而被删除。`;
         const filter = $('packageFilter').value, list = $('packageList'); list.replaceChildren();
         const packages = (catalog.packages || []).filter(pkg => filter === 'all' || (filter === 'draft' ? pkg.state === 'draft' : pkg.state !== 'draft'));
@@ -308,7 +308,7 @@
         const pkg = data.package, detail = $('packageDetail'); detail.replaceChildren();
         detail.append(node('h3', pkg.description || '未填写版本说明'), node('p', label(pkg) + (state.catalog?.current?.package?.id === pkg.id ? ' · 当前使用' : ''), 'state-tag'));
         const meta = node('dl', undefined, 'detail-meta');
-        for (const [key, value] of [['包 ID', pkg.id], ['创建时间', date(pkg.createdAtUtc)], ['大小与线路', `${C.formatBytes(pkg.sizeBytes)} · ${pkg.fileCount} 个文件 · ${pkg.routeCount} 条线路`], ['正式客户端', pkg.requiredClientVersion || '未配置'], ['SHA-256', pkg.sha256]])
+        for (const [key, value] of [['包 ID', pkg.id], ['创建时间', date(pkg.createdAtUtc)], ['大小与线路', `${C.formatBytes(pkg.sizeBytes)} · ${pkg.fileCount} 个文件 · ${pkg.routeCount} 条线路`], ['客户端版本限制', pkg.requiredClientVersion || '无限制'], ['SHA-256', pkg.sha256]])
             meta.append(node('dt', key), node('dd', value));
         detail.append(meta);
         const actions = node('div', undefined, 'actions'), download = node('a', '下载此版本单 ZIP', 'button-link');

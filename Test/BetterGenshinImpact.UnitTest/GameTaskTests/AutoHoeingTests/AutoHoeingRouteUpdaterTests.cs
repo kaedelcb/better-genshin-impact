@@ -366,16 +366,24 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Theory]
-    [InlineData("")]
     [InlineData("0.58.0-TeaBag-older")]
     [InlineData("alpha")]
-    public async Task MissingOrDifferentExactPolicyVersionFailsBeforeDownload(string required)
+    public async Task DifferentExactPolicyVersionFailsBeforeDownload(string required)
     {
         using var f = new Fixture();
         f.Add();
         f.RequiredVersion = required;
         await Assert.ThrowsAsync<InvalidDataException>(() => f.Ensure());
         Assert.DoesNotContain(f.Requests, path => path.EndsWith("/download", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnpinnedPolicyVersionDownloadsPublishedPackageWithoutVersionMatch()
+    {
+        using var f = new Fixture();
+        var package = f.Add();
+        f.RequiredVersion = "";
+        Assert.Equal(package.Id, await f.Ensure());
     }
 
     [Theory]

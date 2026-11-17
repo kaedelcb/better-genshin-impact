@@ -109,9 +109,11 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
             deadline.CancelAfter(TimeSpan.FromMinutes(5));
             var token = deadline.Token;
             var policy = await GetJsonAsync<Policy>(Endpoint(server, "policy"), 16 * 1024, token);
-            if (policy.SchemaVersion != 1 || string.IsNullOrWhiteSpace(clientVersion)
-                || string.IsNullOrWhiteSpace(policy.RequiredClientVersion)
-                || !string.Equals(policy.RequiredClientVersion, clientVersion, StringComparison.Ordinal))
+            // 服务端未配置要求版本时不限制客户端版本；配置了才必须与本机完整版本一致。
+            var versionPinned = !string.IsNullOrWhiteSpace(policy.RequiredClientVersion);
+            if (policy.SchemaVersion != 1
+                || (versionPinned && (string.IsNullOrWhiteSpace(clientVersion)
+                    || !string.Equals(policy.RequiredClientVersion, clientVersion, StringComparison.Ordinal))))
                 throw new InvalidDataException("协调服务要求的 BGI 完整版本与本机不一致，请升级后重试");
             RoutePackageDescriptor target;
             if (string.IsNullOrEmpty(packageId))
@@ -121,7 +123,7 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
                 target = current.Package;
             }
             else target = await GetJsonAsync<RoutePackageDescriptor>(Endpoint(server, "packages/" + packageId), 8 * 1024 * 1024, token);
-            RequireDescriptor(target);
+            RequireDescriptor(target, requireCurrentVersion: versionPinned);
             if (packageId != null && packageId.Length > 0 && target.Id != packageId)
                 throw new InvalidDataException("协调服务返回了不同的线路包");
             var installed = ReadInstalled();
