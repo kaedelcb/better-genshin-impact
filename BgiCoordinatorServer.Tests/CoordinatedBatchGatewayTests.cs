@@ -60,6 +60,11 @@ public class CoordinatedBatchGatewayTests
         return state;
     }
 
+    private static Task<GatewayEnvelope> ResetCleaned(GatewayTestHarness h, GatewayHandlerContext client,
+        string resetId, string batchId)
+        => h.Dispatcher.DispatchAsync(client, Command(GatewayProtocol.Names.ControlBatchResetCleaned,
+            new { resetId, batchId }));
+
     private static int Events(GatewayTestHarness h, string name) => h.GatewayClientProxy.Invocations.Count(call =>
         call.Arguments.Count >= 2 && call.Arguments[0] as string == GatewayProtocol.Callbacks.Event
         && call.Arguments[1] is object?[] { Length: > 0 } args && args[0] is GatewayEnvelope e && e.Name == name);
@@ -378,7 +383,8 @@ public class CoordinatedBatchGatewayTests
         var reset = await h.Dispatcher.DispatchAsync(clients[0], resetCommand);
         Assert.Null(GatewayTestHarness.ErrorCode(reset));
         Assert.Equal(1, Events(h, GatewayProtocol.Events.ControlBatchState));
-        Snapshot(await Update(h, clients[0], first, stage: "cleaned"));
+        Assert.False(Snapshot(await Update(h, clients[0], first, stage: "cleaned")).CleanupComplete);
+        Snapshot(await ResetCleaned(h, clients[0], "reset", first.BatchId));
         var next = Snapshot(await Begin(h, clients[0], "next"));
         var replay = await h.Dispatcher.DispatchAsync(clients[0], resetCommand);
         Assert.Equal(first.BatchId, replay.Payload!.Deserialize<CoordinatedBatchResetResult>(GatewayJson.Options)!.BatchId);
@@ -486,6 +492,139 @@ public class CoordinatedBatchGatewayTests
         Assert.Null(h.Ops.CurrentCoordinatedBatch(clients[0]));
     }
 
+    // These gateway regressions prove the admission decision at each physical-reset boundary;
+    // old cleaned/token/post-task evidence alone cannot establish the new reset's completion.
+    [Fact]
+    public async Task UnregisteredReset_BlocksBeginAndOldCleanedUntilResetCleaned()
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"]));
+        var reset = await h.Ops.ResetCoordinatedBatchAsync(clients[0], "unregistered", ["u0"],
+            expectedGeneration: state.Generation, expectedBatchId: state.BatchId);
+        Assert.True(reset.Found);
+        var pending = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        Assert.Equal("aborted", pending.Phase);
+        Assert.All(pending.Members, member => Assert.Equal("cleaned", member.Stage));
+        Assert.False(pending.CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        Assert.False(Snapshot(await Update(h, clients[0], state, stage: "cleaned")).CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, clients[1], reset.ResetId, state.BatchId)));
+        Assert.True(Snapshot(await ResetCleaned(h, clients[0], reset.ResetId, state.BatchId)).CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next")).BatchId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AlreadyCleanedTerminalReset_RequiresNewPhysicalConfirmation(bool completed)
+    {
+        var (h, clients, _) = await Setup();
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0])));
+        state = Snapshot(await Update(h, clients[0], state, result: completed ? "succeeded" : "cancelled"));
+        state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+        Assert.True(state.CleanupComplete);
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "terminal-reset", ["u0"], expectedBatchId: state.BatchId);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(clients[0])!.CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        Assert.False(Snapshot(await Update(h, clients[0], state, stage: "cleaned")).CleanupComplete);
+        Assert.True(Snapshot(await ResetCleaned(h, clients[0], "terminal-reset", state.BatchId)).CleanupComplete);
+        // Replaying the issued reset is idempotent and must not reopen a completed barrier.
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "terminal-reset", ["u0"], expectedBatchId: state.BatchId);
+        Assert.True(h.Ops.CurrentCoordinatedBatch(clients[0])!.CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next")).BatchId);
+    }
+
+    [Fact]
+    public async Task ReleasedOfflineCompletion_ResetDoesNotInventAnUndeliveredPhysicalWait()
+    {
+        var (h, clients, room) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        state = Snapshot(await Update(h, clients[0], state, result: "succeeded"));
+        state = Snapshot(await Update(h, clients[1], state, "u1", result: "succeeded"));
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        state = Snapshot(await Update(h, clients[0], state, stage: "cleaned"));
+        Assert.True(state.CleanupComplete);
+        Assert.True(state.Members.Single(m => m.Uid == "u1").CompletionWaitReleased);
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "offline-reset", ["u0", "u1"], expectedBatchId: state.BatchId);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(clients[0])!.CleanupComplete); // Online u0 must really reset.
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        state = Snapshot(await ResetCleaned(h, clients[0], "offline-reset", state.BatchId));
+        Assert.True(state.CleanupComplete);
+        Assert.NotEqual("cleaned", state.Members.Single(m => m.Uid == "u1").Stage); // Never forge offline cleanup.
+        var next = Snapshot(await Begin(h, clients[0], "next"));
+        Assert.NotEqual(state.BatchId, next.BatchId);
+        var rejoined = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(rejoined, GatewayTestHarness.HelloEnvelope());
+        await h.Ops.JoinControlRoomAsync(rejoined, room, "pw", "u1", "name1", clientInstanceId: "instance1");
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, rejoined, "offline-reset", state.BatchId)));
+        Assert.Equal(next.BatchId, h.Ops.CurrentCoordinatedBatch(clients[0])!.BatchId);
+    }
+
+    [Fact]
+    public async Task OutstandingOnlineReset_SurvivesDisconnectAndOfflineReauthorization()
+    {
+        var (h, clients, room) = await Setup(2);
+        var state = Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"]));
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "online-reset", ["u1"], expectedBatchId: state.BatchId);
+        await h.Ops.HandleDisconnectAsync(clients[1], null);
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "offline-repair", ["u1"], expectedBatchId: state.BatchId);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(clients[0])!.CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next")));
+        var rejoined = GatewayHandlerContext.V3(Guid.NewGuid().ToString("N"));
+        await h.Dispatcher.DispatchAsync(rejoined, GatewayTestHarness.HelloEnvelope());
+        await h.Ops.JoinControlRoomAsync(rejoined, room, "pw", "u1", "name1", clientInstanceId: "instance1");
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, rejoined, "online-reset", state.BatchId)));
+        Assert.True(Snapshot(await ResetCleaned(h, rejoined, "offline-repair", state.BatchId)).CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next")).BatchId);
+    }
+
+    [Fact]
+    public async Task NewResetSupersedesOnlyItsTargets_AndStaleOrDuplicateResetsCannotClearIt()
+    {
+        var (h, clients, _) = await Setup(2);
+        var state = await Run(h, clients, Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"])));
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "first-reset", ["*"], expectedBatchId: state.BatchId);
+        Snapshot(await ResetCleaned(h, clients[0], "first-reset", state.BatchId));
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "later-reset", ["u0"], expectedBatchId: state.BatchId);
+        var stale = await h.Ops.ResetCoordinatedBatchAsync(clients[0], "stale-reset", ["*"],
+            expectedGeneration: state.Generation + 1, expectedBatchId: state.BatchId);
+        Assert.Equal("stale_reset", stale.Reason);
+        await h.Ops.ResetCoordinatedBatchAsync(clients[0], "first-reset", ["*"], expectedBatchId: state.BatchId);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, clients[0], "first-reset", state.BatchId)));
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await ResetCleaned(h, clients[0], "stale-reset", state.BatchId)));
+        // The later u0-only reset must not steal u1's still-valid first-reset receipt.
+        Assert.False(Snapshot(await ResetCleaned(h, clients[1], "first-reset", state.BatchId)).CleanupComplete);
+        Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0", "u1"])));
+        Assert.True(Snapshot(await ResetCleaned(h, clients[0], "later-reset", state.BatchId)).CleanupComplete);
+        Assert.True(Snapshot(await ResetCleaned(h, clients[0], "later-reset", state.BatchId)).CleanupComplete);
+        Assert.NotEqual(state.BatchId, Snapshot(await Begin(h, clients[0], "next", ["u0", "u1"])).BatchId);
+    }
+
+    [Fact]
+    public async Task IndependentAndNonparticipantReset_CannotAbortOrDisarmCurrentBatch()
+    {
+        var (h, clients, room) = await Setup(2);
+        var independent = await h.Ops.ResetCoordinatedBatchAsync(clients[0], "no-batch", ["u0"]);
+        Assert.False(independent.Found);
+        Assert.Equal("", independent.BatchId);
+        Assert.True(independent.Generation > 0);
+        Assert.Null(h.Ops.CurrentCoordinatedBatch(clients[0]));
+        var state = Snapshot(await Begin(h, clients[0]));
+        Assert.True(state.Generation > independent.Generation);
+        h.RoomManager.ReportOnlineEvent("CTRL_" + room, clients[0].ConnectionId, 27);
+        var nonparticipant = await h.Ops.ResetCoordinatedBatchAsync(clients[1], "unrelated", ["u1"],
+            expectedBatchId: state.BatchId, expectedGeneration: state.Generation);
+        Assert.False(nonparticipant.Found);
+        Assert.Equal("", nonparticipant.BatchId);
+        var empty = await h.Ops.ResetCoordinatedBatchAsync(clients[0], "empty", [], expectedBatchId: state.BatchId);
+        Assert.False(empty.Found);
+        var current = h.Ops.CurrentCoordinatedBatch(clients[0])!;
+        Assert.Equal(state.BatchId, current.BatchId);
+        Assert.Equal(state.Revision, current.Revision);
+        Assert.Equal("registering", current.Phase);
+        Assert.False(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "u0").OnlineEventConsumed);
+    }
+
     [Fact]
     public async Task ExplicitResetCleanupCanReleaseLostTokenButCannotTouchSuccessor()
     {
@@ -552,10 +691,11 @@ public class CoordinatedBatchGatewayTests
         Assert.NotNull(GatewayTestHarness.ErrorCode(await h.Dispatcher.DispatchAsync(clients[1],
             Command(GatewayProtocol.Names.ControlBatchResetCleaned, new { resetId = "lost-reset", batchId = old.BatchId }))));
         Assert.NotNull(GatewayTestHarness.ErrorCode(await Begin(h, clients[0], "next", ["u0", "u1"])));
-        foreach (var client in clients)
+        for (var i = 0; i < clients.Length; i++)
         {
+            var client = clients[i];
             var repairId = "repair-" + client.ConnectionId;
-            var repair = await h.Ops.ResetCoordinatedBatchAsync(client, repairId, ["*"],
+            var repair = await h.Ops.ResetCoordinatedBatchAsync(client, repairId, ["u" + i],
                 expectedGeneration: old.Generation, expectedBatchId: old.BatchId);
             Assert.Equal(old.BatchId, repair.BatchId);
             Snapshot(await h.Dispatcher.DispatchAsync(client, Command(GatewayProtocol.Names.ControlBatchResetCleaned,

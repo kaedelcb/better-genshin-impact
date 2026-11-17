@@ -262,12 +262,13 @@ public sealed partial class RoomOperations
                 || !reset.Found || reset.Reason == "stale_reset" || reset.BatchId != batchId
                 || !reset.TargetUids.Contains(player.PlayerUid, StringComparer.Ordinal)
                 || !_controlBatches.TryGetValue(group, out state!) || state.BatchId != batchId
+                || state.Generation != reset.Generation || !state.MatchesResetCleanup(player.PlayerUid, resetId)
                 || !(state.MatchesExecutor(player.PlayerUid, player.ClientInstanceId)
                     || _resetCleanupExecutors.TryGetValue(group + "\0" + resetId, out var executors)
                         && executors.TryGetValue(player.PlayerUid, out var instance)
                         && instance == player.ClientInstanceId))
                 throw new InvalidOperationException("batch_reset_cleanup_not_authorized");
-            snapshot = state.ConfirmResetCleaned(player.PlayerUid);
+            snapshot = state.ConfirmResetCleaned(player.PlayerUid, resetId);
         }
         await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchState);
         return snapshot;
@@ -302,45 +303,51 @@ public sealed partial class RoomOperations
         {
             if (_processedResetResults.TryGetValue(resetKey, out var processed))
                 return processed;
-            if (_controlBatches.TryGetValue(group, out var state))
+            _controlBatches.TryGetValue(group, out var state);
+            targetUids = requested.Contains("*", StringComparer.Ordinal)
+                ? (state is not null
+                    ? state.ParticipantUids
+                    : _roomManager.GetControlRoomPlayers(group).Select(p => p.PlayerUid)
+                        .Where(static uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.Ordinal).ToArray())
+                : requested;
+            // Bind the physical barrier to executors that can actually receive this
+            // reset. An offline target is not silently considered physically reset.
+            var cleanupExecutors = _roomManager.GetControlRoomPlayers(group)
+                .Where(p => p.Online && targetUids.Contains(p.PlayerUid, StringComparer.Ordinal))
+                .GroupBy(p => p.PlayerUid, StringComparer.Ordinal)
+                .Where(players => players.Count() == 1)
+                .ToDictionary(players => players.Key, players => players.First().ClientInstanceId, StringComparer.Ordinal);
+            // Resetting an unrelated executor (or an empty selection) must not abort,
+            // disarm or acquire cleanup ownership over the room's current batch.
+            if (state is not null && state.ParticipantUids.Intersect(targetUids, StringComparer.Ordinal).Any())
             {
                 resetBatch = state;
                 participants = state.ParticipantUids;
                 snapshot = state.Snapshot();
                 stale = string.IsNullOrWhiteSpace(expectedBatchId)
                     || expectedGeneration.HasValue && expectedGeneration.Value != state.Generation
-                    || !string.IsNullOrWhiteSpace(expectedBatchId)
-                       && !string.Equals(expectedBatchId, state.BatchId, StringComparison.Ordinal);
+                    || !string.Equals(expectedBatchId, state.BatchId, StringComparison.Ordinal);
                 if (!stale)
                 {
                     wasActive = !state.IsTerminal;
-                    if (wasActive)
-                        state.Abort("manual_reset");
+                    state.BeginResetCleanup(resetId, targetUids, cleanupExecutors.Keys);
                     snapshot = state.Snapshot();
                 }
             }
 
-            targetUids = requested.Contains("*", StringComparer.Ordinal)
-                ? (participants.Count > 0
-                    ? participants
-                    : _roomManager.GetControlRoomPlayers(group).Select(p => p.PlayerUid)
-                        .Where(static uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.Ordinal).ToArray())
-                : requested;
-
             // A replaced assistant may not continue an old batch. An explicit new reset
             // can authorize its unique, currently connected executor to attest physical
             // cleanup, without changing the old batch's execution identity or tokens.
-            var cleanupExecutors = _roomManager.GetControlRoomPlayers(group)
-                .Where(p => p.Online && targetUids.Contains(p.PlayerUid, StringComparer.Ordinal))
-                .GroupBy(p => p.PlayerUid, StringComparer.Ordinal)
-                .Where(players => players.Count() == 1 && !string.IsNullOrWhiteSpace(players.First().ClientInstanceId))
-                .ToDictionary(players => players.Key, players => players.First().ClientInstanceId, StringComparer.Ordinal);
+            // Even an independent reset needs a trusted fence for a local orphan batch.
+            // Later Begin allocations use the same monotonic source and remain newer.
+            var resetGeneration = snapshot?.Generation ?? Interlocked.Increment(ref _nextBatchGeneration);
+            if (resetGeneration <= 0) throw new InvalidOperationException("batch_generation_exhausted");
             result = new CoordinatedBatchResetResult
             {
                 ResetId = resetId,
                 Found = snapshot != null,
                 BatchId = snapshot?.BatchId ?? "",
-                Generation = snapshot?.Generation ?? 0,
+                Generation = resetGeneration,
                 Phase = snapshot?.Phase ?? "none",
                 Reason = stale ? "stale_reset" : snapshot?.Reason ?? "no_active_batch",
                 TargetUids = targetUids,
@@ -364,7 +371,7 @@ public sealed partial class RoomOperations
             if (wasActive) _roomManager.MarkExhausted(group);
         }
 
-        if (wasActive && resetBatch is not null && snapshot is not null)
+        if (resetBatch is not null && snapshot is not null)
             await PublishBatchSnapshotAsync(group, resetBatch, snapshot, GatewayProtocol.Events.ControlBatchState);
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
 

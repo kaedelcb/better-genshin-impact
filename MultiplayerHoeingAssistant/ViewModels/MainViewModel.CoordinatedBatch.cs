@@ -205,6 +205,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     private CancellationTokenSource? _stageCancellation;
     private DateTime _stageStarted;
     private bool _cancelSent;
+    private bool _physicalCleanupConfirmed;
     private int _completedNative;
     private DateTime? _observationUnavailableSince;
     private long? _observationUnavailableTimestamp;
@@ -571,8 +572,22 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         finally
         {
             batch.EndControlExecution(); // Reconnection may now settle receipts, never restart this loop.
-            if (!_complete) await CleanupAsync();
-            if (_prepare?.IsCompleted != false && _takeover?.IsCompleted != false) _stageCancellation?.Dispose();
+            if (!_complete)
+            {
+                await CleanupAsync();
+                // Reconnect/stop can finish the same cleanup after a slow stage exits.
+                // Keep the original request/ticket facts; never infer "not sent" from an empty registry.
+                batch.ReconcileControlCleanup = async ct =>
+                {
+                    await CleanupAsync(ct);
+                    return batch.CleanupConfirmed;
+                };
+            }
+            if (_prepare?.IsCompleted != false && _takeover?.IsCompleted != false)
+            {
+                _stageCancellation?.Dispose();
+                _stageCancellation = null;
+            }
         }
     }
 
@@ -965,21 +980,22 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
 
     private bool OriginalProcessExited() => _epoch is not null && io.OriginalProcessAlive?.Invoke(_epoch) == false;
 
-    private async Task CleanupAsync()
+    private async Task CleanupAsync(CancellationToken ct = default)
     {
-        if (batch.LocalExecutionReleased)
+        if (batch.LocalExecutionReleased || _physicalCleanupConfirmed)
         {
             batch.CleanupConfirmed = true;
             return; // This loop no longer owns BGI; delayed team failures cannot reclaim a successor.
         }
         if (ContinueByState && !batch.ExplicitStopRequested && !OriginalProcessExited()
-            && (_item?.State != BatchItemState.TerminalConfirmed || batch.LocalCompletionReady))
+            && (_item?.State == BatchItemState.Submitted || batch.LocalCompletionReady))
         {
             io.Status("reconciling", "原任务或完成动作仍待确认，保留请求与恢复现场，不自动取消");
             return;
         }
         _stageCancellation?.Cancel();
-        using var cleanup = new CancellationTokenSource(io.CleanupTimeout);
+        using var cleanup = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cleanup.CancelAfter(io.CleanupTimeout);
         try { await ExchangeAsync(cleanup.Token); }
         catch (Exception ex) { io.Log("[全队批次] 中止上报未确认: " + ex.Message); }
         var stagesDone = true;
@@ -992,6 +1008,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 io.Log("[全队批次] 本机准备/接管退出: " + ex.Message);
             }
         }
+        // A cancelled takeover may publish its allocated identity just before it exits.
+        _epoch ??= batch.ExecutionEpoch;
         var jobDone = false;
         try { jobDone = await SettleOwnedJobAsync(cleanup.Token); }
         catch (Exception ex) { io.Log("[全队批次] 本批作业退出未确认: " + ex.Message); }
@@ -1007,7 +1025,8 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             }
             catch (Exception ex) { io.Log("[全队批次] 本批票据释放未确认: " + ex.Message); }
         }
-        batch.CleanupConfirmed = stagesDone && jobDone && ticketDone;
+        _physicalCleanupConfirmed = stagesDone && jobDone && ticketDone;
+        batch.CleanupConfirmed = _physicalCleanupConfirmed;
         io.Status(batch.CleanupConfirmed ? "aborted" : "cleanupPending",
             batch.CleanupConfirmed ? "本批已中止并清理" : "本批清理尚未确认，保留执行责任");
         // cleaned ACK 由外层在策略及整个调用栈收口后发送，本循环不抢先宣称已清理。

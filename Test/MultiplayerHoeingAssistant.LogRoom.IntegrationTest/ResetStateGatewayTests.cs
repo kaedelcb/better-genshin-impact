@@ -84,9 +84,11 @@ public sealed class ResetStateGatewayTests
             await observer.ConnectAsync(url, room, password, "owner", "监控发起端", [],
                 isRemote: true).WaitAsync(TimeSpan.FromSeconds(10));
 
+            // Obtain the real grant before forwarding; a caller-supplied generation is not reset authority.
+            var grant = await observer.ResetCoordinatedBatchAsync(resetId, ["owner", "peer"]);
             // 从正式 MainViewModel 等待入口发送，经 SDK -> Kestrel /gateway -> SDK 完成确认。
             var wait = (Task<IReadOnlyList<string>>)Method("SendAndWaitResetAcksAsync")
-                .Invoke(vm, [resetId, new[] { "owner", "peer" }, 1, null])!;
+                .Invoke(vm, [resetId, new[] { "owner", "peer" }, grant.Generation, grant.BatchId])!;
             var missing = await wait.WaitAsync(TimeSpan.FromSeconds(10));
             await Task.WhenAll(own.Replied.Task, peer.Replied.Task).WaitAsync(TimeSpan.FromSeconds(10));
             Assert.Equal(peerFails ? new[] { "peer" } : Array.Empty<string>(), missing);

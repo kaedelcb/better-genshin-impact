@@ -59,6 +59,7 @@ public sealed class CoordinatedStopRoutingTests
         var (h, clients, room) = await Setup();
         var first = await h.Ops.BeginManualCoordinatedBatchAsync(clients[0], "first", ["u0"], DateTimeOffset.UtcNow.AddMinutes(1));
         await h.Ops.ResetCoordinatedBatchAsync(clients[0], "reset", ["u0"], expectedBatchId: first.BatchId);
+        await h.Ops.ConfirmCoordinatedResetCleanedAsync(clients[0], "reset", first.BatchId);
         var next = await h.Ops.BeginManualCoordinatedBatchAsync(clients[0], "next", ["u0"], DateTimeOffset.UtcNow.AddMinutes(1));
         await h.Ops.SendRemoteCommandAsync(clients[0], Stop(room, ["u0"], new() { ["hoeingBatchId"] = first.BatchId }));
         Assert.Empty(Delivered(h));

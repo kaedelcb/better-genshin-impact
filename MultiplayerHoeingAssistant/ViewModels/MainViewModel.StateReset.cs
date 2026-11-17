@@ -7,6 +7,31 @@ public partial class MainViewModel
 {
     private readonly SemaphoreSlim _resetRequestGate = new(1, 1);
     private readonly Dictionary<string, Task<CommandResult>> _handledStateResets = new(StringComparer.Ordinal);
+    private string? _lastCoordinatedAdmissionContext;
+    private int _lastCoordinatedAdmissionGeneration;
+
+    // Server generations distinguish a lagging local batch from a real successor.
+    // Batch-id inequality alone cannot tell these two cases apart.
+    internal static bool ResetTargetsSuccessor(string? activeBatchId, int activeGeneration,
+        string? resetBatchId, int resetGeneration, int lastAcceptedGeneration = 0)
+    {
+        if (resetGeneration > 0 && resetGeneration < lastAcceptedGeneration) return true;
+        if (activeBatchId is null) return false;
+        if (string.Equals(activeBatchId, resetBatchId, StringComparison.Ordinal))
+            return resetGeneration > 0 && resetGeneration != activeGeneration;
+        return resetGeneration <= 0 || resetGeneration <= activeGeneration;
+    }
+
+    // Caller holds _batchGate. Core checks again after acquiring the reset gate.
+    private bool IsCoordinatedResetStale(string? batchId, int generation)
+    {
+        var active = _activeBatch;
+        var latest = _lastCoordinatedAdmissionContext == CurrentControlContext()
+            ? _lastCoordinatedAdmissionGeneration : 0;
+        return active?.Start is not null
+            ? ResetTargetsSuccessor(active.BatchId, active.Generation, batchId, generation, latest)
+            : generation > 0 && Math.Max(active?.Generation ?? 0, latest) > generation;
+    }
 
     // A reset receipt can be evicted or lost while the executor is rebuilding BGI.
     // Re-authorize cleanup only for the same old batch; never reset a successor.
@@ -37,10 +62,11 @@ public partial class MainViewModel
 
     // A retransmitted reset joins its original operation, including while it is still running.
     // It must never restart BGI a second time after the user has started a new task.
-    private Task<CommandResult> ResetLocalExecutionStateAsync(string? resetId = null, string? expectedBatchId = null)
+    private Task<CommandResult> ResetLocalExecutionStateAsync(string? resetId = null, string? expectedBatchId = null,
+        int expectedGeneration = 0)
     {
         if (string.IsNullOrWhiteSpace(resetId))
-            return ResetLocalExecutionStateCoreAsync(resetId, expectedBatchId);
+            return ResetLocalExecutionStateCoreAsync(resetId, expectedBatchId, expectedGeneration);
         TaskCompletionSource<CommandResult> completion;
         lock (_resetAckGate)
         {
@@ -58,7 +84,7 @@ public partial class MainViewModel
 
         async Task CompleteAsync()
         {
-            try { completion.TrySetResult(await ResetLocalExecutionStateCoreAsync(resetId, expectedBatchId)); }
+            try { completion.TrySetResult(await ResetLocalExecutionStateCoreAsync(resetId, expectedBatchId, expectedGeneration)); }
             catch (Exception ex)
             {
                 completion.TrySetResult(new() { ErrorCode = "reset_unconfirmed", Message = "状态重置未完成：" + ex.Message });

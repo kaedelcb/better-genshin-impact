@@ -68,6 +68,7 @@ public sealed class StateResetButtonEntryTests
         DispatcherTimer? confirmTimer = null;
         IAsyncDisposable? heldOldSend = null;
         var physicalEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowPhysical = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var oldBatchExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var oldCallbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseOldCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -95,7 +96,7 @@ public sealed class StateResetButtonEntryTests
             Set(vm, "_activeBatch", oldBatch);
             var executor = new CommandExecutor(null!, isolatedBgi, () => external, logger: vm.AddLog)
             {
-                ResetProcessOverrideForTest = () =>
+                ResetProcessOverrideForTest = async () =>
                 {
                     Assert.False(oldBatchExited.Task.IsCompleted,
                         "旧批次只能由物理复位释放，不能靠预先完成任务绕过等待。");
@@ -106,7 +107,8 @@ public sealed class StateResetButtonEntryTests
                     Assert.True(blockedStart.IsCompletedSuccessfully);
                     Assert.Equal("reset_in_progress", blockedStart.Result.ErrorCode);
                     physicalEntered.TrySetResult();
-                    return Task.FromResult(true);
+                    await allowPhysical.Task;
+                    return true;
                 },
                 ResetStatusQueryOverrideForTest = _ => Task.FromResult<IpcResponse?>(Ready()),
                 ResetReadyTimeoutForTest = TimeSpan.FromSeconds(2),
@@ -171,6 +173,17 @@ public sealed class StateResetButtonEntryTests
             await dialogConfirmed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             // 原故障链先等旧批次 10 秒；本夹具的旧任务只有物理复位进入后才可能退出。
             await physicalEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var inFlight = Assert.Single(Field<Dictionary<string, Task<CommandResult>>>(vm, "_handledStateResets"));
+            var resetMethod = typeof(MainViewModel).GetMethod("ResetLocalExecutionStateAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            Assert.Same(inFlight.Value, resetMethod.Invoke(vm, [inFlight.Key, oldBatch.BatchId, oldBatch.Generation]));
+            Assert.False(inFlight.Value.IsCompleted);
+            // Even a start delivered just before the reset gate is released must queue, not abort the team.
+            var queued = (Task)typeof(MainViewModel).GetMethod("OnCoordinatedBatchStartAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(vm, [oldBatch.Start! with { BatchId = "delayed-terminal", Generation = 22, CleanupComplete = true }])!;
+            Assert.False(queued.IsCompleted);
+            allowPhysical.TrySetResult();
+            await queued.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.DoesNotContain("本机状态重置尚未完成，未开始另一批次", vm.CommandLogsText, StringComparison.Ordinal);
             await UntilAsync(() => vm.CommandLogsText.Contains("本机执行状态已收口", StringComparison.Ordinal)
                 && Field<SemaphoreSlim>(vm, "_resetRequestGate").CurrentCount == 1,
                 TimeSpan.FromSeconds(20), () => vm.CommandLogsText);
@@ -209,18 +222,31 @@ public sealed class StateResetButtonEntryTests
             Set(vm, "_activeBatch", newBatch);
             var duplicate = (Task<CommandResult>)typeof(MainViewModel)
                 .GetMethod("ResetLocalExecutionStateAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(vm, [first.Key, oldBatch.BatchId])!;
+                .Invoke(vm, [first.Key, oldBatch.BatchId, oldBatch.Generation])!;
             Assert.Same(first.Value, duplicate);
             Assert.Same(firstResult, await duplicate);
             Assert.Equal(1, physicalResets);
             Assert.Same(newBatch, Field<OnlineHoeingBatch?>(vm, "_activeBatch"));
             Assert.False(newBatch.IsCancellationRequested);
-            newBatch.MarkSettled();
-            Set(vm, "_activeBatch", null);
+            var stale = await (Task<CommandResult>)resetMethod.Invoke(vm, ["delayed-old-reset", oldBatch.BatchId, oldBatch.Generation])!;
+            Assert.Equal("stale_reset", stale.ErrorCode);
+            Assert.Same(newBatch, Field<OnlineHoeingBatch?>(vm, "_activeBatch"));
+            Assert.False(newBatch.IsCancellationRequested);
+            Assert.Equal(1, physicalResets);
+            // The server has advanced, but this endpoint still owns a failed older batch.
+            // Like the first reset, seed an old physical identity: the pipe double itself
+            // does not create a new OS process when its reset override is called.
+            executor.SeedTakeoverStateForTest("lagging-ticket", new BgiEpoch { ProcessId = 20, StartTicksUtc = 200 });
+            var repaired = await (Task<CommandResult>)resetMethod.Invoke(vm, ["authorized-new-reset", "server-newer-batch", 23])!;
+            Assert.True(repaired.Status == "success", repaired.ErrorCode + ": " + repaired.Message);
+            Assert.Equal(2, physicalResets);
+            Assert.False(newBatch.IsAlive);
+            Assert.Null(Field<OnlineHoeingBatch?>(vm, "_activeBatch"));
         }
         finally
         {
             confirmTimer?.Stop();
+            allowPhysical.TrySetResult();
             releaseOldCallback.TrySetResult();
             oldBatchExited.TrySetResult();
             if (heldOldSend is not null) await heldOldSend.DisposeAsync();

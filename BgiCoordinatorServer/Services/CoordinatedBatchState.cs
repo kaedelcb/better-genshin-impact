@@ -78,6 +78,8 @@ public sealed class CoordinatedBatchState
         public string Reason = "";
         public bool HadLocalTaskError;
         public bool CompletionWaitReleased;
+        public string ResetId = "";
+        public bool ResetCleanupPending;
         public DateTime LastSeen = now;
     }
     private static bool HasEndedCurrentItem(Member member)
@@ -106,7 +108,7 @@ public sealed class CoordinatedBatchState
     public string Reason { get; private set; } = "";
     public bool ExecutionEnded => Phase is "completed" or "aborted";
     public bool IsTerminal => ExecutionEnded
-        && _members.Values.All(m => m.Stage == "cleaned" || m.CompletionWaitReleased);
+        && _members.Values.All(m => !m.ResetCleanupPending && (m.Stage == "cleaned" || m.CompletionWaitReleased));
     public IReadOnlyList<string> ParticipantUids => _members.Keys.ToArray();
 
     public CoordinatedBatchState(int generation, IEnumerable<string> uids, DateTime now,
@@ -207,11 +209,37 @@ public sealed class CoordinatedBatchState
         return true;
     }
 
-    public CoordinatedBatchSnapshot ConfirmResetCleaned(string uid)
+    // reset is a fresh physical-cleanup barrier, independent of old stage/token/post-task waits.
+    // A newer reset supersedes only the targeted members' receipts, never other members' waits.
+    internal void BeginResetCleanup(string resetId, IReadOnlyList<string> targetUids,
+        IReadOnlyCollection<string> onlineTargetUids)
     {
-        if (!ExecutionEnded || !_members.TryGetValue(uid, out var member))
+        Abort("manual_reset");
+        foreach (var uid in targetUids)
+        {
+            if (!_members.TryGetValue(uid, out var member)) continue;
+            member.ResetId = resetId;
+            // Offline commands are not queued or executed. Do not recreate a wait
+            // already released by the offline-completion contract. Existing unknown
+            // execution or an earlier physical-reset wait remains outstanding.
+            if (onlineTargetUids.Contains(uid)) member.ResetCleanupPending = true;
+        }
+        Revision++;
+    }
+
+    internal bool MatchesResetCleanup(string uid, string resetId)
+        => _members.TryGetValue(uid, out var member) && member.ResetId == resetId;
+
+    public CoordinatedBatchSnapshot ConfirmResetCleaned(string uid, string resetId)
+    {
+        if (!ExecutionEnded || !_members.TryGetValue(uid, out var member) || member.ResetId != resetId)
             throw new InvalidOperationException("batch_reset_cleanup_not_authorized");
-        if (member.Stage != "cleaned") { member.Stage = "cleaned"; Revision++; }
+        if (member.ResetCleanupPending)
+        {
+            member.ResetCleanupPending = false;
+            member.Stage = "cleaned";
+            Revision++;
+        }
         return Snapshot();
     }
 
@@ -230,7 +258,7 @@ public sealed class CoordinatedBatchState
         CheckTimeout(now);
         if (ExecutionEnded)
         {
-            if (stage == "cleaned" && member.Token == token && member.Stage != "cleaned")
+            if (stage == "cleaned" && !member.ResetCleanupPending && member.Token == token && member.Stage != "cleaned")
             { member.Stage = "cleaned"; Revision++; }
             return Snapshot();
         }

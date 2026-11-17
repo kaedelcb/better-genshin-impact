@@ -396,6 +396,16 @@ public partial class MainViewModel
         var uid = _config?.PlayerUid;
         if (string.IsNullOrWhiteSpace(uid) || !start.ParticipantUids.Contains(uid, StringComparer.Ordinal)) return;
         if (!IsExecutorMode || start.Protocol != "hoeing.start.v2") return;
+        var controlContext = CurrentControlContext();
+        // resetCleaned can reach the server just before the local finally releases this gate.
+        // Queue that start at the boundary instead of aborting the whole team as preparation_failed.
+        if (!await _localResetGate.WaitAsync(TimeSpan.FromSeconds(90)))
+        {
+            await RejectCoordinatedStartAsync(start, uid, "本机状态重置仍未完成，未开始另一批次");
+            return;
+        }
+        _localResetGate.Release();
+        if (controlContext != CurrentControlContext()) return;
         var recoveryStore = new CoordinatedRecoveryStore(System.IO.Path.Combine(AssistantDataDirectory.Root,
             "coordinated-recovery", AssistantInstanceScope.CurrentSuffix), ControlSettingsIdentity(_config, RoomCode),
             message =>
@@ -464,6 +474,9 @@ public partial class MainViewModel
                     };
                     batch = candidate;
                     _activeBatch = batch; // 从这里起Preparing也是busy，而不是等待RunTask出现。
+                    _lastCoordinatedAdmissionGeneration = _lastCoordinatedAdmissionContext == controlContext
+                        ? Math.Max(_lastCoordinatedAdmissionGeneration, start.Generation) : start.Generation;
+                    _lastCoordinatedAdmissionContext = controlContext;
                 }
                 catch (Exception ex) { rejected = ex.Message; }
             }
@@ -795,6 +808,22 @@ public partial class MainViewModel
         if (batch.StateContinuationEnabled && batch.LocalCompletionReady && !batch.ExplicitStopRequested)
             return false;
         if (batch.RunTask?.IsCompleted != true || batch.LocalFinalizationTask?.IsCompleted == false) return false;
+        if (!batch.LocalCompletionReady && batch.PolicyExecution is null
+            && batch.ReconcileControlCleanup is { } reconcile && await reconcile(ct))
+        {
+            TaskCenterHost? cleanupHost;
+            lock (_taskCenterHostGate) cleanupHost = _taskCenterHost;
+            if (cleanupHost is not null)
+            {
+                var run = cleanupHost.OnlineHoeingManagedRun(batch.Generation);
+                if (run is not null && !await cleanupHost.SettleFailedOnlineHoeingAsync(
+                    batch.Generation, run, true, "原批次中止后的本机清理已确认")) return false;
+                if (!cleanupHost.CanOpenOnlineSendAfterBatch) return false;
+                await cleanupHost.OpenOnlineHoeingSendAsync();
+            }
+            batch.LocalCleanupConfirmed = true;
+            return true;
+        }
         var executor = _commandExecutor;
         var epoch = batch.ExecutionEpoch;
         if (executor is null || epoch is null) return false;

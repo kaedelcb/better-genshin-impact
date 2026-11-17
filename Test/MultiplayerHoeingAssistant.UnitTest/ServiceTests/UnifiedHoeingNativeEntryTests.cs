@@ -64,7 +64,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         var previousExt = BgiExternalClient.PipeNameOverrideForTest;
         await using var server = await IsolatedCoordinator.StartAsync();
         await using var pipe = new BgiInstancePipeDouble();
-        var script = new OwnedBatchPeer(groupName, quickGroupName);
+        using var script = new OwnedBatchPeer(groupName, quickGroupName);
         pipe.BodyForTest = script.Reply;
         pipe.Start();
         IpcClient.PipeNameOverrideForTest = pipe.PipeName;
@@ -247,6 +247,71 @@ public sealed class UnifiedHoeingNativeEntryTests
             await Task.Delay(400);
             Assert.Null(Active(vm));
             Assert.Equal(4, script.StartCount);
+
+            // DC54A4 recovery chain through the real server and production reset handler:
+            // this endpoint retained an older local batch while the server moved on.
+            var orphan = new OnlineHoeingBatch(first with
+            {
+                BatchId = "local-lagging-" + first.BatchId, Generation = fourth.Generation - 1,
+            }, uid, new TaskConflictPolicySettings { Policy = TaskConflictPolicy.Stop });
+            orphan.RunTask = Task.CompletedTask;
+            Set(vm, "_activeBatch", orphan);
+            var enteredReset = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var allowReset = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var physicalResets = 0;
+            executor.SeedTakeoverStateForTest("orphan-ticket", new BgiEpoch { ProcessId = 10, StartTicksUtc = 100 });
+            executor.ResetProcessOverrideForTest = async () =>
+            {
+                Interlocked.Increment(ref physicalResets);
+                enteredReset.TrySetResult();
+                await allowReset.Task;
+                return true;
+            };
+            executor.ResetStatusQueryOverrideForTest = _ => Task.FromResult<IpcResponse?>(new()
+            {
+                Success = true, Data = JsonSerializer.Serialize(new
+                {
+                    executionIdle = true, running = false, slotOccupied = false, queueDepth = 0,
+                    takeoverActive = false, hasSuspendedTaskContext = false, currentTaskHandle = (string?)null,
+                    bgiEpoch = new { processId = Environment.ProcessId,
+                        startTicksUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks },
+                })
+            });
+            executor.ResetReadyTimeoutForTest = TimeSpan.FromSeconds(2);
+            var reset = await client.ResetCoordinatedBatchAsync("native-repair", [uid],
+                expectedGeneration: fourth.Generation, expectedBatchId: fourth.BatchId);
+            var resetCommand = new RemoteCommand
+            {
+                Cmd = "reset_state", CommandId = reset.ResetId, Target = [uid],
+                Params = new() { ["resetId"] = reset.ResetId, ["generation"] = reset.Generation, ["batchId"] = reset.BatchId },
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(30),
+            };
+            try
+            {
+                await client.SendRemoteCommandAsync(resetCommand);
+                await enteredReset.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                var pendingReset = await Assert.ThrowsAsync<GatewayErrorException>(() => BeginAsync(client, uid));
+                Assert.Contains("previous_batch_active", pendingReset.Message);
+            }
+            finally { allowReset.TrySetResult(); }
+            await WaitAsync(() => Active(vm) == null, () => Diagnostics(vm, pipe, server));
+            Assert.False(orphan.IsAlive);
+            Assert.True(orphan.CleanupConfirmed);
+            Assert.True((await client.GetCurrentCoordinatedBatchAsync())!.CleanupComplete);
+            Assert.Equal(1, physicalResets);
+            var fifth = await BeginAsync(client, uid);
+            await WaitAsync(() => script.StartCount == 5 && Active(vm)?.BatchId == fifth.BatchId,
+                () => Diagnostics(vm, pipe, server));
+            var successor = Active(vm)!;
+            await client.SendRemoteCommandAsync(resetCommand); // Old authorization cannot reach the successor.
+            await Task.Delay(400);
+            Assert.Same(successor, Active(vm));
+            Assert.False(successor.IsCancellationRequested);
+            Assert.Equal(1, physicalResets);
+            await StopAsync(client, uid, fifth.BatchId);
+            await WaitAsync(() => Active(vm) == null, () => Diagnostics(vm, pipe, server));
+            Assert.True((await client.GetCurrentCoordinatedBatchAsync())!.CleanupComplete);
+            Assert.Equal(5, script.StartCount);
         }
         finally
         {
@@ -306,7 +371,7 @@ public sealed class UnifiedHoeingNativeEntryTests
         + string.Join(",", pipe.Received.Select(r => r.Operation)) + "\nserver=" + server.Output;
 
     /// <summary>真实帧传输的保守协议替身：作业一直 running，只有自己的 ownedOnly cancel 才进入终态。</summary>
-    private sealed class OwnedBatchPeer(string groupName, string quickGroupName)
+    private sealed class OwnedBatchPeer(string groupName, string quickGroupName) : IDisposable
     {
         private sealed record Job(string Id, string Key, string Name, string BatchId)
         {
@@ -320,7 +385,17 @@ public sealed class UnifiedHoeingNativeEntryTests
         private bool _soloRunning = true;
         public int SoloTakeovers { get; private set; }
         private string? _ticket;
+        private readonly List<Mistletoe.Shared.CoordinatedStopSignal> _stopSignals = [];
+        private long _manualStopVersion;
         private int _cancelCount;
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                foreach (var signal in _stopSignals) signal.Dispose();
+                _stopSignals.Clear();
+            }
+        }
         private readonly int _pid = Environment.ProcessId;
         private readonly long _ticks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
         private object Epoch => new { processId = _pid, startTicksUtc = _ticks };
@@ -359,8 +434,13 @@ public sealed class UnifiedHoeingNativeEntryTests
                                 ["hoeing.batchOutcome.v1"] = true, ["hoeing.coordinatedStart.v1"] = true,
                                 ["hoeing.finishEvidence.v1"] = true,
                                 ["execution.targetedSuspend.v1"] = true, ["config.applied"] = true,
+                                ["task.coordinatedRecoveryStop.v1"] = true,
+                                ["execution.manualStopFence.v1"] = true,
                             }
                         });
+                    case "ext.execution.manualStopFence":
+                        return (true, null, null, new { bgiEpoch = Epoch, stopVersion = _manualStopVersion,
+                            lastManualStopTimestamp = 0L, monotonicFrequency = Stopwatch.Frequency });
                     case "task.status":
                     case "ext.task.status":
                         return (true, null, null, new
@@ -396,6 +476,16 @@ public sealed class UnifiedHoeingNativeEntryTests
                     case "task.suspend":
                         if (active != null || Value(data, "takeoverTicket") is not { } ticket)
                             return (false, "not_current", "替身拒绝非空闲接管", null);
+                        if (Value(data, "recoveryStopSignal") is { } signalName)
+                        {
+                            var signal = Mistletoe.Shared.CoordinatedStopSignal.Open(signalName);
+                            if (signal is null || signal.IsStopped)
+                            {
+                                signal?.Dispose();
+                                return (false, "manual_stop_fence", "停止信号不可用", null);
+                            }
+                            _stopSignals.Add(signal);
+                        }
                         if (_soloRunning)
                         {
                             if (Value(data, "expectedExecutionInstanceId") != SoloRoot.ToString("N")
@@ -438,6 +528,8 @@ public sealed class UnifiedHoeingNativeEntryTests
                         }
                         _soloRunning = false;
                         _ticket = null;
+                        _manualStopVersion++;
+                        foreach (var signal in _stopSignals) signal.Stop();
                         return (true, null, null, new { status = "stop_requested" });
                     case "task.resume":
                         if (active != null || Value(data, "takeoverTicket") != _ticket || _ticket == null)
@@ -464,7 +556,8 @@ public sealed class UnifiedHoeingNativeEntryTests
             while (repo != null && !File.Exists(Path.Combine(repo.FullName, "BgiCoordinatorServer", "BgiCoordinatorServer.csproj")))
                 repo = repo.Parent;
             Assert.NotNull(repo);
-            var serverDll = Path.Combine(repo!.FullName, "BgiCoordinatorServer", "bin", "Debug", "net8.0", "BgiCoordinatorServer.dll");
+            var serverDll = Environment.GetEnvironmentVariable("NEXUSBGI_TEST_COORDINATOR_DLL")
+                ?? Path.Combine(repo!.FullName, "BgiCoordinatorServer", "bin", "Debug", "net8.0", "BgiCoordinatorServer.dll");
             Assert.True(File.Exists(serverDll), "先使用 DeployToBgiTools=false 构建本次源码的 Debug server。");
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();

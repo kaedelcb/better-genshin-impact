@@ -34,7 +34,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>全局状态重置的代际栅栏：迟到旧 AllReady/reset 回调不得再次启动或取消新一轮。</summary>
     private int _resetFenceGeneration;
     private int _resetRoomRefreshRunning;
-    private string? _lastAppliedResetId;
     /// <summary>远端 reset_state 执行回执：一次重置事务按 resetId+目标 UID 等待，超时只报告未确认。</summary>
     private readonly Dictionary<string, TaskCompletionSource<CommandResult>> _pendingResetAcks = new();
     private readonly object _resetAckGate = new();
@@ -2590,7 +2589,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         expectedGeneration = Math.Max(expectedGeneration, _intentLifecycle.LastProcessedAllReadyGeneration);
         string expectedBatchId;
         lock (_batchGate) expectedBatchId = _activeBatch?.Start?.BatchId ?? targetMember?.HoeingBatchId ?? "";
-        Interlocked.Exchange(ref _resetFenceGeneration, expectedGeneration);
+        lock (_batchGate) _resetFenceGeneration = Math.Max(_resetFenceGeneration, expectedGeneration);
         var serverResetGeneration = expectedGeneration;
         var serverResetConfirmed = false;
 
@@ -2625,9 +2624,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                     return;
                 }
                 serverResetConfirmed = true;
-                serverResetGeneration = Math.Max(serverResetGeneration, reset.Generation);
-                if (reset.Found) expectedBatchId = reset.BatchId;
-                Interlocked.Exchange(ref _resetFenceGeneration, serverResetGeneration);
+                serverResetGeneration = reset.Generation; // Forward the exact server grant, not a local high-water mark.
+                expectedBatchId = reset.BatchId;
+                lock (_batchGate) _resetFenceGeneration = Math.Max(_resetFenceGeneration, serverResetGeneration);
                 var missing = reset.MissingRegistrationUids.Count == 0
                     ? "无"
                     : string.Join(",", reset.MissingRegistrationUids);
@@ -2667,7 +2666,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("[状态重置] 正在并行恢复本机和所有在线成员的执行环境");
             // 所有人包含本机，与从哪张成员卡进入无关；不让一个成员的冷启动拖住其他成员。
             var localReset = _config.ObserverMode != true
-                ? ResetLocalExecutionStateAsync(resetId, expectedBatchId)
+                ? ResetLocalExecutionStateAsync(resetId, expectedBatchId, serverResetGeneration)
                 : Task.FromResult(new CommandResult { Status = "success", Message = "遥控端无需本机复位" });
             var remoteReset = _signalRClient != null
                 ? SendAndWaitResetAcksAsync(resetId, remoteTargets, serverResetGeneration, expectedBatchId)
@@ -2697,7 +2696,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
             else
             {
-                await ResetLocalExecutionStateAsync(resetId, expectedBatchId);
+                await ResetLocalExecutionStateAsync(resetId, expectedBatchId, serverResetGeneration);
             }
         }
         else if (_signalRClient != null)
@@ -3098,7 +3097,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 本机“重置状态”收口：取消当前批次、清理上线边沿，再按 BGI 纪元安全释放接管权。
     /// 释放失败时保留票据并把不确定性显示出来，禁止静默当作成功。
     /// </summary>
-    private async Task<CommandResult> ResetLocalExecutionStateCoreAsync(string? resetId, string? expectedBatchId)
+    private async Task<CommandResult> ResetLocalExecutionStateCoreAsync(string? resetId, string? expectedBatchId, int expectedGeneration)
     {
         if (!await _localResetGate.WaitAsync(0))
             return new CommandResult { Status = "failed", ErrorCode = "reset_in_progress", Message = "本机已有一轮状态重置正在执行" };
@@ -3116,9 +3115,9 @@ public partial class MainViewModel : INotifyPropertyChanged
             OnlineHoeingBatch? batchToWait;
             lock (_batchGate)
             {
-                if (_activeBatch is { Start: not null } current
-                    && !string.Equals(current.BatchId, expectedBatchId, StringComparison.Ordinal))
+                if (IsCoordinatedResetStale(expectedBatchId, expectedGeneration))
                     return new CommandResult { Status = "failed", ErrorCode = "stale_reset", Message = "批次身份已改变，未影响当前任务" };
+                _resetFenceGeneration = Math.Max(_resetFenceGeneration, expectedGeneration);
                 batchToWait = _activeBatch;
             }
             CancelPendingCoordinatedBegin();
@@ -5243,31 +5242,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                         && int.TryParse(generationValue.ToString(), out var parsedGeneration))
                         resetGeneration = parsedGeneration;
                     var resetBatchId = cmd.Params?.GetValueOrDefault("batchId")?.ToString();
-                    var duplicateReset = false;
-                    var staleReset = false;
-                    lock (_batchGate)
-                    {
-                        duplicateReset = string.Equals(_lastAppliedResetId, resetId, StringComparison.Ordinal);
-                        staleReset = !duplicateReset && _activeBatch is { } active
-                            && (active.Start is not null
-                                ? !string.Equals(active.BatchId, resetBatchId, StringComparison.Ordinal)
-                                : resetGeneration > 0 && active.Generation > resetGeneration);
-                    }
-                    if (duplicateReset)
-                    {
-                        await SendAckAsync(cmd, "success", "该 resetId 已处理，忽略重复复位");
-                        return;
-                    }
-                    if (staleReset)
-                    {
-                        await SendAckAsync(cmd, "failed", "旧 resetId 已过期，未影响当前联机批次");
-                        return;
-                    }
-                    Interlocked.Exchange(ref _resetFenceGeneration,
-                        Math.Max(Volatile.Read(ref _resetFenceGeneration), resetGeneration));
-                    var result = await ResetLocalExecutionStateAsync(resetId, resetBatchId);
-                    if (result.Status == "success")
-                        lock (_batchGate) _lastAppliedResetId = resetId;
+                    // Join an in-flight/completed reset before checking successor identity.
+                    // Core rechecks the grant atomically after acquiring the local reset gate.
+                    var result = await ResetLocalExecutionStateAsync(resetId, resetBatchId, resetGeneration);
                     await SendAckAsync(cmd, result.Status, result.Message);
                 }
                 else

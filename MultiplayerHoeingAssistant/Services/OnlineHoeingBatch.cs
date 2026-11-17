@@ -698,6 +698,7 @@ public sealed class OnlineHoeingBatch
     public string? TakeoverTicket { get; set; }
     public bool CleanupConfirmed { get; set; }
     public bool LocalCleanupConfirmed { get; set; }
+    internal Func<CancellationToken, Task<bool>>? ReconcileControlCleanup { get; set; }
     public bool Prepared { get; set; }
     public bool TakenOver { get; set; }
     public void MarkSettled(bool waitForCallbacks = true)

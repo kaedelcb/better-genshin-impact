@@ -29,6 +29,9 @@ public sealed class UnifiedHoeingBatchLoopTests
         internal Action<Scenario>? AfterSubmit;
         internal Action<Scenario>? DuringExchange;
         internal Task? PreparationWait;
+        internal Task? TakeoverWait;
+        internal bool StateContinuation;
+        internal bool UncooperativePreparation;
 
         internal Scenario(bool peer = false, params CoordinatedHoeingBinding[] bindings)
         {
@@ -76,21 +79,23 @@ public sealed class UnifiedHoeingBatchLoopTests
         internal Task<bool> Run() => new CoordinatedBatchLoop(Batch, new CoordinatedBatchRuntime
         {
             Exchange = Exchange,
+            StateContinuationEnabled = StateContinuation,
             Prepare = async ct =>
             {
                 Interlocked.Increment(ref PrepareCount);
-                if (PreparationWait != null) await PreparationWait.WaitAsync(ct);
+                if (PreparationWait != null)
+                    await PreparationWait.WaitAsync(UncooperativePreparation ? CancellationToken.None : ct);
                 if (PreparationFailure != null) throw PreparationFailure;
                 ct.ThrowIfCancellationRequested();
             },
-            Takeover = ct =>
+            Takeover = async ct =>
             {
                 ct.ThrowIfCancellationRequested();
                 Assert.Equal("takeover", Server.Phase);
                 Interlocked.Increment(ref TakeoverCount);
                 Batch.TakeoverTicket = "own-ticket";
+                if (TakeoverWait is not null) await TakeoverWait.WaitAsync(ct);
                 if (ChangeEpochDuringTakeover) Epoch = new BgiEpoch { ProcessId = 8, StartTicksUtc = 80 };
-                return Task.CompletedTask;
             },
             ReadJobs = ct =>
             {
@@ -133,6 +138,83 @@ public sealed class UnifiedHoeingBatchLoopTests
             CleanupTimeout = TimeSpan.FromMilliseconds(200),
             SubmissionReconcileTimeout = TimeSpan.FromMilliseconds(25),
         }).RunAsync().WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    // Reproduces DC54A4: a peer rejects start while still resetting. No business
+    // request exists locally, so state continuation must not pin an empty batch forever.
+    [Theory]
+    [InlineData("registering")]
+    [InlineData("preparing")]
+    [InlineData("takeover")]
+    public async Task PeerAbortBeforeSubmissionSettlesWithoutCancellingAnyBusinessTask(string phase)
+    {
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var s = new Scenario(true) { StateContinuation = true, PeerRegistered = phase != "registering" };
+        if (phase == "preparing") s.PreparationWait = held.Task;
+        if (phase == "takeover") s.TakeoverWait = held.Task;
+        s.DuringExchange = current =>
+        {
+            if (current.Server.Phase == phase && (phase != "preparing" || current.PrepareCount > 0)
+                && (phase != "takeover" || current.TakeoverCount > 0))
+                current.Server.Abort("participant_preparation_failed:peer:registering:reset_in_progress");
+        };
+        Assert.False(await s.Run());
+        Assert.True(s.Batch.CleanupConfirmed);
+        Assert.Empty(s.Sent);
+        Assert.Equal(0, s.CancelCount);
+        Assert.Equal(phase == "takeover" ? 1 : 0, s.ReleaseCount);
+        // A later host/receipt failure may retry cleanup after the ticket was already
+        // released. Preserve that physical fact instead of releasing it a second time.
+        s.Batch.CleanupConfirmed = false;
+        Assert.True(await s.Batch.ReconcileControlCleanup!(CancellationToken.None));
+        Assert.Equal(phase == "takeover" ? 1 : 0, s.ReleaseCount);
+        Assert.Equal(0, s.CancelCount);
+        s.Server.Apply("self", s.Batch.Token, s.Batch.BatchId, "group", 0, 0, "", DateTime.UtcNow, "cleaned");
+        s.Server.Apply("peer", "peer-token", s.Batch.BatchId, "group", 0, 0, "", DateTime.UtcNow, "cleaned");
+        Assert.True(s.Server.IsTerminal);
+    }
+
+    [Fact]
+    public async Task SlowCancelledPreparationCanFinishCleanupOnReconnectWithoutAnEpoch()
+    {
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var s = new Scenario(true) { StateContinuation = true, PreparationWait = held.Task,
+            UncooperativePreparation = true };
+        s.DuringExchange = current =>
+        {
+            if (current.PrepareCount > 0)
+                current.Server.Abort("participant_preparation_failed:peer:reset_in_progress");
+        };
+        try
+        {
+            Assert.False(await s.Run());
+            Assert.False(s.Batch.CleanupConfirmed);
+            Assert.Null(s.Batch.ExecutionEpoch);
+        }
+        finally { held.TrySetResult(); }
+        Assert.True(await s.Batch.ReconcileControlCleanup!(CancellationToken.None));
+        Assert.Empty(s.Sent);
+        Assert.Equal(0, s.CancelCount);
+    }
+
+    [Fact]
+    public async Task SubmittedUnknownTaskSurvivesPeerAbortAndLateCleanupUntilExplicitReset()
+    {
+        var s = new Scenario { StateContinuation = true, LoseUnacceptedReply = true };
+        s.DuringExchange = current =>
+        {
+            if (current.Sent.Count > 0) current.Server.Abort("participant_failed:peer");
+        };
+        Assert.False(await s.Run());
+        Assert.False(s.Batch.CleanupConfirmed);
+        Assert.False(await s.Batch.ReconcileControlCleanup!(CancellationToken.None));
+        Assert.Single(s.Sent);
+        Assert.Equal(0, s.ReleaseCount);
+        Assert.Equal(0, s.CancelCount);
+        s.Batch.ConfirmManualResetExecutionReleased();
+        Assert.True(await s.Batch.ReconcileControlCleanup!(CancellationToken.None));
+        Assert.Equal(0, s.ReleaseCount); // Late callbacks cannot release a successor's ticket.
+        Assert.Single(s.Sent);
     }
 
     [Fact]

@@ -191,6 +191,19 @@ public sealed partial class RoomOperations
                     throw new InvalidOperationException("center_requires_target_instance");
             }
 
+            if (command.Cmd == "reset_state")
+            {
+                var authorized = FreezeResetCommand(group, command);
+                if (authorized is null)
+                {
+                    var rejected = new { commandId = command.CommandId, deliveredTo = 0,
+                        message = "重置授权已失效或不匹配，未影响当前任务" };
+                    await _broadcaster.SendToCallerAsync(ctx, "RemoteCommandAck", rejected, rejected);
+                    return;
+                }
+                command = authorized;
+            }
+
             // 解析目标
             var targets = _roomManager.ResolveTargets(command);
 
@@ -240,6 +253,7 @@ public sealed partial class RoomOperations
             var changedStopTargets = 0;
             foreach (var connectionId in targets)
             {
+                if (command.Cmd == "reset_state" && !MatchesResetCommandExecutor(group, connectionId, command)) continue;
                 var outgoing = command;
                 if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all")
                 {
@@ -295,6 +309,65 @@ public sealed partial class RoomOperations
         {
             _logger.LogError(ex, "SendRemoteCommand 失败");
             if (command.Cmd is "center.request" or "center.data") throw;
+        }
+    }
+
+    private RemoteCommand? FreezeResetCommand(string group, RemoteCommand source)
+    {
+        var resetId = source.Params?.GetValueOrDefault("resetId")?.ToString() ?? source.CommandId;
+        var hasGeneration = source.Params?.ContainsKey("generation") == true;
+        var generation = 0;
+        if (hasGeneration && !int.TryParse(source.Params!["generation"]?.ToString(), out generation)) return null;
+        var hasBatchId = source.Params?.ContainsKey("batchId") == true;
+        var batchId = source.Params?.GetValueOrDefault("batchId")?.ToString() ?? "";
+        lock (_batchGate)
+        {
+            _controlBatches.TryGetValue(group, out var current);
+            if (!_processedResetResults.TryGetValue(group + "\0" + resetId, out var reset))
+            {
+                // Old independent reset commands carry no authority to cross a batch fence.
+                // Keep their no-batch path, but never trust a client-supplied generation.
+                return !hasGeneration && batchId.Length == 0
+                    && (current is null || !source.Target.Contains("*")
+                        && !current.ParticipantUids.Intersect(source.Target, StringComparer.Ordinal).Any())
+                    ? source : null;
+            }
+            if (reset.Reason == "stale_reset" || hasGeneration && generation != reset.Generation
+                || hasBatchId && batchId != reset.BatchId) return null;
+            var targetUids = source.Target.Contains("*") ? reset.TargetUids : source.Target;
+            if (targetUids.Any(uid => !reset.TargetUids.Contains(uid, StringComparer.Ordinal))) return null;
+            if (reset.Found)
+            {
+                if (current is null || current.BatchId != reset.BatchId || current.Generation != reset.Generation
+                    || targetUids.Any(uid => current.ParticipantUids.Contains(uid, StringComparer.Ordinal)
+                        && !current.MatchesResetCleanup(uid, resetId))) return null;
+            }
+            else if (current is not null && current.ParticipantUids.Intersect(targetUids, StringComparer.Ordinal).Any())
+                return null; // An independent reset issued before this batch cannot stop its successor.
+            var parameters = source.Params is null ? new Dictionary<string, object>() : new(source.Params);
+            parameters["resetId"] = reset.ResetId;
+            parameters["generation"] = reset.Generation;
+            parameters["batchId"] = reset.BatchId;
+            return new RemoteCommand
+            {
+                RoomCode = source.RoomCode, Cmd = source.Cmd, Sender = source.Sender,
+                SenderUid = source.SenderUid, Target = targetUids.ToList(), TargetInstanceId = source.TargetInstanceId,
+                CommandId = source.CommandId, Timestamp = source.Timestamp, ExpiresAtUtc = source.ExpiresAtUtc,
+                Params = parameters
+            };
+        }
+    }
+
+    private bool MatchesResetCommandExecutor(string group, string connectionId, RemoteCommand command)
+    {
+        var resetId = command.Params?.GetValueOrDefault("resetId")?.ToString() ?? command.CommandId;
+        lock (_batchGate)
+        {
+            if (!_processedResetResults.ContainsKey(group + "\0" + resetId))
+                return command.Params?.ContainsKey("generation") != true; // Only the unfenced legacy path.
+            var player = _roomManager.GetControlRoomPlayers(group).SingleOrDefault(p => p.ConnectionId == connectionId);
+            return player is not null && _resetCleanupExecutors.TryGetValue(group + "\0" + resetId, out var executors)
+                && executors.TryGetValue(player.PlayerUid, out var instance) && instance == player.ClientInstanceId;
         }
     }
 
