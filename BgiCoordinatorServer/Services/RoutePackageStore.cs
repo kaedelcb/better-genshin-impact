@@ -236,6 +236,7 @@ public sealed class RoutePackageStore : IDisposable
         finally { if (File.Exists(temporary)) File.Delete(temporary); _gate.Release(); }
     }
 
+    /// <summary>删除草稿或历史发布版本。只有当前发布版本不能删，其余都可以删除（删除后无法回滚到该版本）。</summary>
     public async Task DeleteAsync(string id, string actor, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);
@@ -243,9 +244,10 @@ public sealed class RoutePackageStore : IDisposable
         {
             var next = Copy();
             var package = Find(next, id, true);
-            if (package.State != "draft" || next.CurrentId == id) throw new RoutePackageException(409, "历史发布版本必须保留，不能删除。");
+            if (next.CurrentId == id) throw new RoutePackageException(409, "当前发布版本不能删除，请先发布或回滚到其他版本。");
+            var history = package.State != "draft";
             next.Packages.Remove(package);
-            AppendAudit(next, "delete", id, actor, "删除未发布草稿");
+            AppendAudit(next, "delete", id, actor, history ? "删除历史发布版本" : "删除未发布草稿");
             Commit(next); // An interruption can leave an unreferenced immutable blob, never a broken catalog reference.
             File.Delete(ZipPath(id));
         }

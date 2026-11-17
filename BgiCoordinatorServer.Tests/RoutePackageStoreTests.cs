@@ -63,8 +63,12 @@ public sealed class RoutePackageStoreTests
             Assert.True(store.IsPublishedAvailable(firstId, RoutePackageTestData.Version));
             Assert.False(store.IsPublishedAvailable(firstId, "9.9.9"));
             Assert.Equal(3, (await store.PublishAsync(firstId, 2, "回滚", "admin", rollback: true)).Revision);
-            Assert.Equal(409, (await Assert.ThrowsAsync<RoutePackageException>(() => store.DeleteAsync(secondId, "admin"))).StatusCode);
-            Assert.Equal("rollback", store.Audit()[0].Action);
+            Assert.Equal(409, (await Assert.ThrowsAsync<RoutePackageException>(() => store.DeleteAsync(firstId, "admin"))).StatusCode); // 当前发布版本不能删
+            await store.DeleteAsync(secondId, "admin"); // 历史版本可以删，不再无限积累
+            Assert.Throws<RoutePackageException>(() => store.Get(secondId));
+            Assert.False(File.Exists(Path.Combine(data.StoreRoot, secondId + ".zip")));
+            Assert.Equal(firstId, store.Current!.Package.Id);
+            Assert.Equal("delete", store.Audit()[0].Action);
             var serialized = JsonSerializer.Serialize(store.Audit(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
             Assert.StartsWith("[", serialized);
             Assert.Contains("\"atUtc\"", serialized);
@@ -73,7 +77,7 @@ public sealed class RoutePackageStoreTests
         using var restarted = new RoutePackageStore(data.StoreRoot, RoutePackageTestData.Version);
         Assert.Equal(3, restarted.Current!.Revision);
         Assert.Equal(firstId, restarted.Current.Package.Id);
-        Assert.Equal("archived", restarted.Get(secondId).State);
+        Assert.Throws<RoutePackageException>(() => restarted.Get(secondId)); // 已删除的历史版本重启后仍不存在
     }
 
     [Fact]

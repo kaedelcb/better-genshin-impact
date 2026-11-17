@@ -314,7 +314,7 @@
         const actions = node('div', undefined, 'actions'), download = node('a', '下载此版本单 ZIP', 'button-link');
         download.href = '/api/admin/routes/' + encodeURIComponent(pkg.id) + '/download'; download.setAttribute('download', 'routes-' + todayStamp() + '-' + pkg.id.slice(0, 8) + '.zip'); actions.append(download);
         if (pkg.state === 'draft') actions.append(actionButton('发布此草稿', 'publish', pkg, 'primary'), actionButton('删除未发布草稿', 'delete', pkg, 'danger'));
-        else if (state.catalog?.current?.package?.id !== pkg.id) actions.append(actionButton('回滚到此版本', 'rollback', pkg, 'primary'));
+        else if (state.catalog?.current?.package?.id !== pkg.id) actions.append(actionButton('回滚到此版本', 'rollback', pkg, 'primary'), actionButton('删除此版本', 'delete', pkg, 'danger'));
         detail.append(actions);
         const diffHeading = node('h4', '服务端校验差异（相对当前发布版）'); detail.append(diffHeading);
         for (const [field, name] of [['added', '新增'], ['modified', '修改'], ['removed', '移除']]) {
@@ -346,7 +346,7 @@
             if (!state.catalogFresh || !state.catalog) throw new Error('请先成功刷新线路清单，再检查版本差异。');
             if (state.detail?.package?.id !== pkg.id || state.detailRevision !== C.publicationRevision(state.catalog))
                 throw new Error('版本详情已过期，请重新选择版本并检查差异。');
-            const names = { publish: '发布此草稿', rollback: '回滚到此版本', delete: '删除未发布草稿', restore: '恢复选定线路到新草稿' };
+            const names = { publish: '发布此草稿', rollback: '回滚到此版本', delete: pkg.state === 'draft' ? '删除未发布草稿' : '删除此版本', restore: '恢复选定线路到新草稿' };
             const action = { kind, pkg, revision: C.publicationRevision(state.catalog) };
             if (kind === 'restore') {
                 action.destination = $('restoreDestination').value;
@@ -355,7 +355,7 @@
             }
             state.action = action; $('actionTitle').textContent = names[kind]; $('actionConfirm').textContent = names[kind];
             const deleting = kind === 'delete';
-            $('actionSummary').textContent = `${packageName(pkg)}。` + (deleting ? '只删除未发布且未引用的草稿，此操作不可撤销。服务端记录固定删除原因。' :
+            $('actionSummary').textContent = `${packageName(pkg)}。` + (deleting ? (pkg.state === 'draft' ? '只删除未发布的草稿，此操作不可撤销。' : '删除后无法再回滚到这个版本，此操作不可撤销。当前发布版本不能删除。') + '服务端记录固定删除原因。' :
                 (kind === 'restore' ? `将 ${action.paths.length} 个文件 / 目录前缀恢复到草稿 ${shortId(action.destination)} 的新副本，不直接发布；目录选择会替换该目录的内容。` : '将完整替换当前官方线路；进行中的轮次仍使用已锁定版本。') + ` 当前修订 ${action.revision}，服务端会核对是否已被其他操作改变。`);
             // 发布是日常操作，默认原因为“日常更新”，有特殊情况再改；回滚、恢复仍需手填，避免默认文案掩盖异常操作。
             $('actionReason').value = kind === 'publish' ? '日常更新' : ''; $('actionReason').hidden = deleting; $('actionReason').disabled = deleting;
