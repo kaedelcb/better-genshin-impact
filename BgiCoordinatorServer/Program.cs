@@ -111,6 +111,27 @@ var app = builder.Build();
 _ = app.Services.GetRequiredService<RoomLogContext>();
 
 if (routeForwarding) app.UseForwardedHeaders();
+if (routeForwarding)
+{
+    // 管理页面只在 HTTPS 使用。浏览器按主机名而不是端口保存 Cookie：https 登录留下的 Secure Cookie
+    // 不允许被 http:8080 的同名普通 Cookie 覆盖，会导致“登录成功又回到登录页”。
+    // 因此域名访问 http 管理页时统一跳到 https；localhost/IP 开发访问不受影响。
+    app.Use(async (context, next) =>
+    {
+        var page = (context.Request.Path.Value ?? "").TrimEnd('/');
+        var host = context.Request.Host.Host;
+        if (HttpMethods.IsGet(context.Request.Method) && !context.Request.IsHttps
+            && (page.Equals("/admin", StringComparison.OrdinalIgnoreCase) || page.Equals("/admin/login", StringComparison.OrdinalIgnoreCase)
+                || page.Equals("/admin/hoeing", StringComparison.OrdinalIgnoreCase) || page.Equals("/admin/routes", StringComparison.OrdinalIgnoreCase))
+            && !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) && !System.Net.IPAddress.TryParse(host, out _))
+        {
+            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Redirect("https://" + host + context.Request.Path + context.Request.QueryString, permanent: false, preserveMethod: true);
+            return;
+        }
+        await next(context);
+    });
+}
 app.UseRoutePackageBoundary();
 app.UseRouting();
 app.UseCors();
