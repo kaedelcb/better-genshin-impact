@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -131,6 +132,8 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
                 && await MatchesAsync(CurrentDirectory, target.Files, token))
             {
                 token.ThrowIfCancellationRequested();
+                // 已是最新：补写/刷新版本标识并留一行日志，用户能确认“没忘记更新”。
+                WriteVersionMarker(target, "已是最新，无需更新");
                 return target.Id;
             }
             if (!lease.AllowsInstall)
@@ -139,10 +142,47 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
                 throw new InvalidDataException("自动更新线路已关闭，本地未完整安装目标包 " + target.Id + "；请先执行“更新联机锄地线路”或开启自动更新");
             await InstallAsync(server, target, installed, token);
             ct.ThrowIfCancellationRequested();
+            WriteVersionMarker(target, installed == null ? "首次安装完成" : $"已从 {DescribeVersion(installed)}更新");
             return target.Id;
         }
         finally { lease.Gate.Release(); }
     }
+
+    /// <summary>版本名称（发布时填写的名称，通常是日期）+ 包 ID 前 8 位，供日志和版本标识使用。</summary>
+    internal static string DescribeVersion(RoutePackageDescriptor package)
+        => (string.IsNullOrWhiteSpace(package.Description) ? "未命名" : package.Description.Trim()) + "（" + package.Id[..Math.Min(8, package.Id.Length)] + "）";
+
+    /// <summary>用户可见的版本标识文件。放在 current 外面：current 必须与发布清单逐文件一致，不能多出文件。</summary>
+    public string VersionMarkerPath => Path.Combine(_root, "当前线路版本.txt");
+
+    private void WriteVersionMarker(RoutePackageDescriptor package, string result)
+    {
+        var text = new StringBuilder();
+        text.AppendLine("联机锄地官方线路 · 当前本地版本");
+        text.AppendLine("版本名称：" + (string.IsNullOrWhiteSpace(package.Description) ? "未命名" : package.Description.Trim()));
+        text.AppendLine("版本标识：" + package.Id);
+        text.AppendLine("服务端上传时间：" + package.CreatedAtUtc.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy-MM-dd HH:mm:ss") + "（北京时间）");
+        text.AppendLine($"内容：{package.FileCount} 个文件，{package.RouteCount} 条线路");
+        text.AppendLine("本机检查时间：" + DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
+        text.AppendLine("本次结果：" + result);
+        text.AppendLine();
+        text.AppendLine("说明：此文件只是给人看的记录，BGI 不读取它；线路文件在 current\\builtin 里。");
+        try
+        {
+            RequireNoLinks(VersionMarkerPath);
+            var temp = VersionMarkerPath + ".new-" + Guid.NewGuid().ToString("N");
+            File.WriteAllText(temp, text.ToString(), new UTF8Encoding(true));
+            File.Move(temp, VersionMarkerPath, true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 标识文件只是给人看的，写失败（例如被记事本占用）不能让已经成功的线路更新变成失败。
+        }
+        VersionLog?.Invoke($"[线路更新] 当前线路版本：{DescribeVersion(package)}，{package.FileCount} 个文件 / {package.RouteCount} 条线路；{result}");
+    }
+
+    /// <summary>更新结果日志出口；BGI 运行时接到任务日志，测试可观察。</summary>
+    public Action<string>? VersionLog { get; set; }
 
     /// <summary>
     /// 线路服务地址：联机助手与 BGI 共用同一个“协调服务器地址”配置，常见写法是 http://主机:8080 或 http://主机:8080/hub。

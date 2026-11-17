@@ -20,6 +20,20 @@
     function secureOrigin() {
         return location.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
     }
+    // 轻量提示：操作结果不用盯着页面顶部的小字，右下角弹出几秒后自动消失。
+    function toast(message, error = false) {
+        const box = $('toast'); if (!box) return;
+        box.textContent = message; box.classList.toggle('error', error); box.hidden = false;
+        clearTimeout(state.toastTimer); state.toastTimer = setTimeout(() => { box.hidden = true; }, error ? 8000 : 4500);
+    }
+    // 上传三步指示：1 选文件夹 → 2 核对并打包 → 3 上传/发布；只有管理员页有这个元素。
+    function setStep(current, done = false) {
+        ['step1', 'step2', 'step3'].forEach((id, index) => {
+            const step = $(id); if (!step) return;
+            step.classList.toggle('active', index + 1 === current && !done);
+            step.classList.toggle('done', index + 1 < current || done);
+        });
+    }
     async function request(path, { method = 'GET', body, headers = {}, signal, timeout = 30000 } = {}) {
         if (!secureOrigin()) throw new Error('线路管理和令牌上传必须使用 HTTPS（本机 loopback 开发除外）。');
         const controller = new AbortController();
@@ -65,6 +79,8 @@
         if (!admin) $('uploadToken').disabled = controls.busy;
         $('packButton').disabled = !controls.canPack;
         $('uploadButton').disabled = !controls.canUpload;
+        const publishNow = $('uploadPublishButton');
+        if (publishNow) { publishNow.hidden = !admin; publishNow.disabled = !controls.canUpload; }
         $('cancelUpload').hidden = !controls.busy;
     }
     function renderPreview() {
@@ -84,17 +100,30 @@
         $('folderInput').value = ''; $('privacyConfirm').checked = false; $('previewSearch').value = '';
         $('previewSearch').disabled = true; $('folderPreview').replaceChildren(); $('morePreview').hidden = true;
         $('uploadProgress').hidden = true; $('uploadResult').hidden = true; $('uploadResult').replaceChildren();
-        $('folderSummary').textContent = '选择目录后显示将要上传的路径与大小。';
-        status('uploadStatus', '本机选择已清除，未删除任何本机文件。'); updateUploadControls();
+        $('folderSummary').textContent = '选择文件夹后在这里显示要上传的文件。';
+        status('uploadStatus', '本机选择已清除，未删除任何本机文件。'); setStep(1); updateUploadControls();
     }
-    // 版本说明默认填写当天（北京时间）日期；管理员自己改过的内容不会被覆盖。
+    // 版本名称默认当天（北京时间）日期；如果今天已经有同名版本，页面先按顺序预填 -2、-3，
+    // 服务端也会兜底自动编号，所以同一天多次上传不会重名、也不会互相覆盖。管理员自己改过的内容不会被覆盖。
     function todayStamp() {
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()).replaceAll('-', '');
     }
+    function nextDescription() {
+        const base = todayStamp();
+        const used = new Set((state.catalog?.packages || []).map(pkg => pkg.description));
+        if (!used.has(base)) return base;
+        for (let n = 2; n < 1000; n++) if (!used.has(base + '-' + n)) return base + '-' + n;
+        return base;
+    }
     function fillDescription() {
         const box = $('uploadDescription');
-        if (!box.value.trim() || box.value === state.autoDescription) { state.autoDescription = todayStamp(); box.value = state.autoDescription; }
+        if (!box.value.trim() || box.value === state.autoDescription) { state.autoDescription = nextDescription(); box.value = state.autoDescription; }
+        const hint = $('descriptionHint');
+        if (hint) hint.textContent = box.value === state.autoDescription
+            ? '自动命名：' + state.autoDescription + '。同一天再次上传会自动加 -2、-3，按名称就能看出先后。'
+            : '已使用自定义名称；如果和已有版本同名，服务器会自动在后面加序号。';
     }
+    $('uploadDescription').addEventListener('input', fillDescription);
     $('folderInput').addEventListener('change', () => {
         fillDescription();
         state.blob = null; state.plan = null; state.previewLimit = 100; state.uploaded = false; state.uploadUnknown = false;
@@ -104,10 +133,11 @@
             const p = state.plan;
             $('folderSummary').textContent = `${p.rootName} · ${p.entries.length} 个文件，${p.routeCount} 条线路；${p.layout}。预计 ZIP ${C.formatBytes(p.zipBytes)}，未压缩。`;
             $('previewSearch').disabled = false;
-            status('uploadStatus', '还未读取或上传文件内容。请核对全部入包路径并勾选确认，再进行本机校验打包。');
+            status('uploadStatus', '请核对右侧预览，勾选确认后点“校验并本机打包”。');
+            setStep(2);
         } catch (error) {
-            $('folderSummary').textContent = '目录未通过检查，不会打包或上传。';
-            $('previewSearch').disabled = true; status('uploadStatus', error.message, true);
+            $('folderSummary').textContent = '文件夹未通过检查，不会打包或上传。';
+            $('previewSearch').disabled = true; status('uploadStatus', error.message, true); setStep(1);
         }
         renderPreview(); updateUploadControls();
     });
@@ -125,7 +155,7 @@
         let worker;
         const finish = () => { worker?.terminate(); state.worker = null; state.phase = 'idle'; updateUploadControls(); };
         try {
-            worker = new Worker('/route-packages-worker.js?v=20261117'); state.worker = worker;
+            worker = new Worker('/route-packages-worker.js?v=20261118'); state.worker = worker;
             worker.onmessage = event => {
                 if (state.worker !== worker) return;
                 const data = event.data;
@@ -134,8 +164,8 @@
                     status('uploadStatus', `本机打包 ${Math.round(data.processed / data.total * 100)}% · ${data.index + 1}/${data.count} · ${data.path}`);
                 } else if (data.type === 'complete') {
                     state.blob = data.blob; $('uploadProgress').value = 100;
-                    status('uploadStatus', `本机基本校验完成，已生成一个 ${C.formatBytes(data.blob.size)} 的 STORE ZIP（未压缩）。control.json5 原样保留，其引用和完整线路依赖由服务端最终校验。尚未上传。`);
-                    finish();
+                    status('uploadStatus', `校验通过，已打包成 ${C.formatBytes(data.blob.size)} 的 ZIP。` + (admin ? '点“上传并发布”一步完成，或先“上传为草稿”再检查差异。' : '请点“上传为草稿”。'));
+                    setStep(3); finish();
                 } else if (data.type === 'error') { status('uploadStatus', data.message, true); $('uploadProgress').hidden = true; finish(); }
             };
             worker.onerror = event => { event.preventDefault(); if (state.worker !== worker) return; status('uploadStatus', '后台打包失败，请确认本地文件未移动并重新选择目录。', true); $('uploadProgress').hidden = true; finish(); };
@@ -151,14 +181,14 @@
             status('uploadStatus', '已请求取消上传；若服务端已接收，仍可能创建草稿，结果需要管理员核对。');
         }
     });
-    $('uploadButton').addEventListener('click', async () => {
+    async function uploadFlow(publishAfter) {
         if ($('uploadButton').disabled) return;
         const description = $('uploadDescription').value.trim();
-        if (!description) { status('uploadStatus', '请填写版本说明，方便管理员确认此次上传。', true); $('uploadDescription').focus(); return; }
+        if (!description) { status('uploadStatus', '请填写版本名称。', true); $('uploadDescription').focus(); return; }
         if (!secureOrigin()) { status('uploadStatus', '线路管理和令牌上传必须使用 HTTPS（本机 loopback 开发除外）。未发送请求。', true); return; }
         state.phase = 'upload'; state.controller = new AbortController(); updateUploadControls();
         $('uploadProgress').hidden = false; $('uploadProgress').removeAttribute('value');
-        status('uploadStatus', '准备上传单个 ZIP，等待服务端重新校验（浏览器不提供可靠发送百分比，不显示估算进度）…');
+        status('uploadStatus', '正在上传，服务端会重新校验全部文件，请稍候…');
         let sent = false;
         try {
             const headers = { 'Content-Type': 'application/zip' };
@@ -170,21 +200,41 @@
                 method: 'POST', body: state.blob, headers, signal: state.controller.signal, timeout: 600000 });
             if (typeof result?.id !== 'string' || !/^[a-f0-9]{32}$/.test(result.id) || result.state !== 'draft') throw new Error('服务端未返回有效草稿，结果未确认。');
             state.uploaded = true;
-            const output = $('uploadResult'); output.replaceChildren(node('strong', '已创建草稿（未发布）'), node('p', '草稿 ID：' + result.id),
-                node('p', `${result.fileCount} 个文件 / ${result.routeCount} 条线路 / ${C.formatBytes(result.sizeBytes)}`), node('p', 'SHA-256：' + result.sha256)); output.hidden = false;
-            status('uploadStatus', '上传和服务端校验完成。' + (admin ? '请在版本列表检查差异后再发布。' : '请将草稿 ID 交给管理员审核发布。'));
+            const output = $('uploadResult'); output.replaceChildren(node('strong', '已创建草稿（未发布）：' + (result.description || description)),
+                node('p', `${result.fileCount} 个文件 / ${result.routeCount} 条线路 / ${C.formatBytes(result.sizeBytes)}`)); output.hidden = false;
             if (!admin) $('uploadToken').value = '';
             state.blob = null;
-            if (admin) { await loadCatalog(); await loadDetail(result.id); await loadAudit(); }
+            if (!admin) { status('uploadStatus', '上传完成。请把草稿名称告诉管理员审核发布。'); return; }
+            await loadCatalog();
+            if (!publishAfter) {
+                status('uploadStatus', '草稿已创建，还没有发布。请在下方版本列表查看差异后发布。'); toast('草稿已创建：' + (result.description || description));
+                setStep(3, true); await loadDetail(result.id); await loadAudit(); return;
+            }
+            // 一步发布：只发布刚上传、服务端校验通过的这个草稿；修订号冲突时服务端会拒绝，不会覆盖别人的发布。
+            status('uploadStatus', '草稿已创建，正在发布…');
+            try {
+                const published = await request('/api/admin/routes/' + result.id + '/publish', { method: 'POST',
+                    headers: { 'X-CSRF-Token': await csrf(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(C.buildMutation(state.catalog, '日常更新')), timeout: 120000 });
+                if (published?.package?.id !== result.id) throw new Error('服务端未确认发布结果。');
+                status('uploadStatus', '已发布：' + (result.description || description)); toast('已发布：' + (result.description || description));
+                setStep(3, true);
+            } catch (error) {
+                status('uploadStatus', '草稿已创建但发布失败：' + error.message + ' 请在下方版本列表手动发布。', true);
+                toast('发布失败，草稿已保留', true);
+            }
+            await loadCatalog(); await loadDetail(result.id); await loadAudit();
         } catch (error) {
             // A lost response/abort does not prove rollback. Never automatically resend a non-idempotent upload.
             state.uploadUnknown = sent && (!error.status || error.status >= 500);
-            const suffix = state.uploadUnknown ? ' 上传结果未确认，不会自动重试；请管理员刷新清单核对，避免重复草稿。' : '';
+            const suffix = state.uploadUnknown ? ' 上传结果未确认，不会自动重试；请刷新清单核对，避免重复草稿。' : '';
             status('uploadStatus', (error.name === 'AbortError' ? '上传已中断。' : error.message) + suffix, true);
         } finally {
             state.controller = null; state.phase = 'idle'; $('uploadProgress').hidden = true; updateUploadControls();
         }
-    });
+    }
+    $('uploadButton').addEventListener('click', () => uploadFlow(false));
+    $('uploadPublishButton')?.addEventListener('click', () => uploadFlow(true));
     window.addEventListener('pagehide', () => {
         state.worker?.terminate(); state.worker = null; state.controller?.abort();
         if (state.phase === 'pack') {
@@ -200,23 +250,36 @@
     const validId = id => typeof id === 'string' && /^[a-f0-9]{32}$/.test(id);
     const shortId = id => String(id).slice(0, 12);
     const date = text => { const d = new Date(text); return Number.isFinite(d.getTime()) ? d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) + '（北京时间）' : '时间未记录'; };
+    const shortDate = text => { const d = new Date(text); return Number.isFinite(d.getTime()) ? d.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '时间未记录'; };
     function packageName(pkg) { return (pkg.description || '未填写版本说明') + ' [' + shortId(pkg.id) + ']'; }
     function renderCatalog() {
         const catalog = state.catalog;
         if (!catalog) return;
         const current = catalog.current;
+        $('currentName').textContent = current?.package ? (current.package.description || '未填写版本说明') : '尚无发布版本';
+        $('currentMeta').textContent = current?.package
+            ? `${shortDate(current.package.createdAtUtc)} 上传 · ${current.package.routeCount} 条线路 · ${C.formatBytes(current.package.sizeBytes)} · 修订 ${current.revision}`
+            : '请上传线路并发布第一个版本。';
         $('currentPublication').textContent = current?.package ? `${packageName(current.package)} · 修订 ${current.revision}` : '尚无发布版本。请上传、校验并发布首个线路包。';
-        $('requiredVersion').textContent = catalog.requiredClientVersion ? '正式客户端精确版本：' + catalog.requiredClientVersion : '未限制客户端版本（发布后所有版本均可使用）';
-        $('storageUsage').textContent = `线路包存储 ${C.formatBytes(catalog.storageBytes)} / ${C.formatBytes(catalog.maxStorageBytes)}；历史版本不会因回滚而被删除。`;
+        $('requiredVersion').textContent = catalog.requiredClientVersion ? '客户端版本限制：' + catalog.requiredClientVersion : '不限制客户端版本';
+        $('storageUsage').textContent = `已用存储 ${C.formatBytes(catalog.storageBytes)} / ${C.formatBytes(catalog.maxStorageBytes)}`;
         const filter = $('packageFilter').value, list = $('packageList'); list.replaceChildren();
-        const packages = (catalog.packages || []).filter(pkg => filter === 'all' || (filter === 'draft' ? pkg.state === 'draft' : pkg.state !== 'draft'));
+        for (const tab of document.querySelectorAll?.('.filter-tabs .tab') || []) {
+            const active = tab.dataset.filter === filter; tab.classList.toggle('active', active); tab.setAttribute('aria-selected', String(active));
+        }
+        // 当前使用的置顶，其余按上传时间从新到旧，一眼能看出最新版本。
+        const packages = (catalog.packages || []).filter(pkg => filter === 'all' || (filter === 'draft' ? pkg.state === 'draft' : pkg.state !== 'draft'))
+            .sort((a, b) => (current?.package?.id === b.id) - (current?.package?.id === a.id) || String(b.createdAtUtc).localeCompare(String(a.createdAtUtc)));
         for (const pkg of packages) {
+            const isCurrent = current?.package?.id === pkg.id;
             const button = node('button', undefined, 'package-option'); button.type = 'button'; button.setAttribute('aria-pressed', String(state.selectedId === pkg.id));
-            button.append(node('strong', pkg.description || '未填写版本说明'), node('small', `${label(pkg)}${current?.package?.id === pkg.id ? ' · 当前使用' : ''} · ${shortId(pkg.id)}`),
-                node('small', date(pkg.createdAtUtc)), node('small', `${pkg.routeCount} 条线路 · ${C.formatBytes(pkg.sizeBytes)}`));
+            const badge = node('span', isCurrent ? '当前使用' : label(pkg), 'badge ' + (isCurrent ? 'badge-live' : pkg.state === 'draft' ? 'badge-draft' : 'badge-old'));
+            const head = node('span', undefined, 'package-head'); head.append(node('strong', pkg.description || '未填写版本说明'), badge);
+            button.append(head, node('small', `${shortDate(pkg.createdAtUtc)} · ${pkg.routeCount} 条线路 · ${C.formatBytes(pkg.sizeBytes)}`));
             button.disabled = !validId(pkg.id); button.addEventListener('click', () => loadDetail(pkg.id)); list.append(button);
         }
-        if (!packages.length) list.append(node('p', '没有符合条件的版本。可先从文件夹创建草稿。', 'muted'));
+        if (!packages.length) list.append(node('p', filter === 'draft' ? '没有草稿。' : '没有版本。先在上面选择文件夹上传。', 'muted'));
+        fillDescription();
     }
     async function loadCatalog() {
         const sequence = ++state.catalogSequence;
@@ -316,13 +379,21 @@
         if (pkg.state === 'draft') actions.append(actionButton('发布此草稿', 'publish', pkg, 'primary'), actionButton('删除未发布草稿', 'delete', pkg, 'danger'));
         else if (state.catalog?.current?.package?.id !== pkg.id) actions.append(actionButton('回滚到此版本', 'rollback', pkg, 'primary'), actionButton('删除此版本', 'delete', pkg, 'danger'));
         detail.append(actions);
-        const diffHeading = node('h4', '服务端校验差异（相对当前发布版）'); detail.append(diffHeading);
-        for (const [field, name] of [['added', '新增'], ['modified', '修改'], ['removed', '移除']]) {
-            const paths = data[field] || [], group = node('details'), summary = node('summary', `${name} ${paths.length} 个文件`), list = node('ul', undefined, 'diff-list');
-            for (const path of paths) list.append(node('li', path));
-            if (!paths.length) list.append(node('li', '无', 'muted')); group.append(summary, list); detail.append(group);
+        const isCurrent = state.catalog?.current?.package?.id === pkg.id;
+        if (!isCurrent) {
+            const added = (data.added || []).length, modified = (data.modified || []).length, removed = (data.removed || []).length;
+            const summaryLine = node('p', undefined, 'diff-summary');
+            summaryLine.append(node('span', `新增 ${added}`, 'diff-add'), node('span', `修改 ${modified}`, 'diff-mod'), node('span', `移除 ${removed}`, 'diff-del'),
+                node('span', '（相对当前发布版）', 'muted'));
+            detail.append(node('h4', '和当前发布版的区别'), summaryLine);
+            for (const [field, name] of [['added', '新增'], ['modified', '修改'], ['removed', '移除']]) {
+                const paths = data[field] || []; if (!paths.length) continue;
+                const group = node('details'), summary = node('summary', `${name} ${paths.length} 个文件`), list = node('ul', undefined, 'diff-list');
+                for (const path of paths) list.append(node('li', path));
+                group.append(summary, list); detail.append(group);
+            }
+            detail.append(node('p', '发布会完整替换官方线路，被移除的文件不会保留。', 'help'));
         }
-        detail.append(node('p', '发布会完整替换官方受管线路，移除项不会继续作为官方线路保留。线路校验不代表游戏内实跑通过。', 'help'));
         detailFiles(pkg, detail);
         if (pkg.state !== 'draft') restorePanel(pkg, detail);
     }
@@ -382,11 +453,12 @@
             if (['publish', 'rollback'].includes(action.kind) && (result?.package?.id !== action.pkg.id || !Number.isSafeInteger(result?.revision) || result.revision <= action.revision))
                 throw new Error('服务端未返回有效发布修订，写入结果未确认。');
             $('actionDialog').close(); state.action = null;
-            status('globalStatus', action.kind === 'restore' ? '已生成恢复后的新草稿，尚未发布。' : action.kind === 'delete' ? '已删除未发布草稿。' : '发布指针已更新。');
+            const doneMessage = action.kind === 'restore' ? '已生成恢复后的新草稿，尚未发布。' : action.kind === 'delete' ? '已删除：' + (action.pkg.description || shortId(action.pkg.id)) : action.kind === 'rollback' ? '已回滚到：' + (action.pkg.description || shortId(action.pkg.id)) : '已发布：' + (action.pkg.description || shortId(action.pkg.id));
+            status('globalStatus', doneMessage); toast(doneMessage);
             const nextId = action.kind === 'restore' ? result?.id : action.kind === 'delete' ? null : action.pkg.id;
             state.selectedId = nextId;
             await loadCatalog();
-            if (nextId) await loadDetail(nextId); else { state.detail = null; state.detailSequence++; $('packageDetail').replaceChildren(node('p', '草稿已删除，请选择其他版本。', 'muted')); }
+            if (nextId) await loadDetail(nextId); else { state.detail = null; state.detailSequence++; $('packageDetail').replaceChildren(node('p', '已删除，请选择其他版本。', 'muted')); }
             await loadAudit();
         } catch (error) {
             const unknown = attempted && (!error.status || error.status >= 500);
@@ -419,6 +491,9 @@
         finally { $('refreshAudit').disabled = false; }
     }
     $('packageFilter').addEventListener('change', renderCatalog);
+    // 标签式筛选：点标签只是替换隐藏下拉框的值再重绘，保持原有“全部 / 草稿 / 已发布”语义。
+    for (const tab of document.querySelectorAll?.('.filter-tabs .tab') || [])
+        tab.addEventListener('click', () => { $('packageFilter').value = tab.dataset.filter; renderCatalog(); });
     $('refreshCatalog').addEventListener('click', async () => { const id = state.selectedId; if (await loadCatalog() && id && state.catalog.packages.some(pkg => pkg.id === id)) await loadDetail(id); });
     $('refreshAudit').addEventListener('click', loadAudit);
     updateUploadControls();

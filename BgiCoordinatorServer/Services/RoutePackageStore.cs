@@ -254,9 +254,27 @@ public sealed class RoutePackageStore : IDisposable
         finally { _gate.Release(); }
     }
 
+    /// <summary>
+    /// 同一说明已存在时自动加序号（"20261117" → "20261117-2"、"-3"…），让每个版本名称唯一、按先后可排序。
+    /// 只在上传时处理；恢复生成的草稿本身带来源，不需要。已删除版本的编号不会回收，只看现存名称。
+    /// </summary>
+    private static string UniqueDescription(Catalog catalog, string description)
+    {
+        var baseName = description.Trim();
+        var used = new HashSet<string>(catalog.Packages.Select(p => p.Description), StringComparer.Ordinal);
+        if (!used.Contains(baseName)) return baseName;
+        for (var n = 2; n < 100000; n++)
+        {
+            var candidate = baseName + "-" + n;
+            if (!used.Contains(candidate)) return candidate;
+        }
+        throw new RoutePackageException(507, "同名版本过多，请换一个版本说明。");
+    }
+
     private async Task<RoutePackageDescriptor> AddZipAsync(string temporary, string description, string actor, string action, string reason, CancellationToken ct)
     {
         if (_catalog.Packages.Count >= 4096) throw new RoutePackageException(507, "线路包目录已满，请删除不再使用的草稿。");
+        if (action == "upload") description = UniqueDescription(_catalog, description);
         var manifest = await RoutePackageArchive.ValidateAsync(temporary, ct);
         await using var input = File.OpenRead(temporary);
         var digest = Convert.ToHexString(await SHA256.HashDataAsync(input, ct)).ToLowerInvariant();

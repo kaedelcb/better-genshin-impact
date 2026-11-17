@@ -118,6 +118,55 @@ public sealed class AutoHoeingRouteUpdaterTests
         => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(value, Json), Encoding.UTF8, "application/json") };
 
     [Fact]
+    public async Task VersionMarkerTellsWhichVersionIsInstalledWithoutPollutingCurrent()
+    {
+        using var f = new Fixture();
+        var logs = new List<string>();
+        f.Updater.VersionLog = logs.Add;
+        var first = f.Add(("builtin/旧包/old.json", Route));
+        first.Description = "20261117";
+        Assert.Equal(first.Id, await f.Ensure());
+        var marker = Path.Combine(f.Managed, "当前线路版本.txt");
+        var text = File.ReadAllText(marker);
+        Assert.Contains("版本名称：20261117", text);
+        Assert.Contains("版本标识：" + first.Id, text);
+        Assert.Contains("首次安装完成", text);
+        Assert.Contains(logs, line => line.Contains("20261117") && line.Contains("首次安装完成"));
+        // 标识文件不能进入 current：current 必须与发布清单逐文件一致，否则下次校验会判为被篡改而重装。
+        Assert.DoesNotContain(Directory.GetFiles(f.Current, "*", SearchOption.AllDirectories), path => path.EndsWith("当前线路版本.txt"));
+
+        // 夹具里描述符是同一进程内的对象；安装器把第一次的描述写进 installed.json，这里换新对象代表服务端发布了新版本。
+        var second = f.Add(("builtin/新包/new.json", Route));
+        second.Description = "20261117-2";
+        Assert.Equal(second.Id, await f.Ensure());
+        text = File.ReadAllText(marker);
+        Assert.Contains("版本名称：20261117-2", text);
+        Assert.Contains("已从 20261117（" + first.Id[..8] + "）更新", text);
+
+        logs.Clear();
+        Assert.Equal(second.Id, await f.Ensure());
+        Assert.Contains("已是最新，无需更新", File.ReadAllText(marker));
+        Assert.Contains(logs, line => line.Contains("20261117-2") && line.Contains("已是最新"));
+        f.AssertNoPendingInstall();
+    }
+
+    [Fact]
+    public async Task VersionMarkerBeingHeldByAnotherProgramDoesNotFailTheUpdate()
+    {
+        using var f = new Fixture();
+        var first = f.Add(("builtin/旧包/old.json", Route));
+        Assert.Equal(first.Id, await f.Ensure());
+        var marker = Path.Combine(f.Managed, "当前线路版本.txt");
+        Assert.True(File.Exists(marker));
+        var next = f.Add(("builtin/新包/new.json", Route));
+        // 用户用记事本之类的程序独占打开了标识文件：只是给人看的记录写不进去，线路更新本身必须照常成功。
+        await using (new FileStream(marker, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.Equal(next.Id, await f.Ensure());
+        Assert.True(File.Exists(Path.Combine(f.Current, "builtin", "新包", "new.json")));
+        f.AssertNoPendingInstall();
+    }
+
+    [Fact]
     public async Task CurrentFolderBrieflyLockedIsRetriedAndThenReplaced()
     {
         using var f = new Fixture();

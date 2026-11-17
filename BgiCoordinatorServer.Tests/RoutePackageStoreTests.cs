@@ -187,6 +187,24 @@ public sealed class RoutePackageStoreTests
     }
 
     [Fact]
+    public async Task SameDescriptionOnTheSameDayGetsAnAutomaticSequenceSuffix()
+    {
+        using var data = new RoutePackageTestData();
+        using var store = new RoutePackageStore(data.StoreRoot, null);
+        async Task<string> UploadNamed(string name, string content)
+        {
+            await using var file = File.OpenRead(data.ValidZip(content));
+            return (await store.UploadAsync(file, name, "admin")).Description;
+        }
+        Assert.Equal("20261117", await UploadNamed("20261117", RoutePackageTestData.Route));
+        Assert.Equal("20261117-2", await UploadNamed("20261117", RoutePackageTestData.Route.Replace("1.25", "2.25")));
+        Assert.Equal("20261117-3", await UploadNamed("20261117", RoutePackageTestData.Route.Replace("1.25", "3.25")));
+        Assert.Equal("20261118", await UploadNamed("20261118", RoutePackageTestData.Route.Replace("1.25", "4.25")));
+        // 用户自己写了 -2：不会和自动编号冲突，会继续往后找空位。
+        Assert.Equal("20261117-4", await UploadNamed("20261117", RoutePackageTestData.Route.Replace("1.25", "5.25")));
+    }
+
+    [Fact]
     public async Task OnlyUnpublishedDraftsCanBeDeletedAndDraftRollbackIsRejected()
     {
         using var data = new RoutePackageTestData();

@@ -121,7 +121,7 @@ async function selectPackage(h, pkg, index) {
 test('uploader has no admin reads, omits cookie credentials and clears its memory-only token on success', async () => {
     const h = harness(); assert.equal(h.requests.length, 0);
     const worker = await chooseAndPack(h);
-    assert.equal(worker.url, '/route-packages-worker.js?v=20261117');
+    assert.equal(worker.url, '/route-packages-worker.js?v=20261118');
     assert.equal(worker.posted.files[0].relativePath, '中文线路/一.json');
     finishPack(worker);
     assert.equal(h.element('uploadButton').disabled, true, 'upload-only token is required');

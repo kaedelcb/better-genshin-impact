@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
+using BetterGenshinImpact.GameTask.Common;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing;
 
@@ -13,7 +14,11 @@ public sealed class AutoHoeingRouteUpdateTask : ISoloTask
     { Timeout = Timeout.InfiniteTimeSpan };
     public string Name => "更新联机锄地线路";
     internal static AutoHoeingRouteUpdater CreateUpdater()
-        => new(Http, AutoHoeingRoutePaths.ManagedRoot, Global.Version);
+        => new(Http, AutoHoeingRoutePaths.ManagedRoot, Global.Version)
+        {
+            // 在 BGI 日志里直接能看到当前线路版本，不用打开文件夹。
+            VersionLog = message => Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(TaskControl.Logger, "{Message}", message)
+        };
 
     public async Task Start(CancellationToken ct)
     {

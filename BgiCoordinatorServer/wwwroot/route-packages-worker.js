@@ -1,6 +1,6 @@
 /* Classic worker; self-contained same-origin assets, no third-party runtime. */
 'use strict';
-importScripts('/route-packages-core.js?v=20261117');
+importScripts('/route-packages-core.js?v=20261118');
 self.onmessage = async event => {
     try {
         if (event.data?.type !== 'pack') throw new Error('不支持的打包操作。');
