@@ -35,6 +35,46 @@ COLOR_NAMES = [n for n, _ in REFS]
 T = 80.0
 # 背景归零阈值：HSV 中 V 通道百分制 65（0-255 制 ≈166），V 低于此值的像素视为背景归零
 VOTE_MIN_V = int(round(65.0 / 100.0 * 255))
+# 灰度底噪截断阈值：过滤色差过大（dE > 60）产生的低亮度背景渗透噪点
+MIN_MATCH_GRAY = 64
+# 单字最大安全跨度（1080p 下原神拾取列表单字约 27.5px），用于切除右侧混入的 ×N 数量或背景噪点
+MAX_PX_PER_CHAR = 28.0
+CHAR_RIGHT_PAD = 2
+
+_NARROW_PUNCT = set("「」『』")
+
+
+def clean_and_measure(gray, name):
+    """清理灰度模板并返回 (清理后 gray, 匹配字数 mlen, 有效前景掩码 fg_mask)。
+
+    1. 滤除低于 MIN_MATCH_GRAY 的背景渗透噪点；
+    2. 若文件名不含「」但图像左右带有误截入的「」符号（如来自对话/调查文本），自动剥离两侧引号并左对齐；
+    3. 根据有效字数限制右侧最大像素跨度，切除误截入的 '×1' 等数量后缀及右侧背景杂点。
+    """
+    g = gray.copy()
+    g[g < MIN_MATCH_GRAY] = 0
+
+    mlen = min(len(name), 5)
+    narrow_cnt = sum(1 for ch in name[:6] if ch in _NARROW_PUNCT)
+
+    col_cnts = (g > 0).sum(axis=0)
+    if not col_cnts.any():
+        return g, mlen, g > 0
+
+    # 检测误带入的左直角引号 '「'（文件名不含引号，但 x=0..3 全空、x=4..7 为长竖线、x=13..17 全空）
+    if narrow_cnt == 0 and int(col_cnts[:4].sum()) == 0 and int(col_cnts[4:8].min()) >= 18 and int(col_cnts[13:18].sum()) == 0:
+        g = np.pad(g[:, 18:], ((0, 0), (0, 18)), mode="constant", constant_values=0)
+
+    # 计算文字区域右侧理论上限：常规每字约 27.5px；若含成对窄引号「」，140px 内实际包含 6 个字符
+    if narrow_cnt >= 2 and len(name) >= 6:
+        max_valid_x = g.shape[1] - 1
+    else:
+        max_valid_x = min(g.shape[1] - 1, int(round(mlen * MAX_PX_PER_CHAR)) + CHAR_RIGHT_PAD)
+
+    if max_valid_x + 1 < g.shape[1]:
+        g[:, max_valid_x + 1:] = 0
+
+    return g, mlen, g > 0
 
 
 def rgb_to_lab(rgb):
@@ -121,19 +161,24 @@ def main():
             dE = np.linalg.norm(lab - ref_labs[main_name], axis=2)
             match = np.clip(1.0 - dE / T, 0.0, 1.0) * 255.0
             match[v < VOTE_MIN_V] = 0.0  # 背景归零
-            gray = match.astype(np.uint8)
+            raw_gray = match.astype(np.uint8)
+            gray, mlen, fg = clean_and_measure(raw_gray, name)
+            if not fg.any():
+                dropped.append((fp, f"{w}x{h}", "no-fg-after-clean"))
+                continue
 
-            # 质量分 = 前景像素数 * 前景平均匹配度 / 全像素数
-            # （即 sum(前景 match) / 全像素数，背景归零计 0）
-            # 兼顾文字覆盖量与颜色匹配度，避免只有零星亮点的小图平均得分虚高
-            fg = v >= VOTE_MIN_V
-            quality = float(match[fg].mean() * int(fg.sum()) / (w * h))
+            # 质量分：在已清理（切除右侧 ×N 与噪点）的有效前景上评估
+            fg_vals = gray[fg].astype(np.float64)
+            mean_fg = float(fg_vals.mean())
+            fg_count = int(fg.sum())
+            quality = float((mean_fg / 255.0) ** 2 * fg_count / (w * h) * 255.0)
 
             candidates.setdefault((name, main_name), []).append({
                 "fp": fp,
                 "color": main_name,
                 "itemName": item_name,
                 "gray": gray,
+                "len": mlen,
                 "quality": quality,
             })
 
@@ -156,7 +201,7 @@ def main():
             "color": color,
             "file": f"{color}/{out_fn}",
             "itemName": best["itemName"],
-            "len": min(len(name), 5),
+            "len": best["len"],
         })
 
     entries.sort(key=lambda e: (e["color"], e["name"]))

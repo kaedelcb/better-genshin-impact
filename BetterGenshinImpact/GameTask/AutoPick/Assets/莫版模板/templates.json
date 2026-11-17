@@ -91,6 +91,13 @@
     "len": 5
   },
   {
+    "name": "幸运儿绿花",
+    "color": "灰",
+    "file": "灰/幸运儿绿花.png",
+    "itemName": "幸运儿绿花",
+    "len": 5
+  },
+  {
     "name": "幸运儿银冠",
     "color": "灰",
     "file": "灰/幸运儿银冠.png",
@@ -462,6 +469,13 @@
     "len": 5
   },
   {
+    "name": "妖精绿艾",
+    "color": "白",
+    "file": "白/妖精绿艾.png",
+    "itemName": "妖精绿艾",
+    "len": 4
+  },
+  {
     "name": "子探测单元",
     "color": "白",
     "file": "白/子探测单元.png",
@@ -642,6 +656,13 @@
     "file": "白/松茸.png",
     "itemName": "松茸",
     "len": 2
+  },
+  {
+    "name": "析晶褶伞",
+    "color": "白",
+    "file": "白/析晶褶伞.png",
+    "itemName": "析晶褶伞",
+    "len": 4
   },
   {
     "name": "枣椰",
@@ -987,6 +1008,13 @@
     "len": 2
   },
   {
+    "name": "笼酸浆",
+    "color": "白",
+    "file": "白/笼酸浆.png",
+    "itemName": "笼酸浆",
+    "len": 3
+  },
+  {
     "name": "紫晶块",
     "color": "白",
     "file": "白/紫晶块.png",
@@ -1265,6 +1293,13 @@
     "file": "白/铁块.png",
     "itemName": "铁块",
     "len": 2
+  },
+  {
+    "name": "镇压沙暴",
+    "color": "白",
+    "file": "白/镇压沙暴.png",
+    "itemName": "镇压沙暴",
+    "len": 4
   },
   {
     "name": "雪球花",
@@ -1743,6 +1778,13 @@
     "len": 4
   },
   {
+    "name": "雪结无明心",
+    "color": "紫",
+    "file": "紫/雪结无明心.png",
+    "itemName": "雪结无明心",
+    "len": 5
+  },
+  {
     "name": "雾虚灯芯",
     "color": "紫",
     "file": "紫/雾虚灯芯.png",
@@ -1768,6 +1810,20 @@
     "color": "绿",
     "file": "绿/「慈爱」的教导.png",
     "itemName": "「慈爱」的教导",
+    "len": 5
+  },
+  {
+    "name": "冒险家之花",
+    "color": "绿",
+    "file": "绿/冒险家之花.png",
+    "itemName": "冒险家之花",
+    "len": 5
+  },
+  {
+    "name": "冒险家头带",
+    "color": "绿",
+    "file": "绿/冒险家头带.png",
+    "itemName": "冒险家头带",
     "len": 5
   },
   {
@@ -1859,6 +1915,13 @@
     "color": "绿",
     "file": "绿/并生嵌合胞.png",
     "itemName": "并生嵌合胞",
+    "len": 5
+  },
+  {
+    "name": "幸运儿之杯",
+    "color": "绿",
+    "file": "绿/幸运儿之杯.png",
+    "itemName": "幸运儿之杯",
     "len": 5
   },
   {
@@ -2065,10 +2128,24 @@
     "len": 5
   },
   {
+    "name": "游医的枭羽",
+    "color": "绿",
+    "file": "绿/游医的枭羽.png",
+    "itemName": "游医的枭羽",
+    "len": 5
+  },
+  {
     "name": "游医的药壶",
     "color": "绿",
     "file": "绿/游医的药壶.png",
     "itemName": "游医的药壶",
+    "len": 5
+  },
+  {
+    "name": "游医的银莲",
+    "color": "绿",
+    "file": "绿/游医的银莲.png",
+    "itemName": "游医的银莲",
     "len": 5
   },
   {
@@ -2188,6 +2265,13 @@
     "color": "绿",
     "file": "绿/隙间之核.png",
     "itemName": "隙间之核",
+    "len": 4
+  },
+  {
+    "name": "雪结片心",
+    "color": "绿",
+    "file": "绿/雪结片心.png",
+    "itemName": "雪结片心",
     "len": 4
   },
   {
@@ -2765,6 +2849,13 @@
     "len": 4
   },
   {
+    "name": "雪结镜心",
+    "color": "蓝",
+    "file": "蓝/雪结镜心.png",
+    "itemName": "雪结镜心",
+    "len": 4
+  },
+  {
     "name": "雾虚草囊",
     "color": "蓝",
     "file": "蓝/雾虚草囊.png",
@@ -2798,5 +2889,12 @@
     "file": "蓝/龙冠武士的金哨.png",
     "itemName": "龙冠武士的金哨",
     "len": 5
+  },
+  {
+    "name": "幽光萤石",
+    "color": "白",
+    "file": "白/幽光萤石.png",
+    "itemName": "幽光萤石",
+    "len": 4
   }
 ]
