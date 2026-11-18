@@ -194,6 +194,14 @@ dialog::backdrop{background:#0b0c1bcc}
   .sidebar{padding:15px 16px 12px;gap:14px;border-right:0;border-bottom:1px solid var(--line)}
   .brand{font-size:21px}
   .brand-mark{font-size:28px}
+  .brand .project-star-short{
+    margin-inline-start:auto;
+    flex-shrink:0;
+    font-size:14px;
+    font-weight:500;
+    letter-spacing:0;
+    white-space:nowrap;
+  }
   .navigation{grid-template-columns:1fr 1fr;gap:8px}
   .navigation button{text-align:center;padding:10px 8px}
   .sidebar-foot{display:none}
