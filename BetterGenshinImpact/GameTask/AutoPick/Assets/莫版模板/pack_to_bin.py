@@ -43,13 +43,37 @@ def main():
     with open(json_path, encoding="utf-8") as f:
         entries = json.load(f)
 
-    buf = bytearray()
-    buf += struct.pack("<iii", MAGIC, VERSION, len(entries))
-    for e in entries:
+    seen = set()
+    errors = []
+    loaded = []
+    for idx, e in enumerate(entries):
+        key = (e["color"], e["name"])
+        if key in seen:
+            errors.append(f"#{idx} 重复键: [{e['color']}] {e['name']}")
+            continue
+        seen.add(key)
+
         p = os.path.join(TEMPLATE_DIR, e["file"].replace("/", os.sep))
+        if not os.path.isfile(p):
+            errors.append(f"#{idx} 缺少模板 PNG: {e['file']}")
+            continue
         with Image.open(p) as im:
             gray = np.asarray(im.convert("L"))
         h, w = gray.shape
+        if (w, h) != (140, 26):
+            errors.append(f"#{idx} 尺寸异常 ({w}x{h} != 140x26): {e['file']}")
+            continue
+        loaded.append((e, w, h, gray))
+
+    if errors:
+        print(f"打包前校验失败（共 {len(errors)} 处错误），已中止：")
+        for err in errors[:20]:
+            print(" ", err)
+        raise SystemExit(1)
+
+    buf = bytearray()
+    buf += struct.pack("<iii", MAGIC, VERSION, len(loaded))
+    for e, w, h, gray in loaded:
         write_str(buf, e["name"])
         write_str(buf, e["color"])
         write_str(buf, e["itemName"])
@@ -58,7 +82,7 @@ def main():
 
     with open(BIN_PATH, "wb") as f:
         f.write(bytes(buf))
-    print(f"已生成 {BIN_PATH}：{len(entries)} 个模板")
+    print(f"已生成 {BIN_PATH}：{len(loaded)} 个模板")
 
 
 if __name__ == "__main__":

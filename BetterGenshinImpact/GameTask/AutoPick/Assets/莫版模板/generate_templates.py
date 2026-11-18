@@ -11,6 +11,7 @@
 import os
 import re
 import json
+import argparse
 from collections import Counter
 
 import numpy as np
@@ -103,12 +104,31 @@ ref_lab_matrix = np.stack([ref_labs[n] for n in COLOR_NAMES], axis=0)
 
 
 def main():
+    parser = argparse.ArgumentParser(description="由原图生成灰度模板与 templates.json（默认增量合并，保护现有模板不被误清空）")
+    parser.add_argument("--src", default=SRC, help="原图输入目录（默认 Assets/原图/sorted-final）")
+    parser.add_argument("--rebuild", action="store_true", help="全量重建 templates.json（仅在原图齐全时使用）")
+    parser.add_argument("--force", action="store_true", help="配合 --rebuild 使用：跳过原图数量骤降的安全熔断")
+    args = parser.parse_args()
+
+    src_dir = os.path.abspath(args.src)
+    json_path = os.path.join(OUT, "templates.json")
+
+    existing_entries = {}
+    if os.path.isfile(json_path):
+        with open(json_path, encoding="utf-8") as jf:
+            for e in json.load(jf):
+                existing_entries[(e["color"], e["name"])] = e
+
+    if not os.path.isdir(src_dir):
+        print(f"错误：找不到原图目录 {src_dir}")
+        return
+
     rejected = []     # 尺寸不符
     dropped = []      # 无亮像素
     candidates = {}   # (name, color) -> [候选 dict]（同色同名多图全部保留，最后择优；不同颜色各自保留）
     total = 0
 
-    for root, dirs, files in os.walk(SRC):
+    for root, dirs, files in os.walk(src_dir):
         dirs.sort()
         for fn in sorted(files):
             if not fn.lower().endswith(".png"):
@@ -182,8 +202,20 @@ def main():
                 "quality": quality,
             })
 
+    if total == 0:
+        print(f"未在 {src_dir} 下找到任何 PNG 原图，未修改 templates.json。")
+        return
+
+    if args.rebuild and not args.force and existing_entries and len(candidates) < len(existing_entries) * 0.5:
+        print(
+            f"安全熔断：--rebuild 仅扫描到 {len(candidates)} 个有效模板，"
+            f"远少于现有 templates.json 的 {len(existing_entries)} 个！"
+            "为防止误清空已中止；如确认要全量覆盖，请追加 --force。"
+        )
+        return
+
     # 同色同名多图只保留质量分最高者，其余跳过；不同颜色的同名图各自保留
-    entries = []
+    new_entries = {}
     dup_skipped = []
     for (name, color), cands in candidates.items():
         best = max(cands, key=lambda c: c["quality"])
@@ -196,22 +228,34 @@ def main():
         out_fn = name + ".png"
         Image.fromarray(best["gray"], "L").save(os.path.join(color_dir, out_fn))
 
-        entries.append({
+        new_entries[(color, name)] = {
             "name": name,
             "color": color,
             "file": f"{color}/{out_fn}",
             "itemName": best["itemName"],
             "len": best["len"],
-        })
+        }
 
-    entries.sort(key=lambda e: (e["color"], e["name"]))
-    json_path = os.path.join(OUT, "templates.json")
+    if args.rebuild:
+        merged = new_entries
+        mode_desc = "全量重建"
+    else:
+        merged = dict(existing_entries)
+        added = sum(1 for k in new_entries if k not in merged)
+        updated = sum(1 for k in new_entries if k in merged)
+        merged.update(new_entries)
+        mode_desc = f"增量合并（新增 {added}，更新 {updated}，保留原有 {len(existing_entries) - updated}）"
+
+    entries = sorted(merged.values(), key=lambda e: (e["color"], e["name"]))
     with open(json_path, "w", encoding="utf-8") as jf:
         json.dump(entries, jf, ensure_ascii=False, indent=2)
+        jf.write("\n")
 
     color_count = Counter(e["color"] for e in entries)
+    print(f"模式: {mode_desc}")
     print(f"总输入 PNG: {total}")
-    print(f"输出模板数: {len(entries)}")
+    print(f"本次生成/更新: {len(new_entries)}")
+    print(f"输出模板总数: {len(entries)}")
     print(f"颜色分布: {dict(color_count)}")
     print(f"尺寸不符拒绝: {len(rejected)}")
     for r in rejected:
