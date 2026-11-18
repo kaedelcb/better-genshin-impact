@@ -71,13 +71,14 @@ public partial class MainViewModel
                     {
                         if (!BgiProcessMonitor.IsConfirmedCurrentSessionBgiProcess(process, executable)) continue;
                         _bgiRunningBeforeCoordination = true;
-                        process.Kill(entireProcessTree: true);
+                        // BGI 可以启动本助手，更新仍需本助手存活。
+                        process.Kill(entireProcessTree: false);
                     }
                     catch (Exception ex) { AddLog("[更新BGI] 关闭本会话目标 BGI 失败：" + ex.Message); }
                     finally { process.Dispose(); }
                 }
                 AddLog(_bgiRunningBeforeCoordination
-                    ? "[更新BGI] 本机正在更新 BGI，关闭本会话的目标 BGI 并暂停守护"
+                    ? "[更新BGI] 本机正在更新 BGI，已暂停守护并尝试关闭本会话的目标 BGI"
                     : "[更新BGI] 本机正在更新 BGI，暂停守护（未确认本会话目标 BGI 正在运行）");
                 return;
             }

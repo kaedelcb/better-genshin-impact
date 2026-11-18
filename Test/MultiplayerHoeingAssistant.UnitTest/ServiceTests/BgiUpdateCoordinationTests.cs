@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
@@ -33,6 +35,60 @@ public class BgiUpdateCoordinationTests : IDisposable
         Assert.Equal(BgiUpdateCoordination.Done, done?.Phase);
         Assert.True(done!.RestartAssistants);
         Assert.NotNull(done.RestartAfterUtc);
+    }
+
+    [Fact]
+    public async Task Preparing_ClosesTargetBgiAndLeavesItsChildRunning()
+    {
+        // 模拟 BGI 启动了助手。使用独占路径和限时子进程，覆盖 watcher 的真实进程关闭路径。
+        var executable = Path.Combine(_dir, "BetterGI.exe");
+        File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), executable);
+        var childScript = Convert.ToBase64String(Encoding.Unicode.GetBytes(
+            "[Console]::WriteLine($PID); Start-Sleep -Seconds 30"));
+        var start = new ProcessStartInfo(executable)
+        {
+            Arguments = $"/d /c powershell.exe -NoProfile -NonInteractive -EncodedCommand {childScript}",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true
+        };
+        using var bgi = Process.Start(start)!;
+        Process? child = null;
+        try
+        {
+            var pid = await bgi.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            child = Process.GetProcessById(int.Parse(pid!));
+            Assert.False(bgi.HasExited);
+            Assert.False(child.HasExited);
+
+            var vm = new MainViewModel();
+            typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm,
+                new AssistConfig { BgiPath = executable });
+            BgiUpdateCoordination.Write(_dir, new("test", BgiUpdateCoordination.Preparing,
+                DateTimeOffset.UtcNow.AddMinutes(1), null, false));
+            typeof(MainViewModel).GetMethod("CheckBgiUpdateCoordination", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(vm, null);
+
+            await bgi.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(child.HasExited);
+            Assert.False(BgiUpdateCoordination.AnyBgiRunning(_dir));
+        }
+        finally
+        {
+            using (child)
+            {
+                if (child is { HasExited: false })
+                {
+                    child.Kill();
+                    await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                }
+            }
+            if (!bgi.HasExited)
+            {
+                bgi.Kill();
+                await bgi.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
     }
 
     [Fact]

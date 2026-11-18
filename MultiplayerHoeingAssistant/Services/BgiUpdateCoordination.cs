@@ -148,8 +148,9 @@ internal static class BgiUpdateCoordination
                     {
                         try
                         {
+                            // 旧版助手也可能由 BGI 启动，兜底只结束已确认的 BGI 进程。
                             if (BgiProcessMonitor.IsConfirmedProcessUnderDirectory(process, bgiDir))
-                                process.Kill(entireProcessTree: true);
+                                process.Kill(entireProcessTree: false);
                         }
                         catch { }
                         finally { process.Dispose(); }
