@@ -24,7 +24,7 @@ services:
       # 用法：宿主机建 bgi-update 目录放茶包版 .7z，取消下面 volumes 注释并重启容器。
       - BGI_UPDATE_ROOT=/app/bgi-update
     volumes:
-      # 日志位于宿主机，更新或重建容器后仍可下载当天的记录。
+      # 日志和助手房间备注位于宿主机，更新或重建容器时保留此目录。
       - ./room-logs:/app/data/room-logs
       - ./route-packages:/app/data/route-packages
       # - ./bgi-update:/app/bgi-update:ro

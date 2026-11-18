@@ -14,19 +14,23 @@ public sealed record RoomMonitorSnapshot(
     int ConnectedControlMemberCount,
     List<RoomMonitorControlRoom> ControlRooms)
 {
+    public bool ControlRoomNotesUnavailable { get; init; }
+
     public static RoomMonitorSnapshot Create(RoomManager manager, DateTime utcNow, TimeSpan onlineTimeout,
-        RoomHoeingHistory? history = null)
+        RoomHoeingHistory? history = null, IReadOnlyDictionary<string, string>? notes = null)
     {
         // 助手先加入控制房间；游戏锄地房间通常到真正开锄时才创建。
         var controlRooms = manager.GetControlRoomMonitorRooms()
-            .Where(room => room.OnlineCount > 0)
+            .Where(room => room.OnlineCount > 0 || notes?.ContainsKey(room.Code) == true)
             .ToList();
+        // 有备注或今日发生过锄地的助手房间在重启后也可查询。
+        var savedCodes = history?.GetTodayRoomCodes(utcNow) ?? [];
+        var visibleCodes = controlRooms.Select(room => room.Code).ToHashSet(StringComparer.Ordinal);
+        foreach (var code in savedCodes.Concat(notes?.Keys ?? []))
+            if (visibleCodes.Add(code))
+                controlRooms.Add(new RoomMonitorControlRoom(code, 0, 0, false, null, []));
         if (history is not null)
         {
-            // 今日发生过锄地的房间离线或服务重启后仍可查询，不依赖当前成员对象存活。
-            foreach (var code in history.GetTodayRoomCodes(utcNow))
-                if (controlRooms.All(room => room.Code != code))
-                    controlRooms.Add(new RoomMonitorControlRoom(code, 0, 0, false, null, []));
             controlRooms = controlRooms.Select(room =>
             {
                 var day = history.ReadToday(room.Code, utcNow);
@@ -42,6 +46,8 @@ public sealed record RoomMonitorSnapshot(
                 return room with { TodayHoeing = day };
             }).ToList();
         }
+        if (notes is not null)
+            controlRooms = controlRooms.Select(room => room with { Note = notes.GetValueOrDefault(room.Code) }).ToList();
         controlRooms = controlRooms.OrderByDescending(room => room.OnlineCount > 0)
             .ThenBy(room => room.Code, StringComparer.Ordinal).ToList();
         var rooms = new List<RoomMonitorRoom>();
@@ -146,6 +152,7 @@ public sealed record RoomMonitorControlRoom(
     List<RoomMonitorControlMember> Members)
 {
     public RoomHoeingDay? TodayHoeing { get; init; }
+    public string? Note { get; init; }
 }
 
 public sealed record RoomMonitorControlMember(

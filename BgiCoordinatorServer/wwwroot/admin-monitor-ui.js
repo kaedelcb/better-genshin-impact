@@ -5,7 +5,8 @@ const memberStates = { Waiting: '等待', Ready: '就绪', Pathing: '路径中',
 let snapshot = null, dailySnapshot = null, view = 'live';
 const selected = { live: null, history: null }, queries = { live: '', history: '' }, openBatches = new Map();
 let historyRequest = 0, liveRequest = 0, historyLoading = false, archiveLoaded = false, archiveRooms = [], unlinkedPage = 0;
-let liveDetailOpen = false;
+let liveDetailOpen = false, noteRevision = 0, activeNoteCode = null, savingNote = false;
+let roomFeedbackTimer;
 let liveLoading = false, historyDateLoading = null, historyController = null;
 function node(tag, className, value) {
   const item = document.createElement(tag);
@@ -17,6 +18,108 @@ function action(text, handler, className = 'button') {
   const button = node('button', className, text); button.type = 'button';
   button.addEventListener('click', handler); return button;
 }
+function roomCodeTitle(tag, room, isAssistant) {
+  const title = node(tag, 'mono', room.code);
+  if (!isAssistant) return title;
+
+  const row = node('div', 'room-code-title');
+  const copy = action('', () => copyRoomCode(room.code), 'room-code-copy');
+  copy.dataset.roomAction = 'copy';
+  copy.title = `复制房间号 ${room.code}`;
+  copy.setAttribute('aria-label', copy.title);
+  row.append(title, copy);
+  return row;
+}
+
+async function copyRoomCode(code) {
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(code);
+    copied = true;
+  } catch {
+    // 兼容仍通过 HTTP 访问监控的浏览器。
+    const focus = document.activeElement;
+    const input = node('textarea', 'clipboard-buffer');
+    input.value = code;
+    input.readOnly = true;
+    document.body.append(input);
+    try {
+      input.select();
+      copied = document.execCommand('copy');
+    } catch { /* 在下方提供手动复制提示。 */ }
+    finally {
+      input.remove();
+      focus?.focus({ preventScroll: true });
+    }
+  }
+  showRoomFeedback(copied ? `已复制房间号 ${code}` : `复制失败，请手动复制 ${code}`);
+}
+
+function showRoomFeedback(message) {
+  const status = $('roomFeedback');
+  status.textContent = message;
+  clearTimeout(roomFeedbackTimer);
+  roomFeedbackTimer = setTimeout(() => { status.textContent = ''; }, 3500);
+}
+
+function roomNoteButton(room) {
+  const button = action(room.note ? '编辑备注' : '添加备注', () => {
+    activeNoteCode = room.code;
+    $('roomNoteCode').textContent = room.code;
+    $('roomNoteInput').value = room.note || '';
+    $('roomNoteError').textContent = '';
+    $('roomNoteDialog').showModal();
+  }, 'text-button room-note-button');
+  button.dataset.roomAction = 'note';
+  button.disabled = snapshot?.controlRoomNotesUnavailable === true;
+  button.setAttribute('aria-label', `${button.textContent} · ${room.code}`);
+  return button;
+}
+
+function roomNoteText(note) {
+  const line = node('span', 'room-note');
+  line.append(node('span', 'room-note-label', '备注'), node('span', '', note));
+  return line;
+}
+
+async function saveRoomNote(event) {
+  event.preventDefault();
+  if (savingNote) return;
+  const code = activeNoteCode, input = $('roomNoteInput'), save = $('roomNoteSave');
+  const error = $('roomNoteError'), note = input.value.trim();
+  savingNote = true;
+  input.readOnly = $('roomNoteCancel').disabled = save.disabled = true;
+  save.textContent = '正在保存…';
+  error.textContent = '';
+  try {
+    const response = await fetch(`/api/admin/control-rooms/${encodeURIComponent(code)}/note`, {
+      method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note }), signal: AbortSignal.timeout(15000)
+    });
+    if (response.status === 401) { location.replace('/admin/login'); return; }
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      throw new Error(problem?.detail || '保存备注失败，请重试。');
+    }
+    const saved = await response.json();
+    const room = snapshot?.controlRooms.find(room => room.code === code);
+    if (room) room.note = saved.note;
+    noteRevision++;
+    $('roomNoteDialog').close();
+    if (view === 'live') render();
+    showRoomFeedback(saved.note ? '已保存房间备注' : '已清除房间备注');
+    load();
+  } catch (failure) {
+    error.textContent = failure.name === 'TimeoutError' ? '保存请求超时，请重试。' :
+      failure instanceof TypeError ? '无法连接服务器，请重试。' : failure.message;
+    input.focus({ preventScroll: true });
+  } finally {
+    savingNote = false;
+    input.readOnly = $('roomNoteCancel').disabled = save.disabled = false;
+    save.textContent = '保存备注';
+  }
+}
+
 function cell(value, sub) {
   const box = node('div', 'value', value);
   if (sub !== undefined) box.append(node('span', 'sub', sub)); return box;
@@ -133,7 +236,7 @@ function entryMatches(entry, query) {
   if (entry.type === 'unlinked') return !query || dailySnapshot.unlinkedRooms.some(code => matches(code, query));
   if (entry.type === 'history') return !query || matches(r.code, query) || r.worlds.some(w => [w.code, w.batchId, w.hostName, w.hostUid].some(v => matches(v, query))) ||
     r.hoeing.runs.some(run => matches(run.id, query) || run.members.some(m => matches(m.name, query) || matches(m.uid, query)));
-  return !query || matches(r.code, query) || matches(r.hostName, query) || r.members.some(m => matches(m.name, query) || matches(m.uid, query));
+  return !query || matches(r.code, query) || matches(r.note, query) || matches(r.hostName, query) || r.members.some(m => matches(m.name, query) || matches(m.uid, query));
 }
 function liveFilter(entry) {
   const type = $('roomType').value, filter = $('filter').value, r = entry.room;
@@ -161,6 +264,7 @@ function option(entry) {
   button.append(top, node('span', 'sub', entry.type === 'unlinked' ? '归属未确认，按房间号查询' : entry.type === 'history' ?
     r.hoeing.runs.length + ' 次批次记录' : `${entry.type === 'control' ? '助手' : '世界'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`));
   if (r) {
+    if (entry.type === 'control' && r.note) button.append(roomNoteText(r.note));
     const names = entry.type === 'history' ? r.hoeing.runs.flatMap(run => run.members) : r.members;
     button.append(node('span', 'sub', [...new Set(names.map(m => m.name || m.uid))].join('、') || '未记录成员'));
   }
@@ -203,20 +307,45 @@ function cardHoeing(day){
   const span=clock(last.startedAtUtc||last.requestedAtUtc)+(last.endedAtUtc?'–'+clock(last.endedAtUtc):' 起');
   return `今日 ${started.length} 次 · 完成 ${done} · 最近 ${span}`;
 }
-function renderOverview() {  const box=$('overviewRooms'),items=entries(),focusKey=document.activeElement?.closest('.overview-card')?.dataset.key;
+function renderOverview() {
+  const box = $('overviewRooms'), items = entries();
+  const active = document.activeElement;
+  const focusKey = active?.closest('.overview-card')?.dataset.key;
+  const focusAction = active?.dataset.roomAction;
   items.sort((a,b)=>Number(b.type==='control'?b.room.autoHoeingRunning:b.room.status==='started')-Number(a.type==='control'?a.room.autoHoeingRunning:a.room.status==='started'));
-  box.replaceChildren();$('overviewCount').textContent=`${items.length} 个`;
-  if(!items.length){box.append(node('div','empty',snapshot?'没有符合条件的房间':'正在读取房间…'));return;}
-  for(const entry of items){
-    const r=entry.room,game=entry.type==='game',running=game?r.status==='started':r.autoHoeingRunning;
-    const card=node('button','overview-card'+(running?' running':''));card.type='button';card.dataset.key=entry.key;
-    const top=node('div','overview-card-top');top.append(node('h3','mono',r.code),pill(game?(labels[r.status]||'未知'):running?'锄地中':r.onlineCount?'在线 · 未锄地':'无人在线',game?r.status:running?'running':r.onlineCount?'':'disconnected'));card.append(top);
-    card.append(node('div','history-note',`${game?'世界':'助手'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`),memberSummary(r.members));
-    card.append(node('div','history-note',game?(r.worldRound?`世界轮次 ${r.worldRound} · `:'')+`线路 ${route(r)}`:cardHoeing(r.todayHoeing)));
-    const foot=node('div','overview-card-foot');foot.append(node('span','',`心跳 ${heartbeat(r.lastHeartbeatUtc)}`),node('span','','查看详情'));card.append(foot);
-    card.addEventListener('click',()=>{selected.live=entry.key;liveDetailOpen=true;render();});box.append(card);
+  box.replaceChildren(); $('overviewCount').textContent = `${items.length} 个`;
+  if (!items.length) {
+    box.append(node('div', 'empty', snapshot ? '没有符合条件的房间' : '正在读取房间…'));
+    return;
   }
-  if(focusKey)box.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll:true});
+  for (const entry of items) {
+    const r = entry.room, game = entry.type === 'game', running = game ? r.status === 'started' : r.autoHoeingRunning;
+    const card = node('article', 'overview-card' + (running ? ' running' : ''));
+    card.dataset.key = entry.key;
+    const top = node('div', 'overview-card-top');
+    top.append(roomCodeTitle('h3', r, !game), pill(game ? (labels[r.status] || '未知') : running ? '锄地中' :
+      r.onlineCount ? '在线 · 未锄地' : '无人在线', game ? r.status : running ? 'running' : r.onlineCount ? '' : 'disconnected'));
+    const meta = node('div', 'overview-card-meta');
+    meta.append(node('span', 'history-note', `${game ? '世界' : '助手'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`));
+    if (!game) meta.append(roomNoteButton(r));
+    card.append(top, meta);
+    if (!game && r.note) card.append(roomNoteText(r.note));
+    card.append(memberSummary(r.members), node('div', 'history-note', game ?
+      (r.worldRound ? `世界轮次 ${r.worldRound} · ` : '') + `线路 ${route(r)}` : cardHoeing(r.todayHoeing)));
+    const open = action('查看详情', () => {
+      selected.live = entry.key; liveDetailOpen = true; render();
+      $('detail').focus({ preventScroll: true });
+    }, 'overview-card-open');
+    open.dataset.roomAction = 'open';
+    open.setAttribute('aria-label', `查看${game ? '世界' : '助手'}房间 ${r.code} 的详情`);
+    const foot = node('div', 'overview-card-foot');
+    foot.append(node('span', '', `心跳 ${heartbeat(r.lastHeartbeatUtc)}`), open);
+    card.append(foot); box.append(card);
+  }
+  if (focusKey && focusAction) {
+    const button = box.querySelector(`[data-key="${CSS.escape(focusKey)}"] [data-room-action="${focusAction}"]`);
+    (button || $('overviewSearch')).focus({ preventScroll: true });
+  }
 }
 function render() {
   const overview=view==='live'&&!liveDetailOpen;$('liveOverview').hidden=!overview;$('workbench').hidden=overview;$('backToOverview').hidden=view!=='live'||overview;$('viewHeading').hidden=overview;
@@ -232,6 +361,7 @@ function render() {
   $('directoryCount').textContent = view === 'history' ? `${$('historyDate').value} · ${items.length} 个目录项` : `${items.length} 个匹配房间`;
   // 查询表单节点跨刷新保留，避免十秒更新打断正在输入的房间号。
   const queryBox = detail.querySelector('.direct-query'), focusedId = document.activeElement?.id;
+  const focusedAction = detail.contains(document.activeElement) ? document.activeElement?.dataset.roomAction : null;
   detail.replaceChildren();
   if (view === 'history') {
     detail.append(queryBox || directQuery());
@@ -251,6 +381,7 @@ function render() {
   revealSelection();
   if (focusKey) list.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
   else if (focusedId === 'archiveCode' || focusedId === 'archiveRoom') $(focusedId)?.focus({ preventScroll: true });
+  else if (focusedAction && entry) detail.querySelector(`[data-room-action="${focusedAction}"]`)?.focus({ preventScroll: true });
 }
 function revealSelection() {
   const list = $('rooms'), active = list.querySelector('.room-option[aria-pressed="true"]');
@@ -263,10 +394,11 @@ function renderLive(panel, entry) {
   const room = entry.room, game = entry.type === 'game', top = node('div', 'detail-top'), title = node('div'), buttons = node('div', 'detail-actions');
   const state = pill(game ? (labels[room.status] || '未知') : room.autoHoeingRunning ? '有成员锄地中' :
     room.onlineCount ? '已连接' : '无人在线', game ? room.status : room.onlineCount ? 'connected' : 'disconnected'), titleRow = node('div', 'detail-title');
-  titleRow.append(node('h2', 'mono', room.code), state);
+  titleRow.append(roomCodeTitle('h2', room, !game), state);
   title.append(node('div', 'detail-eyebrow', game ? '当前游戏世界房间' : '当前助手房间'), titleRow);
+  if (!game && room.note) title.append(roomNoteText(room.note));
   buttons.append(logButton(game ? '下载世界房间日志' : '下载助手自身日志', room.code, beijingMinute().slice(0, 10)));
-  if (!game) buttons.append(action('历史与日志', () => showHistoryFor(room.code), 'button compact'));
+  if (!game) buttons.append(roomNoteButton(room), action('历史与日志', () => showHistoryFor(room.code), 'button compact'));
   top.append(title, buttons); panel.append(top);
   panel.append(summaryLine(game ? [`在线 ${room.onlineCount} / ${room.memberCount}`, room.worldRound ? `世界轮次 ${room.worldRound}` : '世界轮次未记录',
     `线路 ${route(room)}`, room.startedAtUtc ? '开锄 ' + duration(room.startedAtUtc) : '尚未开锄'] :
@@ -315,7 +447,7 @@ function setView(next) {
   $('viewTitle').textContent = view === 'history' ? '历史与日志' : '实时房间';
   $('viewHint').textContent = view === 'history' ? '先选日期和助手房间，再查看批次与世界日志' : '选择左侧房间，在右侧查看状态与成员';
   $('directoryTitle').textContent = view === 'history' ? '已保存房间' : '当前房间';
-  $('search').placeholder = view === 'history' ? '房间号、成员或批次 ID' : '搜索房间号、昵称或 UID'; render();
+  $('search').placeholder = view === 'history' ? '房间号、成员或批次 ID' : '搜索房间号、备注、昵称或 UID'; render();
   if (view === 'history') { if (!archiveLoaded) loadArchive(); if (!dailySnapshot || dailySnapshot.date !== $('historyDate').value) loadDaily(); }
 }
 function showHistoryFor(code) {
@@ -351,16 +483,22 @@ async function loadDaily() {
 async function load() {
   if (liveLoading) return;
   liveLoading = true;
-  const request = ++liveRequest;
+  const request = ++liveRequest, revision = noteRevision;
   try {
     const response = await fetch('/api/admin/rooms', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (response.status === 401) { location.replace('/admin/login'); return; }
-    if (!response.ok) throw new Error(); const data = await response.json(); if (request !== liveRequest) return;
+    if (!response.ok) throw new Error(); const data = await response.json();
+    if (request !== liveRequest || revision !== noteRevision) return;
     snapshot = data; $('controlRooms').textContent = data.connectedControlRoomCount; $('controlMembers').textContent = data.connectedControlMemberCount;
     $('totalRooms').textContent = data.totalRoomCount; $('startedRooms').textContent = data.startedRoomCount;
     if (view === 'live') render();
-    $('updated').textContent = '更新于 ' + new Date(data.capturedAtUtc).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }); $('notice').hidden = true;
+    $('updated').textContent = '更新于 ' + new Date(data.capturedAtUtc).toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+    $('notice').hidden = !data.controlRoomNotesUnavailable;
+    if (data.controlRoomNotesUnavailable) $('notice').textContent = '助手房间备注暂不可读取，请刷新重试。';
   } catch {
     if (request === liveRequest) { $('notice').hidden = false; $('notice').textContent = '无法取得最新状态，当前内容可能已过期。请刷新重试。'; $('updated').textContent = '连接失败'; }
-  } finally { liveLoading = false; }
+  } finally {
+    liveLoading = false;
+    if (revision !== noteRevision) load();
+  }
 }

@@ -9,12 +9,12 @@ const source = readFileSync(new URL('../../BgiCoordinatorServer/wwwroot/admin-mo
 // needing a browser. Rendering is observed separately; these checks concern stale data.
 function harness(mode = 'live') {
     let now = 0, nextTimer = 0;
-    const timers = new Map(), elements = new Map(), requests = [];
+    const timers = new Map(), elements = new Map(), requests = [], clipboard = [];
     const element = id => {
         if (!elements.has(id)) elements.set(id, {
             value: id === 'historyDate' ? '2026-10-29' : '', textContent: '', hidden: false,
             options: [], replaceChildren(...options) { this.options = options; },
-            add(option) { this.options.push(option); }
+            add(option) { this.options.push(option); }, close() {}
         });
         return elements.get(id);
     };
@@ -25,6 +25,7 @@ function harness(mode = 'live') {
     };
     const context = vm.createContext({
         document: { getElementById: element },
+        navigator: { clipboard: { async writeText(text) { clipboard.push(text); } } },
         fetch(url, options) {
             return new Promise((resolve, reject) => requests.push({
                 url, options, resolve(data) { resolve({ ok: true, status: 200, json: async () => data }); }, reject
@@ -42,13 +43,14 @@ function harness(mode = 'live') {
         globalThis.renderCount = 0;
         render = () => { globalThis.renderCount++; };
         globalThis.api = {
-            load, loadDaily,
+            load, loadDaily, saveRoomNote, copyRoomCode,
+            editRoom(code) { activeNoteCode = code; },
             seedHistory(data) { dailySnapshot = data; selected.history = 'history:OLD001'; },
             inspect() { return { snapshot, dailySnapshot, historyLoading, liveLoading, selectedHistory: selected.history, renderCount }; }
         };
     `, context);
     return {
-        api: context.api, requests, element,
+        api: context.api, requests, element, clipboard,
         setDate(value) { element('historyDate').value = value; },
         advance(milliseconds) {
             now += milliseconds;
@@ -80,6 +82,32 @@ test('a live response taking twelve seconds survives the ten-second poll', async
     h.requests[1].resolve(liveData(7));
     await next;
     assert.equal(h.api.inspect().snapshot.connectedControlRoomCount, 7);
+});
+
+test('copy writes exactly the original room code and announces success', async () => {
+    const h = harness();
+    await h.api.copyRoomCode('4AB123');
+    assert.deepEqual(h.clipboard, ['4AB123']);
+    assert.equal(h.element('roomFeedback').textContent, '已复制房间号 4AB123');
+    h.advance(3_500);
+    assert.equal(h.element('roomFeedback').textContent, '');
+});
+
+test('a live response started before saving a note cannot restore stale notes', async () => {
+    const h = harness(), beforeSave = h.api.load();
+    h.api.editRoom('TEAM01');
+    h.element('roomNoteInput').value = '晚班';
+    const saving = h.api.saveRoomNote({ preventDefault() {} });
+    assert.equal(h.requests[1].options.method, 'PUT');
+    h.requests[1].resolve({ note: '晚班' });
+    await saving;
+    h.requests[0].resolve({ ...liveData(1), controlRooms: [{ code: 'TEAM01', note: '旧备注' }] });
+    await beforeSave;
+    assert.equal(h.api.inspect().snapshot, null);
+    assert.equal(h.requests.length, 3, 'a completed save must trigger a fresh snapshot');
+    h.requests[2].resolve({ ...liveData(1), controlRooms: [{ code: 'TEAM01', note: '晚班' }] });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.api.inspect().snapshot.controlRooms[0].note, '晚班');
 });
 
 test('a same-date history response taking twelve seconds survives the ten-second poll', async () => {

@@ -30,6 +30,7 @@ var resolvedRoomLogRoot = string.IsNullOrWhiteSpace(roomLogRoot)
     ? Path.Combine(builder.Environment.ContentRootPath, "data", "room-logs") : roomLogRoot;
 var roomLogArchive = new RoomLogArchive(resolvedRoomLogRoot);
 builder.Services.AddSingleton(new RoomHoeingHistory(Path.Combine(resolvedRoomLogRoot, "hoeing-history")));
+builder.Services.AddSingleton(new AdminControlRoomNotes(resolvedRoomLogRoot));
 builder.Services.AddSingleton(roomLogArchive);
 var roomLogStore = new RoomLogStore(roomLogArchive);
 builder.Services.AddSingleton(roomLogStore);

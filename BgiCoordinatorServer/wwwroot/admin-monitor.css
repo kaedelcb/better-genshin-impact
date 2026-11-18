@@ -3,8 +3,7 @@
 .overview-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .overview-filters{display:flex;gap:8px;flex-wrap:wrap}.overview-filters input{min-width:230px}.overview-rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:12px;align-content:start}
 .overview-card{min-width:0;display:flex;flex-direction:column;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:16px;text-align:left;color:var(--text)}
-.overview-card:hover{border-color:#9c8754}.overview-card.running{border-color:#518b7a}.overview-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.overview-card h3{font-size:17px}.overview-card .member-summary{margin:0}.overview-card .history-note{overflow-wrap:anywhere}.overview-card-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:9px;display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}.overview-card-foot span:last-child{color:var(--gold)}
-@media(max-width:760px){.live-overview{overflow:visible}.overview-filters{width:100%}.overview-filters input{width:100%;min-width:0}.overview-filters select{flex:1}.overview-rooms{grid-template-columns:1fr}}
+.overview-card:hover{border-color:#9c8754}.overview-card.running{border-color:#518b7a}.overview-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}.overview-card h3{font-size:17px}.overview-card .member-summary{margin:0}.overview-card .history-note{overflow-wrap:anywhere}.overview-card-foot{margin-top:auto;border-top:1px solid var(--line);padding-top:9px;display:flex;justify-content:space-between;gap:8px;color:var(--muted);font-size:12px}@media(max-width:760px){.live-overview{overflow:visible}.overview-filters{width:100%}.overview-filters input{width:100%;min-width:0}.overview-filters select{flex:1}.overview-rooms{grid-template-columns:1fr}}
 /* B 房间工作台：沿用助手的紫金色，目录与详情在桌面分别滚动。 */
 :root{
   color-scheme:dark;
@@ -280,7 +279,7 @@ body{font-size:14px}
 .overview-card .member-chip{font-size:13px;padding:3px 9px}
 .overview-card .pill{font-size:12px;padding:2px 10px}
 .overview-card-foot{font-size:12px;padding-top:10px}
-.overview-card:hover .overview-card-foot span:last-child{text-decoration:underline;text-underline-offset:3px}
+.overview-card:hover .overview-card-open{text-decoration:underline;text-underline-offset:3px}
 .sidebar{gap:28px}
 .navigation button{font-size:14px}
 .readonly-tag{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap}
@@ -370,6 +369,43 @@ body{font-size:14px}
 .overview-card .history-note{font-size:13px}
 .overview-card-foot{margin:2px -18px 0;padding:10px 18px;border-top:1px solid var(--line);background:#191a2e;border-radius:0 0 var(--radius) var(--radius);font-size:12px}
 .overview-card.running{border-color:#3f7666;background:linear-gradient(180deg,#1f3530 0,var(--card) 88px)}
+
+/* 整张卡片可打开详情，复制与备注是独立的键盘和触屏操作。 */
+.overview-card{position:relative}
+.overview-card:has(.overview-card-open:focus-visible){outline:2px solid var(--gold);outline-offset:3px}
+.overview-card-meta,.room-code-title{display:flex;align-items:center;gap:6px}
+.overview-card-meta{justify-content:space-between}
+.overview-card-open{min-height:24px;margin:-3px 0;padding:0;background:none;border:0;color:var(--gold)}
+.overview-card-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.overview-card-open:hover,.overview-card-open:focus-visible{background:none;text-decoration:underline;text-underline-offset:3px}
+.overview-card .room-code-title,.overview-card .room-note-button{position:relative;z-index:1}
+.room-code-copy{display:grid;place-items:center;flex:none;width:28px;min-height:28px;padding:0;position:relative;
+  color:var(--muted);background:transparent;border-color:transparent;border-radius:6px}
+.room-code-copy::before,.room-code-copy::after{content:"";grid-area:1/1;width:8px;height:9px;border:1px solid currentColor;border-radius:2px}
+.room-code-copy::before{transform:translate(-2px,-2px);border-right:0;border-bottom:0}
+.room-code-copy::after{transform:translate(2px,2px)}
+.room-code-copy:hover{color:var(--gold)}
+.room-note-button{min-height:26px;padding:2px 5px;font-size:12px;white-space:nowrap}
+.room-note{min-width:0;display:flex;align-items:baseline;gap:6px;font-size:13px;line-height:1.6;color:var(--text);overflow-wrap:anywhere}
+.room-note-label{flex:none;color:var(--gold);font-size:12px}
+.detail-top>div:first-child{min-width:0}
+.detail-top .room-note{margin-top:4px}
+.room-feedback:not(:empty){position:fixed;z-index:5;left:50%;bottom:18px;transform:translateX(-50%);
+  max-width:calc(100% - 28px);padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:var(--raised);color:var(--text);pointer-events:none}
+.clipboard-buffer{position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none}
+#roomNoteDialog{width:min(420px,calc(100vw - 28px))}
+#roomNoteForm{display:grid;gap:8px}
+#roomNoteForm label{margin-top:6px}
+#roomNoteInput{width:100%;font-size:16px}
+#roomNoteError:empty{display:none}
+#roomNoteError{color:var(--red)}
+.room-note-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:6px}
+@media(pointer:coarse),(max-width:930px) and (max-height:500px) and (orientation:landscape){
+  .room-code-copy{width:44px;min-height:44px}
+  .room-note-button{min-height:44px}
+}
+/* 矮视口内筛选栏随卡片滚动，避免覆盖卡片操作。 */
+@media(max-height:500px){.overview-toolbar{position:static}}
 
 /* 工作台：目录与详情统一为卡片 */
 .workbench{gap:16px}

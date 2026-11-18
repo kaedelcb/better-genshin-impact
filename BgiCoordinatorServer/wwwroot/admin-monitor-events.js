@@ -28,6 +28,20 @@ $('logMerge').addEventListener('change', () => {
   activeLogSelection = $('logMerge').checked ? {} : { direct: true };
   $('logScope').textContent = $('logMerge').checked ? '合并此房间及已确认关联的历史世界日志' : '仅此房间号自身保存的日志';
 });
+$('roomNoteForm').addEventListener('submit', saveRoomNote);
+$('roomNoteCancel').addEventListener('click', () => $('roomNoteDialog').close());
+$('roomNoteDialog').addEventListener('cancel', event => { if (savingNote) event.preventDefault(); });
+$('roomNoteDialog').addEventListener('close', () => {
+  const key = 'control:' + activeNoteCode;
+  activeNoteCode = null;
+  if (view !== 'live') return;
+  if (liveDetailOpen) {
+    if (selected.live === key) $('detail').querySelector('[data-room-action="note"]')?.focus({ preventScroll: true });
+  } else {
+    const button = $('overviewRooms').querySelector(`[data-key="${CSS.escape(key)}"] [data-room-action="note"]`);
+    (button || $('overviewSearch')).focus({ preventScroll: true });
+  }
+});
 $('logDownload').addEventListener('click', downloadLogs);
 $('logRefresh').addEventListener('click', () => { loadLogs(); if (activeLogCode) loadLogDates(activeLogCode); });
 $('logClose').addEventListener('click', () => $('logDialog').close());

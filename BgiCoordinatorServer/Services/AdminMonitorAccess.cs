@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 
 namespace BgiCoordinatorServer.Services;
 
-/// <summary>独立于控制房密码的单管理员只读监控入口。</summary>
+/// <summary>独立于控制房密码的管理员监控入口。</summary>
 public sealed class AdminMonitorAccess
 {
     public const string RevisionClaim = "admin-monitor-revision";
@@ -36,6 +36,10 @@ public sealed class AdminMonitorAccess
 public static class AdminMonitorRoutes
 {
     private sealed record LoginRequest(string? Password);
+    private sealed record RoomNoteRequest(string? Note);
+
+    private static bool IsNotesStorageError(Exception exception) =>
+        exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException;
 
     public static void MapAdminMonitor(this WebApplication app, int playerTimeoutSeconds)
     {
@@ -85,12 +89,42 @@ public static class AdminMonitorRoutes
             return Results.File(Path.Combine(pageDirectory, "admin-monitor.html"), "text/html; charset=utf-8");
         }).RequireAuthorization();
 
-        app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager, RoomHoeingHistory history) =>
+        app.MapGet("/api/admin/rooms", (HttpContext context, RoomManager manager, RoomHoeingHistory history,
+            AdminControlRoomNotes store) =>
         {
             NoStore(context);
+            IReadOnlyDictionary<string, string>? notes = null;
+            try { notes = store.Read(); }
+            catch (Exception exception) when (IsNotesStorageError(exception))
+            { app.Logger.LogWarning(exception, "无法读取助手房间备注"); }
+
             return Results.Json(RoomMonitorSnapshot.Create(manager, DateTime.UtcNow,
-                TimeSpan.FromSeconds(playerTimeoutSeconds), history));
+                TimeSpan.FromSeconds(playerTimeoutSeconds), history, notes) with { ControlRoomNotesUnavailable = notes is null });
         }).RequireAuthorization();
+
+        app.MapPut("/api/admin/control-rooms/{code}/note", (string code, RoomNoteRequest request, HttpContext context,
+            RoomManager manager, RoomHoeingHistory history, AdminControlRoomNotes store) =>
+        {
+            NoStore(context);
+            if (!AdminControlRoomNotes.IsRoomCode(code))
+                return Results.Problem("助手房间号无效。", statusCode: 400);
+            var note = request.Note?.Trim();
+            if (!AdminControlRoomNotes.IsValidNote(note))
+                return Results.Problem("请输入最多 120 字的单行备注。", statusCode: 400);
+            var knownRoom = manager.GetControlRoomPlayers("CTRL_" + code).Count > 0 ||
+                history.GetTodayRoomCodes(DateTime.UtcNow).Contains(code, StringComparer.Ordinal);
+            try
+            {
+                return store.TrySet(code, note!, knownRoom)
+                    ? Results.Json(new { note })
+                    : Results.Problem("找不到此助手房间，请刷新房间列表。", statusCode: 404);
+            }
+            catch (Exception exception) when (IsNotesStorageError(exception))
+            {
+                app.Logger.LogWarning(exception, "无法保存助手房间备注");
+                return Results.Problem("服务器无法保存备注，请稍后重试。", statusCode: 503);
+            }
+        }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(4096));
 
         app.MapGet("/api/admin/logs/cards", (string? date, HttpContext context,
             RoomLogArchive archive, RoomHoeingHistory history) =>
