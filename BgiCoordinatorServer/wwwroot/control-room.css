@@ -267,6 +267,8 @@ small,.small{font-size:12px}
 @media(max-width:380px){.topbar .brand small{display:none}.top-star span{display:none}.top-star{padding:0 10px}}
 /* 品牌名较长（提瓦特生物灭绝计划）：手机上品牌与 Star/设置占第一行，房间状态单独一行横排，导航在最后。 */
 .topbar .brand{min-width:0}
+.topbar .brand small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand-tagline{margin-left:10px;padding-left:10px;border-left:1px solid currentColor;opacity:.75}
 .topbar .brand strong{white-space:nowrap}
 @media(max-width:700px){
   .topbar{grid-template-columns:minmax(0,1fr) auto auto}
