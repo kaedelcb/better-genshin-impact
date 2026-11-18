@@ -15,7 +15,8 @@ public sealed class RemoteLogRoomHistoryStoreTests
         var store = new RemoteLogRoomHistoryStore(path);
         for (var i = 1; i <= 3; i++) store.Remember(server, "room-" + i, "local-secret-" + i);
 
-        // 新实例从磁盘重新载入，三个房间及各自密码均保留。
+        // 沿用旧版 JSON（不含 note）从磁盘载入，三个房间及各自密码均保留。
+        Assert.DoesNotContain("\"note\"", File.ReadAllText(path));
         var reloaded = new RemoteLogRoomHistoryStore(path);
         Assert.Equal(3, reloaded.GetRooms(server).Count);
         for (var i = 1; i <= 3; i++)
@@ -23,7 +24,14 @@ public sealed class RemoteLogRoomHistoryStoreTests
             Assert.Equal("local-secret-" + i, reloaded.GetPassword(server + "/hub", "room-" + i));
             Assert.DoesNotContain("local-secret-" + i, File.ReadAllText(path));
         }
+        var original = reloaded.GetRooms(server).Single(r => r.RoomCode == "room-1");
+        reloaded.UpdateNote(server + "/hub", "room-1", "  联机队友  ");
+        var noted = reloaded.GetRooms(server).Single(r => r.RoomCode == "room-1");
+        Assert.Equal(original.LastUsedUtc, noted.LastUsedUtc);
+        Assert.Equal("room-1 · 联机队友", noted.DisplayName);
+        Assert.Equal("local-secret-1", reloaded.GetPassword(server, "room-1"));
         reloaded.Remember(server, "room-1", "updated-secret");
+        Assert.Equal("联机队友", reloaded.GetRooms(server)[0].Note);
         reloaded.Remember("http://localhost:49124", "room-1", "other-server-secret");
         Assert.Equal(3, reloaded.GetRooms(server).Count);
         Assert.Equal("room-1", reloaded.GetRooms(server)[0].RoomCode);

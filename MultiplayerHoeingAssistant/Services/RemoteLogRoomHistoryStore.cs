@@ -12,7 +12,8 @@ public sealed class RemoteLogRoomHistoryStore
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true
+        WriteIndented = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
     private readonly string _path;
 
@@ -23,7 +24,7 @@ public sealed class RemoteLogRoomHistoryStore
     {
         var server = NormalizeServer(serverUrl);
         return Read().Where(r => r.ServerUrl == server).OrderByDescending(r => r.LastUsedUtc)
-            .Select(r => new RemoteLogRoomHistoryEntry(r.RoomCode, r.LastUsedUtc)).ToList();
+            .Select(r => new RemoteLogRoomHistoryEntry(r.RoomCode, r.LastUsedUtc, r.Note)).ToList();
     }
 
     public string? GetPassword(string serverUrl, string roomCode)
@@ -40,8 +41,8 @@ public sealed class RemoteLogRoomHistoryStore
         finally { CryptographicOperations.ZeroMemory(bytes); }
     }
 
-    /// <summary>仅在连接成功后调用；相同服务器的同一房间更新密码和使用时间，其余记录保留。</summary>
-    public void Remember(string serverUrl, string roomCode, string password)
+    /// <summary>连接成功后更新记录。备注为 null 时保留原值，空字符串清除备注。</summary>
+    public void Remember(string serverUrl, string roomCode, string password, string? note = null)
     {
         var server = NormalizeServer(serverUrl);
         roomCode = roomCode.Trim();
@@ -57,8 +58,21 @@ public sealed class RemoteLogRoomHistoryStore
                 Entropy(server, roomCode), DataProtectionScope.CurrentUser));
         }
         finally { CryptographicOperations.ZeroMemory(bytes); }
+        var previousNote = records.FirstOrDefault(r => r.ServerUrl == server && r.RoomCode == roomCode)?.Note;
         records.RemoveAll(r => r.ServerUrl == server && r.RoomCode == roomCode);
-        records.Add(new StoredRoom(server, roomCode, protectedPassword, DateTimeOffset.UtcNow));
+        records.Add(new StoredRoom(server, roomCode, protectedPassword, DateTimeOffset.UtcNow, note?.Trim() ?? previousNote));
+        Write(records);
+    }
+
+    public void UpdateNote(string serverUrl, string roomCode, string note)
+    {
+        var server = NormalizeServer(serverUrl);
+        roomCode = roomCode.Trim();
+        using var writing = ConfigFileWriteGate.Acquire(_path);
+        var records = Read();
+        var index = records.FindIndex(r => r.ServerUrl == server && r.RoomCode == roomCode);
+        if (index < 0) throw new InvalidOperationException("该房间记录已不存在");
+        records[index] = records[index] with { Note = note.Trim() };
         Write(records);
     }
 
@@ -97,7 +111,10 @@ public sealed class RemoteLogRoomHistoryStore
     private static byte[] Entropy(string server, string roomCode) =>
         Encoding.UTF8.GetBytes("NexusBGI.RemoteLogRoom.v1\n" + server + "\n" + roomCode);
 
-    private sealed record StoredRoom(string ServerUrl, string RoomCode, string ProtectedPassword, DateTimeOffset LastUsedUtc);
+    private sealed record StoredRoom(string ServerUrl, string RoomCode, string ProtectedPassword, DateTimeOffset LastUsedUtc, string? Note = null);
 }
 
-public sealed record RemoteLogRoomHistoryEntry(string RoomCode, DateTimeOffset LastUsedUtc);
+public sealed record RemoteLogRoomHistoryEntry(string RoomCode, DateTimeOffset LastUsedUtc, string? Note = null)
+{
+    public string DisplayName => string.IsNullOrWhiteSpace(Note) ? RoomCode : $"{RoomCode} · {Note}";
+}

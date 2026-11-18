@@ -21,14 +21,21 @@ public partial class RemoteLogRoomWindow : Window
         RoomCodeBox.TextChanged += (_, _) =>
         {
             if (_fillingHistory) return;
-            // 手动换房间时不能把上一个房间的密码带过去。
+            // 手动换房间时不能把上一个房间的备注和密码带过去。
             if (HistoryRoomsBox.SelectedItem is RemoteLogRoomHistoryEntry entry && RoomCodeBox.Text.Trim() != entry.RoomCode)
             {
                 HistoryRoomsBox.SelectedItem = null;
+                RoomNoteBox.Clear();
                 RoomPasswordBox.Clear();
+                StatusText.Text = "";
             }
         };
-        ReloadHistory(selectLatest: true);
+        try
+        {
+            ReloadHistory(selectLatest: true);
+            FillSelectedHistory();
+        }
+        catch (Exception ex) { StatusText.Text = "读取房间记录失败，可手动输入：" + ex.Message; }
         Loaded += (_, _) =>
         {
             if (!string.IsNullOrEmpty(RoomPasswordBox.Password)) ConnectButton.Focus();
@@ -37,19 +44,20 @@ public partial class RemoteLogRoomWindow : Window
         Closed += (_, _) => _closed.Cancel();
     }
 
-    private void ReloadHistory(bool selectLatest)
+    private void ReloadHistory(bool selectLatest = false, string? selectedRoomCode = null)
     {
+        var entries = _history.GetRooms(_serverUrl);
         _fillingHistory = true;
         try
         {
-            var entries = _history.GetRooms(_serverUrl);
             HistoryRoomsBox.ItemsSource = entries;
             HistoryPanel.Visibility = entries.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            HistoryRoomsBox.SelectedIndex = selectLatest && entries.Count > 0 ? 0 : -1;
+            HistoryRoomsBox.SelectedItem = selectLatest
+                ? entries.FirstOrDefault()
+                : entries.FirstOrDefault(entry => entry.RoomCode == selectedRoomCode);
+            DeleteHistoryButton.IsEnabled = HistoryRoomsBox.SelectedItem != null;
         }
-        catch (Exception ex) { StatusText.Text = "读取房间记录失败，可手动输入：" + ex.Message; }
         finally { _fillingHistory = false; }
-        FillSelectedHistory();
     }
 
     private void HistoryRooms_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -66,6 +74,7 @@ public partial class RemoteLogRoomWindow : Window
         try
         {
             RoomCodeBox.Text = entry.RoomCode;
+            RoomNoteBox.Text = entry.Note ?? "";
             RoomPasswordBox.Password = _history.GetPassword(_serverUrl, entry.RoomCode) ?? "";
             StatusText.Text = "已填入记录，可直接连接或选择其他房间。";
         }
@@ -77,14 +86,29 @@ public partial class RemoteLogRoomWindow : Window
         finally { _fillingHistory = false; }
     }
 
+    private void SaveNote_Click(object sender, RoutedEventArgs e)
+    {
+        if (HistoryRoomsBox.SelectedItem is not RemoteLogRoomHistoryEntry entry) return;
+        try
+        {
+            var note = RoomNoteBox.Text.Trim();
+            _history.UpdateNote(_serverUrl, entry.RoomCode, note);
+            ReloadHistory(selectedRoomCode: entry.RoomCode);
+            RoomNoteBox.Text = note;
+            StatusText.Text = string.IsNullOrEmpty(note) ? "已清除备注。" : "已保存备注。";
+        }
+        catch (Exception ex) { StatusText.Text = "保存备注失败：" + ex.Message; }
+    }
+
     private void DeleteHistory_Click(object sender, RoutedEventArgs e)
     {
         if (HistoryRoomsBox.SelectedItem is not RemoteLogRoomHistoryEntry entry) return;
         try
         {
             _history.Forget(_serverUrl, entry.RoomCode);
-            ReloadHistory(selectLatest: false);
+            ReloadHistory();
             RoomCodeBox.Clear();
+            RoomNoteBox.Clear();
             RoomPasswordBox.Clear();
             StatusText.Text = "已删除该房间的记录。";
         }
@@ -94,7 +118,7 @@ public partial class RemoteLogRoomWindow : Window
     private async void Connect_Click(object sender, RoutedEventArgs e)
     {
         ConnectButton.IsEnabled = false;
-        RoomCodeBox.IsEnabled = RoomPasswordBox.IsEnabled = false;
+        RoomNoteBox.IsEnabled = RoomCodeBox.IsEnabled = RoomPasswordBox.IsEnabled = false;
         HistoryRoomsBox.IsEnabled = DeleteHistoryButton.IsEnabled = false;
         StatusText.Text = "正在连接…";
         try
@@ -102,11 +126,15 @@ public partial class RemoteLogRoomWindow : Window
             var serverUrl = _browser.LogRoomServerUrl;
             var roomCode = RoomCodeBox.Text;
             var password = RoomPasswordBox.Password;
+            var note = RoomNoteBox.Text.Trim();
+            var selected = HistoryRoomsBox.SelectedItem as RemoteLogRoomHistoryEntry;
+            // 未编辑的备注不覆盖磁盘上的值（例如手动输入了已有房间的房间号）。
+            string? noteToSave = note == (selected?.Note ?? "") ? null : note;
             var connected = await _browser.ConnectAssistedLogRoomAsync(roomCode, password, _closed.Token);
             if (_closed.IsCancellationRequested) return;
             if (connected)
             {
-                try { _history.Remember(serverUrl, roomCode, password); }
+                try { _history.Remember(serverUrl, roomCode, password, noteToSave); }
                 catch (Exception ex) { _browser.RemoteStatus += "；房间记录保存失败：" + ex.Message; }
                 DialogResult = true;
             }
@@ -118,7 +146,7 @@ public partial class RemoteLogRoomWindow : Window
             if (!_closed.IsCancellationRequested)
             {
                 ConnectButton.IsEnabled = true;
-                RoomCodeBox.IsEnabled = RoomPasswordBox.IsEnabled = true;
+                RoomNoteBox.IsEnabled = RoomCodeBox.IsEnabled = RoomPasswordBox.IsEnabled = true;
                 HistoryRoomsBox.IsEnabled = true;
                 DeleteHistoryButton.IsEnabled = HistoryRoomsBox.SelectedItem != null;
             }

@@ -53,7 +53,7 @@ public sealed partial class RemoteLogRoomTests
 
     private static async Task VerifyAsync()
     {
-        var root = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT")!;
+        var root = AssistantDataDirectory.Root;
         Directory.CreateDirectory(root);
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -140,14 +140,16 @@ public sealed partial class RemoteLogRoomTests
             var popup = await OpenDialogAsync(assistButton);
             var codeBox = (TextBox)popup.FindName("RoomCodeBox");
             var passwordBox = (PasswordBox)popup.FindName("RoomPasswordBox");
+            var noteBox = (TextBox)popup.FindName("RoomNoteBox");
             var connectButton = (Button)popup.FindName("ConnectButton");
             codeBox.Text = targetRoom;
+            noteBox.Text = "队友小夏";
             passwordBox.Password = "wrong";
             Invoke(connectButton);
             await Until(() => ((TextBlock)popup.FindName("StatusText")).Text.Contains("失败"));
             Assert.True(connectButton.IsEnabled);
             Assert.False(browser.IsAssistedLogRoom);
-            Assert.Contains("拒绝", ((TextBlock)popup.FindName("StatusText")).Text);
+            Assert.Contains("密码错误", ((TextBlock)popup.FindName("StatusText")).Text);
             Assert.Equal("peer", Assert.Single(browser.RemoteMembers).Uid);
             Assert.Empty(passwordBox.Password);
             Snapshot(popup, Path.Combine(root, "dialog.png"));
@@ -160,7 +162,28 @@ public sealed partial class RemoteLogRoomTests
 
             var reopened = await OpenDialogAsync(assistButton);
             Assert.Equal(targetRoom, ((TextBox)reopened.FindName("RoomCodeBox")).Text);
-            Assert.Equal(password, ((PasswordBox)reopened.FindName("RoomPasswordBox")).Password);
+            var reopenedPasswordBox = (PasswordBox)reopened.FindName("RoomPasswordBox");
+            var reopenedNoteBox = (TextBox)reopened.FindName("RoomNoteBox");
+            var reopenedHistoryBox = (ComboBox)reopened.FindName("HistoryRoomsBox");
+            var saveNoteButton = (Button)reopened.FindName("SaveNoteButton");
+            Assert.Equal(password, reopenedPasswordBox.Password);
+            Assert.Equal("队友小夏", reopenedNoteBox.Text);
+            Assert.Same(page.Resources["GoldComboBox"], reopenedHistoryBox.Style);
+            string? SelectionText()
+            {
+                reopened.UpdateLayout();
+                return Find<TextBlock>(reopenedHistoryBox)?.Text;
+            }
+            Assert.Equal(targetRoom + " · 队友小夏", SelectionText());
+            reopenedNoteBox.Clear();
+            Invoke(saveNoteButton);
+            await Until(() => SelectionText() == targetRoom);
+            reopenedNoteBox.Text = "小夏的联机房";
+            Invoke(saveNoteButton);
+            await Until(() => SelectionText() == targetRoom + " · 小夏的联机房");
+            Snapshot(reopened, Path.Combine(root, "room-note-saved.png"));
+            Assert.Equal(password, reopenedPasswordBox.Password);
+            Assert.Contains("已保存备注", ((TextBlock)reopened.FindName("StatusText")).Text);
             reopened.Close();
 
             browser.SelectedRemoteMember = browser.RemoteMembers[0];
@@ -269,13 +292,25 @@ public sealed partial class RemoteLogRoomTests
             Assert.Equal(3, historyBox.Items.Count);
             Assert.Equal(thirdRoom, ((TextBox)historyDialog.FindName("RoomCodeBox")).Text);
             Assert.Equal(thirdPassword, ((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+            var historyNoteBox = (TextBox)historyDialog.FindName("RoomNoteBox");
+            historyBox.IsDropDownOpen = true;
+            await historyDialog.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            var targetEntry = historyBox.Items.Cast<RemoteLogRoomHistoryEntry>().Single(r => r.RoomCode == targetRoom);
+            var targetOption = Assert.IsType<ComboBoxItem>(historyBox.ItemContainerGenerator.ContainerFromItem(targetEntry));
+            Assert.Equal(targetRoom + " · 小夏的联机房", Find<TextBlock>(targetOption)?.Text);
+            historyBox.IsDropDownOpen = false;
             foreach (var (room, secret) in new[] { (targetRoom, password), (ownRoom, password), (thirdRoom, thirdPassword) })
             {
                 historyBox.SelectedItem = historyBox.Items.Cast<RemoteLogRoomHistoryEntry>().Single(r => r.RoomCode == room);
                 Assert.Equal(room, ((TextBox)historyDialog.FindName("RoomCodeBox")).Text);
                 Assert.Equal(secret, ((PasswordBox)historyDialog.FindName("RoomPasswordBox")).Password);
+                Assert.Equal(room == targetRoom ? "小夏的联机房" : "", historyNoteBox.Text);
             }
+            historyBox.SelectedItem = targetEntry;
             Snapshot(historyDialog, Path.Combine(root, "three-room-history.png"));
+            ((TextBox)historyDialog.FindName("RoomCodeBox")).Text = thirdRoom;
+            Assert.Empty(historyNoteBox.Text);
+            Assert.False(((Button)historyDialog.FindName("SaveNoteButton")).IsEnabled);
             var historyPath = Path.Combine(root, "remote-log-rooms.json");
             var historyBeforeFailure = await File.ReadAllBytesAsync(historyPath);
             ((TextBox)historyDialog.FindName("RoomCodeBox")).Text = targetRoom;

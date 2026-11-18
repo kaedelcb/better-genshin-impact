@@ -172,6 +172,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <ContentPresenter Grid.Column="0" TextElement.Foreground="#FFFFFF"
                                                                   Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
                                                                   VerticalAlignment="Center" HorizontalAlignment="Left" IsHitTestVisible="False"/>
                                                 <Path Grid.Column="1" Data="M 0,0 L 4,4 L 8,0"
                                                       Stroke="{DynamicResource Gold}" StrokeThickness="1.6" StrokeLineJoin="Round"

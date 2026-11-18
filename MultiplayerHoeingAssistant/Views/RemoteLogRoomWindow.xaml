@@ -14,12 +14,28 @@
             <DockPanel>
                 <Button x:Name="DeleteHistoryButton" Content="删除此记录" DockPanel.Dock="Right"
                         Click="DeleteHistory_Click" Style="{DynamicResource BtnGhost}" Padding="8,4" Margin="8,0,0,0"/>
-                <ComboBox x:Name="HistoryRoomsBox" DisplayMemberPath="RoomCode" Height="30"
-                          SelectionChanged="HistoryRooms_SelectionChanged"
+                <ComboBox x:Name="HistoryRoomsBox" TextSearch.TextPath="DisplayName" Height="30"
+                          SelectionChanged="HistoryRooms_SelectionChanged" AutomationProperties.Name="已记录房间"
                           Style="{DynamicResource GoldComboBox}" ItemContainerStyle="{DynamicResource GoldComboItem}"
-                          ToolTip="选择曾协助过的房间，自动填入房间号和密码"/>
+                          ToolTip="选择曾协助过的房间，自动填入备注、房间号和密码">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding DisplayName}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </DockPanel>
         </StackPanel>
+        <TextBlock x:Name="RoomNoteLabel" Text="备注（选填）" Margin="0,0,0,4"/>
+        <DockPanel Margin="0,0,0,10">
+            <Button x:Name="SaveNoteButton" Content="保存备注" DockPanel.Dock="Right"
+                    Visibility="{Binding Visibility, ElementName=HistoryPanel}"
+                    IsEnabled="{Binding IsEnabled, ElementName=DeleteHistoryButton}"
+                    Click="SaveNote_Click" Style="{DynamicResource BtnGhost}" Padding="8,4" Margin="8,0,0,0"/>
+            <TextBox x:Name="RoomNoteBox" Height="30" Padding="6,3"
+                     AutomationProperties.LabeledBy="{Binding ElementName=RoomNoteLabel}"/>
+        </DockPanel>
         <TextBlock Text="被协助房间号" Margin="0,0,0,4"/>
         <TextBox x:Name="RoomCodeBox" Height="30" Padding="6,3"/>
         <TextBlock Text="房间密码" Margin="0,10,0,4"/>
