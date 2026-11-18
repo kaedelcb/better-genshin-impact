@@ -960,12 +960,6 @@ public partial class AutoHoeingTask : ISoloTask
             _coordinatorClientRef = client;
             // 隐藏服务器地址前半部分
             var maskedUrl = MaskServerUrl(_config.CoordinatorServerUrl);
-            if (CoordinatorServerAddress.ConnectProblem(_config.CoordinatorServerUrl) is { } addressProblem)
-            {
-                _logger.LogWarning("[联机] {Problem}", addressProblem);
-                MarkPartyFailed(addressProblem);
-                return;
-            }
             _logger.LogInformation("[联机] 开始连接协调服务器: {Url}", maskedUrl);
             var connected = await client.ConnectAsync(_config.CoordinatorServerUrl, _ct);
             if (!connected)

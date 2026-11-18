@@ -60,6 +60,10 @@ public partial class TaskSettingsPageViewModel : ViewModel
 {
     public AllConfig Config { get; set; }
 
+    /// <summary>设置页只读显示的协调服务器地址：config.json 里的值，旧版示例文字显示为官方地址（只读，不写回）。</summary>
+    public string EffectiveCoordinatorServerUrl
+        => BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(Config?.AutoHoeingConfig?.CoordinatorServerUrl);
+
     private readonly INavigationService _navigationService;
     private readonly TaskTriggerDispatcher _taskDispatcher;
     private readonly ILogger<TaskSettingsPageViewModel> _logger = App.GetLogger<TaskSettingsPageViewModel>();
@@ -1084,18 +1088,14 @@ public partial class TaskSettingsPageViewModel : ViewModel
     private async Task OnCreateRoom()
     {
         var config = Config.AutoHoeingConfig;
-        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
-        {
-            Toast.Warning(addressProblem);
-            return;
-        }
+        var serverUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(config.CoordinatorServerUrl);
         // 清理旧连接
         UnsubscribeClientEvents();
         if (_coordinatorClient != null)
             await _coordinatorClient.DisposeAsync();
 
         var client = new BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.CoordinatorClient();
-        var connected = await client.ConnectAsync(config.CoordinatorServerUrl, CancellationToken.None);
+        var connected = await client.ConnectAsync(serverUrl, CancellationToken.None);
         if (!connected)
         {
             Toast.Error("连接服务器失败，请检查服务器地址");
@@ -1136,18 +1136,14 @@ public partial class TaskSettingsPageViewModel : ViewModel
             Toast.Warning("请先输入房间码");
             return;
         }
-        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
-        {
-            Toast.Warning(addressProblem);
-            return;
-        }
+        var serverUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(config.CoordinatorServerUrl);
         // 清理旧连接
         UnsubscribeClientEvents();
         if (_coordinatorClient != null)
             await _coordinatorClient.DisposeAsync();
 
         var client = new BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.CoordinatorClient();
-        var connected = await client.ConnectAsync(config.CoordinatorServerUrl, CancellationToken.None);
+        var connected = await client.ConnectAsync(serverUrl, CancellationToken.None);
         if (!connected)
         {
             Toast.Error("连接服务器失败，请检查服务器地址");
@@ -1305,13 +1301,9 @@ public partial class TaskSettingsPageViewModel : ViewModel
     private async Task OnBrowseRooms()
     {
         var config = Config.AutoHoeingConfig;
-        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
-        {
-            Toast.Warning(addressProblem);
-            return;
-        }
+        var serverUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(config.CoordinatorServerUrl);
         var client = new BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.CoordinatorClient();
-        var connected = await client.ConnectAsync(config.CoordinatorServerUrl, CancellationToken.None);
+        var connected = await client.ConnectAsync(serverUrl, CancellationToken.None);
         if (!connected)
         {
             Toast.Error("连接服务器失败");

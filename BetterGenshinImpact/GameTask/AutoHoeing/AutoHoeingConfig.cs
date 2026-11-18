@@ -222,10 +222,11 @@ public partial class AutoHoeingConfig : ObservableObject
     private string _multiplayerStartAvatarName = "";
 
     /// <summary>
-    /// 协调服务器地址
+    /// 协调服务器地址。默认就是官方可用地址，安装后直接能联机、能更新线路；
+    /// 想用自建服务器才需要手动改 User\config.json（见 CoordinatorServerAddress）。
     /// </summary>
     [ObservableProperty]
-    private string _coordinatorServerUrl = "举例：https://bgi-sync.example.com(需部署自建服务)";
+    private string _coordinatorServerUrl = CoordinatorServerAddress.RecommendedAddress;
 
     /// <summary>
     /// 当前房间码（运行时状态，不持久化）

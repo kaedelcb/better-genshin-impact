@@ -50,16 +50,20 @@ public class CoordinatorServerAddressTests
     }
 
     [Fact]
-    public void UnsetGlobalStaysUnsetEvenIfTheGroupHasAnAddressSoTheUserIsToldToEditConfigJson()
+    public void OldConfigJsonStillHoldingThePlaceholderJustWorksWithoutBeingRewritten()
     {
-        InjectGlobal("举例：https://bgi-sync.example.com(需部署自建服务)");
-        var result = RunOverride(new Dictionary<string, object?> { ["coordinatorServerUrl"] = "http://www.autobgi.cn:8080" },
+        // 老用户 config.json 里是旧版示例文字：不用手动改就能用官方地址，而且 config.json 里的值保持原样（程序不写它）。
+        var global = InjectGlobal("举例：https://bgi-sync.example.com(需部署自建服务)");
+        var result = RunOverride(new Dictionary<string, object?> { ["coordinatorServerUrl"] = "http://121.4.78.52:8080" },
             new AutoHoeingConfig());
-        Assert.False(CoordinatorServerAddress.IsConfigured(result.CoordinatorServerUrl));
-        Assert.Contains("config.json", CoordinatorServerAddress.ConnectProblem(result.CoordinatorServerUrl));
+        Assert.Equal("http://www.autobgi.cn:8080", result.CoordinatorServerUrl);
+        Assert.Equal("举例：https://bgi-sync.example.com(需部署自建服务)", global.AutoHoeingConfig.CoordinatorServerUrl);
     }
 
     [Fact]
     public void TaskSettingDefinitionsNoLongerOfferTheAddress()
-        => Assert.DoesNotContain(AutoHoeingTask.GetSettingDefinitions(), item => item.Name == "coordinatorServerUrl");
+    {
+        InjectGlobal(CoordinatorServerAddress.RecommendedAddress); // GetSettingDefinitions 读取全局配置作为各项默认值
+        Assert.DoesNotContain(AutoHoeingTask.GetSettingDefinitions(), item => item.Name == "coordinatorServerUrl");
+    }
 }

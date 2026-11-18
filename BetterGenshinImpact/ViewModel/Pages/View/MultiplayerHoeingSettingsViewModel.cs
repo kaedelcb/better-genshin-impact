@@ -221,7 +221,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _multiplayerEnabled = GetBool("multiplayerEnabled", true);
         _roleSelection = GetStr("multiplayerRole", "host") == "member" ? "成员（加入房间）" : "房主（创建房间）";
 
-        _coordinatorServerUrl = g.CoordinatorServerUrl; // 只显示全局值，配置组残留值不生效
+        // 只显示实际生效的全局地址：配置组残留值不生效，旧版示例文字显示为官方地址
+        _coordinatorServerUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(g.CoordinatorServerUrl);
         _playerName = GetStr("playerName", g.PlayerName);
         _playerUid = GetStr("playerUid", g.PlayerUid);
         _pickupMode = GetStr("pickupMode", g.PickupMode);

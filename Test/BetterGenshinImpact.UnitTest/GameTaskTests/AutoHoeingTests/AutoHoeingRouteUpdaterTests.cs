@@ -563,16 +563,17 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Theory]
-    [InlineData("http://www.autobgi.cn:8080", true)]
-    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", false)]
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void ConnectCheckExplainsWhereToEditWhenUnset(string? address, bool ok)
-    {
-        var problem = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(address);
-        if (ok) Assert.Null(problem);
-        else { Assert.NotNull(problem); Assert.Contains("config.json", problem); }
-    }
+    [InlineData("http://www.autobgi.cn:8080", "http://www.autobgi.cn:8080")]
+    [InlineData("  https://my-own.example.org  ", "https://my-own.example.org")]
+    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", "http://www.autobgi.cn:8080")]
+    [InlineData("", "http://www.autobgi.cn:8080")]
+    [InlineData(null, "http://www.autobgi.cn:8080")]
+    public void UnsetOrLegacyPlaceholderAddressJustWorksWithTheOfficialServer(string? configured, string expected)
+        => Assert.Equal(expected, BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(configured));
+
+    [Fact]
+    public void FreshInstallDefaultIsTheWorkingOfficialAddress()
+        => Assert.Equal("http://www.autobgi.cn:8080", new BetterGenshinImpact.GameTask.AutoHoeing.AutoHoeingConfig().CoordinatorServerUrl);
 
     [Fact]
     public async Task ManifestIdentityAndPathEscapeAreRejectedWithoutTouchingOutsideFiles()
