@@ -46,6 +46,12 @@ public class Navigation
         return _instance.GetPosition(imageRegion, mapName, mapMatchMethod);
     }
 
+    internal static Point2f Relocalize(ImageRegion imageRegion, string mapName, string mapMatchMethod,
+        Point2f anchor, Func<Point2f, bool> isUsable)
+    {
+        return _instance.GetPosition(imageRegion, mapName, mapMatchMethod, anchor, isUsable);
+    }
+
     /// <summary>
     /// 稳定获取当前位置坐标，优先使用全地图匹配，适用于不需要高效率但需要高稳定性的场景
     /// </summary>

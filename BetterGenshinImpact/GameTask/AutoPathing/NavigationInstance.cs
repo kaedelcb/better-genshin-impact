@@ -79,9 +79,15 @@ public class NavigationInstance
     /// </summary>
     public (float X, float Y) GetTpPriorPosition() => (_tpPriorX, _tpPriorY);
 
-    private static readonly object GetPositionLock = new object(); 
+    private static readonly object GetPositionLock = new object();
+
     public Point2f GetPosition(ImageRegion imageRegion, string mapName, string mapMatchMethod)
+        => GetPosition(imageRegion, mapName, mapMatchMethod, default, null);
+
+    internal Point2f GetPosition(ImageRegion imageRegion, string mapName, string mapMatchMethod,
+        Point2f recoveryAnchor, Func<Point2f, bool>? isUsable)
     {
+        bool recovering = isUsable != null;
         var lockTimeoutMs = GetPositionLockTimeoutMs;
         if (Monitor.TryEnter(GetPositionLock, lockTimeoutMs))
         {
@@ -89,14 +95,25 @@ public class NavigationInstance
             {
                 using var colorMat = new Mat(imageRegion.SrcMat, MapAssets.Get(imageRegion).MimiMapRect);
                 var captureTime = DateTime.UtcNow;
-                // [小地图诊断] 记录进入时的锚点（局部匹配的搜索中心）
+                if (recovering)
+                {
+                    // 回收异常坐标对下次局部搜索的影响，同时保留传送专用先验。
+                    (_prevX, _prevY) = (recoveryAnchor.X, recoveryAnchor.Y);
+                    _consecutiveFailCount = 0;
+                }
+
                 var diagPrevX = _prevX;
                 var diagPrevY = _prevY;
                 var diagBranch = "局部匹配命中";
-                var p = MapManager.GetMap(mapName, mapMatchMethod).GetMiniMapPosition(colorMat, _prevX, _prevY);
+                var map = MapManager.GetMap(mapName, mapMatchMethod);
+                var p = isUsable != null
+                    ? MatchRecoveryPosition(recoveryAnchor,
+                        anchor => map.GetMiniMapPosition(colorMat, anchor.X, anchor.Y), isUsable,
+                        GlobalMatchJumpGuardThreshold, out diagBranch)
+                    : map.GetMiniMapPosition(colorMat, _prevX, _prevY);
 
-                // 局部匹配失败且有prevPos时，尝试全局匹配回退
-                if (p == default && _prevX > 0 && _prevY > 0)
+                // 普通定位仍按配置累计局部失败次数。
+                if (!recovering && p == default && _prevX > 0 && _prevY > 0)
                 {
                     _consecutiveFailCount++;
                     if (_consecutiveFailCount >= GlobalMatchFallbackThreshold)
@@ -135,7 +152,7 @@ public class NavigationInstance
                         diagBranch = $"局部失败(连续{_consecutiveFailCount}，未达全局回退阈值{GlobalMatchFallbackThreshold})";
                     }
                 }
-                else if (p == default)
+                else if (!recovering && p == default)
                 {
                     // 无有效锚点（首帧或刚 Reset），直接走的全图匹配但仍失败
                     diagBranch = "无锚点全图匹配失败";
@@ -159,7 +176,7 @@ public class NavigationInstance
             {
                 // 获取位置失败，返回上次的位置（仅当上次位置有效时）
                 TaskControl.Logger.LogDebug(ex, "[小地图诊断] GetPosition 抛异常，回退到上次位置 ({Px:F1},{Py:F1})", _prevX, _prevY);
-                if (_prevX > 0 && _prevY > 0)
+                if (!recovering && _prevX > 0 && _prevY > 0)
                 {
                     return new Point2f(_prevX, _prevY);
                 }
@@ -177,12 +194,33 @@ public class NavigationInstance
             TaskControl.Logger.LogDebug(
                 "[小地图诊断] GetPosition 获取锁超时({Timeout}ms)，回退到上次位置 ({Px:F1},{Py:F1})", lockTimeoutMs, _prevX, _prevY);
         }
-        if (_prevX > 0 && _prevY > 0)
+        if (!recovering && _prevX > 0 && _prevY > 0)
         {
             return new Point2f(_prevX, _prevY);
         }
         return default;
-        
+    }
+
+    internal static Point2f MatchRecoveryPosition(Point2f anchor, Func<Point2f, Point2f> match,
+        Func<Point2f, bool> isUsable, double maxGlobalJump, out string branch)
+    {
+        var position = match(anchor);
+        if (position != default && isUsable(position))
+        {
+            branch = "重定位：原参考点附近命中";
+            return position;
+        }
+
+        position = match(new Point2f(-1, -1));
+        if (position != default && isUsable(position) &&
+            (maxGlobalJump <= 0 || position.DistanceTo(anchor) <= maxGlobalJump))
+        {
+            branch = "重定位：局部结果不可用，全图匹配命中";
+            return position;
+        }
+
+        branch = "重定位：局部和全图均无可用结果，保留原参考点";
+        return default;
     }
 
     /// <summary>

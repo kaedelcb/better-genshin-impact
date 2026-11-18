@@ -3494,7 +3494,16 @@ public partial class PathExecutor
                 await SwitchAvatar(PartyConfig.MainAvatarIndex, false, task, true);
         }
         
+        // 传送后这里保留的是传送锚点；途中则使用同地图最近一次可信位置。
+        // 单独保存，避免后续误识别或备用坐标过期把重定位的参考点一起清掉。
+        var recoveryAnchor = _prePositionMapKey == $"{waypoint.MapName}|{waypoint.MapMatchMethod}"
+            ? prePosition
+            : default;
         var (position, additionalTimeInMs) = await GetPositionAndTime(screen, waypoint, isPoint, observePickupPosition);
+        if (position != default && Navigation.GetDistance(waypoint, position) <= 500)
+        {
+            recoveryAnchor = position;
+        }
         var targetOrientation = Navigation.GetTargetOrientation(waypoint, position);
         Logger.LogDebug("粗略接近途经点，位置({x2},{y2})", $"{waypoint.GameX:F1}", $"{waypoint.GameY:F1}");
         // Logger.LogError("324234 {t}",targetOrientation);
@@ -3505,6 +3514,7 @@ public partial class PathExecutor
         var prevPositions = new List<Point2f>();
         var fastModeColdTime = DateTime.MinValue;
         var prevNotTooFarPosition = position;
+        bool relocalizeNextFrame = false;
         int num = 0, distanceTooFarRetryCount = 0, consecutiveRotationCountBeyondAngle = 0;
         var distanceCount = 0;
         var flyDelay = waypoint.MoveMode == MoveModeEnum.Fly.Code;
@@ -3639,7 +3649,9 @@ public partial class PathExecutor
                 }
             }
 
-             (position, additionalTimeInMs) = await GetPositionAndTime(screen2, waypoint, isPoint, observePickupPosition);
+             (position, additionalTimeInMs) = await GetPositionAndTime(screen2, waypoint, isPoint, observePickupPosition,
+                 recoveryAnchor: relocalizeNextFrame ? recoveryAnchor : default);
+             relocalizeNextFrame = false;
              if (additionalTimeInMs>0)
              {
                  if (!InputHub.Foreground.IsKeyDown(GIActions.MoveForward.ToActionKey().ToVK()))
@@ -3717,7 +3729,7 @@ public partial class PathExecutor
                         Logger.LogWarning("检测到离开目标点异常，停止移动，距离1：{distance}- {x} - {y}", distance,position.X, position.Y);
                         await Delay(1000, ct);
                         using var screen23 = CaptureToRectArea();
-                        (position, additionalTimeInMs) = await GetPositionAndTime(screen23, waypoint, isPoint, observePickupPosition);
+                        (position, additionalTimeInMs) = await GetPositionAndTime(screen23, waypoint, isPoint, observePickupPosition, recoveryAnchor);
                     distance = Navigation.GetDistance(waypoint, position);
                     if (position is not { X: 0, Y: 0 } && distance <= 500)
                     {
@@ -3736,7 +3748,7 @@ public partial class PathExecutor
                     {
                         Logger.LogWarning("重新识别位置异常，停止移动，距离3：{distance} - {x} - {y}", distance,position.X, position.Y);
                         using var screen233 = CaptureToRectArea();
-                        (position, additionalTimeInMs) = await GetPositionAndTime(screen233, waypoint, isPoint, observePickupPosition);
+                        (position, additionalTimeInMs) = await GetPositionAndTime(screen233, waypoint, isPoint, observePickupPosition, recoveryAnchor);
                         distance = Navigation.GetDistance(waypoint, position);
                         if (position is not { X: 0, Y: 0 } && distance <= 500)
                         {
@@ -3749,9 +3761,9 @@ public partial class PathExecutor
                         else
                         {
                             using var screen2334 = CaptureToRectArea();
-                            (position, additionalTimeInMs) = await GetPositionAndTime(screen2334, waypoint, isPoint, observePickupPosition);
+                            (position, additionalTimeInMs) = await GetPositionAndTime(screen2334, waypoint, isPoint, observePickupPosition, recoveryAnchor);
 
-                            if (position is  { X: 0, Y: 0 })
+                            if (position == default && recoveryAnchor == default)
                             {
                                 if ((DateTime.UtcNow - _prePositionUpdateTime).TotalSeconds <= 5)
                                 {
@@ -3767,7 +3779,11 @@ public partial class PathExecutor
                             }
                             
                             distance = Navigation.GetDistance(waypoint, position);
-                            Logger.LogWarning("重新识别位置失败，使用上次正常识别的位置，距离5：{distance} - {x} - {y}", distance,prePosition.X, prePosition.Y);
+                            if (position == default || distance > 500)
+                            {
+                                Logger.LogWarning("重新识别位置仍异常，距离={Distance:F0}，坐标=({X:F1},{Y:F1})",
+                                    distance, position.X, position.Y);
+                            }
                         }
                     }
                     // InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown);
@@ -3929,13 +3945,27 @@ public partial class PathExecutor
                         if (!isMisidentification)
                         {
                             distanceTooFarRetryCount++;
-                            // 坐标稳定但距离一直>500，可能是传送后首次识别就错了
-                            // 累积超过10次后触发全局匹配重新定位
+                            // 长路段起点本来就离目标远，仍允许用连续、无跳变的位置推进恢复锚点。
+                            if (recoveryAnchor != default && Navigation.GetDistance(waypoint, recoveryAnchor) > 500
+                                && recoveryAnchor.DistanceTo(position) <= 200)
+                            {
+                                recoveryAnchor = position;
+                            }
+
                             if (distanceTooFarRetryCount > 3)
                             {
-                                Logger.LogWarning($"距离持续>500达{distanceTooFarRetryCount}次，触发全局匹配重新定位");
-                                Navigation.Reset();
-                                prevNotTooFarPosition = default;
+                                if (recoveryAnchor == default)
+                                {
+                                    Logger.LogWarning("距离持续过远，当前地图没有可用参考点，重新截图后匹配全图");
+                                    Navigation.Reset();
+                                }
+                                else
+                                {
+                                    Logger.LogWarning("距离持续过远，重新截图后先在参考点 ({X:F1},{Y:F1}) 附近匹配，失败再匹配全图",
+                                        recoveryAnchor.X, recoveryAnchor.Y);
+                                    relocalizeNextFrame = true;
+                                }
+                                prevNotTooFarPosition = recoveryAnchor;
                                 distanceTooFarRetryCount = 0;
                                 await Delay(200, ct);
                                 continue;
@@ -3980,8 +4010,10 @@ public partial class PathExecutor
                         {
                             if (isPoint)
                             {
-                                if (isPoint && await TryRecoverPathEnvironmentAsync(ct))
+                                if (await TryRecoverPathEnvironmentAsync(ct))
                                     throw new RetryNoCountException("环境恢复后重试当前路线段，不消耗重试次数");
+                                if (recoveryAnchor != default)
+                                    throw new RetryException("参考点附近和全图多次匹配失败，重试当前路线段");
                                 throw new HandledException("重试多次后，当前点位无法被识别，放弃此路径！");
                             }
                             else
@@ -3995,11 +4027,18 @@ public partial class PathExecutor
                             Logger.LogWarning($"坐标识别失败(0,0)，目标({waypoint.X},{waypoint.Y})，第{distanceTooFarRetryCount}次主动恢复");
                         }
                         await ResolveAnomalies(screen2);
-                        Navigation.Reset();
-                        if (prevNotTooFarPosition is not { X: 0, Y: 0 })
+                        if (recoveryAnchor != default)
                         {
-                            if (isPoint) Logger.LogInformation($"重置到上次正确识别的坐标 ({prevNotTooFarPosition.X},{prevNotTooFarPosition.Y})");
-                            Navigation.SetPrevPosition(prevNotTooFarPosition.X, prevNotTooFarPosition.Y);
+                            relocalizeNextFrame = true;
+                        }
+                        else
+                        {
+                            Navigation.Reset();
+                            if (prevNotTooFarPosition != default)
+                            {
+                                if (isPoint) Logger.LogInformation($"重置到上次正确识别的坐标 ({prevNotTooFarPosition.X},{prevNotTooFarPosition.Y})");
+                                Navigation.SetPrevPosition(prevNotTooFarPosition.X, prevNotTooFarPosition.Y);
+                            }
                         }
                         await Delay(500, ct);
                         continue;
@@ -4009,6 +4048,10 @@ public partial class PathExecutor
             {
                 distanceTooFarRetryCount = 0; // 正常距离时重置计数器
                 prevNotTooFarPosition = position;
+                if (position != default)
+                {
+                    recoveryAnchor = position;
+                }
             }
 
             // 非攀爬状态下，检测是否卡死（脱困触发器）
@@ -4831,9 +4874,24 @@ public partial class PathExecutor
     //
     public bool GetPositionAndTimeSuspendFlag = false;
     private async Task<(Point2f point,int additionalTimeInMs)> GetPositionAndTime(ImageRegion imageRegion,
-        WaypointForTrack waypoint, bool isPoint = true, Action<Point2f>? observePickupPosition = null)
+        WaypointForTrack waypoint, bool isPoint = true, Action<Point2f>? observePickupPosition = null,
+        Point2f recoveryAnchor = default)
     {
-        var position = Navigation.GetPosition(imageRegion, waypoint.MapName, waypoint.MapMatchMethod);
+        Point2f MatchPosition(ImageRegion frame)
+        {
+            if (recoveryAnchor == default)
+            {
+                return Navigation.GetPosition(frame, waypoint.MapName, waypoint.MapMatchMethod);
+            }
+
+            bool anchorNearWaypoint = Navigation.GetDistance(waypoint, recoveryAnchor) <= 500;
+            return Navigation.Relocalize(frame, waypoint.MapName, waypoint.MapMatchMethod, recoveryAnchor,
+                candidate => anchorNearWaypoint
+                    ? Navigation.GetDistance(waypoint, candidate) <= 500
+                    : recoveryAnchor.DistanceTo(candidate) <= 200);
+        }
+
+        var position = MatchPosition(imageRegion);
         int time = 0;
         if (position == new Point2f())
         {
@@ -4846,7 +4904,7 @@ public partial class PathExecutor
                     await ResolveAnomalies(imageRegion);
                     // 异常处理后重新截图并重试获取坐标
                     imageRegion = CaptureToRectArea();
-                    position = Navigation.GetPosition(imageRegion, waypoint.MapName, waypoint.MapMatchMethod);
+                    position = MatchPosition(imageRegion);
                     if (position == new Point2f())
                     {
                         Logger.LogDebug("异常处理后重试获取坐标仍然失败");
@@ -4873,10 +4931,11 @@ public partial class PathExecutor
             GetPositionAndTimeSuspendFlag = false;
             throw new RetryNoCountException("可能暂停导致路径过远，重试一次此路线！");
         }
-        //何时处理   pathTooFar  路径过远  unrecognized 未识别
-        if ((position is {X:0,Y:0} && waypoint.Misidentification.Type.Contains("unrecognized")) || (distance>500 && waypoint.Misidentification.Type.Contains("pathTooFar")))
+        if ((position == default && waypoint.Misidentification.Type.Contains("unrecognized")) ||
+            (distance > 500 && waypoint.Misidentification.Type.Contains("pathTooFar")))
         {
-            if (waypoint.Misidentification.HandlingMode == "previousDetectedPoint")
+            // 有锚点的重定位需要本帧实测结果，不能把旧坐标当作重新识别成功。
+            if (recoveryAnchor == default && waypoint.Misidentification.HandlingMode == "previousDetectedPoint")
             {
                 // 三元判定：prePosition 非空 + 5 秒新鲜 + mapKey 一致。
                 // 详见 .kiro/specs/pathexecutor-teleport-fresh-position-fallback-fix/design.md §Fix Implementation 改动 4。
@@ -4896,10 +4955,13 @@ public partial class PathExecutor
                         if (retryPos is not { X: 0, Y: 0 })
                         {
                             position = retryPos;
-                            prePosition = retryPos;
-                            _prePositionUpdateTime = DateTime.UtcNow;
-                            _prePositionMapKey = __mapKey;
-                            Logger.LogInformation(@$"未识别到具体路径，重试成功");
+                            if (Navigation.GetDistance(waypoint, retryPos) <= 500)
+                            {
+                                prePosition = retryPos;
+                                _prePositionUpdateTime = DateTime.UtcNow;
+                                _prePositionMapKey = __mapKey;
+                                Logger.LogInformation("未识别到具体路径，重试成功");
+                            }
                         }
                         else
                         {
