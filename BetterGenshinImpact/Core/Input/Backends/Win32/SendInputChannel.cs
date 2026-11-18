@@ -81,7 +81,7 @@ internal sealed class SendInputChannel : InputChannelBase
     /// </summary>
     public override void ReleaseAll()
     {
-        base.ReleaseAll();
-        Simulation.ReleaseAllKey();
+        InputHub.ReleaseRouteInput(base.ReleaseAll);
+        InputHub.ReleaseRouteInput(Simulation.ReleaseAllKey);
     }
 }

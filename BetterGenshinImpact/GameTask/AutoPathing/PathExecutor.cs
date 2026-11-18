@@ -220,13 +220,6 @@ public partial class PathExecutor
     /// <summary>Current fight scope; its PointId is captured at fight entry and is safe for delayed callbacks.</summary>
     public BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeFightScope? ActiveCooperativeFight { get; private set; }
 
-    /// <summary>
-    /// 最近进入的规范（服务端可识别）协作战斗点 ID。
-    /// 输入被系统阻塞导致线路中断时，RouteExecutionEngine 用它上报轮末重跑标记，
-    /// 避免该线路只标记为本地 Incomplete 却不进入服务端重跑计划而静默少打。
-    /// </summary>
-    public string? LastCanonicalCooperativeFightPointId { get; private set; }
-
     public static BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun.CooperativeFightScope? CurrentCooperativeFight
         => CurrentActiveInstance?.ActiveCooperativeFight;
 
@@ -1499,10 +1492,7 @@ public partial class PathExecutor
                                         CooperativeFightScope? fightScope = null;
                                         if (CooperativeContext != null)
                                         {
-                                            var canonicalFightPointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1);
-                                            if (canonicalFightPointId != null)
-                                                LastCanonicalCooperativeFightPointId = canonicalFightPointId;
-                                            var fightPointId = canonicalFightPointId
+                                            var fightPointId = CooperativeContext.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1)
                                                 ?? CooperativeContext.BuildFightKey(CurWaypoints.Item1, CurWaypoint.Item1);
                                             fightScope = new CooperativeFightScope(fightPointId,
                                                 () => CooperativeContext.ShouldSkipFight(fightPointId), ct);
@@ -2363,9 +2353,9 @@ public partial class PathExecutor
                 }
                 finally
                 {
-                    // 不管咋样，松开所有按键
-                    InputHub.Foreground.Keyboard.KeyUp(User32.VK.VK_W);
-                    InputHub.Foreground.Mouse.RightButtonUp();
+                    // 不管咋样，松开移动和视角按键。
+                    InputHub.ReleaseRouteInput(() => InputHub.Foreground.Keyboard.KeyUp(User32.VK.VK_W));
+                    InputHub.ReleaseRouteInput(() => InputHub.Foreground.Mouse.RightButtonUp());
                     PathingConditionConfig.CombatScenesGoBackUp = null;
                     
                     // using var ra = CaptureToRectArea();

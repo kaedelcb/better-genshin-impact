@@ -1,4 +1,6 @@
 using BetterGenshinImpact.Core.Config;
+using BetterGenshinImpact.Core.Input;
+using BetterGenshinImpact.Core.Input.Backends.Win32;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoHoeing.Models;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
@@ -7,7 +9,6 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
 using BetterGenshinImpact.Shared.CooperativeRerun;
 using BetterGenshinImpact.GameTask.AutoPathing;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
-using Fischless.WindowsInput;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -34,8 +35,6 @@ public class RouteExecutionEngine
     private readonly PathingPartyConfig? _partyConfig;
 
     private volatile bool _running;
-    // 连续把"输入被系统阻塞"降级为 Incomplete 的次数；输入恢复或线路正常结束后归零。
-    private int _consecutiveInputFailureDowngrades;
     private MultiplayerCoordinator? _coordinator;
     private WorldStateMonitor? _worldStateMonitor;
     private volatile bool _currentRouteRetryModeEnabled;
@@ -312,7 +311,6 @@ public class RouteExecutionEngine
         var effectiveRoute = cooperativeContext?.Plan.Route ?? route;
         var executionFailed = false;
         var executionCancelled = false;
-        var inputBlockedDowngraded = false;
         MultiplayerSessionFailedException? sessionFailure = null;
         try
         {
@@ -351,14 +349,17 @@ public class RouteExecutionEngine
         // 主路线执行任务
         var pathingTask = Task.Run(async () =>
         {
-            PathExecutor? executor = null;
             try
             {
+                // 只延长联机锄地线路的前台输入容错。后台及其他运行环境沿用各自的输入路径。
+                using var inputRetry = _config.MultiplayerEnabled && _coordinator != null && InputHub.Backend is Win32InputBackend win32
+                    ? win32.BeginRouteInputRetry(linkedCt)
+                    : null;
                 Logger.LogInformation("→ 开始执行地图追踪任务: {Name}", route.FileName);
                 var task = cooperativeContext?.Plan.CreateTask() ?? PathingTask.BuildFromFilePath(route.FullPath);
                 if (task != null)
                 {
-                    executor = new PathExecutor(ct);
+                    var executor = new PathExecutor(ct);
                     executor.CooperativeContext = cooperativeContext;
                     executor.WantsSkipCurrentFight = false;
                     executor.SkipRevivalFightPointId = -1;   // v3：每条线路入口复位待跳过战斗点
@@ -449,51 +450,6 @@ public class RouteExecutionEngine
                 executionCancelled = true;
                 cooperativeContext?.MarkIncomplete("route cancelled");
                 throw; // 让取消异常穿透，不吞掉
-            }
-            catch (Exception ex) when (
-                cooperativeContext is { } inputContext && InputBlockedRouteDecisions.IsInputBlocked(ex))
-            {
-                // 输入被系统阻塞（失焦/锁屏/UAC/安全软件）是本地可恢复故障。
-                // 降级为 Incomplete，避免单个成员把整队拉进 shared_recovery；
-                // 正常轮同时补报轮末重跑标记，保证这条线路仍会被全队补跑，不会静默少打。
-                var reason = InputBlockedRouteDecisions.InputBlockedReason(ex);
-                inputContext.MarkIncomplete(reason);
-                var rerunPointId = executor?.LastCanonicalCooperativeFightPointId;
-                var downgrade = InputBlockedRouteDecisions.ShouldDowngrade(
-                    _consecutiveInputFailureDowngrades,
-                    inputContext.IsReplay,
-                    inputContext.Plan.Manifest.Eligible,
-                    rerunPointId);
-                _consecutiveInputFailureDowngrades = InputBlockedRouteDecisions.NextConsecutiveDowngradeCount(
-                    downgrade, _consecutiveInputFailureDowngrades);
-                if (downgrade)
-                {
-                    inputBlockedDowngraded = true;
-                    Logger.LogWarning(
-                        "[共同重跑] 模拟键鼠被系统阻塞，本线路按未完成处理（连续 {Count}/{Max} 次），不中止全队: {Reason}",
-                        _consecutiveInputFailureDowngrades, InputBlockedRouteDecisions.MaxConsecutiveDowngrades, reason);
-                    if (InputBlockedRouteDecisions.ShouldReportRoundEndRerun(
-                            inputContext.IsReplay,
-                            inputContext.Plan.Manifest.Eligible,
-                            rerunPointId))
-                    {
-                        inputContext.ReportDeath(rerunPointId!);
-                        Logger.LogWarning(
-                            "[共同重跑] 输入故障线路已请求上报轮末重跑标记: route={Route}, point={Point}",
-                            inputContext.RouteId, rerunPointId);
-                    }
-                }
-                else
-                {
-                    // 达到连续上限，或正常轮无法保证轮末补跑（线路不可重跑/尚无规范战斗点）：
-                    // 保持原有 Failed 语义，宁可整队重开，也不静默少打一条线。
-                    executionFailed = true;
-                    Logger.LogError(
-                        "[共同重跑] 模拟键鼠被系统阻塞，但无法安全降级为未完成（连续={Count}/{Max}, replay={Replay}, eligible={Eligible}, point={Point}），按共同重跑失败处理: {Reason}",
-                        _consecutiveInputFailureDowngrades, InputBlockedRouteDecisions.MaxConsecutiveDowngrades,
-                        inputContext.IsReplay, inputContext.Plan.Manifest.Eligible,
-                        rerunPointId ?? "<null>", reason);
-                }
             }
             catch (Exception ex)
             {
@@ -606,9 +562,6 @@ public class RouteExecutionEngine
         }
         finally
         {
-            // 只有"输入阻塞并已降级"的线路保持连续计数；成功/取消/其他失败都归零。
-            if (!inputBlockedDowngraded)
-                _consecutiveInputFailureDowngrades = 0;
             if (_coordinator != null && ReferenceEquals(_coordinator.ActiveCooperativeContext, cooperativeContext))
                 _coordinator.ActiveCooperativeContext = previousCooperativeContext;
         }

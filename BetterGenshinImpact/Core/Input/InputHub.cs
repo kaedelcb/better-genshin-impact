@@ -1,6 +1,9 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.Core.Input.Backends.Win32;
 using BetterGenshinImpact.Core.Simulator.Extensions;
+using BetterGenshinImpact.GameTask.Common;
+using Fischless.WindowsInput;
+using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Linq;
 using Vanara.PInvoke;
@@ -64,6 +67,19 @@ public static class InputHub
     {
         if (Operation.Value is { } operation) operation.ReleaseAll();
         else Backend.ReleaseAll();
+    }
+
+    // 路线异常或停止时只尝试一次必要的抬键，各项清理独立，保留原始异常。
+    internal static void ReleaseRouteInput(Action release)
+    {
+        if (!WindowsInputRetryScope.IsActive)
+        {
+            release();
+            return;
+        }
+
+        try { WindowsInputRetryScope.RunCleanup(release); }
+        catch (WindowsInputBlockedException ex) { TaskControl.Logger.LogDebug(ex, "联机线路抬键未完成"); }
     }
 
     /// <summary>仅在当前异步调用链内提供可取消输入；退出后旧后台调用也不能再发输入。</summary>
@@ -346,7 +362,7 @@ internal sealed class InputOperationScope : IDisposable
                 {
                     try
                     {
-                        inner.Keyboard.KeyUp(key);
+                        WindowsInputRetryScope.RunCleanup(() => inner.Keyboard.KeyUp(key));
                         _owned.Remove(key);
                     }
                     catch (Exception error)
