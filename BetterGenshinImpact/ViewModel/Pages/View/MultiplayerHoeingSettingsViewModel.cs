@@ -30,7 +30,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     private string _roleSelection = "房主（创建房间）";
 
     // ===== B 联机连接 =====
+    // 协调服务器地址只读显示 User\config.json 的值；不能在此修改，也不写入配置组（见 CoordinatorServerAddress）。
     [ObservableProperty] private string _coordinatorServerUrl = "";
+    public string CoordinatorServerEditHint => BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.EditHint;
     [ObservableProperty] private string _playerName = "";
     [ObservableProperty] private string _playerUid = "";
     [ObservableProperty] private string _pickupMode = "";
@@ -219,7 +221,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _multiplayerEnabled = GetBool("multiplayerEnabled", true);
         _roleSelection = GetStr("multiplayerRole", "host") == "member" ? "成员（加入房间）" : "房主（创建房间）";
 
-        _coordinatorServerUrl = GetStr("coordinatorServerUrl", g.CoordinatorServerUrl);
+        _coordinatorServerUrl = g.CoordinatorServerUrl; // 只显示全局值，配置组残留值不生效
         _playerName = GetStr("playerName", g.PlayerName);
         _playerUid = GetStr("playerUid", g.PlayerUid);
         _pickupMode = GetStr("pickupMode", g.PickupMode);
@@ -317,7 +319,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["multiplayerRole"] = RoleSelection == "成员（加入房间）" ? "member" : "host";
         settings["memberJoinMode"] = JoinModeSelection == "随机加入现有房间" ? "random" : "byHostName";
         settings["targetHostName"] = TargetHostName;
-        settings["coordinatorServerUrl"] = CoordinatorServerUrl;
+        settings.Remove("coordinatorServerUrl"); // 地址不属于配置组；保存时清掉历史残留
         settings["playerName"] = PlayerName;
         settings["playerUid"] = PlayerUid;
         settings["multiplayerPartyName"] = MultiplayerPartyName;

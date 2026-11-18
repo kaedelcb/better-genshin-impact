@@ -1084,9 +1084,9 @@ public partial class TaskSettingsPageViewModel : ViewModel
     private async Task OnCreateRoom()
     {
         var config = Config.AutoHoeingConfig;
-        if (string.IsNullOrEmpty(config.CoordinatorServerUrl))
+        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
         {
-            Toast.Warning("请先填写服务器地址");
+            Toast.Warning(addressProblem);
             return;
         }
         // 清理旧连接
@@ -1136,9 +1136,9 @@ public partial class TaskSettingsPageViewModel : ViewModel
             Toast.Warning("请先输入房间码");
             return;
         }
-        if (string.IsNullOrEmpty(config.CoordinatorServerUrl))
+        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
         {
-            Toast.Warning("请先填写服务器地址");
+            Toast.Warning(addressProblem);
             return;
         }
         // 清理旧连接
@@ -1305,9 +1305,9 @@ public partial class TaskSettingsPageViewModel : ViewModel
     private async Task OnBrowseRooms()
     {
         var config = Config.AutoHoeingConfig;
-        if (string.IsNullOrEmpty(config.CoordinatorServerUrl))
+        if (BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(config.CoordinatorServerUrl) is { } addressProblem)
         {
-            Toast.Warning("请先填写服务器地址");
+            Toast.Warning(addressProblem);
             return;
         }
         var client = new BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.CoordinatorClient();

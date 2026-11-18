@@ -22,8 +22,8 @@ public sealed class AutoHoeingRouteUpdateTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
-        var config = TaskContext.Instance().Config.AutoHoeingConfig;
-        await CreateUpdater().EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(config.CoordinatorServerUrl), null, ct);
+        // 与联机连接读同一个地址：User\config.json 里的协调服务器地址。
+        await CreateUpdater().EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(CoordinatorServerAddress.Global), null, ct);
         ct.ThrowIfCancellationRequested();
     }
 }

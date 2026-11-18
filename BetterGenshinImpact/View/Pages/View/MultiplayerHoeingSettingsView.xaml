@@ -84,9 +84,12 @@
                 </ui:CardExpander.Header>
                 <StackPanel>
                     <ui:TextBlock Margin="0,0,0,2" Text="服务器地址" />
-                    <ui:TextBox Margin="0,0,0,8"
+                    <ui:TextBox Margin="0,0,0,2"
+                                IsReadOnly="True"
                                 PlaceholderText="协调服务器地址"
-                                Text="{Binding CoordinatorServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                Text="{Binding CoordinatorServerUrl, Mode=OneWay}" />
+                    <ui:TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" Opacity="0.75"
+                                  Text="{Binding CoordinatorServerEditHint, Mode=OneTime}" />
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

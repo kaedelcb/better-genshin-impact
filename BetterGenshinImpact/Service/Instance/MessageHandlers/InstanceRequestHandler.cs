@@ -2668,6 +2668,8 @@ internal sealed class InstanceRequestHandler
                            BetterGenshinImpact.Service.ConfigService.JsonOptions)
                        ?? new Dictionary<string, object?>();
             NormalizeSettingsDictionary(dict);
+            // 协调服务器地址只能由用户手动编辑 User\config.json；远程下发的配置组设置不得携带或改动它。
+            dict.Remove("coordinatorServerUrl");
             project.SoloTaskSettingsObject = dict;
         }
 

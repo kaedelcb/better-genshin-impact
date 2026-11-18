@@ -536,6 +536,44 @@ public sealed class AutoHoeingRouteUpdaterTests
     public void MultiplayerServerAddressIsMappedToTheSameHostOverHttps(string address, string expected)
         => Assert.Equal(expected, AutoHoeingRouteUpdater.RequireServerUri(address).AbsoluteUri);
 
+    [Theory]
+    [InlineData("http://121.4.78.52:8080")]
+    [InlineData("http://121.4.78.52:8080/hub")]
+    [InlineData("https://121.4.78.52")]
+    public void IpAddressGetsAnActionableChineseMessageInsteadOfAnSslError(string address)
+    {
+        var error = Assert.Throws<InvalidDataException>(() => AutoHoeingRouteUpdater.RequireServerUri(address));
+        Assert.Contains("不能写 IP", error.Message);
+        Assert.Contains("config.json", error.Message);
+        Assert.Contains("http://www.autobgi.cn:8080", error.Message);
+    }
+
+    [Fact]
+    public void TlsNameMismatchIsTranslatedIntoTheSameEditHint()
+    {
+        var tls = new HttpRequestException("The SSL connection could not be established, see inner exception.",
+            new System.Security.Authentication.AuthenticationException("remote party sent a TLS alert: '112'"));
+        var translated = AutoHoeingRouteUpdater.ExplainTransportFailure(new Uri("https://autobgi.cn/"), tls);
+        Assert.IsType<InvalidDataException>(translated);
+        Assert.Contains("autobgi.cn", translated.Message);
+        Assert.Contains("config.json", translated.Message);
+        Assert.Same(tls, translated.InnerException);
+        var other = new HttpRequestException("连接超时");
+        Assert.Same(other, AutoHoeingRouteUpdater.ExplainTransportFailure(new Uri("https://www.autobgi.cn/"), other));
+    }
+
+    [Theory]
+    [InlineData("http://www.autobgi.cn:8080", true)]
+    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void ConnectCheckExplainsWhereToEditWhenUnset(string? address, bool ok)
+    {
+        var problem = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.ConnectProblem(address);
+        if (ok) Assert.Null(problem);
+        else { Assert.NotNull(problem); Assert.Contains("config.json", problem); }
+    }
+
     [Fact]
     public async Task ManifestIdentityAndPathEscapeAreRejectedWithoutTouchingOutsideFiles()
     {

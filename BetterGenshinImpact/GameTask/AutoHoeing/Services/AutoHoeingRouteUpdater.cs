@@ -210,17 +210,35 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         if (!Uri.TryCreate(text + "/", UriKind.Absolute, out var uri)
             || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-            throw new InvalidDataException("线路服务地址无效，请在联机设置里填写协调服务器地址，例如 https://www.autobgi.cn");
+            throw new InvalidDataException("线路服务地址无效。" + CoordinatorServerAddress.EditHint);
+        // HTTPS 证书只能签给域名：IP 写法一定握手失败（TLS 112），提前给出能照着改的中文说明，不再报看不懂的 SSL 错误。
+        if (!uri.IsLoopback && System.Net.IPAddress.TryParse(uri.Host, out _))
+            throw new InvalidDataException("协调服务器地址不能写 IP（" + uri.Host + "），线路更新需要域名。" + CoordinatorServerAddress.EditHint);
         if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
             uri = new UriBuilder(Uri.UriSchemeHttps, uri.Host).Uri;
         return uri;
+    }
+
+    /// <summary>
+    /// 把握手失败翻译成能照着改的中文：不带 www 等与证书不符的域名会收到 TLS 112（unrecognized_name）。
+    /// </summary>
+    internal static Exception ExplainTransportFailure(Uri server, HttpRequestException error)
+    {
+        var text = error.ToString();
+        if (text.Contains("SSL", StringComparison.OrdinalIgnoreCase) || text.Contains("TLS", StringComparison.OrdinalIgnoreCase)
+            || error.InnerException is System.Security.Authentication.AuthenticationException)
+            return new InvalidDataException("无法和线路服务 " + server.Host + " 建立 HTTPS 连接（证书与地址不符）。" + CoordinatorServerAddress.EditHint, error);
+        return error;
     }
 
     private static Uri Endpoint(Uri server, string path) => new(server, "api/hoeing-routes/" + path);
 
     private async Task<T> GetJsonAsync<T>(Uri uri, int limit, CancellationToken ct)
     {
-        using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+        HttpResponseMessage response;
+        try { response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct); }
+        catch (HttpRequestException ex) { throw ExplainTransportFailure(uri, ex); }
+        using var _ = response;
         RequireResponse(response, uri);
         using var buffer = new MemoryStream();
         await CopyBoundedAsync(await response.Content.ReadAsStreamAsync(ct), buffer, limit, ct);
@@ -269,7 +287,10 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         try
         {
             var uri = Endpoint(server, "packages/" + target.Id + "/download");
-            using (var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct))
+            HttpResponseMessage downloadResponse;
+            try { downloadResponse = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct); }
+            catch (HttpRequestException ex) { throw ExplainTransportFailure(uri, ex); }
+            using (var response = downloadResponse)
             {
                 RequireResponse(response, uri);
                 if (response.Content.Headers.ContentLength is { } length && length != target.SizeBytes)
