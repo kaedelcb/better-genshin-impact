@@ -240,10 +240,8 @@ public sealed class MaskWindowHost : IMaskWindowHost
             changed = true;
         }
 
-        if (!state.IsMinimized)
-        {
-            _lastGameActive = state.IsActive;
-        }
+        // 最小化也视为失焦，确保还原到前台时重新置顶遮罩。
+        _lastGameActive = state.IsActive && !state.IsMinimized;
 
         if (state.Bounds.Width > 0 && state.Bounds.Height > 0 && state.Bounds != _desiredBounds)
         {
