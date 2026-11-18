@@ -4,6 +4,76 @@
         Title="协助房间日志" Width="380" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Background="#211D40"
         Foreground="#F4F2FA" FontFamily="Microsoft YaHei">
+    <Window.Resources>
+        <!-- 与助手页面的 GoldInput 同款：暗紫底、金色细描边，聚焦时描边变亮。
+             弹窗自行声明，避免依赖调用页合并进来的页面级资源。 -->
+        <Style x:Key="RoomInput" TargetType="TextBox">
+            <Setter Property="Background" Value="#2A1C1640"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#80D4AF37"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="CaretBrush" Value="#E8C96D"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="Frame" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="#F0E8C96D"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Frame" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="RoomPasswordInput" TargetType="PasswordBox">
+            <Setter Property="Background" Value="#2A1C1640"/>
+            <Setter Property="Foreground" Value="#FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#80D4AF37"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="CaretBrush" Value="#E8C96D"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="PasswordBox">
+                        <Border x:Name="Frame" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Focusable="False"
+                                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Frame" Property="BorderBrush" Value="#F0E8C96D"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Frame" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <StackPanel Margin="20">
         <TextBlock Text="查看其他房间成员日志" FontSize="16" FontWeight="SemiBold"
                    Foreground="{DynamicResource Gold}"/>
@@ -33,13 +103,13 @@
                     Visibility="{Binding Visibility, ElementName=HistoryPanel}"
                     IsEnabled="{Binding IsEnabled, ElementName=DeleteHistoryButton}"
                     Click="SaveNote_Click" Style="{DynamicResource BtnGhost}" Padding="8,4" Margin="8,0,0,0"/>
-            <TextBox x:Name="RoomNoteBox" Height="30" Padding="6,3"
+            <TextBox x:Name="RoomNoteBox" Style="{DynamicResource RoomInput}"
                      AutomationProperties.LabeledBy="{Binding ElementName=RoomNoteLabel}"/>
         </DockPanel>
         <TextBlock Text="被协助房间号" Margin="0,0,0,4"/>
-        <TextBox x:Name="RoomCodeBox" Height="30" Padding="6,3"/>
+        <TextBox x:Name="RoomCodeBox" Style="{DynamicResource RoomInput}"/>
         <TextBlock Text="房间密码" Margin="0,10,0,4"/>
-        <PasswordBox x:Name="RoomPasswordBox" Height="30" Padding="6,3"/>
+        <PasswordBox x:Name="RoomPasswordBox" Style="{DynamicResource RoomPasswordInput}"/>
         <TextBlock Text="成功连接后自动记录，可随时删除。" TextWrapping="Wrap" FontSize="11"
                    Foreground="{DynamicResource Dim}" Margin="0,8,0,0"/>
         <TextBlock x:Name="StatusText" TextWrapping="Wrap" Foreground="{DynamicResource Gold}"
