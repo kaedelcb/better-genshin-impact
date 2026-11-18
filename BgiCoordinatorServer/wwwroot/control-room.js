@@ -1074,6 +1074,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                     </div>`;
                 }).join('')}
             </div>
+            <p class="note" id="tskResult" role="status" hidden></p>
             <div class="btn-row">
                 <button class="btn btn-secondary" id="tskCancel">取消</button>
                 <button class="btn btn-primary" id="tskOk">确认</button>
@@ -1081,54 +1082,56 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
         </div>`;
     document.body.appendChild(overlay);
 
+    const okBtn = overlay.querySelector('#tskOk');
+    const resultLine = overlay.querySelector('#tskResult');
+    const commandName = isOneClick ? 'start_oneclick' : 'start_group';
     let selectedIndex = 0; // 配置组=数字位置；一条龙=GUID taskId 字符串（"0"=从头开始）
-    // 记录启用状态变更
-    const statusChanges = [];
-
+    const checkboxes = overlay.querySelectorAll('.task-checkbox');
     const listItems = overlay.querySelectorAll('.list-item');
     listItems.forEach(el => {
         el.addEventListener('click', (e) => {
-            // 如果点击的是 checkbox，不触发选择起点
-            if (e.target.classList.contains('task-checkbox')) return;
+            if (okBtn.disabled || e.target.classList.contains('task-checkbox')) return;
             listItems.forEach(x => x.classList.remove('selected'));
             el.classList.add('selected');
-            selectedIndex = isOneClick ? el.dataset.index : parseInt(el.dataset.index);
+            selectedIndex = isOneClick ? el.dataset.index : Number(el.dataset.index);
         });
     });
-    // 默认选中第一项
-    if (listItems.length > 0) listItems[0].classList.add('selected');
+    listItems[0].classList.add('selected');
 
-    // checkbox 变更记录
-    overlay.querySelectorAll('.task-checkbox').forEach(cb => {
-        cb.addEventListener('change', () => {
-            const idx = isOneClick ? cb.dataset.index : parseInt(cb.dataset.index);
-            statusChanges.push({ index: idx, enabled: cb.checked });
-        });
-    });
-
-    overlay.querySelector('#tskOk').addEventListener('click', async () => {
-        // await 期间禁用按钮防重入；用户点取消关窗后 continuation 不得再发 start
-        const okBtn = overlay.querySelector('#tskOk');
-        const cancelBtn = overlay.querySelector('#tskCancel');
+    function validateTargets() {
+        requireOnlineTargets(targets);
+        requireNoPendingMemberWrite(targets, commandName);
+        for (const pending of pendingConfigApplied.values()) {
+            if (targets.includes(pending.uid))
+                throw new Error('有成员仍在等待上次的配置应用回执，本次未发送');
+        }
+    }
+    function setResult(message, error = false) {
+        resultLine.textContent = message;
+        resultLine.hidden = !message;
+        resultLine.classList.toggle('error', error);
+    }
+    okBtn.addEventListener('click', async () => {
+        if (okBtn.disabled || !overlay.isConnected) return;
         okBtn.disabled = true;
-        cancelBtn.disabled = true;
-        // 先发启用状态变更
-        const changes = {};
-        overlay.querySelectorAll('.task-checkbox').forEach(cb => {
-            const idx = isOneClick ? cb.dataset.index : Number(cb.dataset.index);
-            const original = options.find(o => o.isTask && o.index === idx);
-            if (original && cb.checked !== original.enabled) changes[idx] = cb.checked;
+        setResult('');
+        const changes = new Map();
+        checkboxes.forEach((cb, i) => {
+            cb.disabled = true;
+            const original = options[i + 1];
+            if (cb.checked !== original.enabled) changes.set(original.index, cb.checked);
         });
 
         // Serialize dependent writes per target, and require execution-side applied receipts.
         // Gateway forwarding acknowledgements never authorize a dependent start.
         try {
-            requireOnlineTargets(targets);
-            if (isOneClick && (Object.hasOwn(changes, '') || selectedIndex === ''))
+            validateTargets();
+            if (isOneClick && (changes.has('') || selectedIndex === ''))
                 throw new Error('该一条龙尚未上报任务标识，不能修改启用状态或从指定任务开始');
+            if (changes.size) setResult('正在应用启用状态。此时取消将阻止启动，已发送的修改可能仍会生效。');
             const appliedByUid = new Map();
             for (const uid of targets) {
-                for (const [taskIdx, en] of Object.entries(changes)) {
+                for (const [taskIdx, en] of changes) {
                     const previous = appliedByUid.get(uid);
                     // R3 原生身份：一条龙按 GUID taskId 寻址；配置组保持数字 taskIndex
                     const changeCmd = makeCmd('set_task_enabled', {
@@ -1143,11 +1146,13 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                 }
             }
             if (!overlay.isConnected) return;
+            validateTargets();
+            // 启动回执可能等到整项任务结束才返回。对已确认的成员逐一登记并下发，
+            // 由成员状态和操作记录显示结果，不让另一个成员或弹窗等待任务执行完毕。
             for (const uid of targets) {
                 const applied = appliedByUid.get(uid);
-                // R3 原生身份：一条龙起点为 startFromTaskId（"0"/空=从头开始，不携带）；
-                // 配置组保持 startFromIndex 数字位置
-                const cmd = makeCmd(isOneClick ? 'start_oneclick' : 'start_group', {
+                // 一条龙用 taskId，配置组用数字位置；"0"/空表示一条龙从头开始。
+                const cmd = makeCmd(commandName, {
                     [isOneClick ? 'configName' : 'groupName']: configName,
                     ...(isOneClick
                         ? (selectedIndex && selectedIndex !== '0' ? { startFromTaskId: selectedIndex } : {})
@@ -1156,17 +1161,19 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                     bgiEpoch: applied ? { processId: applied.targetProcessId, startTicksUtc: applied.targetStartTicksUtc } : undefined
                 });
                 cmd.target = [uid];
-                const result = await sendTrackedCommand(cmd);
-                if (result.status !== 'success') throw new Error(result.message || '启动结果未确认');
+                void sendTrackedCommand(cmd);
             }
-            log('所选任务已获得执行端启动确认');
+            overlay.remove();
         } catch (error) {
-            log('保存/启动未完成：' + error.message);
-            okBtn.disabled = false;
-            cancelBtn.disabled = false;
-            return;
+            const message = '保存/启动未完成：' + error.message;
+            log(message);
+            if (overlay.isConnected) setResult(message, true);
+        } finally {
+            if (overlay.isConnected) {
+                okBtn.disabled = false;
+                checkboxes.forEach(cb => { cb.disabled = false; });
+            }
         }
-        overlay.remove();
     });
     overlay.querySelector('#tskCancel').addEventListener('click', () => overlay.remove());
 }

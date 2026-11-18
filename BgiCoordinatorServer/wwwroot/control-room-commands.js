@@ -23,11 +23,19 @@ function isCompletionCatalogRefresh(cmd) {
     return cmd.cmd === 'task_policy.pull' && cmd.params?.ensureBgiReady === 'true'
         && ['group', 'onedragon'].includes(cmd.params?.catalogType);
 }
+function memberWriteKey(uid, cmd) {
+    // 配置组和一条龙共享同一个执行入口，不能用切换类型绕过重复下发检查。
+    return uid + '\0' + (cmd === 'start_oneclick' ? 'start_group' : cmd);
+}
+function requireNoPendingMemberWrite(targets, cmd) {
+    if (targets.some(uid => activeMemberWrites.has(memberWriteKey(uid, cmd))))
+        throw new Error('有成员的同类操作仍在等待执行回执，本次未发送');
+}
 function sendTrackedCommand(cmd, expectedReply = null) {
     requireOnlineTargets(cmd.target);
     if (cmd.target.length !== 1) throw new Error('执行回执必须逐成员关联');
-    const uid = cmd.target[0], writeKey = uid + '\0' + cmd.cmd;
-    if (activeMemberWrites.has(writeKey)) throw new Error('该成员的同类操作正在等待结果');
+    const uid = cmd.target[0], writeKey = memberWriteKey(uid, cmd.cmd);
+    requireNoPendingMemberWrite(cmd.target, cmd.cmd);
     activeMemberWrites.add(writeKey);
     rememberMemberResult(uid, cmd.cmd, 'pending', '正在发送，等待执行端确认');
     const refresh = isCompletionCatalogRefresh(cmd);

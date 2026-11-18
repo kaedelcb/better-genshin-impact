@@ -53,6 +53,31 @@ function mockGateway(makeMembers) {
             currentBinding: localStorage.getItem('web_hie_binding'), dispatches }, null, 2);
     }
     function publish() { connection?.handlers.evt?.({ name: 'control.playersUpdated', payload: { full: true, players: structuredClone(members) } }); render(); }
+    function commandResult(command, status, details) {
+        connection.handlers.evt?.({ name: 'control.remoteCommandResult', payload: {
+            commandId: command.commandId, cmd: command.cmd, targetUid: command.target[0], status, ...details
+        } });
+    }
+    let holdConfigWrites = false;
+    const pendingConfig = new Map(), running = new Map();
+    window.taskStartFixture = {
+        commands: () => dispatches.filter(d => d.envelope.name === 'control.sendCommand').map(d => d.envelope.payload.command),
+        holdConfigWrites(value) { holdConfigWrites = value; },
+        applyConfigWrites() {
+            for (const apply of pendingConfig.values()) apply();
+            pendingConfig.clear();
+        },
+        stopOnPc(uid) {
+            const command = running.get(uid);
+            if (!command) throw new Error('没有模拟中的任务：' + uid);
+            running.delete(uid);
+            const member = members.find(m => m.playerUid === uid);
+            member.taskRunning = false;
+            member.currentTaskName = '';
+            publish();
+            commandResult(command, 'cancelled', { message: '模拟电脑端已停止' });
+        }
+    };
     function button(text, action) { const button = document.createElement('button'); button.textContent = text; button.onclick = action; toolbar.appendChild(button); }
     for (const state of ['normal', 'old', 'missing', 'changed', 'offline']) button(state, () => {
         const capabilitiesChanged = (scenario === 'old') !== (state === 'old');
@@ -96,9 +121,21 @@ function mockGateway(makeMembers) {
             }
             if (envelope.name === 'control.sendCommand') {
                 const command = payload.command;
-                if (command.cmd === 'set_task_enabled') queueMicrotask(() => this.handlers.evt?.({ name: 'control.remoteCommandResult', payload: {
-                    commandId: command.commandId, cmd: command.cmd, targetUid: command.target[0], status: 'success',
-                    configRevision: 'fixture-revision', targetProcessId: 101, targetStartTicksUtc: 638000000000000000 } }));
+                if (command.cmd === 'set_task_enabled') {
+                    const apply = () => commandResult(command, 'success', {
+                        configRevision: 'fixture-revision', targetProcessId: 101, targetStartTicksUtc: '638000000000000000'
+                    });
+                    if (holdConfigWrites) pendingConfig.set(command.commandId, apply);
+                    else queueMicrotask(apply);
+                }
+                if (['start_group', 'start_oneclick'].includes(command.cmd)) {
+                    const uid = command.target[0], member = members.find(m => m.playerUid === uid);
+                    running.set(uid, command);
+                    member.taskRunning = true;
+                    member.currentTaskName = command.params.configName || command.params.groupName;
+                    publish();
+                    // The real command can return only after execution finishes or is stopped.
+                }
                 return { payload: {} };
             }
             throw new Error('隔离夹具未实现路径：' + method + ' ' + envelope.name);
@@ -115,7 +152,15 @@ assert.equal(Object.keys(makeMembers('normal')[0].quickCommands).length, 5);
 assert.equal(makeMembers('missing')[3].hoeingCompletionAction, null);
 assert.equal(makeMembers('offline')[3].online, false);
 assert.equal(makeMembers('changed')[0].quickCommands['一键传奇'], 'GROUP:状态变化后的任务');
-const assets = new Map([['/', 'index.html'], ['/index.html', 'index.html'], ['/control-room.css', 'control-room.css'], ['/control-room.js', 'control-room.js']]);
+const webRoot = new URL('../../BgiCoordinatorServer/wwwroot/', import.meta.url);
+const page = await readFile(new URL('index.html', webRoot), 'utf8');
+const assets = new Map([['/', 'index.html'], ['/index.html', 'index.html']]);
+for (const [, asset] of page.matchAll(/(?:src|href)="([\w.-]+\.(?:js|css))(?:\?[^" ]+)?"/g))
+    assets.set('/' + asset, asset);
+for (const name of ['Furina', 'Ayaka', 'Kazuha', 'Zhongli']) {
+    const avatar = `gengdi-avatars/${name}.png`;
+    assets.set('/' + avatar, avatar);
+}
 const server = http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     res.setHeader('Cache-Control', 'no-store');
@@ -126,8 +171,9 @@ const server = http.createServer(async (req, res) => {
         }
         const asset = assets.get(pathname);
         if (!asset) { res.writeHead(404).end(); return; }
-        res.setHeader('Content-Type', asset.endsWith('.html') ? 'text/html; charset=utf-8' : asset.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
-        res.end(await readFile(new URL('../../BgiCoordinatorServer/wwwroot/' + asset, import.meta.url)));
+        const contentTypes = { html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8', js: 'text/javascript; charset=utf-8', png: 'image/png' };
+        res.setHeader('Content-Type', contentTypes[asset.split('.').at(-1)]);
+        res.end(await readFile(new URL(asset, webRoot)));
     } catch (error) { res.writeHead(500).end(String(error)); }
 });
-server.listen(0, '127.0.0.1', () => console.log(`http://127.0.0.1:${server.address().port}/`));
+server.listen(Number(process.argv[2] ?? 0), '127.0.0.1', () => console.log(`http://127.0.0.1:${server.address().port}/`));

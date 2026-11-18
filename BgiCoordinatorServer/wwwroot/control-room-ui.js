@@ -210,7 +210,7 @@ function renderStatusDetail(p, host) {
 }
 function renderTaskCatalog(p, host) {
     let type = 'group';
-    host.innerHTML = `<div class="panel"><h2>任务目录</h2><p class="note">选择配置后可查看任务起点与启用状态；执行前会再次检查目标成员。</p><input id="catalogSearch" type="search" placeholder="搜索配置名称" aria-label="搜索配置名称"><div class="filter-tabs"><button class="active" data-kind="group">配置组</button><button data-kind="oneclick">一条龙</button><button data-kind="hotkey">快捷键</button></div><div id="catalogItems" class="catalog-grid"></div></div>`;
+    host.innerHTML = `<div class="panel"><h2>任务目录</h2><p class="note">选择配置后可查看任务起点与启用状态；执行前会再次检查目标成员。</p><input id="catalogSearch" type="search" placeholder="搜索配置名称" aria-label="搜索配置名称"><div class="filter-tabs"><button class="active" data-kind="group">配置组</button><button data-kind="oneclick">一条龙</button><button data-kind="hotkey">快捷键</button></div><div id="catalogItems" class="catalog-grid"></div><div class="member-result" data-result-uid="${webEscapeHtml(p.playerUid)}" role="status" hidden></div></div>`;
     const draw = () => {
         const current = currentMember(p.playerUid), query = host.querySelector('#catalogSearch').value.toLowerCase();
         const items = type === 'hotkey' ? (current?.hotkeys || []).map(h => ({ name: h.functionName || h.configName, value: h.configName, sub: h.hotkeyText || '' }))
@@ -227,6 +227,7 @@ function renderTaskCatalog(p, host) {
     host.querySelector('#catalogSearch').oninput = draw;
     host.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { type = b.dataset.kind; host.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('active', x === b)); draw(); });
     draw();
+    renderMemberResults();
 }
 function createModal(title, body, buttons = '') {
     const overlay = document.createElement('div'); overlay.className = 'modal-overlay';
