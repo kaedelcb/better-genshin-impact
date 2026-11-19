@@ -2256,7 +2256,9 @@ public partial class AutoHoeingTask : ISoloTask
             _logger.LogInformation("[多世界续跑] 初始组队世界已完成，转入剩余首世界 {Host}", playerOrder[0].PlayerName);
             _worldStateMonitor?.BeginRoundSwitch(120);
             await SyncRoundEndAsync(-1, client);
-            await LeaveCurrentWorldAsync(client.IsHost, client);
+            var previousHost = client.IsHost;
+            if (!previousHost) client.RetirePreviousRoundRoom();
+            await LeaveCurrentWorldAsync(previousHost, client);
             await DisposeRoundCoordinatorAsync();
         }
 
@@ -2378,6 +2380,7 @@ public partial class AutoHoeingTask : ISoloTask
                 // 墙钟兜底同样以 120s 为基准 + 60s 余量 = 180s，确保兜底 > 集合点超时。
                 _worldStateMonitor?.BeginRoundSwitch(120);
                 await SyncRoundEndAsync(round, client);
+                if (!amIHost) client.RetirePreviousRoundRoom();
 
                 // 离开世界：成员先主动离开，房主等待后再关闭房间
                 // 这样避免房主关闭房间时成员还在执行 LeaveWorldAsync 的竞态
@@ -2488,6 +2491,15 @@ public partial class AutoHoeingTask : ISoloTask
             _logger.LogInformation("[多世界] 第 {Round} 轮白名单（含所有参与玩家）: {List}",
                 round + 1, string.Join(", ", multiWorldWhitelist));
 
+            var nextRoomDeadline = DateTime.UtcNow.AddSeconds(_config.PartyTimeoutSeconds);
+            async Task<bool> WaitForRoundTransportAsync()
+            {
+                if (await client.WaitForNextRoundTransportAsync(nextRoomDeadline, _ct)) return true;
+                _logger.LogError("[多世界] 第 {Round} 轮等待协调连接恢复失败", round + 1);
+                MarkPartyFailed("换轮协调连接未恢复");
+                return false;
+            }
+
             if (amIHost)
             {
                 // 我是本轮房主：创建新房间，带重试机制（最多3次）
@@ -2495,6 +2507,8 @@ public partial class AutoHoeingTask : ISoloTask
                 string? newCode = null;
                 for (int retry = 1; retry <= 3; retry++)
                 {
+                    if ((_worldPlanAdmission == null || round > 0) && !await WaitForRoundTransportAsync())
+                        return RoundSetupOutcome.Abort;
                     if (_worldPlanAdmission != null && round == 0)
                     {
                         var targetPlan = await client.CreateWorldPlanTargetAsync(_worldPlanAdmission, _ct);
@@ -2616,10 +2630,11 @@ public partial class AutoHoeingTask : ISoloTask
 
                 // 轮询找到新房主的房间并加入
                 string? newRoomCode = null;
-                var deadline = DateTime.UtcNow.AddSeconds(_config.PartyTimeoutSeconds);
                 int attempt = 0;
-                while (DateTime.UtcNow < deadline)
+                while (DateTime.UtcNow < nextRoomDeadline)
                 {
+                    if ((_worldPlanAdmission == null || round > 0) && !await WaitForRoundTransportAsync())
+                        return RoundSetupOutcome.Abort;
                     attempt++;
                     if (_worldPlanAdmission != null && round == 0)
                     {

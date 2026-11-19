@@ -49,7 +49,10 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// <summary>握手协商到的服务端能力清单（能力缺省即不支持；本切片无任何行为依赖它，仅记录）。</summary>
     public string[] ServerCapabilities { get; private set; } = [];
 
-    public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+    internal Func<HubConnectionState>? _testConnectionStateOverride;
+    private HubConnectionState? ConnectionState => _testConnectionStateOverride?.Invoke() ?? _connection?.State;
+    public bool IsConnected => ConnectionState == HubConnectionState.Connected;
+    internal bool IsDisconnected => ConnectionState == HubConnectionState.Disconnected;
     internal string? ConnectionId => _connection?.ConnectionId;
 
     public bool SupportsCapability(string capability) => Array.IndexOf(ServerCapabilities, capability) >= 0;
