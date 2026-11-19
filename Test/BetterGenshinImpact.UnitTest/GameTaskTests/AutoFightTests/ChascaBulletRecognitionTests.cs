@@ -8,13 +8,12 @@ public class ChascaBulletRecognitionTests
 {
     [Theory]
     [InlineData(1920, 1080)]
-    [InlineData(1280, 720)]
-    [InlineData(1680, 1200)]
+    [InlineData(2560, 1440)]
     public void Recognize_AppliesModelAtReferenceLocationAfterCaptureScaling(int width, int height)
     {
         const string modelJson = """
             {"bullets":{"1":{"1":{"features":[
-                {"x":100,"y":80,"w":20,"h":20,"type":"F1","channel":"V","range":1.0,
+                {"x":1170,"y":80,"w":20,"h":20,"type":"F1","channel":"V","range":1.0,
                 "refVal":1.0,"weight":1.0,"probTable":[0.0,0.9]}
             ]}}}}
             """;
@@ -27,10 +26,11 @@ public class ChascaBulletRecognitionTests
 
             using var original = new GameCaptureRegion(new Mat(height, width, MatType.CV_8UC3, Scalar.All(0)), 0, 0);
             var scale = Math.Min(width / 1920d, height / 1080d);
-            Cv2.Rectangle(original.SrcMat, new Rect((int)(100 * scale), (int)(80 * scale), (int)(20 * scale), (int)(20 * scale)),
+            Cv2.Rectangle(original.SrcMat, new Rect((int)(1170 * scale), (int)(80 * scale), (int)(20 * scale), (int)(20 * scale)),
                 Scalar.All(255), -1);
 
             using var frame = original.DeriveTo1080P();
+            Assert.Equal(new Size(1920, 1080), frame.SrcMat.Size());
             Assert.Equal("空火空空空空", new string(model.Recognize(frame.SrcMat, 0.8)));
             Assert.Equal("空空空空空空", new string(model.Recognize(frame.SrcMat, 0.95)));
         }

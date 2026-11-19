@@ -529,22 +529,7 @@ public static class AvatarCombatSpecialization
     public static bool IsFlying()
     {
         using var region = CaptureToRectArea();
-        return IsFlying(region);
-    }
-
-    internal static double GetChascaFrameScale(ImageRegion region)
-    {
-        return Math.Min(region.Width / 1920d, region.Height / 1080d);
-    }
-
-    internal static bool IsFlying(ImageRegion region)
-    {
-        var scale = GetChascaFrameScale(region);
-        if (scale <= 0)
-        {
-            return false;
-        }
-        var pixel = region.SrcMat.At<Vec3b>((int)(1028 * scale), (int)(1584 * scale));
+        var pixel = region.SrcMat.At<Vec3b>(1028, 1584);
         return pixel.Item0 >= 250 && pixel.Item1 >= 250 && pixel.Item2 >= 250;
     }
 

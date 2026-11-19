@@ -72,15 +72,6 @@ internal sealed class ChascaBulletRecognition
         }
 
         threshold = double.IsFinite(threshold) ? Math.Clamp(threshold, 0, 1) : DefaultThreshold;
-        // CaptureContent 已按需缩放截图，使用传入帧尺寸确定剩余的缩放量。
-        var frameScale = Math.Min(frame.Width / 1920d, frame.Height / 1080d);
-        using var normalized = frameScale == 1 ? null : new Mat();
-        if (normalized != null)
-        {
-            Cv2.Resize(frame, normalized, new Size(frame.Width / frameScale, frame.Height / frameScale));
-        }
-        var scoringFrame = normalized ?? frame;
-
         foreach (var (slot, models) in _models)
         {
             double bestScore = 0;
@@ -91,7 +82,7 @@ internal sealed class ChascaBulletRecognition
                     continue;
                 }
 
-                var score = ImageFeatureScorer.Score(model, scoringFrame);
+                var score = ImageFeatureScorer.Score(model, frame);
                 if (score >= threshold && score > bestScore)
                 {
                     bestScore = score;
