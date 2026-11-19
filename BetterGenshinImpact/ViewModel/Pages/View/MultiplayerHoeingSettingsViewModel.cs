@@ -30,9 +30,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     private string _roleSelection = "房主（创建房间）";
 
     // ===== B 联机连接 =====
-    // 协调服务器地址只读显示 User\config.json 的值；不能在此修改，也不写入配置组（见 CoordinatorServerAddress）。
     [ObservableProperty] private string _coordinatorServerUrl = "";
-    public string CoordinatorServerEditHint => BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.EditHint;
     [ObservableProperty] private string _playerName = "";
     [ObservableProperty] private string _playerUid = "";
     [ObservableProperty] private string _pickupMode = "";
@@ -221,8 +219,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _multiplayerEnabled = GetBool("multiplayerEnabled", true);
         _roleSelection = GetStr("multiplayerRole", "host") == "member" ? "成员（加入房间）" : "房主（创建房间）";
 
-        // 只显示实际生效的全局地址：配置组残留值不生效，旧版示例文字显示为官方地址
-        _coordinatorServerUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(g.CoordinatorServerUrl);
+        // 配置组里已填的地址原样显示和编辑；没填或仍是旧版示例文字时显示官方地址
+        _coordinatorServerUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(GetStr("coordinatorServerUrl", g.CoordinatorServerUrl));
         _playerName = GetStr("playerName", g.PlayerName);
         _playerUid = GetStr("playerUid", g.PlayerUid);
         _pickupMode = GetStr("pickupMode", g.PickupMode);
@@ -320,7 +318,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["multiplayerRole"] = RoleSelection == "成员（加入房间）" ? "member" : "host";
         settings["memberJoinMode"] = JoinModeSelection == "随机加入现有房间" ? "random" : "byHostName";
         settings["targetHostName"] = TargetHostName;
-        settings.Remove("coordinatorServerUrl"); // 地址不属于配置组；保存时清掉历史残留
+        settings["coordinatorServerUrl"] = CoordinatorServerUrl;
         settings["playerName"] = PlayerName;
         settings["playerUid"] = PlayerUid;
         settings["multiplayerPartyName"] = MultiplayerPartyName;

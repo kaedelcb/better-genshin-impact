@@ -210,14 +210,23 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         if (!Uri.TryCreate(text + "/", UriKind.Absolute, out var uri)
             || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-            throw new InvalidDataException("线路服务地址无效。" + CoordinatorServerAddress.EditHint);
-        // HTTPS 证书只能签给域名：IP 写法一定握手失败（TLS 112），提前给出能照着改的中文说明，不再报看不懂的 SSL 错误。
-        if (!uri.IsLoopback && System.Net.IPAddress.TryParse(uri.Host, out _))
-            throw new InvalidDataException("协调服务器地址不能写 IP（" + uri.Host + "），线路更新需要域名。" + CoordinatorServerAddress.EditHint);
+            throw new InvalidDataException("线路服务地址无效，请检查联机设置里的协调服务器地址（官方：" + CoordinatorServerAddress.RecommendedAddress + "）。");
+        // 只影响线路下载，不改用户的联机地址：官方服务器的线路证书只签给 www.autobgi.cn，
+        // 联机地址写成官方 IP、不带 www 或其他 autobgi.cn 子域名时，线路下载一律改走官方 HTTPS 地址，用户无需改任何设置。
+        if (IsOfficialServerHost(uri.Host)) return new Uri(OfficialServerAddress + "/");
         if (uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
             uri = new UriBuilder(Uri.UriSchemeHttps, uri.Host).Uri;
         return uri;
     }
+
+    /// <summary>官方服务器的公网 IP；联机可以用它直连 8080，但 HTTPS 证书无法签给 IP。</summary>
+    internal const string OfficialServerIp = "121.4.78.52";
+
+    /// <summary>是否指向官方服务器（官方 IP、autobgi.cn 及其任意子域名）。</summary>
+    internal static bool IsOfficialServerHost(string host)
+        => string.Equals(host, OfficialServerIp, StringComparison.Ordinal)
+           || string.Equals(host, "autobgi.cn", StringComparison.OrdinalIgnoreCase)
+           || host.EndsWith(".autobgi.cn", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// 把握手失败翻译成能照着改的中文：不带 www 等与证书不符的域名会收到 TLS 112（unrecognized_name）。
@@ -227,7 +236,7 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         var text = error.ToString();
         if (text.Contains("SSL", StringComparison.OrdinalIgnoreCase) || text.Contains("TLS", StringComparison.OrdinalIgnoreCase)
             || error.InnerException is System.Security.Authentication.AuthenticationException)
-            return new InvalidDataException("无法和线路服务 " + server.Host + " 建立 HTTPS 连接（证书与地址不符）。" + CoordinatorServerAddress.EditHint, error);
+            return new InvalidDataException("无法和线路服务 " + server.Host + " 建立 HTTPS 连接（证书与地址不符），请检查联机设置里的协调服务器地址（官方：" + CoordinatorServerAddress.RecommendedAddress + "）。", error);
         return error;
     }
 

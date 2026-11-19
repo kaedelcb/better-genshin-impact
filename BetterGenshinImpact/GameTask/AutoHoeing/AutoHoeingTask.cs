@@ -959,6 +959,7 @@ public partial class AutoHoeingTask : ISoloTask
             // 从创建起由 Start.finally 持有清理责任，查房/连接期间取消也必须释放心跳和连接。
             _coordinatorClientRef = client;
             // 隐藏服务器地址前半部分
+            _config.CoordinatorServerUrl = CoordinatorServerAddress.Effective(_config.CoordinatorServerUrl);
             var maskedUrl = MaskServerUrl(_config.CoordinatorServerUrl);
             _logger.LogInformation("[联机] 开始连接协调服务器: {Url}", maskedUrl);
             var connected = await client.ConnectAsync(_config.CoordinatorServerUrl, _ct);
@@ -4760,7 +4761,7 @@ public partial class AutoHoeingTask : ISoloTask
             {
                 _routePackageUpdater ??= AutoHoeingRouteUpdateTask.CreateUpdater();
                 _routePackageLease ??= _routePackageUpdater.AcquireLease();
-                installed = await _routePackageUpdater.EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(CoordinatorServerAddress.Global), pin, token,
+                installed = await _routePackageUpdater.EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(_config.CoordinatorServerUrl), pin, token,
                     forceRepair, _routePackageLease, allowInstall: _config.AutoUpdateRoutes);
             }
             token.ThrowIfCancellationRequested();
@@ -5269,8 +5270,8 @@ public partial class AutoHoeingTask : ISoloTask
             ? Get("memberJoinMode", _config.MemberJoinMode)
             : _config.MemberJoinMode;
         _config.TargetHostName = Get("targetHostName", _config.TargetHostName);
-        // 协调服务器地址只认 User\config.json 一处（用户关闭 BGI 后手动编辑）；配置组/远程下发里残留的地址一律忽略。
-        _config.CoordinatorServerUrl = CoordinatorServerAddress.Global;
+        // 配置组里填写的联机地址照常生效；只有空值或旧版示例文字才按官方地址处理。
+        _config.CoordinatorServerUrl = CoordinatorServerAddress.Effective(Get("coordinatorServerUrl", _config.CoordinatorServerUrl));
         _config.PlayerName = Get("playerName", _config.PlayerName);
         _config.PlayerUid = Get("playerUid", _config.PlayerUid);
         _config.ExpectedPlayerCount = Get("expectedPlayerCount", _config.ExpectedPlayerCount);
@@ -5551,7 +5552,7 @@ public partial class AutoHoeingTask : ISoloTask
             new() { Name = "targetHostName", Label = "目标房主玩家名称\n仅在成员模式且加入方式为byHostName时生效", Type = "text", DefaultValue = config.TargetHostName },
 
             // ===== 第六部分：联机服务器和同步配置 =====
-            // 协调服务器地址不在配置组/任务设置里提供：只能关闭 BGI 后手动编辑 User\config.json（CoordinatorServerAddress）。
+            new() { Name = "coordinatorServerUrl", Label = "协调服务器地址", Type = "text", DefaultValue = config.CoordinatorServerUrl },
             new() { Name = "playerName", Label = "玩家名(必填)\n联机时显示给其他玩家", Type = "text", DefaultValue = config.PlayerName },
             new() { Name = "playerUid", Label = "玩家UID(必填)\n用于进入世界和多世界切换", Type = "text", DefaultValue = config.PlayerUid },
             new() { Name = "expectedPlayerCount", Label = "房间期望人数（2-4）\n用于判断人齐条件", Type = "number", DefaultValue = config.ExpectedPlayerCount },

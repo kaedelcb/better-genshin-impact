@@ -22,8 +22,8 @@ public sealed class AutoHoeingRouteUpdateTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
-        // 与联机连接读同一个地址：User\config.json 里的协调服务器地址。
-        await CreateUpdater().EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(CoordinatorServerAddress.Global), null, ct);
+        // 读设置页的协调服务器地址；官方 IP/域名会由线路更新器改走 https://www.autobgi.cn。
+        await CreateUpdater().EnsureAsync(AutoHoeingRouteUpdater.ResolveServerAddress(TaskContext.Instance().Config.AutoHoeingConfig.CoordinatorServerUrl), null, ct);
         ct.ThrowIfCancellationRequested();
     }
 }

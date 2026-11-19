@@ -540,13 +540,16 @@ public sealed class AutoHoeingRouteUpdaterTests
     [InlineData("http://121.4.78.52:8080")]
     [InlineData("http://121.4.78.52:8080/hub")]
     [InlineData("https://121.4.78.52")]
-    public void IpAddressGetsAnActionableChineseMessageInsteadOfAnSslError(string address)
-    {
-        var error = Assert.Throws<InvalidDataException>(() => AutoHoeingRouteUpdater.RequireServerUri(address));
-        Assert.Contains("不能写 IP", error.Message);
-        Assert.Contains("config.json", error.Message);
-        Assert.Contains("http://www.autobgi.cn:8080", error.Message);
-    }
+    [InlineData("http://autobgi.cn:8080")]
+    [InlineData("http://mys.autobgi.cn:8080/hub")]
+    public void OfficialIpOrDomainVariantDownloadsRoutesFromTheOfficialHttpsHost(string address)
+        => Assert.Equal("https://www.autobgi.cn/", AutoHoeingRouteUpdater.RequireServerUri(address).AbsoluteUri);
+
+    [Theory]
+    [InlineData("http://203.0.113.9:8080", "https://203.0.113.9/")]
+    [InlineData("http://my-own.example.org:8080", "https://my-own.example.org/")]
+    public void SelfHostedAddressStillUsesItsOwnHost(string address, string expected)
+        => Assert.Equal(expected, AutoHoeingRouteUpdater.RequireServerUri(address).AbsoluteUri);
 
     [Fact]
     public void TlsNameMismatchIsTranslatedIntoTheSameEditHint()
@@ -556,7 +559,7 @@ public sealed class AutoHoeingRouteUpdaterTests
         var translated = AutoHoeingRouteUpdater.ExplainTransportFailure(new Uri("https://autobgi.cn/"), tls);
         Assert.IsType<InvalidDataException>(translated);
         Assert.Contains("autobgi.cn", translated.Message);
-        Assert.Contains("config.json", translated.Message);
+        Assert.Contains("协调服务器地址", translated.Message);
         Assert.Same(tls, translated.InnerException);
         var other = new HttpRequestException("连接超时");
         Assert.Same(other, AutoHoeingRouteUpdater.ExplainTransportFailure(new Uri("https://www.autobgi.cn/"), other));

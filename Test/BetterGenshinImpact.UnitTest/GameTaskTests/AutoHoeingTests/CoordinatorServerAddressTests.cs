@@ -11,7 +11,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 public sealed class GlobalConfigServiceCollection { }
 
 /// <summary>
-/// 协调服务器地址只认 User\config.json 一处：配置组/远程下发里的残留地址必须被忽略。
+/// 协调服务器地址照常可在配置组里填写；空值/旧版示例文字按官方地址处理。
 /// 走真实 ApplySettingsOverride，不是模拟逻辑；全局配置用本仓库测试既有的 ConfigService 反射注入方式。
 /// </summary>
 [Collection("GlobalConfigService")]
@@ -36,34 +36,32 @@ public class CoordinatorServerAddressTests
     }
 
     [Fact]
-    public void ConfigGroupLeftoverAddressIsIgnoredAndTheGlobalValueWins()
+    public void ConfigGroupAddressStillWorksAndCanBeChanged()
     {
+        // 配置组里填的联机地址照常生效（用户可以在锄地一条龙设置里改地址）。
         InjectGlobal("http://www.autobgi.cn:8080");
-        var working = new AutoHoeingConfig { CoordinatorServerUrl = "http://121.4.78.52:8080" };
         var result = RunOverride(new Dictionary<string, object?>
         {
             ["multiplayerEnabled"] = true,
-            ["coordinatorServerUrl"] = "http://121.4.78.52:8080/hub"
-        }, working);
-        Assert.Equal("http://www.autobgi.cn:8080", result.CoordinatorServerUrl);
-        Assert.Equal("http://www.autobgi.cn:8080", CoordinatorServerAddress.Global);
+            ["coordinatorServerUrl"] = "http://121.4.78.52:8080"
+        }, new AutoHoeingConfig { CoordinatorServerUrl = "http://www.autobgi.cn:8080" });
+        Assert.Equal("http://121.4.78.52:8080", result.CoordinatorServerUrl);
     }
 
     [Fact]
-    public void OldConfigJsonStillHoldingThePlaceholderJustWorksWithoutBeingRewritten()
+    public void LegacyPlaceholderOrEmptyFallsBackToTheOfficialAddressWithoutRewritingConfig()
     {
-        // 老用户 config.json 里是旧版示例文字：不用手动改就能用官方地址，而且 config.json 里的值保持原样（程序不写它）。
         var global = InjectGlobal("举例：https://bgi-sync.example.com(需部署自建服务)");
-        var result = RunOverride(new Dictionary<string, object?> { ["coordinatorServerUrl"] = "http://121.4.78.52:8080" },
-            new AutoHoeingConfig());
+        var result = RunOverride(new Dictionary<string, object?> { ["multiplayerEnabled"] = true },
+            new AutoHoeingConfig { CoordinatorServerUrl = global.AutoHoeingConfig.CoordinatorServerUrl });
         Assert.Equal("http://www.autobgi.cn:8080", result.CoordinatorServerUrl);
         Assert.Equal("举例：https://bgi-sync.example.com(需部署自建服务)", global.AutoHoeingConfig.CoordinatorServerUrl);
     }
 
     [Fact]
-    public void TaskSettingDefinitionsNoLongerOfferTheAddress()
+    public void TaskSettingDefinitionsStillOfferTheAddress()
     {
         InjectGlobal(CoordinatorServerAddress.RecommendedAddress); // GetSettingDefinitions 读取全局配置作为各项默认值
-        Assert.DoesNotContain(AutoHoeingTask.GetSettingDefinitions(), item => item.Name == "coordinatorServerUrl");
+        Assert.Contains(AutoHoeingTask.GetSettingDefinitions(), item => item.Name == "coordinatorServerUrl");
     }
 }

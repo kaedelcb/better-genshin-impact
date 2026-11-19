@@ -6811,12 +6811,9 @@
                         <Grid Margin="0,0,0,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <ui:TextBlock Grid.Column="0" VerticalAlignment="Center" Text="服务器地址（内测中，源码后续开源，可自搭服务器）" />
-                            <ui:TextBox Grid.Column="1" Width="220" Margin="0,0,36,0" IsReadOnly="True"
-                                       ToolTip="只能关闭 BGI 后用记事本修改 User\config.json 里的 coordinatorServerUrl"
-                                       Text="{Binding EffectiveCoordinatorServerUrl, Mode=OneWay}" />
+                            <ui:TextBox Grid.Column="1" Width="220" Margin="0,0,36,0"
+                                       Text="{Binding Config.AutoHoeingConfig.CoordinatorServerUrl, Mode=TwoWay}" />
                         </Grid>
-                        <ui:TextBlock Margin="0,0,0,8" FontSize="12" TextWrapping="Wrap" Opacity="0.75"
-                                      Text="默认就是官方服务器，直接可用。只有自建服务器才需要关闭 BGI 后用记事本修改 User\config.json 里 autoHoeingConfig 的 coordinatorServerUrl。" />
 
                         <!-- 玩家名称 + UID -->
                         <Grid Margin="0,0,0,12">

@@ -60,9 +60,6 @@ public partial class TaskSettingsPageViewModel : ViewModel
 {
     public AllConfig Config { get; set; }
 
-    /// <summary>设置页只读显示的协调服务器地址：config.json 里的值，旧版示例文字显示为官方地址（只读，不写回）。</summary>
-    public string EffectiveCoordinatorServerUrl
-        => BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(Config?.AutoHoeingConfig?.CoordinatorServerUrl);
 
     private readonly INavigationService _navigationService;
     private readonly TaskTriggerDispatcher _taskDispatcher;
