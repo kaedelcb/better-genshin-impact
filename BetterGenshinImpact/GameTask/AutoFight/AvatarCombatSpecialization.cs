@@ -845,8 +845,8 @@ public static class AvatarCombatSpecialization
     /// </summary>
     public static (int centerX, int centerY, string text)? FindDamageNumber(ImageRegion? existingCapture = null)
     {
-        using var ownedCapture = existingCapture == null ? CaptureToRectArea() : null;
-        return FindDamageNumber(existingCapture ?? ownedCapture!, excludeChascaBulletSlots: false);
+        using var ra = existingCapture ?? CaptureToRectArea();
+        return FindDamageNumber(ra, excludeChascaBulletSlots: false);
     }
 
     private static (int centerX, int centerY, string text)? FindDamageNumber(
