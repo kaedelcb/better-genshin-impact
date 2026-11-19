@@ -340,6 +340,86 @@ class PublishTests(unittest.TestCase):
         self.assertTrue(self.api.releases[0]["draft"])
 
 
+class NativeDependenciesTests(unittest.TestCase):
+    script = ROOT / "Build" / "ReleaseNativeDependencies.ps1"
+    files = {
+        "Microsoft.ML.OnnxRuntime.DirectML": {
+            "onnxruntime.dll": "runtimes/win-x64/native/onnxruntime.dll",
+        },
+        "Microsoft.AI.DirectML": {
+            "DirectML.dll": "bin/x64-win/DirectML.dll",
+            "DirectML.Debug.dll": "bin/x64-win/DirectML.Debug.dll",
+        },
+        "Melanchall.DryWetMidi": {
+            "Melanchall_DryWetMidi_Native64.dll": "build/Melanchall_DryWetMidi_Native64.dll",
+        },
+        "Microsoft.Diagnostics.Tracing.TraceEvent": {
+            "amd64/KernelTraceControl.dll": "build/native/amd64/KernelTraceControl.dll",
+            "amd64/msdia140.dll": "build/native/amd64/msdia140.dll",
+        },
+        "Microsoft.Web.WebView2": {
+            "runtimes/win-x64/native/WebView2Loader.dll": "runtimes/win-x64/native/WebView2Loader.dll",
+        },
+    }
+
+    def setUp(self):
+        self.pwsh = shutil.which("pwsh")
+        if not self.pwsh:
+            self.skipTest("需要 PowerShell 验证发行包原生依赖")
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.dist = self.root / "BetterGI"
+        self.dist.mkdir()
+
+    def run_script(self, *args):
+        return subprocess.run([self.pwsh, "-NoProfile", "-File", str(self.script),
+                               "-DistributionDirectory", str(self.dist), *map(str, args)],
+                              cwd=self.root, capture_output=True, encoding="utf-8", errors="replace")
+
+    def test_stage_uses_the_resolved_win_x64_packages_and_rejects_missing_source(self):
+        cache = self.root / "NuGet cache"
+        assets = {"targets": {"net8.0/win-x64": {}}, "libraries": {}, "packageFolders": {str(cache): {}}}
+        expected = {}
+        for index, (package, entries) in enumerate(self.files.items()):
+            key = f"{package}/1.2.{index}"
+            package_path = key.lower()
+            assets["targets"]["net8.0/win-x64"][key] = {"type": "package"}
+            assets["libraries"][key] = {"type": "package", "path": package_path}
+            for destination, relative_source in entries.items():
+                source = cache / package_path / relative_source
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(source.name.encode())
+                expected[destination] = source
+        (self.dist / "onnxruntime.dll").write_bytes(b"stale runtime")
+        assets_file = self.root / "project.assets.json"
+        assets_file.write_text(json.dumps(assets), encoding="utf-8")
+        result = self.run_script("-ProjectAssets", assets_file)
+        self.assertEqual(0, result.returncode, result.stderr)
+        for destination, source in expected.items():
+            self.assertEqual(source.read_bytes(), (self.dist / destination).read_bytes())
+        expected["onnxruntime.dll"].unlink()
+        result = self.run_script("-ProjectAssets", assets_file)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("onnxruntime.dll", result.stderr)
+
+    def test_archive_rejects_missing_native_dependency_even_when_staged(self):
+        seven_zip = shutil.which("7z")
+        if not seven_zip:
+            self.skipTest("需要 7-Zip 验证实际 7z 目录")
+        for entries in self.files.values():
+            for relative_path in entries:
+                path = self.dist / relative_path
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"native fixture")
+        for archive, options in [("complete.7z", []), ("missing.7z", ["-xr!onnxruntime.dll"])]:
+            subprocess.run([seven_zip, "a", archive, "BetterGI", *options], cwd=self.root,
+                           check=True, capture_output=True)
+        result = self.run_script("-ArchivePath", self.root / "complete.7z")
+        self.assertEqual(0, result.returncode, result.stderr)
+        result = self.run_script("-ArchivePath", self.root / "missing.7z")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("BetterGI/onnxruntime.dll", result.stderr)
+
+
 class WorkflowTests(unittest.TestCase):
     def load(self, name):
         import yaml
@@ -355,6 +435,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("needs.validate.outputs.publish == 'true'", publish["if"])
         self.assertIn("!inputs.create-release", publish["if"])
         self.assertNotIn("always()", publish["if"])
+
+    def test_native_dependencies_are_staged_and_verified_before_upload(self):
+        steps = self.load("publish.yml")["jobs"]["build_dist"]["steps"]
+        names = [step.get("name") for step in steps]
+        copy = names.index("🧹 Clear & Move Files")
+        stage = names.index("Stage required x64 native dependencies")
+        archive = names.index("📦 Generate archive")
+        verify = names.index("Verify native dependencies in the release archive")
+        upload = next(i for i, step in enumerate(steps) if step.get("with", {}).get("name") == "BetterGI_7z")
+        self.assertEqual([copy, stage, archive, verify, upload], sorted([copy, stage, archive, verify, upload]))
+        self.assertIn("ReleaseNativeDependencies.ps1", steps[stage]["run"])
+        self.assertIn("ReleaseNativeDependencies.ps1", steps[verify]["run"])
+        self.assertEqual("error", steps[upload]["with"]["if-no-files-found"])
 
     def test_micasetup_uses_last_successful_version_and_requires_artifact(self):
         steps = self.load("publish.yml")["jobs"]["build_setup"]["steps"]
