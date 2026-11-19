@@ -4,6 +4,7 @@ using System;
 using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using FsCheck;
 using FsCheck.Xunit;
+using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 
@@ -13,8 +14,8 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 ///
 /// 覆盖列（对应 design.md §Correctness Properties）：
 ///   - Property 1 (Bug Condition)：7 参 IsEligible("stuck",...) 仅在联机 + teleport + 严格等待 +
-///     未消费 + 0 &lt;= elapsed &lt;= 20s 命中；其余组合全部不命中（stuck 窗口 20 秒）。
-///   - Property 2 (Boundary)：恰好 0 / 20 秒命中、20.001 秒不命中、负时间差不命中、
+///     未消费 + 0 &lt;= elapsed &lt;= 30s 命中；其余组合全部不命中（stuck 窗口 30 秒）。
+///   - Property 2 (Boundary)：恰好 0 / 30 秒命中、30.001 秒不命中、负时间差不命中、
 ///     revival 保持 10 秒窗口。
 ///   - Property 3 (One-shot)：TryConsume CAS 至多一个赢家；同段卡死先消费则复苏不再获得（反之亦然）。
 ///   - Property 4 (Preservation)：非命中卡死输入（单机/非 teleport/未完成/已消费/窗口外/负时间差）
@@ -32,32 +33,34 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
     /// 属性 1A：7 参 IsEligible("stuck",...) 只对满足 bug condition 的输入返回 true。
     /// 撒任意 (isMultiplayerHoeing, syncPointType, strictWaitCompleted, consumed, elapsedSeconds,
     /// elapsedMilliseconds)，断言返回值精确等价于"联机 &amp;&amp; teleport &amp;&amp; 严格等待完成
-    /// &amp;&amp; 未消费 &amp;&amp; 0 &lt;= elapsed &lt;= 20_000ms（stuck 20 秒窗口）"。
+    /// &amp;&amp; 未消费 &amp;&amp; 0 &lt;= elapsed &lt;= 30_000ms（stuck 30 秒窗口）"。
     ///
     /// **Validates: Requirements 2.1, 2.6, 6.1**
     /// </summary>
     [Property(MaxTest = 200)]
     public Property IsEligible_Stuck_OnlyMatchesProtectedInputs(
         bool isMultiplayerHoeing,
-        NonNull<string> syncPointType,
+        bool teleportSyncPoint,
         bool strictWaitCompleted,
         bool consumed,
         int elapsedSeconds,
         int elapsedMilliseconds)
     {
+        elapsedSeconds %= 60;
+        elapsedMilliseconds %= 1000;
         var completionTime = DateTime.UnixEpoch;
         var triggerTime = completionTime.AddSeconds(elapsedSeconds)
             .AddMilliseconds(elapsedMilliseconds);
         var actual = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "stuck", isMultiplayerHoeing, syncPointType.Get, strictWaitCompleted,
+            "stuck", isMultiplayerHoeing, teleportSyncPoint ? "teleport" : "fight", strictWaitCompleted,
             completionTime, triggerTime, consumed);
         var totalMs = elapsedSeconds * 1000L + elapsedMilliseconds;
         var expected = isMultiplayerHoeing
-            && syncPointType.Get == "teleport"
+            && teleportSyncPoint
             && strictWaitCompleted
             && !consumed
             && totalMs >= 0
-            && totalMs <= 20_000;   // stuck 窗口 20 秒
+            && totalMs <= 30_000;   // stuck 窗口 30 秒
         return (actual == expected).ToProperty();
     }
 
@@ -66,22 +69,19 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
     // =========================================================================
 
     /// <summary>
-    /// 属性 2A：elapsed == 0 与 elapsed == 20（stuck）命中，elapsed == 20.001 不命中。
+    /// 属性 2A：elapsed == 0 与 elapsed == 30（stuck）命中，elapsed == 30.001 不命中。
     ///
     /// **Validates: Requirements 2.6, 4.1, 6.1**
     /// </summary>
-    [Property]
-    public Property IsEligible_BoundaryZeroAndTwenty_Stuck(bool a, bool b)
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(30, true)]
+    [InlineData(30.001, false)]
+    public void IsEligible_Stuck_UsesThirtySecondBoundary(double elapsedSeconds, bool expected)
     {
-        var c0 = DateTime.UnixEpoch;
-        var hit0 = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "stuck", true, "teleport", true, c0, c0, false);
-        var c20 = DateTime.UnixEpoch;
-        var hit20 = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "stuck", true, "teleport", true, c20, c20.AddSeconds(20), false);
-        var miss21 = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "stuck", true, "teleport", true, c20, c20.AddSeconds(20.001), false);
-        return (hit0 && hit20 && !miss21).ToProperty();
+        var completed = DateTime.UnixEpoch;
+        Assert.Equal(expected, PostTeleportRevivalProtectionDecisions.IsEligible(
+            "stuck", true, "teleport", true, completed, completed.AddSeconds(elapsedSeconds), false));
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
     [Property(MaxTest = 200)]
     public Property IsEligible_Revival_KeepsTenSecondWindow(
         bool isMultiplayerHoeing,
-        NonNull<string> syncPointType,
+        bool teleportSyncPoint,
         bool strictWaitCompleted,
         bool consumed,
         int elapsedSeconds,
@@ -118,11 +118,11 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
         var triggerTime = completionTime.AddSeconds(elapsedSeconds)
             .AddMilliseconds(elapsedMilliseconds);
         var actual = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "revival", isMultiplayerHoeing, syncPointType.Get, strictWaitCompleted,
+            "revival", isMultiplayerHoeing, teleportSyncPoint ? "teleport" : "fight", strictWaitCompleted,
             completionTime, triggerTime, consumed);
         var totalMs = elapsedSeconds * 1000L + elapsedMilliseconds;
         var expected = isMultiplayerHoeing
-            && syncPointType.Get == "teleport"
+            && teleportSyncPoint
             && strictWaitCompleted
             && !consumed
             && totalMs >= 0
@@ -171,7 +171,7 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
     /// <summary>
     /// 属性 4A：所有非命中卡死输入类别经 IsEligible("stuck",...) 恒返回 false。
     /// 显式枚举非命中类别：单机、非 teleport 同步点、严格等待未完成、机会已消费、
-    /// 负时间差、窗口过期（&gt;20s）；每个类别通过对应输入组合构造。守护 Preservation：
+    /// 负时间差、窗口过期（&gt;30s）；每个类别通过对应输入组合构造。守护 Preservation：
     /// 不满足 bug condition 的卡死不建立保护窗口、保持既有卡死脱困/跳路线语义。
     ///
     /// **Validates: Requirements 3.1, 3.2, 3.3, 3.5, 3.6, 4.1**
@@ -179,7 +179,7 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
     [Property(MaxTest = 200)]
     public Property NonEligibleStuckInputs_DoNotCreateProtection(
         bool isMultiplayerHoeing,
-        NonNull<string> syncPointType,
+        bool teleportSyncPoint,
         bool strictWaitCompleted,
         bool consumed,
         int elapsedSeconds)
@@ -187,17 +187,16 @@ public class PostTeleportStuckProtectionPbtPropertiesTest
         var c = DateTime.UnixEpoch;
         var t = c.AddSeconds(elapsedSeconds);
         var actual = PostTeleportRevivalProtectionDecisions.IsEligible(
-            "stuck", isMultiplayerHoeing, syncPointType.Get, strictWaitCompleted,
+            "stuck", isMultiplayerHoeing, teleportSyncPoint ? "teleport" : "fight", strictWaitCompleted,
             c, t, consumed);
         var isEligible = isMultiplayerHoeing
-            && syncPointType.Get == "teleport"
+            && teleportSyncPoint
             && strictWaitCompleted
             && !consumed
             && elapsedSeconds >= 0
-            && elapsedSeconds <= 20;
-        // 若输入本就不满足条件，则 must not hit；若条件成立则 actual 应与 isEligible 一致。
-        // 这里强化为：非命中输入（!isEligible）恒不命中。
-        return (!isEligible || !actual).ToProperty();
+            && elapsedSeconds <= 30;
+        // 本属性只约束不满足保护条件的输入。
+        return (isEligible || !actual).ToProperty();
     }
 
     /// <summary>

@@ -433,18 +433,42 @@ public partial class PathExecutor
     /// 单机零感知：MultiplayerCoordinator == null 或 _protectionSegmentId == -1 时恒 false。
     /// </summary>
     public bool IsPostTeleportRevivalProtectionHit()
+        => IsPostTeleportRevivalProtectionHit(DateTime.UtcNow);
+
+    private bool IsPostTeleportRevivalProtectionHit(DateTime revivalTime)
     {
         if (MultiplayerCoordinator == null) return false;
         if (_protectionSegmentId != CurWaypoints.Item1) return false;
         if (_protectionConsumed != 0) return false;
-        var revivalNow = System.DateTime.UtcNow;
         return BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.IsEligible(
             isMultiplayerHoeing: true,
             syncPointType: "teleport",
             strictWaitCompleted: true,
             completionTime: _protectionCompletedAtUtc,
-            revivalTime: revivalNow,
+            revivalTime: revivalTime,
             consumed: false);
+    }
+
+    internal enum RevivalRetryDisposition
+    {
+        RetryProtectedSegment,
+        SkipAfterSyncPoint,
+        ContinueNormalRetry
+    }
+
+    internal RevivalRetryDisposition PrepareRevivalRetry(DateTime revivalTime, string reason)
+    {
+        if (!IsPostTeleportRevivalProtectionHit(revivalTime)
+            || !BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.TryConsume(ref _protectionConsumed))
+            return _syncPointReached && MultiplayerCoordinator != null
+                ? RevivalRetryDisposition.SkipAfterSyncPoint
+                : RevivalRetryDisposition.ContinueNormalRetry;
+
+        Logger.LogInformation("[联机] 传送后复苏保护命中，从当前段起点重跑，segmentId={Segment}, 原因: {Msg}",
+            CurWaypoints.Item1, reason);
+        StartSkipOtherOperations();
+        ResetRecoveryStateForNewAttempt();
+        return RevivalRetryDisposition.RetryProtectedSegment;
     }
 
     /// <summary>
@@ -2191,28 +2215,9 @@ public partial class PathExecutor
                     // 命中行为：原子消费机会（CAS），仅本机从当前段传送起点重跑，不 escalation、不 Reviving、
                     //          不 tracker、不跳段。命中直接 continue 回到 for-i 重试循环重跑本段起点，
                     //          不推进 _syncPointReached 分流，也不设置 SkipToNextSegment。
-                    if (MultiplayerCoordinator != null
-                        && _protectionSegmentId == CurWaypoints.Item1
-                        && _protectionConsumed == 0)
-                    {
-                        var revivalNow = DateTime.UtcNow;
-                        bool hit = BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.IsEligible(
-                            isMultiplayerHoeing: true,
-                            syncPointType: "teleport",
-                            strictWaitCompleted: true,
-                            completionTime: _protectionCompletedAtUtc,
-                            revivalTime: revivalNow,
-                            consumed: _protectionConsumed == 1);
-                        if (hit && BetterGenshinImpact.GameTask.AutoHoeing.Services.PostTeleportRevivalProtectionDecisions.TryConsume(ref _protectionConsumed))
-                        {
-                            // 保护命中：从当前段起点重跑，不推进到下一段
-                            Logger.LogInformation("[联机] 传送后复苏保护命中，从当前段起点重跑，segmentId={Segment}, 原因: {Msg}",
-                                CurWaypoints.Item1, retryException.Message);
-                            StartSkipOtherOperations();
-                            ResetRecoveryStateForNewAttempt();
-                            continue; // 回到 for-i 重试循环，重跑本段起点（不是跳到下一传送点）
-                        }
-                    }
+                    var revivalRetry = PrepareRevivalRetry(DateTime.UtcNow, retryException.Message);
+                    if (revivalRetry == RevivalRetryDisposition.RetryProtectedSegment)
+                        continue; // 回到 for-i 重试循环，重跑本段起点（不是跳到下一传送点）
 
                     // 计算目标进度：跳到下一段开头的传送点
                     // 当前段索引 = CurWaypoints.Item1，下一段 = CurWaypoints.Item1 + 1，传送点是该段的 waypoint 0
@@ -2279,7 +2284,7 @@ public partial class PathExecutor
                     // === escalation == Continue：走原"同步点前/后"分流逻辑（preservation §3.4 完全不动）===
 
                     // 联机模式：同步点后异常 → 上报 Reviving + 目标进度 → 不重试 → 跳到下一段线路
-                    if (_syncPointReached && MultiplayerCoordinator != null)
+                    if (revivalRetry == RevivalRetryDisposition.SkipAfterSyncPoint && MultiplayerCoordinator != null)
                     {
                         Logger.LogWarning("[联机] 同步点后异常：上报 Reviving，目标进度={Target}，跳到下一段，原因: {Msg}",
                             targetProgress, retryException.Message);

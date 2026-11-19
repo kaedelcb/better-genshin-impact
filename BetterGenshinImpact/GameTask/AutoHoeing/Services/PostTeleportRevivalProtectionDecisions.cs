@@ -22,7 +22,7 @@ public static class PostTeleportRevivalProtectionDecisions
     public const double StuckWindowSeconds = 30;
 
     /// <summary>
-    /// 按触发类型取传送后保护窗口时长（秒）。<c>"stuck"</c> 返回 <see cref="StuckWindowSeconds"/>（20），
+    /// 按触发类型取传送后保护窗口时长（秒）。<c>"stuck"</c> 返回 <see cref="StuckWindowSeconds"/>（30），
     /// 其他触发类型（含 <c>"revival"</c>）返回 <see cref="WindowSeconds"/>（10）。
     /// </summary>
     /// <param name="triggerType">一次传送后保护候选事件的类型（<c>"stuck"</c> 或 <c>"revival"</c>）。</param>

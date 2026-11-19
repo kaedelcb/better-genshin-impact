@@ -1,3 +1,9 @@
+using System.Reflection;
+using BetterGenshinImpact.GameTask.AutoHoeing;
+using BetterGenshinImpact.GameTask.AutoHoeing.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
+using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
@@ -122,22 +128,95 @@ public class SingleModeNullRefPreservationTest
         Assert.Contains("成员：等待房主路线列表就绪事件", content);
     }
 
-    /// <summary>
-    /// 验证成员分支：90秒超时等待逻辑存在
-    ///
-    /// **Validates: Requirements 3.1**
-    /// </summary>
-    [Fact]
-    public void Preservation_MemberBranch_TimeoutWaitLogicExists()
+    [Theory]
+    [InlineData(true, true, false, 1)]
+    [InlineData(false, true, false, 2)]
+    [InlineData(false, false, false, 2)]
+    [InlineData(false, true, true, 2)]
+    public async Task MemberRouteWaitDistinguishesEmptyUploadFromTimeout(
+        bool initiallyUploaded, bool finallyUploaded, bool lateNonEmpty, int expectedReads)
     {
-        var lines = GetLines();
-        var content = string.Join("\n", lines);
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        var reads = new List<GatewayEnvelope>();
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            reads.Add(request);
+            var uploaded = reads.Count == 1 ? initiallyUploaded : finallyUploaded;
+            var names = reads.Count == 2 && lateNonEmpty ? new[] { "late-route.json" } : Array.Empty<string>();
+            return Task.FromResult(new GatewayEnvelope
+            {
+                Name = request.Name,
+                Type = GatewayProtocol.MessageTypes.Response,
+                Payload = GatewayEnvelope.ToPayload(new { value = new { uploaded, routeNames = names } })
+            });
+        };
 
-        // 90秒超时
-        Assert.Contains("TimeSpan.FromSeconds(90)", content);
+        var task = new AutoHoeingTask();
+        if (!finallyUploaded)
+        {
+            var error = await Assert.ThrowsAsync<HoeingStartupException>(
+                () => task.ReadMemberHostRoutesAsync(client, TimeSpan.Zero));
+            Assert.Equal("房主路线列表", error.Stage);
+        }
+        else
+        {
+            var routes = await task.ReadMemberHostRoutesAsync(client, TimeSpan.Zero);
+            if (lateNonEmpty)
+                Assert.Equal("late-route.json", Assert.Single(routes));
+            else
+                Assert.Empty(routes);
+        }
 
-        // 超时日志（multiplayer-host-empty-route-member-wait-timeout-fix 后文案含"房主未上传"）
-        Assert.Contains("等待房主上传路线列表超时（90秒", content);
+        Assert.Equal(expectedReads, reads.Count);
+        Assert.All(reads, request =>
+        {
+            Assert.Equal(GatewayProtocol.Names.RoomGetState, request.Name);
+            Assert.Equal(GatewayProtocol.StateSections.HostRouteListStatus, request.GetString("section"));
+        });
+    }
+
+    [Fact]
+    public async Task ConfirmedEmptyHostUploadMarksTheCooperativeRoundEmpty()
+    {
+        await using var client = new CoordinatorClient
+        {
+            _testIsConnectedOverride = true,
+            HostPlayerUid = "room-host"
+        };
+        var reads = new List<GatewayEnvelope>();
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            reads.Add(request);
+            return Task.FromResult(new GatewayEnvelope
+            {
+                Name = request.Name,
+                Type = GatewayProtocol.MessageTypes.Response,
+                Payload = GatewayEnvelope.ToPayload(new
+                {
+                    value = new { uploaded = true, routeNames = Array.Empty<string>() }
+                })
+            });
+        };
+        var task = new AutoHoeingTask();
+        const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+        var type = typeof(AutoHoeingTask);
+        type.GetField("_config", privateInstance)!.SetValue(task,
+            new AutoHoeingConfig { MultiplayerEnabled = true, PlayerUid = "room-member" });
+        type.GetField("_coordinatorClientRef", privateInstance)!.SetValue(task, client);
+        var scopeType = type.GetNestedType("CooperativeTaskScope", BindingFlags.NonPublic)!;
+        var scope = Activator.CreateInstance(scopeType, nonPublic: true)!;
+        var entry = type.GetMethod("ProcessRoutesByGroupCore", privateInstance)!;
+        var route = new RouteInfo { FileName = "local-only.json", Selected = true, Group = 1 };
+        var routes = new List<RouteInfo> { route };
+
+        await Assert.IsAssignableFrom<Task>(entry.Invoke(task, [routes, "test", null, scope]));
+
+        Assert.True((bool)scopeType.GetProperty("EmptyRound")!.GetValue(scope)!);
+        var request = Assert.Single(reads);
+        Assert.Equal(GatewayProtocol.Names.RoomGetState, request.Name);
+        Assert.Equal(GatewayProtocol.StateSections.HostRouteListStatus, request.GetString("section"));
+        var handler = typeof(CoordinatorClient).GetField(nameof(CoordinatorClient.HostRouteListReady), privateInstance)!;
+        Assert.Null(handler.GetValue(client));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -208,22 +287,26 @@ public class SingleModeNullRefPreservationTest
         Assert.Contains("_config.GroupIndex", content);
     }
 
-    /// <summary>
-    /// 验证 CD 检查逻辑（IsOnCooldown）在 ProcessRoutesByGroup 中存在
-    ///
-    /// **Validates: Requirements 3.3**
-    /// </summary>
-    [Fact]
-    public void Preservation_SingleMode_CdCheckLogicExists()
+    [Theory]
+    [InlineData(false, 0, true, true)]
+    [InlineData(false, 0, false, false)]
+    [InlineData(false, 1, true, false)]
+    [InlineData(true, 0, true, false)]
+    public void LocalCooldownOnlySkipsUnforcedSoloRoutes(
+        bool multiplayer, int startIndex, bool onCooldown, bool expectedSkip)
     {
-        var lines = GetLines();
-        var content = string.Join("\n", lines);
+        var task = new AutoHoeingTask();
+        const BindingFlags privateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+        typeof(AutoHoeingTask).GetField("_config", privateInstance)!.SetValue(task,
+            new AutoHoeingConfig { MultiplayerEnabled = multiplayer, StartRouteIndex = startIndex });
+        var route = new RouteInfo { FileName = "route.json", NormalMonsterCount = 1 };
+        if (onCooldown)
+        {
+            var cdManager = (CdManager)typeof(AutoHoeingTask).GetField("_cdManager", privateInstance)!.GetValue(task)!;
+            cdManager.RecordCompletion(route, duration: 60);
+        }
 
-        // CD 检查
-        Assert.Contains("_cdManager.IsOnCooldown", content);
-
-        // StartRouteIndex 条件（跳过 CD 检查的条件）
-        Assert.Contains("_config.StartRouteIndex > 0", content);
+        Assert.Equal(expectedSkip, task.ShouldSkipRouteOnLocalCooldown(route));
     }
 
     // ─────────────────────────────────────────────────────────────────────────

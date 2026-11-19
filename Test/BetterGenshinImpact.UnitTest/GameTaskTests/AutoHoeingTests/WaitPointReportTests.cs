@@ -18,102 +18,68 @@ public class WaitPointReportTests
     
     [Property(MaxTest = 200)]
     public bool WaitPointReport_Creation_IsValidWithRequiredFields(
-        string playerUid, string routeId, string syncPointId, int worldRound)
+        PositiveInt player, NonNegativeInt segment, NonNegativeInt worldRound)
     {
-        // 过滤无效输入
-        if (string.IsNullOrEmpty(playerUid) || string.IsNullOrEmpty(routeId) || string.IsNullOrEmpty(syncPointId))
-            return true; // 跳过无效输入
-        
-        var report = new WaitPointReport(playerUid, routeId, syncPointId, worldRound);
-        
-        // 验证基本属性
-        var isValid = report.PlayerUid == playerUid
+        var playerUid = $"player-{player.Get}";
+        var routeId = $"Route_{segment.Get}";
+        var syncPointId = $"map_route_{segment.Get}_1";
+        var report = new WaitPointReport(playerUid, routeId, syncPointId, worldRound.Get);
+
+        return report.PlayerUid == playerUid
             && report.RouteId == routeId
             && report.SyncPointId == syncPointId
-            && report.WorldRound == worldRound
-            && report.ReportedTime <= DateTime.UtcNow
-            && report.ExpiryTime.HasValue
-            && report.ExpiryTime.Value > report.ReportedTime;
-        
-        // 验证 IsValid 方法
-        var validationResult = report.IsValid();
-        
-        return isValid && validationResult;
+            && report.WorldRound == worldRound.Get
+            && report.ExpiryTime > report.ReportedTime
+            && report.IsValid();
     }
-    
-    // ========== Property 2: WaitPointReport 过期检查 ==========
-    
+
     [Property(MaxTest = 200)]
-    public bool WaitPointReport_ExpiryCheck_WorksCorrectly(
-        string playerUid, string routeId, string syncPointId, int worldRound, int secondsToAdd)
+    public bool WaitPointReport_ExpiryCheck_WorksCorrectly(int secondsToAdd)
     {
-        // 过滤无效输入
-        if (string.IsNullOrEmpty(playerUid) || string.IsNullOrEmpty(routeId) || string.IsNullOrEmpty(syncPointId))
-            return true; // 跳过无效输入
-        
-        var report = new WaitPointReport(playerUid, routeId, syncPointId, worldRound);
-        
-        // 测试延长过期时间
-        var originalExpiry = report.ExpiryTime;
+        var initial = DateTime.UnixEpoch;
+        var report = new WaitPointReport("test", "Route_1", "map_route_1_1", 1) { ExpiryTime = initial };
+
         report.ExtendExpiry(TimeSpan.FromSeconds(secondsToAdd));
-        
-        var extendedCorrectly = !originalExpiry.HasValue || report.ExpiryTime!.Value > originalExpiry.Value;
-        
-        // 测试 IsExpired 方法（新创建的报告不应过期）
-        var notExpired = !report.IsExpired();
-        
-        return extendedCorrectly && notExpired;
+
+        return report.ExpiryTime == initial.AddSeconds(secondsToAdd);
     }
-    
-    // ========== Property 3: WaitPointReport 路线索引提取 ==========
-    
-    [Property(MaxTest = 200)]
-    public bool WaitPointReport_ExtractRouteIndex_HandlesVariousFormats(
-        string routeIdPrefix, int routeIndex)
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WaitPointReport_ExpiryCheck_UsesTheDeadline(bool expired)
     {
-        // 生成各种格式的路线ID
-        var routeId1 = $"{routeIdPrefix}_{routeIndex}";
-        var routeId2 = $"Route{routeIndex}";
-        var routeId3 = $"Path_{routeIndex}_segment";
-        
-        var report1 = new WaitPointReport("test", routeId1, "sync_1_1", 1);
-        var report2 = new WaitPointReport("test", routeId2, "sync_1_1", 1);
-        var report3 = new WaitPointReport("test", routeId3, "sync_1_1", 1);
-        
-        // 提取路线索引
-        var index1 = report1.ExtractRouteIndex();
-        var index2 = report2.ExtractRouteIndex();
-        var index3 = report3.ExtractRouteIndex();
-        
-        // 验证格式1和3应该能提取出索引
-        var format1Valid = routeId1.Contains("_") ? index1 == routeIndex : true;
-        var format3Valid = routeId3.Contains("_") ? index3 == routeIndex : true;
-        
-        // 格式2可能提取不出，取决于是否有数字
-        var format2Valid = true; // 不强制要求
-        
-        return format1Valid && format2Valid && format3Valid;
+        var report = new WaitPointReport("test", "Route_1", "map_route_1_1", 1)
+        {
+            ExpiryTime = expired ? DateTime.MinValue : DateTime.MaxValue
+        };
+
+        Assert.Equal(expired, report.IsExpired());
+        Assert.Equal(!expired, report.IsValid());
     }
-    
-    // ========== Property 4: WaitPointReport 同步点标识验证 ==========
-    
+
     [Property(MaxTest = 200)]
-    public bool WaitPointReport_SyncPointIdValidation_WorksCorrectly(
-        string syncPointId)
+    public bool WaitPointReport_ExtractRouteIndex_HandlesVariousFormats(NonNegativeInt routeIndex)
     {
-        var report = new WaitPointReport("test", "Route_1", syncPointId, 1);
-        
-        // 验证 IsValidSyncPointId 方法
-        var isValid = report.IsValidSyncPointId();
-        
-        // 同步点标识应包含下划线分隔的部分
-        var expectedValid = !string.IsNullOrEmpty(syncPointId) 
-            && syncPointId.Contains("_") 
-            && syncPointId.Split('_').Length >= 3;
-        
-        return isValid == expectedValid;
+        var index = routeIndex.Get;
+        var suffix = new WaitPointReport("test", $"Area12_{index}", "map_route_1_1", 1);
+        var embedded = new WaitPointReport("test", $"Path_{index}_segment", "map_route_1_1", 1);
+        var withoutIndex = new WaitPointReport("test", "Unknown_route", "map_route_1_1", 1);
+
+        return suffix.ExtractRouteIndex() == index
+            && embedded.ExtractRouteIndex() == index
+            && withoutIndex.ExtractRouteIndex() == null;
     }
-    
+
+    [Property(MaxTest = 200)]
+    public bool WaitPointReport_SyncPointIdValidation_WorksCorrectly(NonNegativeInt segment, NonNegativeInt fight)
+    {
+        var valid = new WaitPointReport("test", "Route_1", $"map_route_{segment.Get}_{fight.Get}", 1);
+        var missingPart = new WaitPointReport("test", "Route_1", $"route_{segment.Get}_{fight.Get}", 1);
+
+        return valid.IsValidSyncPointId() && !missingPart.IsValidSyncPointId();
+    }
+
     // ========== Property 5: WaitPointReport 克隆功能 ==========
     
     [Property(MaxTest = 200)]
