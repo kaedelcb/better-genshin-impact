@@ -191,7 +191,7 @@ public static class AvatarCombatSpecialization
                     break;
                 }
 
-                // 第 1 槽固定标空，每帧最多检测到 5 发有效子弹
+                // 每帧检测有效子弹数量（子弹按顺序填充，0-6）
                 var (bulletStatusChars, _, _, _) = AnalyzeAllChascaBullets();
                 var effectiveBulletCount = bulletStatusChars.Count(c => c != '空');
                 // 子弹类型直接使用检测结果：火/水/雷/冰/空
