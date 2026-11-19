@@ -375,6 +375,7 @@ body{font-size:14px}
 .overview-card:has(.overview-card-open:focus-visible){outline:2px solid var(--gold);outline-offset:3px}
 .overview-card-meta,.room-code-title{display:flex;align-items:center;gap:6px}
 .overview-card-meta{justify-content:space-between}
+.overview-card-meta .room-note-button{max-width:55%;overflow:hidden;text-overflow:ellipsis;text-align:right}
 .overview-card-open{min-height:24px;margin:-3px 0;padding:0;background:none;border:0;color:var(--gold)}
 .overview-card-open::after{content:"";position:absolute;inset:0;border-radius:inherit}
 .overview-card-open:hover,.overview-card-open:focus-visible{background:none;text-decoration:underline;text-underline-offset:3px}

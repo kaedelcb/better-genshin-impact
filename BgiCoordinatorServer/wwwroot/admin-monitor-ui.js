@@ -62,8 +62,10 @@ function showRoomFeedback(message) {
   roomFeedbackTimer = setTimeout(() => { status.textContent = ''; }, 3500);
 }
 
-function roomNoteButton(room) {
-  const button = action(room.note ? '编辑备注' : '添加备注', () => {
+function roomNoteButton(room, showNote = false) {
+  const label = room.note ? '编辑备注' : '添加备注';
+  const note = showNote ? room.note : null;
+  const button = action(note || label, () => {
     activeNoteCode = room.code;
     $('roomNoteCode').textContent = room.code;
     $('roomNoteInput').value = room.note || '';
@@ -72,7 +74,8 @@ function roomNoteButton(room) {
   }, 'text-button room-note-button');
   button.dataset.roomAction = 'note';
   button.disabled = snapshot?.controlRoomNotesUnavailable === true;
-  button.setAttribute('aria-label', `${button.textContent} · ${room.code}`);
+  button.setAttribute('aria-label', note ? `${note} · ${label} · ${room.code}` : `${label} · ${room.code}`);
+  if (note) button.title = `${note} · ${label}`;
   return button;
 }
 
@@ -327,9 +330,8 @@ function renderOverview() {
       r.onlineCount ? '在线 · 未锄地' : '无人在线', game ? r.status : running ? 'running' : r.onlineCount ? '' : 'disconnected'));
     const meta = node('div', 'overview-card-meta');
     meta.append(node('span', 'history-note', `${game ? '世界' : '助手'}房间 · 在线 ${r.onlineCount} / ${r.memberCount}`));
-    if (!game) meta.append(roomNoteButton(r));
+    if (!game) meta.append(roomNoteButton(r, true));
     card.append(top, meta);
-    if (!game && r.note) card.append(roomNoteText(r.note));
     card.append(memberSummary(r.members), node('div', 'history-note', game ?
       (r.worldRound ? `世界轮次 ${r.worldRound} · ` : '') + `线路 ${route(r)}` : cardHoeing(r.todayHoeing)));
     const open = action('查看详情', () => {
