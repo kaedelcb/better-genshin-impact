@@ -2257,7 +2257,7 @@ public partial class AutoHoeingTask : ISoloTask
             _worldStateMonitor?.BeginRoundSwitch(120);
             await SyncRoundEndAsync(-1, client);
             var previousHost = client.IsHost;
-            if (!previousHost) client.RetirePreviousRoundRoom();
+            if (!previousHost) client.MarkPreviousRoundRoomForDeparture();
             await LeaveCurrentWorldAsync(previousHost, client);
             await DisposeRoundCoordinatorAsync();
         }
@@ -2380,7 +2380,7 @@ public partial class AutoHoeingTask : ISoloTask
                 // 墙钟兜底同样以 120s 为基准 + 60s 余量 = 180s，确保兜底 > 集合点超时。
                 _worldStateMonitor?.BeginRoundSwitch(120);
                 await SyncRoundEndAsync(round, client);
-                if (!amIHost) client.RetirePreviousRoundRoom();
+                if (!amIHost) client.MarkPreviousRoundRoomForDeparture();
 
                 // 离开世界：成员先主动离开，房主等待后再关闭房间
                 // 这样避免房主关闭房间时成员还在执行 LeaveWorldAsync 的竞态

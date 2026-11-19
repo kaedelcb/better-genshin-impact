@@ -56,7 +56,9 @@ public partial class CoordinatorClient : IAsyncDisposable
         public TaskCompletionSource<bool> Ready { get; set; } = NewReady();
         public bool Ended { get; set; }
         public long RecoveryStarted { get; set; }
+        public bool LeavingForNextRound { get; set; }
         public long TransportGeneration { get; set; }
+        public long ReadyTransportGeneration { get; set; }
         public string? TransportId { get; set; }
     }
     private static TaskCompletionSource<bool> NewReady() => new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -101,6 +103,7 @@ public partial class CoordinatorClient : IAsyncDisposable
             if (!IsCurrent(session) || expectedTransportGeneration.HasValue
                 && !IsCurrentTransport(session, expectedTransportGeneration.Value)) return;
             session.TransportId = CurrentTransportId;
+            session.ReadyTransportGeneration = session.TransportGeneration;
             _isInRoom = true;
             _isReconnecting = false;
             session.RecoveryStarted = 0;
@@ -803,6 +806,7 @@ public partial class CoordinatorClient : IAsyncDisposable
     private async Task RestoreRoomAsync(RoomSession session, CancellationToken ct, long? expectedTransportGeneration = null)
     {
         long generation;
+        RetirePreviousRoundRoomIfTransportLost();
         lock (_roomLock) generation = expectedTransportGeneration ?? session.TransportGeneration;
         var helloConfirmed = false;
         var waitingForOldConnection = false;
@@ -870,6 +874,7 @@ public partial class CoordinatorClient : IAsyncDisposable
         // SignalR 事件异步投递：迟到的旧连接回调不能接管当前传输。
         if (CurrentTransportId is { } currentId && currentId != newConnectionId
             || _testIsConnectedOverride == null && !IsConnected) return;
+        RetirePreviousRoundRoomIfTransportLost();
         if (IsWorldPlanTransferring)
         {
             await RecoverWorldPlanTransportAsync(false);
@@ -918,6 +923,7 @@ public partial class CoordinatorClient : IAsyncDisposable
 
     internal Task OnReconnecting(Exception? error)
     {
+        RetirePreviousRoundRoomIfTransportLost();
         lock (_roomLock)
         {
             if (_roomSession is { Ended: false } session)

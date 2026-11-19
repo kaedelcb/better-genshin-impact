@@ -40,16 +40,24 @@ public sealed class NextRoundTransportRecoveryTests
         Assert.Equal(new[] { "session.hello", host ? "room.create" : "room.listOnline" }, link.Calls);
     }
 
-    [Fact]
-    public async Task MemberMissingRoomClosedEventCanRecoverAfterReconnectExhaustion()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task MemberMissingRoomClosedEventCanRecoverAfterReconnectExhaustion(bool notifyDisconnect)
     {
         await using var link = new TestTransport(HubConnectionState.Connected);
         Assert.True(await link.Client.JoinRoomAsync("old-room", "member", "member-uid"));
-        link.Client.RetirePreviousRoundRoom();
-        Assert.False(link.Client.IsInRoom);
+        link.Client.MarkPreviousRoundRoomForDeparture();
+        Assert.True(link.Client.IsInRoom);
         link.State = HubConnectionState.Disconnected;
+        if (notifyDisconnect)
+        {
+            await link.Client.OnReconnecting(null);
+            Assert.False(link.Client.IsInRoom);
+        }
 
         Assert.True(await link.WaitAsync());
+        Assert.False(link.Client.IsInRoom);
         var room = Assert.Single(await link.Client.GetOnlineRoomsAsync());
         Assert.True(await link.Client.JoinRoomAsync(room.Code, "member", "member-uid"));
         Assert.True(link.Client.IsInRoom);
@@ -89,6 +97,80 @@ public sealed class NextRoundTransportRecoveryTests
 
         Assert.True(await link.WaitAsync());
         Assert.Equal(new[] { "room.join" }, link.Calls);
+    }
+
+    [Fact]
+    public async Task DepartingMemberKeepsSendingHeartbeatsWhileStillConnected()
+    {
+        await using var link = new TestTransport(HubConnectionState.Connected);
+        link.Client._testConnectionIdOverride = "old-connection";
+        Assert.True(await link.Client.JoinRoomAsync("old-room", "member", "member-uid"));
+
+        link.Client.MarkPreviousRoundRoomForDeparture();
+        await link.Client.OnReconnecting(null); // An old callback cannot retire the same live transport.
+        await link.Client.SendHeartbeatAsync();
+
+        Assert.True(link.Client.IsInRoom);
+        Assert.Equal(new[] { "room.join", "session.heartbeat" }, link.Calls);
+    }
+
+
+    [Fact]
+    public async Task ReconnectedCallbackCannotRejoinDepartingRoom()
+    {
+        await using var link = new TestTransport(HubConnectionState.Connected);
+        link.Client._testConnectionIdOverride = "old-connection";
+        Assert.True(await link.Client.JoinRoomAsync("old-room", "member", "member-uid"));
+        link.Client.MarkPreviousRoundRoomForDeparture();
+
+        link.Client._testConnectionIdOverride = "next-connection";
+        await link.Client.OnReconnected("next-connection");
+
+        Assert.False(link.Client.IsInRoom);
+        Assert.Equal(new[] { "room.join" }, link.Calls);
+    }
+
+    [Fact]
+    public async Task MarkingDepartureCancelsOldRoomRestoreAlreadyInProgress()
+    {
+        await using var link = new TestTransport(HubConnectionState.Connected);
+        link.Client._testConnectionIdOverride = "old-connection";
+        Assert.True(await link.Client.JoinRoomAsync("old-room", "member", "member-uid"));
+
+        var helloStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHello = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invoke = link.Gateway._testInvokeOverride!;
+        link.Gateway._testInvokeOverride = async (method, request, ct) =>
+        {
+            if (request.Name == GatewayProtocol.Names.SessionHello)
+            {
+                helloStarted.SetResult();
+                await releaseHello.Task.WaitAsync(ct);
+                ct.ThrowIfCancellationRequested();
+            }
+            return await invoke(method, request, ct);
+        };
+        string? failure = null;
+        link.Client.SessionFailed += reason => failure = reason;
+
+        link.State = HubConnectionState.Reconnecting;
+        await link.Client.OnReconnecting(null);
+        link.Client._testConnectionIdOverride = "next-connection";
+        link.State = HubConnectionState.Connected;
+        var recovery = link.Client.OnReconnected("next-connection");
+        try
+        {
+            await helloStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            link.Client.MarkPreviousRoundRoomForDeparture();
+        }
+        finally { releaseHello.TrySetResult(); }
+        await recovery.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.False(link.Client.IsInRoom);
+        Assert.Null(failure);
+        Assert.Equal(new[] { "room.join" }, link.Calls);
+        Assert.True(await link.Client.JoinRoomAsync("next-room", "member", "member-uid"));
+        Assert.True(link.Client.IsInRoom);
     }
 
     private sealed class TestTransport : IAsyncDisposable
