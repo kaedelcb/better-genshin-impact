@@ -181,8 +181,10 @@ public static class AvatarCombatSpecialization
                 var chascaRotateLimit = TaskContext.Instance().Config.AutoFightConfig.ChascaRotateCountLimit;
                 var chascaFrameMs = TaskContext.Instance().Config.AutoFightConfig.SpecializedFrameIntervalMs;
 
-                // 退出条件
-                if (!IsFlying())
+                // 在同一张截图上判断姿态、血条和伤害数字。
+                using var drawRegion = CaptureToRectArea();
+                var scale = GetChascaFrameScale(drawRegion);
+                if (!IsFlying(drawRegion))
                 {
                     break;
                 }
@@ -216,118 +218,114 @@ public static class AvatarCombatSpecialization
                 }
 
                 // 血条检测
-                var bloodBars = FindBloodBars();
-                var regularBars = bloodBars.Where(b => !IsLegendaryBar(b.y)).ToList();
-                var legendaryBars = bloodBars.Where(b => IsLegendaryBar(b.y)).ToList();
-                // 传奇已被击杀检测：曾出现传奇血条，现在不再存在且子弹不再变动 → 退出
-                if (hadLegendaryBar && legendaryBars.Count == 0)
+                var bloodBars = FindBloodBars(drawRegion, scale);
+                var regularBars = bloodBars.Where(b => !IsLegendaryBar((int)(b.y / scale))).ToList();
+                var legendaryBars = bloodBars.Where(b => IsLegendaryBar((int)(b.y / scale))).ToList();
+                var damageFound = bloodBars.Count == 0 &&
+                    TryAimAtChascaDamage(drawRegion, dpi, chascaFrameMs, ct, targetX, targetY);
+                if (ShouldExitAfterChascaLegendaryLost(
+                    ref legendaryLostFrames, hadLegendaryBar && legendaryBars.Count == 0, damageFound,
+                    (DateTime.UtcNow - lastBulletPatternTime).TotalSeconds, chascaInterval))
                 {
-                    legendaryLostFrames++;
-                    if (legendaryLostFrames >= 2 &&
-                        (DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval)
+                    Logger.LogInformation("传奇血条消失且子弹不再变动，推测已击杀，退出循环");
+                    break;
+                }
+                if (regularBars.Count > 0 && legendaryBars.Count == 0)
+                {
+                    // 逻辑1：有普通血条，且无传奇血条 → 索敌
+                    Logger.LogInformation("识别到{Count}个血条", regularBars.Count);
+                    var nearest = regularBars
+                        .OrderBy(b => Math.Pow(b.x - targetX * scale, 2) + Math.Pow(b.y - targetY * scale, 2))
+                        .First();
+                    var drawList = regularBars
+                        .Select(b =>
+                        {
+                            var rect = new Rect(b.x, b.y, b.width, b.height);
+                            if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
+                                return drawRegion.ToMaskWindowDrawingRect(rect, new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2));
+                            return drawRegion.ToMaskWindowDrawingRect(rect);
+                        })
+                        .ToList();
+                    drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
+                    consecutiveNoBlood = 0;
+                    hadBloodBar = true;
+                    var offsetX = nearest.x - targetX * scale;
+                    var offsetY = nearest.y - targetY * scale;
+                    InputHub.Foreground.Mouse.MoveMouseBy(
+                        (int)(offsetX * dpi * 0.45),
+                        (int)(offsetY * dpi * 0.80));
+                    Sleep(4 * chascaFrameMs, ct);
+                }
+                else if (legendaryBars.Count > 0)
+                {
+                    // 逻辑3：有传奇血条 → 根据子弹填充状态判断
+                    var drawList = legendaryBars
+                        .Select(lb => drawRegion.ToMaskWindowDrawingRect(new Rect(lb.x, lb.y, lb.width, lb.height), new System.Drawing.Pen(System.Drawing.Color.Orange, 2)))
+                        .ToList();
+                    drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
+                    consecutiveNoBlood = 0;
+                    hadBloodBar = true;
+                    hadLegendaryBar = true;
+
+                    if ((DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval * rotateIntervalMultiplier)
                     {
-                        Logger.LogInformation("传奇血条消失且子弹不再变动，推测已击杀，退出循环");
-                        break;
+                        Logger.LogInformation("传奇：子弹模式在{Count}种状态间变化超过{Interval}s，旋转搜索（倍率={Mult}）", distinctBulletPatterns.Count, chascaInterval * rotateIntervalMultiplier, rotateIntervalMultiplier);
+                        InputHub.Foreground.Mouse.MoveMouseBy(
+                            (int)(500 * dpi * chascaX),
+                            (int)(50 * 0.23 * 8 * dpi * chascaY));
+                        Sleep(6 * chascaFrameMs, ct);
+                        distinctBulletPatterns.Clear();
+                        lastBulletPatternTime = DateTime.UtcNow;
+                        rotateIntervalMultiplier = 1.0;
+                        ocrResetCount = 0;
+                    }
+                    else
+                    {
+                        // 子弹变动中且有传奇血条，尝试OCR寻敌
+                        if (TryAimAtChascaDamage(drawRegion, dpi, chascaFrameMs, ct, targetX, targetY))
+                        {
+                            // OCR命中 → 重置旋转超时（认为还在打）
+                            if (ocrResetCount < ocrResetCap)
+                            {
+                                lastBulletPatternTime = DateTime.UtcNow;
+                                ocrResetCount++;
+                            }
+                        }
+                        else
+                        {
+                            Sleep(chascaFrameMs, ct);
+                        }
                     }
                 }
                 else
                 {
-                    legendaryLostFrames = 0;
-                }
-                using (var drawRegion = CaptureToRectArea())
-                {
-                    if (regularBars.Count > 0 && legendaryBars.Count == 0)
+                    // 无血条时先用伤害数字追踪，丢失目标后再旋转搜索。
+                    drawRegion.DrawingBoard.Clear("ChascaBloodBars");
+                    if (damageFound)
                     {
-                        // 逻辑1：有普通血条，且无传奇血条 → 索敌
-                        Logger.LogInformation("识别到{Count}个血条", regularBars.Count);
-                        var nearest = regularBars
-                            .OrderBy(b => Math.Pow(b.x - targetX, 2) + Math.Pow(b.y - targetY, 2))
-                            .First();
-                        var drawList = regularBars
-                            .Select(b =>
-                            {
-                                var rect = new Rect(b.x, b.y, b.width, b.height);
-                                if (b.x == nearest.x && b.y == nearest.y && b.width == nearest.width && b.height == nearest.height)
-                                    return drawRegion.ToMaskWindowDrawingRect(rect, new System.Drawing.Pen(System.Drawing.Color.LimeGreen, 2));
-                                return drawRegion.ToMaskWindowDrawingRect(rect);
-                            })
-                            .ToList();
-                        drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
                         consecutiveNoBlood = 0;
-                        hadBloodBar = true;
-                        var offsetX = nearest.x - targetX;
-                        var offsetY = nearest.y - targetY;
-                        InputHub.Foreground.Mouse.MoveMouseBy(
-                            (int)(offsetX * dpi * 0.45),
-                            (int)(offsetY * dpi * 0.80));
-                        Sleep(4 * chascaFrameMs, ct);
+                        hadBloodBar = false;
                     }
-                    else if (legendaryBars.Count > 0)
+                    else if (hadBloodBar)
                     {
-                        // 逻辑3：有传奇血条 → 根据子弹填充状态判断
-                        var drawList = legendaryBars
-                            .Select(lb => drawRegion.ToMaskWindowDrawingRect(new Rect(lb.x, lb.y, lb.width, lb.height), new System.Drawing.Pen(System.Drawing.Color.Orange, 2)))
-                            .ToList();
-                        drawRegion.DrawingBoard.Set("ChascaBloodBars", drawList);
-                        consecutiveNoBlood = 0;
-                        hadBloodBar = true;
-                        hadLegendaryBar = true;
-
-                        if ((DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval * rotateIntervalMultiplier)
-                        {
-                            Logger.LogInformation("传奇：子弹模式在{Count}种状态间变化超过{Interval}s，旋转搜索（倍率={Mult}）", distinctBulletPatterns.Count, chascaInterval * rotateIntervalMultiplier, rotateIntervalMultiplier);
-                            InputHub.Foreground.Mouse.MoveMouseBy(
-                                (int)(500 * dpi * chascaX),
-                                (int)(50 * 0.23 * 8 * dpi * chascaY));
-                            Sleep(6 * chascaFrameMs, ct);
-                            distinctBulletPatterns.Clear();
-                            lastBulletPatternTime = DateTime.UtcNow;
-                            rotateIntervalMultiplier = 1.0;
-                            ocrResetCount = 0;
-                        }
-                        else
-                        {
-                            // 子弹变动中且有传奇血条，尝试OCR寻敌
-                            if (OcrSeekEnemy(dpi, chascaFrameMs, ct))
-                            {
-                                // OCR命中 → 重置旋转超时（认为还在打）
-                                if (ocrResetCount < ocrResetCap)
-                                {
-                                    lastBulletPatternTime = DateTime.UtcNow;
-                                    ocrResetCount++;
-                                }
-                            }
-                            else
-                            {
-                                Sleep(chascaFrameMs, ct);
-                            }
-                        }
+                        // 刚从有血条切换到无血条，容错一帧不旋转
+                        hadBloodBar = false;
+                        Logger.LogInformation("血条丢失，容错一帧");
+                        Sleep(2 * chascaFrameMs, ct);
                     }
                     else
                     {
-                        // 逻辑2：无任何血条 → 旋转
-                        drawRegion.DrawingBoard.Clear("ChascaBloodBars");
-                        if (hadBloodBar)
+                        consecutiveNoBlood++;
+                        rotationCount++;
+                        Logger.LogInformation("无血条，进行旋转（第{Count}次）", consecutiveNoBlood);
+                        if (consecutiveNoBlood >= chascaRotateLimit)
                         {
-                            // 刚从有血条切换到无血条，容错一帧不旋转
-                            hadBloodBar = false;
-                            Logger.LogInformation("血条丢失，容错一帧");
-                            Sleep(2 * chascaFrameMs, ct);
+                            break;
                         }
-                        else
-                        {
-                            consecutiveNoBlood++;
-                            rotationCount++;
-                            Logger.LogInformation("无血条，进行旋转（第{Count}次）", consecutiveNoBlood);
-                            if (consecutiveNoBlood >= chascaRotateLimit)
-                            {
-                                break;
-                            }
-                            InputHub.Foreground.Mouse.MoveMouseBy(
-                                (int)(500 * dpi * chascaX),
-                                rotationCount % 5 == 0 ? (int)(50 * 0.23 * 4 * dpi * chascaY) : 0);
-                            Sleep(6 * chascaFrameMs, ct);
-                        }
+                        InputHub.Foreground.Mouse.MoveMouseBy(
+                            (int)(500 * dpi * chascaX),
+                            rotationCount % 5 == 0 ? (int)(50 * 0.23 * 4 * dpi * chascaY) : 0);
+                        Sleep(6 * chascaFrameMs, ct);
                     }
                 }
             }
@@ -396,13 +394,17 @@ public static class AvatarCombatSpecialization
 
     public static List<(int x, int y, int width, int height)> FindBloodBars(ImageRegion? existingCapture = null)
     {
-        var results = new List<(int x, int y, int width, int height)>();
-
         using var image = CaptureToRectArea();
+        return FindBloodBars(image, 1.0);
+    }
+
+    private static List<(int x, int y, int width, int height)> FindBloodBars(ImageRegion image, double scale)
+    {
+        var results = new List<(int x, int y, int width, int height)>();
         var bloodLower = new Scalar(255, 90, 90); // BGR 红色
 
-        using Mat mask = OpenCvCommonHelper.Threshold(
-            image.DeriveCrop(0, 0, 1500, 900).SrcMat, bloodLower);
+        using var bloodRegion = image.DeriveCrop(0, 0, 1500 * scale, 900 * scale);
+        using Mat mask = OpenCvCommonHelper.Threshold(bloodRegion.SrcMat, bloodLower);
 
         using Mat labels = new Mat();
         using Mat stats = new Mat();
@@ -418,58 +420,42 @@ public static class AvatarCombatSpecialization
             if (row.GetArray(out int[] arr))
             {
                 int x = arr[0], y = arr[1], width = arr[2], height = arr[3];
-                if (y < 50)
+                if (y < 50 * scale)
                     continue;
                 results.Add((x, y, width, height));
             }
         }
 
         // 自动更新传奇血条动态追踪
-        UpdateLegendaryBarTracker(results.Select(r => r.y));
+        UpdateLegendaryBarTracker(results.Select(r => (int)(r.y / scale)));
 
         return results;
     }
 
-    /// <summary>
-    /// OCR寻敌 — 仅传奇模式使用。
-    /// 在 450,240-1600,900 区域进行OCR识别，按文字区域大小加权计算目标中心，移动视角朝向该坐标。
-    /// 力度为普通血条对准的 1/3 (0.45→0.15, 0.80→0.27)。
-    /// </summary>
-    public static bool OcrSeekEnemy(double dpi, int frameMs, CancellationToken ct, double targetX = 960, double targetY = 500)
+    internal static bool ShouldExitAfterChascaLegendaryLost(
+        ref int lostFrames, bool legendaryLost, bool damageFound, double secondsSinceBulletChange, double interval)
     {
-        using var ra = CaptureToRectArea();
-        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
-
-        if (ocrResults == null || ocrResults.Count == 0)
-            return false;
-
-        var validResults = ocrResults.Where(r => !string.IsNullOrWhiteSpace(r.Text) && !r.Text.StartsWith("+")).ToList();
-        if (validResults.Count == 0)
-            return false;
-
-        // 按面积加权计算中心
-        double totalWeight = 0, wx = 0, wy = 0;
-        foreach (var r in validResults)
+        if (!legendaryLost || damageFound)
         {
-            double w = r.Width * r.Height;
-            wx += (r.X + r.Width / 2.0) * w;
-            wy += (r.Y + r.Height / 2.0) * w;
-            totalWeight += w;
+            lostFrames = 0;
+            return false;
+        }
+        return ++lostFrames >= 2 && secondsSinceBulletChange >= interval;
+    }
+
+    private static bool TryAimAtChascaDamage(ImageRegion capture, double dpi, int frameMs, CancellationToken ct, double targetX, double targetY)
+    {
+        var scale = GetChascaFrameScale(capture);
+        var damage = FindDamageNumber(capture, scale, excludeChascaBulletSlots: true);
+        if (damage is not { } target)
+        {
+            return false;
         }
 
-        double cx = wx / totalWeight;
-        double cy = wy / totalWeight;
-
-        var dx = cx - targetX;
-        var dy = cy - targetY;
-
-        InputHub.Foreground.Mouse.MoveMouseBy(
-            (int)(dx * dpi * 0.15),
-            (int)(dy * dpi * 0.27));
-
-        Logger.LogInformation("OCR寻敌：加权中心({Cx:F0},{Cy:F0}) 偏移({Dx:F0},{Dy:F0}) 共{Count}个文本",
-            cx, cy, dx, dy, validResults.Count);
-
+        var dx = target.centerX - targetX * scale;
+        var dy = target.centerY - targetY * scale;
+        InputHub.Foreground.Mouse.MoveMouseBy((int)(dx * dpi * 0.15), (int)(dy * dpi * 0.27));
+        Logger.LogInformation("OCR寻敌：伤害目标({Cx},{Cy}) 偏移({Dx:F0},{Dy:F0})", target.centerX, target.centerY, dx, dy);
         Sleep(frameMs, ct);
         return true;
     }
@@ -513,7 +499,22 @@ public static class AvatarCombatSpecialization
     public static bool IsFlying()
     {
         using var region = CaptureToRectArea();
-        var pixel = region.SrcMat.At<Vec3b>(1028, 1584);
+        return IsFlying(region);
+    }
+
+    internal static double GetChascaFrameScale(ImageRegion region)
+    {
+        return Math.Min(region.Width / 1920d, region.Height / 1080d);
+    }
+
+    internal static bool IsFlying(ImageRegion region)
+    {
+        var scale = GetChascaFrameScale(region);
+        if (scale <= 0)
+        {
+            return false;
+        }
+        var pixel = region.SrcMat.At<Vec3b>((int)(1028 * scale), (int)(1584 * scale));
         return pixel.Item0 >= 250 && pixel.Item1 >= 250 && pixel.Item2 >= 250;
     }
 
@@ -863,14 +864,35 @@ public static class AvatarCombatSpecialization
     /// </summary>
     public static (int centerX, int centerY, string text)? FindDamageNumber(ImageRegion? existingCapture = null)
     {
-        using var ra = existingCapture ?? CaptureToRectArea();
-        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
+        using var ownedCapture = existingCapture == null ? CaptureToRectArea() : null;
+        return FindDamageNumber(existingCapture ?? ownedCapture!, 1.0, excludeChascaBulletSlots: false);
+    }
 
+    private static (int centerX, int centerY, string text)? FindDamageNumber(
+        ImageRegion capture, double scale, bool excludeChascaBulletSlots)
+    {
+        var ocrResults = capture.FindMulti(RecognitionObject.Ocr(
+            (int)(450 * scale), (int)(240 * scale), (int)(1150 * scale), (int)(660 * scale)));
+        return SelectDamageNumber(ocrResults, scale, excludeChascaBulletSlots);
+    }
+
+    internal static (int centerX, int centerY, string text)? SelectDamageNumber(
+        IEnumerable<Region> ocrResults, double scale, bool excludeChascaBulletSlots)
+    {
         string[] reactionKeywords = ["免疫", "蒸发", "感电", "结晶", "扩散", "绽放", "冻结", "超载", "融化", "燃烧", "超导", "激化"];
         var validItems = new List<(int cx, int cy, int area, string text)>();
 
         foreach (var r in ocrResults)
         {
+            if (excludeChascaBulletSlots && ChascaBulletRects.Any(slot =>
+                r.X < (int)(slot.x * scale) + (int)(slot.w * scale)
+                && r.X + r.Width > (int)(slot.x * scale)
+                && r.Y < (int)(slot.y * scale) + (int)(slot.h * scale)
+                && r.Y + r.Height > (int)(slot.y * scale)))
+            {
+                continue;
+            }
+
             var text = r.Text?.Trim();
             if (string.IsNullOrEmpty(text)) continue;
 
