@@ -963,6 +963,7 @@ public partial class AutoHoeingTask : ISoloTask
             var serverUrl = CoordinatorServerAddress.Effective(_config.CoordinatorServerUrl);
             var maskedUrl = MaskServerUrl(serverUrl);
             _logger.LogInformation("[联机] 开始连接协调服务器: {Url}", maskedUrl);
+            _logger.LogDebug("[联机] 协调服务器完整地址: {Url}", serverUrl);
             var connected = await client.ConnectAsync(serverUrl, _ct);
             if (!connected)
             {
