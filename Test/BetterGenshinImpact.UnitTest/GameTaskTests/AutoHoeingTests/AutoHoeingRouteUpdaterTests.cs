@@ -566,17 +566,26 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Theory]
-    [InlineData("http://www.autobgi.cn:8080", "http://www.autobgi.cn:8080")]
+    [InlineData("http://www.autobgi.cn:8080", "https://autohoeing.autobgi.cn")]
+    [InlineData("http://WWW.autobgi.cn:8080/hub", "https://autohoeing.autobgi.cn")]
+    [InlineData("https://autohoeing.autobgi.cn/hub", "https://autohoeing.autobgi.cn/hub")]
+    [InlineData("https://www.autobgi.cn", "https://www.autobgi.cn")]
+    [InlineData("http://121.4.78.52:8080", "http://121.4.78.52:8080")]
     [InlineData("  https://my-own.example.org  ", "https://my-own.example.org")]
-    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", "http://www.autobgi.cn:8080")]
-    [InlineData("", "http://www.autobgi.cn:8080")]
-    [InlineData(null, "http://www.autobgi.cn:8080")]
+    [InlineData("举例：https://bgi-sync.example.com(需部署自建服务)", "https://autohoeing.autobgi.cn")]
+    [InlineData("", "https://autohoeing.autobgi.cn")]
+    [InlineData(null, "https://autohoeing.autobgi.cn")]
     public void UnsetOrLegacyPlaceholderAddressJustWorksWithTheOfficialServer(string? configured, string expected)
         => Assert.Equal(expected, BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(configured));
 
     [Fact]
     public void FreshInstallDefaultIsTheWorkingOfficialAddress()
-        => Assert.Equal("http://www.autobgi.cn:8080", new BetterGenshinImpact.GameTask.AutoHoeing.AutoHoeingConfig().CoordinatorServerUrl);
+        => Assert.Equal("https://autohoeing.autobgi.cn", new BetterGenshinImpact.GameTask.AutoHoeing.AutoHoeingConfig().CoordinatorServerUrl);
+
+    [Fact]
+    public void DefaultCoordinatorAddressDownloadsRoutesFromTheOfficialHttpsHost()
+        => Assert.Equal("https://www.autobgi.cn/", AutoHoeingRouteUpdater.RequireServerUri(
+            AutoHoeingRouteUpdater.ResolveServerAddress(BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.RecommendedAddress)).ToString());
 
     [Fact]
     public async Task ManifestIdentityAndPathEscapeAreRejectedWithoutTouchingOutsideFiles()

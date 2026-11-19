@@ -31,6 +31,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
     // ===== B 联机连接 =====
     [ObservableProperty] private string _coordinatorServerUrl = "";
+    private readonly bool _groupHadCoordinatorServerUrl;
+    private readonly string _initialCoordinatorServerUrl = "";
     [ObservableProperty] private string _playerName = "";
     [ObservableProperty] private string _playerUid = "";
     [ObservableProperty] private string _pickupMode = "";
@@ -221,6 +223,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
 
         // 配置组里已填的地址原样显示和编辑；没填或仍是旧版示例文字时显示官方地址
         _coordinatorServerUrl = BetterGenshinImpact.GameTask.AutoHoeing.CoordinatorServerAddress.Effective(GetStr("coordinatorServerUrl", g.CoordinatorServerUrl));
+        _groupHadCoordinatorServerUrl = settings.ContainsKey("coordinatorServerUrl");
+        _initialCoordinatorServerUrl = _coordinatorServerUrl;
         _playerName = GetStr("playerName", g.PlayerName);
         _playerUid = GetStr("playerUid", g.PlayerUid);
         _pickupMode = GetStr("pickupMode", g.PickupMode);
@@ -318,7 +322,9 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["multiplayerRole"] = RoleSelection == "成员（加入房间）" ? "member" : "host";
         settings["memberJoinMode"] = JoinModeSelection == "随机加入现有房间" ? "random" : "byHostName";
         settings["targetHostName"] = TargetHostName;
-        settings["coordinatorServerUrl"] = CoordinatorServerUrl;
+        // 配置组原来没填地址且用户没改时不写入，继续跟随设置页的地址；否则保存时会把当时的地址固定进配置组
+        if (_groupHadCoordinatorServerUrl || !string.Equals(CoordinatorServerUrl?.Trim(), _initialCoordinatorServerUrl, System.StringComparison.Ordinal))
+            settings["coordinatorServerUrl"] = CoordinatorServerUrl;
         settings["playerName"] = PlayerName;
         settings["playerUid"] = PlayerUid;
         settings["multiplayerPartyName"] = MultiplayerPartyName;

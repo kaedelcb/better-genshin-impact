@@ -54,8 +54,36 @@ public class CoordinatorServerAddressTests
         var global = InjectGlobal("举例：https://bgi-sync.example.com(需部署自建服务)");
         var result = RunOverride(new Dictionary<string, object?> { ["multiplayerEnabled"] = true },
             new AutoHoeingConfig { CoordinatorServerUrl = global.AutoHoeingConfig.CoordinatorServerUrl });
-        Assert.Equal("http://www.autobgi.cn:8080", result.CoordinatorServerUrl);
+        Assert.Equal("https://autohoeing.autobgi.cn", result.CoordinatorServerUrl);
         Assert.Equal("举例：https://bgi-sync.example.com(需部署自建服务)", global.AutoHoeingConfig.CoordinatorServerUrl);
+    }
+
+    [Fact]
+    public void SavingGroupWithoutOwnAddressKeepsFollowingTheSettingsPage()
+    {
+        // 配置组没填地址：只打开再保存，不能把设置页当时的地址固定进配置组
+        var settings = new Dictionary<string, object?> { ["multiplayerEnabled"] = true };
+        var global = new AutoHoeingConfig { CoordinatorServerUrl = "http://www.autobgi.cn:8080" };
+        var vm = new BetterGenshinImpact.ViewModel.Pages.View.MultiplayerHoeingSettingsViewModel(settings, global, new[] { "1" }, "1");
+        Assert.Equal("https://autohoeing.autobgi.cn", vm.CoordinatorServerUrl);
+        vm.WriteMultiplayerSettings(settings);
+        Assert.False(settings.ContainsKey("coordinatorServerUrl"));
+        Assert.Equal("http://www.autobgi.cn:8080", global.CoordinatorServerUrl);
+    }
+
+    [Fact]
+    public void GroupAddressIsSavedWhenTheUserChangesItOrTheGroupAlreadyHadOne()
+    {
+        var changed = new Dictionary<string, object?> { ["multiplayerEnabled"] = true };
+        var vm = new BetterGenshinImpact.ViewModel.Pages.View.MultiplayerHoeingSettingsViewModel(changed, new AutoHoeingConfig(), new[] { "1" }, "1");
+        vm.CoordinatorServerUrl = "https://my-own.example.org";
+        vm.WriteMultiplayerSettings(changed);
+        Assert.Equal("https://my-own.example.org", changed["coordinatorServerUrl"]);
+
+        var own = new Dictionary<string, object?> { ["coordinatorServerUrl"] = "https://autohoeing.autobgi.cn/hub" };
+        var vm2 = new BetterGenshinImpact.ViewModel.Pages.View.MultiplayerHoeingSettingsViewModel(own, new AutoHoeingConfig(), new[] { "1" }, "1");
+        vm2.WriteMultiplayerSettings(own);
+        Assert.Equal("https://autohoeing.autobgi.cn/hub", own["coordinatorServerUrl"]);
     }
 
     [Fact]

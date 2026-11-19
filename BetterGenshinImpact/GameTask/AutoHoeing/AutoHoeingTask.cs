@@ -959,10 +959,11 @@ public partial class AutoHoeingTask : ISoloTask
             // 从创建起由 Start.finally 持有清理责任，查房/连接期间取消也必须释放心跳和连接。
             _coordinatorClientRef = client;
             // 隐藏服务器地址前半部分
-            _config.CoordinatorServerUrl = CoordinatorServerAddress.Effective(_config.CoordinatorServerUrl);
-            var maskedUrl = MaskServerUrl(_config.CoordinatorServerUrl);
+            // 只在本次连接使用归一后的地址，不写回 _config（未用配置组时它就是全局配置，写回会触发保存 config.json）
+            var serverUrl = CoordinatorServerAddress.Effective(_config.CoordinatorServerUrl);
+            var maskedUrl = MaskServerUrl(serverUrl);
             _logger.LogInformation("[联机] 开始连接协调服务器: {Url}", maskedUrl);
-            var connected = await client.ConnectAsync(_config.CoordinatorServerUrl, _ct);
+            var connected = await client.ConnectAsync(serverUrl, _ct);
             if (!connected)
             {
                 _ct.ThrowIfCancellationRequested();
