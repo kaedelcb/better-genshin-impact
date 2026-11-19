@@ -744,7 +744,7 @@ public class AutoFightTask : ISoloTask
         using var cts2 = new CancellationTokenSource();
         using var fightCancellationRegistration = ct.Register(cts2.Cancel);
 
-        combatScenes.BeforeTask(cts2.Token);
+        combatScenes.BeforeTask(cts2.Token, _taskParam);
         // 注入阿蕾奇诺红血门控开关到每个角色（让 Avatar.KeyPress/UseBurst 读到当前配置组/独立任务的开关值，
         // 而非全局 AutoFightConfig；修复"配置组开关失效"问题）。
         foreach (var avatarToInit in combatScenes.GetAvatars())
