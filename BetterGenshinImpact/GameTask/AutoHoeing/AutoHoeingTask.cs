@@ -1002,7 +1002,7 @@ public partial class AutoHoeingTask : ISoloTask
                     while (DateTime.UtcNow < deadline)
                     {
                         attempt++;
-                        var rooms = await client.GetOnlineRoomsAsync();
+                        var rooms = await client.GetOnlineRoomsAsync(_ct);
                         var candidates = rooms.Where(r => r.PlayerCount < r.MaxPlayers).ToList();
                         if (candidates.Count == 0)
                         {
@@ -1049,7 +1049,7 @@ public partial class AutoHoeingTask : ISoloTask
                     while (DateTime.UtcNow < deadline)
                     {
                         attempt++;
-                        var rooms = await client.GetOnlineRoomsAsync();
+                        var rooms = await client.GetOnlineRoomsAsync(_ct);
                         var target = rooms.FirstOrDefault(r =>
                             r.HostName.Equals(targetHost, StringComparison.OrdinalIgnoreCase) &&
                             r.PlayerCount < r.MaxPlayers);
@@ -2634,7 +2634,7 @@ public partial class AutoHoeingTask : ISoloTask
                         await Task.Delay(500, _ct);
                         continue;
                     }
-                    var rooms = await client.GetOnlineRoomsAsync();
+                    var rooms = await client.GetOnlineRoomsAsync(_ct);
                     var target = rooms.FirstOrDefault(r =>
                         (!string.IsNullOrEmpty(roundHostPlayer.PlayerUid) && r.HostUid == roundHostPlayer.PlayerUid) ||
                         (RequiredWorldParticipants == null && r.HostName.Equals(roundHostPlayer.PlayerName, StringComparison.OrdinalIgnoreCase)));
