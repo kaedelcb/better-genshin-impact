@@ -172,23 +172,17 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// 响应携带 error 时抛 <see cref="GatewayErrorException"/>（对齐旧 HubException 落点）。
     /// </summary>
     public async Task<GatewayEnvelope> InvokeCommandAsync(string name, object? payload, string? roomCode = null, CancellationToken ct = default)
-    {
-        var env = GatewayEnvelope.Command(name, payload, roomCode);
-        var resp = _testInvokeOverride != null
-            ? await _testInvokeOverride(GatewayProtocol.HubMethods.Dispatch, env, ct)
-            : await _connection!.InvokeAsync<GatewayEnvelope>(GatewayProtocol.HubMethods.Dispatch, env, ct);
-        if (resp.TryGetError(out var code, out var message))
-            throw new GatewayErrorException(code, message);
-        return resp;
-    }
+        => await InvokeEnvelopeAsync(GatewayProtocol.HubMethods.Dispatch, GatewayEnvelope.Command(name, payload, roomCode), ct);
 
     /// <summary>query 调用（Hub.Query）：语义同 <see cref="InvokeCommandAsync"/>。</summary>
     public async Task<GatewayEnvelope> QueryAsync(string name, object? payload, string? roomCode = null, CancellationToken ct = default)
+        => await InvokeEnvelopeAsync(GatewayProtocol.HubMethods.Query, GatewayEnvelope.Query(name, payload, roomCode), ct);
+
+    internal async Task<GatewayEnvelope> InvokeEnvelopeAsync(string hubMethod, GatewayEnvelope envelope, CancellationToken ct)
     {
-        var env = GatewayEnvelope.Query(name, payload, roomCode);
         var resp = _testInvokeOverride != null
-            ? await _testInvokeOverride(GatewayProtocol.HubMethods.Query, env, ct)
-            : await _connection!.InvokeAsync<GatewayEnvelope>(GatewayProtocol.HubMethods.Query, env, ct);
+            ? await _testInvokeOverride(hubMethod, envelope, ct)
+            : await _connection!.InvokeAsync<GatewayEnvelope>(hubMethod, envelope, ct);
         if (resp.TryGetError(out var code, out var message))
             throw new GatewayErrorException(code, message);
         return resp;

@@ -41,6 +41,7 @@ public static class GatewayProtocol
     {
         /// <summary>未知消息名——v3 下"服务端无此功能"的表现形式（对齐旧协议 HubException "does not exist"）。</summary>
         public const string UnsupportedOperation = "unsupported_operation";
+        public const string HandshakeRequired = "handshake_required";
     }
 
     /// <summary>客户端 → 服务端消息名（§9.2 按族，本切片实际用到的子集）。</summary>

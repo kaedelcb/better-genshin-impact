@@ -1046,14 +1046,19 @@ public partial class CoordinatorClient : IAsyncDisposable
         return playerUid;
     }
 
-    public async Task<List<RoomSummary>> GetOnlineRoomsAsync()
+    public async Task<List<RoomSummary>> GetOnlineRoomsAsync(CancellationToken ct = default)
     {
-        if (_gateway == null) return new List<RoomSummary>();
+        ct.ThrowIfCancellationRequested();
+        if (_gateway is not { } gateway) return new List<RoomSummary>();
+        using var budget = CreateRpcBudget(ct, includeRoom: false);
         try
         {
-            var resp = await _gateway.QueryAsync(GatewayProtocol.Names.RoomListOnline, null);
+            var request = GatewayEnvelope.Query(GatewayProtocol.Names.RoomListOnline, null);
+            var resp = await InvokeRoomEntryRpcAsync(gateway, GatewayProtocol.HubMethods.Query, request, budget.Token);
+            budget.Token.ThrowIfCancellationRequested();
             return resp.Get<List<RoomSummary>>("rooms") ?? new List<RoomSummary>();
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetOnlineRoomsAsync 失败");
@@ -1061,10 +1066,36 @@ public partial class CoordinatorClient : IAsyncDisposable
         }
     }
 
+    private async Task<GatewayEnvelope> InvokeRoomEntryRpcAsync(BgiGatewayClient gateway,
+        string hubMethod, GatewayEnvelope request, CancellationToken ct)
+    {
+        EnsureRoomEntryAllowed(ct);
+        try
+        {
+            return await gateway.InvokeEnvelopeAsync(hubMethod, request, ct);
+        }
+        catch (GatewayErrorException ex) when (ex.Code == GatewayProtocol.ErrorCodes.HandshakeRequired)
+        {
+            // 关旧房到入新房之间没有可恢复的 RoomSession。网关在执行业务前拒绝了请求，
+            // 可在同一预算内补一次握手，再发送同一请求。
+            EnsureRoomEntryAllowed(ct);
+            await gateway.HelloAsync(ct);
+            EnsureRoomEntryAllowed(ct);
+            return await gateway.InvokeEnvelopeAsync(hubMethod, request, ct);
+        }
+    }
+
+    private void EnsureRoomEntryAllowed(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_roomLock)
+            if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
+    }
+
     public async Task<bool> JoinRoomAsync(string roomCode, string playerName, string? playerUid = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
-        if (_gateway == null) return false;
+        if (_gateway is not { } gateway) return false;
         var batchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId;
         // 旧恢复先收到撤销，再等待同一窄门；后台回调不得阻塞正常轮换的取消。
         DetachRoomForExplicitChange();
@@ -1076,11 +1107,12 @@ public partial class CoordinatorClient : IAsyncDisposable
                 if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
             DetachRoomForExplicitChange();
             BeginExplicitRoomEvents(roomCode);
-            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
+            var request = GatewayEnvelope.Command(GatewayProtocol.Names.RoomJoin, new
             {
                 roomCode, playerName, playerUid = playerUid ?? "", hoeingBatchId = batchId,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            }, roomCode, budget.Token);
+            }, roomCode);
+            var resp = await InvokeRoomEntryRpcAsync(gateway, GatewayProtocol.HubMethods.Dispatch, request, budget.Token);
             ct.ThrowIfCancellationRequested();
             budget.Token.ThrowIfCancellationRequested();
             var result = resp.GetBool("success");
@@ -1362,7 +1394,7 @@ public partial class CoordinatorClient : IAsyncDisposable
     public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount, CancellationToken ct = default, IReadOnlyList<string>? worldPlanParticipantUids = null)
     {
         ct.ThrowIfCancellationRequested();
-        if (_gateway == null) return null;
+        if (_gateway is not { } gateway) return null;
         var batchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId;
         var participants = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids;
         DetachRoomForExplicitChange();
@@ -1374,12 +1406,13 @@ public partial class CoordinatorClient : IAsyncDisposable
                 if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机房间准入已撤销");
             DetachRoomForExplicitChange();
             BeginExplicitRoomEvents(null);
-            var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
+            var request = GatewayEnvelope.Command(GatewayProtocol.Names.RoomCreate, new
             {
                 playerName, whitelist = whitelist ?? new List<string>(), playerUid, expectedPlayerCount,
                 hoeingBatchId = batchId, expectedParticipantUids = participants, worldPlanParticipantUids,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
-            }, null, budget.Token);
+            });
+            var resp = await InvokeRoomEntryRpcAsync(gateway, GatewayProtocol.HubMethods.Dispatch, request, budget.Token);
             ct.ThrowIfCancellationRequested();
             budget.Token.ThrowIfCancellationRequested();
             var result = resp.GetString("roomCode");
