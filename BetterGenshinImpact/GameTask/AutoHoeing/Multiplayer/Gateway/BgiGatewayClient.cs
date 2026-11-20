@@ -26,6 +26,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     private readonly ILogger<BgiGatewayClient> _logger = App.GetLogger<BgiGatewayClient>();
 
     private HubConnection? _connection;
+    private readonly SemaphoreSlim _startGate = new(1, 1);
 
     // SignalR 换连接后须重新握手，包括多世界关房后等待下一房间的阶段。
     private readonly SemaphoreSlim _helloGate = new(1, 1);
@@ -38,6 +39,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     internal Func<string, GatewayEnvelope, CancellationToken, Task>? _testSendOverride;
     internal Func<string, GatewayEnvelope, CancellationToken, Task<GatewayEnvelope>>? _testInvokeOverride;
     internal Func<CancellationToken, Task>? _testReconnectStartOverride;
+    internal Func<HubConnectionState>? _testConnectionStateOverride;
     internal string? _testConnectionIdOverride;
 
     /// <summary>evt 信封到达（服务器 → 客户端广播/定向）。在 SignalR 回调线程触发，订阅方不得外抛异常。</summary>
@@ -55,7 +57,9 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// <summary>握手协商到的服务端能力清单（能力缺省即不支持；本切片无任何行为依赖它，仅记录）。</summary>
     public string[] ServerCapabilities { get; private set; } = [];
 
-    public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+    private HubConnectionState TransportState => _testConnectionStateOverride?.Invoke()
+        ?? _connection?.State ?? HubConnectionState.Disconnected;
+    public bool IsConnected => TransportState == HubConnectionState.Connected;
     internal string? ConnectionId => _testConnectionIdOverride ?? _connection?.ConnectionId;
 
     public bool SupportsCapability(string capability) => Array.IndexOf(ServerCapabilities, capability) >= 0;
@@ -128,7 +132,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             _connection.Reconnected += connectionId => Reconnected?.Invoke(connectionId) ?? Task.CompletedTask;
             _connection.Closed += error => Closed?.Invoke(error) ?? Task.CompletedTask;
 
-            await _connection.StartAsync(ct);
+            await ReconnectStartAsync(ct);
 
             // DAP 时序：连接后第一条消息必须是 session.hello（握手完成前服务端拒绝其它消息）
             await HelloAsync(ct);
@@ -200,9 +204,27 @@ public sealed class BgiGatewayClient : IAsyncDisposable
         }
     }
 
-    /// <summary>重连自愈用：对已构建的连接重新 StartAsync（与旧 OnConnectionClosed 退避循环配套）。</summary>
-    public Task ReconnectStartAsync(CancellationToken ct = default)
-        => _testReconnectStartOverride?.Invoke(ct) ?? _connection?.StartAsync(ct) ?? Task.CompletedTask;
+    /// <summary>等待 SignalR 内置重连，只有连接完全断开后才允许一次主动启动。</summary>
+    public async Task ReconnectStartAsync(CancellationToken ct = default)
+    {
+        await _startGate.WaitAsync(ct);
+        try
+        {
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                var state = TransportState;
+                if (state == HubConnectionState.Connected) return;
+                if (state == HubConnectionState.Disconnected)
+                {
+                    await (_testReconnectStartOverride?.Invoke(ct) ?? _connection?.StartAsync(ct) ?? Task.CompletedTask);
+                    return;
+                }
+                await Task.Delay(100, ct);
+            }
+        }
+        finally { _startGate.Release(); }
+    }
 
     /// <summary>
     /// command 调用（Hub.Dispatch）：返回响应信封；传输异常原样上抛；

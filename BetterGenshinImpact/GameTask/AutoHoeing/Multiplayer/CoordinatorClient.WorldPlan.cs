@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
@@ -13,7 +12,6 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 public partial class CoordinatorClient
 {
     private readonly CancellationTokenSource _worldPlanStopCts = new();
-    private readonly SemaphoreSlim _worldPlanTransportGate = new(1, 1);
     private string? _worldPlanTransferId;
     private string? _worldPlanOriginRoom;
     private readonly HashSet<string> _retiredWorldPlanRooms = new(StringComparer.Ordinal);
@@ -168,13 +166,15 @@ public partial class CoordinatorClient
         lock (_roomLock) transferring = _worldPlanTransferId != null;
         using var budget = CreateWorldPlanBudget(ct, transferring ? TimeSpan.FromSeconds(120) : null);
         if (_gateway == null) throw new MultiplayerSessionFailedException("协调连接不存在");
+        // 开队轮询可用原凭据重读快照。开队写命令仍按原语义处理结果未知，避免重复执行。
+        var retryTransport = transferring || name == GatewayProtocol.Names.WorldPlanGet;
         var needsHello = false;
         while (true)
         {
             try
             {
                 using var attempt = CreateWorldPlanBudget(budget.Token);
-                await EnsureWorldPlanTransportAsync(attempt.Token, needsHello);
+                await EnsureWorldPlanTransportAsync(attempt.Token, needsHello, useRoomRecovery: !transferring);
                 needsHello = false;
                 var response = query
                     ? await _gateway.QueryAsync(name, payload, null, attempt.Token)
@@ -182,35 +182,31 @@ public partial class CoordinatorClient
                 ThrowIfWorldPlanStopped(budget.Token);
                 return response;
             }
-            catch (GatewayErrorException ex) when (transferring && ex.Code == "handshake_required" && !budget.IsCancellationRequested)
+            catch (GatewayErrorException ex) when (retryTransport && ex.Code == "handshake_required" && !budget.IsCancellationRequested)
             {
                 needsHello = true;
             }
-            catch (OperationCanceledException) when (transferring && !budget.IsCancellationRequested)
+            catch (Exception ex) when (retryTransport && !budget.IsCancellationRequested
+                && (IsTransportFailure(ex) || ex is TimeoutException
+                    || transferring && ex.GetType() == typeof(InvalidOperationException)))
             {
-                // 本次传输超时可以重发同一幂等命令；外层停止或总预算取消仍立即传播。
-            }
-            catch (Exception ex) when (transferring && !budget.IsCancellationRequested
-                && ex is not GatewayErrorException && ex is IOException or TimeoutException or InvalidOperationException)
-            {
-                // 仅重试同一幂等计划命令；业务拒绝、取消和原计划终态不能变成重试/新建房间。
-                _logger.LogDebug(ex, "[多世界续跑] 交接网络暂不可用，按原计划重试");
+                _logger.LogDebug(ex, "[多世界续跑] 计划通信暂不可用，按原计划重试");
             }
             await Task.Delay(_testWaitRetryIntervalMs ?? 250, budget.Token);
             ThrowIfWorldPlanStopped(budget.Token);
         }
     }
 
-    private async Task EnsureWorldPlanTransportAsync(CancellationToken ct, bool forceHello = false)
+    private async Task EnsureWorldPlanTransportAsync(CancellationToken ct, bool forceHello, bool useRoomRecovery)
     {
-        await _worldPlanTransportGate.WaitAsync(ct);
-        try
-        {
-            ThrowIfWorldPlanStopped(ct);
-            if (!IsConnected) { await _gateway!.ReconnectStartAsync(ct); forceHello = true; }
-            if (forceHello) await _gateway!.HelloAsync(ct);
-        }
-        finally { _worldPlanTransportGate.Release(); }
+        ThrowIfWorldPlanStopped(ct);
+        bool hasRoom;
+        lock (_roomLock) hasRoom = useRoomRecovery && _roomSession is { Ended: false };
+        // 开队仍在原房间时，由房间恢复流程重连并重新入房；交接期间只需恢复传输。
+        if (hasRoom) await WaitForBusinessReadyAsync(ct);
+        else if (!IsConnected) await _gateway!.ReconnectStartAsync(ct);
+        ThrowIfWorldPlanStopped(ct);
+        if (forceHello) await _gateway!.HelloAsync(ct);
     }
 
     private async Task RecoverWorldPlanTransportAsync(bool start)
@@ -219,7 +215,8 @@ public partial class CoordinatorClient
         {
             using var budget = CreateWorldPlanBudget(CancellationToken.None);
             if (start) await _gateway!.ReconnectStartAsync(budget.Token);
-            await EnsureWorldPlanTransportAsync(budget.Token, true);
+            ThrowIfWorldPlanStopped(budget.Token);
+            await _gateway!.HelloAsync(budget.Token);
         }
         catch (Exception ex) { _logger.LogWarning(ex, "[多世界续跑] 交接连接恢复尚未确认，保持原计划等待重试"); }
     }

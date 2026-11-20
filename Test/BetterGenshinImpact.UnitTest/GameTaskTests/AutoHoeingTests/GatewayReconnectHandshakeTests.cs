@@ -2,9 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
+using Microsoft.AspNetCore.SignalR.Client;
 using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
@@ -34,6 +36,34 @@ public sealed class GatewayReconnectHandshakeTests
             }));
         };
         return (gateway, names);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConcurrentRecoveryWaitsForAutomaticReconnectBeforeStarting(bool automaticSucceeds)
+    {
+        await using var gateway = new BgiGatewayClient();
+        var state = (int)HubConnectionState.Reconnecting;
+        var starts = 0;
+        gateway._testConnectionStateOverride = () => (HubConnectionState)Volatile.Read(ref state);
+        gateway._testReconnectStartOverride = _ =>
+        {
+            Assert.Equal(HubConnectionState.Disconnected, (HubConnectionState)Volatile.Read(ref state));
+            starts++;
+            Volatile.Write(ref state, (int)HubConnectionState.Connected);
+            return Task.CompletedTask;
+        };
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var first = gateway.ReconnectStartAsync(budget.Token);
+        var second = gateway.ReconnectStartAsync(budget.Token);
+        Assert.False(first.IsCompleted);
+        Assert.False(second.IsCompleted);
+
+        Volatile.Write(ref state, (int)(automaticSucceeds ? HubConnectionState.Connected : HubConnectionState.Disconnected));
+        await Task.WhenAll(first, second).WaitAsync(budget.Token);
+        Assert.True(gateway.IsConnected);
+        Assert.Equal(automaticSucceeds ? 0 : 1, starts);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
@@ -118,6 +119,89 @@ public sealed class WorldPlanClientTests
         var snapshot = await client.ReadWorldPlanAsync(admission, CancellationToken.None);
         Assert.Equal("plan-1", snapshot.PlanId);
         Assert.Equal(new[] { GatewayProtocol.Names.SessionHello, GatewayProtocol.Names.WorldPlanGet }, sent);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OpeningPlanReadWaitsForTheOriginalRoomDuringAutomaticReconnect(bool stopDuringReconnect)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testConnectionIdOverride = "old" };
+        using var stop = new CancellationTokenSource();
+        client.BindTaskLifetime(stop.Token);
+        await Join(client);
+        var admission = Admission();
+        var sent = new List<string>();
+        var gateway = client.GetOrCreateGatewayForTest();
+        var rejoinSent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var confirmRejoin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        gateway._testReconnectStartOverride = _ => throw new InvalidOperationException("StartAsync during automatic reconnect");
+        gateway._testInvokeOverride = async (_, request, token) =>
+        {
+            sent.Add(request.Name);
+            if (request.Name == GatewayProtocol.Names.RoomJoin)
+            {
+                Assert.Equal("A", request.GetString("roomCode"));
+                rejoinSent.SetResult();
+                await confirmRejoin.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+            }
+            if (request.Name == GatewayProtocol.Names.WorldPlanGet)
+                Assert.Equal(admission.Ticket, request.GetString("ticket"));
+            return Response(request, new { success = true, snapshot = admission.Snapshot });
+        };
+
+        client._testIsConnectedOverride = false;
+        client._testConnectionIdOverride = null;
+        await client.OnReconnecting(null);
+        var reading = client.ReadWorldPlanAsync(admission, CancellationToken.None);
+        Assert.False(reading.IsCompleted);
+        Assert.Empty(sent);
+
+        if (stopDuringReconnect)
+        {
+            stop.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reading);
+            Assert.Empty(sent);
+            return;
+        }
+
+        client._testConnectionIdOverride = "new";
+        client._testIsConnectedOverride = true;
+        var recovery = client.OnReconnected("new");
+        await rejoinSent.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(reading.IsCompleted);
+        confirmRejoin.SetResult();
+        await recovery.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(admission.PlanId, (await reading.WaitAsync(TimeSpan.FromSeconds(5))).PlanId);
+        Assert.Equal(new[] { GatewayProtocol.Names.SessionHello, GatewayProtocol.Names.RoomJoin,
+            GatewayProtocol.Names.WorldPlanGet }, sent);
+    }
+
+    [Fact]
+    public async Task OpeningPlanCanRereadTheSameTicketWithoutReplayingAnUnconfirmedWrite()
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true, _testWaitRetryIntervalMs = 1 };
+        await Join(client);
+        var admission = Admission();
+        var reads = 0;
+        var writes = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal(admission.Ticket, request.GetString("ticket"));
+            if (request.Name == GatewayProtocol.Names.WorldPlanAck)
+            {
+                writes++;
+                throw new IOException("write response lost");
+            }
+            Assert.Equal(GatewayProtocol.Names.WorldPlanGet, request.Name);
+            if (++reads == 1) throw new IOException("read response lost");
+            return Task.FromResult(Response(request, new { snapshot = admission.Snapshot }));
+        };
+
+        Assert.Equal(admission.PlanId, (await client.ReadWorldPlanAsync(admission, CancellationToken.None)).PlanId);
+        await Assert.ThrowsAsync<IOException>(() => client.AckWorldPlanAsync(admission, CancellationToken.None));
+        Assert.Equal(2, reads);
+        Assert.Equal(1, writes);
     }
 
     [Fact]
