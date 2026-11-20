@@ -1003,6 +1003,229 @@ public partial class AutoHoeingTask : ISoloTask
         await client.VerifyHoeingStartupAsync(scope.BatchId, scope.ExpectedParticipantUids, ct);
     }
 
+    internal async Task<bool> UploadFirstHostConfigAsync(CoordinatorClient client, RoomConfig roomConfig)
+    {
+        // 房主上传配置，带重试机制（最多3次）
+        bool uploadSuccess = false;
+        for (int retry = 1; retry <= 3; retry++)
+        {
+            try
+            {
+                await client.SetRoomConfigAsync(roomConfig);
+                uploadSuccess = true;
+                _logger.LogInformation("[联机] 房主配置已上传到服务器（第{N}次尝试）", retry);
+                break;
+            }
+            catch (Exception ex)
+            {
+                if (retry < 3)
+                {
+                    _logger.LogWarning(ex, "[联机] 上传房主配置失败（第{N}次尝试），2秒后重试", retry);
+                    await Task.Delay(2000, _ct);
+                }
+                else
+                {
+                    _logger.LogError(ex, "[联机] 上传房主配置失败（重试3次后仍失败）");
+                }
+            }
+        }
+
+        // 多世界模式下配置上传失败是严重错误，必须终止
+        if (!uploadSuccess)
+        {
+            _logger.LogError("[联机] 多世界模式：房主配置上传失败，终止多世界模式");
+            MarkPartyFailed("房主配置上传失败");
+            return false;
+        }
+
+        // 多世界模式：保存第一任房主的配置
+        if (_config.MultiWorldEnabled && uploadSuccess)
+        {
+            _firstHostConfig = roomConfig;
+            _logger.LogInformation("[联机] 多世界模式：已锁定第一任房主配置");
+        }
+        return true;
+    }
+
+    internal async Task<bool> SyncFirstHostConfigAsync(CoordinatorClient client)
+    {
+        // 房主就绪后拉取配置（确保房主已上传配置）
+        RoomConfig? hostConfig = null;
+        for (int retry = 1; retry <= 3; retry++)
+        {
+            hostConfig = await client.GetRoomConfigAsync(_ct);
+            if (hostConfig != null)
+            {
+                _logger.LogInformation("[联机] 成功拉取房主配置（第{N}次尝试）", retry);
+                break;
+            }
+            if (retry < 3)
+            {
+                _logger.LogWarning("[联机] 拉取房主配置失败（第{N}次尝试），2秒后重试", retry);
+                await Task.Delay(2000, _ct);
+            }
+        }
+
+        if (hostConfig != null)
+        {
+            RequireMatchingRoomBatch(hostConfig);
+            await ApplyPinnedHostConfigAsync(hostConfig, _ct);
+
+            // 多世界模式：保存第一任房主的配置
+            if (_config.MultiWorldEnabled)
+            {
+                _firstHostConfig = hostConfig;
+                _logger.LogInformation("[联机] 多世界模式：已保存第一任房主配置");
+            }
+
+            _logger.LogInformation(
+                "[联机] 已同步房主配置：最小距离={Dist}，快速同步点抢报启用={FastEn}，路径距离阈值={FastDist:F1}米，传送延迟={FastDelay}ms",
+                hostConfig.SyncPointMinDistance,
+                _config.FastSyncPointEnabled, _config.FastSyncPathingDistance, _config.FastSyncTeleportLoadingDelayMs);
+        }
+        else
+        {
+            // 多世界模式下配置同步失败是严重错误，必须终止
+            if (_config.MultiWorldEnabled || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
+            {
+                _logger.LogError("[联机] 多世界模式：无法获取房主配置（重试3次后仍失败），终止多世界模式");
+                _worldStateMonitor.IsPartyPhase = false;
+                MarkPartyFailed("无法获取房主配置");
+                return false;
+            }
+            throw new HoeingStartupException("线路整包身份", "无法获取房主配置，不允许使用本地配置代替本轮 pin");
+        }
+        return true;
+    }
+
+    internal async Task<bool> UploadLaterRoundHostConfigAsync(CoordinatorClient client, int round)
+    {
+        // 上传配置：使用第一任房主的配置（已在第1轮保存）
+        if (_firstHostConfig != null)
+        {
+            // 房主上传配置，带重试机制（最多3次）
+            bool uploadSuccess = false;
+            for (int retry = 1; retry <= 3; retry++)
+            {
+                try
+                {
+                    await client.SetRoomConfigAsync(_firstHostConfig);
+                    uploadSuccess = true;
+                    _logger.LogInformation("[多世界] 第 {Round} 轮已上传第一任房主的配置（第{N}次尝试）", round + 1, retry);
+
+                    // kazuha-declare-after-team-switch: 删除此处旧调用——
+                    // 此位置只在房主分支触发（成员永远不调用），且早于 line 1647 的 _multiplayerCoordinator 重建。
+                    // 新调用点已移至 RunMultiWorldAsync 主循环内 RunSingleWorldCoreAsync 之前，每轮所有客户端都触发。
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    if (retry < 3)
+                    {
+                        _logger.LogWarning(ex, "[多世界] 第 {Round} 轮上传配置失败（第{N}次尝试），2秒后重试", round + 1, retry);
+                        await Task.Delay(2000, _ct);
+                    }
+                    else
+                    {
+                        _logger.LogError(ex, "[多世界] 第 {Round} 轮上传配置失败（重试3次后仍失败），终止多世界模式", round + 1);
+                    }
+                }
+            }
+
+            if (!uploadSuccess)
+            {
+                MarkPartyFailed("上传配置失败");
+                _multiplayerCoordinator = null;
+                return false;
+            }
+        }
+        else
+        {
+            // 多世界模式下_firstHostConfig为null是严重错误，必须终止
+            _logger.LogError("[多世界] 第 {Round} 轮房主配置丢失（_firstHostConfig为null），这表明第1轮配置保存失败，终止多世界模式", round + 1);
+            MarkPartyFailed("房主配置丢失");
+            _multiplayerCoordinator = null;
+            return false;
+        }
+        return true;
+    }
+
+    internal async Task<List<string>> ReadMemberHostRoutesAsync(CoordinatorClient client, TimeSpan uploadTimeout)
+    {
+        // 成员：等待房主路线列表就绪事件，或轮询兜底
+        var routeListTcs = new TaskCompletionSource<List<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Action<List<string>> routeListHandler = names => routeListTcs.TrySetResult(names);
+        client.HostRouteListReady += routeListHandler;
+        List<string> hostRouteNames;
+        try
+        {
+            // 先尝试直接拉取（房主可能已经上传了）。
+            // 原子查询 (uploaded, names) 同源，消除 TOCTOU：避免房主在两次独立查询之间上传非空列表，
+            // 导致拿到 uploaded=true + count=0 误判跳过（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
+            var (hostUploadedNow, existing) = await client.GetHostRouteListStatusAsync();
+            if (existing.Count > 0)
+            {
+                hostRouteNames = existing;
+                _logger.LogInformation("[联机] 直接获取到房主路线列表，共 {Count} 条", hostRouteNames.Count);
+            }
+            else
+            {
+                // 拿到空列表：可能是"房主还没上传"，也可能是"房主上传了空列表（CD全过滤）"。
+                // hostUploadedNow 与 existing 来自同一原子快照：uploaded=true 且 count=0 才是真·空列表。
+                // 不能用 IsHostReadyAsync 代理：房主在组队阶段就上报就绪（早于路线上传），会误判。
+                // multiplayer-host-empty-route-member-wait-timeout-fix（方案A）+ multiplayer-member-skip-round-stuck-roundend-sync-fix（原子快照）。
+                if (HostRouteListDecisions.ClassifyMemberRouteListResult(hostUploadedNow, 0, timedOut: false)
+                    == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
+                {
+                    _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
+                    return [];
+                }
+
+                // 房主尚未上传：等待推送事件，最多90秒
+                _logger.LogInformation("[联机] 等待房主上传路线列表...");
+                using var timeoutCts = new CancellationTokenSource(uploadTimeout);
+                using var linked = CancellationTokenSource.CreateLinkedTokenSource(_ct, timeoutCts.Token);
+                using var reg = linked.Token.Register(() => routeListTcs.TrySetResult([]));
+                hostRouteNames = await routeListTcs.Task;
+                if (hostRouteNames.Count > 0)
+                {
+                    _logger.LogInformation("[联机] 收到房主路线列表推送，共 {Count} 条", hostRouteNames.Count);
+                }
+                else
+                {
+                    // 等待结束仍为空：再查一次服务端原子快照，区分"房主路线为空"与"纯超时未收到"。
+                    var (hostUploadedAfter, namesAfter) = await client.GetHostRouteListStatusAsync();
+                    // 极端情况：等待期间推送丢失但服务端已有非空列表 → 用快照内容兜底正常继续。
+                    if (namesAfter.Count > 0)
+                    {
+                        hostRouteNames = namesAfter;
+                        _logger.LogInformation("[联机] 二次确认获取到房主路线列表，共 {Count} 条", hostRouteNames.Count);
+                    }
+                    else
+                    {
+                        var outcome = HostRouteListDecisions.ClassifyMemberRouteListResult(hostUploadedAfter, namesAfter.Count, timedOut: true);
+                        if (outcome == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
+                        {
+                            _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
+                            return [];
+                        }
+
+                        _ct.ThrowIfCancellationRequested();
+                        throw new HoeingStartupException("房主路线列表", "等待90秒仍未确认房主上传，不能按空轮完成");
+                    }
+                }
+            }
+        }
+        finally
+        {
+            client.HostRouteListReady -= routeListHandler;
+        }
+        return hostRouteNames;
+    }
+
+    internal bool ShouldSkipRouteOnLocalCooldown(RouteInfo route)
+        => !_config.MultiplayerEnabled && _config.StartRouteIndex <= 0 && _cdManager.IsOnCooldown(route);
+
     private static void RequireMatchingRoomBatch(RoomConfig room)
     {
         var scope = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current;
@@ -1272,45 +1495,7 @@ public partial class AutoHoeingTask : ISoloTask
                     RoomWhitelist = _config.RoomWhitelist ?? "",
                 };
                 
-                // 房主上传配置，带重试机制（最多3次）
-                bool uploadSuccess = false;
-                for (int retry = 1; retry <= 3; retry++)
-                {
-                    try
-                    {
-                        await client.SetRoomConfigAsync(roomConfig);
-                        uploadSuccess = true;
-                        _logger.LogInformation("[联机] 房主配置已上传到服务器（第{N}次尝试）", retry);
-                        break;
-                    }
-                    catch (Exception ex)
-                    {
-                        if (retry < 3)
-                        {
-                            _logger.LogWarning(ex, "[联机] 上传房主配置失败（第{N}次尝试），2秒后重试", retry);
-                            await Task.Delay(2000, _ct);
-                        }
-                        else
-                        {
-                            _logger.LogError(ex, "[联机] 上传房主配置失败（重试3次后仍失败）");
-                        }
-                    }
-                }
-                
-                // 多世界模式下配置上传失败是严重错误，必须终止
-                if (!uploadSuccess)
-                {
-                    _logger.LogError("[联机] 多世界模式：房主配置上传失败，终止多世界模式");
-                    MarkPartyFailed("房主配置上传失败");
-                    return;
-                }
-                
-                // 多世界模式：保存第一任房主的配置
-                if (_config.MultiWorldEnabled && uploadSuccess)
-                {
-                    _firstHostConfig = roomConfig;
-                    _logger.LogInformation("[联机] 多世界模式：已锁定第一任房主配置");
-                }
+                if (!await UploadFirstHostConfigAsync(client, roomConfig)) return;
             }
 
             var resolver = new SyncPointResolver();
@@ -1699,52 +1884,7 @@ public partial class AutoHoeingTask : ISoloTask
                         client.HostReadyChanged -= readyHandler;
                     }
 
-                    // 房主就绪后拉取配置（确保房主已上传配置）
-                    RoomConfig? hostConfig = null;
-                    for (int retry = 1; retry <= 3; retry++)
-                    {
-                        hostConfig = await client.GetRoomConfigAsync(_ct);
-                        if (hostConfig != null)
-                        {
-                            _logger.LogInformation("[联机] 成功拉取房主配置（第{N}次尝试）", retry);
-                            break;
-                        }
-                        if (retry < 3)
-                        {
-                            _logger.LogWarning("[联机] 拉取房主配置失败（第{N}次尝试），2秒后重试", retry);
-                            await Task.Delay(2000, _ct);
-                        }
-                    }
-
-                    if (hostConfig != null)
-                    {
-                        RequireMatchingRoomBatch(hostConfig);
-                        await ApplyPinnedHostConfigAsync(hostConfig, _ct);
-
-                        // 多世界模式：保存第一任房主的配置
-                        if (_config.MultiWorldEnabled)
-                        {
-                            _firstHostConfig = hostConfig;
-                            _logger.LogInformation("[联机] 多世界模式：已保存第一任房主配置");
-                        }
-
-                        _logger.LogInformation(
-                            "[联机] 已同步房主配置：最小距离={Dist}，快速同步点抢报启用={FastEn}，路径距离阈值={FastDist:F1}米，传送延迟={FastDelay}ms",
-                            hostConfig.SyncPointMinDistance,
-                            _config.FastSyncPointEnabled, _config.FastSyncPathingDistance, _config.FastSyncTeleportLoadingDelayMs);
-                    }
-                    else
-                    {
-                        // 多世界模式下配置同步失败是严重错误，必须终止
-                        if (_config.MultiWorldEnabled || BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.IsActive)
-                        {
-                            _logger.LogError("[联机] 多世界模式：无法获取房主配置（重试3次后仍失败），终止多世界模式");
-                            _worldStateMonitor.IsPartyPhase = false;
-                            MarkPartyFailed("无法获取房主配置");
-                            return;
-                        }
-                        throw new HoeingStartupException("线路整包身份", "无法获取房主配置，不允许使用本地配置代替本轮 pin");
-                    }
+                    if (!await SyncFirstHostConfigAsync(client)) return;
 
                     // 加入世界前先确认自己在房间花名册，掉了就用房间码重新加入（网络抖动容错）
                     HoeingStartupBoundary.RequireConfirmed(await client.EnsureInRoomAsync(_ct), "房间成员登记", _ct);
@@ -2595,53 +2735,7 @@ public partial class AutoHoeingTask : ISoloTask
                 await client.ResetForNewWorldRoundAsync(round + 1);
                 _logger.LogInformation("[多世界] 第 {Round} 轮等待点状态已重置", round + 1);
 
-                // 上传配置：使用第一任房主的配置（已在第1轮保存）
-                if (_firstHostConfig != null)
-                {
-                    // 房主上传配置，带重试机制（最多3次）
-                    bool uploadSuccess = false;
-                    for (int retry = 1; retry <= 3; retry++)
-                    {
-                        try
-                        {
-                            await client.SetRoomConfigAsync(_firstHostConfig);
-                            uploadSuccess = true;
-                            _logger.LogInformation("[多世界] 第 {Round} 轮已上传第一任房主的配置（第{N}次尝试）", round + 1, retry);
-
-                            // kazuha-declare-after-team-switch: 删除此处旧调用——
-                            // 此位置只在房主分支触发（成员永远不调用），且早于 line 1647 的 _multiplayerCoordinator 重建。
-                            // 新调用点已移至 RunMultiWorldAsync 主循环内 RunSingleWorldCoreAsync 之前，每轮所有客户端都触发。
-                            break;
-                        }
-                        catch (Exception ex)
-                        {
-                            if (retry < 3)
-                            {
-                                _logger.LogWarning(ex, "[多世界] 第 {Round} 轮上传配置失败（第{N}次尝试），2秒后重试", round + 1, retry);
-                                await Task.Delay(2000, _ct);
-                            }
-                            else
-                            {
-                                _logger.LogError(ex, "[多世界] 第 {Round} 轮上传配置失败（重试3次后仍失败），终止多世界模式", round + 1);
-                            }
-                        }
-                    }
-                    
-                    if (!uploadSuccess)
-                    {
-                        MarkPartyFailed("上传配置失败");
-                        _multiplayerCoordinator = null;
-                        return RoundSetupOutcome.Abort;
-                    }
-                }
-                else
-                {
-                    // 多世界模式下_firstHostConfig为null是严重错误，必须终止
-                    _logger.LogError("[多世界] 第 {Round} 轮房主配置丢失（_firstHostConfig为null），这表明第1轮配置保存失败，终止多世界模式", round + 1);
-                    MarkPartyFailed("房主配置丢失");
-                    _multiplayerCoordinator = null;
-                    return RoundSetupOutcome.Abort;
-                }
+                if (!await UploadLaterRoundHostConfigAsync(client, round)) return RoundSetupOutcome.Abort;
 
                 await RequireWorldPlanTargetAsync(client, _ct, round);
                 await client.ReportHostReadyAsync();
@@ -3482,75 +3576,11 @@ public partial class AutoHoeingTask : ISoloTask
             }
             else
             {
-                // 成员：等待房主路线列表就绪事件，或轮询兜底
-                var routeListTcs = new TaskCompletionSource<List<string>>(TaskCreationOptions.RunContinuationsAsynchronously);
-                Action<List<string>> routeListHandler = names => routeListTcs.TrySetResult(names);
-                _coordinatorClientRef.HostRouteListReady += routeListHandler;
-                List<string> hostRouteNames;
-                try
+                var hostRouteNames = await ReadMemberHostRoutesAsync(_coordinatorClientRef, TimeSpan.FromSeconds(90));
+                if (hostRouteNames.Count == 0)
                 {
-                    // 先尝试直接拉取（房主可能已经上传了）。
-                    // 原子查询 (uploaded, names) 同源，消除 TOCTOU：避免房主在两次独立查询之间上传非空列表，
-                    // 导致拿到 uploaded=true + count=0 误判跳过（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
-                    var (hostUploadedNow, existing) = await _coordinatorClientRef.GetHostRouteListStatusAsync();
-                    if (existing.Count > 0)
-                    {
-                        hostRouteNames = existing;
-                        _logger.LogInformation("[联机] 直接获取到房主路线列表，共 {Count} 条", hostRouteNames.Count);
-                    }
-                    else
-                    {
-                        // 拿到空列表：可能是"房主还没上传"，也可能是"房主上传了空列表（CD全过滤）"。
-                        // hostUploadedNow 与 existing 来自同一原子快照：uploaded=true 且 count=0 才是真·空列表。
-                        // 不能用 IsHostReadyAsync 代理：房主在组队阶段就上报就绪（早于路线上传），会误判。
-                        // multiplayer-host-empty-route-member-wait-timeout-fix（方案A）+ multiplayer-member-skip-round-stuck-roundend-sync-fix（原子快照）。
-                        if (HostRouteListDecisions.ClassifyMemberRouteListResult(hostUploadedNow, 0, timedOut: false)
-                            == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
-                        {
-                            _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
-                            if (cooperative != null) cooperative.EmptyRound = true;
-                            return;
-                        }
-
-                        // 房主尚未上传：等待推送事件，最多90秒
-                        _logger.LogInformation("[联机] 等待房主上传路线列表...");
-                        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-                        using var linked = CancellationTokenSource.CreateLinkedTokenSource(_ct, timeoutCts.Token);
-                        using var reg = linked.Token.Register(() => routeListTcs.TrySetResult([]));
-                        hostRouteNames = await routeListTcs.Task;
-                        if (hostRouteNames.Count > 0)
-                        {
-                            _logger.LogInformation("[联机] 收到房主路线列表推送，共 {Count} 条", hostRouteNames.Count);
-                        }
-                        else
-                        {
-                            // 等待结束仍为空：再查一次服务端原子快照，区分"房主路线为空"与"纯超时未收到"。
-                            var (hostUploadedAfter, namesAfter) = await _coordinatorClientRef.GetHostRouteListStatusAsync();
-                            // 极端情况：等待期间推送丢失但服务端已有非空列表 → 用快照内容兜底正常继续。
-                            if (namesAfter.Count > 0)
-                            {
-                                hostRouteNames = namesAfter;
-                                _logger.LogInformation("[联机] 二次确认获取到房主路线列表，共 {Count} 条", hostRouteNames.Count);
-                            }
-                            else
-                            {
-                                var outcome = HostRouteListDecisions.ClassifyMemberRouteListResult(hostUploadedAfter, namesAfter.Count, timedOut: true);
-                                if (outcome == HostRouteListDecisions.MemberRouteListOutcome.SkipRoundEmpty)
-                                {
-                                    _logger.LogWarning("[联机] 房主已上传且路线列表为空（可能全部在CD中），跳过本轮执行");
-                                    if (cooperative != null) cooperative.EmptyRound = true;
-                                    return;
-                                }
-
-                                _ct.ThrowIfCancellationRequested();
-                                throw new HoeingStartupException("房主路线列表", "等待90秒仍未确认房主上传，不能按空轮完成");
-                            }
-                        }
-                    }
-                }
-                finally
-                {
-                    _coordinatorClientRef.HostRouteListReady -= routeListHandler;
+                    if (cooperative != null) cooperative.EmptyRound = true;
+                    return;
                 }
 
                 // 先从完整路线列表查找（不限于当前 group 过滤后的结果）
@@ -4100,7 +4130,7 @@ public partial class AutoHoeingTask : ISoloTask
 
             // CD检查（StartRouteIndex > 0 时跳过CD检查，强制执行；填0则正常检测CD）
             // 联机模式下成员不检测CD，由房主路线列表控制
-            if (!_config.MultiplayerEnabled && _config.StartRouteIndex <= 0 && _cdManager.IsOnCooldown(route))
+            if (ShouldSkipRouteOnLocalCooldown(route))
             {
                 _logger.LogInformation("路线 {Name} 未刷新，跳过", route.FileName);
                 skippedTime += route.AdjustedTime;

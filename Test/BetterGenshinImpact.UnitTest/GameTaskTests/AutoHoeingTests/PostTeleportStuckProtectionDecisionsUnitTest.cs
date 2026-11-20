@@ -9,9 +9,9 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 /// <summary>
 /// PostTeleportRevivalProtectionDecisions 扩展后（triggerType 参数化）的单元测试（普通 xunit Fact，非 PBT）。
 /// 覆盖 design.md §Unit Tests 与 requirements.md 2.1, 2.6, 4.1, 6.1：
-///   - GetWindowSeconds："stuck"=20、"revival"=10、其他值回退 10。
-///   - 7 参 IsEligible：stuck 命中组合（联机 teleport + 严格等待 + 未消费 + 0<=elapsed<=20，含恰好 0/20）
-///     与不命中组合（负时间差、>20s、单机、非 teleport、未完成、已消费）；
+///   - GetWindowSeconds："stuck"=30、"revival"=10、其他值回退 10。
+///   - 7 参 IsEligible：stuck 命中组合（联机 teleport + 严格等待 + 未消费 + 0<=elapsed<=30，含恰好 0/30）
+///     与不命中组合（负时间差、>30s、单机、非 teleport、未完成、已消费）；
 ///     revival 组合（0<=elapsed<=10，含恰好 0/10，>10 不命中，公开窗口区分）。
 ///   - 6 参复苏入口：委托到 revival，行为与既有一致（回归防护）。
 ///   - ComputeProgress：目标为当前段起点，不推进到下一段。
@@ -20,7 +20,7 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 public class PostTeleportStuckProtectionDecisionsUnitTest
 {
     private const double RevivalWindowSeconds = PostTeleportRevivalProtectionDecisions.WindowSeconds;        // 10
-    private const double StuckWindowSeconds = PostTeleportRevivalProtectionDecisions.StuckWindowSeconds;     // 20
+    private const double StuckWindowSeconds = 30;
 
     private static readonly DateTime CompletionTime = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -70,14 +70,14 @@ public class PostTeleportStuckProtectionDecisionsUnitTest
     [Fact]
     public void IsEligible_Stuck_ExactlyWindowSeconds_ReturnsTrue()
     {
-        // 边界：恰好 20 秒命中
+        // 边界：恰好 30 秒命中
         Assert.True(EligibleStuck(elapsedSeconds: StuckWindowSeconds));
     }
 
     [Fact]
     public void IsEligible_Stuck_JustInsideWindow_ReturnsTrue()
     {
-        // 边界：19.999 秒仍在窗口内命中
+        // 边界：29.999 秒仍在窗口内命中
         Assert.True(EligibleStuck(elapsedSeconds: StuckWindowSeconds - 0.001));
     }
 
@@ -95,15 +95,15 @@ public class PostTeleportStuckProtectionDecisionsUnitTest
     [Fact]
     public void IsEligible_Stuck_JustBeyondWindow_ReturnsFalse()
     {
-        // 20.001 秒超过窗口 → 不命中
+        // 30.001 秒超过窗口 → 不命中
         Assert.False(EligibleStuck(elapsedSeconds: StuckWindowSeconds + 0.001));
     }
 
     [Fact]
     public void IsEligible_Stuck_BeyondWindow_ReturnsFalse()
     {
-        // 21 秒超过窗口 → 不命中
-        Assert.False(EligibleStuck(elapsedSeconds: 21));
+        // 31 秒超过窗口 → 不命中
+        Assert.False(EligibleStuck(elapsedSeconds: 31));
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class PostTeleportStuckProtectionDecisionsUnitTest
     [Fact]
     public void IsEligible_Revival_BeyondWindow_ReturnsFalse()
     {
-        // 10.001 秒超过复苏窗口 → 不命中（即便仍落在 stuck 20s 窗口内）
+        // 10.001 秒超过复苏窗口 → 不命中（即便仍落在 stuck 30s 窗口内）
         Assert.False(EligibleRevival(elapsedSeconds: RevivalWindowSeconds + 0.001));
     }
 
@@ -198,7 +198,7 @@ public class PostTeleportStuckProtectionDecisionsUnitTest
     public void IsEligible_Revival_ExceedsWindowButWithinStuckWindow_ReturnsFalse()
     {
         // 关键窗口区分：15 秒 > 复苏 10s 窗口 → 复苏不命中，
-        // 但 <= stuck 20s 窗口；证明两种 triggerType 使用各自窗口时长。
+        // 但 <= stuck 30s 窗口；证明两种 triggerType 使用各自窗口时长。
         Assert.False(EligibleRevival(elapsedSeconds: 15));
         Assert.True(EligibleStuck(elapsedSeconds: 15));
     }
@@ -342,7 +342,7 @@ public class PostTeleportStuckProtectionDecisionsUnitTest
         double elapsedSeconds = 5,
         bool consumed = false)
     {
-        // 卡死窗口 20s 内（默认 5 秒），触发类型 stuck
+        // 卡死窗口 30s 内（默认 5 秒），触发类型 stuck
         return Eligible("stuck", isMultiplayerHoeing, syncPointType,
             strictWaitCompleted, elapsedSeconds, consumed);
     }
