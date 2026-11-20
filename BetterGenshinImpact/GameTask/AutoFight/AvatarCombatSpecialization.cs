@@ -219,23 +219,17 @@ public static class AvatarCombatSpecialization
                 var bloodBars = FindBloodBars();
                 var regularBars = bloodBars.Where(b => !IsLegendaryBar(b.y)).ToList();
                 var legendaryBars = bloodBars.Where(b => IsLegendaryBar(b.y)).ToList();
-                // 传奇已被击杀检测：曾出现传奇血条，现在不再存在且子弹不再变动 → 退出
-                if (hadLegendaryBar && legendaryBars.Count == 0)
+                using (var drawRegion = CaptureToRectArea())
                 {
-                    legendaryLostFrames++;
-                    if (legendaryLostFrames >= 2 &&
-                        (DateTime.UtcNow - lastBulletPatternTime).TotalSeconds >= chascaInterval)
+                    var damageFound = bloodBars.Count == 0 &&
+                        TryAimAtChascaDamage(drawRegion, dpi, chascaFrameMs, ct, targetX, targetY);
+                    if (ShouldExitAfterChascaLegendaryLost(
+                        ref legendaryLostFrames, hadLegendaryBar && legendaryBars.Count == 0, damageFound,
+                        (DateTime.UtcNow - lastBulletPatternTime).TotalSeconds, chascaInterval))
                     {
                         Logger.LogInformation("传奇血条消失且子弹不再变动，推测已击杀，退出循环");
                         break;
                     }
-                }
-                else
-                {
-                    legendaryLostFrames = 0;
-                }
-                using (var drawRegion = CaptureToRectArea())
-                {
                     if (regularBars.Count > 0 && legendaryBars.Count == 0)
                     {
                         // 逻辑1：有普通血条，且无传奇血条 → 索敌
@@ -288,7 +282,7 @@ public static class AvatarCombatSpecialization
                         else
                         {
                             // 子弹变动中且有传奇血条，尝试OCR寻敌
-                            if (OcrSeekEnemy(dpi, chascaFrameMs, ct))
+                            if (TryAimAtChascaDamage(drawRegion, dpi, chascaFrameMs, ct, targetX, targetY))
                             {
                                 // OCR命中 → 重置旋转超时（认为还在打）
                                 if (ocrResetCount < ocrResetCap)
@@ -305,9 +299,14 @@ public static class AvatarCombatSpecialization
                     }
                     else
                     {
-                        // 逻辑2：无任何血条 → 旋转
+                        // 无血条时先用伤害数字追踪，丢失目标后再旋转搜索。
                         drawRegion.DrawingBoard.Clear("ChascaBloodBars");
-                        if (hadBloodBar)
+                        if (damageFound)
+                        {
+                            consecutiveNoBlood = 0;
+                            hadBloodBar = false;
+                        }
+                        else if (hadBloodBar)
                         {
                             // 刚从有血条切换到无血条，容错一帧不旋转
                             hadBloodBar = false;
@@ -430,46 +429,29 @@ public static class AvatarCombatSpecialization
         return results;
     }
 
-    /// <summary>
-    /// OCR寻敌 — 仅传奇模式使用。
-    /// 在 450,240-1600,900 区域进行OCR识别，按文字区域大小加权计算目标中心，移动视角朝向该坐标。
-    /// 力度为普通血条对准的 1/3 (0.45→0.15, 0.80→0.27)。
-    /// </summary>
-    public static bool OcrSeekEnemy(double dpi, int frameMs, CancellationToken ct, double targetX = 960, double targetY = 500)
+    internal static bool ShouldExitAfterChascaLegendaryLost(
+        ref int lostFrames, bool legendaryLost, bool damageFound, double secondsSinceBulletChange, double interval)
     {
-        using var ra = CaptureToRectArea();
-        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
-
-        if (ocrResults == null || ocrResults.Count == 0)
-            return false;
-
-        var validResults = ocrResults.Where(r => !string.IsNullOrWhiteSpace(r.Text) && !r.Text.StartsWith("+")).ToList();
-        if (validResults.Count == 0)
-            return false;
-
-        // 按面积加权计算中心
-        double totalWeight = 0, wx = 0, wy = 0;
-        foreach (var r in validResults)
+        if (!legendaryLost || damageFound)
         {
-            double w = r.Width * r.Height;
-            wx += (r.X + r.Width / 2.0) * w;
-            wy += (r.Y + r.Height / 2.0) * w;
-            totalWeight += w;
+            lostFrames = 0;
+            return false;
+        }
+        return ++lostFrames >= 2 && secondsSinceBulletChange >= interval;
+    }
+
+    private static bool TryAimAtChascaDamage(ImageRegion capture, double dpi, int frameMs, CancellationToken ct, double targetX, double targetY)
+    {
+        var damage = FindDamageNumber(capture, excludeChascaBulletSlots: true);
+        if (damage is not { } target)
+        {
+            return false;
         }
 
-        double cx = wx / totalWeight;
-        double cy = wy / totalWeight;
-
-        var dx = cx - targetX;
-        var dy = cy - targetY;
-
-        InputHub.Foreground.Mouse.MoveMouseBy(
-            (int)(dx * dpi * 0.15),
-            (int)(dy * dpi * 0.27));
-
-        Logger.LogInformation("OCR寻敌：加权中心({Cx:F0},{Cy:F0}) 偏移({Dx:F0},{Dy:F0}) 共{Count}个文本",
-            cx, cy, dx, dy, validResults.Count);
-
+        var dx = target.centerX - targetX;
+        var dy = target.centerY - targetY;
+        InputHub.Foreground.Mouse.MoveMouseBy((int)(dx * dpi * 0.15), (int)(dy * dpi * 0.27));
+        Logger.LogInformation("OCR寻敌：伤害目标({Cx},{Cy}) 偏移({Dx:F0},{Dy:F0})", target.centerX, target.centerY, dx, dy);
         Sleep(frameMs, ct);
         return true;
     }
@@ -864,13 +846,33 @@ public static class AvatarCombatSpecialization
     public static (int centerX, int centerY, string text)? FindDamageNumber(ImageRegion? existingCapture = null)
     {
         using var ra = existingCapture ?? CaptureToRectArea();
-        var ocrResults = ra.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
+        return FindDamageNumber(ra, excludeChascaBulletSlots: false);
+    }
 
+    private static (int centerX, int centerY, string text)? FindDamageNumber(
+        ImageRegion capture, bool excludeChascaBulletSlots)
+    {
+        var ocrResults = capture.FindMulti(RecognitionObject.Ocr(450, 240, 1150, 660));
+        return SelectDamageNumber(ocrResults, excludeChascaBulletSlots);
+    }
+
+    internal static (int centerX, int centerY, string text)? SelectDamageNumber(
+        IEnumerable<Region> ocrResults, bool excludeChascaBulletSlots)
+    {
         string[] reactionKeywords = ["免疫", "蒸发", "感电", "结晶", "扩散", "绽放", "冻结", "超载", "融化", "燃烧", "超导", "激化"];
         var validItems = new List<(int cx, int cy, int area, string text)>();
 
         foreach (var r in ocrResults)
         {
+            if (excludeChascaBulletSlots && ChascaBulletRects.Any(slot =>
+                r.X < slot.x + slot.w
+                && r.X + r.Width > slot.x
+                && r.Y < slot.y + slot.h
+                && r.Y + r.Height > slot.y))
+            {
+                continue;
+            }
+
             var text = r.Text?.Trim();
             if (string.IsNullOrEmpty(text)) continue;
 
