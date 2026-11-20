@@ -219,6 +219,27 @@ public sealed partial class RoomOperations
         await PublishBatchSnapshotAsync(group, state, snapshot, GatewayProtocol.Events.ControlBatchStart);
     }
 
+    private async Task ReplayPendingBatchStartAsync(string group, string connectionId)
+    {
+        var player = _roomManager.GetControlRoomPlayers(group)
+            .SingleOrDefault(p => p.ConnectionId == connectionId && p.Online);
+        if (player is null || _capabilityLookup?.Supports(connectionId, GatewayProtocol.HoeingStartCapability) != true)
+            return;
+
+        CoordinatedBatchSnapshot? snapshot;
+        lock (_batchGate)
+        {
+            snapshot = _controlBatches.TryGetValue(group, out var state)
+                ? state.TryReplayRegistration(player.PlayerUid, player.ClientInstanceId, DateTime.UtcNow)
+                : null;
+        }
+
+        // 状态续接保留原批次。仍未登记的执行端可以借状态上报补收一次开始通知。
+        if (snapshot is not null)
+            await _broadcaster.SendEventOnlyToConnectionAsync(connectionId,
+                GatewayProtocol.Events.ControlBatchStart, snapshot, group[5..]);
+    }
+
     private async Task PublishBatchSnapshotAsync(string group, CoordinatedBatchState state,
         CoordinatedBatchSnapshot snapshot, string eventName)
     {
