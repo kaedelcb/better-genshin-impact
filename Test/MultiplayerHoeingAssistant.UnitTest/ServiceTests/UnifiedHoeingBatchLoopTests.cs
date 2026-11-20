@@ -32,6 +32,16 @@ public sealed class UnifiedHoeingBatchLoopTests
         internal Task? TakeoverWait;
         internal bool StateContinuation;
         internal bool UncooperativePreparation;
+        internal bool DeferStopForGameRecovery;
+        internal int RetryStopCount;
+
+        internal void FinishGameRecovery(bool ready)
+        {
+            var job = _terminals.Keys.Single();
+            _terminals[job] = ready
+                ? new BgiTaskQueueStatus { Status = "failed", ErrorCode = "hoeing_incomplete" }
+                : new BgiTaskQueueStatus { Status = "completed", Cancelled = true, ErrorCode = "game_recovery_cancelled" };
+        }
 
         internal Scenario(bool peer = false, params CoordinatedHoeingBinding[] bindings)
         {
@@ -68,7 +78,7 @@ public sealed class UnifiedHoeingBatchLoopTests
                         Server.Apply("peer", "peer-token", Server.BatchId, layout, Server.Index, Server.Attempt, "", DateTime.UtcNow, "takeoverConfirmed");
                     if (Server.Phase == "running" && result == "succeeded")
                         Server.Apply("peer", "peer-token", Server.BatchId, layout, Server.Index, Server.Attempt, "succeeded", DateTime.UtcNow);
-                    if (Server.Phase == "stopping")
+                    if (Server.Phase == "stopping" && Server.Snapshot().Members.Single(m => m.Uid == "peer").Result == "")
                         Server.Apply("peer", "peer-token", Server.BatchId, layout, Server.Index, Server.Attempt, "stopped", DateTime.UtcNow);
                 }
                 DuringExchange?.Invoke(this);
@@ -125,6 +135,13 @@ public sealed class UnifiedHoeingBatchLoopTests
                 CancelCount++;
                 _terminals[id] = new BgiTaskQueueStatus { Status = "queueCancelled", Cancelled = true };
                 return Task.CompletedTask;
+            },
+            CancelOwnedForRetry = !DeferStopForGameRecovery ? null : (id, ct) =>
+            {
+                ct.ThrowIfCancellationRequested();
+                Assert.True(_jobs.ContainsKey(id));
+                RetryStopCount++;
+                return Task.FromResult(false);
             },
             ReleaseTicket = (ticket, epoch, ct) =>
             {
@@ -290,6 +307,31 @@ public sealed class UnifiedHoeingBatchLoopTests
         Assert.Equal(0, s.ReleaseCount);
         Assert.False(s.Batch.CleanupConfirmed);
         Assert.Equal("unknown", s.Batch.Outcome);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TeamRetryWaitsForTheExitedMembersOriginalJobResult(bool gameReady)
+    {
+        var s = new Scenario(peer: true) { KeepRunning = true, DeferStopForGameRecovery = true };
+        var waiting = 0;
+        s.AfterSubmit = current => current.KeepRunning = false;
+        s.DuringExchange = current =>
+        {
+            if (current.Server.Phase == "running" && current.Server.Attempt == 0 && current.Sent.Count == 1)
+                current.Server.Apply("peer", "peer-token", current.Server.BatchId, "group", 0, 0, "failed", DateTime.UtcNow);
+            if (current.Server.Phase != "stopping" || current.RetryStopCount == 0) return;
+            Assert.Single(current.Sent);
+            Assert.Equal(0, current.Server.Attempt);
+            if (++waiting == 3) current.FinishGameRecovery(gameReady);
+        };
+
+        Assert.Equal(gameReady, await s.Run());
+        Assert.Equal(1, s.RetryStopCount);
+        Assert.Equal(0, s.CancelCount);
+        Assert.Equal(gameReady ? 2 : 1, s.Sent.Count);
+        Assert.Equal(gameReady ? "completed" : "aborted", s.Server.Phase);
     }
 
     [Fact]

@@ -26,7 +26,12 @@ public sealed class Win32RuntimeProvider(
     /// <summary>
     /// 找到游戏窗口就附着；找不到时，开启了关联启动则启动游戏后附着，否则提示并返回 null
     /// </summary>
-    public async Task<GameRuntime?> AcquireAsync(CancellationToken ct)
+    public Task<GameRuntime?> AcquireAsync(CancellationToken ct) => AcquireAsync(ct, recoveringGame: false);
+
+    internal Task<GameRuntime?> AcquireAfterGameExitAsync(CancellationToken ct)
+        => AcquireAsync(ct, recoveringGame: true);
+
+    private async Task<GameRuntime?> AcquireAsync(CancellationToken ct, bool recoveringGame)
     {
         var config = configService.Get();
         DisableGenshinHdrIfNeeded(config);
@@ -35,6 +40,8 @@ public sealed class Win32RuntimeProvider(
         if (hWnd == IntPtr.Zero)
         {
             var startConfig = config.GenshinStartConfig;
+            if (recoveringGame && (!startConfig.LinkedStartEnabled || !System.IO.File.Exists(startConfig.InstallPath)))
+                return null;
             if (startConfig.LinkedStartEnabled)
             {
                 if (string.IsNullOrEmpty(startConfig.InstallPath))
@@ -43,7 +50,9 @@ public sealed class Win32RuntimeProvider(
                     return null;
                 }
 
-                hWnd = await SystemControl.StartFromLocalAsync(startConfig.InstallPath);
+                hWnd = recoveringGame
+                    ? await SystemControl.StartFromLocalAsync(startConfig.InstallPath, windowTimeout: TimeSpan.FromMinutes(3), ct: ct)
+                    : await SystemControl.StartFromLocalAsync(startConfig.InstallPath);
                 if (hWnd == IntPtr.Zero)
                 {
                     // 启动失败的提示已由 StartFromLocalAsync 给出

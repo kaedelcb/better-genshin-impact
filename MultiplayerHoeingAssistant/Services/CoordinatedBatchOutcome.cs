@@ -7,6 +7,7 @@ public static class CoordinatedBatchOutcome
     {
         "pending" or "running" => "",
         "completed" when !terminal.Cancelled => "succeeded",
+        "completed" when terminal.ErrorCode == "game_recovery_cancelled" => "cancelled",
         "completed" or "queueCancelled" when stopping => "stopped",
         "completed" or "queueCancelled" => "cancelled",
         "failed" when terminal.ErrorCode == "hoeing_incomplete" => "failed",

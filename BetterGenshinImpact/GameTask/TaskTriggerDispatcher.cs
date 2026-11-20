@@ -114,7 +114,7 @@ namespace BetterGenshinImpact.GameTask
         /// <summary>
         /// 截图器停止或游戏已退出。由 GameRuntimeService 订阅并停止运行环境
         /// </summary>
-        public event EventHandler? UiTaskStopTickEvent;
+        internal event Action<GameRuntime, bool>? RuntimeLost;
 
         private GameUiCategory PrevGameUiCategory = GameUiCategory.Unknown; // 上一个UI类别
         private DateTime PrevGameUiChangeTime = DateTime.Now; // 上一次UI变化时间
@@ -417,7 +417,7 @@ namespace BetterGenshinImpact.GameTask
 
                     PictureInPictureService.Hide(resetManual: true);
                     _maskWindowHost.ReportGameWindow(new GameWindowState(false, false, false, false, default));
-                    UiTaskStopTickEvent?.Invoke(sender, e);
+                    RuntimeLost?.Invoke(runtime, !alive);
                     return;
                 }
                 

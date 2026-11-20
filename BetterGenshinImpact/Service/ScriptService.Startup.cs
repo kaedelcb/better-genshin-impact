@@ -156,25 +156,49 @@ public partial class ScriptService
     /// 处理登录/领奖界面并等待游戏进入可操作界面（最长 5 分钟，跟随调用方令牌取消）。
     /// </summary>
     internal static Task WaitColdStartedGameReadyAsync(CancellationToken ct)
+        => WaitColdStartedGameReadyAsync(App.GetService<GameRuntimeService>()!, ct);
+
+    internal static Task WaitColdStartedGameReadyAsync(GameRuntimeService runtime, CancellationToken ct,
+        GameRuntime? exited = null, Action? verifyRecovery = null)
     {
-        var runtime = App.GetService<GameRuntimeService>()!;
         var waitingLogged = false;
+        void Verify()
+        {
+            ct.ThrowIfCancellationRequested();
+            verifyRecovery?.Invoke();
+        }
+
         return GameTaskStartupGate.PrepareAsync(true,
-            token => runtime.IsRunning ? Task.FromResult(true) : runtime.StartAsync(token),
-            token =>
+            token => exited != null ? runtime.StartAfterGameExitAsync(exited, token)
+                : runtime.IsRunning ? Task.FromResult(true) : runtime.StartAsync(token),
+            _ =>
             {
                 using var pause = TaskTriggerDispatcher.Instance().PauseForInference();
-                token.ThrowIfCancellationRequested();
-                if (!runtime.IsRunning || !TaskContext.Instance().IsInitialized) return false;
-                using var frame = TaskControl.CaptureToRectArea();
-                var ready = CheckStartupScreen(frame, token.ThrowIfCancellationRequested);
-                if (!ready && !waitingLogged)
+                Verify();
+                if (runtime.Current is not { } active || !TaskContext.Instance().IsInitialized) return false;
+                bool ready;
+                if (exited == null)
+                {
+                    using var frame = TaskControl.CaptureToRectArea();
+                    ready = CheckStartupScreen(frame, Verify);
+                }
+                else
+                {
+                    // 旧锄地令牌已取消。新窗口暂时无画面时继续等，不进入旧任务的截图恢复。
+                    if (!active.Window.IsAlive || !active.Capture.IsCapturing)
+                        throw new InvalidOperationException("重新启动的游戏或截图器已停止");
+                    var image = TaskControl.CaptureGameImageNoRetry(active.Capture);
+                    if (image == null) return false;
+                    using var frame = new CaptureContent(image, 0, 0);
+                    ready = CheckStartupScreen(frame.CaptureRectArea, Verify);
+                }
+                if (exited == null && !ready && !waitingLogged)
                 {
                     waitingLogged = true;
                     TaskControl.Logger.LogInformation("游戏刚启动，等待登录、加载和领奖完成后再核对账号（最长5分钟，可随时停止）");
                 }
                 return ready;
-            }, ct);
+            }, ct, verifyRecovery);
     }
 
     private static bool CheckStartupScreen(ImageRegion frame, Action verifyOwnership)

@@ -931,11 +931,16 @@ internal sealed class InstanceRequestHandler
         var dispatch = Application.Current!.Dispatcher.InvokeAsync(async () =>
         {
             using var coordinatedHoeing = CreateCoordinatedHoeingScope(executionRequest, jobId);
-            void FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult result)
+            void FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult result, OperationCanceledException? cancellation = null)
             {
+                var recoveredExit = result == BetterGenshinImpact.GameTask.TaskRunResult.Cancelled
+                    && !cancellationToken.IsCancellationRequested && stopVersion == ExecutionScope.StopVersionNow
+                    && coordinatedHoeing.RecoveredGameIsReady?.Invoke() == true;
+                if (recoveredExit) result = BetterGenshinImpact.GameTask.TaskRunResult.Failed;
                 coordinatedHoeing.Seal(result);
-                if (result == BetterGenshinImpact.GameTask.TaskRunResult.Failed && coordinatedHoeing.Incomplete)
+                if (result == BetterGenshinImpact.GameTask.TaskRunResult.Failed && (coordinatedHoeing.Incomplete || recoveredExit))
                     completion.TrySetException(new HoeingIncompleteException());
+                else if (cancellation != null) completion.TrySetException(cancellation);
                 else completion.TrySetResult(result);
             }
             ExecutionScope? admittedRoot = null;
@@ -1024,8 +1029,7 @@ internal sealed class InstanceRequestHandler
             }
             catch (OperationCanceledException ex)
             {
-                coordinatedHoeing.Seal(BetterGenshinImpact.GameTask.TaskRunResult.Cancelled);
-                completion.TrySetException(ex);
+                FinishCoordinated(BetterGenshinImpact.GameTask.TaskRunResult.Cancelled, ex);
             }
             catch (Exception ex)
             {

@@ -54,7 +54,7 @@ public sealed class GameRuntimeService
             webPageProvider.StopCaptureBeforeCloseAsync = StopAsync;
         }
 
-        _dispatcher.UiTaskStopTickEvent += OnRuntimeLost;
+        _dispatcher.RuntimeLost += OnRuntimeLost;
     }
 
     /// <summary>
@@ -68,6 +68,9 @@ public sealed class GameRuntimeService
     public GameRuntime? Current { get; private set; }
 
     public bool IsRunning => Current is not null;
+
+    internal event Action<GameRuntime>? UnexpectedGameExit;
+    internal long StopVersion => Interlocked.Read(ref _stopVersion);
 
     /// <summary>
     /// 正在获取运行环境（找窗、启动游戏、等待网页版登录与排队）。只在 UI 线程上变化
@@ -94,13 +97,17 @@ public sealed class GameRuntimeService
     /// 获取期间收到停止请求时，获取完成后不再绑定（网页版可关闭宿主窗口来结束等待）。
     /// 绑定过程中抛出的异常（例如分辨率不合规）会在回滚后继续向上抛出，与改造前一致
     /// </summary>
-    public Task<bool> StartAsync(CancellationToken ct = default)
+    public Task<bool> StartAsync(CancellationToken ct = default) => StartAsync(ct, StopVersion);
+
+    internal Task<bool> StartAfterGameExitAsync(GameRuntime exited, CancellationToken ct)
+        => StartAsync(ct, Interlocked.Read(ref exited.UnexpectedExitVersion), recoveringGame: true);
+
+    private Task<bool> StartAsync(CancellationToken ct, long stopVersion, bool recoveringGame = false)
     {
-        var stopVersion = Interlocked.Read(ref _stopVersion);
         var uiDispatcher = Application.Current.Dispatcher;
         return uiDispatcher.CheckAccess()
-            ? StartCoreAsync(ct, stopVersion)
-            : uiDispatcher.InvokeAsync(() => StartCoreAsync(ct, stopVersion)).Task.Unwrap();
+            ? StartCoreAsync(ct, stopVersion, recoveringGame)
+            : uiDispatcher.InvokeAsync(() => StartCoreAsync(ct, stopVersion, recoveringGame)).Task.Unwrap();
     }
 
     /// <summary>
@@ -134,6 +141,7 @@ public sealed class GameRuntimeService
     /// </summary>
     public Task StopAsync(bool cancelRunningTasks)
     {
+        if (Current is { } runtime) runtime.StopRequested = true;
         Interlocked.Increment(ref _stopVersion);
         var uiDispatcher = Application.Current.Dispatcher;
         return uiDispatcher.CheckAccess()
@@ -141,23 +149,24 @@ public sealed class GameRuntimeService
             : uiDispatcher.InvokeAsync(() => QueueStopAsync(cancelRunningTasks)).Task.Unwrap();
     }
 
-    private Task QueueStopAsync(bool cancelRunningTasks)
+    private Task QueueStopAsync(bool cancelRunningTasks, GameRuntime? lostRuntime = null, bool processExited = false)
     {
         // 同一轮停止只排队一次；后续启动必须等这次解绑完成。
         if (_stopTask.IsCompleted)
         {
-            _stopTask = StopCoreAsync(cancelRunningTasks);
+            _stopTask = StopCoreAsync(cancelRunningTasks, lostRuntime, processExited);
         }
 
         return _stopTask;
     }
 
-    private async Task StopCoreAsync(bool cancelRunningTasks)
+    private async Task StopCoreAsync(bool cancelRunningTasks, GameRuntime? lostRuntime, bool processExited)
     {
         await _startLock.WaitAsync();
         try
         {
-            StopCurrent(cancelRunningTasks);
+            if (lostRuntime != null && !ReferenceEquals(Current, lostRuntime)) return;
+            StopCurrent(cancelRunningTasks, processExited);
         }
         finally
         {
@@ -165,7 +174,7 @@ public sealed class GameRuntimeService
         }
     }
 
-    private void StopCurrent(bool cancelRunningTasks = true)
+    private void StopCurrent(bool cancelRunningTasks, bool processExited)
     {
         var runtime = Current;
         if (runtime is null)
@@ -173,7 +182,13 @@ public sealed class GameRuntimeService
             return;
         }
 
+        var stopVersion = StopVersion;
         Current = null;
+        if (processExited && !runtime.StopRequested && runtime.Kind == GameRuntimeKind.Win32Window)
+        {
+            Interlocked.Exchange(ref runtime.UnexpectedExitVersion, stopVersion);
+            UnexpectedGameExit?.Invoke(runtime);
+        }
         if (cancelRunningTasks)
         {
             CancellationContext.Instance.Cancel(); // 取消独立任务的运行
@@ -192,9 +207,14 @@ public sealed class GameRuntimeService
     /// <summary>
     /// 关闭游戏。截图器会在下一次调度时发现游戏已退出并自动停止
     /// </summary>
-    public void CloseGame() => _provider.CloseGame();
+    public void CloseGame()
+    {
+        if (Current is { } runtime) runtime.StopRequested = true;
+        Interlocked.Increment(ref _stopVersion);
+        _provider.CloseGame();
+    }
 
-    private async Task<bool> StartCoreAsync(CancellationToken ct, long stopVersion)
+    private async Task<bool> StartCoreAsync(CancellationToken ct, long stopVersion, bool recoveringGame)
     {
         await _stopTask.WaitAsync(ct);
         await _startLock.WaitAsync(ct);
@@ -220,7 +240,10 @@ public sealed class GameRuntimeService
             SetStarting(true);
             try
             {
-                runtime = await _provider.AcquireAsync(ct);
+                ct.ThrowIfCancellationRequested();
+                runtime = recoveringGame && _provider is Win32.Win32RuntimeProvider win32
+                    ? await win32.AcquireAfterGameExitAsync(ct)
+                    : await _provider.AcquireAsync(ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -324,11 +347,16 @@ public sealed class GameRuntimeService
     /// <summary>
     /// 截图调度发现游戏已退出或截图器停止
     /// </summary>
-    private async void OnRuntimeLost(object? sender, EventArgs e)
+    private async void OnRuntimeLost(GameRuntime runtime, bool processExited)
     {
         try
         {
-            await StopAsync();
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (!ReferenceEquals(Current, runtime) || !_stopTask.IsCompleted) return Task.CompletedTask;
+                Interlocked.Increment(ref _stopVersion);
+                return QueueStopAsync(cancelRunningTasks: true, runtime, processExited);
+            }).Task.Unwrap();
         }
         catch (Exception ex)
         {

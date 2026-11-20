@@ -66,6 +66,52 @@ public class CoordinatedHoeingEvidenceQueueTests
         Assert.Equal(TaskRunResult.Ran, finished.HoeingEvidence.JobResult);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task GameRecoveryDefersOnlyTheAutomaticRetryStop(bool userStops, bool gameReady)
+    {
+        using var queue = Create();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var recoveryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var submitted = queue.Submit(new(1, "finish-group", null, 0, async (handle, token) =>
+        {
+            using var scope = InstanceRequestHandler.CreateCoordinatedHoeingScope(CoordinatedRequest(), handle,
+                (id, evidence) => queue.RecordHoeingEvidence(id, evidence));
+            using var native = scope.BeginNative();
+            scope.BeginGameRecovery();
+            native.Cancel();
+            recoveryStarted.SetResult();
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(token, deadline.Token);
+            try { await finishRecovery.Task.WaitAsync(lifetime.Token); }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+            if (!gameReady || token.IsCancellationRequested)
+            {
+                scope.Seal(TaskRunResult.Cancelled);
+                return true;
+            }
+            scope.Seal(TaskRunResult.Failed);
+            throw new HoeingIncompleteException();
+        }));
+        await recoveryStarted.Task.WaitAsync(deadline.Token);
+
+        Assert.Equal(BgiTaskCoordinator.CancelOutcome.GameRecoveryPending,
+            queue.CancelByHandle(submitted.TaskHandle, ownedOnly: true, forTeamRetry: true));
+        Assert.Equal("running", queue.QueryItemStatus(submitted.TaskHandle).Status);
+        if (userStops)
+            Assert.Equal(BgiTaskCoordinator.CancelOutcome.StopRequestedRunning,
+                queue.CancelByHandle(submitted.TaskHandle, ownedOnly: true));
+        else
+            finishRecovery.SetResult();
+
+        await Until(() => queue.QueryItemStatus(submitted.TaskHandle).Status == (gameReady ? "failed" : "completed"));
+        var result = queue.QueryItemStatus(submitted.TaskHandle);
+        Assert.Equal(!gameReady, result.Cancelled);
+        Assert.Equal(gameReady ? "hoeing_incomplete" : "game_recovery_cancelled", result.ErrorCode);
+    }
+
     [Fact]
     public async Task TailFailureKeepsBodyEvidenceWithoutChangingFailedQueueResult()
     {

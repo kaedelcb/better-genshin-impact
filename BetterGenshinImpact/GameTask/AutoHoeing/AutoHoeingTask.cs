@@ -16,6 +16,9 @@ using BetterGenshinImpact.GameTask.Common.Exceptions;
 using BetterGenshinImpact.GameTask.Common.Job;
 using BetterGenshinImpact.GameTask.Model.Area;
 using BetterGenshinImpact.GameTask.Shell;
+using BetterGenshinImpact.GameTask.Runtime;
+using BetterGenshinImpact.Service;
+using BetterGenshinImpact.Service.Execution;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -485,12 +488,36 @@ public partial class AutoHoeingTask : ISoloTask
 
     public async Task Start(CancellationToken ct)
     {
-        using var attempt = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BeginNative();
+        var coordinated = CoordinatedHoeingScope.Current;
+        using var attempt = coordinated?.BeginNative();
+        var root = ExecutionScope.Current;
+        var runtimeService = coordinated != null ? App.GetService<GameRuntimeService>() : null;
+        var runtime = runtimeService?.Current;
+        GameRuntime? exited = null;
+        void OnGameExit(GameRuntime lost)
+        {
+            if (!ReferenceEquals(lost, runtime) || root?.IsCurrentOwner != true || ct.IsCancellationRequested
+                || _config is not { MultiplayerEnabled: true, SoloDebugMode: false }
+                || _completedNormally || _mainExecutionReturned || _expCapStopTriggered || _restrictionStopTriggered)
+                return;
+            Volatile.Write(ref exited, lost);
+            coordinated!.BeginGameRecovery();
+        }
+
+        if (runtime?.Kind == GameRuntimeKind.Win32Window) runtimeService!.UnexpectedGameExit += OnGameExit;
         try
         {
             await StartCore(ct, attempt);
             if (attempt != null) ct.ThrowIfCancellationRequested();
             attempt?.Complete();
+        }
+        catch (Exception) when (Volatile.Read(ref exited) is { } && ct.IsCancellationRequested)
+        {
+            // 旧路线和房间已经收尾。只恢复本机游戏，越过原线路令牌时仍受同一个根流程的停止约束。
+            attempt?.Cancel();
+            await RecoverExitedGameAsync(runtimeService!, exited!, root!, coordinated!);
+            ct.ThrowIfCancellationRequested();
+            throw;
         }
         catch (OperationCanceledException)
         {
@@ -501,6 +528,41 @@ public partial class AutoHoeingTask : ISoloTask
         {
             attempt?.Fail();
             throw;
+        }
+        finally
+        {
+            if (runtime?.Kind == GameRuntimeKind.Win32Window) runtimeService!.UnexpectedGameExit -= OnGameExit;
+        }
+    }
+
+    private async Task RecoverExitedGameAsync(GameRuntimeService service, GameRuntime exited, ExecutionScope root,
+        CoordinatedHoeingScope coordinated)
+    {
+        var exitVersion = Interlocked.Read(ref exited.UnexpectedExitVersion);
+        try
+        {
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(root.Token);
+            budget.CancelAfter(TimeSpan.FromMinutes(5));
+            void Verify()
+            {
+                root.ThrowIfStopped();
+                budget.Token.ThrowIfCancellationRequested();
+                if (service.StopVersion != exitVersion)
+                    throw new OperationCanceledException("游戏恢复期间运行环境已停止");
+            }
+
+            Verify();
+            _logger.LogWarning("[联机] 本机游戏在锄地期间退出，正在重新启动并等待就绪（最长5分钟）");
+            await ScriptService.WaitColdStartedGameReadyAsync(service, budget.Token, exited, Verify);
+            Verify();
+            var recovered = service.Current;
+            coordinated.RecoveredGameIsReady = () => service.StopVersion == exitVersion
+                && ReferenceEquals(service.Current, recovered) && recovered?.Window.IsAlive == true;
+            _logger.LogInformation("[联机] 本机游戏已就绪，交回现有全队重开流程");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[联机] 本机游戏未能恢复，按原流程结束本次锄地");
         }
     }
 

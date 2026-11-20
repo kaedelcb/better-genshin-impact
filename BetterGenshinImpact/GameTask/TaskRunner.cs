@@ -178,7 +178,8 @@ public class TaskRunner
         catch (OperationCanceledException)
         {
             interrupted = true;
-            Notify.Event(NotificationEvent.TaskCancel).Success("任务被手动取消");
+            if (CoordinatedHoeingScope.Current?.RecoveredGameIsReady?.Invoke() != true || !scope.IsCurrentOwner)
+                Notify.Event(NotificationEvent.TaskCancel).Success("任务被手动取消");
             _logger.LogInformation("任务中断:{Msg}", "任务被取消");
             if (RunnerContext.Instance.IsContinuousRunGroup)
             {

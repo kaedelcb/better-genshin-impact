@@ -13,7 +13,10 @@ namespace BetterGenshinImpact.Service.Execution;
 /// JobResult is the independent result of the complete group/one-dragon invocation.
 /// </summary>
 public sealed record CoordinatedHoeingEvidence(int Started, int Completed, int Failed, int Cancelled,
-    int Active, bool Sealed, TaskRunResult? JobResult, long Revision = 0, int? PlannedNativeCount = null);
+    int Active, bool Sealed, TaskRunResult? JobResult, long Revision = 0, int? PlannedNativeCount = null)
+{
+    internal bool RecoveringGame { get; init; }
+}
 
 /// <summary>Flows with one dispatched job, including nested script/one-dragon tasks; never a process switch.</summary>
 public sealed class CoordinatedHoeingScope : IDisposable
@@ -29,6 +32,18 @@ public sealed class CoordinatedHoeingScope : IDisposable
     private bool _incomplete;
     private bool _disposed;
     public bool Incomplete { get { lock (_gate) return _incomplete; } }
+    internal Func<bool>? RecoveredGameIsReady { get; set; }
+
+    internal void BeginGameRecovery()
+    {
+        CoordinatedHoeingEvidence snapshot;
+        lock (_gate)
+        {
+            if (_disposed || _evidence.Sealed || _evidence.Active == 0 || _evidence.RecoveringGame) return;
+            snapshot = _evidence = _evidence with { RecoveringGame = true, Revision = _evidence.Revision + 1 };
+        }
+        Publish(snapshot);
+    }
     public string? BatchId { get; }
     public IReadOnlyList<string> ExpectedParticipantUids { get; }
     public static CoordinatedHoeingScope? Current => Ambient.Value;

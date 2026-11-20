@@ -68,6 +68,8 @@ internal sealed class BgiTaskCoordinator : IDisposable
         /// <summary>在跑且句柄匹配：调用方应走等价 task.stop 的全局取消。</summary>
         StopRequestedRunning,
 
+        GameRecoveryPending,
+
         /// <summary>句柄不存在（不在队也不在跑）。</summary>
         NotFound,
     }
@@ -293,6 +295,9 @@ internal sealed class BgiTaskCoordinator : IDisposable
     /// <summary>[终态可拉取] 登记队列项终态（每个终态发布点调用，与事件发布同源同事）。</summary>
     private void RecordTerminal(Guid taskHandle, string status, bool cancelled = false, string? errorCode = null, string? message = null)
     {
+        if (cancelled && errorCode == null
+            && _hoeingEvidence.TryGetValue(taskHandle, out var evidence) && evidence.RecoveringGame)
+            errorCode = "game_recovery_cancelled";
         RecordQueueObservation(taskHandle, status, cancelled, errorCode, message);
 
         // [A2.4] 终态同源进统一注册表（幂等仲裁：执行过的项漏斗已先写终态，此处 TryMark 返回 false 自然无操作；
@@ -620,7 +625,7 @@ internal sealed class BgiTaskCoordinator : IDisposable
     }
 
     /// <summary>按句柄取消：在队 → 移除+事件；在跑且匹配 → 由调用方走等价 task.stop；否则 task_not_found。</summary>
-    public CancelOutcome CancelByHandle(Guid taskHandle, bool ownedOnly = false)
+    public CancelOutcome CancelByHandle(Guid taskHandle, bool ownedOnly = false, bool forTeamRetry = false)
     {
         PendingTask? queued = null;
         lock (_submitLock)
@@ -634,6 +639,12 @@ internal sealed class BgiTaskCoordinator : IDisposable
             {
                 if (ownedOnly)
                 {
+                    // The old native attempt is already unwinding. Let only this member finish
+                    // restoring its game before reporting a terminal result for the team retry.
+                    if (forTeamRetry && !current.Cts.IsCancellationRequested
+                        && _hoeingEvidence.TryGetValue(taskHandle, out var evidence)
+                        && evidence is { RecoveringGame: true, Sealed: false })
+                        return CancelOutcome.GameRecoveryPending;
                     current.OwnedCancellationRequested = true;
                     current.Cts.Cancel();
                 }

@@ -582,6 +582,19 @@ public sealed partial class BgiExternalClient : IDisposable
     public Task<BgiExternalResponse> CancelOwnedTaskAsync(string taskHandle, CancellationToken ct)
         => SendCommandAsync(ExternalOperations.TaskCancel, new { taskHandle, ownedOnly = "v1" }, CommandTimeout, ct);
 
+    internal async Task<bool> CancelOwnedTaskForRetryAsync(string taskHandle, CancellationToken ct)
+    {
+        var response = await SendCommandAsync(ExternalOperations.TaskCancel,
+            new { taskHandle, ownedOnly = "v1", forTeamRetry = true }, CommandTimeout, ct);
+        // Only a positive deferral receipt changes the existing stop path.
+        if (!response.Success || string.IsNullOrEmpty(response.Data)) return true;
+        using var data = JsonDocument.Parse(response.Data);
+        return data.RootElement.ValueKind != JsonValueKind.Object
+            || !data.RootElement.TryGetProperty("status", out var status)
+            || status.ValueKind != JsonValueKind.String
+            || !status.ValueEquals("game_recovery_pending");
+    }
+
     /// <summary>停止当前任务，默认同时清空排队任务。</summary>
     public Task<BgiExternalResponse> StopTaskAsync(bool clearQueue = true, CancellationToken cancellationToken = default)
         => SendCommandAsync(ExternalOperations.TaskStop, new { clearQueue }, CommandTimeout, cancellationToken);

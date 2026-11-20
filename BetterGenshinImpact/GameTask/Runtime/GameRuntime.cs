@@ -19,6 +19,9 @@ public sealed class GameRuntime(
 {
     public GameRuntimeKind Kind { get; } = kind;
 
+    internal volatile bool StopRequested;
+    internal long UnexpectedExitVersion;
+
     public IGameWindow Window { get; } = window ?? throw new ArgumentNullException(nameof(window));
 
     /// <summary>

@@ -272,8 +272,11 @@ internal static class ExternalInterfaceCommandPlane
             return InstanceIpcEnvelope.Failure(request, "cancel_identity_mismatch", "原纪元或作业出现身份不可核对；未取消");
 
         var ownedOnly = request.Data?["ownedOnly"]?.ToString() == "v1";
-        return BgiTaskCoordinator.Instance.CancelByHandle(handle, ownedOnly) switch
+        var forTeamRetry = ownedOnly && request.Data?["forTeamRetry"] is JValue { Value: true };
+        return BgiTaskCoordinator.Instance.CancelByHandle(handle, ownedOnly, forTeamRetry) switch
         {
+            BgiTaskCoordinator.CancelOutcome.GameRecoveryPending => InstanceIpcEnvelope.Response(
+                request, new { status = "game_recovery_pending", taskHandle = handleRaw }),
             BgiTaskCoordinator.CancelOutcome.CancelledQueued => InstanceIpcEnvelope.Response(
                 request, new { status = "cancelled", taskHandle = handleRaw, wasQueued = true }),
             BgiTaskCoordinator.CancelOutcome.StopRequestedRunning when ownedOnly =>

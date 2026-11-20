@@ -50,6 +50,7 @@ public partial class MainViewModel
             ResolveOriginal = (key, ct) => External().QueryTaskQueueStatusByKeyAsync(key, ct),
             Acknowledge = (key, jobId, epoch, ct) => External().AcknowledgeTaskResultAsync(key, jobId, epoch, ct),
             CancelOwned = async (jobId, ct) => { await External().CancelOwnedTaskAsync(jobId, ct); },
+            CancelOwnedForRetry = (jobId, ct) => External().CancelOwnedTaskForRetryAsync(jobId, ct),
             Submit = (item, epoch, ct) => SubmitCoordinatedControlAsync(batch, async admittedToken =>
             {
                 var ext = _externalClient is { State: BgiExternalLinkState.Ready } ready ? ready
@@ -158,6 +159,7 @@ internal sealed class CoordinatedBatchRuntime
     internal Func<BgiEpoch?>? ReadBoundEpoch { get; init; }
     internal required Func<string, CancellationToken, Task<BgiTaskQueueStatus?>> ReadTerminal { get; init; }
     internal required Func<string, CancellationToken, Task> CancelOwned { get; init; }
+    internal Func<string, CancellationToken, Task<bool>>? CancelOwnedForRetry { get; init; }
     internal bool StateContinuationEnabled { get; init; }
     internal Func<bool>? StateContinuationAvailable { get; init; }
     internal Func<string, CancellationToken, Task<BgiTaskQueueStatus?>>? ResolveOriginal { get; init; }
@@ -205,6 +207,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
     private CancellationTokenSource? _stageCancellation;
     private DateTime _stageStarted;
     private bool _cancelSent;
+    private bool _retryStopDeferredForGameRecovery;
     private bool _physicalCleanupConfirmed;
     private int _completedNative;
     private DateTime? _observationUnavailableSince;
@@ -661,6 +664,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             if (recovery && batch.PriorityRecoveryEnabled) batch.RetryUnfinishedJointItem();
             _index = team.Index; _attempt = team.Attempt;
             _item = null; _result = ""; _reason = ""; _cancelSent = false; _completedNative = 0;
+            _retryStopDeferredForGameRecovery = false;
             batch.SetControlItemSubmitted(false);
             batch.MarkCurrentBindingStarted();
         }
@@ -732,7 +736,18 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             if (_item.State == BatchItemState.PendingSubmit)
             { _item.State = BatchItemState.TerminalConfirmed; _result = "stopped"; }
             else if (_item.JobId != null && !_cancelSent)
-            { await io.CancelOwned(_item.JobId, rpc.Token); _cancelSent = true; }
+            {
+                if (batch.ExplicitStopRequested || io.CancelOwnedForRetry == null)
+                {
+                    await io.CancelOwned(_item.JobId, rpc.Token);
+                    _cancelSent = true;
+                }
+                else if (!_retryStopDeferredForGameRecovery)
+                {
+                    _cancelSent = await io.CancelOwnedForRetry(_item.JobId, rpc.Token);
+                    _retryStopDeferredForGameRecovery = !_cancelSent;
+                }
+            }
         }
         if (_item.State == BatchItemState.Submitted && _item.JobId != null && _result.Length == 0)
         {

@@ -49,6 +49,9 @@ public sealed class CoordinatedBatchAdmissionRelationTests
     // stopping 且未取消：completed 仍是"确认成功"（stop 与结果正交，不因停止意图改判成功为 stopped）
     [InlineData("completed", false, null, true, "succeeded")]
     [InlineData("completed", true, null, true, "stopped")]
+    [InlineData("completed", true, "game_recovery_cancelled", true, "cancelled")]
+    [InlineData("completed", true, "game_recovery_cancelled", false, "cancelled")]
+    [InlineData("failed", false, "hoeing_incomplete", true, "failed")]
     [InlineData("queueCancelled", false, null, true, "stopped")]
     [InlineData("failed", false, "task_cancelled", true, "stopped")]
     public void CoordinatedBatchOutcome_Classify_NeverTreatsAbsenceOrUnknownAsSuccess(

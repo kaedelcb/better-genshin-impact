@@ -241,8 +241,10 @@ public class SystemControl
     /// true 时强制按 1920x1080 窗口化参数启动（先剔除用户参数里已有的同类项再追加，不会重复）。
     /// 用于启动等待超时后的自动重启。
     /// </param>
-    public static async Task<nint> StartFromLocalAsync(string path, bool forceStandardResolution = false)
+    public static async Task<nint> StartFromLocalAsync(string path, bool forceStandardResolution = false,
+        TimeSpan? windowTimeout = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (!File.Exists(path))
         {
             await ThemedMessageBox.ErrorAsync($"原神启动路径 {path} 不存在，请前往 启动——同时启动原神——原神安装路径 重新进行配置！");
@@ -285,23 +287,31 @@ public class SystemControl
 
         // 等待新启动的进程创建窗口，带超时保护
         var sw = Stopwatch.StartNew();
-        var timeout = TimeSpan.FromSeconds(60);
+        var timeout = windowTimeout ?? TimeSpan.FromSeconds(60);
         while (sw.Elapsed < timeout)
         {
+            ct.ThrowIfCancellationRequested();
             var handle = FindGenshinImpactHandle();
             Logger.LogDebug("等待进程:{handle}", handle);
             if (handle != 0)
             {
                 // 稳定等待，确保窗口完全初始化
-                await Task.Delay(3000);
+                await Task.Delay(3000, ct);
                 handle = FindGenshinImpactHandle();
-                await Task.Delay(2500);
+                await Task.Delay(2500, ct);
+                if (windowTimeout != null)
+                {
+                    // 恢复时给启动过程中短暂消失或重建的窗口留出剩余时间。
+                    handle = FindGenshinImpactHandle();
+                    if (handle == 0) continue;
+                }
                 return handle;
             }
-            await Task.Delay(2000);
+            await Task.Delay(2000, ct);
         }
 
         // 超时后再做一次最终尝试
+        ct.ThrowIfCancellationRequested();
         return FindGenshinImpactHandle();
     }
 
