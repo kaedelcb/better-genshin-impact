@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -26,6 +27,10 @@ public sealed class BgiGatewayClient : IAsyncDisposable
 
     private HubConnection? _connection;
 
+    // SignalR 换连接后须重新握手，包括多世界关房后等待下一房间的阶段。
+    private readonly SemaphoreSlim _helloGate = new(1, 1);
+    private volatile string? _helloConnectionId;
+
     // === 测试种子（沿用 CoordinatorClient._invokeHubAsync 的既有模式）===
     // 注入后绕过真实 HubConnection，让单测可断言信封线形（名称 + payload）而不依赖网络。
     // 仅在测试中赋值；生产路径保持 null。注意：HubConnection 在 SignalR.Client 8.0 中
@@ -33,6 +38,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     internal Func<string, GatewayEnvelope, CancellationToken, Task>? _testSendOverride;
     internal Func<string, GatewayEnvelope, CancellationToken, Task<GatewayEnvelope>>? _testInvokeOverride;
     internal Func<CancellationToken, Task>? _testReconnectStartOverride;
+    internal string? _testConnectionIdOverride;
 
     /// <summary>evt 信封到达（服务器 → 客户端广播/定向）。在 SignalR 回调线程触发，订阅方不得外抛异常。</summary>
     public event Action<GatewayEnvelope>? EnvelopeReceived;
@@ -50,7 +56,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     public string[] ServerCapabilities { get; private set; } = [];
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
-    internal string? ConnectionId => _connection?.ConnectionId;
+    internal string? ConnectionId => _testConnectionIdOverride ?? _connection?.ConnectionId;
 
     public bool SupportsCapability(string capability) => Array.IndexOf(ServerCapabilities, capability) >= 0;
 
@@ -139,9 +145,10 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// session.hello 握手与能力协商（§4.4）。失败（传输异常或 error 响应）原样上抛，
     /// 由调用方决定计为失败（首连 → ConnectAsync 返回 false；重连 → 计入该次重连失败）。
     /// </summary>
-    public async Task HelloAsync(CancellationToken ct = default)
-    {
-        var resp = await QueryAsync(GatewayProtocol.Names.SessionHello, new
+    public Task HelloAsync(CancellationToken ct = default) => EnsureHelloAsync(ct, force: true);
+
+    private Task<GatewayEnvelope> SendHelloAsync(CancellationToken ct)
+        => QueryRawAsync(GatewayProtocol.Names.SessionHello, new
         {
             clientKind = "bgi",
             clientVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
@@ -158,9 +165,39 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             },
         }, null, ct);
 
-        ServerCapabilities = resp.Get<string[]>("capabilities") ?? [];
-        _logger.LogInformation("[联机] 网关握手完成：serverVersion={Version} capabilities=[{Caps}]",
-            resp.GetString("serverVersion", "unknown"), string.Join(",", ServerCapabilities));
+    /// <summary>业务消息和显式重握手共用同一把门，握手确认只属于当前连接。</summary>
+    private async Task EnsureHelloAsync(CancellationToken ct, bool force = false)
+    {
+        var connectionId = ConnectionId;
+        if (!force && connectionId != null && connectionId == _helloConnectionId) return;
+        // 既有信封测试可以只注入发送方法，不模拟连接代次。
+        if (!force && connectionId == null && _connection == null) return;
+
+        await _helloGate.WaitAsync(ct);
+        try
+        {
+            var connection = _connection;
+            connectionId = ConnectionId;
+            if (connection != null && (connectionId == null || connection.State != HubConnectionState.Connected))
+                throw new IOException("网关连接尚未就绪");
+            if (!force && connectionId != null && connectionId == _helloConnectionId) return;
+
+            _helloConnectionId = null;
+            var response = await SendHelloAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(connection, _connection) || connectionId != ConnectionId
+                || connection != null && connection.State != HubConnectionState.Connected)
+                throw new IOException("网关连接在握手期间已变化");
+
+            ServerCapabilities = response.Get<string[]>("capabilities") ?? [];
+            _helloConnectionId = connectionId;
+            _logger.LogInformation("[联机] 网关握手完成：serverVersion={Version} capabilities=[{Caps}]",
+                response.GetString("serverVersion", "unknown"), string.Join(",", ServerCapabilities));
+        }
+        finally
+        {
+            _helloGate.Release();
+        }
     }
 
     /// <summary>重连自愈用：对已构建的连接重新 StartAsync（与旧 OnConnectionClosed 退避循环配套）。</summary>
@@ -173,6 +210,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// </summary>
     public async Task<GatewayEnvelope> InvokeCommandAsync(string name, object? payload, string? roomCode = null, CancellationToken ct = default)
     {
+        await EnsureHelloAsync(ct);
         var env = GatewayEnvelope.Command(name, payload, roomCode);
         var resp = _testInvokeOverride != null
             ? await _testInvokeOverride(GatewayProtocol.HubMethods.Dispatch, env, ct)
@@ -184,6 +222,13 @@ public sealed class BgiGatewayClient : IAsyncDisposable
 
     /// <summary>query 调用（Hub.Query）：语义同 <see cref="InvokeCommandAsync"/>。</summary>
     public async Task<GatewayEnvelope> QueryAsync(string name, object? payload, string? roomCode = null, CancellationToken ct = default)
+    {
+        await EnsureHelloAsync(ct);
+        return await QueryRawAsync(name, payload, roomCode, ct);
+    }
+
+    /// <summary>已握手通道上的 query 发送：HelloAsync 自身走这里，避免握手重入。</summary>
+    private async Task<GatewayEnvelope> QueryRawAsync(string name, object? payload, string? roomCode, CancellationToken ct)
     {
         var env = GatewayEnvelope.Query(name, payload, roomCode);
         var resp = _testInvokeOverride != null
@@ -200,6 +245,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     /// </summary>
     public async Task SendCommandFireAndForgetAsync(string name, object? payload, string? roomCode = null, CancellationToken ct = default)
     {
+        await EnsureHelloAsync(ct);
         var env = GatewayEnvelope.Command(name, payload, roomCode);
         if (_testSendOverride != null)
         {
@@ -224,6 +270,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
     {
         var conn = _connection;
         _connection = null;
+        _helloConnectionId = null;
         if (conn != null)
             await conn.DisposeAsync();
     }
