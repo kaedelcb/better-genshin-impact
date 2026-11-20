@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight.Model;
 using BetterGenshinImpact.GameTask.AutoFight.Script;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
@@ -12,7 +13,7 @@ namespace BetterGenshinImpact.GameTask.AutoPathing.Handler;
 public class CombatScriptHandler : IActionHandler
 {
     public Task RunAsync(CancellationToken ct, WaypointForTrack? waypointForTrack = null, object? config = null)
-        => RunCoreAsync(ct, waypointForTrack, null, null);
+        => RunCoreAsync(ct, waypointForTrack, null, null, partyConfig: config as PathingPartyConfig);
 
     internal static PickupWaypointProgress? TryStartPickup(CancellationToken ct, WaypointForTrack waypoint, string? pointLabel,
         double distance, bool fromPreviousPoint, CombatScenes? scenes = null, bool counting = true)
@@ -38,14 +39,14 @@ public class CombatScriptHandler : IActionHandler
     }
 
     internal async Task<bool> RunWithPickupAsync(CancellationToken ct, WaypointForTrack waypoint,
-        PickupWaypointProgress pickup, string? pointLabel, bool keepObservingAfterAction = false)
+        PickupWaypointProgress pickup, string? pointLabel, bool keepObservingAfterAction = false, PathingPartyConfig? partyConfig = null)
     {
         // 观察已在移动时启动；基线尚未就绪时继续观察，不阻塞节点动作。
         // 靠近时已经拾够：移动照常到点，完全不发送节点策略指令。
         if (pickup.ReachedToken.IsCancellationRequested)
             return FinishPickup(ct, pickup, waypoint, pointLabel, false, Logger);
 
-        return await RunCoreAsync(ct, waypoint, pickup, pointLabel, keepObservingAfterAction);
+        return await RunCoreAsync(ct, waypoint, pickup, pointLabel, keepObservingAfterAction, partyConfig);
     }
 
     private static bool FinishPickup(CancellationToken ct, PickupWaypointProgress pickup,
@@ -70,7 +71,7 @@ public class CombatScriptHandler : IActionHandler
     }
 
     private static async Task<bool> RunCoreAsync(CancellationToken ct, WaypointForTrack? waypointForTrack,
-        PickupWaypointProgress? pickup, string? pointLabel, bool keepObservingAfterAction = false)
+        PickupWaypointProgress? pickup, string? pointLabel, bool keepObservingAfterAction = false, PathingPartyConfig? partyConfig = null)
     {
         if (waypointForTrack is { CombatScript: not null })
         {
@@ -88,7 +89,10 @@ public class CombatScriptHandler : IActionHandler
                 return false;
             }
 
-            combatScenes.BeforeTask(ct);
+            var fightConfig = partyConfig is { Enabled: true, AutoFightEnabled: true }
+                ? partyConfig.AutoFightConfig
+                : null;
+            combatScenes.BeforeTask(ct, fightConfig?.ChascaBulletThreshold, fightConfig?.ChascaSequenceSlotCount);
             if (pickup == null)
             {
                 await CombatScriptExecutor.ExecuteAsync(combatScript, ct, Logger, combatScenes);

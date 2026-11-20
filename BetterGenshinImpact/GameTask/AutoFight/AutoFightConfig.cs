@@ -108,6 +108,10 @@ public partial class AutoFightConfig : ObservableObject
     /// </summary>
     [ObservableProperty] private int _specializedFrameIntervalMs = 50;
 
+    [ObservableProperty] private double _chascaBulletThreshold = 0.8;
+
+    [ObservableProperty] private int _chascaSequenceSlotCount = 2;
+
     /// <summary>
     /// 桑多涅（Sandrone）重击时间序列（字符串，格式待定）。
     /// </summary>

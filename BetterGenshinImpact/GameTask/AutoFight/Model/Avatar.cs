@@ -102,6 +102,9 @@ public class Avatar
     //阿蕾奇诺自动EQ
     public bool ArlecchinoAutoEnabled { get; set; } = false;
 
+    internal double? ChascaBulletThreshold { get; set; }
+    internal int? ChascaSequenceSlotCount { get; set; }
+
     /// <summary>
     /// 玛薇卡摩托状态检测开关（位置1：重击分支用）。运行期由 AutoFightTask 经 AutoFightParam 注入当前配置组/独立任务的值，
     /// 替代原先读全局 AutoFightConfig 的做法，修复"配置组开关对位置1失效"问题。默认 false。
@@ -1126,7 +1129,7 @@ public class Avatar
                 else if (Name == "恰斯卡")
                 {
                     // 恰斯卡特化逻辑（角色特化域 → AvatarCombatSpecialization，飞行旋转搜索整块收拢）
-                    AvatarCombatSpecialization.RunChascaFlightRotation(Ct);
+                    AvatarCombatSpecialization.RunChascaFlightRotation(Ct, ChascaBulletThreshold, ChascaSequenceSlotCount);
                 }
                 else
                 {

@@ -1710,6 +1710,42 @@
                                         Text="{Binding Config.AutoFightConfig.SpecializedFrameIntervalMs, Mode=TwoWay}" />
                         </Grid>
 
+                        <Grid Margin="0,12,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBlock Grid.Row="0" Grid.Column="0" Text="恰斯卡弹槽识别阈值" TextWrapping="Wrap" />
+                            <ui:TextBlock Grid.Row="1" Grid.Column="0"
+                                          Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                          Text="模型评分范围 0–1，默认 0.8" TextWrapping="Wrap" />
+                            <ui:TextBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                        Width="60" Margin="0,0,12,0"
+                                        Text="{Binding Config.AutoFightConfig.ChascaBulletThreshold, Mode=TwoWay}" />
+                        </Grid>
+
+                        <Grid Margin="0,12,0,0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBlock Grid.Row="0" Grid.Column="0" Text="恰斯卡序列槽数量" TextWrapping="Wrap" />
+                            <ui:TextBlock Grid.Row="1" Grid.Column="0"
+                                          Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                          Text="参与比对的近期子弹序列数量，范围 1–5，默认 2" TextWrapping="Wrap" />
+                            <ui:TextBox Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                                        Width="60" Margin="0,0,12,0"
+                                        Text="{Binding Config.AutoFightConfig.ChascaSequenceSlotCount, Mode=TwoWay}" />
+                        </Grid>
+
                         <!-- 桑多涅特化配置 -->
                         <Grid Margin="0,12,0,0">
                             <Grid.RowDefinitions>

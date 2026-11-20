@@ -665,11 +665,17 @@ public class CombatScenes : IDisposable
         throw new Exception("识别队伍角色失败（已重试 5 次）");
     }
 
-    public void BeforeTask(CancellationToken ct)
+    public void BeforeTask(CancellationToken ct, AutoFightParam? fightParam = null)
+        => BeforeTask(ct, fightParam?.ChascaBulletThreshold, fightParam?.ChascaSequenceSlotCount);
+
+    internal void BeforeTask(CancellationToken ct, double? bulletThreshold, int? bulletSequenceSlotCount)
     {
         for (var i = 0; i < AvatarCount; i++)
         {
-            Avatars[i].Ct = ct;
+            var avatar = Avatars[i];
+            avatar.Ct = ct;
+            avatar.ChascaBulletThreshold = bulletThreshold;
+            avatar.ChascaSequenceSlotCount = bulletSequenceSlotCount;
         }
     }
 

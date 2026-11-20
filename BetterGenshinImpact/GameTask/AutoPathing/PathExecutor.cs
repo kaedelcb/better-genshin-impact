@@ -4624,7 +4624,7 @@ public partial class PathExecutor
             var handler = ActionFactory.GetAfterHandler(waypoint.Action);
             if (pickup != null && CanUseWaypointPickup(waypoint) && handler is CombatScriptHandler combatScriptHandler)
             {
-                if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickup, pickupPointLabel, keepObservingAfterAction))
+                if (await combatScriptHandler.RunWithPickupAsync(ct, waypoint, pickup, pickupPointLabel, keepObservingAfterAction, PartyConfig))
                     return plannedPickupResume;
             }
             else
