@@ -227,9 +227,17 @@ jobs:
         shell: pwsh
         run: git config --global core.longpaths true
       - uses: actions/checkout@v4
+      - name: 配置发布用 .NET SDK
+        run: |
+          @'
+          {
+            "sdk": {
+              "version": "8.0.428",
+              "rollForward": "disable"
+            }
+          }
+          '@ | Set-Content -LiteralPath global.json -Encoding utf8
       - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.x
       - name: 更新 csproj 文件版本号
         run: |
           $version = '${{ needs.validate.outputs.version }}'
@@ -249,7 +257,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
       - name: 🛠️ Build application
-        run: dotnet publish BetterGenshinImpact/BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile -p:DeployToBgiTools=false -p:Version=${{ needs.validate.outputs.version }}
+        run: |
+          dotnet --version
+          dotnet publish BetterGenshinImpact/BetterGenshinImpact.csproj -c Release -p:PublishProfile=FolderProfile -p:DeployToBgiTools=false -p:Version=${{ needs.validate.outputs.version }} -warnaserror:NETSDK1236
       - name: 🛠️ Build MultiplayerHoeingAssistant
         run: dotnet build MultiplayerHoeingAssistant/MultiplayerHoeingAssistant.csproj -c Release -p:DeployToBgiTools=false
       - name: 📦 Copy MultiplayerHoeingAssistant to Tools
