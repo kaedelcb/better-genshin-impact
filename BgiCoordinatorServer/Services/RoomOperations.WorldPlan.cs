@@ -186,7 +186,7 @@ public sealed partial class RoomOperations
             var player = plan.Players.Single(p => p.PlayerUid == uid);
             _routePackagePolicy?.RequireVersion(player.ReportedVersion);
             _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, player.ReportedVersion, ctx.IsV3);
-            _routePackagePolicy?.RequirePackage(plan.Config.RoutePackageId);
+            _routePackagePolicy?.RequirePackage(plan.Config.RoutePackageId, plan.Config.UseLocalRouteFallback);
             var snapshot = plan.Snapshot(_worldPlanTime.GetUtcNow().UtcDateTime);
             if (uid != plan.InitialHostUid && !snapshot.SourceReleased)
                 throw new InvalidOperationException("world_plan_source_not_released");

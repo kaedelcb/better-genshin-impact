@@ -23,7 +23,7 @@ public sealed class AutoHoeingRouteUpdaterTests
     private const string Route = """{"info":{"description":"预计用时60秒"},"positions":[{"x":1,"y":2,"type":"path","move_mode":"walk"}]}""";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public string Root { get; } = Path.Combine(Path.GetTempPath(), "BetterGI-RoutePackageTests-" + Guid.NewGuid().ToString("N"));
         public string Managed => Path.Combine(Root, "managed");
@@ -316,17 +316,20 @@ public sealed class AutoHoeingRouteUpdaterTests
     }
 
     [Fact]
-    public async Task DisabledAutomaticDownloadChecksLocalPinButNeverDownloadsMissingPackage()
+    public async Task OfflineVerificationUsesTheInstalledManifestWithoutAnyHttpRequests()
     {
         using var f = new Fixture();
         var package = f.Add();
         var failure = await Assert.ThrowsAsync<InvalidDataException>(() => f.Ensure(allowInstall: false));
         Assert.Contains("自动更新线路已关闭", failure.Message);
-        Assert.DoesNotContain(f.Requests, path => path.EndsWith("/download", StringComparison.Ordinal));
+        Assert.Empty(f.Requests);
         await f.Ensure();
+        var newer = f.Add();
         f.Requests.Clear();
+        Assert.Equal(package.Id, await f.Ensure(allowInstall: false));
         Assert.Equal(package.Id, await f.Ensure(package.Id, allowInstall: false));
-        Assert.DoesNotContain(f.Requests, path => path.EndsWith("/download", StringComparison.Ordinal));
+        await Assert.ThrowsAsync<InvalidDataException>(() => f.Ensure(newer.Id, allowInstall: false));
+        Assert.Empty(f.Requests);
     }
 
     [Theory]

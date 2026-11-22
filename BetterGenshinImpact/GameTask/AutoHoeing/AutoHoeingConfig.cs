@@ -251,8 +251,8 @@ public partial class AutoHoeingConfig : ObservableObject
     private string _routeFilterKeywords = "";
 
     /// <summary>
-    /// 自动下载本轮官方整包。关闭时仍核验服务器 pin 和本地完整清单，缺包/损坏则明确失败。
-    /// 默认 true（房主设置，同步给成员）。hoeing-autoupdate-routes spec。
+    /// 自动下载本轮官方整包。关闭或下载失败时使用现有本地线路。
+    /// 默认开启；成员自动下载还须经过房主允许。
     /// </summary>
     [ObservableProperty]
     private bool _autoUpdateRoutes = true;

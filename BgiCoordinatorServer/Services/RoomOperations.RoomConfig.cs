@@ -21,7 +21,7 @@ public sealed partial class RoomOperations
                     || !room.ExpectedParticipantUids.Order(StringComparer.Ordinal)
                         .SequenceEqual((config.ExpectedParticipantUids ?? []).Order(StringComparer.Ordinal)))
                     throw new InvalidOperationException("hoeing_start_config_identity_mismatch");
-                RequireRoomRoutePackage(room, proposedId: config.RoutePackageId);
+                RequireRoomRoutePackage(room, proposed: config);
                 config.ExpectedParticipantUids = room.ExpectedParticipantUids.ToList();
                 room.HostConfig = config;
             }

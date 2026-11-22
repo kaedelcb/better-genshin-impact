@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using System.Reflection;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoHoeing;
@@ -6,10 +8,6 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 
-/// <summary>
-/// 直接覆盖任务实际准备/封存入口：预取不能抢占房主 pin，执行期不能再安装，守护新对象继承身份但重新核验。
-/// 这些断言决定是否允许预判/执行，不以下载替身返回或旧成功标志代替有效身份；不运行游戏或访问真实 User。
-/// </summary>
 [Collection("WorldPlanStartupState")]
 public sealed class AutoHoeingRoutePackagePinTests
 {
@@ -24,7 +22,7 @@ public sealed class AutoHoeingRoutePackagePinTests
     }
 
     [Fact]
-    public async Task MemberPrefetchDoesNotPinCurrentAndHostConfigMustConfirmItsOwnPin()
+    public async Task MemberDownloadsOnlyTheRoomPinAndReusesPreparation()
     {
         var task = CreateTask();
         var requested = new List<string?>();
@@ -34,48 +32,120 @@ public sealed class AutoHoeingRoutePackagePinTests
             requested.Add(pin);
             return Task.FromResult(pin ?? First);
         };
-        await Prepare(task, pinResult: false);
-        Assert.Equal("", Field<string>(task, "_routePackageId"));
-        Assert.Equal(First, Field<string>(task, "_confirmedRoutePackageId"));
         await Apply(task, Host);
-        Assert.Equal(new string?[] { null, Host }, requested);
+        await Apply(task, Host);
+        Assert.Equal(new[] { Host }, requested);
         Assert.Equal(Host, Field<string>(task, "_routePackageId"));
         Assert.Equal(Host, Field<string>(task, "_confirmedRoutePackageId"));
-        Assert.True(Field<bool>(task, "_worldRoutesUpdateSucceeded"));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task EitherOptOutPreventsAllRouteRequestsIncludingRepair(bool localUpdates, bool hostUpdates)
+    {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
+        var installed = files.Add();
+        await files.Ensure();
+        files.Requests.Clear();
+        var task = CreateTask(localUpdates);
+        Set(task, "_routePackageUpdater", files.Updater);
+        try
+        {
+            await Apply(task, Host, hostUpdates);
+            Assert.False(await Prepare(task, repair: true));
+            Assert.Equal(localUpdates, Field<AutoHoeingConfig>(task, "_config").AutoUpdateRoutes);
+            Assert.Equal(installed.Id, Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.Empty(files.Requests);
+            await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
+            await Seal(task, routeHashesVerified: true);
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HostKeepsInstalledRoutesWithoutRetryingAfterFailureOrOptOut(bool autoUpdate)
+    {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
+        var installed = files.Add();
+        await files.Ensure();
+        files.Add();
+        files.Requests.Clear();
+        files.Intercept = (request, _) => Task.FromResult<HttpResponseMessage?>(
+            request.RequestUri!.AbsolutePath.EndsWith("/download", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : null);
+        var task = CreateTask(autoUpdate, role: "host");
+        Set(task, "_routePackageUpdater", files.Updater);
+        try
+        {
+            Assert.False(await Prepare(task));
+            Assert.True(Field<bool>(task, "_roomUsesLocalRoutes"));
+            Assert.Equal(installed.Id, Field<string>(task, "_routePackageId"));
+            Assert.Equal(installed.Id, Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.Single(Directory.GetFiles(files.Current, "*.json", SearchOption.AllDirectories));
+            var requestCount = files.Requests.Count;
+            if (autoUpdate) Assert.Contains(files.Requests, path => path.EndsWith("/download", StringComparison.Ordinal));
+            else Assert.Empty(files.Requests);
+            await Apply(task, installed.Id, hostUpdates: false, useLocalRoutes: true);
+            Assert.False(await Prepare(task, repair: true));
+            await Seal(task, routeHashesVerified: true);
+            Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose();
+
+            var restart = (AutoHoeingTask)Invoke(task, "CreateGuardRestartTask")!;
+            Set(restart, "_config", Field<AutoHoeingConfig>(task, "_config"));
+            Set(restart, "_routePackageUpdater", files.Updater);
+            try
+            {
+                Assert.False(await Prepare(restart));
+                Assert.Equal(installed.Id, Field<string>(restart, "_confirmedRoutePackageId"));
+                Assert.Equal(requestCount, files.Requests.Count);
+            }
+            finally { Field<AutoHoeingRouteUpdater.Lease?>(restart, "_routePackageLease")?.Dispose(); }
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
     }
 
     [Fact]
-    public async Task PinCannotChangeAfterPreparationEvenBeforeExecution()
+    public async Task MissingLocalPackageFallsThroughToResourceHandlingAndCannotAuthorizePreview()
+    {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
+        var task = CreateTask(false, role: "host");
+        Set(task, "_routePackageUpdater", files.Updater);
+        try
+        {
+            Assert.False(await Prepare(task));
+            Assert.True(Field<bool>(task, "_roomUsesLocalRoutes"));
+            Assert.Empty(Field<string>(task, "_routePackageId"));
+            Assert.Equal((false, 0), ((bool, int))Invoke(task, "PreviewOwnWorld")!);
+            var error = Assert.Throws<TargetInvocationException>(() => Invoke(task, "LoadRoutesBasedOnConfig"));
+            Assert.IsType<HoeingMissingResourceException>(error.InnerException);
+            await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
+            Assert.Empty(files.Requests);
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
+    }
+
+    [Fact]
+    public async Task PinAndSourceCannotChangeAfterPreparationOrReinstallAfterExecutionStarts()
     {
         var task = CreateTask();
         var calls = 0;
         task.UpdateHoeingRoutes = (pin, _, _) => { calls++; return Task.FromResult(pin ?? First); };
         await Prepare(task);
         await Assert.ThrowsAsync<HoeingStartupException>(() => Apply(task, Host));
-        Assert.Equal(First, Field<string>(task, "_routePackageId"));
-        Assert.Equal(1, calls);
-    }
-
-    [Fact]
-    public async Task SamePinAcrossWorldsAndAsyncHostConfigCannotReinstallAfterExecutionStarts()
-    {
-        var task = CreateTask();
-        var calls = 0;
-        task.UpdateHoeingRoutes = (pin, _, _) => { calls++; return Task.FromResult(pin ?? First); };
-        await Prepare(task);
-        await InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None);
+        await Assert.ThrowsAsync<HoeingStartupException>(() => Apply(task, First, hostUpdates: false, useLocalRoutes: true));
+        await Seal(task);
         await Apply(task, First);
         await Prepare(task);
-        await InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None);
-        Assert.Equal(1, calls);
+        await Seal(task);
         await Assert.ThrowsAsync<HoeingStartupException>(() => Prepare(task, repair: true));
-        await Assert.ThrowsAsync<HoeingStartupException>(() => Apply(task, Host));
         Assert.Equal(1, calls);
-        Assert.Equal(First, Field<string>(task, "_routePackageId"));
     }
 
     [Fact]
-    public async Task GuardRestartInheritsOnlyPinAndMustReconfirmItInsteadOfFetchingCurrent()
+    public async Task GuardRestartInheritsPinAndMustPrepareAgainBeforeExecution()
     {
         var task = CreateTask();
         var requested = new List<string?>();
@@ -85,16 +155,16 @@ public sealed class AutoHoeingRoutePackagePinTests
             return Task.FromResult(pin ?? First);
         };
         await Prepare(task);
-        await InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None);
+        await Seal(task);
         var restart = (AutoHoeingTask)Invoke(task, "CreateGuardRestartTask")!;
         Set(restart, "_config", new AutoHoeingConfig { MultiplayerEnabled = true });
         Assert.Equal(First, Field<string>(restart, "_routePackageId"));
-        Assert.Equal("", Field<string>(restart, "_confirmedRoutePackageId"));
+        Assert.Empty(Field<string>(restart, "_confirmedRoutePackageId"));
         Assert.False(Field<bool>(restart, "_routePackageExecutionStarted"));
-        Assert.False(Field<bool>(restart, "_worldRoutesUpdateSucceeded"));
+        Assert.False(Field<bool>(restart, "_routesPrepared"));
         Assert.True(Field<bool>(restart, "_isGuardRestartRun"));
         Assert.Null(Field<object?>(restart, "_routePackageLease"));
-        await Assert.ThrowsAsync<HoeingStartupException>(() => InvokeAsync(restart, "SealRoutePackageForExecutionAsync", CancellationToken.None));
+        await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(restart));
         await Prepare(restart);
         Assert.Equal(new string?[] { null, First }, requested);
     }
@@ -103,15 +173,20 @@ public sealed class AutoHoeingRoutePackagePinTests
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData(First)]
-    public async Task EmptyInvalidOrWrongInstallerResultCannotAuthorizePreviewOrExecution(string returned)
+    public async Task InvalidInstallerResultRequiresActualRouteValidation(string returned)
     {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
         var task = CreateTask();
+        Set(task, "_routePackageUpdater", files.Updater);
         task.UpdateHoeingRoutes = (_, _, _) => Task.FromResult(returned);
-        await Assert.ThrowsAsync<HoeingStartupException>(() => Apply(task, Host));
-        Assert.False(Field<bool>(task, "_worldRoutesUpdateSucceeded"));
-        Assert.Equal("", Field<string>(task, "_confirmedRoutePackageId"));
-        Assert.Equal((false, 0), ((bool, int))Invoke(task, "PreviewOwnWorld")!);
-        await Assert.ThrowsAsync<HoeingStartupException>(() => InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None));
+        try
+        {
+            await Apply(task, Host);
+            Assert.Empty(Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.Equal((false, 0), ((bool, int))Invoke(task, "PreviewOwnWorld")!);
+            await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
     }
 
     [Fact]
@@ -121,9 +196,9 @@ public sealed class AutoHoeingRoutePackagePinTests
         using var stop = new CancellationTokenSource();
         task.UpdateHoeingRoutes = (_, _, _) => { stop.Cancel(); return Task.FromResult(First); };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Prepare(task, token: stop.Token));
-        Assert.False(Field<bool>(task, "_worldRoutesUpdateSucceeded"));
-        Assert.Equal("", Field<string>(task, "_routePackageId"));
-        await Assert.ThrowsAsync<HoeingStartupException>(() => InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None));
+        Assert.False(Field<bool>(task, "_routesPrepared"));
+        Assert.Empty(Field<string>(task, "_routePackageId"));
+        await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
     }
 
     [Fact]
@@ -135,7 +210,7 @@ public sealed class AutoHoeingRoutePackagePinTests
         task.UpdateHoeingRoutes = (_, _, _) => { started.SetResult(); return finished.Task; };
         var prepare = Prepare(task);
         await started.Task;
-        var seal = InvokeAsync(task, "SealRoutePackageForExecutionAsync", CancellationToken.None);
+        var seal = Seal(task);
         Assert.False(seal.IsCompleted);
         Assert.False(Field<bool>(task, "_routePackageExecutionStarted"));
         finished.SetResult(First);
@@ -153,20 +228,23 @@ public sealed class AutoHoeingRoutePackagePinTests
         Assert.Contains("已经结束", error.Message);
     }
 
-    private static AutoHoeingTask CreateTask()
+    private static AutoHoeingTask CreateTask(bool autoUpdate = true, string role = "member")
     {
         var task = new AutoHoeingTask();
-        Set(task, "_config", new AutoHoeingConfig { MultiplayerEnabled = true, MultiplayerRole = "member", AutoUpdateRoutes = false });
+        Set(task, "_config", new AutoHoeingConfig { MultiplayerEnabled = true, MultiplayerRole = role, AutoUpdateRoutes = autoUpdate });
         Set(task, "_ct", CancellationToken.None);
         return task;
     }
 
-    private static Task Prepare(AutoHoeingTask task, bool repair = false, bool pinResult = true, CancellationToken token = default)
-        => InvokeAsync(task, "RunAutoUpdateRoutesAsync", token, repair, pinResult);
-    private static Task Apply(AutoHoeingTask task, string pin)
-        => InvokeAsync(task, "ApplyPinnedHostConfigAsync", new RoomConfig { RoutePackageId = pin, AutoUpdateRoutes = false }, CancellationToken.None);
-    private static Task InvokeAsync(AutoHoeingTask task, string method, params object?[] args)
-        => (Task)Invoke(task, method, args)!;
+    private static Task<bool> Prepare(AutoHoeingTask task, bool repair = false, CancellationToken token = default)
+        => (Task<bool>)Invoke(task, "RunAutoUpdateRoutesAsync", token, repair)!;
+    private static Task Apply(AutoHoeingTask task, string pin, bool hostUpdates = true, bool useLocalRoutes = false)
+        => (Task)Invoke(task, "ApplyPinnedHostConfigAsync", new RoomConfig
+        {
+            RoutePackageId = pin, AutoUpdateRoutes = hostUpdates, UseLocalRouteFallback = useLocalRoutes
+        }, CancellationToken.None)!;
+    private static Task Seal(AutoHoeingTask task, bool routeHashesVerified = false)
+        => (Task)Invoke(task, "SealRoutePackageForExecutionAsync", CancellationToken.None, routeHashesVerified)!;
     private static object? Invoke(AutoHoeingTask task, string method, params object?[] args)
         => typeof(AutoHoeingTask).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(task, args);
     private static T Field<T>(AutoHoeingTask task, string name)

@@ -39,9 +39,15 @@ public sealed class RoutePackagePolicy(RoutePackageStore store, GatewaySessionTr
         else RequireVersion(fallback);
     }
 
-    public void RequirePackage(string? id)
+    public void RequirePackage(string? id, bool useLocalRoutes = false)
     {
         RequireConfigured();
+        if (useLocalRoutes)
+        {
+            if (!string.IsNullOrEmpty(id) && !NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(id))
+                throw new InvalidOperationException("hoeing_route_package_unavailable");
+            return;
+        }
         if (!store.IsPublishedAvailable(id, RequiredClientVersion)) throw new InvalidOperationException("hoeing_route_package_unavailable");
     }
 }

@@ -314,7 +314,7 @@ public sealed class WorldPlanMemberNegotiationTests
         {
             PlayerUid = "B", PlayerName = "B", MultiplayerRole = "member", MultiplayerEnabled = true,
             MultiWorldEnabled = multiWorld, PartyTimeoutSeconds = 30,
-            AutoUpdateRoutes = false
+            AutoUpdateRoutes = true
         });
         Set(task, "_ct", cancellation);
         task.UpdateHoeingRoutes = (pin, _, token) =>
@@ -336,7 +336,7 @@ public sealed class WorldPlanMemberNegotiationTests
         {
             MultiWorldEnabled = true, MultiWorldCount = 1,
             RoutePackageId = TestPin,
-            PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
+            PartyTimeoutSeconds = 30, AutoUpdateRoutes = true
         }
     };
 

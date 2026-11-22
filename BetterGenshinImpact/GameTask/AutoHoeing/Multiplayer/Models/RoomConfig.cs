@@ -11,10 +11,11 @@ public class RoomConfig
     public int StartRouteIndex { get; set; } = 0;
     /// <summary>线路关键词过滤（逗号分隔，全角/半角），文件名含任一关键词的线路跳过。默认空=不过滤。hoeing-route-keyword-filter，与服务端 RoomConfig 严格对称</summary>
     public string RouteFilterKeywords { get; set; } = "";
-    /// <summary>允许自动下载官方整包；关闭时仍须核验房主 pin 的完整本地清单，缺包或损坏即停止。</summary>
+    /// <summary>房主是否允许成员在本轮自动下载，成员仍须开启本机开关。</summary>
     public bool AutoUpdateRoutes { get; set; } = true;
-    /// <summary>本次轮次锁定的已发布整包；多世界与守护续跑不得追随 current 变化。</summary>
+    /// <summary>本次锁定的包 ID。本地线路模式下可以为空，由执行前的线路校验决定能否继续。</summary>
     public string RoutePackageId { get; set; } = "";
+    public bool UseLocalRouteFallback { get; set; }
     /// <summary>线路重试模式关键词（逗号分隔，全角/半角），文件名含任一关键词的线路启用"任一成员复苏→全员回神像重跑本段"。默认空=不启用。hoeing-multiplayer-route-retry-mode §0，房主设置同步给成员，与服务端 RoomConfig 严格对称</summary>
     public string RouteRetryModeKeywords { get; set; } = "";
     public bool UseFixedDebugRoutes { get; set; } = false;

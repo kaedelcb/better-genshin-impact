@@ -18,7 +18,7 @@ public partial class AutoHoeingTask
 
     private void ApplyWorldHostConfig(RoomConfig hostConfig)
     {
-        AdoptRoutePackagePin(hostConfig.RoutePackageId);
+        AdoptRoomRoutePackage(hostConfig);
         _config.SyncPointMinDistance = hostConfig.SyncPointMinDistance;
         _config.StartRouteIndex = hostConfig.StartRouteIndex;
         _config.RouteFilterKeywords = hostConfig.RouteFilterKeywords;
@@ -60,8 +60,6 @@ public partial class AutoHoeingTask
         // === 守护模式同步（hoeing-multiplayer-guard-auto-restart，成员回填房主下发值）===
         _config.HoeingGuardMode = hostConfig.HoeingGuardMode;
         _config.GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(hostConfig.GuardUnexecutedRouteThreshold);
-        // === 自动更新线路同步（hoeing-autoupdate-routes，成员回填房主下发值）===
-        _config.AutoUpdateRoutes = hostConfig.AutoUpdateRoutes;
         _config.RoomWhitelist = hostConfig.RoomWhitelist ?? "";
 
         // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params §C2）===
@@ -136,7 +134,11 @@ public partial class AutoHoeingTask
     private MultiWorldStartPlan? _worldStartPlan;
     private WorldPlanAdmission? _worldPlanAdmission;
     private bool _worldPlanNoWorkConfirmed;
-    private bool _worldRoutesUpdateSucceeded;
+    private bool _routesPrepared;
+    private bool _routeUpdateFailed;
+    private bool _roomRouteIdentityKnown;
+    private bool _roomUsesLocalRoutes;
+    private bool _roomAllowsRouteUpdate = true;
     private string _routePackageId = "";
     private AutoHoeingRouteUpdater? _routePackageUpdater;
     private AutoHoeingRouteUpdater.Lease? _routePackageLease;
@@ -181,18 +183,27 @@ public partial class AutoHoeingTask
         }
     }
 
-    private void AdoptRoutePackagePin(string pin)
+    private void AdoptRoomRoutePackage(RoomConfig config)
     {
-        if (!NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(pin)
-            || (_routePackageId.Length > 0 && _routePackageId != pin))
-            throw new HoeingStartupException("线路整包身份", "房主未提供有效包身份或同轮包身份发生变化");
+        var pin = config.RoutePackageId ?? "";
+        var validIdentity = NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(pin)
+            || (config.UseLocalRouteFallback && pin.Length == 0);
+        if (!validIdentity || (_roomRouteIdentityKnown && (_routePackageId != pin || _roomUsesLocalRoutes != config.UseLocalRouteFallback)))
+            throw new HoeingStartupException("线路整包身份", "房主未提供有效线路配置或同轮线路配置发生变化");
         _routePackageId = pin;
+        _roomUsesLocalRoutes = config.UseLocalRouteFallback;
+        _roomAllowsRouteUpdate &= config.AutoUpdateRoutes;
+        _roomRouteIdentityKnown = true;
     }
 
     private AutoHoeingTask CreateGuardRestartTask() => new(_partyConfig, _settingsOverride, _groupName)
     {
         _isGuardRestartRun = true,
         _routePackageId = _routePackageId,
+        _roomRouteIdentityKnown = _roomRouteIdentityKnown,
+        _roomUsesLocalRoutes = _roomUsesLocalRoutes,
+        _roomAllowsRouteUpdate = _roomAllowsRouteUpdate,
+        _routeUpdateFailed = _routeUpdateFailed,
         UpdateHoeingRoutes = UpdateHoeingRoutes
     };
 
@@ -271,9 +282,8 @@ public partial class AutoHoeingTask
         try
         {
             var account = string.IsNullOrEmpty(_config.AccountName) ? "默认账户" : _config.AccountName;
-            if (!_worldRoutesUpdateSucceeded || (_config.MultiplayerEnabled
-                && (!NexusBGI.RoutePackages.RoutePackageArchive.IsValidId(_routePackageId)
-                    || _confirmedRoutePackageId != _routePackageId))) return (false, 0);
+            if (!_routesPrepared || (_config.MultiplayerEnabled
+                && (_routePackageId.Length == 0 || _confirmedRoutePackageId != _routePackageId))) return (false, 0);
             _cdManager.Load(_dataDir, account);
             if (!_cdManager.LoadSucceeded) return (false, 0);
             if (!_config.UseFixedDebugRoutes)

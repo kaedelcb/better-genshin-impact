@@ -48,7 +48,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
         const string pin = "11111111111111111111111111111111";
         SetField(_task, "_routePackageId", pin);
         SetField(_task, "_confirmedRoutePackageId", pin);
-        SetField(_task, "_worldRoutesUpdateSucceeded", true);
+        SetField(_task, "_routesPrepared", true);
         SetField(_task, "_routePackageUpdater", new AutoHoeingRouteUpdater(_http, Path.Combine(_directory, "managed"), "preview-only"));
     }
 
@@ -119,7 +119,7 @@ public sealed class WorldPlanPreviewTests : IDisposable
         AddRoutes("01.json");
         WriteCd(("01.json", DateTime.Now.AddDays(2)));
         _config.AutoUpdateRoutes = hostUpdatesEnabled;
-        SetField(_task, "_worldRoutesUpdateSucceeded", false);
+        SetField(_task, "_routesPrepared", false);
         Assert.Equal((false, 0), Preview());
     }
 

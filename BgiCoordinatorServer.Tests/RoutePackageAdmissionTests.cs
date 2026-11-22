@@ -131,6 +131,36 @@ public sealed class RoutePackageAdmissionTests
         }
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("11111111111111111111111111111111")]
+    public async Task LocalRouteFallbackAdmitsTheRoomAndFreezesTheModeAndId(string localId)
+    {
+        using var data = new RoutePackageTestData();
+        using var store = new RoutePackageStore(data.StoreRoot, RoutePackageTestData.Version);
+        var published = await data.Upload(store);
+        await store.PublishAsync(published.Id, 0, "首版", "admin");
+        var h = new GatewayTestHarness();
+        var ops = Operations(h, store);
+        var host = Hello(h, "host");
+        var member = Hello(h, "member");
+        var (code, _) = await ops.CreateRoomAsync(host, "房主", playerUid: "A", expectedPlayerCount: 2,
+            reportedVersion: RoutePackageTestData.Version);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ops.SetRoomConfigAsync(host, new RoomConfig { RoutePackageId = localId }));
+        await ops.SetRoomConfigAsync(host, new RoomConfig
+        {
+            RoutePackageId = localId, AutoUpdateRoutes = false, UseLocalRouteFallback = true
+        });
+        Assert.True((await ops.JoinRoomAsync(member, code, "成员", "B", RoutePackageTestData.Version)).Success);
+        await ops.SetHostRouteListAsync(host, ["本地线路"]);
+        await ops.ReportHostReadyAsync(host);
+        var changed = await Assert.ThrowsAsync<InvalidOperationException>(() => ops.SetRoomConfigAsync(host,
+            new RoomConfig { RoutePackageId = published.Id }));
+        Assert.Equal("hoeing_route_package_frozen", changed.Message);
+        var wrongVersion = Hello(h, "wrong", "1.0.0");
+        Assert.False((await ops.JoinRoomAsync(wrongVersion, code, "错误版本", "C", "1.0.0")).Success);
+    }
+
     [Fact]
     public async Task DraftAndCorruptedPinCannotBeInstalledAsHostConfig()
     {

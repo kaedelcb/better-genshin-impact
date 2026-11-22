@@ -195,7 +195,7 @@ public sealed class WorldPlanStartBoundaryTests
                     _ => throw new InvalidOperationException(request.Name)
                 };
                 var snapshot = new MultiWorldStartPlan { PlanId = "guard", Stage = stage,
-                    HostConfig = new() { MultiWorldEnabled = true, AutoUpdateRoutes = false, RoutePackageId = TestPin } };
+                    HostConfig = new() { MultiWorldEnabled = true, AutoUpdateRoutes = true, RoutePackageId = TestPin } };
                 return Task.FromResult(Response(request, new { planId = "guard", ticket = "guard-ticket", snapshot }));
             };
             Assert.False(await Start(task, client));
@@ -292,7 +292,7 @@ public sealed class WorldPlanStartBoundaryTests
             {
                 MultiWorldEnabled = true, MultiWorldCount = 2,
                 RoutePackageId = TestPin,
-                PartyTimeoutSeconds = 30, AutoUpdateRoutes = false
+                PartyTimeoutSeconds = 30, AutoUpdateRoutes = true
             }
         };
         client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>

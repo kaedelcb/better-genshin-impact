@@ -148,7 +148,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // ===== F 线路设置 =====
     [ObservableProperty] private bool _debugMode;
 
-    /// <summary>自动更新线路：执行联机锄地前自动调用一次「更新联机锄地线路」（房主设置，同步给成员）。默认 true。hoeing-autoupdate-routes</summary>
+    /// <summary>本机是否允许自动下载线路。成员同时受当前房主的更新设置约束。</summary>
     [ObservableProperty] private bool _autoUpdateRoutes = true;
 
     [ObservableProperty]

@@ -85,15 +85,41 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         catch (IOException ex) { throw new IOException("线路正在由另一个任务或 BGI 进程使用，不能更新", ex); }
     }
 
+    public async Task<string?> VerifyInstalledAsync(Lease lease, CancellationToken ct)
+    {
+        if (!lease.IsAlive || !string.Equals(lease.Root, _root, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("线路租约不属于本受管根或已经释放");
+        await lease.Gate.WaitAsync(ct);
+        try
+        {
+            if (!lease.IsAlive) throw new ObjectDisposedException(nameof(Lease));
+            if (File.Exists(Path.Combine(_root, "transaction.json")))
+            {
+                if (!lease.AllowsInstall) throw new IOException("执行中的线路存在未完成安装事务");
+                await RecoverAsync();
+            }
+            ct.ThrowIfCancellationRequested();
+            var installed = ReadInstalled();
+            return installed != null && await MatchesAsync(CurrentDirectory, installed.Files, ct) ? installed.Id : null;
+        }
+        finally { lease.Gate.Release(); }
+    }
+
     public async Task<string> EnsureAsync(string serverAddress, string? packageId, CancellationToken ct,
         bool forceRepair = false, Lease? lease = null, bool allowInstall = true)
     {
         ct.ThrowIfCancellationRequested();
-        var server = RequireServerUri(serverAddress);
         if (!string.IsNullOrEmpty(packageId) && !RoutePackageArchive.IsValidId(packageId))
             throw new InvalidDataException("房主线路包身份无效");
         using var owned = lease == null ? AcquireLease() : null;
         lease ??= owned!;
+        if (!allowInstall)
+        {
+            var local = await VerifyInstalledAsync(lease, ct);
+            if (local != null && (string.IsNullOrEmpty(packageId) || packageId == local)) return local;
+            throw new InvalidDataException("自动更新线路已关闭，本地没有完整的所需线路包");
+        }
+        var server = RequireServerUri(serverAddress);
         if (!lease.IsAlive || !string.Equals(lease.Root, _root, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("线路租约不属于本受管根或已经释放");
         await lease.Gate.WaitAsync(ct);
@@ -138,8 +164,6 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
             }
             if (!lease.AllowsInstall)
                 throw new IOException("线路已进入执行阶段，禁止替换或修复；请停止后重试本轮锁定包");
-            if (!allowInstall)
-                throw new InvalidDataException("自动更新线路已关闭，本地未完整安装目标包 " + target.Id + "；请先执行“更新联机锄地线路”或开启自动更新");
             await InstallAsync(server, target, installed, token);
             ct.ThrowIfCancellationRequested();
             WriteVersionMarker(target, installed == null ? "首次安装完成" : $"已从 {DescribeVersion(installed)}更新");
@@ -380,21 +404,25 @@ public sealed class AutoHoeingRouteUpdater(HttpClient http, string managedRoot, 
         RequireNoLinks(staging);
         RequireNoLinks(backup);
         RequireNoLinks(archive);
-        if (await MatchesAsync(CurrentDirectory, transaction.Target.Files, CancellationToken.None))
+        // 已有 current 时，只有改名前留下的 backup 证明此次安装已切换目录。
+        // 新旧包内容可能相同，下载失败不能单凭清单相同改写本地包身份。
+        var hasBackup = Directory.Exists(backup);
+        if ((!transaction.HadCurrent || hasBackup)
+            && await MatchesAsync(CurrentDirectory, transaction.Target.Files, CancellationToken.None))
         {
             WriteDurable(Path.Combine(_root, "installed.json"), transaction.Target);
             Multiplayer.RouteVariantScanner.InvalidateUnderRoot(CurrentDirectory);
             BetterGenshinImpact.Core.Script.Utils.JsonMerger.InvalidateUnderRoot(CurrentDirectory);
             DeleteOwnedDirectory(backup);
         }
-        else if (!Directory.Exists(CurrentDirectory) && Directory.Exists(backup))
+        else if (!Directory.Exists(CurrentDirectory) && hasBackup)
         {
             Directory.Move(backup, CurrentDirectory);
             Multiplayer.RouteVariantScanner.InvalidateUnderRoot(CurrentDirectory);
             BetterGenshinImpact.Core.Script.Utils.JsonMerger.InvalidateUnderRoot(CurrentDirectory);
             RestorePreviousState(transaction.Previous);
         }
-        else if (Directory.Exists(backup))
+        else if (hasBackup)
             throw new IOException("线路事务当前目录内容异常；已保留旧完整 backup，拒绝覆盖未知数据");
         else if (!transaction.HadCurrent && Directory.Exists(CurrentDirectory))
             throw new IOException("线路事务出现未知 current 目录，拒绝覆盖");

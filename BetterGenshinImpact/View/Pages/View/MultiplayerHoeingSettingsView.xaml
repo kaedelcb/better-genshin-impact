@@ -441,6 +441,9 @@
                     <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                                   Text="秒，默认300"
                                   TextWrapping="Wrap" />
+                    <ui:ToggleSwitch Margin="0,8,0,0"
+                                     Content="允许自动下载线路整包（还需房主开启）"
+                                     IsChecked="{Binding AutoUpdateRoutes, Mode=TwoWay}" />
                 </StackPanel>
             </ui:CardExpander>
 
@@ -546,7 +549,7 @@
                     <!--  内置线路按钮组占位（code-behind 填充），随 ShowManualRoute 显隐  -->
                     <ContentControl x:Name="BuiltinRouteHost" Visibility="{Binding ShowManualRoute}" />
                     <ui:ToggleSwitch Margin="0,8,0,0"
-                                     Content="自动下载本轮线路整包（关闭时仍校验本地已安装包）"
+                                     Content="自动下载线路整包（关闭或更新失败时使用本地线路）"
                                      IsChecked="{Binding AutoUpdateRoutes, Mode=TwoWay}" />
                     <ui:ToggleSwitch Margin="0,8,0,0"
                                      Content="调试模式（跳过路线一致性验证）"
