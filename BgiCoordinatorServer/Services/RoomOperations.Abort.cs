@@ -48,6 +48,7 @@ public sealed partial class RoomOperations
                 return;
             }
             room.CoordinatedAbortBroadcasted = true;
+            room.RoundOrderStartup?.Result.TrySetResult(false);
         }
 
         _roomManager.UpdateHeartbeat(ctx.ConnectionId);

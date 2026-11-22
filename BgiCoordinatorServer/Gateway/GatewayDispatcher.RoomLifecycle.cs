@@ -43,11 +43,17 @@ public sealed partial class GatewayDispatcher
             return new { ack = true };
         };
 
+        _commands[GatewayProtocol.Names.RoomConfirmRoundOrder] = async (env, ctx) => new
+        {
+            ready = await _ops.ConfirmRoundOrderAsync(ctx, env.RoomCode, GetString(env, "sessionId"),
+                GetStringList(env, "order") ?? [], GetInt(env, "roundCount")),
+        };
+
         // MarkRoomStarted / MarkRoomStartedWithProgress 聚合：completedHostUids 收进 payload
         _commands[GatewayProtocol.Names.RoomMarkStarted] = async (env, ctx) =>
         {
             await _ops.MarkRoomStartedAsync(ctx, GetStringList(env, "completedHostUids"),
-                GetBool(env, "requireWorldPlanRoster"), env.RoomCode);
+                GetBool(env, "requireWorldPlanRoster"), env.RoomCode, GetBool(env, "requireRoundOrderStartup"));
             return new { ack = true };
         };
     }

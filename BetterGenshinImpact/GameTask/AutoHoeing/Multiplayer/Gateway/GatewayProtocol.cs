@@ -68,6 +68,7 @@ public static class GatewayProtocol
         public const string RoomListOnline = "room.listOnline";
         public const string RoomGetConfig = "room.getConfig";
         public const string RoomGetRoundHostOrder = "room.getRoundHostOrder";
+        public const string RoomConfirmRoundOrder = "room.confirmRoundOrder";
         public const string RoomSetConfig = "room.setConfig";
         public const string RoomSetHostRouteList = "room.setHostRouteList";
         public const string RoomReportHostReady = "room.reportHostReady";

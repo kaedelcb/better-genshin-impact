@@ -43,7 +43,7 @@ public sealed class WorldPlanState
         if (Participants.Count is < 1 or > 4 || capable && (Participants.Any(string.IsNullOrWhiteSpace)
             || Participants.Distinct(StringComparer.Ordinal).Count() != Participants.Count))
             throw new InvalidOperationException("world_plan_roster_invalid");
-        Candidates = RoundHostOrderDecisions.Build(Players, InitialHostUid)
+        Candidates = RoundHostOrderDecisions.Build(Players, InitialHostUid, whitelist: Config.RoomWhitelist)
             .Take(Math.Clamp(Config.MultiWorldCount, 1, 4)).ToList();
         ExpiresAtUtc = now.AddSeconds(Math.Max(300L, (long)Math.Clamp(Config.PartyTimeoutSeconds, 1, 86400) * 3 + 120));
         _tickets = Participants.Distinct(StringComparer.Ordinal).ToDictionary(uid => uid,

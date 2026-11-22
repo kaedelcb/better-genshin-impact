@@ -204,7 +204,7 @@
                                     Text="{Binding RoomWhitelist, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <ui:TextBlock Margin="0,0,0,8"
                                       Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="逗号分隔，房主自己也要加进去，留空不限"
+                                      Text="用逗号分隔名字，留空不限制入房。多世界锄地按名单从左到右轮换，房主也按所填位置排序；名单留空或无人匹配时，房主先跑。"
                                       TextWrapping="Wrap" />
                         <ui:ToggleSwitch Margin="0,0,0,4"
                                          Content="启用多世界连续锄地"
@@ -217,7 +217,7 @@
                                         PlaceholderText="轮数（1-4）"
                                         Text="{Binding MultiWorldCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                          Text="按加入顺序轮换房主，最多4轮"
+                                          Text="最多 4 轮。未到场的名字跳过，到场但未匹配的人排在末尾。"
                                           TextWrapping="Wrap" />
                         </StackPanel>
 

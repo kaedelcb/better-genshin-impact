@@ -1789,7 +1789,12 @@ public partial class AutoHoeingTask : ISoloTask
             // 成员路径不调（成员无房主权限，调了服务端也会拒）
             if (client.IsHost)
             {
-                await LockCurrentHoeingRoomAsync(client);
+                var requireRoundOrder = _worldStartPlan == null && _config.MultiWorldEnabled
+                    && HasRoundOrderWhitelist(_firstHostConfig?.RoomWhitelist);
+                if (requireRoundOrder)
+                    await client.MarkFrozenRoomStartedAsync(_ct, RequiredWorldParticipants != null, requireRoundOrderStartup: true);
+                else
+                    await LockCurrentHoeingRoomAsync(client);
             }
 
             // 只有走到这里（所有组队/加入/等待环节均未提前 return）才算组队成功，允许后续开锄。
@@ -2234,16 +2239,45 @@ public partial class AutoHoeingTask : ISoloTask
     {
         var client = _coordinatorClientRef!;
 
-        // 多世界轮换序列：优先采用服务端权威序列（首任房主 MarkRoomStarted 时生成，各端一致），
-        // 旧服务端 / 未填 UID / 查询失败 → 降级本地 CurrentPlayerList 快照（现状行为）。
-        // multiplayer-server-authoritative-round-order §B2。
+        // 已确认的世界计划、有白名单的逐家路径、空白名单兼容路径，按此顺序选择。
         var snapshot = _worldStartPlan?.Players ?? new List<PlayerInfo>(client.CurrentPlayerList);
         var initialHostUid = client.HostPlayerUid;
         _isInitialHost = _worldStartPlan == null ? client.IsHost : _worldStartPlan.InitialHostUid == _config.PlayerUid;
         var resumeOrderSignature = MultiWorldResumeDecisions.ComputeOrderSignature(snapshot.Select(p => p.PlayerUid));
+        bool confirmedWhitelistOrder = false;
         List<string>? authoritativeUids = null;
         if (_worldStartPlan != null)
+        {
             authoritativeUids = _worldStartPlan.RemainingHostUids;
+            if (authoritativeUids.Count == 0)
+                throw new InvalidOperationException("已确认的多世界开锄计划未提供待执行世界");
+        }
+        else if (_firstHostConfig == null || HasRoundOrderWhitelist(_firstHostConfig.RoomWhitelist))
+        {
+            var epoch = client.CurrentRoomEpoch;
+            try
+            {
+                if (_firstHostConfig == null)
+                    throw new InvalidOperationException("未确认房主白名单配置");
+                // A peer might leave the source immediately after all confirmations.
+                _worldStateMonitor?.BeginRoundSwitch(120);
+                authoritativeUids = await client.ConfirmWhitelistRoundOrderAsync(snapshot, initialHostUid, _config.MultiWorldCount, _ct);
+                _manualFrozenParty = snapshot.Select(p => p.PlayerUid).ToArray();
+                confirmedWhitelistOrder = true;
+            }
+            catch (Exception ex) when (!_ct.IsCancellationRequested)
+            {
+                const string reason = "无法确认全员采用同一份白名单轮换顺序";
+                _logger.LogWarning(ex, "[多世界] {Reason}", reason);
+                MarkPartyFailed(reason);
+                if (epoch.HasValue)
+                {
+                    try { await client.ReportCoordinatedAbortAsync(reason, epoch); }
+                    catch (Exception reportError) { _logger.LogWarning(reportError, "[多世界] 白名单轮换中止上报失败"); }
+                }
+                throw new InvalidOperationException(reason, ex);
+            }
+        }
         else if (!string.IsNullOrEmpty(_config.PlayerUid))
         {
             // 短重试给房主 MarkRoomStarted 留时间（成员可能早于房主生成序列），最多 ~3s。
@@ -2255,7 +2289,7 @@ public partial class AutoHoeingTask : ISoloTask
             }
         }
 
-        var playerOrder = client.UsesV1WorldPlanServer
+        var playerOrder = !confirmedWhitelistOrder && client.UsesV1WorldPlanServer
             ? RoundHostOrderClientMapping.BuildV1PlayerOrder(snapshot, authoritativeUids, initialHostUid, _config.MultiWorldCount)
             : RoundHostOrderClientMapping.BuildPlayerOrder(snapshot, authoritativeUids);
         if (RoundHostOrderClientMapping.UsedAuthoritative(authoritativeUids))
@@ -2310,12 +2344,18 @@ public partial class AutoHoeingTask : ISoloTask
             && !string.Equals(playerOrder[0].PlayerUid, initialHostUid, StringComparison.Ordinal);
         if (switchBeforeFirstRound)
         {
-            _logger.LogInformation("[多世界续跑] 初始组队世界已完成，转入剩余首世界 {Host}", playerOrder[0].PlayerName);
-            _worldStateMonitor?.BeginRoundSwitch(120);
-            await SyncRoundEndAsync(-1, client);
-            await LeaveCurrentWorldAsync(client.IsHost, client);
+            _logger.LogInformation("[多世界] 首轮目标不在初始组队世界，转入 {Host}", playerOrder[0].PlayerName);
+            if (!confirmedWhitelistOrder)
+            {
+                _worldStateMonitor?.BeginRoundSwitch(120);
+                await SyncRoundEndAsync(-1, client);
+            }
+            _ct.ThrowIfCancellationRequested();
+            await LeaveCurrentWorldAsync(client.IsHost, client, requireExit: confirmedWhitelistOrder);
             await DisposeRoundCoordinatorAsync();
         }
+        else if (confirmedWhitelistOrder)
+            _worldStateMonitor?.EndRoundSwitch();
 
         bool lastRoundAmIHost = client.IsHost;
         // 是否跑满全部轮次（hoeing-guard-false-restart-on-normal-close 防线 B）。
@@ -2508,6 +2548,9 @@ public partial class AutoHoeingTask : ISoloTask
     private Task LockCurrentHoeingRoomAsync(CoordinatorClient client)
         => RequiredWorldParticipants == null ? client.MarkRoomStartedAsync()
             : client.MarkFrozenRoomStartedAsync(_ct);
+
+    private static bool HasRoundOrderWhitelist(string? whitelist) =>
+        whitelist?.Split(new[] { ',', '，' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length > 0;
 
     /// <summary>SetupNextRoundAsync 的结果：决定多世界主循环后续走向。</summary>
     private enum RoundSetupOutcome
@@ -3063,7 +3106,7 @@ public partial class AutoHoeingTask : ISoloTask
     }
 
     /// <summary>离开当前世界（成员退出，房主关闭房间）</summary>
-    private async Task LeaveCurrentWorldAsync(bool amIHost, CoordinatorClient client)
+    private async Task LeaveCurrentWorldAsync(bool amIHost, CoordinatorClient client, bool requireExit = false)
     {
         var autoParty = new AutoPartyTask();
         if (amIHost)
@@ -3118,20 +3161,25 @@ public partial class AutoHoeingTask : ISoloTask
             await Task.Delay(2000, _ct);
             // 房主也需要退出多人世界，回到自己的世界
             _logger.LogInformation("[多世界] 房主退出多人世界");
-            var left = await autoParty.LeaveWorldAsync(_ct);
-            if (!left)
-                _logger.LogWarning("[多世界] 房主退出多人世界未确认成功，继续下一轮");
-            await Task.Delay(1000, _ct);
         }
         else
         {
             // 成员：主动离开，回到自己的世界
             _logger.LogInformation("[多世界] 成员离开当前世界");
-            var left = await autoParty.LeaveWorldAsync(_ct);
-            if (!left)
-                _logger.LogWarning("[多世界] 离开世界操作未确认成功，继续下一轮");
-            await Task.Delay(1000, _ct);
         }
+
+        var left = await autoParty.LeaveWorldAsync(_ct);
+        if (!left)
+        {
+            if (requireExit)
+            {
+                const string reason = "首轮切换未确认离开初始世界，停止白名单轮换";
+                MarkPartyFailed(reason);
+                throw new InvalidOperationException(reason);
+            }
+            _logger.LogWarning("[多世界] 离开世界操作未确认成功，继续下一轮");
+        }
+        await Task.Delay(1000, _ct);
     }
 
     /// <summary>单世界锄地核心（从 RunTask 提取，供多世界循环复用）</summary>
@@ -5694,7 +5742,7 @@ public partial class AutoHoeingTask : ISoloTask
 
             // ===== 第七部分：多世界连续锄地配置 =====
             new() { Name = "multiWorldEnabled", Label = "启用多世界连续锄地\n房主设定，完成一个世界后轮换到下一个玩家的世界", Type = "bool", DefaultValue = config.MultiWorldEnabled },
-            new() { Name = "multiWorldCount", Label = "多世界锄地轮数（1-4）\n由房主设定，按加入顺序依次成为房主", Type = "number", DefaultValue = config.MultiWorldCount },
+            new() { Name = "multiWorldCount", Label = "多世界锄地轮数（1-4）\n按房间白名单顺序轮换；名单留空或无人匹配时房主先跑，其余按 UID 升序", Type = "number", DefaultValue = config.MultiWorldCount },
 
             // ===== 线路关键词过滤（hoeing-route-keyword-filter spec，单机和联机均支持）=====
             new() { Name = "routeFilterKeywords", Label = "线路关键词过滤\n逗号分隔（支持全角，/半角,），文件名含任一关键词的线路跳过；留空=不过滤", Type = "text", DefaultValue = config.RouteFilterKeywords },

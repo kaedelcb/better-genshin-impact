@@ -19,10 +19,10 @@ public sealed partial class GatewayDispatcher
             return new { config };
         };
 
-        _queries[GatewayProtocol.Names.RoomGetRoundHostOrder] = async (env, ctx) =>
+        _queries[GatewayProtocol.Names.RoomGetRoundHostOrder] = (env, ctx) =>
         {
-            var order = await _ops.GetRoundHostOrderAsync(ctx);
-            return new { order };
+            var (order, startup) = _ops.GetRoundOrderSnapshot(ctx, env.RoomCode);
+            return Task.FromResult<object?>(new { order, startup });
         };
 
         // §4.3 分组收敛：6 个状态查询聚合为 room.getState，payload.section 区分

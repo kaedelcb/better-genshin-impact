@@ -347,7 +347,8 @@ public class RoomManager
             {
                 lock (room)
                 {
-                    room.Players.RemoveAll(p => p.ConnectionId == connectionId);
+                    if (room.Players.RemoveAll(p => p.ConnectionId == connectionId) > 0)
+                        room.RoundOrderStartup?.Result.TrySetResult(false);
                     // 清理该连接在各同步集合中的记录
                     foreach (var set in room.ArrivalSets.Values)
                         set.Remove(connectionId);
@@ -876,6 +877,7 @@ public class RoomManager
     {
         if (!_rooms.TryRemove(new KeyValuePair<string, Room>(roomCode, room))) return false;
         room.RerunExecution?.Abort("RoomClosed");
+        room.RoundOrderStartup?.Result.TrySetResult(false);
         foreach (var player in room.Players)
             RemoveConnectionMappingLocked(player.ConnectionId, roomCode);
         return true;
@@ -1117,6 +1119,7 @@ public class RoomManager
                         ? now >= deadline : p.LastHeartbeat < cutoff).ToArray();
                 if (expired.Length == 0) continue;
                 var removed = Array.AsReadOnly(expired.Select(RoomPlayerSnapshot.Capture).ToArray());
+                room.RoundOrderStartup?.Result.TrySetResult(false);
                 var hostTimedOut = expired.Any(p => p.ConnectionId == room.HostConnectionId);
                 if (hostTimedOut)
                 {

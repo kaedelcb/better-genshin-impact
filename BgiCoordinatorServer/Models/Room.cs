@@ -157,12 +157,14 @@ public class Room
     /// <summary>
     /// 多世界权威轮换序列：UID 列表，第 i 项 = 第 i 轮房主 UID。
     /// 首任房主 MarkRoomStarted 时（首轮全员已在房间）基于 Players 生成一次
-    /// （首项=首任房主，其余 UID 升序），整场只确定一次，房间销毁随之消失。
+    /// （优先按房主白名单排序），整场只确定一次，房间销毁随之消失。
     /// 空 = 未生成（单世界 / 旧流程 / 非首轮房间未触发）。
     /// 客户端 RunMultiWorldAsync 查询此序列构造 playerOrder，保证各端轮换序列一致。
     /// multiplayer-server-authoritative-round-order。
     /// </summary>
     public List<string> RoundHostOrder { get; set; } = [];
+
+    internal Services.RoundOrderStartup? RoundOrderStartup { get; set; }
 
     /// <summary>玩家等待点上报缓存：playerUid → WaitPointReport</summary>
     public Dictionary<string, WaitPointReport> WaitPoints { get; set; } = [];

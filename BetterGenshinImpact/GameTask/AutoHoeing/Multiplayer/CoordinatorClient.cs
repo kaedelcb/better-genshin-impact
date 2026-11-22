@@ -1687,7 +1687,8 @@ public partial class CoordinatorClient : IAsyncDisposable
             items?.Count ?? 0, items?.Count(i => !string.IsNullOrEmpty(i.LogicalRouteId)) ?? 0);
     }
 
-    internal async Task MarkFrozenRoomStartedAsync(CancellationToken ct)
+    internal async Task MarkFrozenRoomStartedAsync(CancellationToken ct, bool requireWorldPlanRoster = true,
+        bool requireRoundOrderStartup = false)
     {
         await WaitForBusinessReadyAsync(ct);
         RoomSession session;
@@ -1699,9 +1700,9 @@ public partial class CoordinatorClient : IAsyncDisposable
             try
             {
                 var result = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomMarkStarted,
-                    new { requireWorldPlanRoster = true }, session.RoomCode, budget.Token);
+                    new { requireWorldPlanRoster, requireRoundOrderStartup }, session.RoomCode, budget.Token);
                 if (!result.GetBool("ack") || !IsCurrent(session))
-                    throw new MultiplayerSessionFailedException("冻结名册的开锄确认失败");
+                    throw new MultiplayerSessionFailedException("联机开锄房间锁定失败");
                 ct.ThrowIfCancellationRequested();
                 return;
             }

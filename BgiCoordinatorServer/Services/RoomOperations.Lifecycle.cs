@@ -213,33 +213,46 @@ public sealed partial class RoomOperations
     /// hoeing-multiworld-host-restart-resume-round：completedHostUids 非空时排除已完成房主世界（裁剪）。
     /// </summary>
     public async Task MarkRoomStartedAsync(GatewayHandlerContext ctx, List<string>? completedHostUids,
-        bool requireWorldPlanRoster = false, string? expectedRoomCode = null)
+        bool requireWorldPlanRoster = false, string? expectedRoomCode = null, bool requireRoundOrderStartup = false)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null)
         {
-            if (requireWorldPlanRoster) throw new InvalidOperationException("world_plan_target_missing");
+            if (requireWorldPlanRoster || requireRoundOrderStartup) throw new InvalidOperationException("world_plan_target_missing");
             _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 未在任何房间中，忽略", ctx.ConnectionId);
             return;
         }
         if (room.HostConnectionId != ctx.ConnectionId)
         {
-            if (requireWorldPlanRoster) throw new InvalidOperationException("world_plan_host_required");
+            if (requireWorldPlanRoster || requireRoundOrderStartup) throw new InvalidOperationException("world_plan_host_required");
             _logger.LogWarning("[MarkRoomStarted] 连接 {ConnId} 不是房主，忽略（房间 {Code}）",
                 ctx.ConnectionId, roomCode);
             return;
         }
         RequireRoomRoutePackage(room);
-        if (requireWorldPlanRoster && (roomCode != expectedRoomCode || room.WorldPlanParticipantUids == null))
+        if (((requireWorldPlanRoster || requireRoundOrderStartup) && roomCode != expectedRoomCode)
+            || (requireWorldPlanRoster && room.WorldPlanParticipantUids == null))
             throw new InvalidOperationException("world_plan_target_identity");
         lock (room)
-            if (room.IsStarted) return; // Ordinary reconnect/idempotent locking no longer needs a startup ticket.
+        {
+            if (room.IsStarted)
+            {
+                if (requireRoundOrderStartup && room.RoundOrderStartup == null)
+                    throw new InvalidOperationException("round_order_startup_missing");
+                return; // Ordinary reconnect/idempotent locking no longer needs a startup ticket.
+            }
+        }
         WorldPlanState? startupPlan = null;
         if (room.WorldPlanId is { } planId && !_worldPlans.TryGetValue(planId, out startupPlan))
             throw new InvalidOperationException("world_plan_not_found");
         if (startupPlan != null) await startupPlan.TransferGate.WaitAsync();
         try
         {
+            int excludedCount;
+            int matched;
+            int playerCount;
+            string[] entries;
+            List<string> order;
             lock (room)
             {
                 if (!ReferenceEquals(_roomManager.GetRoomByConnectionId(ctx.ConnectionId).Room, room)
@@ -247,45 +260,49 @@ public sealed partial class RoomOperations
                     throw new InvalidOperationException("world_plan_target_identity");
                 if (room.IsStarted)
                 {
-                    _logger.LogDebug("[MarkRoomStarted] 房间 {Code} 已经 IsStarted=true，幂等返回", roomCode);
+                    if (requireRoundOrderStartup && room.RoundOrderStartup == null)
+                        throw new InvalidOperationException("round_order_startup_missing");
                     return;
                 }
-                if (room.WorldPlanParticipantUids != null)
-                {
-                    if (!room.HostReady || !_roomManager.GetHoeingStartupReadyLocked(room).Ready)
-                        throw new InvalidOperationException("world_plan_roster_not_ready");
-                    startupPlan?.RetireStartup(room.Code, room.SessionId, _worldPlanTime.GetUtcNow().UtcDateTime);
-                }
+                if (room.WorldPlanParticipantUids != null
+                    && (!room.HostReady || !_roomManager.GetHoeingStartupReadyLocked(room).Ready))
+                    throw new InvalidOperationException("world_plan_roster_not_ready");
+
                 RequireRoomRoutePackage(room);
+                var hostUid = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid ?? "";
+                var config = room.HostConfig;
+                entries = RoundHostOrderDecisions.SplitWhitelist(config is { MultiWorldEnabled: true } ? config.RoomWhitelist : null);
+                // A v1 host can send completed UIDs. Current clients need the whole original candidate order.
+                var keepFullOrder = requireRoundOrderStartup || room.UseLegacyWorldPlanOrder
+                    || room.WorldPlanParticipantUids == null && room.Players.Any(p =>
+                        _capabilityLookup?.Supports(p.ConnectionId, WorldPlanState.Capability) == true);
+                IReadOnlySet<string>? exclude = !keepFullOrder && completedHostUids is { Count: > 0 }
+                    ? new HashSet<string>(completedHostUids) : null;
+                order = RoundHostOrderDecisions.Build(room.Players, hostUid, exclude, entries, out matched);
+                playerCount = room.Players.Count;
+                excludedCount = exclude?.Count ?? 0;
+
+                // Only the first room on the sequential path needs this gate; a committed WorldPlan already has one.
+                if (requireRoundOrderStartup && (entries.Length == 0 || startupPlan != null))
+                    throw new InvalidOperationException("round_order_startup_invalid");
+                var startup = requireRoundOrderStartup
+                    ? CreateRoundOrderStartupLocked(room, order, hostUid, config!.MultiWorldCount) : null;
+                if (room.WorldPlanParticipantUids != null)
+                    startupPlan?.RetireStartup(room.Code, room.SessionId, _worldPlanTime.GetUtcNow().UtcDateTime);
+                room.RoundHostOrder = order;
+                room.RoundOrderStartup = startup;
+                if (keepFullOrder) room.UseLegacyWorldPlanOrder = true;
                 room.IsStarted = true;
                 room.StartedAtUtc = DateTime.UtcNow;
             }
             _logger.LogInformation("[MarkRoomStarted] 房间 {Code} 已锁定，IsStarted=true", roomCode);
             ObservePhase(room, roomCode, "room.markStarted");
-
-        // multiplayer-server-authoritative-round-order：首轮锁房时全员已在房间
-        // （客户端 MarkRoomStarted 在 AllWorldJoined 之后），此刻 Players 是全集，
-        // 生成权威轮换序列（首项=首任房主，其余 UID 升序）。整场只生成一次（幂等）。
-        // hoeing-multiworld-host-restart-resume-round：completedHostUids 非空时排除已完成房主世界（裁剪）。
-            lock (room)
+            _logger.LogInformation("[RoundOrder] 房间 {Code} 生成权威轮换序列（排除 {N} 已完成）：{Order}",
+                roomCode, excludedCount, string.Join(" -> ", order));
+            if (entries.Length > 0)
             {
-                if (room.RoundHostOrder.Count == 0)
-                {
-                    var hostUid = room.Players.Count > 0 ? room.Players[0].PlayerUid : "";
-                    // A v1 host can still send completed UIDs after a v2 peer selected the legacy path.
-                    // Keep one full order for that room; clipping first would turn an A/B two-world plan into B/C.
-                    var keepFullOrder = room.UseLegacyWorldPlanOrder
-                        || room.WorldPlanParticipantUids == null && room.Players.Any(p =>
-                            _capabilityLookup?.Supports(p.ConnectionId, WorldPlanState.Capability) == true);
-                    if (keepFullOrder) room.UseLegacyWorldPlanOrder = true;
-                    IReadOnlySet<string>? exclude =
-                        (!keepFullOrder && completedHostUids != null && completedHostUids.Count > 0)
-                            ? new HashSet<string>(completedHostUids)
-                            : null;
-                    room.RoundHostOrder = RoundHostOrderDecisions.Build(room.Players, hostUid, exclude);
-                    _logger.LogInformation("[RoundOrder] 房间 {Code} 生成权威轮换序列（排除 {N} 已完成）：{Order}",
-                        roomCode, exclude?.Count ?? 0, string.Join(" -> ", room.RoundHostOrder));
-                }
+                if (matched == 0) _logger.LogWarning("[RoundOrder] 房间 {Code} 白名单未匹配任何参与者，使用默认顺序", roomCode);
+                else _logger.LogInformation("[RoundOrder] 房间 {Code} 按白名单顺序排序，未匹配 {N} 人", roomCode, playerCount - matched);
             }
         }
         finally { startupPlan?.TransferGate.Release(); }

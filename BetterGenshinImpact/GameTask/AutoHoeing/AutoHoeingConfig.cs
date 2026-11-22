@@ -623,7 +623,7 @@ public partial class AutoHoeingConfig : ObservableObject
     private bool _multiWorldEnabled = true;
 
     /// <summary>
-    /// 多世界锄地轮数（1-4），由房主设定，按加入顺序依次成为房主
+    /// 多世界锄地轮数（1-4），使用首任房主的白名单确定轮换顺序。
     /// </summary>
     [ObservableProperty]
     private int _multiWorldCount = 4;
