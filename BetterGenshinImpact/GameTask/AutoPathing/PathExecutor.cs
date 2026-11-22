@@ -2606,13 +2606,17 @@ public partial class PathExecutor
 
     private void InitializeTravelMode()
     {
-        if (PartyConfig.HurryOnAvatar == "自动" && _combatScenes!= null)
+        if (PartyConfig.UseNewHurrySystem)
+        {
+            InitHurryOnConfig();
+        }
+        else if (PartyConfig.HurryOnAvatar == "自动" && _combatScenes!= null)
         {
             foreach (var avatar in _combatScenes.GetAvatars())
             {
                 if (PartyConfig.HurryOnAvatarList.Contains(avatar.Name))
                 {
-                    _hurryOnAvatar = avatar.Name;  
+                    _hurryOnAvatar = avatar.Name;
                 }
             }
         }
@@ -3557,6 +3561,9 @@ public partial class PathExecutor
         // Logger.LogWarning("赶路测试log:当前节点:({x2}),动作:({t1}),类型({t2}))", waypoint.Type, waypoint.Action, waypoint.MoveMode);
         // Logger.LogWarning("赶路测试log:Next节点:({x2}),动作:({t1}),间隔距离({x3}),类型({t2}))", nextWaypoint?.Type?? "null", nextWaypoint?.MoveMode ,nextWaypoint?.Action, (int)Math.Round(nextDistance.Value));
 
+        // 公版赶路选瓦雷莎时帧间隔上限强制 50ms（夜魂疾冲的 E 窗口检测依赖高频帧）；茶包版及其他角色保持 100ms
+        var moveLoopDelayMs = PartyConfig.UseNewHurrySystem && _hurryOnAvatar == "瓦雷莎" && avatar != null ? 50 : 100;
+
         // 按下w，一直走
         if (!flyDelay) InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyDown); 
         
@@ -3817,31 +3824,9 @@ public partial class PathExecutor
 
             if (avatar != null && isPoint && !yellowBlood)
             {
-                // 新赶路系统启用时跳过旧版赶路逻辑
+                // 新赶路系统启用时跳过旧版赶路逻辑（公版赶路放在下方到达判断与视角旋转之后执行）
                 bool skipOldHurry = PartyConfig.UseNewHurrySystem;
-                
-                // 新赶路系统分支
-                if (PartyConfig.UseNewHurrySystem)
-                {
-                    
-                    // 初始化赶路配置（首次使用时）
-                    if (string.IsNullOrEmpty(_hurryOnAvatar))
-                    {
-                        InitHurryOnConfig();
-                    }
-
-                    // 使用外部创建的 hurryOnState 实例（跨帧保持 RotationStableCount）
-                    // diff 在本循环迭代的旋转阶段计算，首次进入时传递 0（旋转尚未发生，视为稳定状态）
-                    var hurryOnResult = await TryHurryOnAsync(0, waypoint, distance, screen2, num, hurryOnState);
-                    if (hurryOnResult)
-                    {
-                        // 赶路已处理，跳过当前帧的后续逻辑
-                        continue;
-                    }
-                    
-                    // 新版赶路未触发，跳过旧版赶路逻辑，避免两套系统冲突
-                }
-                else
+                if (!PartyConfig.UseNewHurrySystem)
                 {
                     // 茶包版赶路逻辑已抽离到 TeapotHurryOnHelper.cs（选项1：position/additionalTimeInMs 按值传入）。
                     // 返回 true 表示原"赶路靠近超时-2"应 break 主循环。
@@ -4196,6 +4181,18 @@ public partial class PathExecutor
                 }
             }
 
+            // 公版/新版赶路逻辑（放在到达判断、脱困和视角旋转之后，与公版主循环顺序一致，避免 return true 跳过转向与到达检测）
+            if (PartyConfig.UseNewHurrySystem && avatar != null && isPoint && !yellowBlood)
+            {
+                var hurryOnResult = await TryHurryOnAsync(diff ?? 0, waypoint, distance, screen2, num, hurryOnState);
+                if (hurryOnResult)
+                {
+                    // continue 会跳过底部 await Delay(...)，显式等待以展开状态机并按帧间隔节流
+                    await Delay(moveLoopDelayMs, ct);
+                    continue;
+                }
+            }
+
             // 根据指定方式进行移动
             if (waypoint.MoveMode == MoveModeEnum.Fly.Code)
             {
@@ -4314,8 +4311,8 @@ public partial class PathExecutor
                 }
             }
 
-            await Delay(100, ct);
-            
+            await Delay(moveLoopDelayMs, ct);
+
         }
         
         // 抬起w键
