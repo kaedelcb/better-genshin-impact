@@ -81,6 +81,7 @@ public sealed class CoordinatedBatchState
         public string ResetId = "";
         public bool ResetCleanupPending;
         public DateTime LastSeen = now;
+        public DateTime LastRegistrationReplay;
     }
     private static bool HasEndedCurrentItem(Member member)
         => member.Result is "succeeded" or "local_tasks_failed";
@@ -153,6 +154,17 @@ public sealed class CoordinatedBatchState
 
     public bool MatchesExecutor(string uid, string instanceId)
         => !_executorInstances.TryGetValue(uid, out var expected) || expected == instanceId;
+
+    internal CoordinatedBatchSnapshot? TryReplayRegistration(string uid, string instanceId, DateTime now)
+    {
+        if (Phase != "registering" || !_members.TryGetValue(uid, out var member)
+            || member.Stage != "pending" || !MatchesExecutor(uid, instanceId)
+            || now - member.LastRegistrationReplay < TimeSpan.FromSeconds(10))
+            return null;
+
+        member.LastRegistrationReplay = now;
+        return Snapshot();
+    }
 
     public CoordinatedBatchSnapshot Snapshot() => new(BatchId, Generation, Index, Attempt, Revision, Phase, Reason)
     {

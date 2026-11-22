@@ -122,6 +122,28 @@ public class CoordinatedBatchStateTests
         Assert.Equal("registration_timeout", snapshot.Reason);
         Assert.Equal(new[] { "b", "c", "d" }, snapshot.MissingRegistrationUids);
     }
+    [Fact]
+    public void RegistrationReplayIsRateLimitedAndRequiresTheFrozenExecutor()
+    {
+        var s = new CoordinatedBatchState(7, ["a", "b"], _now,
+            executorInstances: new Dictionary<string, string> { ["a"] = "instance-a", ["b"] = "instance-b" },
+            stateContinuation: true);
+
+        Assert.Null(s.TryReplayRegistration("a", "replacement", _now));
+        var first = Assert.IsType<CoordinatedBatchSnapshot>(s.TryReplayRegistration("a", "instance-a", _now));
+        Assert.Equal(s.BatchId, first.BatchId);
+        Assert.Equal(s.Generation, first.Generation);
+        Assert.Equal(0, first.Revision);
+        Assert.Null(s.TryReplayRegistration("a", "instance-a", _now.AddSeconds(9)));
+        Assert.NotNull(s.TryReplayRegistration("a", "instance-a", _now.AddSeconds(10)));
+        Assert.NotNull(s.TryReplayRegistration("b", "instance-b", _now.AddSeconds(1)));
+
+        Assert.Equal("registering", Send(s, "a", seconds: 11).Phase);
+        Assert.Null(s.TryReplayRegistration("a", "instance-a", _now.AddSeconds(21)));
+        s.Abort("user_stop_all");
+        Assert.Null(s.TryReplayRegistration("b", "instance-b", _now.AddSeconds(21)));
+    }
+
     [Fact] public void ManualAbortDoesNotInventRegistrationDiagnostic()
     {
         var s = Create();

@@ -2,6 +2,8 @@ using System.Text.Json;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 using BgiCoordinatorServer.Services;
+using Microsoft.AspNetCore.SignalR;
+using Moq;
 using Xunit;
 
 namespace BgiCoordinatorServer.Tests;
@@ -84,6 +86,45 @@ public class CoordinatedBatchGatewayTests
     private static int Events(GatewayTestHarness h, string name) => h.GatewayClientProxy.Invocations.Count(call =>
         call.Arguments.Count >= 2 && call.Arguments[0] as string == GatewayProtocol.Callbacks.Event
         && call.Arguments[1] is object?[] { Length: > 0 } args && args[0] is GatewayEnvelope e && e.Name == name);
+
+    [Fact]
+    public async Task PendingExecutorCanRegisterFromReplayedStartAfterItsStatusReport()
+    {
+        var (h, clients, room) = await Setup(2);
+        var batch = Snapshot(await Begin(h, clients[0], targets: ["u0", "u1"]));
+        var pending = Snapshot(await Update(h, clients[0], batch, stage: "registered"));
+        Assert.Equal("registering", pending.Phase);
+
+        // The first start was not handled by u1. Capture only its subsequent delivery.
+        var pendingExecutor = new Mock<ISingleClientProxy>();
+        pendingExecutor.Setup(p => p.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        h.GatewayHub.Setup(hub => hub.Clients.Client(clients[1].ConnectionId)).Returns(pendingExecutor.Object);
+        h.GatewayClientProxy.Invocations.Clear();
+
+        Task ReportStatus(int member) => h.Ops.ReportControlStatusAsync(clients[member], new ControlStatus
+        {
+            RoomCode = room, PlayerUid = "u" + member, ExpectedHoeingPlayers = 2,
+            OnlineHoeingGroupNames = ["group" + member], OnlineHoeingGroupTypes = ["group"],
+        });
+        IEnumerable<GatewayEnvelope> Starts() => pendingExecutor.Invocations
+            .SelectMany(call => (object?[])call.Arguments[1])
+            .OfType<GatewayEnvelope>().Where(e => e.Name == GatewayProtocol.Events.ControlBatchStart);
+
+        await ReportStatus(0);
+        Assert.Empty(Starts());
+        Assert.Equal(0, Events(h, GatewayProtocol.Events.ControlBatchStart));
+        await ReportStatus(1);
+        await ReportStatus(1);
+        var replay = Assert.Single(Starts()).Payload!.Deserialize<CoordinatedBatchSnapshot>(GatewayJson.Options)!;
+        Assert.Equal(pending.BatchId, replay.BatchId);
+        Assert.Equal(pending.Generation, replay.Generation);
+        Assert.Equal(pending.Revision, replay.Revision);
+        Assert.Equal(pending.ParticipantUids, replay.ParticipantUids);
+        Assert.Equal("preparing", Snapshot(await Update(h, clients[1], replay, "u1", "registered")).Phase);
+        await ReportStatus(1);
+        Assert.Single(Starts());
+    }
 
     [Fact]
     public async Task AllReadyCreatesAuthorityAndGatewayReturnsRealSnapshot()

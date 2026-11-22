@@ -487,6 +487,7 @@ public sealed partial class RoomOperations
 
             // 广播给控制房间所有成员（状态上报：增量比对，无变化零发送——主优化点）
             await BroadcastControlRoomPlayersAsync(group, forceFull: false);
+            await ReplayPendingBatchStartAsync(group, ctx.ConnectionId);
         }
         catch (Exception ex)
         {
