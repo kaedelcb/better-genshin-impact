@@ -137,7 +137,7 @@ public static class AvatarCombatSpecialization
 
     /// <summary>
     /// 恰斯卡 e(hold) 飞行旋转搜索循环（自 Avatar.UseSkill 内联块收拢）：
-    /// 点按E起飞→按住左键瞄准，循环：起飞态检测/满弹倍率/子弹模式跟踪/血条索敌/传奇血条处置/OCR寻敌/旋转搜索，
+    /// 点按E起飞→按住左键瞄准，循环：起飞态检测/传奇索敌等待倍率/子弹模式跟踪/血条索敌/传奇血条处置/OCR寻敌/旋转搜索，
     /// 退出条件：脱离飞行/20秒超时/传奇击杀推断/连续无血条达上限。下车收尾（松键+E复位）一并收拢。
     /// </summary>
     public static void RunChascaFlightRotation(CancellationToken ct)
@@ -200,8 +200,8 @@ public static class AvatarCombatSpecialization
                 Logger.LogInformation("当前子弹有效数量：{Count}，子弹类型{Pattern}", effectiveBulletCount, pattern);
                 // 调试采样：每帧输出亮度花纹，不干扰原逻辑
                 DebugSampleChascaBullets(bulletStatusChars);
-                // 满弹（≥6）→ 进入双倍超时模式
-                if (effectiveBulletCount >= 6)
+                // 识别到至少 4 发时，传奇索敌等待翻倍
+                if (effectiveBulletCount >= 4)
                 {
                     rotateIntervalMultiplier = 2.0;
                 }
