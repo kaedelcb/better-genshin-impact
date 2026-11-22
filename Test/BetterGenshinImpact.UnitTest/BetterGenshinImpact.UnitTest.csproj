@@ -64,6 +64,7 @@
     <Compile Include="GameTaskTests\AutoFightTests\CheckFightFinishDoubleCheckTests.cs" />
     <!-- Re-include B7 像素检测内存图像测试与 B6/B12 决策 PBT（2026-09-13，白名单新增） -->
     <Compile Include="GameTaskTests\AutoFightTests\CombatHealthDetectorTests.cs" />
+    <Compile Include="GameTaskTests\AutoFightTests\ChascaDamageNumberTests.cs" />
     <Compile Include="GameTaskTests\AutoFightTests\ArlecchinoAndMotorcycleDecisionsPbtTest.cs" />
     <Compile Include="GameTaskTests\AutoFightTests\ArlecchinoAutoEqRegressionTests.cs" />
     <!-- Re-include otherworld teammate avatar misrecognition fix bug exploration tests -->
