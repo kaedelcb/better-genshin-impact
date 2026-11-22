@@ -97,6 +97,8 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
     /// </summary>
     public bool ArlecchinoBurstLowHpGateEnabled { get; set; } = false;
     public bool ArlecchinoAutoEnabled { get; set; } = false;
+    public double ChascaBulletThreshold { get; set; } = 0.8;
+    public int ChascaSequenceSlotCount { get; set; } = 2;
     public int QiKong { get; set; } = 0;
     public string KazuhaPartyName;
     public string OnlyPickEliteDropsMode = "";
@@ -185,6 +187,8 @@ public class AutoFightParam : BaseTaskParam<AutoFightTask>
         MavuikaMotorcycleCheckEnabled = autoFightConfig.MavuikaMotorcycleCheckEnabled;
         ArlecchinoBurstLowHpGateEnabled = autoFightConfig.ArlecchinoBurstLowHpGateEnabled;
         ArlecchinoAutoEnabled = autoFightConfig.ArlecchinoAutoEnabled;
+        ChascaBulletThreshold = autoFightConfig.ChascaBulletThreshold;
+        ChascaSequenceSlotCount = autoFightConfig.ChascaSequenceSlotCount;
         QiKong = autoFightConfig.QiKong;
 
         FinishDetectConfig.FastCheckEnabled = autoFightConfig.FinishDetectConfig.FastCheckEnabled;

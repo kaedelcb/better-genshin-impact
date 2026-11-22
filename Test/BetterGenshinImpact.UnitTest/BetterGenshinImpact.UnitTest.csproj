@@ -67,6 +67,7 @@
     <Compile Include="GameTaskTests\AutoFightTests\ChascaDamageNumberTests.cs" />
     <Compile Include="GameTaskTests\AutoFightTests\ArlecchinoAndMotorcycleDecisionsPbtTest.cs" />
     <Compile Include="GameTaskTests\AutoFightTests\ArlecchinoAutoEqRegressionTests.cs" />
+    <Compile Include="GameTaskTests\AutoFightTests\ChascaBulletRecognitionTests.cs" />
     <!-- Re-include otherworld teammate avatar misrecognition fix bug exploration tests -->
     <!-- These files are referenced in the csproj but no longer exist on disk.
          They are excluded to allow the test project to build. -->

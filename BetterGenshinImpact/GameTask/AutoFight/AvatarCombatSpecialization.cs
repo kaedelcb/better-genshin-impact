@@ -140,8 +140,13 @@ public static class AvatarCombatSpecialization
     /// 点按E起飞→按住左键瞄准，循环：起飞态检测/传奇索敌等待倍率/子弹模式跟踪/血条索敌/传奇血条处置/OCR寻敌/旋转搜索，
     /// 退出条件：脱离飞行/20秒超时/传奇击杀推断/连续无血条达上限。下车收尾（松键+E复位）一并收拢。
     /// </summary>
-    public static void RunChascaFlightRotation(CancellationToken ct)
+    public static void RunChascaFlightRotation(
+        CancellationToken ct, double? bulletThreshold = null, int? sequenceSlotCount = null)
     {
+            var config = TaskContext.Instance().Config.AutoFightConfig;
+            var bulletRecognition = ChascaBulletRecognition.PackagedModels.Value;
+            var threshold = bulletThreshold ?? config.ChascaBulletThreshold;
+            var bulletHistory = new ChascaBulletSequenceHistory(sequenceSlotCount ?? config.ChascaSequenceSlotCount);
             Logger.LogInformation("进入恰斯卡特化逻辑");
             // 恰斯卡e(hold)：先确保E抬起，再点按E起飞，然后按住左键进入瞄准蓄力
             Logger.LogInformation("恰斯卡：释放E键（确保抬起）");
@@ -191,12 +196,20 @@ public static class AvatarCombatSpecialization
                     break;
                 }
 
-                // 每帧检测有效子弹数量（子弹按顺序填充，0-6）
-                var (bulletStatusChars, _, _, _) = AnalyzeAllChascaBullets();
-                var effectiveBulletCount = bulletStatusChars.Count(c => c != '空');
-                // 子弹类型直接使用检测结果：火/水/雷/冰/空
-                var compressedChars = bulletStatusChars.Skip(1).ToArray();
-                var pattern = new string(compressedChars);
+                // 风弹不计入有效弹数，旧模板会把第 1 槽标为空。
+                char[] bulletStatusChars;
+                if (bulletRecognition == null)
+                {
+                    bulletStatusChars = AnalyzeAllChascaBullets().statusChars;
+                }
+                else
+                {
+                    using var bulletFrame = CaptureToRectArea();
+                    bulletStatusChars = bulletRecognition.Recognize(bulletFrame.SrcMat, threshold);
+                }
+
+                var effectiveBulletCount = bulletStatusChars.Count(c => c != '空' && c != '风');
+                var pattern = new string(bulletStatusChars, 1, bulletStatusChars.Length - 1);
                 Logger.LogInformation("当前子弹有效数量：{Count}，子弹类型{Pattern}", effectiveBulletCount, pattern);
                 // 调试采样：每帧输出亮度花纹，不干扰原逻辑
                 DebugSampleChascaBullets(bulletStatusChars);
@@ -205,9 +218,12 @@ public static class AvatarCombatSpecialization
                 {
                     rotateIntervalMultiplier = 2.0;
                 }
+                // 新模型比较最近的装填序列，回退到旧模板时沿用原计时规则。
                 distinctBulletPatterns.Add(pattern);
-                // 当出现第3种不同模式时，重置计时器（说明正在稳定命中，子弹变化多样）
-                if (distinctBulletPatterns.Count > 2)
+                var newPattern = bulletRecognition == null
+                    ? distinctBulletPatterns.Count > 2
+                    : bulletHistory.Observe(bulletStatusChars);
+                if (newPattern)
                 {
                     distinctBulletPatterns.Clear();
                     distinctBulletPatterns.Add(pattern);

@@ -242,7 +242,7 @@ public class AutoFightJsonTask : ISoloTask
             cts2 = new CancellationTokenSource();
             cts2Registration = ct.Register(cts2.Cancel);
 
-            combatScenes.BeforeTask(cts2.Token);
+            combatScenes.BeforeTask(cts2.Token, _taskParam);
             // 设置初始当前角色名（用于无 Character 字段的通用 action 回退）
             CombatScriptParser.CurrentAvatarName = combatScenes.GetAvatars().FirstOrDefault()?.Name ?? CombatScriptParser.CurrentAvatarName;
             TimeSpan fightTimeout = TimeSpan.FromSeconds(_taskParam.Timeout);

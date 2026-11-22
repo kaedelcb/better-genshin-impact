@@ -204,6 +204,10 @@
 		<None Update="GameTask\AutoFight\Assets\chasca-patterns.json">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
+		<None Update="GameTask\AutoFight\Assets\chasca-bullet-models.json">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		  <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+		</None>
 		<None Update="GameTask\AutoFight\Assets\combat_avatar.json">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
