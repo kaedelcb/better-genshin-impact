@@ -47,6 +47,9 @@ public sealed partial class RoomOperations
                     roomCode, reporterUid);
                 return;
             }
+            if (room.HostWorld is { } standby && (!_roomManager.CanUseHostWorldRoomLocked(room, ctx.ConnectionId)
+                || !standby.Abort(string.IsNullOrWhiteSpace(reason) ? "coordinated_abort" : reason[..Math.Min(reason.Length, 256)])))
+                return;
             room.CoordinatedAbortBroadcasted = true;
             room.RoundOrderStartup?.Result.TrySetResult(false);
         }

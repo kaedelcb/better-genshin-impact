@@ -35,6 +35,7 @@ public sealed partial class RoomOperations
         ObservePhase(room, roomCode, "world.resetJoined");
         if (room != null && roomCode != null && room.HostConnectionId == ctx.ConnectionId)
         {
+            if (room.HostWorld != null) throw new InvalidOperationException("host_world_single_world_required");
             _roomManager.ResetWorldJoinedSet(roomCode);
             _logger.LogInformation("[ResetWorldJoined] 房间 {Code} WorldJoinedSet 已重置", roomCode);
         }
@@ -49,6 +50,7 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return Task.CompletedTask;
+        if (room.HostWorld != null) throw new InvalidOperationException("host_world_single_world_required");
 
         _phaseObserver.Mark(roomCode, RoomPhase.RoundTransition, "world.resetForNewRound");
 

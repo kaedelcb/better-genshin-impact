@@ -104,13 +104,11 @@ public class RouteConsistencyChecker
         client.RouteVerificationPassed += onPassed;
         client.RouteDiffReceived += onDiff;
 
-        await client.ReportRouteListAsync(hashes);
-
-        // 超时时间延长到90秒，覆盖房主准备时间
-        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-
         try
         {
+            await client.ReportRouteListAsync(hashes, ct);
+            // 超时时间延长到90秒，覆盖房主准备时间
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
             using var externalReg = ct.Register(() => tcs.TrySetResult(null));
             using var timeoutReg = timeoutCts.Token.Register(() =>
             {

@@ -23,6 +23,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
 
         if (await TrySendBarrierFailureAsync(ctx, room, roomCode, syncPointId)) return;
@@ -57,6 +59,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
 
         if (await TrySendBarrierFailureAsync(ctx, room, roomCode, syncPointId)) return;
@@ -100,6 +104,7 @@ public sealed partial class RoomOperations
         bool first;
         lock (room)
         {
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
             first = !room.BarrierFailures.ContainsKey(syncPointId);
             if (first) room.BarrierFailures[syncPointId] = safeReason;
         }
@@ -156,6 +161,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.waitForAllPlayers");
 
         _logger.LogDebug("[WaitForAllPlayers] 房间={RoomCode}, 同步点={SyncId}, 进度={Progress}, 连接={ConnId}",
@@ -166,7 +173,7 @@ public sealed partial class RoomOperations
         {
             lock (room)
             {
-                var caller = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+                var caller = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
                 if (caller != null)
                 {
                     caller.CurrentProgress = syncProgress;
@@ -191,7 +198,7 @@ public sealed partial class RoomOperations
         // 只清理调用方自己（caller），不清理其他玩家（比 WillBroadcastHere 更保守）。
         lock (room)
         {
-            var caller = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            var caller = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (caller != null && caller.IsAbnormal && caller.TargetProgress > 0 && syncProgress >= 0 && caller.TargetProgress <= syncProgress)
             {
                 _logger.LogInformation("[WaitForAllPlayers] 异常玩家 {Uid} 到达同步点 {SyncId}（progress={SP}），清除异常状态（Target={T}）",
@@ -215,10 +222,10 @@ public sealed partial class RoomOperations
             // 取除 caller 外、所有在线（心跳<2min）正常玩家的 CurrentProgress；
             // 若 syncProgress 严格小于它们全部，则 caller 落后于所有人、其它人不会再以此 syncId 到达。
             // 异常玩家（IsAbnormal）不纳入比较，保持其分支现状不受影响。
-            var others = room.Players
+            var others = room.RouteExecutors
                 .Where(p => p.ConnectionId != ctx.ConnectionId
                             && !p.IsAbnormal
-                            && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                            && (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
                 .Select(p => p.CurrentProgress)
                 .ToList();
             releaseLaggingCaller = LaggingMemberReleaseDecisions.ShouldReleaseLaggingCaller(syncProgress, others);
@@ -281,7 +288,7 @@ public sealed partial class RoomOperations
             // 汇合后清理异常状态：所有 TargetProgress ≤ syncProgress 的异常玩家恢复正常
             lock (room)
             {
-                foreach (var p in room.Players)
+                foreach (var p in room.RouteExecutors)
                 {
                     if (p.IsAbnormal && p.TargetProgress > 0 && syncProgress >= 0 && p.TargetProgress <= syncProgress)
                     {
@@ -297,7 +304,7 @@ public sealed partial class RoomOperations
             {
                 lock (room)
                 {
-                    foreach (var p in room.Players)
+                    foreach (var p in room.RouteExecutors)
                     {
                         p.IsAbnormal = false;
                         p.TargetProgress = -1;
@@ -406,7 +413,7 @@ public sealed partial class RoomOperations
                 // collective-stuck-orphan-arrivalset fix：优先用存储的真实进度
                 if (!room.ArrivalSetProgress.TryGetValue(sid, out sp))
                 {
-                    sp = room.Players
+                    sp = room.RouteExecutors
                         .Where(p => arrivals.Contains(p.ConnectionId))
                         .Select(p => p.CurrentProgress)
                         .DefaultIfEmpty(-1)
@@ -434,8 +441,9 @@ public sealed partial class RoomOperations
     /// </summary>
     internal bool ShouldBroadcastAllArrived(Room room, string syncId, HashSet<string> arrivals, long syncProgress)
     {
-        var onlinePlayers = room.Players
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+        if (!room.HasActiveRouteExecution) return false;
+        var onlinePlayers = room.RouteExecutors
+            .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
             .ToList();
 
         _logger.LogInformation("[ShouldBroadcast] syncId={SyncId}, syncProgress={SP}, 在线玩家数={Online}, ArrivalSet={Arrivals}",
@@ -501,8 +509,9 @@ public sealed partial class RoomOperations
     /// </summary>
     private static bool ShouldBroadcastAllArrived(Room room, HashSet<string> arrivals, long syncProgress)
     {
-        var onlinePlayers = room.Players
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+        if (!room.HasActiveRouteExecution) return false;
+        var onlinePlayers = room.RouteExecutors
+            .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
             .ToList();
 
         if (onlinePlayers.Count == 0) return false;
@@ -531,9 +540,10 @@ public sealed partial class RoomOperations
     /// </summary>
     private static bool AllOnlineMembersReportedStatic(Room room, HashSet<string> reported)
     {
-        var onlinePlayers = room.Players
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
-            .Where(p => !room.GracePendingMembers.ContainsKey(p.ConnectionId))
+        if (!room.HasActiveRouteExecution) return false;
+        var onlinePlayers = room.RouteExecutors
+            .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
+            .Where(p => room.HostWorld != null || !room.GracePendingMembers.ContainsKey(p.ConnectionId))
             .ToList();
 
         if (onlinePlayers.Count == 0) return false;
@@ -547,9 +557,9 @@ public sealed partial class RoomOperations
     /// </summary>
     private static bool AllNormalOnlineMembersReported(Room room, HashSet<string> reported)
     {
-        var normalOnlinePlayers = room.Players
+        var normalOnlinePlayers = room.RouteExecutors
             .Where(p => !p.IsAbnormal)
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
             .ToList();
 
         if (normalOnlinePlayers.Count == 0) return false;
@@ -577,6 +587,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private bool IsCollectiveStuckLocked(Room room)
     {
+        if (!room.HasActiveRouteExecution || room.HostWorld != null && room.GracePendingMembers.Count > 0) return false;
         if (room.RerunExecution?.BlocksLegacyAdvancement == true) return false;
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return false;
         // route-anchor 激活时由路线边界锚点统一推进路线，旧集体跳段不再介入卡死判定（阶段 6 隔离）
@@ -585,8 +596,8 @@ public sealed partial class RoomOperations
         var ratio = Math.Clamp(room.HostConfig.MutualWaitMinWaitersRatio, 0.01, 1.0);
         var stableSeconds = Math.Max(5, room.HostConfig.MutualWaitStableSeconds);
 
-        var onlinePlayers = room.Players
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+        var onlinePlayers = room.RouteExecutors
+            .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
             .ToList();
         if (onlinePlayers.Count == 0) return false;
 
@@ -724,8 +735,8 @@ public sealed partial class RoomOperations
                 if (!IsCollectiveStuckLocked(room)) return;
 
                 // 1) 计算 targetProgress（OQ-1 B：round 到下一条路线开头）
-                var maxCurrent = room.Players
-                    .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                var maxCurrent = room.RouteExecutors
+                    .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
                     .Select(p => p.CurrentProgress)
                     .DefaultIfEmpty(-1)
                     .Max();
@@ -736,8 +747,8 @@ public sealed partial class RoomOperations
                 var allArrivedConns = new HashSet<string>(
                     room.ArrivalSets.SelectMany(kv => kv.Value)
                 );
-                laggingPlayerConnIds = room.Players
-                    .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+                laggingPlayerConnIds = room.RouteExecutors
+                    .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
                     .Where(p => p.CurrentProgress < targetProgress)
                     .Where(p => !allArrivedConns.Contains(p.ConnectionId))
                     .Select(p => p.ConnectionId)
@@ -778,7 +789,7 @@ public sealed partial class RoomOperations
                     //        异常玩家分支依赖 TargetProgress 判定是否需要等他）
                     foreach (var connId in laggingPlayerConnIds)
                     {
-                        var p = room.Players.FirstOrDefault(x => x.ConnectionId == connId);
+                        var p = room.RouteExecutors.FirstOrDefault(x => x.ConnectionId == connId);
                         if (p == null) continue;
                         p.IsAbnormal = true;
                         p.TargetProgress = targetProgress;
@@ -1084,6 +1095,7 @@ public sealed partial class RoomOperations
         {
             lock (room)
             {
+                if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
                 var active = room.ActiveCollectiveSkip;
                 if (active == null)
                 {

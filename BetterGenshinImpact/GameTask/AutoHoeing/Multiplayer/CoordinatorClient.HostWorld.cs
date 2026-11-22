@@ -1,0 +1,104 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
+
+namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
+
+internal sealed record HostWorldState(string SessionId, string HostUid, string[] ExecutorUids,
+    string Phase, string[]? RouteNames, string? Reason, string? ManifestDigest = null)
+{
+    public bool IsSuccess => Phase is "completed" or "noRoutes" or "expCap";
+    public bool IsTerminal => IsSuccess || Phase == "aborted";
+
+    internal void RequireIdentity(string sessionId, string uid, bool isHost, string? knownHostUid,
+        HostWorldState? frozen)
+    {
+        if (SessionId != sessionId || string.IsNullOrWhiteSpace(HostUid) || string.IsNullOrWhiteSpace(uid)
+            || (isHost != (HostUid == uid)) || (!string.IsNullOrEmpty(knownHostUid) && HostUid != knownHostUid)
+            || ExecutorUids == null || ExecutorUids.Any(x => string.IsNullOrWhiteSpace(x) || x == HostUid)
+            || ExecutorUids.Distinct(StringComparer.Ordinal).Count() != ExecutorUids.Length
+            || Phase is not ("waiting" or "ready" or "running" or "completed" or "noRoutes" or "expCap" or "aborted"))
+            throw new MultiplayerSessionFailedException("借世界房间实例、角色或执行者名单不一致");
+
+        if (Phase is not ("waiting" or "aborted")
+            && (ExecutorUids.Length == 0 || (!isHost && !ExecutorUids.Contains(uid, StringComparer.Ordinal))))
+            throw new MultiplayerSessionFailedException("借世界房间未确认本机的执行身份");
+        if (frozen != null && (frozen.HostUid != HostUid
+            || !frozen.ExecutorUids.ToHashSet(StringComparer.Ordinal).SetEquals(ExecutorUids)
+            || Phase == "waiting"))
+            throw new MultiplayerSessionFailedException("借世界房间的已确认名单发生变化");
+        if ((Phase is "running" or "completed" && (RouteNames is not { Length: > 0 }
+                || ManifestDigest is not { Length: 64 } || !ManifestDigest.All(Uri.IsHexDigit)))
+            || (Phase == "noRoutes" && RouteNames is not { Length: 0 }))
+            throw new MultiplayerSessionFailedException("借世界房间未确认路线发布结果");
+    }
+}
+
+public partial class CoordinatorClient
+{
+    internal bool IsHostWorldOnlyRoom { get { lock (_roomLock) return _roomSession?.StandbySessionId != null; } }
+
+    // Only route execution uses this projection. Party admission, in-game detection and heartbeat use the full roster.
+    internal bool IsRouteExecutor(string uid)
+    {
+        lock (_roomLock)
+            return _roomSession?.StandbySessionId == null
+                || _roomSession.FrozenHostWorld?.ExecutorUids.Contains(uid, StringComparer.Ordinal) == true;
+    }
+
+    internal int? FrozenRouteExecutorCount
+    {
+        get { lock (_roomLock) return _roomSession?.FrozenHostWorld?.ExecutorUids.Length; }
+    }
+
+    private static string? ReadHostWorldBinding(GatewayEnvelope response)
+    {
+        var sessionId = response.GetString("standbySessionId");
+        if (response.GetBool("hostProvidesWorldOnly") == string.IsNullOrWhiteSpace(sessionId))
+            throw new MultiplayerSessionFailedException("借世界房间模式与实例回执不一致");
+        return string.IsNullOrWhiteSpace(sessionId) ? null : sessionId;
+    }
+
+    internal async Task<HostWorldState> ReadOrUpdateHostWorldAsync(CancellationToken ct, string? action = null,
+        IReadOnlyList<string>? routeNames = null, bool allowPartial = false, int? partyCount = null,
+        string? manifestDigest = null)
+    {
+        RoomSession session;
+        lock (_roomLock)
+            session = _roomSession is { StandbySessionId: not null } room ? room
+                : throw new MultiplayerSessionFailedException("本次任务没有已绑定的借世界房间");
+        var gateway = _gateway ?? throw new MultiplayerSessionFailedException("借世界房间连接未建立");
+        // Replay is bound to this saved instance, even if room.close won the race with an RPC reply.
+        using var budget = CreateRpcBudget(ct, includeRoom: false);
+        if (IsCurrent(session))
+        {
+            try { await WaitForBusinessReadyAsync(budget.Token); }
+            catch (MultiplayerSessionFailedException) when (!IsCurrent(session) && !ct.IsCancellationRequested) { }
+        }
+        var response = action == null
+            ? await gateway.QueryAsync(GatewayProtocol.Names.RoomHostWorldState,
+                new { sessionId = session.StandbySessionId }, session.RoomCode, budget.Token)
+            : await gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomHostWorldUpdate,
+                new { sessionId = session.StandbySessionId, action, routeNames, allowPartial, partyCount, manifestDigest },
+                session.RoomCode, budget.Token);
+        budget.Token.ThrowIfCancellationRequested();
+        var state = response.Get<HostWorldState>("state")
+            ?? throw new MultiplayerSessionFailedException("未收到借世界房间状态回执");
+        lock (_roomLock)
+        {
+            if (!ReferenceEquals(_roomSession, session))
+                throw new MultiplayerSessionFailedException("借世界房间回执已失去原实例");
+            state.RequireIdentity(session.StandbySessionId!, session.Uid ?? "", session.IsStandbyHost,
+                HostPlayerUid, session.FrozenHostWorld);
+            if (!state.IsTerminal && session.Ended)
+                throw new MultiplayerSessionFailedException("借世界房间已关闭，未确认完工");
+            if (state.Phase is "ready" or "running" or "completed" or "expCap" or "noRoutes")
+                session.FrozenHostWorld ??= state;
+        }
+        return state;
+    }
+}

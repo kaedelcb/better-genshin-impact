@@ -14,8 +14,9 @@ public sealed partial class RoomOperations
 
         lock (room)
         {
-            var player = room.Players.SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId);
-            if (player == null || string.IsNullOrWhiteSpace(player.PlayerUid))
+            var executors = room.RouteExecutors.ToArray();
+            var player = executors.SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId) || player == null || string.IsNullOrWhiteSpace(player.PlayerUid))
                 throw new RerunProtocolException("rerun_not_participant", "Connection has no current player identity.");
 
             if (!hasCapability(ctx.ConnectionId))
@@ -50,16 +51,16 @@ public sealed partial class RoomOperations
             {
                 if (request.Operation != RerunProtocol.Enroll)
                     throw new RerunProtocolException("rerun_not_enrolled", "Enroll before requesting rerun state.");
-                if (room.Players.Any(p => string.IsNullOrWhiteSpace(p.PlayerUid)) ||
-                    room.Players.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).Count() != room.Players.Count)
+                if (executors.Any(p => string.IsNullOrWhiteSpace(p.PlayerUid)) ||
+                    executors.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).Count() != executors.Length)
                     throw new RerunProtocolException("rerun_invalid_roster", "Every participant must have a unique nonempty UID.");
-                if (room.Players.Any(p => !hasCapability(p.ConnectionId)))
+                if (executors.Any(p => !hasCapability(p.ConnectionId)))
                     throw new RerunProtocolException("rerun_capability_required", "Every participant must advertise hoeing.rerun.v1.");
                 if (room.ExpCapBroadcasted)
                     throw new RerunProtocolException("rerun_exp_cap_reached", "The room has reached the experience cap.");
 
                 var state = new RerunExecutionState(scope, room.CurrentWorldRound,
-                    room.Players.ToDictionary(p => p.PlayerUid, p => p.ConnectionId, StringComparer.Ordinal), DateTime.UtcNow);
+                    executors.ToDictionary(p => p.PlayerUid, p => p.ConnectionId, StringComparer.Ordinal), DateTime.UtcNow);
                 var snapshot = state.Apply(player.PlayerUid, ctx.ConnectionId, request, DateTime.UtcNow);
                 // Publish only after a valid first enrollment; malformed requests cannot reserve the session.
                 room.RerunExecution = state;

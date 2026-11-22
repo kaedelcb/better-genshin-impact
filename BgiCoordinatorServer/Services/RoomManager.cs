@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace BgiCoordinatorServer.Services;
 
-public class RoomManager
+public partial class RoomManager
 {
     private const string CodeChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     private const int CodeLength = 6;
@@ -74,7 +74,7 @@ public class RoomManager
     public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, IReadOnlyList<string>? expectedParticipantUids = null,
         IReadOnlyList<string>? worldPlanParticipantUids = null, string? worldPlanId = null, string? protocol = null,
-        RoomConfig? hostConfig = null)
+        RoomConfig? hostConfig = null, bool hostProvidesWorldOnly = false)
     {
         var endedRooms = new List<Room>();
         var fixedUids = expectedParticipantUids?.ToArray() ?? [];
@@ -102,22 +102,17 @@ public class RoomManager
                 .ToList();
             foreach (var oldCode in oldRoomCodes)
             {
-                if (_rooms.TryRemove(oldCode, out var oldRoom))
-                {
-                    lock (oldRoom)
-                    {
-                        foreach (var p in oldRoom.Players)
-                            _connectionRoomMap.TryRemove(p.ConnectionId, out _);
-                    }
-                    endedRooms.Add(oldRoom);
-                }
+                if (!_rooms.TryGetValue(oldCode, out var oldRoom)) continue;
+                lock (oldRoom)
+                    if (RemoveRoomLocked(oldCode, oldRoom)) endedRooms.Add(oldRoom);
             }
         }
 
-        string code;
+        string code, sessionId;
         do
         {
             code = GenerateCode();
+            sessionId = $"{code}-{Guid.NewGuid():N}";
         } while (!_rooms.TryAdd(code, new Room
         {
             Code = code,
@@ -130,7 +125,8 @@ public class RoomManager
             HostConfig = hostConfig,
             CreatedAt = DateTime.UtcNow,
             // 服务端生成的会话身份（route-anchor）：区分房间实例，避免房间码复用导致跨实例串状态
-            SessionId = $"{code}-{Guid.NewGuid():N}",
+            SessionId = sessionId,
+            HostWorld = hostProvidesWorldOnly ? new HostWorldExecution(sessionId, playerUid) : null,
             Whitelist = whitelist ?? [],
             ExpectedPlayerCount = fixedUids.Length > 0 ? fixedUids.Length : expectedPlayerCount,
             HostBaselineVersion = reportedVersion ?? "",
@@ -156,7 +152,9 @@ public class RoomManager
     }
 
     /// <summary>加入房间，验证房间存在且人数 &lt; 4</summary>
-    public (bool Success, string? Error) JoinRoom(string roomCode, string connectionId, string playerId, string playerName = "", string playerUid = "", string reportedVersion = "")
+    public (bool Success, string? Error) JoinRoom(string roomCode, string connectionId, string playerId,
+        string playerName = "", string playerUid = "", string reportedVersion = "", string? standbySessionId = null,
+        bool hasHostWorldCapability = false, Room? expectedRoom = null)
     {
         if (!_rooms.TryGetValue(roomCode, out var room))
             return (false, "房间不存在");
@@ -165,6 +163,15 @@ public class RoomManager
         {
             if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room))
                 return (false, "房间不存在");
+            if ((expectedRoom != null && !ReferenceEquals(expectedRoom, room))
+                || (!string.IsNullOrEmpty(standbySessionId) && (room.HostWorld == null || room.SessionId != standbySessionId)))
+                return (false, "host_world_session_mismatch");
+            if (_connectionRoomMap.TryGetValue(connectionId, out var activeCode) && activeCode != roomCode
+                && _rooms.TryGetValue(activeCode, out var activeRoom) && activeRoom.HostWorld != null)
+                return (false, "host_world_other_room");
+            if (room.HostWorld != null)
+                return JoinHostWorldLocked(room, connectionId, playerId, playerName, playerUid, reportedVersion,
+                    hasHostWorldCapability, standbySessionId);
             if (room.WorldPlanParticipantUids is { } planned)
             {
                 if (!planned.Contains(playerUid, StringComparer.Ordinal))
@@ -347,8 +354,15 @@ public class RoomManager
             {
                 lock (room)
                 {
-                    if (room.Players.RemoveAll(p => p.ConnectionId == connectionId) > 0)
+                    if (room.HostWorld is { } standby && connectionId == room.HostConnectionId)
+                    {
+                        if (RemoveRoomLocked(roomCode, room)) endedRoom = room;
+                    }
+                    else if (room.Players.RemoveAll(p => p.ConnectionId == connectionId) > 0)
+                    {
                         room.RoundOrderStartup?.Result.TrySetResult(false);
+                        if (room.IsStarted) room.HostWorld?.Abort("executor_left");
+                    }
                     // 清理该连接在各同步集合中的记录
                     foreach (var set in room.ArrivalSets.Values)
                         set.Remove(connectionId);
@@ -392,6 +406,7 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             if (!room.ArrivalSets.TryGetValue(syncPointId, out var arrivals))
             {
                 arrivals = [];
@@ -401,13 +416,13 @@ public class RoomManager
             arrivals.Add(connectionId);
             
             // 如果指定了预期人数，使用指定人数判断
-            if (expectedCount > 0)
+            if (expectedCount > 0 && room.HostWorld == null)
             {
                 return arrivals.Count >= expectedCount;
             }
             
             // 否则使用原有的"所有在线成员"判断
-            return AllOnlineMembersReported(room, arrivals);
+            return AllRouteExecutorsReported(room, arrivals);
         }
     }
 
@@ -458,6 +473,7 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             // 周期复位（design §11.3）：与 RecordFightParticipant 对称，防止"投票先于参与者上报到达"
             // 时读到上一轮残留集合（网络乱序兜底，D2）。
             if (room.FightDoneBroadcasted.Contains(syncPointId))
@@ -477,7 +493,7 @@ public class RoomManager
 
             // multiplayer-shared-fight-end-quorum-sync: 开关关闭维持现状全员语义（零回归）
             if (!(room.HostConfig?.SharedFightEndQuorumEnabled ?? false))
-                return AllOnlineMembersReported(room, doneSet);
+                return AllRouteExecutorsReported(room, doneSet);
 
             // 开关开启：配额 + 战斗参与者分母
             var participants = room.FightParticipantSets.TryGetValue(syncPointId, out var ps) && ps.Count > 0
@@ -520,11 +536,11 @@ public class RoomManager
             var enabled = room.HostConfig?.SharedFightEndQuorumEnabled ?? false;
             var required = enabled
                 ? RequiredDoneCount(participantCount, room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
-                : participantCount;
+                : room.HostWorld?.Snapshot.ExecutorUids.Count ?? participantCount;
             var terminal = alreadyBroadcast || (enabled
                 ? SharedFightEndQuorumDecisions.IsQuorumReached(doneCount, participantCount,
                     room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
-                : doneCount > 0 && AllOnlineMembersReported(room, doneSet ?? []));
+                : doneCount > 0 && AllRouteExecutorsReported(room, doneSet ?? []));
 
             var shouldBroadcast = terminal && !alreadyBroadcast && enabled;
             if (shouldBroadcast)
@@ -547,6 +563,7 @@ public class RoomManager
         if (!_rooms.TryGetValue(roomCode, out var room)) return;
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return;
             // 周期复位（design §11.3）：若该 syncKey 上一轮已广播终态，首个新参与者触发清空，开启新一轮，
             // 消除上一拨战斗在同一战斗点的残留 connectionId/done 票（D2 污染修复）。
             if (room.FightDoneBroadcasted.Contains(syncKey))
@@ -572,17 +589,18 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             room.RouteVerificationDoneSet.Add(connectionId);
             
             // 清理已离线玩家的验证记录
-            var onlineConnectionIds = room.Players
-                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            var onlineConnectionIds = room.RouteExecutors
+                .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
                 
             room.RouteVerificationDoneSet.IntersectWith(onlineConnectionIds);
             
-            return AllOnlineMembersReported(room, room.RouteVerificationDoneSet);
+            return AllRouteExecutorsReported(room, room.RouteVerificationDoneSet);
         }
     }
 
@@ -598,13 +616,14 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             if (room.ExpCapBroadcasted) return false; // 本轮已广播，幂等短路
 
             room.ExpCapReachedSet.Add(connectionId);
 
             // 在线清理（与 RecordRouteVerificationDone 对称）
-            var onlineConnectionIds = room.Players
-                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            var onlineConnectionIds = room.RouteExecutors
+                .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
             room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
@@ -613,14 +632,16 @@ public class RoomManager
             // 团队 arming 门控（multiplayer-hoeing-exp-cap-stop R7.4）：全员上报 且 团队已 arming 才广播。
             // 收紧不放宽（P11）：未 arming 时即便全员上报也不广播，防"重启空线路误停"。
             // exp-cap-prefinal-stop-by-two-noexp：提前停止——ExpCapReachedSet ∪ TwoConsecutiveNoExpSet 覆盖全员即可。
-            if (room.ExpCapArmed && AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            if (room.ExpCapArmed && AllRouteExecutorsReported(room, room.ExpCapReachedSet))
             {
                 room.ExpCapBroadcasted = true;
+                room.HostWorld?.ReachExpCap();
                 return true;
             }
             if (room.ExpCapArmed && IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
             {
                 room.ExpCapBroadcasted = true;
+                room.HostWorld?.ReachExpCap();
                 return true;
             }
             return false;
@@ -639,27 +660,30 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             if (room.ExpCapBroadcasted) return false; // 本轮已广播，幂等短路
 
             room.ExpCapArmed = true;
 
             // 在线清理（与 RecordExpCapReached 对称），再重查广播条件（解全员满级死锁）
-            var onlineConnectionIds = room.Players
-                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            var onlineConnectionIds = room.RouteExecutors
+                .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
             room.ExpCapReachedSet.IntersectWith(onlineConnectionIds);
             room.TwoConsecutiveNoExpSet.IntersectWith(onlineConnectionIds);
 
-            if (AllOnlineMembersReported(room, room.ExpCapReachedSet))
+            if (AllRouteExecutorsReported(room, room.ExpCapReachedSet))
             {
                 room.ExpCapBroadcasted = true;
+                room.HostWorld?.ReachExpCap();
                 return true;
             }
             // exp-cap-prefinal-stop-by-two-noexp：arming 后重查提前停止条件
             if (IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
             {
                 room.ExpCapBroadcasted = true;
+                room.HostWorld?.ReachExpCap();
                 return true;
             }
             return false;
@@ -675,6 +699,7 @@ public class RoomManager
         if (!_rooms.TryGetValue(roomCode, out var room)) return;
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return;
             if (room.ExpCapBroadcasted) return; // 已广播，撤回无意义
             room.ExpCapReachedSet.Remove(connectionId);
             room.TwoConsecutiveNoExpSet.Remove(connectionId);
@@ -692,13 +717,14 @@ public class RoomManager
 
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return false;
             if (room.ExpCapBroadcasted) return false;
 
             room.TwoConsecutiveNoExpSet.Add(connectionId);
 
             // 在线清理
-            var onlineConnectionIds = room.Players
-                .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+            var onlineConnectionIds = room.RouteExecutors
+                .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
                 .Select(p => p.ConnectionId)
                 .ToHashSet();
             room.TwoConsecutiveNoExpSet.IntersectWith(onlineConnectionIds);
@@ -708,6 +734,7 @@ public class RoomManager
             if (room.ExpCapArmed && IsAllOnlineMembersInEitherSet(room, room.ExpCapReachedSet, room.TwoConsecutiveNoExpSet))
             {
                 room.ExpCapBroadcasted = true;
+                room.HostWorld?.ReachExpCap();
                 return true;
             }
             return false;
@@ -722,6 +749,7 @@ public class RoomManager
         if (!_rooms.TryGetValue(roomCode, out var room)) return;
         lock (room)
         {
+            if (!room.AllowsRouteReport(connectionId)) return;
             if (room.ExpCapBroadcasted) return;
             room.TwoConsecutiveNoExpSet.Remove(connectionId);
         }
@@ -736,8 +764,8 @@ public class RoomManager
     /// </summary>
     private static bool IsAllOnlineMembersInEitherSet(Room room, HashSet<string> setA, HashSet<string> setB)
     {
-        var onlinePlayers = room.Players
-            .Where(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
+        var onlinePlayers = room.RouteExecutors
+            .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
             .ToList();
 
         if (onlinePlayers.Count == 0) return false;
@@ -755,8 +783,8 @@ public class RoomManager
 
         lock (room)
         {
-            var onlineCount = room.Players
-                .Count(p => DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2));
+            var onlineCount = room.RouteExecutors
+                .Count(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2));
             var reportedCount = room.RouteVerificationDoneSet.Count;
             return (onlineCount, reportedCount);
         }
@@ -875,6 +903,8 @@ public class RoomManager
     // 调用方持有 room 锁；条件移除避免旧房间/旧连接清理覆盖后继身份。
     private bool RemoveRoomLocked(string roomCode, Room room)
     {
+        if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room)) return false;
+        RetainHostWorldLocked(room);
         if (!_rooms.TryRemove(new KeyValuePair<string, Room>(roomCode, room))) return false;
         room.RerunExecution?.Abort("RoomClosed");
         room.RoundOrderStartup?.Result.TrySetResult(false);
@@ -960,6 +990,7 @@ public class RoomManager
                 if (player != null)
                 {
                     player.LastHeartbeat = DateTime.UtcNow;
+                    if (!room.AllowsRouteReport(connectionId)) return;
                     player.CurrentRouteIndex = routeIndex;
                     player.RouteStartTime = routeStartTime;
                     player.RouteEstimatedSeconds = routeEstimatedSeconds;
@@ -987,6 +1018,7 @@ public class RoomManager
                 if (player != null)
                 {
                     player.LastHeartbeat = DateTime.UtcNow;
+                    if (!room.AllowsRouteReport(connectionId)) return;
                     player.CurrentRouteIndex = routeIndex;
                     player.IsAbnormal = isAbnormal;
                     player.WaitPointId = waitPointId;
@@ -1014,6 +1046,7 @@ public class RoomManager
 
         lock (room)
         {
+            if (room.HostWorld != null && (!room.HasActiveRouteExecution || !room.RouteExecutors.Any(p => p.PlayerUid == playerUid))) return false;
             // 获取或创建到达记录
             if (!room.WaitPointArrivals.TryGetValue(syncPointId, out var arrivals))
             {
@@ -1128,6 +1161,7 @@ public class RoomManager
                 }
                 else
                 {
+                    if (room.IsStarted) room.HostWorld?.Abort("executor_disconnected");
                     foreach (var player in expired)
                     {
                         var connectionId = player.ConnectionId;
@@ -1149,6 +1183,13 @@ public class RoomManager
             if (ended) NotifyRoomLogEnded(room);
         }
         return results.AsReadOnly();
+    }
+
+    private static bool AllRouteExecutorsReported(Room room, HashSet<string> reported)
+    {
+        if (room.HostWorld == null) return AllOnlineMembersReported(room, reported);
+        return room.HasActiveRouteExecution && room.RouteExecutors.Any()
+            && room.RouteExecutors.All(p => reported.Contains(p.ConnectionId));
     }
 
     private static bool AllOnlineMembersReported(Room room, HashSet<string> reported)
@@ -1227,8 +1268,8 @@ public class RoomManager
         lock (room)
         {
             // 在线玩家数（2分钟内有心跳）
-            int onlineCount = room.Players.Count(p =>
-                DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2));
+            int onlineCount = room.RouteExecutors.Count(p =>
+                room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2));
 
             // 在其他线路等待的异常玩家数
             int abnormalInOtherRoutes = room.AbnormalPlayerInfos.Values

@@ -38,14 +38,16 @@ public sealed partial class RoomOperations
         _logger.LogInformation("[ReportRouteList] 连接 {ConnId} 在房间 {Code} 中上报路线", ctx.ConnectionId, roomCode);
         ObservePhase(room, roomCode, "route.reportList", routeReportActivity: true);
 
-        var roomReports = RouteReports.GetOrAdd(roomCode, _ => new ConcurrentDictionary<string, List<RouteHash>>());
-        roomReports[ctx.ConnectionId] = routes;
-
-        // 检查是否所有在线成员都已上报
+        ConcurrentDictionary<string, List<RouteHash>> roomReports;
         List<string> onlineConnIds;
         lock (room)
         {
-            onlineConnIds = room.Players.Select(p => p.ConnectionId).ToList();
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            roomReports = RouteReports.GetOrAdd(roomCode, _ => new ConcurrentDictionary<string, List<RouteHash>>());
+            var executor = room.HostWorld == null ? ctx.ConnectionId
+                : room.RouteExecutors.Single(p => p.ConnectionId == ctx.ConnectionId).PlayerUid;
+            roomReports[executor] = routes;
+            onlineConnIds = room.RouteExecutors.Select(p => room.HostWorld == null ? p.ConnectionId : p.PlayerUid).ToList();
         }
 
         if (!onlineConnIds.All(id => roomReports.ContainsKey(id)))
@@ -122,9 +124,18 @@ public sealed partial class RoomOperations
         ObservePhase(room, roomCode, "route.reportVariantSchema", routeReportActivity: true);
 
         items ??= new List<RouteVariantSchemaItem>();
-        var roomReports = VariantSchemaReports.GetOrAdd(roomCode,
-            _ => new ConcurrentDictionary<string, List<RouteVariantSchemaItem>>());
-        roomReports[ctx.ConnectionId] = items;
+        ConcurrentDictionary<string, List<RouteVariantSchemaItem>> roomReports;
+        List<string> onlineConnIds;
+        lock (room)
+        {
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            roomReports = VariantSchemaReports.GetOrAdd(roomCode,
+                _ => new ConcurrentDictionary<string, List<RouteVariantSchemaItem>>());
+            var executor = room.HostWorld == null ? ctx.ConnectionId
+                : room.RouteExecutors.Single(p => p.ConnectionId == ctx.ConnectionId).PlayerUid;
+            roomReports[executor] = items;
+            onlineConnIds = room.RouteExecutors.Select(p => room.HostWorld == null ? p.ConnectionId : p.PlayerUid).ToList();
+        }
 
         _logger.LogInformation("[变体校验] 连接 {ConnId} 在房间 {Code} 上报 {Count} 条 schema（含非空 LogicalRouteId {NonEmpty} 条）",
             ctx.ConnectionId, roomCode, items.Count, items.Count(i => !string.IsNullOrEmpty(i.LogicalRouteId)));
@@ -137,8 +148,6 @@ public sealed partial class RoomOperations
             return cts;
         });
 
-        List<string> onlineConnIds;
-        lock (room) { onlineConnIds = room.Players.Select(p => p.ConnectionId).ToList(); }
         if (!onlineConnIds.All(id => roomReports.ContainsKey(id)))
         {
             return;   // 还有人未上报

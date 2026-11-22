@@ -121,11 +121,12 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 {
                     lock (room)
                     {
-                        if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
+                        if (!room.HasActiveRouteExecution || room.HostWorld != null && room.GracePendingMembers.Count > 0
+                            || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                         if (process.IsCompleted) return; // 双重检查
                         
                         // 标记未响应的玩家为异常
-                        var onlinePlayers = room.Players
+                        var onlinePlayers = room.RouteExecutors
                             .Where(p => (DateTime.UtcNow - p.LastHeartbeat) <= TimeSpan.FromSeconds(30))
                             .ToList();
                         
@@ -177,9 +178,10 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 List<PlayerInfo> activePlayers;
                 lock (room)
                 {
-                    if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
+                    if (!room.HasActiveRouteExecution || room.HostWorld != null && room.GracePendingMembers.Count > 0
+                            || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                     // 获取活跃玩家（排除异常状态和心跳超时）
-                    activePlayers = room.Players
+                    activePlayers = room.RouteExecutors
                         .Where(p => !p.IsAbnormal)
                         .Where(p => (DateTime.UtcNow - p.LastHeartbeat) <= TimeSpan.FromSeconds(30))
                         .Where(p => p.CurrentRouteIndex >= 0)
@@ -209,7 +211,8 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                     
                     lock (room)
                     {
-                        if (room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
+                        if (!room.HasActiveRouteExecution || room.HostWorld != null && room.GracePendingMembers.Count > 0
+                            || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                         _ = _broadcaster.BroadcastGroupAsync(roomCode, "RouteEnforceSync",
                             new { minRoute, reason = "线路偏差检测", deviationInfo },
                             minRoute, "线路偏差检测", deviationInfo);

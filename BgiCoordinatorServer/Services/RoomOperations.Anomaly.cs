@@ -38,7 +38,8 @@ public sealed partial class RoomOperations
         string playerUid;
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null)
             {
                 _logger.LogWarning("[WaitPointReport] 连接 {ConnId} 不在房间玩家列表中", ctx.ConnectionId);
@@ -83,7 +84,7 @@ public sealed partial class RoomOperations
             );
 
             // 更新玩家异常状态
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player != null)
             {
                 player.IsAbnormal = true;
@@ -158,7 +159,8 @@ public sealed partial class RoomOperations
         string playerUid;
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null)
             {
                 _logger.LogWarning("[ReportArrivalAtWaitPoint] 连接 {ConnId} 不在房间玩家列表中", ctx.ConnectionId);
@@ -196,7 +198,7 @@ public sealed partial class RoomOperations
                         }
 
                         // 更新玩家状态
-                        var abnormalPlayer = room.Players.FirstOrDefault(p => p.PlayerUid == uid);
+                        var abnormalPlayer = room.RouteExecutors.FirstOrDefault(p => p.PlayerUid == uid);
                         if (abnormalPlayer != null)
                         {
                             abnormalPlayer.IsAbnormal = false;
@@ -242,7 +244,8 @@ public sealed partial class RoomOperations
         string playerUid;
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null)
             {
                 _logger.LogWarning("[ClearAbnormalStatus] 连接 {ConnId} 不在房间玩家列表中", ctx.ConnectionId);
@@ -278,6 +281,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId, playerUid)) return;
 
         // 计算目标汇合线路（需求 REQ-1.3, REQ-1.4）
         int targetRouteIndex = passedSyncPoint ? routeIndex + 1 : routeIndex;
@@ -313,6 +318,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId, playerUid)) return;
 
         _logger.LogInformation(
             "[PlayerAnomalyNotifyFightPoint] 房间={RoomCode}, 玩家={PlayerUid}, 线路={RouteIndex}, 战斗点={FightPointId}",
@@ -331,6 +338,8 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        lock (room)
+            if (!room.AllowsRouteReport(ctx.ConnectionId, playerUid)) return;
 
         _logger.LogInformation("[PlayerAnomalyRecovered] 房间={RoomCode}, 玩家={PlayerUid}", roomCode, playerUid);
 
@@ -367,9 +376,11 @@ public sealed partial class RoomOperations
 
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null) return;
 
+            if (room.HostWorld is { } standby && status == "Offline") standby.Abort("executor_offline");
             if (Enum.TryParse<PlayerStatus>(status, out var parsedStatus))
             {
                 player.Status = parsedStatus;
@@ -395,7 +406,7 @@ public sealed partial class RoomOperations
                     if (syncId != "route_sync_done")
                     {
                         // 用已到达玩家的最大 CurrentProgress
-                        syncProgress = room.Players
+                        syncProgress = room.RouteExecutors
                             .Where(p => arrivals.Contains(p.ConnectionId))
                             .Select(p => p.CurrentProgress)
                             .DefaultIfEmpty(-1)
@@ -473,7 +484,8 @@ public sealed partial class RoomOperations
         List<(string syncId, long progress)> satisfiedSyncs;
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
+            var player = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null)
             {
                 _logger.LogWarning("[ReportMemberProgress] 连接 {ConnId} 不在任何房间玩家列表中，忽略", ctx.ConnectionId);
@@ -561,6 +573,7 @@ public sealed partial class RoomOperations
         // 没有活动锚点时这里等价于原来的空实现。
         lock (room)
         {
+            if (!room.AllowsRouteReport(ctx.ConnectionId, playerUid)) return Task.CompletedTask;
             var uid = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid;
             if (!string.IsNullOrEmpty(uid))
             {
@@ -668,10 +681,10 @@ public sealed partial class RoomOperations
             int normalPlayersAtRoute = 0;
             int abnormalPlayersAtRoute = 0;
 
-            foreach (var player in room.Players)
+            foreach (var player in room.RouteExecutors)
             {
                 // 跳过离线玩家（超过2分钟无心跳）
-                if (DateTime.UtcNow - player.LastHeartbeat > TimeSpan.FromMinutes(2))
+                if (room.HostWorld == null && DateTime.UtcNow - player.LastHeartbeat > TimeSpan.FromMinutes(2))
                 {
                     _logger.LogDebug("[CalculateExpectedWaitCount] 跳过离线玩家: {PlayerUid}", player.PlayerUid);
                     continue;
@@ -717,8 +730,8 @@ public sealed partial class RoomOperations
     {
         lock (room)
         {
-            return room.Players.Count(p =>
-                DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2));
+            return room.RouteExecutors.Count(p =>
+                (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)));
         }
     }
 

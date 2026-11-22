@@ -17,6 +17,9 @@ public sealed partial class RoomOperations
         {
             lock (room)
             {
+                if (room.HostWorld is { } standby && (standby.Snapshot.Phase != "waiting"
+                    || config.MultiWorldEnabled || config.DebugMode))
+                    throw new InvalidOperationException("host_world_config_invalid");
                 if (!string.Equals(room.HoeingBatchId ?? "", config.HoeingBatchId ?? "", StringComparison.Ordinal)
                     || !room.ExpectedParticipantUids.Order(StringComparer.Ordinal)
                         .SequenceEqual((config.ExpectedParticipantUids ?? []).Order(StringComparer.Ordinal)))
@@ -57,6 +60,7 @@ public sealed partial class RoomOperations
             // 两字段的写入对读侧表现为单一原子快照（multiplayer-member-skip-round-stuck-roundend-sync-fix）。
             lock (room)
             {
+                if (room.HostWorld != null) throw new InvalidOperationException("host_world_publish_required");
                 RequireRoomRoutePackage(room);
                 room.HostRouteList = routeNames;
                 room.HostRouteListUploaded = true;

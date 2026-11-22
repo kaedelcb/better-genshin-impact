@@ -88,7 +88,7 @@ public sealed class RoomPhaseObserver
         RoomPhase phase;
         lock (room)
         {
-            var onlineCount = room.Players.Count(p => !room.GracePendingMembers.ContainsKey(p.ConnectionId));
+            var onlineCount = room.RouteExecutors.Count(p => room.HostWorld != null || !room.GracePendingMembers.ContainsKey(p.ConnectionId));
             phase = RoomPhaseDecisions.Derive(
                 room.IsStarted,
                 room.ExpCapBroadcasted,

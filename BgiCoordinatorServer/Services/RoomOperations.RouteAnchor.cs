@@ -29,8 +29,8 @@ public sealed partial class RoomOperations
     /// </summary>
     private bool AllOnlineMembersSupportRouteAnchorLocked(Room room, DateTime nowUtc)
         => _capabilityLookup != null
-           && room.Players
-                .Where(p => IsAnchorOnline(p, nowUtc))
+           && room.RouteExecutors
+                .Where(p => room.HostWorld != null || IsAnchorOnline(p, nowUtc))
                 .All(p => _capabilityLookup.Supports(p.ConnectionId, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability));
 
     /// <summary>
@@ -112,7 +112,8 @@ public sealed partial class RoomOperations
     /// <summary>取调用方在房间内的 PlayerUid；不在房间返回 null。</summary>
     private static string? ResolveCallerUid(Room room, GatewayHandlerContext ctx)
     {
-        var uid = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid;
+        if (!room.AllowsRouteReport(ctx.ConnectionId)) return null;
+        var uid = room.RouteExecutors.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId)?.PlayerUid;
         return string.IsNullOrEmpty(uid) ? null : uid;
     }
 
@@ -221,8 +222,8 @@ public sealed partial class RoomOperations
 
             // 4) 新建锚点：参与者 = 当时在线成员 UID（冻结）
             room.RouteAnchorSequence += 1;
-            var participants = room.Players
-                .Where(p => IsAnchorOnline(p, nowUtc) && !string.IsNullOrEmpty(p.PlayerUid))
+            var participants = room.RouteExecutors
+                .Where(p => (room.HostWorld != null || IsAnchorOnline(p, nowUtc)) && !string.IsNullOrEmpty(p.PlayerUid))
                 .Select(p => p.PlayerUid)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
@@ -495,7 +496,7 @@ public sealed partial class RoomOperations
             {
                 // 已离开房间的成员（主动离开 / 心跳判死后被清理）不可恢复：
                 // 立即停止整队，而不是把队伍拖到绝对截止（10 分钟）——强兜底要求"有界"。
-                if (!room.Players.Any(p => string.Equals(p.PlayerUid, uid, StringComparison.Ordinal)))
+                if (!room.RouteExecutors.Any(p => string.Equals(p.PlayerUid, uid, StringComparison.Ordinal)))
                 {
                     _logger.LogError("[RouteAnchor] 参与者 {Uid} 已不在房间，锚点停止：房间={RoomCode}, 锚点={AnchorId}",
                         uid, roomCode, anchor.AnchorId);
@@ -551,7 +552,7 @@ public sealed partial class RoomOperations
                     break;
                 }
 
-                var connectionId = room.Players.FirstOrDefault(p => p.PlayerUid == uid)?.ConnectionId;
+                var connectionId = room.RouteExecutors.FirstOrDefault(p => p.PlayerUid == uid)?.ConnectionId;
                 if (string.IsNullOrEmpty(connectionId)) continue;
 
                 var attempt = attempts + 1;

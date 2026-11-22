@@ -113,7 +113,7 @@ public sealed partial class RoomOperations
 
         lock (room)
         {
-            var player = room.Players.FirstOrDefault(p => p.PlayerUid == playerUid);
+            var player = room.RouteExecutors.FirstOrDefault(p => p.PlayerUid == playerUid);
             if (player == null || player.CurrentRouteIndex < 0)
                 return Task.FromResult<MemberProgress?>(null);
 

@@ -3,6 +3,17 @@ using BgiCoordinatorServer.Models;
 
 namespace BgiCoordinatorServer.Services;
 
+public sealed record RoomCreation(string Code, string Protocol, string? StandbySessionId)
+{
+    public void Deconstruct(out string code, out string protocol) => (code, protocol) = (Code, Protocol);
+}
+
+public sealed record RoomJoin(bool Success, string? Protocol, string? Error, string? StandbySessionId = null)
+{
+    public void Deconstruct(out bool success, out string? protocol, out string? error)
+        => (success, protocol, error) = (Success, Protocol, Error);
+}
+
 /// <summary>
 /// 房间生命周期族（自 CoordinatorHub 逐字搬迁：CreateRoom/JoinRoom/LeaveRoom/CloseRoom/
 /// MarkRoomStarted(+WithProgress)）。仅做 ctx 参数化与双发改造，业务逻辑不变。
@@ -11,11 +22,21 @@ namespace BgiCoordinatorServer.Services;
 public sealed partial class RoomOperations
 {
     /// <summary>创建房间，返回房间码与房间协议（§4.7 锁定）。</summary>
-    public async Task<(string Code, string Protocol)> CreateRoomAsync(GatewayHandlerContext ctx,
+    public async Task<RoomCreation> CreateRoomAsync(GatewayHandlerContext ctx,
         string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, List<string>? expectedParticipantUids = null,
-        List<string>? worldPlanParticipantUids = null)
+        List<string>? worldPlanParticipantUids = null, bool hostProvidesWorldOnly = false)
     {
+        if (hostProvidesWorldOnly)
+        {
+            if (!SupportsHostWorld(ctx)) throw new InvalidOperationException("host_world_capability_required");
+            if (!HostWorldExecution.IsValidUid(playerUid) || expectedPlayerCount is < 2 or > 4
+                || !string.IsNullOrEmpty(hoeingBatchId) || expectedParticipantUids is { Count: > 0 }
+                || worldPlanParticipantUids != null)
+                throw new InvalidOperationException("host_world_create_invalid");
+        }
+        if (_roomManager.GetRoomByConnectionId(ctx.ConnectionId).Room?.HostWorld != null)
+            throw new InvalidOperationException("host_world_other_room");
         _routePackagePolicy?.RequireVersion(reportedVersion);
         _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, reportedVersion, ctx.IsV3);
         if (worldPlanParticipantUids != null)
@@ -43,7 +64,8 @@ public sealed partial class RoomOperations
         // version-compatibility-check 改动 5：透传房主上报版本作为房间基准版本
         var code = _roomManager.CreateRoom(ctx.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion,
             hoeingBatchId, expectedParticipantUids, worldPlanParticipantUids,
-            protocol: ctx.IsV3 ? GatewayProtocol.RoomProtocols.V3 : GatewayProtocol.RoomProtocols.Legacy);
+            protocol: ctx.IsV3 ? GatewayProtocol.RoomProtocols.V3 : GatewayProtocol.RoomProtocols.Legacy,
+            hostProvidesWorldOnly: hostProvidesWorldOnly);
         await _broadcaster.AddToGroupAsync(ctx, code);
         TrackGroup(ctx, code);
         _logger.LogInformation("连接 {ConnId}({Name}) 创建房间 {Code}", ctx.ConnectionId, playerName, code);
@@ -56,43 +78,49 @@ public sealed partial class RoomOperations
         }
         ObservePhase(room, code, "room.create");
         await _broadcaster.BroadcastGroupAsync(code, "PlayerListUpdated", new { players = room.Players }, room.Players);
-        return (code, room.Protocol);
+        return new(code, room.Protocol, room.HostWorld?.Snapshot.SessionId);
     }
 
     /// <summary>加入房间，广播 PlayerListUpdated。返回 (是否成功, 房间协议, 失败原因)。</summary>
-    public async Task<(bool Success, string? Protocol, string? Error)> JoinRoomAsync(GatewayHandlerContext ctx,
-        string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "", string? hoeingBatchId = null)
+    public async Task<RoomJoin> JoinRoomAsync(GatewayHandlerContext ctx,
+        string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "", string? hoeingBatchId = null,
+        string? standbySessionId = null)
     {
+        var room0 = _roomManager.GetRoom(roomCode);
+        if (!string.IsNullOrEmpty(standbySessionId) && (room0?.HostWorld == null || room0.SessionId != standbySessionId))
+            return new(false, room0?.Protocol, "host_world_session_mismatch");
+        if (room0 == null) return new(false, null, "房间不存在");
+        var hasHostWorldCapability = SupportsHostWorld(ctx);
+        if (room0.HostWorld != null && !hasHostWorldCapability)
+            return new(false, room0.Protocol, "host_world_capability_required");
         try
         {
             _routePackagePolicy?.RequireVersion(reportedVersion);
             _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, reportedVersion, ctx.IsV3);
         }
-        catch (InvalidOperationException ex) { return (false, null, ex.Message); }
+        catch (InvalidOperationException ex) { return new(false, null, ex.Message); }
         var playerId = ctx.ConnectionId;
 
-        var room0 = _roomManager.GetRoom(roomCode);
-        if (room0 != null)
         {
             try { RequireRoomRoutePackage(room0); }
-            catch (InvalidOperationException ex) { return (false, room0.Protocol, ex.Message); }
+            catch (InvalidOperationException ex) { return new(false, room0.Protocol, ex.Message); }
             if (!string.Equals(room0.HoeingBatchId ?? "", hoeingBatchId ?? "", StringComparison.Ordinal))
-                return (false, room0.Protocol, "hoeing_start_identity_mismatch");
+                return new(false, room0.Protocol, "hoeing_start_identity_mismatch");
             if (room0.HoeingBatchId is not null
                 && _capabilityLookup?.Supports(ctx.ConnectionId, GatewayProtocol.HoeingStartCapability) != true)
-                return (false, room0.Protocol, "hoeing_start_capability_required");
+                return new(false, room0.Protocol, "hoeing_start_capability_required");
             // §4.7 协议锁定校验：同一房间不允许新旧协议混用
             if (ctx.IsV3 && room0.Protocol != GatewayProtocol.RoomProtocols.V3)
             {
                 _logger.LogWarning("[Gateway] 连接 {ConnId} 以 v3 协议加入 legacy 房间 {Code}，拒绝（协议锁定）",
                     ctx.ConnectionId, roomCode);
-                return (false, room0.Protocol, GatewayProtocol.ErrorCodes.RoomProtocolMismatch);
+                return new(false, room0.Protocol, GatewayProtocol.ErrorCodes.RoomProtocolMismatch);
             }
             if (!ctx.IsV3 && room0.Protocol == GatewayProtocol.RoomProtocols.V3)
             {
                 _logger.LogWarning("[Gateway] 连接 {ConnId} 以旧协议加入 v3 房间 {Code}，拒绝（协议锁定）",
                     ctx.ConnectionId, roomCode);
-                return (false, room0.Protocol, GatewayProtocol.ErrorCodes.RoomProtocolMismatch);
+                return new(false, room0.Protocol, GatewayProtocol.ErrorCodes.RoomProtocolMismatch);
             }
 
             // === 版本一致性校验（就地，入房之前）version-compatibility-check R1.1/R6.1 改动 7/14 ===
@@ -111,17 +139,18 @@ public sealed partial class RoomOperations
                     ctx.ConnectionId, roomCode, reportedVersion, baseline);
                 // 向该加入者单独回传 Check_Result（向后兼容：旧客户端不订阅此事件即忽略，不影响 bool 返回语义 U4.1）
                 await _broadcaster.SendToCallerAsync(ctx, "VersionCheckRejected", checkResult, checkResult);
-                return (false, room0.Protocol, "version_incompatible"); // 硬阻断（R5.1），不调用 RoomManager.JoinRoom，成员不入房
+                return new(false, room0.Protocol, "version_incompatible"); // 硬阻断（R5.1），不调用 RoomManager.JoinRoom，成员不入房
             }
         }
 
-        var (success, error) = _roomManager.JoinRoom(roomCode, ctx.ConnectionId, playerId, playerName, playerUid, reportedVersion);
+        var (success, error) = _roomManager.JoinRoom(roomCode, ctx.ConnectionId, playerId, playerName, playerUid, reportedVersion,
+            standbySessionId, hasHostWorldCapability, room0);
 
         if (!success)
         {
             _logger.LogWarning("连接 {ConnId} 加入房间 {Code} 失败：{Error}",
                 ctx.ConnectionId, roomCode, error);
-            return (false, room0?.Protocol, error);
+            return new(false, room0?.Protocol, error);
         }
 
         // 多世界轮次切换：先离开所有旧 Group，避免旧房间广播串扰
@@ -130,11 +159,11 @@ public sealed partial class RoomOperations
         TrackGroup(ctx, roomCode);
         _logger.LogInformation("连接 {ConnId} 加入房间 {Code}", ctx.ConnectionId, roomCode);
 
-        var room = _roomManager.GetRoom(roomCode)!;
+        var room = room0;
         ObserveRoomLog(context => context.ObserveGameRoom(room));
         ObservePhase(room, roomCode, "room.join");
         await _broadcaster.BroadcastGroupAsync(roomCode, "PlayerListUpdated", new { players = room.Players }, room.Players);
-        return (true, room.Protocol, null);
+        return new(true, room.Protocol, null, room.HostWorld?.Snapshot.SessionId);
     }
 
     /// <summary>
@@ -167,6 +196,13 @@ public sealed partial class RoomOperations
             await _broadcaster.RemoveFromGroupAsync(ctx, code);
             UntrackGroup(ctx, code);
             var updatedRoom = _roomManager.GetRoom(code);
+            if (updatedRoom == null && room?.HostWorld != null && room.HostConnectionId == ctx.ConnectionId)
+            {
+                _phaseObserver.Mark(code, RoomPhase.Ended, "room.leave.hostWorld");
+                _phaseObserver.Forget(code);
+                await _broadcaster.BroadcastGroupAsync(code, "RoomClosed", new { reason = "房主已离开房间" }, "房主已离开房间");
+                continue;
+            }
             var players = updatedRoom?.Players ?? [];
             if (updatedRoom != null)
             {
@@ -194,12 +230,14 @@ public sealed partial class RoomOperations
             return;
         }
 
+        // Persist the final standby outcome before a guest can observe RoomClosed.
+        if (room.HostWorld != null && !_roomManager.EndRoomIfMatches(roomCode, room.SessionId)) return;
         _logger.LogInformation("[CloseRoom] 房主 {ConnId} 关闭房间 {Code}", ctx.ConnectionId, roomCode);
         _phaseObserver.Mark(roomCode, RoomPhase.Ended, "room.close");
         _phaseObserver.Forget(roomCode);
         await _broadcaster.BroadcastGroupAsync(roomCode, "RoomClosed", new { reason = "房主已关闭房间" }, "房主已关闭房间");
         // 删除整个房间，防止玩家重连后重新加入已关闭的房间
-        _roomManager.DeleteRoom(roomCode);
+        if (room.HostWorld == null) _roomManager.DeleteRoom(roomCode);
         await _broadcaster.RemoveFromGroupAsync(ctx, roomCode);
         UntrackGroup(ctx, roomCode);
     }
@@ -229,6 +267,7 @@ public sealed partial class RoomOperations
                 ctx.ConnectionId, roomCode);
             return;
         }
+        if (room.HostWorld != null) throw new InvalidOperationException("host_world_start_required");
         RequireRoomRoutePackage(room);
         if (((requireWorldPlanRoster || requireRoundOrderStartup) && roomCode != expectedRoomCode)
             || (requireWorldPlanRoster && room.WorldPlanParticipantUids == null))

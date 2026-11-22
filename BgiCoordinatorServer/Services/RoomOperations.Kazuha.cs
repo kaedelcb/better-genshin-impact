@@ -36,6 +36,7 @@ public sealed partial class RoomOperations
         string broadcastUid = "";
         lock (room)
         {
+            if (room.HostWorld != null && !room.HasExecutorConnection(ctx.ConnectionId)) return;
             var player = room.Players.FirstOrDefault(p => p.ConnectionId == ctx.ConnectionId);
             if (player == null) return;
 
@@ -88,6 +89,7 @@ public sealed partial class RoomOperations
         // 鉴权：必须是当前周期的万叶玩家
         lock (room)
         {
+            if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
             if (room.KazuhaCollect.KazuhaConnectionId != ctx.ConnectionId)
             {
                 _logger.LogWarning("[KazuhaCollect] NotifyKazuhaCollectStarted 鉴权失败：调用方 {ConnId} 不是万叶 {KazuhaId}",

@@ -24,6 +24,22 @@ public class Room
 
     public List<PlayerInfo> Players { get; set; } = [];
 
+    internal Services.HostWorldExecution? HostWorld { get; init; }
+
+    // Physical membership includes the host. Only route coordination uses this projection (under the room lock).
+    internal IEnumerable<PlayerInfo> RouteExecutors => HostWorld is { } mode
+        ? Players.Where(p => mode.IsExecutor(p.PlayerUid)) : Players;
+
+    internal bool HasActiveRouteExecution => HostWorld is null || HostWorld.Snapshot.Phase == "running";
+
+    internal bool AllowsRouteReport(string connectionId, string? claimedUid = null) => HostWorld is null
+        || HasActiveRouteExecution && !GracePendingMembers.ContainsKey(connectionId)
+            && RouteExecutors.Any(p => p.ConnectionId == connectionId
+                && (string.IsNullOrEmpty(claimedUid) || p.PlayerUid == claimedUid));
+
+    internal bool HasExecutorConnection(string connectionId) => RouteExecutors.Any(p => p.ConnectionId == connectionId)
+        && !GracePendingMembers.ContainsKey(connectionId);
+
     [System.Text.Json.Serialization.JsonIgnore]
     public BgiCoordinatorServer.Services.RerunExecutionState? RerunExecution { get; set; }
     public DateTime CreatedAt { get; set; }

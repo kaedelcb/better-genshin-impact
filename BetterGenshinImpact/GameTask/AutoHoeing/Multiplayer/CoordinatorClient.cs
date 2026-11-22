@@ -13,6 +13,7 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
 using BetterGenshinImpact.Shared.CooperativeRerun;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 
@@ -52,6 +53,9 @@ public partial class CoordinatorClient : IAsyncDisposable
         public string Name { get; } = name;
         public string? Uid { get; } = uid;
         public string? BatchId { get; } = batchId;
+        public string? StandbySessionId { get; init; }
+        public bool IsStandbyHost { get; init; }
+        public HostWorldState? FrozenHostWorld { get; set; }
         public CancellationTokenSource End { get; } = new();
         public TaskCompletionSource<bool> Ready { get; set; } = NewReady();
         public bool Ended { get; set; }
@@ -62,14 +66,18 @@ public partial class CoordinatorClient : IAsyncDisposable
     private static TaskCompletionSource<bool> NewReady() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     public event Action<string>? SessionFailed;
 
-    private RoomSession BeginRoomSession(string code, string name, string? uid, string? batchId)
+    private RoomSession BeginRoomSession(string code, string name, string? uid, string? batchId,
+        string? standbySessionId = null, bool isStandbyHost = false)
     {
         EndRoomSession("room-replaced");
         lock (_roomLock)
         {
             _lifetimeCts.Token.ThrowIfCancellationRequested();
             if (_taskStopped) throw new MultiplayerSessionFailedException("本次联机任务的房间准入已撤销");
-            var session = new RoomSession(++_roomEpoch, code, name, uid, batchId);
+            var session = new RoomSession(++_roomEpoch, code, name, uid, batchId)
+            {
+                StandbySessionId = standbySessionId, IsStandbyHost = isStandbyHost,
+            };
             _roomSession = session;
             _worldStateMonitor?.NotifyHeartbeatSuccess(); // 新房间不继承旧房间的心跳失败。
             _currentRoomCode = code;
@@ -826,7 +834,7 @@ public partial class CoordinatorClient : IAsyncDisposable
                 response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomJoin, new
                 {
                     roomCode = session.RoomCode, playerName = session.Name, playerUid = session.Uid ?? "",
-                    hoeingBatchId = session.BatchId,
+                    hoeingBatchId = session.BatchId, standbySessionId = session.StandbySessionId,
                     reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
                 }, session.RoomCode, join.Token);
                 join.Token.ThrowIfCancellationRequested();
@@ -848,13 +856,15 @@ public partial class CoordinatorClient : IAsyncDisposable
             if (!IsCurrentTransport(session, generation)) return;
             if (response.GetBool("success"))
             {
+                if (ReadHostWorldBinding(response) != session.StandbySessionId)
+                    throw new MultiplayerSessionFailedException("原联机房间恢复回执与借世界绑定不一致");
                 MarkRoomReady(session, generation);
                 return;
             }
 
             // room.join 的业务拒绝是字符串 error，并非网关的 error:{code,message}。
             var error = response.GetString("error");
-            if (error is not ("world_plan_duplicate_participant" or "hoeing_start_duplicate_participant"))
+            if (error is not ("world_plan_duplicate_participant" or "hoeing_start_duplicate_participant" or "host_world_reconnect_pending"))
                 throw new MultiplayerSessionFailedException($"原联机房间拒绝恢复加入: {error}");
             if (!waitingForOldConnection)
             {
@@ -1086,7 +1096,7 @@ public partial class CoordinatorClient : IAsyncDisposable
             var result = resp.GetBool("success");
             if (result)
             {
-                var session = BeginRoomSession(roomCode, playerName, playerUid, batchId);
+                var session = BeginRoomSession(roomCode, playerName, playerUid, batchId, ReadHostWorldBinding(resp));
                 ct.ThrowIfCancellationRequested();
                 MarkRoomReady(session);
                 CompleteExplicitRoomEvents();
@@ -1359,10 +1369,13 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 创建房间
     /// </summary>
-    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount, CancellationToken ct = default, IReadOnlyList<string>? worldPlanParticipantUids = null)
+    public async Task<string?> CreateRoomAsync(string playerName, List<string>? whitelist, string playerUid, int expectedPlayerCount,
+        CancellationToken ct = default, IReadOnlyList<string>? worldPlanParticipantUids = null, bool hostProvidesWorldOnly = false)
     {
         ct.ThrowIfCancellationRequested();
         if (_gateway == null) return null;
+        if (hostProvidesWorldOnly && !_gateway.SupportsCapability(GatewayProtocol.HostProvidesWorldCapability))
+            throw new HoeingStartupException("仅提供世界", "当前协调服务器不支持借世界挂机；不会用普通房间代替");
         var batchId = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.BatchId;
         var participants = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids;
         DetachRoomForExplicitChange();
@@ -1377,14 +1390,17 @@ public partial class CoordinatorClient : IAsyncDisposable
             var resp = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomCreate, new
             {
                 playerName, whitelist = whitelist ?? new List<string>(), playerUid, expectedPlayerCount,
-                hoeingBatchId = batchId, expectedParticipantUids = participants, worldPlanParticipantUids,
+                hoeingBatchId = batchId, expectedParticipantUids = participants, worldPlanParticipantUids, hostProvidesWorldOnly,
                 reportedVersion = BetterGenshinImpact.Core.Config.Global.Version ?? "",
             }, null, budget.Token);
             ct.ThrowIfCancellationRequested();
             budget.Token.ThrowIfCancellationRequested();
             var result = resp.GetString("roomCode");
             if (string.IsNullOrEmpty(result)) return null;
-            var session = BeginRoomSession(result, playerName, playerUid, batchId);
+            var standbySessionId = ReadHostWorldBinding(resp);
+            if (hostProvidesWorldOnly != (standbySessionId != null))
+                throw new MultiplayerSessionFailedException("创建房间回执未确认本机要求的借世界模式");
+            var session = BeginRoomSession(result, playerName, playerUid, batchId, standbySessionId, hostProvidesWorldOnly);
             ct.ThrowIfCancellationRequested();
             MarkRoomReady(session);
             CompleteExplicitRoomEvents();
@@ -1606,8 +1622,17 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 上传房间配置
     /// </summary>
-    public async Task SetRoomConfigAsync(Models.RoomConfig config)
+    public async Task SetRoomConfigAsync(Models.RoomConfig config, CancellationToken ct = default)
     {
+        if (IsHostWorldOnlyRoom)
+        {
+            using var budget = CreateRpcBudget(ct);
+            await WaitForBusinessReadyAsync(budget.Token);
+            var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomSetConfig, new { config },
+                _currentRoomCode, budget.Token);
+            if (!response.GetBool("ack")) throw new HoeingStartupException("借世界房间", "未确认房主配置上传");
+            return;
+        }
         if (_gateway == null || !IsConnected)
             throw new InvalidOperationException("房间配置上传时协调连接不可用");
         try
@@ -1646,8 +1671,16 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 上报房主就绪
     /// </summary>
-    public async Task ReportHostReadyAsync()
+    public async Task ReportHostReadyAsync(CancellationToken ct = default)
     {
+        if (IsHostWorldOnlyRoom)
+        {
+            using var budget = CreateRpcBudget(ct);
+            await WaitForBusinessReadyAsync(budget.Token);
+            await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RoomReportHostReady, null,
+                _currentRoomCode, budget.Token);
+            return;
+        }
         if (_gateway == null || !IsConnected) return;
         try
         {
@@ -2056,8 +2089,16 @@ public partial class CoordinatorClient : IAsyncDisposable
     /// <summary>
     /// 上报路线哈希列表（用于路线一致性验证）
     /// </summary>
-    public async Task ReportRouteListAsync(List<Models.RouteHash> hashes)
+    public async Task ReportRouteListAsync(List<Models.RouteHash> hashes, CancellationToken ct = default)
     {
+        if (IsHostWorldOnlyRoom)
+        {
+            using var budget = CreateRpcBudget(ct);
+            await WaitForBusinessReadyAsync(budget.Token);
+            await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.RouteReportList, new { routes = hashes },
+                _currentRoomCode, budget.Token);
+            return;
+        }
         if (_gateway == null || !IsConnected) return;
         try
         {

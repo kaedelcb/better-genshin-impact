@@ -163,6 +163,7 @@ public sealed class BgiGatewayClient : IAsyncDisposable
             {
                 "hoeing.start.v2",
                 GatewayProtocol.WorldPlanCapability,
+                GatewayProtocol.HostProvidesWorldCapability,
                 BetterGenshinImpact.Shared.CooperativeRerun.RerunProtocol.Capability,
                 // 路线边界锚点能力：服务端据此判断"是否全员支持"，部分客户端不支持时禁止激活（禁止半启用）
                 BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability,

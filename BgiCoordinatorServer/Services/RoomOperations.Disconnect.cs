@@ -78,7 +78,8 @@ public sealed partial class RoomOperations
                     if (disconnectedRoom.KazuhaCollect.KazuhaConnectionId == ctx.ConnectionId)
                     {
                         var onlineCandidate = disconnectedRoom.KazuhaCandidates.FirstOrDefault(c =>
-                            disconnectedRoom.Players.Any(p => p.ConnectionId == c.ConnectionId
+                            disconnectedRoom.RouteExecutors.Any(p => p.ConnectionId == c.ConnectionId
+                                && !disconnectedRoom.GracePendingMembers.ContainsKey(p.ConnectionId)
                                 && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)));
 
                         if (onlineCandidate != null)

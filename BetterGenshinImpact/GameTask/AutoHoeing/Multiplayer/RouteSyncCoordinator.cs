@@ -127,7 +127,7 @@ public class RouteSyncCoordinator
             _playerRouteProgress.Clear();
             foreach (var player in _client.CurrentPlayerList)
             {
-                _playerRouteProgress[player.PlayerUid] = 0;
+                if (_client.IsRouteExecutor(player.PlayerUid)) _playerRouteProgress[player.PlayerUid] = 0;
             }
         }
     }

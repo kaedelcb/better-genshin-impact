@@ -488,6 +488,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
     /// </summary>
     private void OnAllReachedExpCap()
     {
+        if (_client.IsHostWorldOnlyRoom) return; // 由本场实例的终态查询确认，房主不会在这里关房或传送。
         _logger.LogWarning("[联机][经验上限] 收到全员达上限广播，触发协调停止");
         _ = TriggerCoordinatedStop(IsHost, "全员达经验上限", reportAbortToRoom: false);
     }
@@ -809,6 +810,7 @@ public class MultiplayerCoordinator : IAsyncDisposable
         var peerSegs = new System.Collections.Generic.List<long>();
         foreach (var player in _client.CurrentPlayerList)
         {
+            if (!_client.IsRouteExecutor(player.PlayerUid)) continue;
             if (player.PlayerUid == myUid) continue;
             long seg = player.CurrentProgress;
             if (player.IsHost) hostSeg = seg;

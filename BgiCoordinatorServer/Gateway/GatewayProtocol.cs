@@ -16,6 +16,7 @@ public static class GatewayProtocol
     public const string HoeingStateContinuationCapability = "hoeing.stateContinuation.v1";
     public const string HoeingPriorityRecoveryCapability = "hoeing.priorityRecovery.v1";
     public const string WorldPlanCapability = "hoeing.worldPlan.v2";
+    public const string HostProvidesWorldCapability = "hoeing.hostProvidesWorld.v1";
     /// <summary>信封协议版本，冻结。</summary>
     public const int ProtocolVersion = 3;
 
@@ -24,7 +25,7 @@ public static class GatewayProtocol
 
     /// <summary>服务端能力清单（§4.4：能力缺省即不支持）。只列本切片真实实现的。</summary>
     public static readonly string[] ServerCapabilities =
-        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability, HoeingStateContinuationCapability, HoeingPriorityRecoveryCapability, WorldPlanCapability];
+        ["gateway.envelope.v3", RerunProtocol.Capability, BetterGenshinImpact.Shared.RouteAnchor.RouteAnchorProtocol.Capability, HoeingStartCapability, CompletionChoiceCapability, QuickCommandCompletionCapability, LocalFinishCapability, LocalTaskFailureCapability, HoeingStateContinuationCapability, HoeingPriorityRecoveryCapability, WorldPlanCapability, HostProvidesWorldCapability];
 
     public static class MessageTypes
     {
@@ -78,6 +79,8 @@ public static class GatewayProtocol
         public const string RoomClose = "room.close";
         public const string RoomMarkStarted = "room.markStarted";
         public const string RoomGetState = "room.getState";
+        public const string RoomHostWorldState = "room.hostWorldState";
+        public const string RoomHostWorldUpdate = "room.hostWorldUpdate";
         public const string RoomListOnline = "room.listOnline";
         public const string RoomGetConfig = "room.getConfig";
         public const string RoomGetRoundHostOrder = "room.getRoundHostOrder";

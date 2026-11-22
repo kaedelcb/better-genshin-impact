@@ -9,27 +9,41 @@ public sealed partial class GatewayDispatcher
     {
         _commands[GatewayProtocol.Names.RoomCreate] = async (env, ctx) =>
         {
-            var (code, protocol) = await _ops.CreateRoomAsync(ctx,
+            var result = await _ops.CreateRoomAsync(ctx,
                 GetString(env, "playerName"),
                 GetStringList(env, "whitelist"),
                 GetString(env, "playerUid"),
                 GetInt(env, "expectedPlayerCount", 4),
                 GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"),
-                GetStringList(env, "expectedParticipantUids"), GetStringList(env, "worldPlanParticipantUids"));
-            return new { roomCode = code, roomProtocol = protocol };
+                GetStringList(env, "expectedParticipantUids"), GetStringList(env, "worldPlanParticipantUids"),
+                GetBool(env, "hostProvidesWorldOnly"));
+            return new { roomCode = result.Code, roomProtocol = result.Protocol,
+                hostProvidesWorldOnly = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
         };
 
         _commands[GatewayProtocol.Names.RoomJoin] = async (env, ctx) =>
         {
-            var (success, protocol, error) = await _ops.JoinRoomAsync(ctx,
+            var result = await _ops.JoinRoomAsync(ctx,
                 env.RoomCode ?? GetString(env, "roomCode"),
                 GetString(env, "playerName"),
                 GetString(env, "playerUid"),
-                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"));
-            return error != null
-                ? (object)new { success, roomProtocol = protocol, error }
-                : new { success, roomProtocol = protocol };
+                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"), GetString(env, "standbySessionId"));
+            return result.Error != null
+                ? (object)new { success = false, roomProtocol = result.Protocol, error = result.Error }
+                : new { success = true, roomProtocol = result.Protocol,
+                    hostProvidesWorldOnly = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
         };
+
+        _commands[GatewayProtocol.Names.RoomHostWorldUpdate] = (env, ctx) => Task.FromResult<object?>(new
+        {
+            state = _ops.HostWorldOperation(ctx, env.RoomCode, GetString(env, "sessionId"), GetString(env, "action"),
+                GetStringList(env, "routeNames"), GetBool(env, "allowPartial"), GetInt(env, "partyCount"),
+                Get<string>(env, "manifestDigest")),
+        });
+        _queries[GatewayProtocol.Names.RoomHostWorldState] = (env, ctx) => Task.FromResult<object?>(new
+        {
+            state = _ops.HostWorldOperation(ctx, env.RoomCode, GetString(env, "sessionId")),
+        });
 
         _commands[GatewayProtocol.Names.RoomLeave] = async (env, ctx) =>
         {
