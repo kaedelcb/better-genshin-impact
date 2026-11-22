@@ -26,12 +26,12 @@ public sealed partial class RoomOperations
             throw new InvalidOperationException("host_world_routes_invalid");
 
         var room = _roomManager.GetRoom(roomCode);
-        if (room?.HostWorld is { } state && room.SessionId == sessionId)
+        if (room?.StandbyNegotiation is { } state && room.SessionId == sessionId)
         {
             lock (room)
             {
                 if (_roomManager.CanUseHostWorldRoomLocked(room, ctx.ConnectionId)
-                    && room.Players.SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId) is { } caller)
+                    && room.Players.SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId && p.NegotiatesStandby) is { } caller)
                 {
                     CheckHostWorldActor(state.Snapshot, caller.PlayerUid, action);
                     switch (action)
@@ -76,14 +76,19 @@ public sealed partial class RoomOperations
 
     private void StartHostWorldIfReadyLocked(Room room, HostWorldExecution state, bool allowPartial, int partyCount)
     {
+        var standby = room.Players.Where(p => p.StandbyOnly).Select(p => p.PlayerUid).ToArray();
         var required = partyCount == 0 && !allowPartial ? room.ExpectedPlayerCount : partyCount;
-        if (required < 2 || required > room.ExpectedPlayerCount || !allowPartial && required != room.ExpectedPlayerCount
+        if (required < (standby.Length > 0 ? 2 : 1) || required > room.ExpectedPlayerCount
+            || !allowPartial && required != room.ExpectedPlayerCount
             || room.HostConfig == null || !room.HostReady || room.Players.Count != required
-            || _roomManager.GetLiveJoinedHostWorldCountLocked(room) != required
-            || room.Players.Any(p => _capabilityLookup?.Supports(p.ConnectionId, GatewayProtocol.HostProvidesWorldCapability) != true))
+            || (standby.Length > 0 || !allowPartial) && _roomManager.GetLiveJoinedHostWorldCountLocked(room) != required)
             return;
+        if (standby.Length > 0 && room.Players.Any(p => !p.NegotiatesStandby
+            || _capabilityLookup?.Supports(p.ConnectionId, GatewayProtocol.HostProvidesWorldCapability) != true))
+            throw new InvalidOperationException("player_standby_peer_unsupported");
         RequireRoomRoutePackage(room);
-        state.Start(room.RouteExecutors.Select(p => p.PlayerUid));
+        state.Start(room.Players.Where(p => !p.StandbyOnly).Select(p => p.PlayerUid), standby);
+        if (state.Snapshot.Phase == "aborted") return;
         room.IsStarted = true;
         room.StartedAtUtc = DateTime.UtcNow;
         ObservePhase(room, room.Code, "room.hostWorldUpdate.start");

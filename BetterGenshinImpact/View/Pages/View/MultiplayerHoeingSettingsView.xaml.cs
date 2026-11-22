@@ -1413,7 +1413,7 @@ public partial class MultiplayerHoeingSettingsView : UserControl
             "fastSyncPointEnabled", "fastSyncPathingDistance", "fastSyncTeleportLoadingDelayMs",
             "sharedFightEndQuorumEnabled", "sharedFightEndQuorumRatio",
             "debugMode", "useFixedDebugRoutes", "fixedDebugRoutePath", "selectedBuiltinRoute",
-            "multiWorldEnabled", "multiWorldCount", "hostProvidesWorldOnly"
+            "multiWorldEnabled", "multiWorldCount", "hostProvidesWorldOnly", "standbyOnly"
         })
         {
             _settings.Remove(key);

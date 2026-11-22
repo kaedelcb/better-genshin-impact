@@ -18,8 +18,9 @@ namespace BetterGenshinImpact.GameTask.AutoHoeing;
 
 public partial class AutoHoeingTask
 {
-    private bool _hostProvidesWorldOnly;
+    private bool _standbyOnly;
     private bool _hostWorldRoom;
+    private bool _standbyAdmissionPending;
     private volatile bool _hostWorldRoutePhase;
     private string[]? _hostWorldRouteNames;
     private string? _hostWorldManifestDigest;
@@ -31,12 +32,25 @@ public partial class AutoHoeingTask
     private static bool IsManagedHostWorldInvocation => CoordinatedHoeingScope.IsActive
         || ExecutionScope.Current?.Descriptor.WorkflowRunId != null;
 
+    private bool CanOfferStandby(bool isMember) => _settingsOverride is { Count: > 0 }
+        && _config.MultiplayerEnabled && !_config.SoloDebugMode
+        && !IsManagedHostWorldInvocation && !string.IsNullOrWhiteSpace(_config.PlayerUid)
+        && (isMember || (!_config.MultiWorldEnabled && !_config.DebugMode && _config.ExpectedPlayerCount is >= 2 and <= 4
+            && _config.OperationMode is "运行锄地路线" or "启用仅指定怪物模式"));
+
+    private void RequireLocalStandbySetting()
+    {
+        if (!CanOfferStandby(_config.MultiplayerRole == "member"))
+            throw new HoeingStartupException("仅组队，不跟跑", "请填写玩家 UID，从本机配置组启动单世界正常联机");
+        if (_config.MultiplayerRole != "member") RequireHostWorldModeAllowed();
+    }
+
     private void RequireHostWorldModeAllowed()
     {
         if (!HostWorldModeAllowed(_config.MultiplayerEnabled, _config.MultiWorldEnabled, _config.DebugMode,
                 _config.SoloDebugMode, IsManagedHostWorldInvocation))
             throw new HoeingStartupException("仅提供世界", "请从本机配置组启动单世界联机锄地并关闭调试；任务中心和协同批次暂不支持");
-        if (_hostProvidesWorldOnly && (_config.ExpectedPlayerCount is < 2 or > 4
+        if (_standbyOnly && _config.MultiplayerRole != "member" && (_config.ExpectedPlayerCount is < 2 or > 4
             || string.IsNullOrWhiteSpace(_config.PlayerUid)
             || _config.OperationMode is not ("运行锄地路线" or "启用仅指定怪物模式")))
             throw new HoeingStartupException("仅提供世界", "房主需填写 UID、设置 2–4 人并选择正常路线执行");
@@ -46,7 +60,8 @@ public partial class AutoHoeingTask
     {
         // On a partial start the server still requires the exact sealed party to have reported game-world entry.
         var partyCount = actualCount > 0 ? actualCount : client.CurrentRoomPlayerCount;
-        if (partyCount < 2) throw new HoeingStartupException("仅提供世界", "未确认至少一名执行成员已加入世界");
+        if (partyCount < 2 && _standbyOnly)
+            throw new HoeingStartupException("仅组队，不跟跑", "未确认至少一人跟跑");
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(_ct);
         budget.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(RemainingPartyWaitSeconds(), 1, 600)));
         try
@@ -54,8 +69,9 @@ public partial class AutoHoeingTask
             await client.ReportWorldJoinedAsync(budget.Token);
             var state = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t, "start", allowPartial: allowCurrentParty,
                     partyCount: partyCount), s => s.Phase != "waiting", budget.Token);
-            if (state.Phase != "ready" || state.ExecutorUids.Length != partyCount - 1)
-                throw new HoeingStartupException("仅提供世界", state.Reason ?? "未确认待机房主和执行成员名单");
+            ApplyStandbyStartState(client, state);
+            if (_hostWorldRoom && state.ExecutorUids.Length + state.StandbyUids!.Length != partyCount)
+                throw new HoeingStartupException("仅组队，不跟跑", "已确认的执行及待机名单与实际组队人数不一致");
         }
         catch (OperationCanceledException ex) when (!_ct.IsCancellationRequested)
         {
@@ -65,18 +81,32 @@ public partial class AutoHoeingTask
 
     private async Task ReportHostWorldMemberJoinedAsync(CoordinatorClient client)
     {
-        _hostWorldRoutePhase = true;
+        _hostWorldRoutePhase = true; // A fast empty report may reach normal room close before this member gets the join receipt.
         using var report = CancellationTokenSource.CreateLinkedTokenSource(_ct);
         report.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_config.PartyTimeoutSeconds, 1, 600)));
         try { await client.ReportWorldJoinedAsync(report.Token); }
         catch (Exception ex) when (!_ct.IsCancellationRequested
             && ex is OperationCanceledException or MultiplayerSessionFailedException)
         {
-            // A response may be lost after the room sealed. Only a matching sealed roster
-            // that contains this member proves the server recorded the real game join.
-            var state = await client.ReadOrUpdateHostWorldAsync(_ct);
-            if (state.Phase is "waiting" or "aborted") throw;
+            // Only the same room's sealed roster can reconcile lost confirmation.
+            var observed = await client.ReadOrUpdateHostWorldAsync(_ct);
+            if (observed.Phase is "waiting" or "regular") throw;
+            ApplyStandbyStartState(client, observed);
+            return;
         }
+        var state = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t), s => s.Phase != "waiting", report.Token);
+        ApplyStandbyStartState(client, state);
+    }
+
+    private void ApplyStandbyStartState(CoordinatorClient client, HostWorldState state)
+    {
+        _hostWorldRoom = client.IsHostWorldOnlyRoom || _standbyOnly;
+        _hostWorldRoutePhase = _hostWorldRoom;
+        if (state.Phase == "aborted")
+            throw new HoeingStartupException("仅组队，不跟跑", state.Reason ?? "协作房间已中止");
+        if (!_hostWorldRoom && state.Phase != "regular" || _hostWorldRoom && state.StandbyUids is not { Length: > 0 })
+            throw new HoeingStartupException("仅组队，不跟跑", "未确认本场执行及待机名单");
+        _standbyAdmissionPending = false;
     }
 
     private List<RouteInfo> PrepareHostWorldRoutes(List<List<string>> groupTags)
@@ -107,9 +137,11 @@ public partial class AutoHoeingTask
         using var run = CancellationTokenSource.CreateLinkedTokenSource(taskToken);
         run.CancelAfter(TimeSpan.FromHours(6));
         using var stopAtDeadline = run.Token.Register(() => _linkedStopCts!.Cancel());
-        if (_hostProvidesWorldOnly)
+        HostWorldState published;
+        List<RouteInfo>? prepared = null;
+        if (_config.MultiplayerRole != "member")
         {
-            var prepared = PrepareHostWorldRoutes(groupTags);
+            prepared = PrepareHostWorldRoutes(groupTags);
             // Preparation and selection only. No route engine, position reports, sync or CD write.
             var selected = SelectHostWorldRoutes(prepared.Where(r => r.Group == _config.GroupIndex && r.Selected).ToList(), preview: false);
             var names = selected.Select(r => r.FileName).ToArray();
@@ -119,23 +151,26 @@ public partial class AutoHoeingTask
             EnsureCooperativeExecutionAllowed();
             using var publication = CancellationTokenSource.CreateLinkedTokenSource(run.Token);
             publication.CancelAfter(TimeSpan.FromSeconds(30));
-            var state = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t, "publish", names, manifestDigest: digest),
+            published = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t, "publish", names, manifestDigest: digest),
                 s => s.Phase != "ready", publication.Token);
-            if (state.Phase != "aborted" && (state.RouteNames == null || state.ManifestDigest != digest
-                || !names.SequenceEqual(state.RouteNames, StringComparer.Ordinal)))
+            if (published.Phase != "aborted" && (published.RouteNames == null || published.ManifestDigest != digest
+                || !names.SequenceEqual(published.RouteNames, StringComparer.Ordinal)))
                 throw new HoeingStartupException("借世界路线", "服务端未确认同一份路线发布结果");
-            _logger.LogInformation("[借世界] 已确认房主发布 {Count} 条路线，原地等待执行者收尾", names.Length);
-            var terminal = state.IsTerminal ? state : await PollHostWorldTerminalAsync(client, run.Token);
-            RecordHostWorldTerminal(terminal);
-            return;
+            _logger.LogInformation("[借世界] 已确认房主发布 {Count} 条路线", names.Length);
         }
-
-        HostWorldState published;
-        using (var publication = CancellationTokenSource.CreateLinkedTokenSource(run.Token))
+        else
         {
+            using var publication = CancellationTokenSource.CreateLinkedTokenSource(run.Token);
             publication.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_config.PartyTimeoutSeconds, 90, 600)));
             published = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t),
                 s => s.Phase is not ("waiting" or "ready"), publication.Token);
+        }
+        if (_standbyOnly)
+        {
+            _logger.LogInformation("[联机] 本机选择不跟跑，原地等待执行者收尾");
+            var terminal = published.IsTerminal ? published : await PollHostWorldTerminalAsync(client, run.Token);
+            RecordHostWorldTerminal(terminal);
+            return;
         }
         if (published.IsTerminal)
         {
@@ -153,7 +188,8 @@ public partial class AutoHoeingTask
         {
             await DeclareKazuhaCapabilityIfPresentAsync(taskToken);
             // Ignore the member's local operation mode (e.g. refresh records) for a frozen, host-selected manifest.
-            var localRoutes = _config.UseFixedDebugRoutes ? LoadRoutesBasedOnConfig() : PrepareNormalWorldRoutes(groupTags, strict: true);
+            var localRoutes = prepared ?? (_config.UseFixedDebugRoutes
+                ? LoadRoutesBasedOnConfig() : PrepareNormalWorldRoutes(groupTags, strict: true));
             ValidateTeam();
             await ProcessRoutesByGroup(localRoutes, accountName);
             EnsureCooperativeExecutionAllowed();
@@ -260,7 +296,7 @@ public partial class AutoHoeingTask
     {
         if (!state.IsSuccess)
             throw new HoeingStartupException("借世界收尾", state.Reason ?? "房间中断，未确认正常结束");
-        if (state.Phase == "expCap" && !_hostProvidesWorldOnly)
+        if (state.Phase == "expCap" && !_standbyOnly)
         {
             _expCapStopTriggered = true;
             _stopReason = "执行成员均达经验上限，结束借世界锄地";

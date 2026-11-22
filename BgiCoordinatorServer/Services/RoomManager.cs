@@ -74,7 +74,7 @@ public partial class RoomManager
     public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, IReadOnlyList<string>? expectedParticipantUids = null,
         IReadOnlyList<string>? worldPlanParticipantUids = null, string? worldPlanId = null, string? protocol = null,
-        RoomConfig? hostConfig = null, bool hostProvidesWorldOnly = false)
+        RoomConfig? hostConfig = null, bool negotiateStandby = false, bool standbyOnly = false)
     {
         var endedRooms = new List<Room>();
         var fixedUids = expectedParticipantUids?.ToArray() ?? [];
@@ -126,7 +126,7 @@ public partial class RoomManager
             CreatedAt = DateTime.UtcNow,
             // 服务端生成的会话身份（route-anchor）：区分房间实例，避免房间码复用导致跨实例串状态
             SessionId = sessionId,
-            HostWorld = hostProvidesWorldOnly ? new HostWorldExecution(sessionId, playerUid) : null,
+            StandbyNegotiation = negotiateStandby ? new HostWorldExecution(sessionId, playerUid, standbyOnly) : null,
             Whitelist = whitelist ?? [],
             ExpectedPlayerCount = fixedUids.Length > 0 ? fixedUids.Length : expectedPlayerCount,
             HostBaselineVersion = reportedVersion ?? "",
@@ -140,6 +140,7 @@ public partial class RoomManager
                     PlayerUid = playerUid,
                     ReportedVersion = reportedVersion ?? "",
                     Status = PlayerStatus.Waiting,
+                    NegotiatesStandby = negotiateStandby, StandbyOnly = standbyOnly,
                     LastHeartbeat = DateTime.UtcNow
                 }
             ]
@@ -154,7 +155,7 @@ public partial class RoomManager
     /// <summary>加入房间，验证房间存在且人数 &lt; 4</summary>
     public (bool Success, string? Error) JoinRoom(string roomCode, string connectionId, string playerId,
         string playerName = "", string playerUid = "", string reportedVersion = "", string? standbySessionId = null,
-        bool hasHostWorldCapability = false, Room? expectedRoom = null)
+        bool hasHostWorldCapability = false, Room? expectedRoom = null, bool standbyOnly = false)
     {
         if (!_rooms.TryGetValue(roomCode, out var room))
             return (false, "房间不存在");
@@ -164,14 +165,15 @@ public partial class RoomManager
             if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room))
                 return (false, "房间不存在");
             if ((expectedRoom != null && !ReferenceEquals(expectedRoom, room))
-                || (!string.IsNullOrEmpty(standbySessionId) && (room.HostWorld == null || room.SessionId != standbySessionId)))
+                || (!string.IsNullOrEmpty(standbySessionId) && (room.StandbyNegotiation == null || room.SessionId != standbySessionId)))
                 return (false, "host_world_session_mismatch");
             if (_connectionRoomMap.TryGetValue(connectionId, out var activeCode) && activeCode != roomCode
                 && _rooms.TryGetValue(activeCode, out var activeRoom) && activeRoom.HostWorld != null)
                 return (false, "host_world_other_room");
-            if (room.HostWorld != null)
+            if (standbyOnly && room.StandbyNegotiation == null) return (false, "player_standby_room_unsupported");
+            if (room.StandbyNegotiation != null && (room.HostWorld != null || hasHostWorldCapability || standbyOnly))
                 return JoinHostWorldLocked(room, connectionId, playerId, playerName, playerUid, reportedVersion,
-                    hasHostWorldCapability, standbySessionId);
+                    hasHostWorldCapability, standbySessionId, standbyOnly);
             if (room.WorldPlanParticipantUids is { } planned)
             {
                 if (!planned.Contains(playerUid, StringComparer.Ordinal))
@@ -358,10 +360,11 @@ public partial class RoomManager
                     {
                         if (RemoveRoomLocked(roomCode, room)) endedRoom = room;
                     }
-                    else if (room.Players.RemoveAll(p => p.ConnectionId == connectionId) > 0)
+                    else if (room.Players.FirstOrDefault(p => p.ConnectionId == connectionId) is { } leaving)
                     {
+                        room.Players.Remove(leaving);
                         room.RoundOrderStartup?.Result.TrySetResult(false);
-                        if (room.IsStarted) room.HostWorld?.Abort("executor_left");
+                        if (room.IsStarted && !leaving.StandbyOnly) room.HostWorld?.Abort("executor_left");
                     }
                     // 清理该连接在各同步集合中的记录
                     foreach (var set in room.ArrivalSets.Values)
@@ -1161,7 +1164,7 @@ public partial class RoomManager
                 }
                 else
                 {
-                    if (room.IsStarted) room.HostWorld?.Abort("executor_disconnected");
+                    if (room.IsStarted && expired.Any(p => !p.StandbyOnly)) room.HostWorld?.Abort("executor_disconnected");
                     foreach (var player in expired)
                     {
                         var connectionId = player.ConnectionId;

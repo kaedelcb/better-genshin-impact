@@ -17,7 +17,7 @@ public sealed partial class RoomOperations
         {
             lock (room)
             {
-                if (room.HostWorld is { } standby && (standby.Snapshot.Phase != "waiting"
+                if (room.StandbyNegotiation is { } standby && (standby.Snapshot.Phase != "waiting"
                     || config.MultiWorldEnabled || config.DebugMode))
                     throw new InvalidOperationException("host_world_config_invalid");
                 if (!string.Equals(room.HoeingBatchId ?? "", config.HoeingBatchId ?? "", StringComparison.Ordinal)

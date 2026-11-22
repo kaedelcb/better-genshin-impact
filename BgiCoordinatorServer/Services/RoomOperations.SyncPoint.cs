@@ -587,7 +587,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private bool IsCollectiveStuckLocked(Room room)
     {
-        if (!room.HasActiveRouteExecution || room.HostWorld != null && room.GracePendingMembers.Count > 0) return false;
+        if (!room.HasActiveRouteExecution || room.HasStandbyRoomExecutorInGrace) return false;
         if (room.RerunExecution?.BlocksLegacyAdvancement == true) return false;
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return false;
         // route-anchor 激活时由路线边界锚点统一推进路线，旧集体跳段不再介入卡死判定（阶段 6 隔离）

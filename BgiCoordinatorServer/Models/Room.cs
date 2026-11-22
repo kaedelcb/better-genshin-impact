@@ -24,13 +24,18 @@ public class Room
 
     public List<PlayerInfo> Players { get; set; } = [];
 
-    internal Services.HostWorldExecution? HostWorld { get; init; }
+    // An ordinary room may negotiate before start; its route gates remain unchanged unless someone chose standby.
+    internal Services.HostWorldExecution? StandbyNegotiation { get; init; }
+    internal Services.HostWorldExecution? HostWorld => StandbyNegotiation is { UsesStandby: true } mode ? mode : null;
 
     // Physical membership includes the host. Only route coordination uses this projection (under the room lock).
     internal IEnumerable<PlayerInfo> RouteExecutors => HostWorld is { } mode
-        ? Players.Where(p => mode.IsExecutor(p.PlayerUid)) : Players;
+        ? Players.Where(p => mode.IsExecutor(p.PlayerUid, p.StandbyOnly)) : Players;
 
-    internal bool HasActiveRouteExecution => HostWorld is null || HostWorld.Snapshot.Phase == "running";
+    internal bool HasActiveRouteExecution => HostWorld is not { } mode || mode.Snapshot.Phase == "running";
+
+    internal bool HasStandbyRoomExecutorInGrace => HostWorld != null
+        && RouteExecutors.Any(p => GracePendingMembers.ContainsKey(p.ConnectionId));
 
     internal bool AllowsRouteReport(string connectionId, string? claimedUid = null) => HostWorld is null
         || HasActiveRouteExecution && !GracePendingMembers.ContainsKey(connectionId)

@@ -8,19 +8,22 @@ namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 public sealed class HostWorldClientTests
 {
     [Fact]
-    public void ConfigurationIsOffByDefaultAndOwnedByHost()
+    public void ConfigurationPersistsTheSamePerPlayerOptionForBothRoles()
     {
         var settings = new Dictionary<string, object?>();
         var config = new AutoHoeingConfig();
         var vm = new MultiplayerHoeingSettingsViewModel(settings, config, ["1"], "1");
-        Assert.False(vm.HostProvidesWorldOnly);
-        vm.HostProvidesWorldOnly = true;
+        Assert.False(vm.StandbyOnly);
+        vm.StandbyOnly = true;
         vm.WriteMultiplayerSettings(settings);
-        Assert.True(Assert.IsType<bool>(settings["hostProvidesWorldOnly"]));
+        Assert.True(Assert.IsType<bool>(settings["standbyOnly"]));
         vm.RoleSelection = "成员（加入房间）";
-        vm.HostProvidesWorldOnly = false;
+        vm.StandbyOnly = false;
         vm.WriteMultiplayerSettings(settings);
-        Assert.True(Assert.IsType<bool>(settings["hostProvidesWorldOnly"]));
+        Assert.False(Assert.IsType<bool>(settings["standbyOnly"]));
+        vm.StandbyOnly = true;
+        vm.WriteMultiplayerSettings(settings);
+        Assert.True(Assert.IsType<bool>(settings["standbyOnly"]));
     }
 
     [Theory]
@@ -41,7 +44,7 @@ public sealed class HostWorldClientTests
     {
         await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
         var gateway = client.GetOrCreateGatewayForTest();
-        gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Reply(request, new { success = true, hostProvidesWorldOnly = true }));
+        gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Reply(request, new { success = true, negotiatesStandby = true }));
         Assert.False(await client.JoinRoomAsync("code", "guest", "guest"));
     }
 
@@ -50,7 +53,7 @@ public sealed class HostWorldClientTests
     {
         await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
         await JoinHostWorld(client);
-        var state = new HostWorldState("instance", "host", ["guest"], "running", ["route.json"], null, new string('a', 64));
+        var state = new HostWorldState("instance", "host", ["guest"], "running", ["route.json"], null, new string('a', 64), ["host"]);
         var gateway = client.GetOrCreateGatewayForTest();
         gateway._testInvokeOverride = (_, request, _) =>
         {
@@ -76,7 +79,7 @@ public sealed class HostWorldClientTests
         await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
         await JoinHostWorld(client);
         client.EndRoomSession("closed");
-        var state = new HostWorldState("instance", "host", ["guest"], "running", ["route.json"], null, new string('a', 64));
+        var state = new HostWorldState("instance", "host", ["guest"], "running", ["route.json"], null, new string('a', 64), ["host"]);
         var gateway = client.GetOrCreateGatewayForTest();
         gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Reply(request, new { state }));
         await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() => client.ReadOrUpdateHostWorldAsync(CancellationToken.None));
@@ -94,7 +97,7 @@ public sealed class HostWorldClientTests
         gateway._testInvokeOverride = (_, request, _) =>
         {
             stop.Cancel();
-            return Task.FromResult(Reply(request, new { state = new HostWorldState("instance", "host", ["guest"], "noRoutes", [], null) }));
+            return Task.FromResult(Reply(request, new { state = new HostWorldState("instance", "host", ["guest"], "noRoutes", [], null, StandbyUids: ["host"]) }));
         };
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.ReadOrUpdateHostWorldAsync(stop.Token));
     }
@@ -102,12 +105,12 @@ public sealed class HostWorldClientTests
     [Fact]
     public void AnExplicitEmptyManifestIsDifferentFromAMissingManifestOrNoExecutor()
     {
-        var state = new HostWorldState("instance", "host", ["guest"], "noRoutes", [], null);
-        state.RequireIdentity("instance", "host", true, "host", null);
+        var state = new HostWorldState("instance", "host", ["guest"], "noRoutes", [], null, StandbyUids: ["host"]);
+        state.RequireIdentity("instance", "host", true, "host", null, standbyOnly: true);
         Assert.Throws<MultiplayerSessionFailedException>(() => (state with { RouteNames = null })
-            .RequireIdentity("instance", "host", true, "host", null));
+            .RequireIdentity("instance", "host", true, "host", null, standbyOnly: true));
         Assert.Throws<MultiplayerSessionFailedException>(() => (state with { ExecutorUids = [] })
-            .RequireIdentity("instance", "host", true, "host", null));
+            .RequireIdentity("instance", "host", true, "host", null, standbyOnly: true));
     }
 
     [Fact]
@@ -124,11 +127,24 @@ public sealed class HostWorldClientTests
         finally { File.Delete(route); }
     }
 
+    [Fact]
+    public void PersonalRoleMustMatchTheSameFrozenDecisionForOwnerAndGuest()
+    {
+        var state = new HostWorldState("instance", "host", ["host", "runner"], "ready", null, null, StandbyUids: ["idle"]);
+        state.RequireIdentity("instance", "host", true, "host", null);
+        state.RequireIdentity("instance", "runner", false, "host", null);
+        state.RequireIdentity("instance", "idle", false, "host", null, standbyOnly: true);
+        Assert.Throws<MultiplayerSessionFailedException>(() => state.RequireIdentity("instance", "idle", false, "host", null));
+        Assert.Throws<MultiplayerSessionFailedException>(() => state.RequireIdentity("instance", "host", true, "host", null, standbyOnly: true));
+        var regular = new HostWorldState("instance", "host", [], "regular", null, null);
+        Assert.Throws<MultiplayerSessionFailedException>(() => regular.RequireIdentity("instance", "idle", false, "host", null, standbyOnly: true));
+    }
+
     private static async Task JoinHostWorld(CoordinatorClient client)
     {
         var gateway = client.GetOrCreateGatewayForTest();
         gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Reply(request,
-            new { success = true, hostProvidesWorldOnly = true, standbySessionId = "instance" }));
+            new { success = true, negotiatesStandby = true, standbySessionId = "instance" }));
         Assert.True(await client.JoinRoomAsync("code", "guest", "guest"));
     }
 

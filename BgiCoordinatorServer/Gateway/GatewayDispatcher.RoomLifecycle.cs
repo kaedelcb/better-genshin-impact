@@ -9,6 +9,7 @@ public sealed partial class GatewayDispatcher
     {
         _commands[GatewayProtocol.Names.RoomCreate] = async (env, ctx) =>
         {
+            if (GetBool(env, "hostProvidesWorldOnly")) throw new InvalidOperationException("player_standby_upgrade_required");
             var result = await _ops.CreateRoomAsync(ctx,
                 GetString(env, "playerName"),
                 GetStringList(env, "whitelist"),
@@ -16,9 +17,9 @@ public sealed partial class GatewayDispatcher
                 GetInt(env, "expectedPlayerCount", 4),
                 GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"),
                 GetStringList(env, "expectedParticipantUids"), GetStringList(env, "worldPlanParticipantUids"),
-                GetBool(env, "hostProvidesWorldOnly"));
+                GetBool(env, "negotiateStandby"), GetBool(env, "standbyOnly"));
             return new { roomCode = result.Code, roomProtocol = result.Protocol,
-                hostProvidesWorldOnly = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
+                negotiatesStandby = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
         };
 
         _commands[GatewayProtocol.Names.RoomJoin] = async (env, ctx) =>
@@ -27,11 +28,12 @@ public sealed partial class GatewayDispatcher
                 env.RoomCode ?? GetString(env, "roomCode"),
                 GetString(env, "playerName"),
                 GetString(env, "playerUid"),
-                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"), GetString(env, "standbySessionId"));
+                GetString(env, "reportedVersion"), GetString(env, "hoeingBatchId"), GetString(env, "standbySessionId"),
+                GetBool(env, "acceptsStandby"), GetBool(env, "standbyOnly"));
             return result.Error != null
                 ? (object)new { success = false, roomProtocol = result.Protocol, error = result.Error }
                 : new { success = true, roomProtocol = result.Protocol,
-                    hostProvidesWorldOnly = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
+                    negotiatesStandby = result.StandbySessionId != null, standbySessionId = result.StandbySessionId };
         };
 
         _commands[GatewayProtocol.Names.RoomHostWorldUpdate] = (env, ctx) => Task.FromResult<object?>(new

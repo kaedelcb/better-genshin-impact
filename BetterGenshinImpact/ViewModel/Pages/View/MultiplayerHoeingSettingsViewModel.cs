@@ -53,7 +53,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
     // ===== C 房间设置（房主本地）=====
     [ObservableProperty] private string _expectedPlayerCount = "";
     [ObservableProperty] private string _roomWhitelist = "";
-    [ObservableProperty] private bool _hostProvidesWorldOnly;
+    [ObservableProperty] private bool _standbyOnly;
     [ObservableProperty] private string _hostPartyTimeoutSeconds = "";
     [ObservableProperty] private int _partyTimeoutAction;
 
@@ -242,7 +242,7 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         _hostPartyTimeoutSeconds = GetInt("partyTimeoutSeconds", g.PartyTimeoutSeconds).ToString();
         _memberPartyTimeoutSeconds = GetInt("partyTimeoutSeconds", g.PartyTimeoutSeconds).ToString();
         _partyTimeoutAction = GetInt("partyTimeoutAction", g.PartyTimeoutAction);
-        _hostProvidesWorldOnly = GetBool("hostProvidesWorldOnly", false);
+        _standbyOnly = GetBool("standbyOnly", IsHost && GetBool("hostProvidesWorldOnly", false));
         _multiWorldEnabled = GetBool("multiWorldEnabled", g.MultiWorldEnabled);
         _multiWorldCount = GetInt("multiWorldCount", g.MultiWorldCount).ToString();
 
@@ -337,7 +337,8 @@ public partial class MultiplayerHoeingSettingsViewModel : ObservableObject
         settings["partyTimeoutAction"] = PartyTimeoutAction;
         if (int.TryParse(ExpectedPlayerCount, out var ec)) settings["expectedPlayerCount"] = ec;
         settings["roomWhitelist"] = RoomWhitelist;
-        if (IsHost) settings["hostProvidesWorldOnly"] = HostProvidesWorldOnly;
+        settings["standbyOnly"] = StandbyOnly;
+        settings.Remove("hostProvidesWorldOnly");
 
         if (double.TryParse(SyncPointMinDistance, out var spd)) settings["syncPointMinDistance"] = spd;
         if (int.TryParse(StartRouteIndex, out var sri)) settings["startRouteIndex"] = sri;

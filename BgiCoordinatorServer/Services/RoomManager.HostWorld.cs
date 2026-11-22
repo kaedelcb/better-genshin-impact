@@ -16,7 +16,7 @@ public partial class RoomManager
     // member can reconcile a lost terminal response across a concurrent close.
     private void RetainHostWorldLocked(Room room)
     {
-        if (room.HostWorld is not { } state) return;
+        if (room.StandbyNegotiation is not { } state || state.Snapshot.Phase == "regular") return;
         state.Abort("room_closed");
         lock (_hostWorldArchiveLock)
         {
@@ -52,7 +52,7 @@ public partial class RoomManager
         && CanUseHostWorldRoomLocked(room, p.ConnectionId) && room.WorldJoinedSet.Contains(p.ConnectionId));
 
     private (bool Success, string? Error) JoinHostWorldLocked(Room room, string connectionId, string playerId,
-        string playerName, string playerUid, string reportedVersion, bool hasCapability, string? standbySessionId)
+        string playerName, string playerUid, string reportedVersion, bool hasCapability, string? standbySessionId, bool standbyOnly)
     {
         if (!hasCapability) return (false, "host_world_capability_required");
         if (!HostWorldExecution.IsValidUid(playerUid)) return (false, "host_world_uid_required");
@@ -62,16 +62,18 @@ public partial class RoomManager
 
         var current = room.Players.FirstOrDefault(p => p.ConnectionId == connectionId);
         if (current != null)
-            return current.PlayerUid == playerUid ? (true, null) : (false, "host_world_uid_mismatch");
+            return current.PlayerUid == playerUid && current.StandbyOnly == standbyOnly && current.NegotiatesStandby
+                ? (true, null) : (false, "player_standby_identity_mismatch");
 
         var previous = room.Players.FirstOrDefault(p => p.PlayerUid == playerUid);
         if (previous != null)
         {
-            if (previous.ConnectionId == room.HostConnectionId || standbySessionId != room.SessionId)
-                return (false, "host_world_duplicate_uid");
+            if (previous.ConnectionId == room.HostConnectionId || standbySessionId != room.SessionId
+                || previous.StandbyOnly != standbyOnly || !previous.NegotiatesStandby)
+                return (false, "player_standby_identity_mismatch");
             if (!room.GracePendingMembers.TryGetValue(previous.ConnectionId, out var deadline))
                 return (false, "host_world_reconnect_pending");
-            if (deadline <= DateTime.UtcNow || room.HostWorld!.IsTerminal)
+            if (deadline <= DateTime.UtcNow || room.StandbyNegotiation!.IsTerminal)
                 return (false, "host_world_session_mismatch");
 
             var oldConnection = previous.ConnectionId;
@@ -101,7 +103,9 @@ public partial class RoomManager
         }
 
         if (!string.IsNullOrEmpty(standbySessionId)) return (false, "host_world_uid_mismatch");
-        if (room.HostWorld!.Snapshot.Phase != "waiting" || room.IsStarted) return (false, "房间已开锄");
+        if (room.StandbyNegotiation!.Snapshot.Phase != "waiting" || room.IsStarted) return (false, "房间已开锄");
+        if (standbyOnly && room.Players.Any(p => !p.NegotiatesStandby))
+            return (false, "player_standby_peer_unsupported");
         if (room.Whitelist.Count > 0 && !room.Whitelist.Contains(playerName)) return (false, "不在白名单中");
         if (room.Players.Count >= Math.Min(room.ExpectedPlayerCount, MaxPlayers)) return (false, "房间已满");
         room.Players.Add(new PlayerInfo
@@ -110,10 +114,12 @@ public partial class RoomManager
             PlayerId = playerId,
             PlayerName = string.IsNullOrEmpty(playerName) ? $"玩家{room.Players.Count + 1}" : playerName,
             PlayerUid = playerUid,
+            NegotiatesStandby = true, StandbyOnly = standbyOnly,
             ReportedVersion = reportedVersion,
             LastHeartbeat = DateTime.UtcNow,
         });
         _connectionRoomMap[connectionId] = room.Code;
+        if (standbyOnly) room.StandbyNegotiation.NoteStandbyRequest();
         return (true, null);
     }
 }

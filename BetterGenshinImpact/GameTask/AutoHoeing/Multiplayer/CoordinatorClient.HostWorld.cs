@@ -9,27 +9,35 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 
 internal sealed record HostWorldState(string SessionId, string HostUid, string[] ExecutorUids,
-    string Phase, string[]? RouteNames, string? Reason, string? ManifestDigest = null)
+    string Phase, string[]? RouteNames, string? Reason, string? ManifestDigest = null, string[]? StandbyUids = null)
 {
     public bool IsSuccess => Phase is "completed" or "noRoutes" or "expCap";
     public bool IsTerminal => IsSuccess || Phase == "aborted";
 
     internal void RequireIdentity(string sessionId, string uid, bool isHost, string? knownHostUid,
-        HostWorldState? frozen)
+        HostWorldState? frozen, bool standbyOnly = false)
     {
         if (SessionId != sessionId || string.IsNullOrWhiteSpace(HostUid) || string.IsNullOrWhiteSpace(uid)
             || (isHost != (HostUid == uid)) || (!string.IsNullOrEmpty(knownHostUid) && HostUid != knownHostUid)
-            || ExecutorUids == null || ExecutorUids.Any(x => string.IsNullOrWhiteSpace(x) || x == HostUid)
+            || ExecutorUids == null || ExecutorUids.Any(string.IsNullOrWhiteSpace)
             || ExecutorUids.Distinct(StringComparer.Ordinal).Count() != ExecutorUids.Length
-            || Phase is not ("waiting" or "ready" or "running" or "completed" or "noRoutes" or "expCap" or "aborted"))
+            || Phase is not ("waiting" or "regular" or "ready" or "running" or "completed" or "noRoutes" or "expCap" or "aborted"))
             throw new MultiplayerSessionFailedException("借世界房间实例、角色或执行者名单不一致");
 
-        if (Phase is not ("waiting" or "aborted")
-            && (ExecutorUids.Length == 0 || (!isHost && !ExecutorUids.Contains(uid, StringComparer.Ordinal))))
-            throw new MultiplayerSessionFailedException("借世界房间未确认本机的执行身份");
+        var standby = StandbyUids ?? [];
+        if (Phase == "regular" && (standbyOnly || standby.Length != 0 || ExecutorUids.Length != 0))
+            throw new MultiplayerSessionFailedException("房间未确认本机选择的待机身份");
+        if (Phase is not ("waiting" or "regular" or "aborted")
+            && (ExecutorUids.Length == 0 || standby.Length == 0 || standby.Any(string.IsNullOrWhiteSpace)
+                || standby.Distinct(StringComparer.Ordinal).Count() != standby.Length
+                || standby.Intersect(ExecutorUids, StringComparer.Ordinal).Any()
+                || !standby.Concat(ExecutorUids).Contains(HostUid, StringComparer.Ordinal)
+                || !(standbyOnly ? standby : ExecutorUids).Contains(uid, StringComparer.Ordinal)))
+            throw new MultiplayerSessionFailedException("房间确认的执行/待机身份与本机选择不符");
         if (frozen != null && (frozen.HostUid != HostUid
             || !frozen.ExecutorUids.ToHashSet(StringComparer.Ordinal).SetEquals(ExecutorUids)
-            || Phase == "waiting"))
+            || !(frozen.StandbyUids ?? []).ToHashSet(StringComparer.Ordinal).SetEquals(standby)
+            || Phase == "waiting" || (frozen.Phase == "regular") != (Phase == "regular")))
             throw new MultiplayerSessionFailedException("借世界房间的已确认名单发生变化");
         if ((Phase is "running" or "completed" && (RouteNames is not { Length: > 0 }
                 || ManifestDigest is not { Length: 64 } || !ManifestDigest.All(Uri.IsHexDigit)))
@@ -40,25 +48,26 @@ internal sealed record HostWorldState(string SessionId, string HostUid, string[]
 
 public partial class CoordinatorClient
 {
-    internal bool IsHostWorldOnlyRoom { get { lock (_roomLock) return _roomSession?.StandbySessionId != null; } }
+    internal bool NegotiatesPlayerStandby { get { lock (_roomLock) return _roomSession?.StandbySessionId != null; } }
+    internal bool IsHostWorldOnlyRoom { get { lock (_roomLock) return _roomSession?.FrozenHostWorld?.StandbyUids is { Length: > 0 }; } }
 
     // Only route execution uses this projection. Party admission, in-game detection and heartbeat use the full roster.
     internal bool IsRouteExecutor(string uid)
     {
         lock (_roomLock)
-            return _roomSession?.StandbySessionId == null
-                || _roomSession.FrozenHostWorld?.ExecutorUids.Contains(uid, StringComparer.Ordinal) == true;
+            return _roomSession?.FrozenHostWorld?.StandbyUids is not { Length: > 0 }
+                || _roomSession.FrozenHostWorld.ExecutorUids.Contains(uid, StringComparer.Ordinal);
     }
 
     internal int? FrozenRouteExecutorCount
     {
-        get { lock (_roomLock) return _roomSession?.FrozenHostWorld?.ExecutorUids.Length; }
+        get { lock (_roomLock) return IsHostWorldOnlyRoom ? _roomSession!.FrozenHostWorld!.ExecutorUids.Length : null; }
     }
 
     private static string? ReadHostWorldBinding(GatewayEnvelope response)
     {
         var sessionId = response.GetString("standbySessionId");
-        if (response.GetBool("hostProvidesWorldOnly") == string.IsNullOrWhiteSpace(sessionId))
+        if (response.GetBool("negotiatesStandby") == string.IsNullOrWhiteSpace(sessionId))
             throw new MultiplayerSessionFailedException("借世界房间模式与实例回执不一致");
         return string.IsNullOrWhiteSpace(sessionId) ? null : sessionId;
     }
@@ -92,11 +101,11 @@ public partial class CoordinatorClient
         {
             if (!ReferenceEquals(_roomSession, session))
                 throw new MultiplayerSessionFailedException("借世界房间回执已失去原实例");
-            state.RequireIdentity(session.StandbySessionId!, session.Uid ?? "", session.IsStandbyHost,
-                HostPlayerUid, session.FrozenHostWorld);
+            state.RequireIdentity(session.StandbySessionId!, session.Uid ?? "", session.IsRoomOwner,
+                HostPlayerUid, session.FrozenHostWorld, session.StandbyOnly);
             if (!state.IsTerminal && session.Ended)
                 throw new MultiplayerSessionFailedException("借世界房间已关闭，未确认完工");
-            if (state.Phase is "ready" or "running" or "completed" or "expCap" or "noRoutes")
+            if (state.Phase is "regular" or "ready" or "running" or "completed" or "expCap" or "noRoutes")
                 session.FrozenHostWorld ??= state;
         }
         return state;

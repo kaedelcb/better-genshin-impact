@@ -71,6 +71,13 @@
                                   Text="选择本机在联机中的角色" />
                     <ComboBox ItemsSource="{Binding RoleOptions}"
                               SelectedItem="{Binding RoleSelection, Mode=TwoWay}" />
+                    <ui:ToggleSwitch Margin="0,12,0,4"
+                                     Content="仅组队，不跟跑"
+                                     IsChecked="{Binding StandbyOnly, Mode=TwoWay}" />
+                    <ui:TextBlock Margin="12,0,0,0"
+                                  Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
+                                  Text="每个人各自设置，仅影响本机，下次开房或入房生效。开启后本机照常组队但不跟跑，房主仍会发布路线。仅限本机配置组启动的单世界联机，需协调服务和全员支持，至少一人跟跑。"
+                                  TextWrapping="Wrap" />
                 </StackPanel>
             </ui:CardExpander>
 
@@ -220,14 +227,6 @@
                                           Text="最多 4 轮。未到场的名字跳过，到场但未匹配的人排在末尾。"
                                           TextWrapping="Wrap" />
                         </StackPanel>
-
-                        <ui:ToggleSwitch Margin="0,12,0,4"
-                                         Content="仅提供世界，不跟跑"
-                                         IsChecked="{Binding HostProvidesWorldOnly, Mode=TwoWay}" />
-                        <ui:TextBlock Margin="12,0,0,0"
-                                      Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                      Text="房主组队并发布路线后原地待机，由至少一名成员执行；不补写房主的路线 CD，也不自动重开。仅限本机配置组启动的单世界联机，请关闭多世界和调试。"
-                                      TextWrapping="Wrap" />
 
                         <!--  联机锄地守护自动重开（hoeing-multiplayer-guard-auto-restart）房主设置，同步给成员  -->
                         <ui:ToggleSwitch Margin="0,12,0,4"

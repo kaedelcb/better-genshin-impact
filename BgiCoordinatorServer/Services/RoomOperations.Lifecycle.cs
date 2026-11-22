@@ -25,9 +25,10 @@ public sealed partial class RoomOperations
     public async Task<RoomCreation> CreateRoomAsync(GatewayHandlerContext ctx,
         string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, List<string>? expectedParticipantUids = null,
-        List<string>? worldPlanParticipantUids = null, bool hostProvidesWorldOnly = false)
+        List<string>? worldPlanParticipantUids = null, bool negotiateStandby = false, bool standbyOnly = false)
     {
-        if (hostProvidesWorldOnly)
+        if (standbyOnly && !negotiateStandby) throw new InvalidOperationException("player_standby_room_unsupported");
+        if (negotiateStandby)
         {
             if (!SupportsHostWorld(ctx)) throw new InvalidOperationException("host_world_capability_required");
             if (!HostWorldExecution.IsValidUid(playerUid) || expectedPlayerCount is < 2 or > 4
@@ -65,7 +66,7 @@ public sealed partial class RoomOperations
         var code = _roomManager.CreateRoom(ctx.ConnectionId, playerName, whitelist, playerUid, expectedPlayerCount, reportedVersion,
             hoeingBatchId, expectedParticipantUids, worldPlanParticipantUids,
             protocol: ctx.IsV3 ? GatewayProtocol.RoomProtocols.V3 : GatewayProtocol.RoomProtocols.Legacy,
-            hostProvidesWorldOnly: hostProvidesWorldOnly);
+            negotiateStandby: negotiateStandby, standbyOnly: standbyOnly);
         await _broadcaster.AddToGroupAsync(ctx, code);
         TrackGroup(ctx, code);
         _logger.LogInformation("连接 {ConnId}({Name}) 创建房间 {Code}", ctx.ConnectionId, playerName, code);
@@ -78,19 +79,21 @@ public sealed partial class RoomOperations
         }
         ObservePhase(room, code, "room.create");
         await _broadcaster.BroadcastGroupAsync(code, "PlayerListUpdated", new { players = room.Players }, room.Players);
-        return new(code, room.Protocol, room.HostWorld?.Snapshot.SessionId);
+        return new(code, room.Protocol, room.StandbyNegotiation?.Snapshot.SessionId);
     }
 
     /// <summary>加入房间，广播 PlayerListUpdated。返回 (是否成功, 房间协议, 失败原因)。</summary>
     public async Task<RoomJoin> JoinRoomAsync(GatewayHandlerContext ctx,
         string roomCode, string playerName = "", string playerUid = "", string reportedVersion = "", string? hoeingBatchId = null,
-        string? standbySessionId = null)
+        string? standbySessionId = null, bool acceptsStandby = false, bool standbyOnly = false)
     {
         var room0 = _roomManager.GetRoom(roomCode);
-        if (!string.IsNullOrEmpty(standbySessionId) && (room0?.HostWorld == null || room0.SessionId != standbySessionId))
+        if (!string.IsNullOrEmpty(standbySessionId) && (room0?.StandbyNegotiation == null || room0.SessionId != standbySessionId))
             return new(false, room0?.Protocol, "host_world_session_mismatch");
         if (room0 == null) return new(false, null, "房间不存在");
-        var hasHostWorldCapability = SupportsHostWorld(ctx);
+        var hasHostWorldCapability = acceptsStandby && HostWorldExecution.IsValidUid(playerUid) && SupportsHostWorld(ctx);
+        if (standbyOnly && (!hasHostWorldCapability || room0.StandbyNegotiation == null))
+            return new(false, room0.Protocol, "player_standby_room_unsupported");
         if (room0.HostWorld != null && !hasHostWorldCapability)
             return new(false, room0.Protocol, "host_world_capability_required");
         try
@@ -144,7 +147,7 @@ public sealed partial class RoomOperations
         }
 
         var (success, error) = _roomManager.JoinRoom(roomCode, ctx.ConnectionId, playerId, playerName, playerUid, reportedVersion,
-            standbySessionId, hasHostWorldCapability, room0);
+            standbySessionId, hasHostWorldCapability, room0, standbyOnly);
 
         if (!success)
         {
@@ -163,7 +166,7 @@ public sealed partial class RoomOperations
         ObserveRoomLog(context => context.ObserveGameRoom(room));
         ObservePhase(room, roomCode, "room.join");
         await _broadcaster.BroadcastGroupAsync(roomCode, "PlayerListUpdated", new { players = room.Players }, room.Players);
-        return new(true, room.Protocol, null, room.HostWorld?.Snapshot.SessionId);
+        return new(true, room.Protocol, null, hasHostWorldCapability ? room.StandbyNegotiation?.Snapshot.SessionId : null);
     }
 
     /// <summary>
@@ -267,7 +270,7 @@ public sealed partial class RoomOperations
                 ctx.ConnectionId, roomCode);
             return;
         }
-        if (room.HostWorld != null) throw new InvalidOperationException("host_world_start_required");
+        if (room.StandbyNegotiation != null) throw new InvalidOperationException("host_world_start_required");
         RequireRoomRoutePackage(room);
         if (((requireWorldPlanRoster || requireRoundOrderStartup) && roomCode != expectedRoomCode)
             || (requireWorldPlanRoster && room.WorldPlanParticipantUids == null))

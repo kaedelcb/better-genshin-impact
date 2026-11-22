@@ -47,7 +47,9 @@ public sealed partial class RoomOperations
                     roomCode, reporterUid);
                 return;
             }
+            // A passive guest cannot stop other players simply by stopping their own task.
             if (room.HostWorld is { } standby && (!_roomManager.CanUseHostWorldRoomLocked(room, ctx.ConnectionId)
+                || ctx.ConnectionId != room.HostConnectionId && !room.AllowsRouteReport(ctx.ConnectionId)
                 || !standby.Abort(string.IsNullOrWhiteSpace(reason) ? "coordinated_abort" : reason[..Math.Min(reason.Length, 256)])))
                 return;
             room.CoordinatedAbortBroadcasted = true;

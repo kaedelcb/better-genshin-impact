@@ -651,8 +651,8 @@ public partial class AutoHoeingTask : ISoloTask
 
         // Only the final configuration used by this invocation can prove a multiplayer success.
         attempt?.SetMultiplayerMode(_config.MultiplayerEnabled);
-        _hostWorldRoom = _hostProvidesWorldOnly;
-        if (_hostProvidesWorldOnly) RequireHostWorldModeAllowed();
+        _hostWorldRoom = _standbyOnly;
+        if (_standbyOnly) RequireLocalStandbySetting();
         bool? savedAutoFetchDispatch = _partyConfig?.DisableAutoFetchDispatch;
 
         // 数据目录：使用JS脚本原有的pathing目录
@@ -737,13 +737,13 @@ public partial class AutoHoeingTask : ISoloTask
             PathingConditionConfig.AuthoritativePlayerCountProvider = null;
 
             // 房主兜底：确保关闭房间通知已发送
-            if (_hostWorldRoom && _coordinatorClientRef != null && !_completedNormally && !_hostProvidesWorldOnly)
+            if (_hostWorldRoom && _coordinatorClientRef != null && !_completedNormally && _config.MultiplayerRole == "member")
             {
                 // Explicit leave wakes the still-assembled peers even after local cancellation.
                 try { await _coordinatorClientRef.LeaveRoomAsync(); }
                 catch (Exception ex) { _logger.LogDebug(ex, "[借世界] 未确认成员离房，等待服务端连接清退"); }
             }
-            if (_multiplayerCoordinator?.IsHost == true || _hostProvidesWorldOnly && _coordinatorClientRef?.IsHostWorldOnlyRoom == true)
+            if (_multiplayerCoordinator?.IsHost == true || _config.MultiplayerRole != "member" && _coordinatorClientRef?.NegotiatesPlayerStandby == true)
             {
                 try { await _coordinatorClientRef!.CloseRoomAsync(); }
                 catch (Exception ex)
@@ -802,7 +802,8 @@ public partial class AutoHoeingTask : ISoloTask
 
             // 挂机房主清理只关闭服务端房间，不触发回城或神像传送输入。
             // 联机中断时通知用户并退出世界
-            if (!_hostProvidesWorldOnly && !string.IsNullOrEmpty(_stopReason) && _config.MultiplayerEnabled && !ct.IsCancellationRequested)
+            if (!(_standbyOnly && _config.MultiplayerRole != "member") && !string.IsNullOrEmpty(_stopReason)
+                && _config.MultiplayerEnabled && !ct.IsCancellationRequested)
             {
                 // 房主和成员都退出联机世界回到单人世界
                 try
@@ -889,9 +890,9 @@ public partial class AutoHoeingTask : ISoloTask
             }
         }
 
-        if (_hostWorldRoom)
+        if (_hostWorldRoom || _standbyAdmissionPending)
         {
-            // 不把房主本地零路线或成员异常退房视为成功，也不自动重开一场普通房间。
+            // 协商未确认时也不能自行按普通房间重开；关房不等于正常收尾。
             ct.ThrowIfCancellationRequested();
             if (!_completedNormally || executionFailure != null)
                 throw new HoeingStartupException("借世界收尾", _stopReason ?? "未确认成功终态", executionFailure);
@@ -1097,7 +1098,8 @@ public partial class AutoHoeingTask : ISoloTask
                         {
                             _logger.LogInformation("[联机] 尝试加入房间: {Code}（房主: {Host}，{N}/{Max}人）",
                                 room.Code, room.HostName, room.PlayerCount, room.MaxPlayers);
-                            var ok = await client.JoinRoomAsync(room.Code, _config.PlayerName, _config.PlayerUid, _ct);
+                            var ok = await client.JoinRoomAsync(room.Code, _config.PlayerName, _config.PlayerUid, _ct,
+                                acceptsStandby: CanOfferStandby(isMember), standbyOnly: _standbyOnly);
                             if (ok)
                             {
                                 roomCodeToJoin = room.Code;
@@ -1166,7 +1168,8 @@ public partial class AutoHoeingTask : ISoloTask
                         {
                             if (roomClosed) { _logger.LogWarning("[联机] 房间已被关闭，停止加入"); break; }
                             _logger.LogInformation("[联机] 尝试加入房间: {Code}（第{N}次）", roomCodeToJoin, retry);
-                            joinedRoom = await client.JoinRoomAsync(roomCodeToJoin, _config.PlayerName, _config.PlayerUid, _ct);
+                            joinedRoom = await client.JoinRoomAsync(roomCodeToJoin, _config.PlayerName, _config.PlayerUid, _ct,
+                                acceptsStandby: CanOfferStandby(isMember), standbyOnly: _standbyOnly);
                             if (joinedRoom) { _logger.LogInformation("[联机] 成功加入房间: {Code}", roomCodeToJoin); break; }
                             _logger.LogWarning("[联机] 加入房间 {Code} 失败，3秒后重试", roomCodeToJoin);
                             await Task.Delay(3000, _ct);
@@ -1184,9 +1187,8 @@ public partial class AutoHoeingTask : ISoloTask
                     MarkPartyFailed("无法加入房间");
                     return;
                 }
-                _hostWorldRoom = client.IsHostWorldOnlyRoom;
-                if (_hostWorldRoom && (_config.SoloDebugMode || IsManagedHostWorldInvocation))
-                    throw new HoeingStartupException("仅提供世界", "任务中心、协同批次及单人调试不能加入借世界房间");
+                if (_standbyOnly && !client.NegotiatesPlayerStandby)
+                    throw new HoeingStartupException("仅组队，不跟跑", "房间未确认参与独立待机协商");
                 // 加入房间后立刻发心跳，确保服务器知道成员在线
                 await client.SendHeartbeatAsync();
             }
@@ -1200,7 +1202,7 @@ public partial class AutoHoeingTask : ISoloTask
                 }
                 _logger.LogInformation("[联机] 无房间码，创建新房间");
                 var newCode = await client.CreateRoomAsync(_config.PlayerName, whitelist, _config.PlayerUid,
-                    _config.ExpectedPlayerCount, _ct, hostProvidesWorldOnly: _hostProvidesWorldOnly);
+                    _config.ExpectedPlayerCount, _ct, negotiateStandby: CanOfferStandby(isMember), standbyOnly: _standbyOnly);
                 if (newCode != null)
                 {
                     _config.CurrentRoomCode = newCode;
@@ -1214,6 +1216,7 @@ public partial class AutoHoeingTask : ISoloTask
                 }
             }
 
+            _standbyAdmissionPending = client.NegotiatesPlayerStandby;
             // 房主/成员标识（用于后续配置同步）
             var isHost = !isMember;
             // kazuha-declare-after-team-switch: 删除此处旧调用——
@@ -1421,7 +1424,7 @@ public partial class AutoHoeingTask : ISoloTask
             // 注入单人调试模式标志（纯本地，显式依赖）：为 true 时 WorldStateMonitor 跳过
             // connected-but-not-in-game 被踢出终止判定，供单人世界调试线路。hoeing-multiplayer-solo-debug-mode。
             _worldStateMonitor = new WorldStateMonitor(client, _config.PlayerUid, _ct, _config.SoloDebugMode,
-                _config.HoeingGuardMode && !_hostWorldRoom, allowVisualRecovery: !_hostProvidesWorldOnly);
+                _config.HoeingGuardMode && !_hostWorldRoom, allowVisualRecovery: !_standbyOnly);
             client.WorldStateMonitor = _worldStateMonitor;
             _worldStateMonitor.OnExitConfirmed += HandleWorldExitConfirmedAsync;
             _worldStateMonitor.OnDroppedFromRoom += async () =>
@@ -1542,7 +1545,7 @@ public partial class AutoHoeingTask : ISoloTask
 
             // 自动组队：游戏内加入/等待
             _worldStateMonitor.IsPartyPhase = true;
-            if (!_hostWorldRoom && await TryPrepareWorldStartAsync(client, isHost)) return;
+            if (!client.NegotiatesPlayerStandby && await TryPrepareWorldStartAsync(client, isHost)) return;
             await RequireWorldPlanTargetAsync(client, _ct);
             var autoParty = new AutoPartyTask();
             if (isHost)
@@ -1609,7 +1612,7 @@ public partial class AutoHoeingTask : ISoloTask
                     _logger.LogInformation("[联机] 人齐，共 {N} 人，开始锄地", actualCount);
                 }
 
-                if (_hostWorldRoom)
+                if (client.NegotiatesPlayerStandby)
                 {
                     await SealHostWorldPartyAsync(client, actualCount, allowCurrentParty);
                 }
@@ -1754,7 +1757,7 @@ public partial class AutoHoeingTask : ISoloTask
                     {
                         RequireMatchingRoomBatch(hostConfig);
                         await ApplyPinnedHostConfigAsync(hostConfig, _ct);
-                        if (_hostWorldRoom) RequireHostWorldModeAllowed();
+                        if (client.NegotiatesPlayerStandby) RequireHostWorldModeAllowed();
 
                         // 多世界模式：保存第一任房主的配置
                         if (_config.MultiWorldEnabled)
@@ -1791,9 +1794,10 @@ public partial class AutoHoeingTask : ISoloTask
                     {
                         _logger.LogInformation("[联机] 已进入房主世界，等待所有人就绪...");
 
-                        if (_hostWorldRoom)
+                        if (client.NegotiatesPlayerStandby)
                         {
                             await ReportHostWorldMemberJoinedAsync(client);
+                            if (!_hostWorldRoom) _worldStateMonitor.IsPartyPhase = false;
                             // 执行前查询封存的执行名册及路线，不依赖全员入世界广播一定到达。
                         }
                         else
@@ -1836,7 +1840,7 @@ public partial class AutoHoeingTask : ISoloTask
 
             // 房主路径：开锄前锁定房间，从此服务端拒绝非重连新玩家（spec lock-room-after-start §4.2 / bugfix §2.8）
             // 成员路径不调（成员无房主权限，调了服务端也会拒）
-            if (client.IsHost && !_hostWorldRoom)
+            if (client.IsHost && !client.NegotiatesPlayerStandby)
             {
                 var requireRoundOrder = _worldStartPlan == null && _config.MultiWorldEnabled
                     && HasRoundOrderWhitelist(_firstHostConfig?.RoomWhitelist);
@@ -1852,7 +1856,7 @@ public partial class AutoHoeingTask : ISoloTask
 
             // 锄地房间信号：已成功加入联机锄地房间（IsInRoom=true）即视为"锄地中"，
             // 立即同步全局进度载体，供 IPC task.status 读取。离开房间由 Start finally 的 Clear() 复位。
-            if (!_hostProvidesWorldOnly)
+            if (!_standbyOnly)
             {
                 lock (AutoHoeingProgress.Sync) AutoHoeingProgress.IsRunning = true;
             }
@@ -2149,7 +2153,7 @@ public partial class AutoHoeingTask : ISoloTask
         // 无论单机/联机、房主/成员，新账户名一经运行即在 records 目录生成 {账户名}.json，
         // 不再依赖"某条路线成功跑完才写盘"（联机被踢/中断时那条路径不会触发）。
         _cdManager.Load(_dataDir, accountName);
-        if (!_hostProvidesWorldOnly) _cdManager.EnsureFileExists();
+        if (!_standbyOnly) _cdManager.EnsureFileExists();
 
         // 2. 解析时间限制
         _timeChecker.ParseRestrictions(_config.NoRunPeriod);
@@ -3559,9 +3563,9 @@ public partial class AutoHoeingTask : ISoloTask
                 ? _coordinatorClientRef.HostPlayerUid == _config.PlayerUid
                 : _config.MultiplayerRole == "host";
 
-            if (isHost || string.IsNullOrEmpty(_coordinatorClientRef.HostPlayerUid))
+            if (!_hostWorldRoom && (isHost || string.IsNullOrEmpty(_coordinatorClientRef.HostPlayerUid)))
             {
-                // 房主：CD 过滤后上传最终路线文件名列表
+                // 普通房间房主：CD 过滤后上传最终路线文件名列表
                 var hostRouteNames = SelectHostWorldRoutes(groupRoutes, preview: false)
                     .Select(r => r.FileName).ToList();
                 await _coordinatorClientRef.SetHostRouteListAsync(hostRouteNames);
@@ -5621,7 +5625,7 @@ public partial class AutoHoeingTask : ISoloTask
         if (_settingsOverride.ContainsKey("selectedBuiltinRoute"))
             _config.SelectedBuiltinRoute = Get("selectedBuiltinRoute", _config.SelectedBuiltinRoute);
 
-        _hostProvidesWorldOnly = _config.MultiplayerRole != "member" && Get("hostProvidesWorldOnly", false);
+        _standbyOnly = Get("standbyOnly", _config.MultiplayerRole != "member" && Get("hostProvidesWorldOnly", false));
         _config.MultiWorldEnabled = Get("multiWorldEnabled", _config.MultiWorldEnabled);
         _config.MultiWorldCount = Get("multiWorldCount", _config.MultiWorldCount);
 

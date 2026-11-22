@@ -106,6 +106,7 @@ public class WorldStateMonitor : IAsyncDisposable
     // === R5 队友掉线协同中止检测（hoeing-multiplayer-guard-auto-restart §10）===
     // 仅 HoeingGuardMode 开启时启用（构造注入）。执行期房间人数低于基准 → 判定队友掉线 → 协同中止重开。
     private readonly bool _peerDropGuardEnabled;
+    private bool PeerDropGuardEnabled => _peerDropGuardEnabled && !_client.IsHostWorldOnlyRoom;
     private readonly bool _allowVisualRecovery;
     private int _peerBaselineCount = -1;   // 执行期基准人数（-1 = 未捕获）
     private int _peerBelowStreak;          // 连续低于基准次数（去抖，达 PeerDropConfirmChecks 触发）
@@ -419,7 +420,7 @@ public class WorldStateMonitor : IAsyncDisposable
         // 与自身 IsInMultiGame 流程正交：只比房间人数、不截图。仅"干净执行阶段"生效，
         // 抑制窗口（组队/轮换/换角色/吃药/传送/暂停）一律复位基准，等下个执行阶段重新捕获。
         // 仅 HoeingGuardMode 开启才启用；关闭时整块跳过，历史行为（剩下人继续跑）逐字节不变。
-        if (_peerDropGuardEnabled)
+        if (PeerDropGuardEnabled)
         {
             bool inSuppressedWindow =
                 IsPartyPhase || _isRoundSwitching || _isRoleSwitching || _isEatingMedicine
@@ -504,7 +505,7 @@ public class WorldStateMonitor : IAsyncDisposable
                         }
                         var mismatchElapsed = (DateTime.UtcNow - _visualMismatchStart).TotalSeconds;
                         if (HoeingGuardDecisions.ShouldTriggerVisualMismatchExit(
-                                _peerDropGuardEnabled, inSuppressedWindow,
+                                PeerDropGuardEnabled, inSuppressedWindow,
                                 visualCount, coordCount, mismatchElapsed, VisualMismatchExitWindowSeconds))
                         {
                             _visualMismatchInProgress = false;
