@@ -173,6 +173,71 @@ public class SignalRClient : IAsyncDisposable
     public bool SupportsQuickCommandCompletion => _gateway?.ServerCapabilities.Contains(GatewayProtocol.QuickCommandCompletionCapability, StringComparer.Ordinal) == true;
     public bool SupportsCompletionChoice => _gateway?.ServerCapabilities.Contains(GatewayProtocol.CompletionChoiceCapability, StringComparer.Ordinal) == true;
 
+    internal sealed class RoomJoinRejectedException(string message) : InvalidOperationException(message);
+
+    private volatile bool _awaitingRoomSwitchCommit;
+    private readonly Queue<GatewayEnvelope> _preparedRoomCommands = new();
+
+    internal void DispatchPreparedRoomCommands()
+    {
+        GatewayEnvelope[] commands;
+        lock (_preparedRoomCommands)
+        {
+            commands = [.. _preparedRoomCommands];
+            _preparedRoomCommands.Clear();
+        }
+        foreach (var command in commands) DispatchEvt(command);
+    }
+    private long _preparedRoomEpoch;
+    internal ControlRoomPlayersUpdate? PreparedRoomSnapshot { get; private set; }
+
+    internal void PrepareRoomSwitch() => _awaitingRoomSwitchCommit = true;
+
+    internal void CompleteRoomSwitch()
+    {
+        if (!_awaitingRoomSwitchCommit || !_roomReady || !IsConnected || _preparedRoomEpoch != DesktopControlEpoch)
+            throw new ControlChannelUnavailableException("目标房间会话已变化");
+        _awaitingRoomSwitchCommit = false;
+    }
+
+    internal void ApplyRoomSnapshot(ControlRoomPlayersUpdate snapshot) => OnPlayersUpdated?.Invoke(snapshot);
+
+    internal async Task<ControlRoomPlayersUpdate> ConfirmRoomSwitchAsync(ControlStatus status, CancellationToken ct)
+    {
+        var gateway = _gateway ?? throw new ControlChannelUnavailableException("目标房间没有连接");
+        if (!_awaitingRoomSwitchCommit || !gateway.IsConnected || _preparedRoomEpoch != DesktopControlEpoch)
+            throw new ControlChannelUnavailableException("目标房间会话未确认");
+        status.RoomCode = _roomCode;
+        var reply = await gateway.InvokeCommandAsync("control.readyRoom", new { status }, ct: ct);
+        if (reply.Payload?["success"]?.GetValue<bool>() != true)
+            throw new InvalidOperationException(reply.GetString("reason", "目标房间未确认就绪"));
+        if (!gateway.IsConnected || _preparedRoomEpoch != DesktopControlEpoch)
+            throw new ControlChannelUnavailableException("目标房间就绪回执所属会话已变化");
+        var snapshot = reply.Get<ControlRoomPlayersUpdate>("playersUpdate") ?? PreparedRoomSnapshot;
+        if (snapshot is not { Full: true }) throw new ControlChannelUnavailableException("目标房间成员快照未确认");
+        _roomReady = true;
+        return snapshot;
+    }
+
+    internal async Task<(bool Success, bool Busy, string Reason)> LeaveControlRoomForSwitchAsync(CancellationToken ct)
+    {
+        var gateway = _gateway ?? throw new ControlChannelUnavailableException("原房间没有连接");
+        if (!IsControlRoomReady) throw new ControlChannelUnavailableException("原房间连接状态未确认");
+        var reply = await gateway.InvokeCommandAsync("control.leaveRoom", new { roomCode = _roomCode }, ct: ct);
+        if (reply.Payload?["success"] is null) throw new ControlChannelUnavailableException("离房结果未确认");
+        return (reply.Payload["success"]!.GetValue<bool>(), reply.Payload["busy"]?.GetValue<bool>() == true,
+            reply.GetString("reason", "服务端拒绝离房"));
+    }
+
+    internal async Task<ControlRoomPlayersUpdate?> ReadRoomSnapshotAsync(CancellationToken ct)
+    {
+        var gateway = _gateway;
+        if (gateway is null || !IsControlRoomReady) return null;
+        var reply = await gateway.InvokeCommandAsync("control.roomSnapshot", new { roomCode = _roomCode }, ct: ct);
+        return ReferenceEquals(gateway, _gateway) && !IsRetired && reply.Payload?["success"]?.GetValue<bool>() == true
+            ? reply.Get<ControlRoomPlayersUpdate>("playersUpdate") : null;
+    }
+
     public async Task ConnectAsync(string serverUrl, string roomCode, string password,
         string playerUid, string playerName, List<string> teamUids, bool isRemote = false, string clientInstanceId = "",
         bool bypassSystemProxy = false, CancellationToken cancellationToken = default)
@@ -220,6 +285,18 @@ public class SignalRClient : IAsyncDisposable
 
         gateway.EnvelopeReceived += env =>
         {
+            if (_retired) return;
+            if (_awaitingRoomSwitchCommit)
+            {
+                if (env.Name == GatewayProtocol.Events.ControlRemoteCommand)
+                {
+                    lock (_preparedRoomCommands)
+                    {
+                        if (_preparedRoomCommands.Count < 64) _preparedRoomCommands.Enqueue(env);
+                    }
+                }
+                return;
+            }
             // 桌面控制只消费当前传输连接的事件；旧实例的已排队回调不能转到新房间。
             if ((env.Name.StartsWith("desktop.control.", StringComparison.Ordinal)
                 || env.Name is GatewayProtocol.Events.ScreenshotMember or GatewayProtocol.Events.ScreenshotRequested)
@@ -245,7 +322,7 @@ public class SignalRClient : IAsyncDisposable
         // SignalR 内置自动重连成功
         gateway.Reconnected += async _ =>
         {
-            if (_retired || !ReferenceEquals(gateway, _gateway)) return;
+            if (_retired || _awaitingRoomSwitchCommit || !ReferenceEquals(gateway, _gateway)) return;
             try
             {
                 OnLog?.Invoke("[连接] SignalR 已重连，重新加入控制房间");
@@ -282,7 +359,7 @@ public class SignalRClient : IAsyncDisposable
             // 手动刷新/重建连接时 DisposeAsync 会先置 _disposed 再 Dispose 连接，
             // Dispose 触发的 Closed 不是真实断连：不打"自动重连已耗尽"误导日志、不转离线状态
             InvalidateControlRoom();
-            if (_disposed || _retired) return Task.CompletedTask;
+            if (_disposed || _retired || _awaitingRoomSwitchCommit) return Task.CompletedTask;
             OnLog?.Invoke(exception != null
                 ? $"[连接] SignalR 连接已关闭: {exception.Message}（自动重连已耗尽，将每 30 秒尝试自愈）"
                 : "[连接] SignalR 连接已关闭（自动重连已耗尽，将每 30 秒尝试自愈）");
@@ -313,7 +390,8 @@ public class SignalRClient : IAsyncDisposable
         var old = _gateway;
         _gateway = gateway;
         // A pending replacement cannot publish batch starts before MainViewModel adopts it.
-        if (CoordinateRoomJoin is null) await RestoreCoordinatedBatchAsync(gateway, cancellationToken);
+        if (CoordinateRoomJoin is null && !_awaitingRoomSwitchCommit)
+            await RestoreCoordinatedBatchAsync(gateway, cancellationToken);
         // 旧实例（上次失败/掉线残留）在新实例就位后释放，避免双连接并发收发
         if (old != null)
         {
@@ -341,19 +419,37 @@ public class SignalRClient : IAsyncDisposable
         gateway.EnvelopeReceived += ObserveJoin;
         try
         {
-            await gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
+            var response = await gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlJoinRoom, new
             {
                 roomCode,
                 password,
                 playerUid,
                 playerName,
-                allowedUids = teamUids, // 服务器路由键名是 allowedUids（GatewayDispatcher.ControlRoom.cs）
+                allowedUids = teamUids,
                 isRemote,
+                requireReady = _awaitingRoomSwitchCommit,
                 clientInstanceId = _clientInstanceId,
                 machineId = HostMachineIdentity.Current
             }, ct: cancellationToken);
+            if (response.Payload?["success"]?.GetValue<bool>() == false)
+                throw new RoomJoinRejectedException(response.GetString("reason", "服务端拒绝入房"));
+            if (_awaitingRoomSwitchCommit)
+            {
+                if (response.Payload?["success"]?.GetValue<bool>() != true
+                    || response.Get<ControlRoomPlayersUpdate>("playersUpdate") is not { Full: true } snapshot)
+                    throw new ControlChannelUnavailableException("目标房间入房结果或全量成员未确认");
+                PreparedRoomSnapshot = snapshot;
+                _preparedRoomEpoch = DesktopControlEpoch;
+                return;
+            }
+            if (response.Payload?["success"]?.GetValue<bool>() == true
+                && response.Get<ControlRoomPlayersUpdate>("playersUpdate") is { Full: true } current)
+            {
+                ApplyRoomSnapshot(current);
+                return;
+            }
             if (await joined.Task.WaitAsync(cancellationToken) is { } rejection)
-                throw new ControlChannelUnavailableException("加入控制房间失败：" + rejection);
+                throw new RoomJoinRejectedException("加入控制房间失败：" + rejection);
         }
         finally { gateway.EnvelopeReceived -= ObserveJoin; }
     }
@@ -583,7 +679,7 @@ public class SignalRClient : IAsyncDisposable
             await JoinControlRoomAsync(gateway, roomCode, password, playerUid, playerName, teamUids, isRemote, token);
             token.ThrowIfCancellationRequested();
             if (_retired || !gateway.IsConnected) throw new ControlChannelUnavailableException("入房期间连接已失效");
-            _roomReady = true;
+            _roomReady = !_awaitingRoomSwitchCommit;
         }
         if (CoordinateRoomJoin is { } coordinate)
             await coordinate(this, Join, budget.Token);
@@ -736,7 +832,8 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task SendRemoteCommandAsync(RemoteCommand command)
     {
-        if (_gateway == null) return;
+        if (_gateway == null || _retired || _awaitingRoomSwitchCommit
+            || !string.IsNullOrEmpty(command.RoomCode) && command.RoomCode != _roomCode) return;
         command.RoomCode = _roomCode;
         try
         {
@@ -764,8 +861,9 @@ public class SignalRClient : IAsyncDisposable
     {
         if (command.Cmd is not (RemoteCenterProtocol.RequestCommand or RemoteCenterProtocol.ReplyCommand))
             throw new ArgumentException("不是远程中心命令", nameof(command));
-        if (_gateway == null || !IsConnected)
-            throw new InvalidOperationException("控制房间未连接");
+        if (_gateway == null || !IsConnected || _retired || _awaitingRoomSwitchCommit
+            || !string.IsNullOrEmpty(command.RoomCode) && command.RoomCode != _roomCode)
+            throw new InvalidOperationException("控制房间未连接或命令所属房间已变化");
         command.RoomCode = _roomCode;
         await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlSendCommand, new { command });
     }
@@ -842,8 +940,9 @@ public class SignalRClient : IAsyncDisposable
         }
         try
         {
-            await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportOnlineEvent, new { generation, isOnlineReady });
-            return true;
+            var reply = await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportOnlineEvent,
+                new { roomCode = _roomCode, generation, isOnlineReady });
+            return reply.Payload?["success"]?.GetValue<bool>() ?? reply.Payload?["ack"]?.GetValue<bool>() == true;
         }
         catch (Exception ex)
         {
@@ -853,6 +952,18 @@ public class SignalRClient : IAsyncDisposable
             OnLog?.Invoke($"ReportOnlineEventAsync 调用失败: {ex.Message}");
             return false;
         }
+    }
+
+    internal async Task<bool> ReportRoomChainOnlineAsync(int generation, CancellationToken ct)
+    {
+        var gateway = _gateway;
+        if (gateway is null || !IsControlRoomReady || _awaitingRoomSwitchCommit)
+            throw new ControlChannelUnavailableException("目标房间尚未就绪");
+        var reply = await gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlReportOnlineEvent,
+            new { roomCode = _roomCode, generation, isOnlineReady = true }, ct: ct);
+        if (reply.Payload?["success"] is not { } accepted)
+            throw new ControlChannelUnavailableException("目标房间上线业务结果未确认");
+        return accepted.GetValue<bool>();
     }
 
     /// <summary>清除指定成员的 OnlineHistory（已联机记录），由本人或房主调用。</summary>

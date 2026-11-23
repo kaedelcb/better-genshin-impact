@@ -108,9 +108,12 @@ public sealed class RoomLogContext
         lock (_gate)
         {
             source = "完整成员名单与已认证控制房间配置一致";
-            if (session.BatchId is not null && _batches.TryGetValue(session.BatchId, out var batch)
-                && batch.Uids.SequenceEqual(roster) && !_ambiguousCodes.Contains(batch.ControlCode))
+            if (session.BatchId is not null)
             {
+                // 同一队 UID 可以使用多个控制房间，显式批次只信服务端确认的归属。
+                // 尚未联到本进程的批次保留原游戏日志，不能误记到同名单的旧房间。
+                if (!_batches.TryGetValue(session.BatchId, out var batch) || !batch.Uids.SequenceEqual(roster)
+                    || _ambiguousCodes.Contains(batch.ControlCode)) return;
                 controlCode = batch.ControlCode;
                 verifiedBatchId = session.BatchId;
                 source = "服务端控制批次身份与完整参与名单一致";

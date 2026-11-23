@@ -1,27 +1,39 @@
 namespace BgiCoordinatorServer.Gateway;
 
-/// <summary>路由表注册：控制房间族（control.* 共 7 条，JoinControlRoom/SendRemoteCommand/ReportStatus/
-/// ReportCommandResult/ConfirmAllReady/ReportOnlineEvent/ClearOnlineHistory 与旧方法一一对应，
-/// ReportCommandResult 为纯新增回执口无旧方法）。
-/// JoinRejected/RemoteCommandAck 走事件（evt 双发），响应一律 ack。</summary>
+/// <summary>控制房间命令与业务回执；未 opt-in 的旧入房继续使用 JoinRejected/成员列表事件。</summary>
 public sealed partial class GatewayDispatcher
 {
     partial void RegisterControlRoom()
     {
+        _commands[GatewayProtocol.Names.ControlCreateRoom] = (env, ctx) => Task.FromResult<object?>(
+            _ops.CreateControlRoom(ctx, GetString(env, "password"), GetString(env, "playerUid"),
+                GetStringList(env, "allowedUids") ?? []));
+
         _commands[GatewayProtocol.Names.ControlJoinRoom] = async (env, ctx) =>
         {
-            await _ops.JoinControlRoomAsync(ctx,
-                GetString(env, "roomCode"),
+            var result = await _ops.JoinControlRoomAsync(ctx,
+                GetString(env, "roomCode", env.RoomCode ?? ""),
                 GetString(env, "password"),
                 GetString(env, "playerUid"),
                 GetString(env, "playerName"),
                 GetStringList(env, "allowedUids"),
                 GetBool(env, "isRemote"),
                 GetString(env, "clientInstanceId"),
-                GetString(env, "machineId"));
-            // 旧方法返回 Task 无值，JoinRejected 走事件
+                GetString(env, "machineId"),
+                GetBool(env, "requireReady"));
+            if (env.Payload?.ContainsKey("requireReady") == true) return result;
             return new { ack = true };
         };
+
+        _commands[GatewayProtocol.Names.ControlReadyRoom] = async (env, ctx) =>
+            await _ops.ReadyControlRoomAsync(ctx, Get<Models.ControlStatus>(env, "status"));
+        _commands[GatewayProtocol.Names.ControlLeaveRoom] = async (env, ctx) =>
+            await _ops.LeaveControlRoomAsync(ctx, GetString(env, "roomCode", env.RoomCode ?? ""));
+        _commands[GatewayProtocol.Names.ControlRoomSnapshot] = _queries[GatewayProtocol.Names.ControlRoomSnapshot]
+            = async (env, ctx) => await _ops.GetControlRoomSnapshotAsync(ctx, GetString(env, "roomCode", env.RoomCode ?? ""));
+        _commands[GatewayProtocol.Names.ControlRoomAccess] = _queries[GatewayProtocol.Names.ControlRoomAccess]
+            = (env, _) => Task.FromResult<object?>(_ops.GetControlRoomAccess(GetString(env, "roomCode", env.RoomCode ?? ""),
+                GetString(env, "password"), GetString(env, "playerUid")));
 
         _commands[GatewayProtocol.Names.ControlSendCommand] = async (env, ctx) =>
         {
@@ -120,12 +132,8 @@ public sealed partial class GatewayDispatcher
         };
 
         _commands[GatewayProtocol.Names.ControlReportOnlineEvent] = async (env, ctx) =>
-        {
-            await _ops.ReportOnlineEventAsync(ctx,
-                GetInt(env, "generation"),
-                GetBool(env, "isOnlineReady"));
-            return new { ack = true };
-        };
+            await _ops.ReportOnlineEventAsync(ctx, GetInt(env, "generation"),
+                GetBool(env, "isOnlineReady"), GetString(env, "roomCode", env.RoomCode ?? ""));
 
         _commands[GatewayProtocol.Names.ControlClearOnlineHistory] = async (env, ctx) =>
         {

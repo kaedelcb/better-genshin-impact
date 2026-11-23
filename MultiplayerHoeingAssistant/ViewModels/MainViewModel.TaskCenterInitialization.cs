@@ -10,7 +10,14 @@ public partial class MainViewModel
     private void InitializeTaskCenterCompatibility()
     {
         EnsureSamePackageBgiPath();
-        if (IsExecutorMode) _ = TaskCenterHost;
+        if (IsExecutorMode) ConfigureTaskCenterRoomSwitch(TaskCenterHost);
+    }
+
+    internal void ConfigureTaskCenterRoomSwitch(TaskCenterHost host)
+    {
+        host.FlowRuntime.SwitchRoomAsync ??= SwitchAssistantRoomForFlowAsync;
+        host.FlowRuntime.IsRoomIdentityCurrent ??= IsAssistantRoomIdentityCurrent;
+        host.FlowRuntime.IsRoomSwitchRecoveryClear ??= () => !RoomSwitchHasPendingRequest && GetAssistantRoomIdentity() is not null;
     }
 
     private IpcClient CreateConfiguredIpcClient() => new(ResolveConfiguredBgiDirectory());

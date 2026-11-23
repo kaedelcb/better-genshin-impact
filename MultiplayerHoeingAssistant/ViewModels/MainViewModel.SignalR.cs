@@ -25,7 +25,7 @@ public partial class MainViewModel
 
     private void InvalidateChangedControlSettings(AssistConfig config)
     {
-        var room = AssistConfigManager.GenerateControlRoomCode(config.TeamUids);
+        var room = config.EffectiveRoomCode;
         if (ControlSettingsIdentity(_config, RoomCode) != ControlSettingsIdentity(config, room))
             InvalidateCoordinatedControlContext();
     }
@@ -74,7 +74,7 @@ public partial class MainViewModel
         }
         using (await _controlAuthority.EnterAsync(budget.Token))
         {
-            if (client.IsRetired || client.ControlContext != CurrentControlContext()
+            if (RoomSwitchBlocksRoomOperations || client.IsRetired || client.ControlContext != CurrentControlContext()
                 || !ReferenceEquals(client, _signalRClient) && !ReferenceEquals(client, _pendingControlClient))
                 throw new ControlChannelUnavailableException("旧连接回调不能重新取得房间身份");
             if (ReferenceEquals(client, _pendingControlClient) && _signalRClient is { } old
@@ -222,7 +222,7 @@ public partial class MainViewModel
         await _connectionAttemptGate.WaitAsync(cancellationToken);
         try
         {
-            if (client.ControlContext != CurrentControlContext() || IsStandaloneMode)
+            if (RoomSwitchBlocksRoomOperations || client.ControlContext != CurrentControlContext() || IsStandaloneMode)
                 throw new OperationCanceledException("连接参数已变化", cancellationToken);
             _pendingControlClient = client;
             await client.ConnectAsync(
@@ -230,7 +230,7 @@ public partial class MainViewModel
                 _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
                 _config.BypassSystemProxy, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsStandaloneMode || client.ControlContext != CurrentControlContext())
+            if (RoomSwitchBlocksRoomOperations || IsStandaloneMode || client.ControlContext != CurrentControlContext())
                 throw new OperationCanceledException("连接完成时原房间身份已撤销", cancellationToken);
             await AdoptConnectedSignalRClientAsync(client, message, fireRefreshCompleted, cancellationToken);
         }
@@ -292,7 +292,7 @@ public partial class MainViewModel
         _retryTimer?.Dispose();
         _retryTimer = new Timer(async _ =>
         {
-            if (!TryEnterConfigTransferOperation("connection_retry", out var transferOperation)) return;
+            if (RoomSwitchBlocksRoomOperations || !TryEnterConfigTransferOperation("connection_retry", out var transferOperation)) return;
             using var configTransferOperation = transferOperation;
             // 上次重试的 StartAsync 可能还挂着（假死服务器协商超时 ~100s），不叠加（详见 _retryRunning 注释）
             if (Interlocked.CompareExchange(ref _retryRunning, 1, 0) != 0) return;
@@ -344,6 +344,7 @@ public partial class MainViewModel
 
     private async Task ConnectSignalRAsync()
     {
+        if (RoomSwitchBlocksRoomOperations || string.IsNullOrEmpty(RoomCode)) return;
         // 离线优先：手动单机或服务器地址留空 = 单机模式，完全不发起连接（不连接/不重试/不刷失败日志）。
         // 本地状态采集循环独立于本方法运行（InitializeAsync 里已启动），槲寄生等本地功能不受影响。
         if (IsStandaloneMode)
@@ -456,7 +457,7 @@ public partial class MainViewModel
     /// </summary>
     private void ScheduleSignalRRecovery(SignalRClient expected)
     {
-        if (_disposing || IsStandaloneMode || !CanEditConfiguration) return;
+        if (_disposing || IsStandaloneMode || RoomSwitchBlocksRoomOperations || !CanEditConfiguration) return;
         _connectionRecoveryTimer?.Dispose();
         _connectionRecoveryTimer = new Timer(async _ =>
         {
@@ -464,7 +465,7 @@ public partial class MainViewModel
             try
             {
                 if (_disposing || IsStandaloneMode || !ReferenceEquals(_signalRClient, expected)
-                    || expected.IsControlRoomReady) return;
+                    || RoomSwitchBlocksRoomOperations || expected.IsControlRoomReady) return;
                 if (Volatile.Read(ref _refreshRunning) != 0)
                 {
                     ScheduleSignalRRecovery(expected);

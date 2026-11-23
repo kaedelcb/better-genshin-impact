@@ -49,6 +49,7 @@ public static class HandoffReasonCodes
     public const string FlowUnavailable = "FlowUnavailable";
     /// <summary>BGI 离线或 ext 通道未就绪。</summary>
     public const string NotReady = "NotReady";
+    public const string AssistantRoomChanged = "AssistantRoomChanged";
     /// <summary>宿主已关闭。</summary>
     public const string Shutdown = "Shutdown";
     /// <summary>受理路径异常（兜底；按终止链处置）。</summary>
@@ -87,6 +88,8 @@ public sealed class StartupHandoffRequest
 {
     /// <summary>继承来源挂载/明确意图的原基线；移交不得刷新当前版本。</summary>
     public WorkflowStopAuthorityRecord? StopAuthority { get; init; }
+    /// <summary>上游切房已确认的连接身份；仅供同一进程内的移交，不落盘。</summary>
+    [JsonIgnore] internal string? AssistantRoomIdentity { get; init; }
     public string ExecutionId { get; init; } = "";
     public string StepId { get; init; } = "";
     public string? TriggerKind { get; init; }

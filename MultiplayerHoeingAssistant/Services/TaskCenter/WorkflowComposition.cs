@@ -270,7 +270,7 @@ public static class TaskFlowNodeCatalog
 {
     public static bool IsTrigger(string kind) => kind is StartupStepKinds.TimerTrigger or StartupStepKinds.LogTrigger or StartupStepKinds.Watchdog;
     public static IReadOnlyList<StartupStepKinds.KindInfo> All => StartupStepKinds.All.Where(k => k.NodeType == "condition"
-        || k.Key is StartupStepKinds.SetRegister or StartupStepKinds.Wait or StartupStepKinds.StartProgram
+        || k.Key is StartupStepKinds.SetRegister or StartupStepKinds.Wait or StartupStepKinds.StartProgram or StartupStepKinds.SwitchAssistantRoom
         || IsTrigger(k.Key)).ToArray();
     public static IEnumerable<StartupStep> Flatten(IEnumerable<StartupStep> steps)
     {
@@ -280,10 +280,15 @@ public static class TaskFlowNodeCatalog
             foreach (var c in Flatten(s.TrueSteps.Concat(s.FalseSteps).Concat(s.FireSteps).Concat(s.BeforeAttemptSteps))) yield return c;
         }
     }
+    internal static bool HasRoomSwitch(WorkflowFlowDefinition? flow)
+        => flow is not null && StartupStepNumbering.OrdinarySteps(flow.Steps)
+            .Any(s => s.Enabled && s.Kind == StartupStepKinds.SwitchAssistantRoom);
+
     public static IReadOnlyList<string> Validate(WorkflowFlowDefinition flow)
     {
         var errors = new List<string>();
         var steps = Flatten(flow.Steps).ToArray();
+        var ordinarySteps = StartupStepNumbering.OrdinarySteps(flow.Steps).ToHashSet();
         if (steps.Any(s => string.IsNullOrWhiteSpace(s.Id)) || steps.GroupBy(s => s.Id).Any(g => g.Count() > 1))
             errors.Add("流程内部节点身份重复或缺失");
         if (flow.ExitStepId is { Length: > 0 } exit && (flow.Steps.LastOrDefault() is not { NodeType: "condition" } end || end.Id != exit || !end.Enabled || end.TrueSteps.Count > 0 || end.FalseSteps.Count > 0))
@@ -292,6 +297,12 @@ public static class TaskFlowNodeCatalog
         {
             var kind = All.FirstOrDefault(k => k.Key == s.Kind);
             if (kind is null || kind.NodeType != s.NodeType) errors.Add($"任务流程不支持节点 {s.Kind} 或其类型不符");
+            if (s.Kind == StartupStepKinds.SwitchAssistantRoom)
+            {
+                if (string.IsNullOrWhiteSpace(s.RoomProfileId)) errors.Add("切换助手房间必须选择目标房间档案");
+                if (!string.IsNullOrEmpty(flow.ExitStepId) || !ordinarySteps.Contains(s))
+                    errors.Add("切换助手房间只支持流程主链和普通条件分支，不支持后台或车道选择步骤");
+            }
             if (IsTrigger(s.Kind))
             {
                 if (s.TriggerScope is not ("flow" or "task" or "round")) errors.Add("触发器作用范围无效");

@@ -43,9 +43,10 @@ public partial class MainViewModel
         _ = Task.Run(async () =>
         {
             object reply;
+            using var roomEffect = TryEnterAssistantRoomEffect();
             try
             {
-                if (!CurrentRequest())
+                if (roomEffect is null || !CurrentRequest())
                     reply = WebReply("rejected", "请求已过期或连接已变化，未执行");
                 else
                     reply = await Application.Current.Dispatcher.InvokeAsync(

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Security.Cryptography;
@@ -9,9 +10,14 @@ namespace MultiplayerHoeingAssistant.Services;
 
 public class AssistConfigManager
 {
+    private static readonly JsonSerializerOptions ReadOptions = new() { PropertyNameCaseInsensitive = true };
+    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
     private readonly string _configPath;
+    private readonly string _legacyFireDatePath;
     private readonly object _configWriteGate = new();
     private bool _configTransferActive;
+
+    public string? RoomProfileMigrationWarning { get; private set; }
     internal void SetConfigTransferActive(bool active)
     {
         lock (_configWriteGate) _configTransferActive = active;
@@ -27,6 +33,7 @@ public class AssistConfigManager
         ConfigTransferService.RecoverInterruptedImport(dir);
         System.IO.Directory.CreateDirectory(dir);
         _configPath = System.IO.Path.Combine(dir, "assistant-config.json");
+        _legacyFireDatePath = Path.Combine(dir, "assistant-online-fired-date.txt");
 
         // 旧版基于 exe 目录的配置路径（历史版本）。若存在且新路径无配置，则迁移。
         var appDir = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".";
@@ -62,15 +69,34 @@ public class AssistConfigManager
     /// </summary>
     public AssistConfig Load()
     {
+        RoomProfileMigrationWarning = null;
         if (!AssistantDataDirectory.IsExplicit) MigrateIfNeeded();
-        if (!System.IO.File.Exists(_configPath))
+        if (!File.Exists(_configPath))
         {
+            if (File.Exists(_legacyFireDatePath))
+                RoomProfileMigrationWarning = "旧定时上线记录无法确定所属房间，已原样保留，请核对。";
             return new AssistConfig();
         }
         try
         {
-            var json = System.IO.File.ReadAllText(_configPath);
-            return System.Text.Json.JsonSerializer.Deserialize<AssistConfig>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new AssistConfig();
+            var json = File.ReadAllText(_configPath);
+            var config = JsonSerializer.Deserialize<AssistConfig>(json, ReadOptions) ?? new AssistConfig();
+            if (config.EnsureRoomProfiles())
+            {
+                LoadLegacyScheduledFireDate(config);
+                if (!TryStore(config, expectedRaw: json))
+                    RoomProfileMigrationWarning = "旧房间档案未能保存，原配置仍保留；可重启重试。 " + RoomProfileMigrationWarning;
+            }
+            else if (config.ActiveRoomProfile is { } active)
+            {
+                active.ApplyTo(config);
+            }
+            else if (config.ActiveRoomProfileId.Length > 0 || (config.RoomProfiles.Count == 0
+                && (config.TeamUids is { Count: > 0 } || File.Exists(_legacyFireDatePath))))
+            {
+                RoomProfileMigrationWarning = "无法确定当前房间，旧配置和历史记录已保留，请在房间管理中核对。";
+            }
+            return config;
         }
         catch (Exception ex)
         {
@@ -90,17 +116,91 @@ public class AssistConfigManager
         }
     }
 
-    /// <summary>[A0 容错] 原子写：先写 .tmp 再覆盖移动，杜绝半截写入制造坏配置；失败内部留痕不抛（调用方均无 catch）。</summary>
-    public void Save(AssistConfig config)
+    private void LoadLegacyScheduledFireDate(AssistConfig config)
+    {
+        try
+        {
+            // 文件保持原样。只有旧配置能唯一定位原房间时才接续此记录。
+            var raw = File.ReadAllText(_legacyFireDatePath).Trim();
+            if (DateTime.TryParseExact(raw, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+                || DateTime.TryParse(raw, out date))
+            {
+                config.ScheduledOnlineLastFireDate = date.Date;
+                return;
+            }
+        }
+        catch (FileNotFoundException) { return; }
+        catch (IOException ex) { System.Diagnostics.Debug.WriteLine($"[AssistConfig] 读取旧定时记录失败: {ex.Message}"); }
+        catch (UnauthorizedAccessException ex) { System.Diagnostics.Debug.WriteLine($"[AssistConfig] 读取旧定时记录失败: {ex.Message}"); }
+
+        if (!string.IsNullOrEmpty(config.ScheduledOnlineTime)) config.ScheduledOnlineRequiresConfirmation = true;
+        RoomProfileMigrationWarning = "旧定时上线记录无法读取，原文件已保留，请核对房间的定时设置。";
+    }
+
+    /// <summary>普通设置保存沿用失败不抛；切房等须确认落盘的提交使用 TrySave。</summary>
+    public void Save(AssistConfig config) => TrySave(config);
+
+    public bool TrySave(AssistConfig config) => TryStore(config);
+
+    private bool TryStore(AssistConfig config, string? expectedRaw = null, bool rawEdit = false)
     {
         lock (_configWriteGate)
         {
-            if (_configTransferActive) return;
-            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            if (!LocalPeerSyncService.WriteFileAtomic(_configPath, json))
+            if (_configTransferActive) return false;
+            try
             {
-                System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置保存失败（已内部容错）: {_configPath}");
+                using var writing = ConfigFileWriteGate.Acquire(_configPath);
+                var raw = File.Exists(_configPath) ? File.ReadAllText(_configPath) : null;
+                if (expectedRaw != null && !string.Equals(raw, expectedRaw, StringComparison.Ordinal)) return false;
+                var diskHasRooms = HasStoredRoomProfiles(raw);
+                if (rawEdit)
+                {
+                    // 不能用一份旧格式文本编辑静默覆盖已有的独立档案。
+                    if (diskHasRooms && config.RoomProfiles.Count == 0) return false;
+                    config.ActiveRoomProfile?.ApplyTo(config);
+                }
+                config.EnsureRoomProfiles();
+                if (config.RoomProfiles.Count > 0 && !diskHasRooms && raw != null && !BackUpBeforeRoomProfiles(raw))
+                    return false;
+                config.ActiveRoomProfile?.Capture(config);
+                return LocalPeerSyncService.WriteFileAtomic(_configPath, JsonSerializer.Serialize(config, WriteOptions));
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AssistConfig] 配置保存失败: {ex.Message}");
+                return false;
+            }
+        }
+    }
+
+    private bool BackUpBeforeRoomProfiles(string raw)
+    {
+        var backup = _configPath + $".before-room-profiles-{ConfigRevision(raw)[..12]}.bak";
+        if (!File.Exists(backup))
+        {
+            // 失败不留下半截的正式备份，下一次可重新复制。按原字节保留，不转码。
+            var staging = $"{backup}.{Environment.ProcessId}.tmp";
+            File.Copy(_configPath, staging, overwrite: true);
+            File.Move(staging, backup);
+        }
+        return string.Equals(raw, File.ReadAllText(backup), StringComparison.Ordinal);
+    }
+
+    private static bool HasStoredRoomProfiles(string? raw)
+    {
+        if (raw == null) return false;
+        try
+        {
+            using var document = JsonDocument.Parse(raw);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.EnumerateObject().Any(property =>
+                    string.Equals(property.Name, "roomProfiles", StringComparison.OrdinalIgnoreCase)
+                    && property.Value.ValueKind == JsonValueKind.Array && property.Value.GetArrayLength() > 0);
+        }
+        catch (JsonException)
+        {
+            // 允许从原有损坏配置继续使用；建立首个档案前同样保留原文件。
+            return false;
         }
     }
 
@@ -115,8 +215,7 @@ public class AssistConfigManager
         lock (_configWriteGate)
         {
             var raw = ReadRawJson();
-            var config = JsonSerializer.Deserialize<AssistConfig>(raw,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            var config = JsonSerializer.Deserialize<AssistConfig>(raw, ReadOptions)
                 ?? throw new InvalidDataException("执行端助手配置无法读取");
             return (config.BgiPath, ConfigRevision(raw));
         }
@@ -137,7 +236,7 @@ public class AssistConfigManager
             var root = JsonNode.Parse(raw) as JsonObject
                 ?? throw new InvalidDataException("执行端助手配置不是 JSON 对象");
             root["bgiPath"] = path;
-            var updated = root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            var updated = root.ToJsonString(WriteOptions);
             if (File.Exists(_configPath))
             {
                 var backup = _configPath + "." + expectedRevision[..8] + ".backup.json";
@@ -155,31 +254,20 @@ public class AssistConfigManager
     private static string ConfigRevision(string raw)
         => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
 
-    /// <summary>校验并保存用户编辑的 JSON。成功返回 true，JSON 无效返回 false。</summary>
+    /// <summary>校验并原子保存用户编辑的 JSON，保留文件中的所有档案字段。</summary>
     public bool WriteRawJson(string json)
     {
-        lock (_configWriteGate)
+        try
         {
-            if (_configTransferActive) return false;
-            try
-            {
-                var obj = JsonSerializer.Deserialize<AssistConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (obj == null) return false;
-                // [A0 容错] 同 Save：原子写，杜绝半截写入
-                return LocalPeerSyncService.WriteFileAtomic(_configPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
-            }
-            catch
-            {
-                return false;
-            }
+            var config = JsonSerializer.Deserialize<AssistConfig>(json, ReadOptions);
+            return config != null && TryStore(config, rawEdit: true);
+        }
+        catch (JsonException)
+        {
+            return false;
         }
     }
 
     public static string GenerateControlRoomCode(List<string> playerUids)
-    {
-        var sorted = playerUids.OrderBy(u => u).ToList();
-        var input = string.Join(",", sorted);
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(input));
-        return Convert.ToHexString(hash)[..6];
-    }
+        => AssistConfig.GenerateLegacyRoomCode(playerUids);
 }

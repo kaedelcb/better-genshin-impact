@@ -111,6 +111,7 @@ public sealed class CoordinatedBatchState
     public bool IsTerminal => ExecutionEnded
         && _members.Values.All(m => !m.ResetCleanupPending && (m.Stage == "cleaned" || m.CompletionWaitReleased));
     public IReadOnlyList<string> ParticipantUids => _members.Keys.ToArray();
+    internal bool HasParticipant(string uid) => _members.ContainsKey(uid);
 
     public CoordinatedBatchState(int generation, IEnumerable<string> uids, DateTime now,
         string source = "online", string requestId = "",

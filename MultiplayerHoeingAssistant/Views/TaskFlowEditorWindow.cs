@@ -15,6 +15,7 @@ public sealed class TaskFlowEditorWindow : Window
     private readonly WorkflowFlowDefinition _draft;
     private readonly IReadOnlyList<WorkflowNode> _resources;
     private readonly IReadOnlyList<StartupStep> _allowedPrograms;
+    private readonly Func<IReadOnlyList<RoomSwitchChoice>>? _roomSwitchChoicesProvider;
     private readonly TreeView _tree = new();
     private readonly StackPanel _parameters = new();
     private readonly DockPanel _picker = new();
@@ -49,11 +50,14 @@ public sealed class TaskFlowEditorWindow : Window
     internal IReadOnlyList<MultiplayerHoeingAssistant.ViewModels.JumpTargetChoice>? JumpChoices { get; init; }
     internal ComboBox? JumpChoiceForTest { get; private set; }
 
-    public TaskFlowEditorWindow(WorkflowFlowDefinition source, IEnumerable<WorkflowNode> resources, string? selectedStepId = null, IReadOnlyList<StartupStep>? allowedPrograms = null, bool requireExit = false)
+    public TaskFlowEditorWindow(WorkflowFlowDefinition source, IEnumerable<WorkflowNode> resources, string? selectedStepId = null,
+        IReadOnlyList<StartupStep>? allowedPrograms = null, bool requireExit = false,
+        Func<IReadOnlyList<RoomSwitchChoice>>? roomSwitchChoicesProvider = null)
     {
         _draft = JsonSerializer.Deserialize<WorkflowFlowDefinition>(JsonSerializer.Serialize(source))!;
         _requireExit = requireExit;
         _allowedPrograms = allowedPrograms ?? [];
+        _roomSwitchChoicesProvider = roomSwitchChoicesProvider;
         _resources = resources.Where(n => n.Kind.StartsWith("resource.", StringComparison.Ordinal)).ToArray();
         Title = requireExit ? "添加车道 · 配置出口流程" : "编辑流程";
         Width = 880; Height = 700; MinWidth = 700; MinHeight = 510;
@@ -270,6 +274,7 @@ public sealed class TaskFlowEditorWindow : Window
     public static string DescribeStep(StartupStep s) => s.Kind switch
     {
         StartupStepKinds.Wait => $"等待 {s.WaitSeconds} 秒，再做下一步",
+        StartupStepKinds.SwitchAssistantRoom => string.IsNullOrWhiteSpace(s.RoomProfileId) ? "请选择目标房间" : "等待已选房间就绪",
         StartupStepKinds.SetRegister => RegisterText(s.RegisterWrite?.Values, "设为") is { Length: > 0 } v ? v + "；其他位保持" : "尚未选择要设置的寄存器",
         StartupStepKinds.JudgeRegister => RegisterText(s.RegisterCondition?.Values, "=") is { Length: > 0 } v ? v : "请选择要判断的寄存器",
         StartupStepKinds.LogTrigger => (string.IsNullOrWhiteSpace(s.LogKeyword) ? "等待填写日志关键字" : $"出现「{s.LogKeyword}」")
@@ -284,6 +289,12 @@ public sealed class TaskFlowEditorWindow : Window
         StartupStepKinds.ProcessRunning => $"{s.ProcessName} {(s.ExpectRunning ? "正在运行" : "未运行")}",
         _ => s.ExpectRunning ? "判断是否正在运行" : "判断是否未运行"
     };
+    private string DescribeStepWithRoom(StartupStep step)
+        => step.Kind == StartupStepKinds.SwitchAssistantRoom && !string.IsNullOrWhiteSpace(step.RoomProfileId)
+            && _roomSwitchChoicesProvider is not null
+            ? _roomSwitchChoicesProvider().FirstOrDefault(c => c.Id == step.RoomProfileId)?.Display ?? "已选房间档案不可用"
+            : DescribeStep(step);
+
     private FrameworkElement StepHeader(StartupStep s, int index)
     {
         var panel = new StackPanel { Margin = new Thickness(0, 1, 0, 2) };
@@ -295,7 +306,7 @@ public sealed class TaskFlowEditorWindow : Window
         });
         panel.Children.Add(new TextBlock
         {
-            Text = DescribeStep(s), Foreground = Brush("#C6BAD5"), FontSize = 11, Margin = new Thickness(24, 3, 0, 0),
+            Text = DescribeStepWithRoom(s), Foreground = Brush("#C6BAD5"), FontSize = 11, Margin = new Thickness(24, 3, 0, 0),
             TextWrapping = TextWrapping.Wrap, MaxWidth = 340
         });
         return panel;
@@ -313,9 +324,9 @@ public sealed class TaskFlowEditorWindow : Window
         Walk(_tree);
         if (_stepPreview != null && _selected is { } slot) _stepPreview.Text = PreviewText(slot.Step);
     }
-    private static string PreviewText(StartupStep step)
+    private string PreviewText(StartupStep step)
     {
-        if (!IsTrigger(step) || step.FireSteps.Count == 0) return DescribeStep(step);
+        if (!IsTrigger(step) || step.FireSteps.Count == 0) return DescribeStepWithRoom(step);
         var trigger = step.Kind == StartupStepKinds.LogTrigger && !string.IsNullOrWhiteSpace(step.LogKeyword)
             ? $"出现「{step.LogKeyword}」" : DescribeStep(step);
         return trigger + " → " + string.Join("；", step.FireSteps.Take(2).Select(DescribeStep))
@@ -413,6 +424,10 @@ public sealed class TaskFlowEditorWindow : Window
     private static bool Contains(IEnumerable<StartupStep> chain, StartupStep target)
         => chain.Any(s => ReferenceEquals(s, target) || Contains(s.TrueSteps.Concat(s.FalseSteps).Concat(s.FireSteps).Concat(s.BeforeAttemptSteps), target));
 
+    private bool CanAddRoomSwitch(ChainChoice? choice)
+        => choice?.Background == false && !_requireExit && string.IsNullOrEmpty(_draft.ExitStepId)
+            && _roomSwitchChoicesProvider is not null;
+
     private void RefreshCatalog()
     {
         _catalog.Children.Clear();
@@ -423,6 +438,7 @@ public sealed class TaskFlowEditorWindow : Window
             StartupStepKinds.GameRunning, StartupStepKinds.ProcessRunning, StartupStepKinds.BgiTaskRunning,
             StartupStepKinds.BgiTaskName, StartupStepKinds.ManualConfirm, StartupStepKinds.JudgeRegister,
             StartupStepKinds.TimerTrigger, StartupStepKinds.Watchdog, StartupStepKinds.LogTrigger };
+        if (CanAddRoomSwitch(_addTarget)) permitted.Add(StartupStepKinds.SwitchAssistantRoom);
         foreach (var group in TaskFlowNodeCatalog.All.Where(k => permitted.Contains(k.Key))
                      .Where(k => !background || k.Key is StartupStepKinds.Wait or StartupStepKinds.SetRegister || k.NodeType == "condition" && k.Key != StartupStepKinds.ManualConfirm)
                      .GroupBy(k => k.NodeType == "condition" ? "判断" : k.Key is StartupStepKinds.TimerTrigger or StartupStepKinds.Watchdog or StartupStepKinds.LogTrigger ? "触发器" : "动作"))
@@ -439,7 +455,7 @@ public sealed class TaskFlowEditorWindow : Window
 
     private void Add(string kind)
     {
-        if (_addTarget is not { } choice) return;
+        if (_addTarget is not { } choice || (kind == StartupStepKinds.SwitchAssistantRoom && !CanAddRoomSwitch(choice))) return;
         var s = StartupStepKinds.Create(kind);
         if (IsTrigger(s)) s.TriggerScope = "round";
         var at = _insertAfter is not null && choice.Chain.Contains(_insertAfter)
@@ -571,6 +587,9 @@ public sealed class TaskFlowEditorWindow : Window
             case StartupStepKinds.SetRegister: Register(s, false); break;
             case StartupStepKinds.JudgeRegister: Register(s, true); break;
             case StartupStepKinds.Wait: Number("等待秒数", s.WaitSeconds, 0, 86400, v => s.WaitSeconds = v); break;
+            case StartupStepKinds.SwitchAssistantRoom:
+                RoomSwitchParameters(s);
+                break;
             case StartupStepKinds.TimeRange: Time("开始时间", s.TimeStart, v => s.TimeStart = v); Time("结束时间", s.TimeEnd, v => s.TimeEnd = v); break;
             case StartupStepKinds.Weekday:
                 var wrap = new WrapPanel(); _parameters.Children.Add(wrap);
@@ -608,6 +627,32 @@ public sealed class TaskFlowEditorWindow : Window
                 break;
         }
     }
+    private void RoomSwitchParameters(StartupStep step)
+    {
+        var choices = _roomSwitchChoicesProvider?.Invoke() ?? [];
+        var selected = choices.FirstOrDefault(c => c.Id == step.RoomProfileId);
+        if (selected is null && step.RoomProfileId is { Length: > 0 } missing)
+        {
+            selected = new RoomSwitchChoice(missing, "已选房间档案不可用");
+            choices = [.. choices, selected];
+        }
+        var combo = new ComboBox { ItemsSource = choices, SelectedItem = selected, MinWidth = 180,
+            IsEnabled = _roomSwitchChoicesProvider is not null && choices.Count > 0 };
+        AutomationProperties.SetName(combo, "目标房间");
+        ThemeCombo(combo);
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (combo.SelectedItem is not RoomSwitchChoice choice) return;
+            step.RoomProfileId = choice.Id;
+            RefreshStepHeaders();
+        };
+        var row = Row("目标房间（必选）");
+        row.Children.Add(combo);
+        row.Children.Add(new TextBlock { Text = _roomSwitchChoicesProvider is null ? "请在执行端选择本机档案。"
+            : choices.Count == 0 ? "请先在耕地机页保存房间档案。" : "目标房间就绪后才继续。",
+            Foreground = Brush("#C9BED5"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) });
+    }
+
     private void TriggerParameters(StartupStep s)
     {
         var scopes = new[] { "round", "flow", "task" };
@@ -653,6 +698,9 @@ public sealed class TaskFlowEditorWindow : Window
             {
                 if (s.Kind == StartupStepKinds.SetRegister) RegisterBank.ValidateSelection(s.RegisterWrite?.Values);
                 if (s.Kind == StartupStepKinds.JudgeRegister) RegisterBank.ValidateSelection(s.RegisterCondition?.Values);
+                if (s.Kind == StartupStepKinds.SwitchAssistantRoom && (string.IsNullOrWhiteSpace(s.RoomProfileId)
+                    || _roomSwitchChoicesProvider is not null && !_roomSwitchChoicesProvider().Any(c => c.Id == s.RoomProfileId)))
+                    throw new ArgumentException("请选择本机已保存的目标房间档案。");
                 if (s.Kind == StartupStepKinds.StartProgram && !_allowedPrograms.Any(p => p.Path == s.Path && p.Arguments == s.Arguments && p.WindowsUserName == s.WindowsUserName)) throw new ArgumentException("请选择执行端启动中心已配置的辅助程序目标。");
                 if (s.Kind == StartupStepKinds.LogTrigger && string.IsNullOrWhiteSpace(s.LogKeyword)) throw new ArgumentException("请填写日志关键字。");
                 if (IsTrigger(s) && s.TriggerScope == "task" && !_resources.Any(n => n.NodeId == s.TargetNodeId)) throw new ArgumentException("请选择触发器绑定的任务。");

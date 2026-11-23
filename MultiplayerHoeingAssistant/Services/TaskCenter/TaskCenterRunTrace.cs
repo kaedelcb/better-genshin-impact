@@ -98,6 +98,8 @@ public sealed class TaskCenterRunTrace
                         "yes" or "conditionYes" => NodeRunState.CondTrue,
                         "no" or "conditionNo" => NodeRunState.CondFalse,
                         "waiting" or "executing" => active ? NodeRunState.Running : NodeRunState.Failed,
+                        "failed" => NodeRunState.Failed,
+                        "skipped" => NodeRunState.Skipped,
                         _ => NodeRunState.None,
                     };
                     if (state != NodeRunState.None) trace._steps[owner + "/" + stepId] = state;

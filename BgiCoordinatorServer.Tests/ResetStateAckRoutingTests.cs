@@ -24,7 +24,7 @@ public sealed class ResetStateAckRoutingTests
 
         VerifyCommand(observer, ack, Times.Once());
         VerifyCommand(executor, ack, Times.Once());
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("owner"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"owner"));
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public sealed class ResetStateAckRoutingTests
         await h.Ops.SendRemoteCommandAsync(Ctx("member"), ack);
 
         VerifyCommand(observer, ack, Times.Once());
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("owner"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"owner"));
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class ResetStateAckRoutingTests
 
         h.LegacyClientProxy.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(),
             It.IsAny<CancellationToken>()), Times.Never);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("offlineOwner"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"offlineOwner"));
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public sealed class ResetStateAckRoutingTests
 
         VerifyCommand(observer, request, Times.Never());
         VerifyCommand(executor, request, executorOnline ? Times.Once() : Times.Never());
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("target"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"target"));
     }
 
     [Fact]

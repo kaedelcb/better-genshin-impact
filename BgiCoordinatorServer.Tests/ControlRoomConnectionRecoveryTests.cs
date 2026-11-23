@@ -75,7 +75,7 @@ public class ControlRoomConnectionRecoveryTests
         Assert.Equal(0, Events(h, GatewayProtocol.Events.ControlBatchStart));
         Assert.Equal(0, Events(h, "control.allReady"));
         Assert.Equal(0, Events(h, GatewayProtocol.LegacyEventMap["RemoteCommand"]));
-        Assert.Single(h.RoomManager.GetAndClearPendingCommands("u0"));
+        Assert.Single(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room, "u0"));
 
         // 恢复后新的遥控命令只投递到原连接一次。
         h.GatewayHub.Invocations.Clear(); h.GatewayClientProxy.Invocations.Clear();

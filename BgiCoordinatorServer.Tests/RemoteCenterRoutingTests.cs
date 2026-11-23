@@ -39,11 +39,11 @@ public sealed class RemoteCenterRoutingTests
         await h.Ops.SendRemoteCommandAsync(Ctx("observer"), Request(room, "sameUid", "instance-a"));
         a.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
         b.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"sameUid"));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             h.Ops.SendRemoteCommandAsync(Ctx("observer"), Request(room, "sameUid", "missing-instance")));
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"sameUid"));
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public sealed class RemoteCenterRoutingTests
         await h.Ops.JoinControlRoomAsync(Ctx("observer"), room, "pw", "sameUid", "监控端", isRemote: true);
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             h.Ops.SendRemoteCommandAsync(Ctx("observer"), Request(room, "otherUid", "instance-a")));
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"sameUid"));
     }
 
     [Fact]
@@ -81,6 +81,6 @@ public sealed class RemoteCenterRoutingTests
         await h.Ops.SendRemoteCommandAsync(Ctx("exec"), reply);
         observer.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"sameUid"));
     }
 }

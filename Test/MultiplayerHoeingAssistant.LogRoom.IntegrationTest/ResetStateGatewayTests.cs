@@ -108,8 +108,8 @@ public sealed class ResetStateGatewayTests
                 Assert.Equal(peerFails ? "failed" : "success", reply.Params!["status"].ToString()));
             var manager = server.Services.GetRequiredService<RoomManager>();
             Assert.Equal(2, manager.GetControlRoomPlayers("CTRL_" + room).Count);
-            Assert.Empty(manager.GetAndClearPendingCommands("owner"));
-            Assert.Empty(manager.GetAndClearPendingCommands("peer"));
+            Assert.Empty(manager.GetAndClearPendingCommands("CTRL_" + room, "owner"));
+            Assert.Empty(manager.GetAndClearPendingCommands("CTRL_" + room, "peer"));
         }
         finally { await server.StopAsync(); }
     }

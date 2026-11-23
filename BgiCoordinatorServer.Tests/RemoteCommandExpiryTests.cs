@@ -11,30 +11,30 @@ public sealed class RemoteCommandExpiryTests
     {
         var manager = new RoomManager(); var command = new RemoteCommand();
         var before = DateTimeOffset.UtcNow;
-        manager.CachePendingCommand("fixture", command);
+        manager.CachePendingCommand("CTRL_", "fixture", command);
         Assert.InRange(command.ExpiresAtUtc!.Value, before.AddMinutes(2), DateTimeOffset.UtcNow.AddMinutes(2));
-        Assert.Single(manager.GetAndClearPendingCommands("fixture"));
-        Assert.Empty(manager.GetAndClearPendingCommands("fixture"));
+        Assert.Single(manager.GetAndClearPendingCommands("CTRL_", "fixture"));
+        Assert.Empty(manager.GetAndClearPendingCommands("CTRL_", "fixture"));
     }
 
     [Fact]
     public void ExpiredCommandNeverEntersPendingDelivery()
     {
         var manager = new RoomManager();
-        manager.CachePendingCommand("fixture", new RemoteCommand { ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1) });
-        Assert.Empty(manager.GetAndClearPendingCommands("fixture"));
+        manager.CachePendingCommand("CTRL_", "fixture", new RemoteCommand { ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1) });
+        Assert.Empty(manager.GetAndClearPendingCommands("CTRL_", "fixture"));
     }
 
     [Fact]
     public void ExpiryIsCheckedAgainOnReconnect()
     {
         var manager = new RoomManager(); var delayed = new RemoteCommand { ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1) };
-        manager.CachePendingCommand("fixture", delayed);
+        manager.CachePendingCommand("CTRL_", "fixture", delayed);
         // Deterministic clock simulation via this fixture's own object; no live server or waiting.
         delayed.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
         var valid = new RemoteCommand { ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(1) };
-        manager.CachePendingCommand("fixture", valid);
-        Assert.Same(valid, Assert.Single(manager.GetAndClearPendingCommands("fixture")));
+        manager.CachePendingCommand("CTRL_", "fixture", valid);
+        Assert.Same(valid, Assert.Single(manager.GetAndClearPendingCommands("CTRL_", "fixture")));
     }
 
     [Fact]

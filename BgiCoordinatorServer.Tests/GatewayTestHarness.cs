@@ -49,9 +49,10 @@ internal sealed class GatewayTestHarness
     public FakeCapabilityLookup Capabilities { get; } = new();
     public GatewayDispatcher Dispatcher { get; }
 
-    public GatewayTestHarness(TimeProvider? worldPlanTimeProvider = null, TimeProvider? screenshotTimeProvider = null)
+    public GatewayTestHarness(TimeProvider? worldPlanTimeProvider = null, TimeProvider? screenshotTimeProvider = null,
+        TimeProvider? controlTimeProvider = null, ControlRoomAuth? controlRoomAuth = null)
     {
-        RoomManager = new RoomManager(50, new Mock<ILogger<RoomManager>>().Object);
+        RoomManager = new RoomManager(50, new Mock<ILogger<RoomManager>>().Object, controlTimeProvider);
 
         LegacyHub.Setup(h => h.Clients.Group(It.IsAny<string>())).Returns(LegacyGroupProxy.Object);
         LegacyHub.Setup(h => h.Clients.Client(It.IsAny<string>())).Returns(LegacyClientProxy.Object);
@@ -80,7 +81,7 @@ internal sealed class GatewayTestHarness
             new Mock<ILogger<GatewayBroadcaster>>().Object);
         var phaseObserver = new RoomPhaseObserver(new Mock<ILogger<RoomPhaseObserver>>().Object);
         Ops = new RoomOperations(RoomManager, new Mock<ILogger<RoomOperations>>().Object, broadcaster, phaseObserver, Capabilities,
-            worldPlanTimeProvider: worldPlanTimeProvider, screenshotTimeProvider: screenshotTimeProvider);
+            worldPlanTimeProvider: worldPlanTimeProvider, screenshotTimeProvider: screenshotTimeProvider, controlRoomAuth: controlRoomAuth);
         Dispatcher = new GatewayDispatcher(Tracker, new Mock<ILogger<GatewayDispatcher>>().Object, Ops);
     }
 

@@ -96,6 +96,7 @@ public partial class MainViewModel
             return new() { ErrorCode = "observer_mode", Message = "遥控端不执行本机任务，停止需发送给对应执行端" };
         if (command.ExpiresAtUtc <= DateTimeOffset.UtcNow)
             return new() { ErrorCode = "request_expired", Message = "停止命令已过期，未执行" };
+        CancelWaitingAssistantRoomSwitch();
         CancelPendingCoordinatedBegin();
         OnlineHoeingBatch? batch;
         lock (_batchGate)

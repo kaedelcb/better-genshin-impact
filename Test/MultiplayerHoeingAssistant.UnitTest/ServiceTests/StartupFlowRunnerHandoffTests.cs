@@ -46,6 +46,45 @@ public class StartupFlowRunnerHandoffTests
         return runner;
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RoomSwitchMustConfirmReadyBeforeHandoff(bool success)
+    {
+        var ready = new TaskCompletionSource<FlowRoomSwitchResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var runner = new StartupFlowRunner(
+            (_, _) => Task.FromResult(new CommandResult { Status = "success" }),
+            (request, _) => { _handoffRequests.Add(request); return Task.FromResult(_handoffResult); },
+            _ => { }, (_, _) => Task.FromResult((true, "测试确认")), _logs.Add, () => null, _ => { },
+            switchRoom: async (id, verify, ct) =>
+            {
+                Assert.Equal("fixture-room", id);
+                await verify(ct);
+                entered.TrySetResult();
+                return await ready.Task.WaitAsync(ct);
+            },
+            roomIdentityCurrent: identity => identity == "confirmed-room-session");
+        var room = new StartupStep { Kind = StartupStepKinds.SwitchAssistantRoom, RoomProfileId = "fixture-room" };
+        var run = runner.RunAsync([room, Handoff()], budget.Token);
+        await entered.Task.WaitAsync(budget.Token);
+        Assert.Empty(_handoffRequests);
+        ready.TrySetResult(success
+            ? new(true, false, "已进入目标房间", "confirmed-room-session")
+            : new(false, false, "目标房间拒绝入房"));
+        if (success)
+        {
+            await run.WaitAsync(budget.Token);
+            Assert.Equal("confirmed-room-session", Assert.Single(_handoffRequests).AssistantRoomIdentity);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<StartupRoomSwitchException>(() => run.WaitAsync(budget.Token));
+            Assert.Empty(_handoffRequests);
+        }
+    }
+
     private static StartupStep Handoff(string flowId = "wf-1", string mode = StartupHandoffModes.Start)
         => new() { Kind = StartupStepKinds.EnterTaskCenter, TaskCenterFlowId = flowId, TaskCenterHandoffMode = mode };
 

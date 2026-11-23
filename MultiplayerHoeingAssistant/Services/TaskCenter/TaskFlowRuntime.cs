@@ -13,10 +13,14 @@ public sealed class TaskFlowOnlineParkException : Exception
     public TaskFlowOnlineParkException() : base("联机锄地接管期间，流程在已保存的步骤等待恢复。") { }
 }
 
+internal sealed class TaskFlowRoomSwitchFailedException(string message) : Exception(message);
+
 /// <summary>执行端共用的任务流程宿主。UI只消费快照；订阅、回调和撤销都属于运行实例。</summary>
 public sealed class TaskFlowRuntime
 {
     private readonly ConcurrentDictionary<string, Active> _active = new();
+    private readonly ConcurrentDictionary<string, RoomSwitchWait> _roomSwitches = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, string> _roomDependencies = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _faults = new();
     private readonly ConcurrentDictionary<string, byte> _preparedOnlineRuns = new();
     private SemaphoreSlim _effectGate = new(1, 1);
@@ -35,6 +39,9 @@ public sealed class TaskFlowRuntime
     public IWorkflowObservationSource? ObservationSource { get; set; }
     public Func<StartupStep, CancellationToken, Task<bool>>? ConfirmAsync { get; set; }
     public Func<StartupStep, CancellationToken, Task>? StartProgramAsync { get; set; }
+    public Func<string, Func<CancellationToken, Task>, CancellationToken, Task<FlowRoomSwitchResult>>? SwitchRoomAsync { get; set; }
+    public Func<string, bool>? IsRoomIdentityCurrent { get; set; }
+    internal Func<bool>? IsRoomSwitchRecoveryClear { get; set; }
     public Func<DateTimeOffset> Clock { get; set; } = () => DateTimeOffset.Now;
     public Func<TimeSpan, CancellationToken, Task> DelayAsync { get; set; } = Task.Delay;
     public event Action? Changed;
@@ -63,6 +70,99 @@ public sealed class TaskFlowRuntime
         public string? CoveredSourceInstance;
         public string? CoveredSourcePath;
         public string? CoveredEpoch;
+    }
+
+    // 持久化只有流程进度；真实请求与已就绪的连接身份均不落盘。
+    private const string RoomSwitchPendingKey = "taskFlowRoomSwitchPending";
+    internal const string RoomDependencyKey = "taskFlowRoomDependencyRequired";
+
+    private sealed class RoomSwitchWait(string stepKey, string profileId, string revision, CancellationToken ct)
+    {
+        public string StepKey { get; } = stepKey;
+        public string ProfileId { get; } = profileId;
+        public string Revision { get; } = revision;
+        public TaskCenterDriveAuthority? Authority { get; } = TaskCenterDriveAuthority.Current;
+        public CancellationTokenSource Stop { get; } = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        public TaskCompletionSource<FlowRoomSwitchResult> Result { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public volatile bool SkipRequested;
+    }
+
+    internal static bool HasPendingRoomSwitch(WorkflowRunRecord run) => run.ExtensionData?.ContainsKey(RoomSwitchPendingKey) == true;
+
+    internal static bool IsPendingRoomSwitchStep(WorkflowRunRecord run, string stepKey)
+        => run.ExtensionData?.TryGetValue(RoomSwitchPendingKey, out var pending) == true
+            && pending.ValueKind == JsonValueKind.String && pending.GetString() == stepKey;
+
+    internal static bool RequiresRoomDependency(WorkflowRunRecord run)
+        => HasPendingRoomSwitch(run) || run.ExtensionData?.ContainsKey(RoomDependencyKey) == true
+            || run.Handoffs.Any(h => h.ExtensionData?.ContainsKey(RoomDependencyKey) == true);
+
+    internal bool HasBoundRoomIdentity(string runId, string identity)
+        => _roomDependencies.TryGetValue(runId, out var current) && current == identity;
+
+    internal void BindRoomDependency(string runId, string identity) => _roomDependencies[runId] = identity;
+    internal void ForgetRoomDependency(string runId) => _roomDependencies.TryRemove(runId, out _);
+
+    internal bool VerifyRoomDependency(WorkflowRunRecord run)
+        => !HasPendingRoomSwitch(run) && (!RequiresRoomDependency(run)
+            || _roomDependencies.TryGetValue(run.RunId, out var identity) && IsRoomIdentityCurrent?.Invoke(identity) == true);
+
+    internal bool CanResumeRoomSwitch(WorkflowRunRecord run, string revision)
+        => _roomSwitches.TryGetValue(run.RunId, out var wait) && wait.Authority?.IsRevoked != true
+            && wait.Revision == revision && IsPendingRoomSwitchStep(run, wait.StepKey);
+
+    internal bool IsRoomSwitchSkipRequested(string runId)
+        => _roomSwitches.TryGetValue(runId, out var wait) && wait.SkipRequested;
+
+    internal bool RequestRoomSwitchSkip(WorkflowRunRecord run)
+    {
+        if (!_roomSwitches.TryGetValue(run.RunId, out var wait) || !IsPendingRoomSwitchStep(run, wait.StepKey)) return false;
+        wait.SkipRequested = true;
+        _ = CancelRoomWaitAsync(wait);
+        return true;
+    }
+
+    private static async Task CancelRoomWaitAsync(RoomSwitchWait wait)
+    {
+        try { await wait.Stop.CancelAsync().ConfigureAwait(false); }
+        catch (Exception ex) { Debug.WriteLine(ex); }
+    }
+
+    internal async Task<FlowRoomSwitchResult?> CancelRoomSwitchAsync(string runId, TimeSpan timeout)
+    {
+        if (!_roomSwitches.TryGetValue(runId, out var wait)) return null;
+        _ = CancelRoomWaitAsync(wait);
+        try { return await wait.Result.Task.WaitAsync(timeout).ConfigureAwait(false); }
+        catch (TimeoutException) { return new(false, true, "取消切房后未确认原请求已结束，请在房间页核对"); }
+    }
+
+    internal static bool SettleRoomSwitchCancellation(WorkflowRunRecord run, FlowRoomSwitchResult? result)
+    {
+        if (result is not { Unknown: false } || result.Success && string.IsNullOrWhiteSpace(result.Identity)
+            || run.ExtensionData is not { } data || !data.Remove(RoomSwitchPendingKey, out var pending)) return false;
+        if (pending.ValueKind == JsonValueKind.String && pending.GetString() is { } key)
+            data[key] = JsonSerializer.SerializeToElement("skipped");
+        // 显式跳过不能默默让后继房间动作回退到另一个房间。
+        data[RoomDependencyKey] = JsonSerializer.SerializeToElement(true);
+        return true;
+    }
+
+    internal static bool HasUnconfirmedStep(WorkflowRunRecord run, string nodeId, int round)
+        => run.ExtensionData?.Any(p => p.Key.StartsWith($"taskFlowStep:{nodeId}:{round}:", StringComparison.Ordinal)
+            && p.Value.ValueKind == JsonValueKind.String && p.Value.GetString() == "executing") == true;
+
+    internal async Task CloseSkippedRoomFlowAsync(string runId, string nodeId, CancellationToken ct)
+    {
+        if (_roomSwitches.TryGetValue(runId, out var wait)) ForgetRoomWait(runId, wait);
+        foreach (var a in _active.Values.Where(a => a.View.RunId == runId && a.View.FlowNodeId == nodeId && a.Scope == "flow").ToArray())
+            await CloseAsync(a, ct).ConfigureAwait(false);
+    }
+
+    private void ForgetRoomWait(string runId, RoomSwitchWait wait)
+    {
+        if (!((ICollection<KeyValuePair<string, RoomSwitchWait>>)_roomSwitches).Remove(new(runId, wait))) return;
+        if (wait.Result.Task.IsCompleted) wait.Stop.Dispose();
+        else _ = wait.Result.Task.ContinueWith(_ => wait.Stop.Dispose(), TaskScheduler.Default);
     }
 
     private const string BindingPrefix = "taskFlowBinding:";
@@ -170,6 +270,13 @@ public sealed class TaskFlowRuntime
         lock (_onlineStateGate) _effectGate = new SemaphoreSlim(1, 1);
         _preparedOnlineRuns.Clear();
         _preparedStatusAfter.Clear();
+        foreach (var (runId, wait) in _roomSwitches.ToArray())
+        {
+            if (wait.Authority?.IsRevoked != true) continue;
+            _ = CancelRoomWaitAsync(wait);
+            ForgetRoomWait(runId, wait);
+            ForgetRoomDependency(runId);
+        }
         foreach (var a in _active.Values.Where(a => a.Authority?.IsRevoked == true).ToArray())
         {
             _active.TryRemove(a.View.RuntimeId, out _);
@@ -214,14 +321,21 @@ public sealed class TaskFlowRuntime
             if (await FreezeAsync(a).ConfigureAwait(false) != "complete") throw new WorkflowObservationUnknownException("本轮后台观察未完整结束");
     }
 
+    internal IEnumerable<string> RetainedRoomSwitchRuns => _roomSwitches.Keys;
+
     public async Task CloseRunAsync(string runId, CancellationToken ct = default)
     {
+        if (_roomSwitches.TryGetValue(runId, out var wait))
+        {
+            _ = CancelRoomWaitAsync(wait);
+            ForgetRoomWait(runId, wait);
+        }
         foreach (var a in _active.Values.Where(a => a.View.RunId == runId).ToArray())
             await CloseAsync(a, ct).ConfigureAwait(false);
     }
 
     public async Task<bool?> ExecuteAsync(WorkflowRunRecord run, WorkflowNode node, int round,
-        Action save, CancellationToken ct)
+        Action save, CancellationToken ct, Func<string, CancellationToken, Task>? verifyRoomSource = null)
     {
         if (_faults.TryGetValue(run.RunId, out var error)) throw new WorkflowObservationUnknownException(error);
         foreach (var pair in run.ExtensionData?.Where(p => p.Key.StartsWith(BindingPrefix, StringComparison.Ordinal)) ?? [])
@@ -236,14 +350,14 @@ public sealed class TaskFlowRuntime
         if (errors.Count > 0) throw new InvalidOperationException(string.Join("；", errors));
         foreach (var old in _active.Values.Where(a => a.View.RunId == run.RunId && a.Round != round).ToArray())
             await CloseAsync(old, ct).ConfigureAwait(false);
-        var answer = await ExecuteChainAsync(run, node, flow.Steps, flow.ExitStepId, round, save, ct).ConfigureAwait(false);
+        var answer = await ExecuteChainAsync(run, node, flow.Steps, flow.ExitStepId, round, save, ct, verifyRoomSource).ConfigureAwait(false);
         foreach (var a in _active.Values.Where(a => a.View.RunId == run.RunId && a.View.FlowNodeId == node.NodeId && a.Scope == "flow").ToArray())
             if (await FreezeAsync(a).ConfigureAwait(false) != "complete") throw new WorkflowObservationUnknownException("流程范围内观察未完整结束");
         return answer;
     }
 
     private async Task<bool?> ExecuteChainAsync(WorkflowRunRecord run, WorkflowNode node, IEnumerable<StartupStep> steps,
-        string? exitId, int round, Action save, CancellationToken ct)
+        string? exitId, int round, Action save, CancellationToken ct, Func<string, CancellationToken, Task>? verifyRoomSource)
     {
         bool? answer = null;
         foreach (var step in steps)
@@ -265,7 +379,12 @@ public sealed class TaskFlowRuntime
                     if (step.Id == exitId) answer = state == "yes";
                     continue;
                 }
-                if (state is not ("conditionYes" or "conditionNo" or "waiting"))
+                if (state == "executing" && step.Kind == StartupStepKinds.SwitchAssistantRoom && IsPendingRoomSwitchStep(run, key))
+                {
+                    if (!CanResumeRoomSwitch(run, run.WorkflowRevision))
+                        throw new WorkflowObservationUnknownException("切房原请求已中断，结果待核对，不自动重发");
+                }
+                else if (state is not ("conditionYes" or "conditionNo" or "waiting"))
                     throw new WorkflowObservationUnknownException("流程动作上次结果未确认，不能重放");
                 if (state == "waiting" && step.Kind != StartupStepKinds.Wait
                     || state is "conditionYes" or "conditionNo" && step.NodeType != "condition")
@@ -309,7 +428,12 @@ public sealed class TaskFlowRuntime
             {
                 var passed = state is "conditionYes" or "conditionNo" ? state == "conditionYes" : await EvaluateFlowAsync(step, ct).ConfigureAwait(false);
                 run.ExtensionData[key] = JsonSerializer.SerializeToElement(passed ? "conditionYes" : "conditionNo"); save();
-                await ExecuteChainAsync(run, node, passed ? step.TrueSteps : step.FalseSteps, null, round, save, ct).ConfigureAwait(false);
+                await ExecuteChainAsync(run, node, passed ? step.TrueSteps : step.FalseSteps, null, round, save, ct, verifyRoomSource).ConfigureAwait(false);
+            }
+            else if (step.Kind == StartupStepKinds.SwitchAssistantRoom)
+            {
+                await ExecuteRoomSwitchAsync(run, step, key, save, ct, verifyRoomSource).ConfigureAwait(false);
+                continue; // 房间依赖与本步骤结果同一次保存。
             }
             else
             {
@@ -334,6 +458,89 @@ public sealed class TaskFlowRuntime
             run.ExtensionData[key] = JsonSerializer.SerializeToElement("done"); save();
         }
         return answer;
+    }
+
+    private async Task ExecuteRoomSwitchAsync(WorkflowRunRecord run, StartupStep step, string key,
+        Action save, CancellationToken ct, Func<string, CancellationToken, Task>? verifyRoomSource)
+    {
+        var switchRoom = SwitchRoomAsync ?? throw new TaskFlowRoomSwitchFailedException("助手切房入口未就绪");
+        var profile = step.RoomProfileId;
+        if (string.IsNullOrWhiteSpace(profile)) throw new TaskFlowRoomSwitchFailedException("切换助手房间必须选择目标档案");
+        if (!_roomSwitches.TryGetValue(run.RunId, out var wait))
+        {
+            if (HasPendingRoomSwitch(run)) throw new WorkflowObservationUnknownException("切房原请求已中断，结果待核对，不自动重发");
+            if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
+            run.ExtensionData![RoomSwitchPendingKey] = JsonSerializer.SerializeToElement(key);
+            run.ExtensionData[key] = JsonSerializer.SerializeToElement("executing");
+            save();
+            wait = new RoomSwitchWait(key, profile, run.WorkflowRevision, ct);
+            if (!_roomSwitches.TryAdd(run.RunId, wait))
+            {
+                wait.Stop.Dispose();
+                throw new WorkflowObservationUnknownException("已有切房请求，不能重复派发");
+            }
+            // 只启动一次调用，不持有 _effectGate，也不把联机停驻传给真实请求。
+            _ = ObserveRoomSwitchAsync(wait, switchRoom, token => verifyRoomSource?.Invoke(key, token) ?? Task.CompletedTask);
+        }
+        else if (wait.StepKey != key || wait.ProfileId != profile || wait.Revision != run.WorkflowRevision || wait.Authority?.IsRevoked == true)
+            throw new WorkflowObservationUnknownException("原切房请求与当前步骤身份不一致，禁止重新提交");
+
+        var interrupt = OnlineInterruptToken;
+        using var observation = CancellationTokenSource.CreateLinkedTokenSource(ct, interrupt);
+        if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
+        FlowRoomSwitchResult result;
+        try { result = await wait.Result.Task.WaitAsync(observation.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested && interrupt.IsCancellationRequested)
+        { throw new TaskFlowOnlineParkException(); }
+        ct.ThrowIfCancellationRequested();
+        if (wait.SkipRequested) throw new OperationCanceledException("已请求跳过原切房等待", ct);
+        if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
+        if (result.Unknown || result.Success && string.IsNullOrWhiteSpace(result.Identity))
+            throw new WorkflowObservationUnknownException("切换结果待核对：" + result.Message);
+        if (result.Success && verifyRoomSource is not null)
+        {
+            // 确认回复可能晚于 F11；先复核原来源再让任何后继步骤执行。
+            await verifyRoomSource(key, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (wait.SkipRequested) throw new OperationCanceledException("已请求跳过原切房等待", ct);
+            if (IsOnlineClosed) throw new TaskFlowOnlineParkException();
+        }
+
+        run.ExtensionData!.Remove(RoomSwitchPendingKey);
+        run.ExtensionData[key] = JsonSerializer.SerializeToElement(result.Success ? "done" : "failed");
+        if (result.Success)
+        {
+            run.ExtensionData[RoomDependencyKey] = JsonSerializer.SerializeToElement(true);
+            BindRoomDependency(run.RunId, result.Identity!);
+        }
+        save();
+        ForgetRoomWait(run.RunId, wait);
+        if (!result.Success) throw new TaskFlowRoomSwitchFailedException(result.Message);
+    }
+
+    private static async Task ObserveRoomSwitchAsync(RoomSwitchWait wait,
+        Func<string, Func<CancellationToken, Task>, CancellationToken, Task<FlowRoomSwitchResult>> switchRoom,
+        Func<CancellationToken, Task> verifySource)
+    {
+        FlowRoomSwitchResult result;
+        try
+        {
+            var token = wait.Stop.Token;
+            if (token.IsCancellationRequested)
+                result = new(false, false, "切房请求取消，未提交");
+            else
+            {
+                Task Verify(CancellationToken ct)
+                {
+                    TaskCenterDriveAuthority.VerifyCurrent();
+                    ct.ThrowIfCancellationRequested();
+                    return verifySource(ct);
+                }
+                result = await TaskCenterDriveAuthority.StartPortCall(() => switchRoom(wait.ProfileId, Verify, token)).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex) { result = new(false, true, "切房调用未确认：" + ex.Message); }
+        wait.Result.TrySetResult(result);
     }
 
     private async Task<bool> EvaluateFlowAsync(StartupStep step, CancellationToken ct)

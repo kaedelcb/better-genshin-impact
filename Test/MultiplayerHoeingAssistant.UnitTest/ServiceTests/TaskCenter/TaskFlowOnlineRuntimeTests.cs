@@ -8,6 +8,39 @@ namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests.TaskCenter;
 public sealed class TaskFlowOnlineRuntimeTests
 {
     [Fact]
+    public async Task RoomSwitchWaitReleasesOnlineGateAndResumesTheOriginalRequest()
+    {
+        using var f = new Fixture();
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ready = new TaskCompletionSource<FlowRoomSwitchResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var submissions = 0;
+        f.Runtime.SwitchRoomAsync = async (id, _, ct) =>
+        {
+            Assert.Equal("B", id);
+            Interlocked.Increment(ref submissions);
+            entered.TrySetResult();
+            return await ready.Task.WaitAsync(ct);
+        };
+        f.Runtime.IsRoomIdentityCurrent = identity => identity == "B-confirmed-session";
+        var step = StartupStepKinds.Create(StartupStepKinds.SwitchAssistantRoom);
+        step.RoomProfileId = "B";
+        var flow = Flow(step, Write(1, 1));
+        var first = f.Runtime.ExecuteAsync(f.Run, flow, 0, () => { }, budget.Token);
+        await entered.Task.WaitAsync(budget.Token);
+        await f.Suspend().WaitAsync(budget.Token);
+        await Assert.ThrowsAsync<TaskFlowOnlineParkException>(() => first);
+        Assert.Equal(0, f.Value(1));
+        await f.Open();
+        var resumed = f.Runtime.ExecuteAsync(f.Run, flow, 0, () => { }, budget.Token);
+        ready.TrySetResult(new(true, false, "B ready", "B-confirmed-session"));
+        await resumed.WaitAsync(budget.Token);
+        Assert.Equal(1, f.Value(1));
+        Assert.Equal(1, submissions);
+        Assert.True(f.Runtime.VerifyRoomDependency(f.Run));
+    }
+
+    [Fact]
     public async Task PhysicalResetDropsExternallyDeliveredOldLogCallback()
     {
         using var f = new Fixture();

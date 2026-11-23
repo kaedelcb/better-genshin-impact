@@ -273,20 +273,24 @@
                         Command="{Binding CloseSettingsCommand}"/>
             </Grid>
 
-            <!-- ========== 卡片：房间设置 ========== -->
+            <!-- ========== 卡片：本机与控制房间 ========== -->
             <Border Style="{DynamicResource QuestCard}" Margin="0,0,0,16">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="房间设置" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                        <TextBlock Text="服务器地址、房间密码、玩家信息、UID、BGI 路径"
-                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0"/>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                        <TextBlock Text="本机与控制房间" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
+                        <TextBlock Text="本机设置适用于所有房间；房间密码、成员和预期人数只保存到当前档案。"
+                                   FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <Button Grid.Column="1" Content="打开房间设置" Style="{DynamicResource BtnGold}"
-                            Command="{Binding OpenRoomSettingsCommand}" VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Content="本机设置" Style="{DynamicResource BtnGhost}" Margin="0,0,8,0"
+                                Command="{Binding OpenRoomSettingsCommand}"/>
+                        <Button Content="管理房间" Style="{DynamicResource BtnGold}"
+                                Command="{Binding OpenAssistantRoomsCommand}"/>
+                    </StackPanel>
                 </Grid>
             </Border>
 

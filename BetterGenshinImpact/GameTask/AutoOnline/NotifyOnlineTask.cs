@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.Common;
+using BetterGenshinImpact.Service.Execution;
 using Microsoft.Extensions.Logging;
 
 namespace BetterGenshinImpact.GameTask.AutoOnline;
@@ -24,29 +25,38 @@ public class NotifyOnlineTask : ISoloTask
 
     public string Name => TaskName;
 
-    private static int _nextGeneration = LoadPersistedGeneration();
+    private static int? _nextGeneration;
     private static readonly object _genLock = new();
+    private static Signal _signal = new(0, DateTime.MinValue, null);
+    internal sealed record Signal(int Generation, DateTime TriggeredAt, Guid? WorkflowRunId);
 
     private static string GenerationFilePath => Global.Absolute("User/online_generation.txt");
 
-    /// <summary>当前上线事件的代序号（单调递增）。0 = 从未触发。</summary>
-    public static int CurrentGeneration { get; private set; }
+    internal static Signal ReadSignal() => Volatile.Read(ref _signal);
 
-    /// <summary>最近一次执行的触发时间戳（UTC）。MinValue = 从未触发。</summary>
-    public static DateTime LastTriggeredAt { get; private set; } = DateTime.MinValue;
+    /// <summary>当前普通上线事件的代序号（单调递增）。0 = 从未触发。</summary>
+    public static int CurrentGeneration => ReadSignal().Generation;
 
-    public async Task Start(CancellationToken ct)
+    /// <summary>最近一次普通上线的触发时间戳（UTC）。MinValue = 从未触发。</summary>
+    public static DateTime LastTriggeredAt => ReadSignal().TriggeredAt;
+
+    public Task Start(CancellationToken ct)
     {
-        // 自增 generation，作为本次上线事件的唯一标识
+        // 切过房间的原配置组只走本机收件通道，不写代序号，也不落回旧的上线广播。
+        if (ConfigurationGroupRoomActions.TrySendOnlineAsync(ct) is { } handoff)
+            return handoff;
+
         lock (_genLock)
         {
-            CurrentGeneration = _nextGeneration++;
+            var generation = _nextGeneration ?? LoadPersistedGeneration();
+            var nextGeneration = generation + 1;
+            _nextGeneration = nextGeneration;
+            Volatile.Write(ref _signal, new Signal(generation, DateTime.UtcNow,
+                ExecutionScope.Current?.Descriptor.WorkflowRunId));
+            // 保持普通上线跨 BGI 重启的单调序号。
+            PersistGeneration(nextGeneration);
         }
-        LastTriggeredAt = DateTime.UtcNow;
-        // 自增后立即写盘，保证跨 BGI 重启单调递增。写盘失败仅记日志，不影响主流程。
-        PersistGeneration(_nextGeneration);
-        // 立即返回，不阻塞任务流。
-        await Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     /// <summary>从持久化文件读取下一个 generation。文件不存在/解析失败则从 1 开始（单机用户无感知）。</summary>

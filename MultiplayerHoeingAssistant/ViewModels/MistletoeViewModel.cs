@@ -99,7 +99,11 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             armLogWithSource: (step, source) => ArmLogTrigger(step, source),
             registerBank: _localRegisterService,
             jumpRoot: () => _config.Steps,
-            isTriggerArmed: IsTriggerArmed);
+            isTriggerArmed: IsTriggerArmed,
+            switchRoom: IsRemoteMode ? null : mainVm.SwitchAssistantRoomForFlowAsync,
+            roomIdentityCurrent: IsRemoteMode ? null : mainVm.IsAssistantRoomIdentityCurrent,
+            roomSourceAuthorityProvider: (source, required, ct) => _mainVm.TaskCenterHost.RefreshStartupStopAuthorityAsync(
+                source, required, ct, allowBgiStartOrRebind: false));
         _runner.NodeStateSink = OnNodeStateReported;
         RootChain = new StepChainViewModel(_config.Steps, this, parentCondition: null, branchName: "主流程");
         Renumber();
@@ -145,6 +149,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             _mainVm.TaskCenterHost.ObservationLogTail = _logTail;
             _mainVm.TaskCenterHost.FlowRuntime.Registers = _localRegisterService;
             _mainVm.TaskCenterHost.FlowRuntime.StartProgramAsync = StartConfiguredTaskProgramAsync;
+            _mainVm.ConfigureTaskCenterRoomSwitch(_mainVm.TaskCenterHost);
             _mainVm.TaskCenterHost.FlowRuntime.ConfirmAsync = async (step, ct) =>
                 (await Application.Current.Dispatcher.InvokeAsync(() => ConfirmStepWindow.ShowConfirm(step, Application.Current.MainWindow, ct, "taskCenter"))).passed;
         }
@@ -210,6 +215,14 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 OnPropertyChanged(nameof(AutoLaunchOnBoot));
                 // 启动方式下拉框的 IsEnabled 依赖开关状态，一并刷新
                 OnPropertyChanged(nameof(AutoLaunchOnBootModeIndex));
+            }
+            else if (e.PropertyName is nameof(MainViewModel.RoomSwitchChoices))
+            {
+                RunOnUi(() =>
+                {
+                    foreach (var step in AllStepVms(RootChain).Where(vm => vm.Kind == StartupStepKinds.SwitchAssistantRoom))
+                        step.RefreshRoomSwitchChoices();
+                });
             }
             else if (e.PropertyName is nameof(MainViewModel.AutoLaunchOnBootModeIndex))
             {
@@ -516,6 +529,11 @@ public sealed partial class MistletoeViewModel : ViewModelBase
     public IReadOnlyList<StartupStepKinds.KindInfo> ActionKinds { get; } =
         StartupStepKinds.All.Where(k => k.NodeType == "action").ToList();
 
+    public Func<IReadOnlyList<RoomSwitchChoice>>? RoomSwitchChoicesProvider => IsRemoteMode ? null : GetRoomSwitchChoices;
+
+    internal IReadOnlyList<RoomSwitchChoice> GetRoomSwitchChoices() => IsRemoteMode ? [] : _mainVm.RoomSwitchChoices
+        .Select(profile => new RoomSwitchChoice(profile.Id, $"{profile.Name}（{profile.RoomCode}）")).ToArray();
+
     public bool HasSteps => RootChain.Steps.Count > 0;
 
     // ================= 节点编号与跳转目标 =================
@@ -634,6 +652,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             _selectedStep = value;
             if (_selectedStep != null)
             {
+                if (_selectedStep.Kind == StartupStepKinds.SwitchAssistantRoom) _selectedStep.RefreshRoomSwitchChoices();
                 _selectedStep.IsSelected = true;
                 // R4.9 §5：选中移交节点时刷新目标流程候选（宿主 ListFlows 的 Ready 条目，仅选择体验，执行时宿主权威校验）
                 if (_selectedStep.Kind == StartupStepKinds.EnterTaskCenter)
@@ -730,6 +749,13 @@ public sealed partial class MistletoeViewModel : ViewModelBase
             }
         }
 
+        if (targetChain.IsTriggerChain && StartupStepNumbering.OrdinarySteps([dragged.Model])
+            .Any(s => s.Kind == StartupStepKinds.SwitchAssistantRoom))
+        {
+            _mainVm.AddLog("[槲寄生] 切换助手房间只支持主链和普通条件分支，不能移到后台触发链");
+            return;
+        }
+
         var sourceChain = dragged.OwnerChain;
         var oldIndex = sourceChain.Steps.IndexOf(dragged);
         if (oldIndex < 0) return;
@@ -771,6 +797,7 @@ public sealed partial class MistletoeViewModel : ViewModelBase
         targetChain.Steps.Insert(insertIndex, dragged);
         targetChain.ModelList.Insert(insertIndex, dragged.Model);
         dragged.OwnerChain = targetChain;
+        foreach (var child in dragged.ActiveChildChains) child.RefreshRoomActionAvailability();
         OnPropertyChanged(nameof(HasSteps));
         SaveNow();
         _mainVm.AddLog($"[槲寄生] 节点「{dragged.DisplayName}」已移动到「{targetChain.BranchName}」第 {insertIndex + 1} 位");
@@ -865,6 +892,12 @@ public sealed partial class MistletoeViewModel : ViewModelBase
                 reason == "手动" ? null : new StartupTriggerInfo("startup", "main", source.IntentId) { SourceIntent = source }, source);
             StatusText = $"上次执行完成（{DateTime.Now:HH:mm:ss}，{reason}触发）";
             return HostActionResult.Effective(StatusText);
+        }
+        catch (StartupRoomSwitchException ex)
+        {
+            StatusText = "启动流程已停止后继：" + ex.Message;
+            _mainVm.AddLog("[槲寄生] " + StatusText);
+            return HostActionResult.Unavailable(StatusText);
         }
         catch (OperationCanceledException ex)
         {
@@ -2630,7 +2663,19 @@ public sealed class StepChainViewModel : ViewModelBase
     // ---- 「＋ 添加节点」弹层（每条链各一份状态；目录转发宿主的，主链/分支链写法统一） ----
 
     public IReadOnlyList<StartupStepKinds.KindInfo> ConditionKinds => _owner.ConditionKinds;
-    public IReadOnlyList<StartupStepKinds.KindInfo> ActionKinds => _owner.ActionKinds;
+    internal bool IsTriggerChain => ParentCondition is { } parent
+        && (ReferenceEquals(this, parent.FireChain) || parent.OwnerChain.IsTriggerChain);
+
+    private bool AllowsRoomSwitch => !IsTriggerChain && !_owner.IsRemoteMode;
+    public IReadOnlyList<StartupStepKinds.KindInfo> ActionKinds => AllowsRoomSwitch ? _owner.ActionKinds
+        : _owner.ActionKinds.Where(k => k.Key != StartupStepKinds.SwitchAssistantRoom).ToArray();
+
+    internal void RefreshRoomActionAvailability()
+    {
+        OnPropertyChanged(nameof(ActionKinds));
+        foreach (var step in Steps)
+            foreach (var child in step.ActiveChildChains) child.RefreshRoomActionAvailability();
+    }
 
     private bool _isAddPopupOpen;
     public bool IsAddPopupOpen
@@ -2643,7 +2688,7 @@ public sealed class StepChainViewModel : ViewModelBase
 
     public RelayCommand AddStepCommand => new(p =>
     {
-        if (p is not string kind) return;
+        if (p is not string kind || kind == StartupStepKinds.SwitchAssistantRoom && !AllowsRoomSwitch) return;
         IsAddPopupOpen = false;
         // 链尾节点（结束流程 / 跳转）：链里已有它时不能再添加任何节点（新节点永远追加在尾，必然落在它后面成为死节点）
         if (HasTerminal)
@@ -2974,6 +3019,36 @@ public sealed partial class StartupStepViewModel : ViewModelBase
         set { Model.WindowsUserName = value; Changed(); }
     }
 
+    public string? RoomProfileId
+    {
+        get => Model.RoomProfileId;
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value) || Model.RoomProfileId == value) return;
+            Model.RoomProfileId = value;
+            Changed(nameof(RoomProfileId));
+        }
+    }
+
+    public IReadOnlyList<RoomSwitchChoice> RoomSwitchChoices
+    {
+        get
+        {
+            if (Kind != StartupStepKinds.SwitchAssistantRoom) return [];
+            var choices = _owner.GetRoomSwitchChoices();
+            return RoomProfileId is { Length: > 0 } missing && !choices.Any(c => c.Id == missing)
+                ? [.. choices, new(missing, "已选房间档案不可用")]
+                : choices;
+        }
+    }
+
+    internal void RefreshRoomSwitchChoices()
+    {
+        OnPropertyChanged(nameof(RoomSwitchChoices));
+        OnPropertyChanged(nameof(RoomProfileId));
+        OnPropertyChanged(nameof(Summary));
+    }
+
     public string WaitSecondsText
     {
         get => Model.WaitSeconds.ToString();
@@ -3205,7 +3280,10 @@ public sealed partial class StartupStepViewModel : ViewModelBase
     // ---- 卡片摘要行 ----
 
     public string Summary => (IsAfterTerminal ? "【位于链尾节点之后，不会执行，请移走或删除】" : "")
-        + (IsJump ? JumpSummary(Model, _owner.StepNumbers, _owner.FindStepVmById(Model.JumpTargetId)?.DisplayName) : BuildSummary(Model));
+        + (IsJump ? JumpSummary(Model, _owner.StepNumbers, _owner.FindStepVmById(Model.JumpTargetId)?.DisplayName)
+            : Kind == StartupStepKinds.SwitchAssistantRoom
+                ? RoomSwitchChoices.FirstOrDefault(c => c.Id == RoomProfileId)?.Display ?? "（请选择目标房间）"
+                : BuildSummary(Model));
 
     /// <summary>旧配置里位于「跳转 / 结束流程」之后的节点（执行时不会走到；编辑器不再允许新放到这里）。</summary>
     public bool IsAfterTerminal
@@ -3259,6 +3337,7 @@ public sealed partial class StartupStepViewModel : ViewModelBase
         StartupStepKinds.RunCmd => string.IsNullOrWhiteSpace(model.Arguments) ? "（未填写命令）" : model.Arguments,
         StartupStepKinds.KillProgram => string.IsNullOrWhiteSpace(model.ProcessName) ? "（未填写进程名）" : $"结束进程 {model.ProcessName}",
         StartupStepKinds.Wait => $"等待 {model.WaitSeconds} 秒",
+        StartupStepKinds.SwitchAssistantRoom => string.IsNullOrWhiteSpace(model.RoomProfileId) ? "（未选择目标房间）" : "等待已选房间就绪",
         StartupStepKinds.TimerTrigger =>
             $"{model.TriggerTime} 触发「到点执行」链（{model.FireSteps.Count} 个节点{(model.RepeatDaily ? "，每天重复" : "")}）",
         StartupStepKinds.Watchdog => model.FireSteps.Count == 0

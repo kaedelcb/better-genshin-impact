@@ -299,6 +299,7 @@ public partial class MainViewModel
 
     internal static bool ConfigTransferRuntimeBindingsChanged(AssistConfig previous, AssistConfig imported)
         => previous.ServerUrl != imported.ServerUrl || previous.ControlRoomPassword != imported.ControlRoomPassword
+            || previous.EffectiveRoomCode != imported.EffectiveRoomCode
             || previous.PlayerUid != imported.PlayerUid || previous.ClientInstanceId != imported.ClientInstanceId
             || previous.ObserverMode != imported.ObserverMode || previous.StandaloneMode != imported.StandaloneMode
             || previous.BgiPath != imported.BgiPath || previous.GuardBgi != imported.GuardBgi
@@ -318,6 +319,8 @@ public partial class MainViewModel
         imported.PlayerUid = previous.PlayerUid;
         imported.ClientInstanceId = previous.ClientInstanceId;
         imported.TeamUids = [.. previous.TeamUids];
+        imported.RoomProfiles = previous.RoomProfiles;
+        imported.ActiveRoomProfileId = previous.ActiveRoomProfileId;
         imported.ObserverMode = previous.ObserverMode;
         imported.StandaloneMode = previous.StandaloneMode;
         imported.BgiPath = previous.BgiPath;
@@ -335,7 +338,8 @@ public partial class MainViewModel
         catch (Exception ex) { AddLog("迁移已完成，旧运行绑定暂停时发生异常：" + ex.Message); }
         try
         {
-            RoomCode = AssistConfigManager.GenerateControlRoomCode(imported.TeamUids);
+            RoomCode = imported.EffectiveRoomCode;
+            NotifyRoomProfiles();
             RefreshSetupBindings();
             OnPropertyChanged(nameof(Config));
         }
@@ -345,7 +349,7 @@ public partial class MainViewModel
 
     private void EnsureConfigTransferIdle(MainWindow window)
     {
-        if (_disposing || Volatile.Read(ref _refreshRunning) != 0
+        if (_disposing || Volatile.Read(ref _refreshRunning) != 0 || RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations
             || HasLocalCoordinatedExecutionResponsibility || _intentLifecycle.IsOnlineReady
             || Volatile.Read(ref _ordinaryStopInProgress) != 0
             || _pendingCommandResults.Count != 0 || !_pendingCenterReplies.IsEmpty
@@ -373,7 +377,10 @@ public partial class MainViewModel
         }
         RefreshSetupBindings();
         OnPropertyChanged(nameof(Config));
-        RoomCode = AssistConfigManager.GenerateControlRoomCode(config.TeamUids);
+        config.EnsureRoomProfiles();
+        RoomCode = config.EffectiveRoomCode;
+        _lastScheduledFireDate = config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
+        NotifyRoomProfiles();
         window.Mistletoe.ReloadConfigTransferSettings();
         window.Dodoco.ReloadConfigTransferSettings(reloadRules);
         window.Pet.ReloadConfigTransferSettings();

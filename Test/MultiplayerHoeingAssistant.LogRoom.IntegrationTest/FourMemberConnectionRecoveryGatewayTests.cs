@@ -21,6 +21,72 @@ namespace MultiplayerHoeingAssistant.LogRoom.IntegrationTest;
 /// <summary>四条真实本地网关连接；不启动游戏、不接触运行中的助手或真实 User。</summary>
 public sealed class FourMemberConnectionRecoveryGatewayTests
 {
+    [Fact]
+    public async Task ControlRoomSwitchConfirmsBusinessResultsAndReturnsToOriginalRoom()
+    {
+        await using var server = await Server.StartAsync();
+        const string uid = "111111111";
+        const string password = "fixture-only";
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        var ct = budget.Token;
+        await using var creator = await Connect();
+        var a = await CreateRoom();
+        var b = await CreateRoom();
+        Assert.NotEqual(a, b);
+        await using var source = await Connect();
+        await PrepareAndReady(source, a, "A 的绑定");
+        var left = await source.InvokeCommandAsync("control.leaveRoom", new { roomCode = a }, ct: ct);
+        Assert.True(left.Payload!["success"]!.GetValue<bool>());
+
+        await using var target = await Connect();
+        var rejected = await target.InvokeCommandAsync("control.joinRoom", new
+        { roomCode = b, playerUid = uid, playerName = uid, password = "错误密码", requireReady = true }, ct: ct);
+        Assert.False(rejected.Payload!["success"]!.GetValue<bool>());
+        await PrepareAndReady(target, b, "B 的绑定");
+        var accepted = await target.InvokeCommandAsync("control.reportOnlineEvent",
+            new { roomCode = b, generation = 1, isOnlineReady = true }, ct: ct);
+        Assert.True(accepted.Payload!["success"]!.GetValue<bool>());
+        var busy = await target.InvokeCommandAsync("control.leaveRoom", new { roomCode = b }, ct: ct);
+        Assert.True(busy.Payload!["busy"]!.GetValue<bool>());
+        var withdrawn = await target.InvokeCommandAsync("control.reportOnlineEvent",
+            new { roomCode = b, generation = 1, isOnlineReady = false }, ct: ct);
+        Assert.True(withdrawn.Payload!["success"]!.GetValue<bool>());
+        left = await target.InvokeCommandAsync("control.leaveRoom", new { roomCode = b }, ct: ct);
+        Assert.True(left.Payload!["success"]!.GetValue<bool>());
+        await using var back = await Connect();
+        await PrepareAndReady(back, a, "A 的绑定");
+        Assert.Single(server.Manager.GetControlRoomPlayers("CTRL_" + a).Where(p => p.Online));
+        Assert.DoesNotContain(server.Manager.GetControlRoomPlayers("CTRL_" + b), p => p.Online);
+
+        async Task<MultiplayerHoeingAssistant.Services.Gateway.MhaGatewayClient> Connect()
+        {
+            var client = new MultiplayerHoeingAssistant.Services.Gateway.MhaGatewayClient();
+            await client.ConnectAsync(server.Url, false, ct);
+            return client;
+        }
+        async Task<string> CreateRoom()
+        {
+            var created = await creator.InvokeCommandAsync("control.createRoom", new
+            { playerUid = uid, password, allowedUids = new[] { uid, "222222222" } }, ct: ct);
+            Assert.True(created.Payload!["success"]!.GetValue<bool>());
+            return created.GetString("roomCode");
+        }
+        async Task PrepareAndReady(MultiplayerHoeingAssistant.Services.Gateway.MhaGatewayClient client, string roomCode, string binding)
+        {
+            var prepared = await client.InvokeCommandAsync("control.joinRoom", new
+            { roomCode, playerUid = uid, playerName = uid, password, requireReady = true }, ct: ct);
+            Assert.True(prepared.Payload!["success"]!.GetValue<bool>());
+            Assert.True(prepared.Get<ControlRoomPlayersUpdate>("playersUpdate")!.Full);
+            Assert.DoesNotContain(server.Manager.GetControlRoomPlayers("CTRL_" + roomCode), p => p.Online);
+            var status = new ControlStatus { RoomCode = roomCode, PlayerUid = uid, PlayerName = uid,
+                ExpectedHoeingPlayers = 2, OnlineHoeingGroupNames = [binding], OnlineHoeingGroupTypes = ["group"] };
+            var ready = await client.InvokeCommandAsync("control.readyRoom", new { status }, ct: ct);
+            Assert.True(ready.Payload!["success"]!.GetValue<bool>());
+            var active = Assert.Single(ready.Get<ControlRoomPlayersUpdate>("playersUpdate")!.Players!.Where(p => p.Online));
+            Assert.Equal(binding, Assert.Single(active.OnlineHoeingGroupNames));
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

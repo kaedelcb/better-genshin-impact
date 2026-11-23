@@ -1343,6 +1343,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
 
     public bool CanStop { get; private set; }
     public bool CanSkip { get; private set; }
+    public bool CanSkipRoomSwitchRow => CanSkip && TaskFlowRuntime.HasPendingRoomSwitch(_run);
     public bool CanPause { get; private set; }
     public bool CanReload { get; private set; }
     public bool CanResume { get; private set; }
@@ -1370,6 +1371,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         StateText = run.State switch
         {
             WorkflowRunState.Planned => driving ? "正在准备" : "已计划",
+            WorkflowRunState.Running when driving && TaskFlowRuntime.HasPendingRoomSwitch(run) => "等待切房确认",
             WorkflowRunState.Running => driving ? "运行中" : "执行已中断 · 等待核对",
             WorkflowRunState.Waiting => WorkflowTimeWindowWaitDisplay.Describe(run.Wait)
                 ?? $"等待触发（{run.Wait?.NextTriggerAt:MM-dd HH:mm}）",
@@ -1384,6 +1386,7 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
         };
         ActionHintText = run.State switch
         {
+            WorkflowRunState.Unknown when TaskFlowRuntime.HasPendingRoomSwitch(run) => "切换结果待核对。请在房间页重新检查，恢复连接后点「停止」结束旧流程；不会重发。",
             WorkflowRunState.Unknown => "上次任务结果未知，当前计划已禁止重复启动；请保留未确认历史并删除旧计划后新建计划。",
             WorkflowRunState.Planned when driving => "任务正在准备；需要取消时点击「停止」。",
             WorkflowRunState.Running => driving ? "任务正在执行；需要结束时点击「停止」。"
@@ -1436,7 +1439,9 @@ public sealed class ActiveRunVm : ViewModelBase, TaskCenterPanelViewModel.IKeyed
             or WorkflowRunState.Completing or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking
             or WorkflowRunState.Interrupted or WorkflowRunState.Unknown
             || run.State == WorkflowRunState.Planned && driving;
-        CanSkip = driving && run.State == WorkflowRunState.Running;
+        CanSkip = driving && run.State == WorkflowRunState.Running
+            || !run.StopRequested && run.OnlineHoeingGateParked && run.State == WorkflowRunState.LocalWaitParking
+                && TaskFlowRuntime.HasPendingRoomSwitch(run);
         CanPause = run.OnlineHoeingHandoff is null
             && driving && (run.State is WorkflowRunState.Running or WorkflowRunState.Waiting);
         CanReload = driving && run.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.Paused;

@@ -41,8 +41,10 @@ public sealed partial class RoomOperations
         RoomHoeingHistory? hoeingHistory = null,
         TimeProvider? worldPlanTimeProvider = null,
         TimeProvider? screenshotTimeProvider = null,
-        RoutePackagePolicy? routePackagePolicy = null)
+        RoutePackagePolicy? routePackagePolicy = null,
+        ControlRoomAuth? controlRoomAuth = null)
     {
+        _controlRoomAuth = controlRoomAuth ?? new();
         _routePackagePolicy = routePackagePolicy;
         _roomManager = roomManager;
         _logger = logger;
@@ -119,7 +121,7 @@ public sealed partial class RoomOperations
 
     /// <summary>每个连接当前所属的 SignalR Group 列表（用于轮换房间时清理旧 Group 订阅，
     /// 避免上一个房间关闭/广播时串扰到已切换到新房间的连接）。</summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HashSet<string>>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, HashSet<string>>
         _connectionGroups = new();
 
     /// <summary>
@@ -140,8 +142,12 @@ public sealed partial class RoomOperations
         {
             try
             {
-                // 离开旧控制组即撤销恢复资格，防止旧状态包重新取得已离开的房间身份。
-                if (g.StartsWith("CTRL_")) _roomManager.ForgetControlRoomRecovery(g, ctx.ConnectionId);
+                // 控制房间只撤销该连接自己的登记；与批次准入共用离房检查。
+                if (g.StartsWith("CTRL_", StringComparison.Ordinal))
+                {
+                    await LeaveControlRoomAsync(ctx, g[5..]);
+                    continue;
+                }
                 await _broadcaster.RemoveFromGroupAsync(ctx, g);
                 lock (groups) { groups.Remove(g); }
                 _logger.LogInformation("[GroupCleanup] 连接 {ConnId} 从旧 Group {Group} 移除",

@@ -1203,12 +1203,12 @@ internal sealed class InstanceRequestHandler
                 recentTaskName = _recentTaskName;
             }
 
-            // 检查"联机锄地上线"独立任务是否在 30 秒内触发过（更可靠，不依赖 taskName 字符串匹配）
-            if (recentTaskName == null
-                && BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.LastTriggeredAt != DateTime.MinValue
-                && (DateTime.UtcNow - BetterGenshinImpact.GameTask.AutoOnline.NotifyOnlineTask.LastTriggeredAt).TotalSeconds < 30)
+            // 工作流身份、代序号和时间是同一次普通上线的快照，兼容轮询也不能混读。
+            var onlineSignal = NotifyOnlineTask.ReadSignal();
+            if (recentTaskName == null && onlineSignal.TriggeredAt != DateTime.MinValue
+                && (DateTime.UtcNow - onlineSignal.TriggeredAt).TotalSeconds < 30)
             {
-                recentTaskName = "联机锄地上线";
+                recentTaskName = NotifyOnlineTask.TaskName;
             }
 
             // 检查是否有已保存的中断上下文
@@ -1338,8 +1338,9 @@ internal sealed class InstanceRequestHandler
                 friendshipProgress,
                 recentTaskName,
                 recentTaskNameTime = _recentTaskNameTime, // 仅当 recentTaskName != null 时有效；null 时忽略
-                onlineGeneration = NotifyOnlineTask.CurrentGeneration, // 新：上线事件代序号，无任务时返回 0
-                onlineTriggeredAt = NotifyOnlineTask.LastTriggeredAt, // 新：上线事件触发时间
+                onlineGeneration = onlineSignal.Generation, // 无任务时返回 0
+                onlineTriggeredAt = onlineSignal.TriggeredAt,
+                onlineWorkflowRunId = onlineSignal.WorkflowRunId?.ToString("N"),
                 hasSuspendedTaskContext,
                 takeoverActive = PreemptionGate.IsArmed,
                 suspendedTakeoverTicket = suspendedCtx?.TakeoverTicket,
@@ -2047,14 +2048,14 @@ internal sealed class InstanceRequestHandler
                 }
             }
             var service = App.ServiceProvider.GetRequiredService<BetterGenshinImpact.Service.Interface.IScriptService>();
-            if (context.TaskType == "group"
-                && IsOnlineSignalTask(context.ProjectName, context.FolderName))
+            var resumeIndex = ResumeGroupStartIndex(context, planContinuation is not null);
+            if (context.TaskType == "group" && IsOnlineSignalTask(context.ProjectName, context.FolderName))
             {
-                _logger.LogInformation("[IPC task.resume] 配置组中的联机锄地上线信号已完成，恢复从下一项开始：Group={GroupName}, CurrentIndex={TaskIndex}, StartIndex={StartIndex}",
-                    context.GroupName, context.TaskIndex, context.TaskIndex + 1);
+                // 项目名不是房间动作已收件的证据；配置组会在执行该游标时核对进程内的原链路。
+                _logger.LogInformation("[IPC task.resume] 恢复配置组上线游标：Group={GroupName}, CurrentIndex={TaskIndex}, StartIndex={StartIndex}",
+                    context.GroupName, context.TaskIndex, resumeIndex);
             }
             Task execution;
-            var resumeIndex = ResumeGroupStartIndex(context, planContinuation is not null);
             if (planContinuation is not null && context.TaskType is ("group" or "onedragon") && resumeIndex <= 0)
                 return InstanceIpcEnvelope.Failure(request, "plan_resume_position_unknown", "组内恢复位置不可考，现场保留");
             var resumeExecutionIdentity = context.RootRunId is { } run && context.NodeId is { } node

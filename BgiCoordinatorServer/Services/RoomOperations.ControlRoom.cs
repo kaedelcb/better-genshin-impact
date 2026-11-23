@@ -1,131 +1,74 @@
+using System.Collections.Concurrent;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 
 namespace BgiCoordinatorServer.Services;
 
-/// <summary>
-/// 控制房间族（自 CoordinatorHub 逐字搬迁：JoinControlRoom/SendRemoteCommand/
-/// ReportControlStatus/ConfirmAllReady/ReportOnlineEvent/ClearOnlineHistory，
-/// 及统一联机开始/IsInControlRoomOrRemote 辅助）。
-/// 仅做 ctx 参数化与双发改造，业务逻辑不变。
-/// 控制房间 Group 名为 "CTRL_{roomCode}"，与锄地房间不同命名空间——
-/// RoomPhase 观测（只针对锄地房间）本族一律不加。
-/// 注：IsInControlRoomOrRemote 本族方法暂未使用（日志族 RoomOperations.MemberLog.cs 使用本 ctx 版），
-/// 旧 Hub 中的同名副本已随日志族迁移删除。
-/// 带宽优化（2026-09）：ControlRoomPlayersUpdated 广播统一收口到 BroadcastControlRoomPlayersAsync
-/// （全量/增量两态 payload，无变化零发送），各调用点不再直接 BroadcastGroupAsync。
-/// </summary>
 public sealed partial class RoomOperations
 {
-    /// <summary>
-    /// 控制房间成员列表广播的统一出口（带宽优化，替代各调用点直接全量广播）。
-    /// forceFull=true 或本组尚无快照（首次广播）→ 发 Full=true 全量并刷新快照为基线；
-    /// forceFull=false → 快照哈希比对发 Full=false 增量；changed/removed 都空则<b>不发送</b>
-    /// （成员周期性状态上报不再产生 N² 放大的全量广播，主优化点）。
-    /// internal：HeartbeatMonitor 兜底扫描（同程序集）也走本出口。
-    /// </summary>
-    internal async Task BroadcastControlRoomPlayersAsync(string group, bool forceFull)
+    private sealed class ControlPlayersPublication
     {
-        // 广播前先剪同 UID 离线幽灵条目：存量幽灵（修复前残留）随任意一次广播自愈，
-        // 避免离线条目在按 UID 键控的全量/增量广播中覆盖在线状态导致客户端"假离线"
-        _roomManager.PruneOfflineControlRoomGhosts(group);
-        List<ControlRoomPlayer> players;
-        lock (_batchGate)
-        {
-            _controlBatches.TryGetValue(group, out var current);
-            if (current is not null) ReleaseOfflineCompletionWaits(group, current);
-            players = _roomManager.RefreshCompletionWaitDisplay(group, current?.Snapshot());
-        }
-        var revision = _roomManager.NextControlRoomRevision(group);
-        if (forceFull || !_roomManager.HasControlRoomSnapshot(group))
-        {
-            var fullUpdate = new ControlRoomPlayersUpdate { Full = true, Revision = revision, Players = players };
-            // evt payload 与 legacy 参数同为单个 update 对象（新旧客户端同步升级，payload 形状允许变更）
-            await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", fullUpdate, fullUpdate);
-            // 全量下发后刷新快照为基线，后续增量以本次为准（out 丢弃，仅借 ComputeControlRoomDelta 刷快照）
-            _roomManager.ComputeControlRoomDelta(group, players, out _, out _);
-            return;
-        }
-
-        _roomManager.ComputeControlRoomDelta(group, players, out var changed, out var removed);
-        // 无变化零发送：revision 已消耗（允许跳号），快照已刷新
-        if (changed.Count == 0 && removed.Count == 0) return;
-        var deltaUpdate = new ControlRoomPlayersUpdate { Full = false, Revision = revision, Changed = changed, Removed = removed };
-        await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", deltaUpdate, deltaUpdate);
+        public readonly SemaphoreSlim Gate = new(1, 1);
+        public ControlRoomPlayersUpdate Baseline = new() { Full = true, Players = [] };
+        public long AllocatedRevision;
+        public bool NeedsFull;
     }
 
-    /// <summary>
-    /// 加入控制房间。校验密码 + UID 白名单，成功后加入 CTRL_{roomCode} Group
-    /// </summary>
-    public async Task JoinControlRoomAsync(GatewayHandlerContext ctx, string roomCode, string password, string playerUid, string playerName,
-        List<string>? allowedUids = null, bool isRemote = false, string clientInstanceId = "", string machineId = "")
+    private readonly ConcurrentDictionary<string, ControlPlayersPublication> _controlPublications = new(StringComparer.Ordinal);
+
+    private async Task<ControlRoomPlayersUpdate> ReadControlRoomPlayersBaselineAsync(string group)
     {
+        var publication = _controlPublications.GetOrAdd(group, _ => new());
+        await publication.Gate.WaitAsync();
+        try { return publication.Baseline; }
+        finally { publication.Gate.Release(); }
+    }
+
+    /// <summary>同一房间串行取快照、比对并发送，增量只依赖最后发布的版本。</summary>
+    internal async Task<ControlRoomPlayersUpdate> BroadcastControlRoomPlayersAsync(string group, bool forceFull)
+    {
+        var publication = _controlPublications.GetOrAdd(group, _ => new());
+        await publication.Gate.WaitAsync();
         try
         {
-            var uidWhitelist = allowedUids ?? [];
-            var isWebClient = playerUid.StartsWith("web_");
-            var group = $"CTRL_{roomCode}";
-            // 只有 PC 助手能建房（首次设置房间密码）；网页端只能加入已建好的房间。
-            var auth = ControlRoomAuth.Authenticate(roomCode, password, playerUid, uidWhitelist, allowCreate: !isWebClient);
-            string? rejection = auth switch
+            List<ControlRoomPlayer> players;
+            lock (_batchGate)
             {
-                ControlRoomAuthResult.RoomNotFound => "房间不存在：请先在助手中用该房间号建房",
-                ControlRoomAuthResult.Rejected => "密码错误或UID不在白名单中",
-                _ => null,
+                _roomManager.PruneOfflineControlRoomGhosts(group);
+                _roomManager.ExpireOnlineIntents(group, _roomManager.ControlUtcNow);
+                _controlBatches.TryGetValue(group, out var current);
+                if (current is not null) ReleaseOfflineCompletionWaits(group, current);
+                players = _roomManager.RefreshCompletionWaitDisplay(group, current?.Snapshot());
+            }
+            var revision = ++publication.AllocatedRevision;
+            forceFull |= publication.NeedsFull || publication.Baseline.Revision == 0;
+            _roomManager.ComputeControlRoomDelta(group, players, out var changed, out var removed);
+            if (!forceFull && changed.Count == 0 && removed.Count == 0) return publication.Baseline;
+
+            var full = new ControlRoomPlayersUpdate { Full = true, Revision = revision, Players = players };
+            var update = forceFull ? full : new ControlRoomPlayersUpdate
+            {
+                Full = false, Revision = revision, BaseRevision = publication.Baseline.Revision,
+                Changed = changed, Removed = removed,
             };
-            // 网页控制端的昵称必须是房间内某个助手成员的昵称（网页日志协助等 isRemote 入口不受此限）。
-            if (rejection is null && isWebClient && !isRemote && !IsControlRoomMemberName(group, playerName))
-                rejection = "控制端昵称必须与房间内某个成员的昵称一致";
-            if (rejection is not null)
-            {
-                await _broadcaster.SendToCallerAsync(ctx, "JoinRejected", new { reason = rejection }, rejection);
-                return;
-            }
-
-            await _broadcaster.AddToGroupAsync(ctx, group);
-            TrackGroup(ctx, group);
-            // 遥控端（observerMode 标记，isRemote=true）与 WEB 端类似：不加入 _controlRooms 成员列表，
-            // 只加 SignalR Group 收广播。这样遥控端不建独立条目、不被 ResolveTargets 匹配（不接收命令）、
-            // 且同 UID 执行端的 ControlRoomPlayer 不被覆盖（解决"同 UID 双端互挤占"）。
-            if (!isWebClient && !isRemote)
-            {
-                _roomManager.AddToControlRoom(group, ctx.ConnectionId, playerUid, playerName, clientInstanceId, machineId);
-                ObserveRoomLog(context => context.RegisterControlRoster(roomCode, playerUid, uidWhitelist));
-            }
-            if (isRemote || isWebClient)
-            {
-                _roomManager.RegisterRemoteConnection(group, ctx.ConnectionId, playerUid);
-            }
-            _logger.LogInformation("玩家 {PlayerName}({PlayerUid}) 加入控制房间 {RoomCode} (Web={IsWeb}, Remote={IsRemote})", playerName, playerUid, roomCode, isWebClient, isRemote);
-
-            // 广播成员列表（成员加入：全量）
-            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-
-            // 遥控端不接收命令（FR-3），故不下发离线缓存命令。WEB 端同样不入 _controlRooms，
-            // 但既有行为会下发缓存——保持 WEB 端不变，仅对遥控端跳过。
-            if (!isRemote && !isWebClient)
-            {
-                var pending = _roomManager.GetAndClearPendingCommands(playerUid);
-                foreach (var cmd in pending)
-                {
-                    await _broadcaster.SendToConnectionAsync(ctx.ConnectionId, "RemoteCommand", new { command = cmd }, cmd);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "JoinControlRoom 失败");
+            publication.Baseline = full;
             try
             {
-                // 把异常信息传给客户端，让用户能定位具体原因
-                await _broadcaster.SendToCallerAsync(ctx, "JoinRejected", new { reason = $"加入控制房间失败: {ex.Message}" }, $"加入控制房间失败: {ex.Message}");
+                await _broadcaster.BroadcastGroupAsync(group, "ControlRoomPlayersUpdated", update, update);
+                publication.NeedsFull = false;
             }
-            catch
+            catch (Exception ex)
             {
-                // 客户端可能已断开，忽略二次异常，避免 "Failed to invoke" 模糊错误
+                publication.NeedsFull = true;
+                _logger.LogWarning(ex, "控制房间 {Group} 成员广播失败，下次补发全量", group);
             }
+            return full;
         }
+        finally { publication.Gate.Release(); }
     }
+
+    private Task SendCommandInRoomAsync(string group, string connectionId, RemoteCommand command)
+        => _broadcaster.SendToConnectionAsync(connectionId, "RemoteCommand", new { command }, [command], roomCode: group[5..]);
 
     private bool IsControlRoomMemberName(string group, string playerName)
     {
@@ -140,11 +83,12 @@ public sealed partial class RoomOperations
     public async Task SendRemoteCommandAsync(GatewayHandlerContext ctx, RemoteCommand command)
     {
         // Delayed control is bounded; the execution end checks the same deadline again.
-        command.ExpiresAtUtc ??= DateTimeOffset.UtcNow.AddMinutes(2);
-        if (command.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+        var now = _roomManager.ControlUtcNow;
+        command.ExpiresAtUtc ??= now.AddMinutes(2);
+        if (command.ExpiresAtUtc <= now)
             throw new InvalidOperationException("request_expired");
-        if (command.ExpiresAtUtc > DateTimeOffset.UtcNow.AddMinutes(2))
-            command.ExpiresAtUtc = DateTimeOffset.UtcNow.AddMinutes(2);
+        if (command.ExpiresAtUtc > now.AddMinutes(2))
+            command.ExpiresAtUtc = now.AddMinutes(2);
         try
         {
             var group = $"CTRL_{command.RoomCode}";
@@ -156,6 +100,8 @@ public sealed partial class RoomOperations
             if (!isRemoteSender && !_roomManager.IsInControlRoom(group, ctx.ConnectionId))
             {
                 _logger.LogWarning("玩家 {Sender} 不在控制房间中，拒绝发送命令", command.Sender);
+                var rejected = new { commandId = command.CommandId, deliveredTo = 0, accepted = false, message = "当前连接未在该房间就绪" };
+                await _broadcaster.SendToCallerAsync(ctx, "RemoteCommandAck", rejected, rejected);
                 return;
             }
 
@@ -204,60 +150,68 @@ public sealed partial class RoomOperations
                 command = authorized;
             }
 
-            // 解析目标
-            var targets = _roomManager.ResolveTargets(command);
-
-            // [监控模式修复] 请求/应答族的回复命令额外投递给目标 UID 的遥控端连接：
-            // 监控端不入 _controlRooms、ResolveTargets 匹配不到，回复会被误判"目标离线"进缓存，
-            // 导致监控端发起远程编辑永远等不到回包（切回执行模式冲刷缓存才恢复）。
-            // 回复命令按 CommandId 关联、只有发起方的等待会话会消费，同 UID 执行端收到只会忽略，双投安全。
-            // 执行类命令维持 FR-3 不变：遥控端一律不接收。
-            // 历史 bug：本例举只列了 remote_config.* 两条，遗漏结构完全同一的 task_policy.data /
-            // task_policy.push_result，导致监控模式下 task_policy.pull 的回复永远投不到发起方，
-            // 必然 8s 超时（弹窗显示默认值，保存即覆盖对方配置），而绑定列表正常（走状态广播推送）。
-            // 故改为按"请求/应答族"统一判定，新增此类命令无需再改这里。
+            // 配置/回执仍可回投同房监控端，执行命令只走已就绪执行端。
             var isRemoteConfigReply = IsRequestReplyCommand(command.Cmd);
-            if (isRemoteConfigReply)
-            {
-                var remoteTargets = _roomManager.GetRemoteConnectionIdsByUids(group, command.Target);
-                if (remoteTargets.Count > 0)
-                {
-                    targets = targets.Union(remoteTargets).ToList();
-                }
-            }
-            if (isCenterRequest && targets.Count != 1)
-                throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
-
+            var isAllStop = command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all";
             var allStopGeneration = 0;
-            // 用户全停止也撤销服务端的准备/重试来源；不把广播或批次终态当作成员已退出。
-            if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all")
+            CoordinatedBatchState? stoppedBatch = null;
+            CoordinatedBatchSnapshot? stoppedSnapshot = null;
+            List<string> targets;
+            lock (_batchGate)
             {
-                CoordinatedBatchState? stoppedBatch = null;
-                CoordinatedBatchSnapshot? stoppedSnapshot = null;
-                lock (_batchGate)
+                if (!IsInControlRoomOrRemote(ctx, group) || command.ExpiresAtUtc <= _roomManager.ControlUtcNow) return;
+                targets = _roomManager.ResolveTargets(command);
+                if (isRemoteConfigReply)
+                    targets = targets.Union(_roomManager.GetRemoteConnectionIdsByUids(group, command.Target)).ToList();
+                if (isCenterRequest && targets.Count != 1)
+                    throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
+
+                if (isAllStop)
                 {
-                    if (_controlBatches.TryGetValue(group, out var observed)) allStopGeneration = observed.Generation;
-                    if (_controlBatches.TryGetValue(group, out var current) && !current.IsTerminal
-                        && (command.Target.Contains("*") || current.ParticipantUids.Intersect(command.Target).Any()))
+                    // 全停止撤销本房目标的上线意图。中止共享批次时也撤销该批次的其他参与者，
+                    // 但不影响别的房间、不把已中止当作已物理清理。
+                    IEnumerable<string> disarm = command.Target.Contains("*")
+                        ? _roomManager.GetControlRoomPlayers(group).Select(player => player.PlayerUid)
+                        : command.Target;
+                    if (_controlBatches.TryGetValue(group, out var current))
                     {
-                        current.Abort("user_stop_all");
-                        stoppedBatch = current;
-                        stoppedSnapshot = current.Snapshot();
+                        allStopGeneration = current.Generation;
+                        if (!current.IsTerminal && (command.Target.Contains("*") || current.ParticipantUids.Intersect(command.Target).Any()))
+                        {
+                            current.Abort("user_stop_all");
+                            stoppedBatch = current;
+                            stoppedSnapshot = current.Snapshot();
+                            disarm = disarm.Concat(current.ParticipantUids);
+                            _roomManager.MarkExhausted(group);
+                        }
                     }
+                    _roomManager.DisarmOnlineEvents(group, disarm.Distinct(StringComparer.Ordinal).ToArray());
                 }
-                if (stoppedBatch is not null)
-                    await PublishBatchSnapshotAsync(group, stoppedBatch, stoppedSnapshot!, GatewayProtocol.Events.ControlBatchState);
+
+                // 决定在线投递和缓存时与就绪/离房共锁，避免两条路径都漏掉刚就绪的成员。
+                if (!isRemoteConfigReply && !isCenterRequest && command.Cmd is not ("reset_state" or "stop")
+                    && !command.Target.Contains("*"))
+                {
+                    foreach (var uid in command.Target.Distinct(StringComparer.Ordinal))
+                        if (!_roomManager.IsPlayerOnline(group, uid)) _roomManager.CachePendingCommand(group, uid, command);
+                }
             }
+            if (stoppedBatch is not null)
+                await PublishBatchSnapshotAsync(group, stoppedBatch, stoppedSnapshot!, GatewayProtocol.Events.ControlBatchState);
+            if (isAllStop) await BroadcastControlRoomPlayersAsync(group, forceFull: false);
 
             var deliveredTo = 0;
             var changedStopTargets = 0;
             foreach (var connectionId in targets)
             {
+                if (!IsInControlRoomOrRemote(ctx, group) || command.ExpiresAtUtc <= _roomManager.ControlUtcNow) break;
+                if (!_roomManager.IsInControlRoom(group, connectionId)
+                    && !(isRemoteConfigReply && _roomManager.IsRemoteConnection(group, connectionId))) continue;
                 if (command.Cmd == "reset_state" && !MatchesResetCommandExecutor(group, connectionId, command)) continue;
                 var outgoing = command;
-                if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() == "all")
+                if (isAllStop)
                 {
-                    var parameters = new Dictionary<string, object>(command.Params);
+                    var parameters = new Dictionary<string, object>(command.Params!);
                     parameters["hoeingStopGeneration"] = allStopGeneration;
                     outgoing = new RemoteCommand
                     {
@@ -267,32 +221,13 @@ public sealed partial class RoomOperations
                         Params = parameters
                     };
                 }
-                if (command.Cmd == "stop" && command.Params?.GetValueOrDefault("stopScope")?.ToString() != "all")
+                if (command.Cmd == "stop" && !isAllStop)
                 {
                     outgoing = FreezeStopTarget(group, connectionId, command);
                     if (outgoing is null) { changedStopTargets++; continue; }
                 }
-                await _broadcaster.SendToConnectionAsync(connectionId, "RemoteCommand", new { command = outgoing }, outgoing);
+                await SendCommandInRoomAsync(group, connectionId, outgoing);
                 deliveredTo++;
-            }
-
-            // 缓存离线目标：仅当明确指定的目标不在线时缓存（"*" 全员时不缓存单品）。
-            // 回复类命令只对实时等待中的会话有意义，发起方 20s 超时后缓存冲刷出来的只是迟到噪音，不缓存。
-            if (!isRemoteConfigReply
-                && !isCenterRequest
-                && !string.Equals(command.Cmd, "reset_state", StringComparison.Ordinal)
-                && !string.Equals(command.Cmd, "stop", StringComparison.Ordinal)
-                && command.Target.Count > 0 && !(command.Target.Count == 1 && command.Target[0] == "*"))
-            {
-                var players = _roomManager.GetControlRoomPlayers(group);
-                foreach (var targetUid in command.Target)
-                {
-                    if (!_roomManager.IsPlayerOnline(group, targetUid))
-                    {
-                        _roomManager.CachePendingCommand(targetUid, command);
-                        _logger.LogInformation("命令 {Cmd} 目标 {Uid} 离线，已缓存", command.Cmd, targetUid);
-                    }
-                }
             }
 
             _logger.LogInformation("命令 {Cmd} 已从 {Sender} 转发到 {Count} 个目标", command.Cmd, command.Sender, deliveredTo);
@@ -481,8 +416,11 @@ public sealed partial class RoomOperations
         try
         {
             var group = $"CTRL_{status.RoomCode}";
-            // 只更新状态，不做就绪检查（就绪检查由 ReportOnlineEvent 端点统一处理）
-            _roomManager.UpdateControlStatus(group, ctx.ConnectionId, status);
+            lock (_batchGate)
+            {
+                // 普通状态不能代替 readyRoom，也不能延长上线意图。
+                if (!_roomManager.UpdateControlStatus(group, ctx.ConnectionId, status)) return;
+            }
             ObserveHoeingMember(group, ctx.ConnectionId, status);
 
             // 广播给控制房间所有成员（状态上报：增量比对，无变化零发送——主优化点）
@@ -530,29 +468,33 @@ public sealed partial class RoomOperations
         }
     }
 
-    /// <summary>上报上线事件（带 generation 代序号）。由 ReportOnlineEvent 端点统一处理就绪检查。</summary>
-    public async Task ReportOnlineEventAsync(GatewayHandlerContext ctx, int generation, bool isOnlineReady)
+    /// <summary>只有当前就绪连接的成员可登记/撤回上线边沿；ack 不是受理凭据。</summary>
+    public async Task<ControlRoomResult> ReportOnlineEventAsync(GatewayHandlerContext ctx, int generation,
+        bool isOnlineReady, string roomCode = "")
     {
-        try
+        string group;
+        bool changed;
+        lock (_batchGate)
         {
-            var group = _roomManager.GetControlRoomGroup(ctx.ConnectionId);
-            if (string.IsNullOrEmpty(group))
+            var joined = _roomManager.GetControlRoomGroup(ctx.ConnectionId);
+            if (joined is null || (roomCode.Length > 0 && joined != $"CTRL_{roomCode}" && joined != roomCode))
+                return new(false, "当前连接未在该房间就绪");
+            group = joined;
+            var result = _roomManager.AcceptOnlineEvent(group, ctx.ConnectionId, generation, isOnlineReady, _roomManager.ControlUtcNow);
+            if (!result.Accepted) return new(false, "上线代序号无效或不属于本连接的当前意图");
+            changed = result.Changed;
+        }
+        if (changed)
+        {
+            // 通知的故障不改变在此连接上已落定的业务受理结果。
+            try
             {
-                return;
+                if (isOnlineReady) await TryStartRoundAsync(group);
+                await BroadcastControlRoomPlayersAsync(group, forceFull: false);
             }
-
-            _roomManager.ReportOnlineEvent(group, ctx.ConnectionId, generation);
-
-            // 广播玩家列表更新（上线事件：全量）
-            await BroadcastControlRoomPlayersAsync(group, forceFull: true);
-
-            // 检查是否可转换为 ready（凑齐则开一轮：单人直接 AllReady，多人进确认阶段）
-            await TryStartRoundAsync(group);
+            catch (Exception ex) { _logger.LogWarning(ex, "控制房间 {Group} 上线结果通知失败", group); }
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ReportOnlineEvent 失败");
-        }
+        return new(true);
     }
 
     /// <summary>就绪检查并在凑齐时开一轮（广播 AllReady 或进入确认阶段）。
@@ -566,13 +508,18 @@ public sealed partial class RoomOperations
         bool created = false;
         lock (_batchGate)
         {
-            if (!_roomManager.CheckAndTransition(group, out intentGeneration)) return;
+            var now = _roomManager.ControlUtcNow;
+            _roomManager.ExpireOnlineIntents(group, now);
+            if (!_roomManager.CheckAndTransition(group, now, out intentGeneration)) return;
             var players = _roomManager.GetCoordinatedStartPlayers(group)
-                .Where(p => p.Online && !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToArray();
+                .Where(p => RoomManager.HasLiveOnlineIntent(p, now)).ToArray();
             participants = players.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).ToList();
             var intents = players.GroupBy(p => p.PlayerUid).ToDictionary(g => g.Key, g => g.First().OnlineEventGeneration,
                 StringComparer.Ordinal);
-            var identity = string.Join("|", intents.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => p.Key + ":" + p.Value));
+            // 相同 UID 的新连接可以重新使用本地计数器；不能命中旧连接的批次收据。
+            var identity = string.Join("\n", players.OrderBy(p => p.PlayerUid, StringComparer.Ordinal)
+                .ThenBy(p => p.ConnectionId, StringComparer.Ordinal)
+                .Select(p => $"{p.PlayerUid}\0{p.ConnectionId}\0{p.OnlineEventGeneration}"));
             var requestId = "online_" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                 System.Text.Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
             try
@@ -601,6 +548,22 @@ public sealed partial class RoomOperations
             await PublishBatchStartAsync(group, batch);
         await BroadcastControlRoomPlayersAsync(group, forceFull: true);
     }
+    // 扫描只补过期通知；真正的准入和离房不依赖扫描时序。
+    internal async Task ScanControlRoomTimeoutsAsync()
+    {
+        foreach (var group in _roomManager.GetAllControlRoomGroups())
+        {
+            bool expired;
+            lock (_batchGate)
+            {
+                var now = _roomManager.ControlUtcNow;
+                expired = _roomManager.ExpireOnlineIntents(group, now);
+                _roomManager.ExpireControlRoomTaskStatus(group, now);
+            }
+            if (expired) await BroadcastControlRoomPlayersAsync(group, forceFull: false);
+        }
+    }
+
     /// <summary>客户端确认收到 AllReadyConfirm。由客户端收到 AllReadyConfirm 事件后调用。</summary>
     public async Task ConfirmAllReadyAsync(GatewayHandlerContext ctx, int generation)
     {

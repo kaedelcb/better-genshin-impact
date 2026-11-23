@@ -482,7 +482,7 @@ public sealed partial class TaskCenterHost
     /// Registered=已受理（运行记录随后出现在 Store）；Unavailable=响亮拒绝（原因可读）。
     /// </summary>
     public async Task<WorkflowStopAuthorityRecord?> RefreshStartupStopAuthorityAsync(
-        StartupSourceIntent source, bool required, CancellationToken ct)
+        StartupSourceIntent source, bool required, CancellationToken ct, bool allowBgiStartOrRebind = true)
     {
         lock (_gate)
         {
@@ -506,6 +506,8 @@ public sealed partial class TaskCenterHost
                 throw new StartupSourceUnavailableException("辅助监控等待 BGI 连接恢复，不主动启动 BGI");
             }
             if (!required && source.Authority is null) return null;
+            if (!allowBgiStartOrRebind)
+                throw new StartupSourceUnavailableException("无法核对原 BGI 停止授权；切房不会启动或重连其他 BGI 实例");
             if (source.Authority is { } offline && (!source.AllowProcessRecovery || !StartupProcessExited(offline)))
                 throw new StartupSourceUnavailableException("正在等待原 BGI 恢复连接");
             if (await EnsureExecutionEnvironmentAsync(ct).ConfigureAwait(false) is { } error)
@@ -519,7 +521,7 @@ public sealed partial class TaskCenterHost
         if (source.Authority is { } inherited)
         {
             var epoch = WorkflowStopAuthority.Epoch(client?.ServerEpoch);
-            if (epoch is not null && epoch != inherited.Epoch && source.AllowProcessRecovery && StartupProcessExited(inherited))
+            if (allowBgiStartOrRebind && epoch is not null && epoch != inherited.Epoch && source.AllowProcessRecovery && StartupProcessExited(inherited))
             {
                 var next = await runner.AcquireExplicitIntentStopAuthorityAsync(source.IntentId, source.IntentTimestamp, ct).ConfigureAwait(false);
                 if (next is null) throw new StartupSourceUnavailableException("新 BGI 尚未就绪");
@@ -863,6 +865,12 @@ public sealed partial class TaskCenterHost
         if (action == WorkflowRunAction.Stop && run.State == WorkflowRunState.LocalWaitParking
             && run.OnlineHoeingGateParked && run.LocalWaitDecision?.Binding is null)
             return await StopOnlineGateParkedRunAsync(runId).ConfigureAwait(false);
+        if (action == WorkflowRunAction.SkipCurrent && run.OnlineHoeingGateParked
+            && run.State == WorkflowRunState.LocalWaitParking && !run.StopRequested
+            && TaskFlowRuntime.HasPendingRoomSwitch(run))
+            return FlowRuntime.RequestRoomSwitchSkip(run)
+                ? HostActionResult.Registered("已请求取消原切房等待，联机结束后按原请求结果跳过或待核对。")
+                : HostActionResult.Unavailable("原切房请求不可确认，不能跳过后继续，请先在房间页核对。");
         if (action == WorkflowRunAction.Stop && run.State is not (WorkflowRunState.Succeeded or WorkflowRunState.Failed or WorkflowRunState.LocalWaitParking)
             && stopEntry?.Runner.HasActiveControl(runId) != true)
         {
@@ -993,7 +1001,7 @@ public sealed partial class TaskCenterHost
                 latest.StopRequested = true;
                 latest.OnlineHoeingGateParked = false;
                 latest.State = entry is not null || _reservedWorkflows.Contains(latest.WorkflowId)
-                    || RunStore.HasUnresolvedTerminalResponsibility(latest)
+                    || RunStore.HasUnresolvedTerminalResponsibility(latest) || TaskFlowRuntime.HasPendingRoomSwitch(latest)
                     ? WorkflowRunState.Unknown : WorkflowRunState.Cancelled;
                 latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
                     + "联机停驻期间已明确请求停止，禁止自动唤醒；未结的作业/票据责任保留，不触发后继或收尾。";
@@ -1003,16 +1011,48 @@ public sealed partial class TaskCenterHost
         }
         try { entry?.Runner.RequestAction(runId, WorkflowRunAction.Stop); }
         catch (Exception ex) { TryLog("联机停驻停止意图已保存，驱动取消通知待核对：" + ex.Message); }
-        try { await FlowRuntime.CloseRunAsync(runId, CancellationToken.None).ConfigureAwait(false); }
+        try
+        {
+            if (TaskFlowRuntime.HasPendingRoomSwitch(stopped))
+            {
+                var result = await FlowRuntime.CancelRoomSwitchAsync(runId, TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+                lock (_gate)
+                {
+                    if (_runs.UpdateMergingIf(runId, latest =>
+                    {
+                        if (!latest.StopRequested || !TaskFlowRuntime.HasPendingRoomSwitch(latest)) return false;
+                        TaskFlowRuntime.SettleRoomSwitchCancellation(latest, result);
+                        if (TaskFlowRuntime.HasPendingRoomSwitch(latest))
+                            latest.Note += " | 切换结果待核对，旧流程不再恢复。";
+                        else if (!_drives.ContainsKey(latest.WorkflowId) && !_reservedWorkflows.Contains(latest.WorkflowId)
+                            && CanConfirmStoppedRoomFlow(latest))
+                            latest.State = WorkflowRunState.Cancelled;
+                        return true;
+                    }, out var current) && current is not null) stopped = current;
+                }
+            }
+            await FlowRuntime.CloseRunAsync(runId, CancellationToken.None).ConfigureAwait(false);
+            FlowRuntime.ForgetRoomDependency(runId);
+        }
         catch (Exception ex)
         {
             NotifyStateChanged();
             return HostActionResult.Unavailable("停止意图已保存，作用域撤销仍未确认：" + ex.Message);
         }
         NotifyStateChanged();
-        return stopped.State == WorkflowRunState.Cancelled
+        return stopped is { State: WorkflowRunState.Cancelled, OnlineHoeingHandoff: null }
             ? await ReconcileAdmissionTerminalForExplicitStopAsync(runId, "联机门停驻已停止，不自动恢复。").ConfigureAwait(false)
             : HostActionResult.Registered("停止意图已保存且流程作用域已撤下；联机票据或作业责任仍待结清，不会自动恢复。");
+    }
+
+    private static bool CanConfirmStoppedRoomFlow(WorkflowRunRecord run)
+    {
+        if (run.OnlineHoeingHandoff is null) return !RunStore.HasUnresolvedTerminalResponsibility(run);
+        if (run.OnlineHoeingHandoff is not { Phase: "gap", OriginalJobId: null, ResumeJobId: null }) return false;
+        // 原流程只在间隙让位，没有被接管作业。允许确认流程停止，但不清除联机票据或代替批次收尾。
+        var withoutGap = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(run))!;
+        withoutGap.OnlineHoeingHandoff = null;
+        return !RunStore.HasUnresolvedTerminalResponsibility(withoutGap);
     }
 
     /// <summary>停驻运行的显式放弃：先按完整队列绑定取消等待项，再把同一运行记为终态；绝不收尾或发送。</summary>
@@ -1098,6 +1138,8 @@ public sealed partial class TaskCenterHost
         }
         if (run?.State != WorkflowRunState.Unknown)
             return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
+        if (TaskFlowRuntime.HasPendingRoomSwitch(run) && !RunStore.HasUnresolvedTerminalResponsibility(run))
+            return await StopFlowAfterRoomReviewAsync(runId).ConfigureAwait(false);
 
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var client = _clientAccessor();
@@ -1241,6 +1283,8 @@ public sealed partial class TaskCenterHost
             return HostActionResult.Unavailable("运行状态已变化，请刷新后重试");
         if (RunStore.HasUnresolvedTerminalResponsibility(fresh))
             return HostActionResult.Unavailable("存在未决发送/收尾/前置事实，对账未清偿；保持 Unknown 待重试");
+        if (TaskFlowRuntime.HasPendingRoomSwitch(fresh))
+            return await StopFlowAfterRoomReviewAsync(runId).ConfigureAwait(false);
 
         fresh.State = WorkflowRunState.Cancelled;
         fresh.Note = (fresh.Note is null ? "" : fresh.Note + " ")
@@ -1253,6 +1297,25 @@ public sealed partial class TaskCenterHost
         }
         NotifyStateChanged();
         return await ReconcileAdmissionTerminalForExplicitStopAsync(runId, "已停止（Unknown 经原身份只读对账，全部事实清偿）").ConfigureAwait(false);
+    }
+
+    private async Task<HostActionResult> StopFlowAfterRoomReviewAsync(string runId)
+    {
+        // 复用耕地机同一个事实：未决切换已收口且当前房间已就绪。仅放弃旧流程，绝不把旧请求记为成功。
+        if (!_runs.UpdateMergingIf(runId, latest =>
+        {
+            if (latest.State != WorkflowRunState.Unknown || !latest.StopRequested
+                || !TaskFlowRuntime.HasPendingRoomSwitch(latest) || RunStore.HasUnresolvedTerminalResponsibility(latest)
+                || FlowRuntime.IsRoomSwitchRecoveryClear?.Invoke() != true) return false;
+            latest.State = WorkflowRunState.Cancelled;
+            latest.OnlineHoeingGateParked = false;
+            latest.Note += " | 房间已恢复可用，显式停止旧流程；保留未确认的切换历史，不重发。";
+            return true;
+        }, out _))
+            return HostActionResult.Unavailable("旧流程的切房结果待核对；请在房间页重新检查，旧流程不会自动恢复。");
+        FlowRuntime.ForgetRoomDependency(runId);
+        NotifyStateChanged();
+        return await ReconcileAdmissionTerminalForExplicitStopAsync(runId, "已停止旧切房流程，可按需重新启动计划。").ConfigureAwait(false);
     }
 
     private static bool HasUnresolvedPrerequisiteResponsibility(WorkflowRunRecord run)
@@ -1555,6 +1618,28 @@ public sealed partial class TaskCenterHost
         catch { return null; }
     }
 
+    // BGI 的 workflowRunId 是线协议 GUID，不是本地 RunId。仅供已确认来自任务中心运行的房间动作调用。
+    internal bool VerifyFlowRoomDependency(string workflowRunId)
+    {
+        if (!Guid.TryParse(workflowRunId, out var wireId)) return false;
+        try
+        {
+            var matches = _runs.List().Where(r => Guid.TryParse(r.WireRunId, out var wire) && wire == wireId).Take(2).ToArray();
+            if (matches.Length != 1) return false;
+            var run = matches[0];
+            if (!TaskFlowRuntime.RequiresRoomDependency(run)) return true; // 普通独立上线保持原入口的准入语义。
+            return !run.StopRequested && run.State is not (WorkflowRunState.Cancelled or WorkflowRunState.Failed or WorkflowRunState.Unknown)
+                && !IsExecutionUnavailable(run) && FlowRuntime.VerifyRoomDependency(run);
+        }
+        catch { return false; }
+    }
+
+    private HandoffRegisterResult? VerifyHandoffRoom(StartupHandoffRequest request)
+        => request.AssistantRoomIdentity is { } identity && FlowRuntime.IsRoomIdentityCurrent?.Invoke(identity) != true
+            ? HandoffRegisterResult.Rejected(HandoffReasonCodes.AssistantRoomChanged,
+                "前置切房的目标连接已变化，未移交任务中心")
+            : null;
+
     private static HandoffIdentity BuildIdentity(StartupHandoffRequest request) => new()
     {
         IntentKey = request.IntentKey,
@@ -1562,6 +1647,10 @@ public sealed partial class TaskCenterHost
         StepId = request.StepId ?? "",
         TriggerKind = request.TriggerKind,
         Mode = request.Mode,
+        ExtensionData = request.AssistantRoomIdentity is null ? null : new()
+        {
+            [TaskFlowRuntime.RoomDependencyKey] = JsonSerializer.SerializeToElement(true),
+        },
     };
 
     private static string ShortExecutionId(StartupHandoffRequest request)
@@ -1603,6 +1692,7 @@ public sealed partial class TaskCenterHost
         ct.ThrowIfCancellationRequested(); // 启动链 CTS 仅覆盖受理点之前
 
         // 台账查询（读路径无副作用）：命中 → 内容核对（§2）；不完整 → 拒绝新受理（I5）
+        if (VerifyHandoffRoom(request) is { } staleRoom) return staleRoom;
         if (LedgerGate(request) is { } receipt)
             return await ReplayAccountPreparationAsync(request, receipt, ct).ConfigureAwait(false);
 
@@ -1738,6 +1828,11 @@ public sealed partial class TaskCenterHost
                     .OrderByDescending(r => r.UpdatedAt).FirstOrDefault();
                 if (waiting is not null)
                 {
+                    // 已挂载的运行可能随时开始，不能事后把另一房间依赖附到它的已放行动作上。
+                    if (request.AssistantRoomIdentity is { } room && !FlowRuntime.HasBoundRoomIdentity(waiting.RunId, room))
+                        return HandoffRegisterResult.Rejected(HandoffReasonCodes.AssistantRoomChanged,
+                            "已挂载的运行不属于本次切房，未改变原运行。请停止原挂载后再移交");
+                    if (VerifyHandoffRoom(request) is { } staleRoom) return staleRoom;
                     // B2：幂等挂载成立前，先把本次身份原子追加到在等运行（落盘失败不得报成功；旧绑定保留；
                     // 五轮 重6：修订冲突重读收敛）
                     if (TryAppendHandoffBinding(id => _runs.Load(id), r => _runs.Update(r), waiting.RunId, request,
@@ -1776,6 +1871,7 @@ public sealed partial class TaskCenterHost
             }
 
             ct.ThrowIfCancellationRequested(); // 三轮 重要9：组装+权威预检之后、受理落盘之前再查取消
+            if (VerifyHandoffRoom(request) is { } changedRoom) return changedRoom;
 
             try
             {
@@ -1787,6 +1883,7 @@ public sealed partial class TaskCenterHost
                     note: $"启动中心移交受理（{request.Mode}，执行 {shortId}）",
                     handoff: BuildIdentity(request),
                     admissionSourceScope: AdmissionSourceScopeForRun(), stopAuthority: request.StopAuthority);
+                if (request.AssistantRoomIdentity is { } room) FlowRuntime.BindRoomDependency(run.RunId, room);
             }
             catch (Exception ex)
             {
@@ -1875,18 +1972,28 @@ public sealed partial class TaskCenterHost
                 return HandoffRegisterResult.Rejected(HandoffReasonCodes.FlowUnavailable, ex.Message);
             }
 
+            (string Code, string Reason)? ResumeGuard(WorkflowRunRecord original)
+            {
+                if (original.State is not (WorkflowRunState.Interrupted or WorkflowRunState.Paused or WorkflowRunState.LocalWaitParking))
+                    return (HandoffReasonCodes.NoResumableRun, "目标运行状态已变化，请刷新后重试");
+                if (VerifyHandoffRoom(request) is { } changedRoom)
+                    return (changedRoom.ReasonCode!, changedRoom.Reason!);
+                if (request.AssistantRoomIdentity is { } room
+                    && (TaskFlowRuntime.HasPendingRoomSwitch(original)
+                        || TaskFlowRuntime.RequiresRoomDependency(original) && !FlowRuntime.HasBoundRoomIdentity(original.RunId, room)))
+                    return (HandoffReasonCodes.AssistantRoomChanged, "原运行切房依赖未确认或不是同一次就绪连接，未恢复旧运行");
+                return null;
+            }
+
             // 受理点（锁内）：身份绑定原子追加（B1：绝不替换旧绑定，旧意图去重依据永存），落盘失败不留预留；
             // 五轮 重6：修订冲突重读收敛（TryAppendHandoffBinding 内置取消复核贴近身份修改）
             if (TryAppendHandoffBinding(id => _runs.Load(id), r => _runs.Update(r), target.RunId, request,
                     $"启动中心移交受理（resume 绑定，执行 {shortId}）。",
-                    r => r.State is WorkflowRunState.Interrupted or WorkflowRunState.Paused
-                        or WorkflowRunState.LocalWaitParking // [批次 20／Wave3／C11=(a)] 停驻运行可移交 resume
-                        ? null
-                        : (HandoffReasonCodes.NoResumableRun, "目标运行状态已变化，请刷新后重试"),
-                    ct, out committedBind) is { } bindError)
+                    ResumeGuard, ct, out committedBind) is { } bindError)
                 return HandoffRegisterResult.Rejected(bindError.Code, bindError.Reason);
             if (!_admissionWired) _reservedWorkflows.Add(request.WorkflowId); // B2-β：接线后由恢复准入 sender 侧预留（避免双预留自拒）
             boundRunId = committedBind!.RunId;
+            if (request.AssistantRoomIdentity is { } inheritedRoom) FlowRuntime.BindRoomDependency(boundRunId, inheritedRoom);
         }
 
         // B2-β：接线后恢复动作经 E2 恢复专用准入边界（意图持久化后发送；发送=门面回调驱动 ResumeAsync）。
@@ -1944,7 +2051,8 @@ public sealed partial class TaskCenterHost
         lock (_gate) waitWorkers = new[] { _localWaitMonitorTask, _localWaitReevaluationTask, _priorityWaiterWakeTask }.OfType<Task>().ToArray();
         var retainedFlowCleanup = Task.Run(async () =>
         {
-            foreach (var runId in FlowRuntime.List().Select(t => t.RunId).Distinct(StringComparer.Ordinal).ToArray())
+            foreach (var runId in FlowRuntime.List().Select(t => t.RunId).Concat(FlowRuntime.RetainedRoomSwitchRuns)
+                .Distinct(StringComparer.Ordinal).ToArray())
             {
                 try { await FlowRuntime.CloseRunAsync(runId, CancellationToken.None).ConfigureAwait(false); }
                 catch (Exception ex) { TryLog("宿主关闭时撤销保留流程作用域未确认：" + ex.GetType().Name); }

@@ -363,6 +363,14 @@ public class AutoPartyTask
         int timeoutSeconds,
         CancellationToken ct, bool allowSkipWait = true, Func<int>? remainingSeconds = null)
     {
+        var batchRoster = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids;
+        var strictlyConfirmed = batchRoster is { Count: > 0 };
+        Func<string, bool>? canAccept = strictlyConfirmed
+            ? applicant => ConfirmBatchApplicant(applicant, whitelist, batchRoster!, client) : null;
+        if (strictlyConfirmed && whitelist is not { Length: > 0 })
+        {
+            _logger.LogWarning("[自动组队] 本批未配置可核对的游戏昵称白名单。自动同意已暂停，请核对本房间绑定。");
+        }
         _logger.LogInformation("[自动组队-房主] 开始，期望人数: {N}", expectedCount);
 
         // 1. 尝试回到主界面
@@ -381,7 +389,7 @@ public class AutoPartyTask
         }
 
         // 2. 打开 F2
-        if (!await OpenCoOpScreen(ct))
+        if (!await OpenCoOpScreen(ct, strictlyConfirmed ? whitelist : null, canAccept))
         {
             _logger.LogError("[自动组队-房主] 打开多人游戏界面失败");
             return -1;
@@ -399,6 +407,7 @@ public class AutoPartyTask
         // F2 诊断日志节流状态（策略 D：变化立即输出 + 无变化每 5s 兜底心跳）
         F2DiagnosticLogThrottle.F2Metrics? lastEmittedF2Metrics = null;
         DateTime lastF2DiagnosticEmitTime = DateTime.MinValue;
+        var reportedUnconfirmedApplicant = false;
 
         try
         {
@@ -434,7 +443,22 @@ public class AutoPartyTask
                     if (hasPopup)
                     {
                         var shouldAccept = true;
-                        if (whitelist != null && whitelist.Length > 0)
+                        if (canAccept is not null)
+                        {
+                            var (applicantName, applicantRoi) = CaptureApplicantRoi();
+                            using (applicantRoi) shouldAccept = canAccept(applicantName);
+                            if (!shouldAccept)
+                            {
+                                if (!reportedUnconfirmedApplicant)
+                                {
+                                    _logger.LogWarning("[自动组队] 未确认申请者是本批成员，已暂停自动同意，请房主核对。");
+                                    reportedUnconfirmedApplicant = true;
+                                }
+                                await Delay(500, ct);
+                                continue;
+                            }
+                        }
+                        else if (whitelist != null && whitelist.Length > 0)
                         {
                             // 单帧同时取 OCR 文本与弹窗 ROI，供白名单未命中时对同一 ROI 做模板匹配兜底
                             var (applicantName, applicantRoi) = CaptureApplicantRoi();
@@ -580,7 +604,7 @@ public class AutoPartyTask
                             isInF2Screen = false;
                             await Delay(2000, ct);
                             await WaitForMainUi(ct, 10);
-                            if (!await OpenCoOpScreen(ct, whitelist))
+                            if (!await OpenCoOpScreen(ct, whitelist, canAccept))
                             {
                                 _logger.LogWarning("[自动组队-房主] 重新打开 F2 失败，重试");
                                 await Delay(2000, ct);
@@ -600,7 +624,7 @@ public class AutoPartyTask
                             {
                                 _logger.LogDebug("[自动组队-房主] 在主界面但 F2 未打开，尝试打开 F2");
                             }
-                            if (!await OpenCoOpScreen(ct, whitelist))
+                            if (!await OpenCoOpScreen(ct, whitelist, canAccept))
                             {
                                 await Delay(1000, ct);
                             }
@@ -730,7 +754,22 @@ public class AutoPartyTask
     }
 
     /// <summary>打开 F2 多人游戏界面，重试 3 次。每次重试间隙检测申请弹窗并处理。</summary>
-    private async Task<bool> OpenCoOpScreen(CancellationToken ct, string[]? whitelist = null)
+    private static bool ConfirmBatchApplicant(string? applicant, string[]? configured,
+        IReadOnlyList<string> batchRoster, CoordinatorClient client)
+    {
+        if (string.IsNullOrWhiteSpace(applicant) || configured is not { Length: > 0 }) return false;
+        var name = WhitelistMatchDecisions.ExtractNameCandidates(applicant);
+        var exactMatch = configured.SelectMany(WhitelistMatchDecisions.ExtractNameCandidates)
+            .Intersect(name, StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
+        if (exactMatch.Count == 0) return false;
+        var matches = client.CurrentPlayerList.Where(player =>
+                WhitelistMatchDecisions.ExtractNameCandidates(player.PlayerName).Any(exactMatch.Contains))
+            .Select(player => player.PlayerUid).Distinct(StringComparer.Ordinal).Take(2).ToArray();
+        return matches.Length == 1 && batchRoster.Contains(matches[0], StringComparer.Ordinal);
+    }
+
+    private async Task<bool> OpenCoOpScreen(CancellationToken ct, string[]? whitelist = null,
+        Func<string, bool>? canAccept = null)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -751,7 +790,18 @@ public class AutoPartyTask
             {
                 _logger.LogInformation("[自动组队] 打开 F2 失败但检测到申请弹窗，处理中");
                 var shouldAccept = true;
-                if (whitelist != null && whitelist.Length > 0)
+                if (canAccept is not null)
+                {
+                    var (applicantName, applicantRoi) = CaptureApplicantRoi();
+                    using (applicantRoi) shouldAccept = canAccept(applicantName);
+                    if (!shouldAccept)
+                    {
+                        _logger.LogWarning("[自动组队] 未确认申请者是本批成员，未自动同意，请核对名单。");
+                        await Delay(500, ct);
+                        continue;
+                    }
+                }
+                else if (whitelist != null && whitelist.Length > 0)
                 {
                     // 单帧同时取 OCR 文本与弹窗 ROI，供白名单未命中时对同一 ROI 做模板匹配兜底
                     var (applicantName, applicantRoi) = CaptureApplicantRoi();

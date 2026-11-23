@@ -63,11 +63,8 @@ public class HeartbeatMonitor : IHostedService, IDisposable
             
             // 3/4. 心跳与成员宽限由 RoomManager 一次原子清退，只广播该次实际移除的快照。
             await ScanExpiredPlayersAsync(DateTime.UtcNow);
-            // 5. 检查控制房间上线状态过期
-            CheckControlRoomTimeout();
-
-            // 6. 控制房间增量广播兜底：CheckControlRoomTimeout 直接改成员字段（上线过期复位/任务运行态超时复位）
-            // 但自身不广播；哈希去重后这些变更不再靠其他成员上报的全量广播搭车下发，必须由这里补兜底。
+            // 控制房间意图过期通知走准入锁；任务运行态的展示仍由增量兜底。
+            await _roomOperations.ScanControlRoomTimeoutsAsync();
             SweepControlRoomBroadcasts();
         }
         catch (Exception ex)
@@ -233,8 +230,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
 
     /// <summary>
     /// 控制房间增量广播兜底（带宽优化配套）：每个 CTRL_ 组 60s 节流做一次增量比对，
-    /// 有变化才发（无变化零发送，不产生额外流量）。承载 CheckControlRoomTimeout 等
-    /// "服务端直接改成员字段但不广播"路径的变更下发。
+    /// 有变化才发（无变化零发送），承载任务运行态超时复位等服务端派生字段的通知。
     /// </summary>
     private void SweepControlRoomBroadcasts()
     {
@@ -277,57 +273,4 @@ public class HeartbeatMonitor : IHostedService, IDisposable
         }
     }
 
-    /// <summary>检查控制房间上线状态过期（30 分钟超时），过期后自动重置上线状态。R-1 方案 C。</summary>
-    private void CheckControlRoomTimeout()
-    {
-        try
-        {
-            var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(30);
-            var groups = _roomManager.GetAllControlRoomGroups();
-            foreach (var group in groups)
-            {
-                var players = _roomManager.GetControlRoomPlayers(group);
-                foreach (var player in players)
-                {
-                    if (player.OnlineReady && player.OnlineReadyExpireTime < DateTime.UtcNow
-                        && player.OnlineReadyExpireTime != DateTime.MinValue)
-                    {
-                        _logger.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 上线状态已过期（30分钟），自动重置",
-                            group, player.PlayerName, player.PlayerUid);
-                        // 标记上线状态过期
-                        player.OnlineReady = false;
-                        player.OnlineReadyExpireTime = DateTime.MinValue;
-                        // 同步重置上线事件代序号（边沿检测：过期后下次重新上线才算新事件)
-                        player.OnlineEventGeneration = 0;
-                        player.OnlineEventConsumed = true;
-                        player.OnlineEventTime = DateTime.MinValue;
-                    }
-
-                    // TaskRunning 超时自愈：任务运行态超过 TaskRunningTimeoutSec 未续期 → 复位为未运行（防崩溃/断电残留）
-                    if (TaskRunningExpiryDecisions.ShouldResetTaskRunning(
-                            player.TaskRunning,
-                            DateTime.UtcNow.Ticks,
-                            player.TaskRunningExpireTime.Ticks))
-                    {
-                        _logger.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 任务运行态已超时，自动复位为未运行",
-                            group, player.PlayerName, player.PlayerUid);
-                        player.TaskRunning = false;
-                        player.TaskStatusAvailable = false;
-                        player.TaskPaused = false;
-                        player.CurrentTaskName = null;
-                        player.CurrentTaskGroupName = null;
-                        player.CurrentRouteDisplay = null;
-                        player.CurrentScriptRouteName = null;
-                        player.ScriptTaskProgress = null;
-                        player.FriendshipProgress = null;
-                        player.TaskRunningExpireTime = DateTime.MinValue;
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "CheckControlRoomTimeout 扫描时发生异常");
-        }
-    }
 }

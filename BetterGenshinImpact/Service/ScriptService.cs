@@ -13,6 +13,7 @@ using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.GameTask;
 using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
+using BetterGenshinImpact.GameTask.AutoOnline;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.Common;
 using BetterGenshinImpact.GameTask.Common.BgiVision;
@@ -136,6 +137,9 @@ public partial class ScriptService : IScriptService
     //优先执行的配置组，统计每个project执行次数
     private readonly Dictionary<string, int> _projectExecutionCount = new();
 
+    private static bool IsEnabledRoomSwitch(ScriptGroupProject project) =>
+        project is { Type: "SoloTask", Name: SwitchAssistantRoomTask.TaskName, Status: "Enabled", RunNum: > 0 };
+
     /// <param name="job">[A2] 作业描述符：非空时经 TaskRunner 漏斗登记进 JobRegistry；null = 不登记（旧行为）。</param>
     public async Task<TaskRunResult> RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
     {
@@ -188,17 +192,15 @@ public partial class ScriptService : IScriptService
         //     hasTimer = HasTimerOperation(codeList);
         // }
 
-        // 纯 Shell 配置组不依赖游戏：跳过游戏启动等待，截图器未启动也照常执行。
-        // 开启了优先执行配置组时可能插入地图追踪等项目，仍按原流程等待游戏。
+        // 纯 Shell / 切换助手房间不依赖游戏。优先配置组可能插入游戏任务，仍沿用启动准备。
         var enabledProjects = list.Where(p => p.Status == "Enabled").ToList();
-        var shellOnly = enabledProjects.Count > 0 && enabledProjects.All(p => p.Type == "Shell"
-            && !((p.GroupInfo?.Config.PathingConfig.Enabled ?? false)
-                 && p.GroupInfo.Config.PathingConfig.PreExecutionPriorityConfig.Enabled));
+        var requiresGame = enabledProjects.Count == 0 || enabledProjects.Any(p =>
+            (p.Type != "Shell" && !IsEnabledRoomSwitch(p))
+            || p.GroupInfo?.Config.PathingConfig is { Enabled: true, PreExecutionPriorityConfig.Enabled: true });
 
-        // 没启动时候，启动截图器
-        if (shellOnly)
+        if (!requiresGame)
         {
-            _logger.LogInformation("配置组 {Name} 仅包含 Shell 任务，不等待游戏启动", groupName);
+            _logger.LogInformation("配置组 {Name} 不包含依赖游戏的任务，不等待游戏启动", groupName);
         }
         else
         {
@@ -240,6 +242,12 @@ public partial class ScriptService : IScriptService
         var runResult = await new TaskRunner()
             .RunThreadAsync(async () =>
             {
+                var firstSwitchRow = list.FindIndex(IsEnabledRoomSwitch);
+                // 原进程的联机让位可核对收件事实；仅有恢复游标不能证明可以继续交接房间动作。
+                using var roomActions = firstSwitchRow >= 0
+                    ? ConfigurationGroupRoomActions.Begin(scope, groupName, firstSwitchRow,
+                        scope.Descriptor.Source == JobSource.Resume || taskProgress?.Next is not null)
+                    : null;
                 var failuresBefore = scope.FailureCount;
                 var stopwatch = new Stopwatch();
                 int projectIndex = -1;
@@ -331,6 +339,8 @@ public partial class ScriptService : IScriptService
                     }
                     
 
+                    // 房间链的出现序号固定在原配置组行，不受优先插入项目影响。
+                    var configurationIndex = roomActions is null ? projectIndex : x;
                     for (int y = 0; y < exeProjects.Count; y++)
                     {
                         var exeProject = exeProjects[y];
@@ -341,7 +351,7 @@ public partial class ScriptService : IScriptService
                         }
                         if (!RunnerContext.Instance.IsPreExecution && taskProgress != null && taskProgress.Next != null)
                         {
-                            if (taskProgress.Next.Index > projectIndex)
+                            if (taskProgress.Next.Index > configurationIndex)
                             {
                                 continue;
                             }
@@ -405,7 +415,7 @@ public partial class ScriptService : IScriptService
                             taskProgress.CurrentScriptGroupProjectInfo = new TaskProgress.ScriptGroupProjectInfo
                             {
                                 Name = exeProject.Name,
-                                FolderName = exeProject.FolderName, Index = projectIndex,
+                                FolderName = exeProject.FolderName, Index = configurationIndex,
                                 GroupName = taskProgress?.CurrentScriptGroupName ?? ""
                             };
                             TaskProgressManager.SaveTaskProgress(taskProgress);
@@ -426,6 +436,7 @@ public partial class ScriptService : IScriptService
                         }
 
 
+                        var roomActionFailed = false;
                         for (var i = 0; i < exeProject.RunNum; i++)
                         {
                             try
@@ -439,27 +450,36 @@ public partial class ScriptService : IScriptService
                                 stopwatch.Start();
 
                                 scope.ThrowIfStopped();
+                                var preExecution = RunnerContext.Instance.IsPreExecution;
+                                // 优先插入的项目不属于本次配置组。若前方切房同样被插入或跳过，不能把对应上线改投旧房。
+                                if (preExecution && exeProject is { Type: "SoloTask", Name: NotifyOnlineTask.TaskName }
+                                    && exeProject.GroupInfo?.Projects.TakeWhile(p => !ReferenceEquals(p, exeProject))
+                                        .Any(IsEnabledRoomSwitch) == true)
+                                    throw new RoomActionHandoffException("优先插入的切房链不支持自动交接，未在当前房间上线。");
+                                var isRoomAction = !preExecution && roomActions is not null
+                                    && exeProject.Type == "SoloTask"
+                                    && exeProject.Name is SwitchAssistantRoomTask.TaskName or NotifyOnlineTask.TaskName;
+                                using var roomStep = isRoomAction ? roomActions!.EnterStep(exeProject.Name, x, i) : null;
+                                // 邮箱可能仍未确认；不能沿用普通上线「到达步骤即兑现」的续跑规则。
+                                var legacyOnline = SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
+                                    && !(isRoomAction && roomActions!.RoutesOnlineThroughMailbox(x));
+                                var checkpointIndex = preExecution ? projectIndex : configurationIndex;
+                                var hasNextGroupProject = !preExecution && x + 1 < list.Count;
+                                var nextOnlineProject = legacyOnline && hasNextGroupProject ? list[x + 1] : null;
                                 scope.SetCheckpoint(new SuspendContextCapture.Snapshot("group", groupName,
-                                    projectIndex, exeProject.FolderName, exeProject.Name, null, null, null,
-                                    SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName),
+                                    checkpointIndex, exeProject.FolderName, exeProject.Name, null, null, null, legacyOnline,
                                     // 优先执行项目不属于当前配置组的续跑游标，不能让它抢占当前组恢复位置。
-                                     HasNextGroupProject: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count,
-                                     PlanNextTaskIndex: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
-                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
-                                             ? projectIndex + 2 : null,
-                                     PlanNextFolderName: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
-                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
-                                         ? list[x + 1].FolderName : null,
-                                     PlanNextProjectName: !RunnerContext.Instance.IsPreExecution && x + 1 < list.Count
-                                         && SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
-                                         ? list[x + 1].Name : null,
-                                     PlanPreExecution: RunnerContext.Instance.IsPreExecution));
+                                    HasNextGroupProject: hasNextGroupProject,
+                                    PlanNextTaskIndex: nextOnlineProject is not null ? checkpointIndex + 2 : null,
+                                    PlanNextFolderName: nextOnlineProject?.FolderName,
+                                    PlanNextProjectName: nextOnlineProject?.Name,
+                                    PlanPreExecution: preExecution));
                                 await ExecuteProject(exeProject);
                                 executedProjects++;
                                 // 在项目确实返回后立即推进任务中心的空隙水位；不能等后面的 1 秒延时。
                                 if (i == exeProject.RunNum - 1 && !RunnerContext.Instance.IsPreExecution
                                     && (scope.Result is TaskRunResult.Ran or TaskRunResult.Skipped))
-                                    scope.MarkPlanGroupProjectCompleted(projectIndex + 2,
+                                    scope.MarkPlanGroupProjectCompleted(checkpointIndex + 2,
                                         x + 1 < list.Count ? list[x + 1].FolderName : null,
                                         x + 1 < list.Count ? list[x + 1].Name : null);
 
@@ -480,6 +500,7 @@ public partial class ScriptService : IScriptService
                             }
                             catch (Exception e)
                             {
+                                roomActionFailed |= e is RoomActionHandoffException;
                                 scope.Observe(TaskRunResult.Failed);
                                 _logger.LogDebug(e, "执行脚本时发生异常");
                                 _logger.LogError("执行脚本时发生异常: {Msg}", e.Message);
@@ -515,8 +536,8 @@ public partial class ScriptService : IScriptService
                                     taskProgress.LastScriptGroupName = taskProgress.CurrentScriptGroupName;
                                 }
 
-                                //累计连续失败次数
-                                if (taskProgress.CurrentScriptGroupProjectInfo.Status == 2)
+                                // 本机房间信号未确认时只终止链路，不能触发跨进程自动重试。
+                                if (taskProgress.CurrentScriptGroupProjectInfo.Status == 2 && !roomActionFailed)
                                 {
                                     taskProgress.ConsecutiveFailureCount++;
                                 }
@@ -527,7 +548,7 @@ public partial class ScriptService : IScriptService
 
                             //异常达到一次次数，重启bgi
                             var autoconfig = TaskContext.Instance().Config.OtherConfig.AutoRestartConfig;
-                            if (autoconfig.Enabled && taskProgress.ConsecutiveFailureCount >= autoconfig.FailureCount)
+                            if (!roomActionFailed && autoconfig.Enabled && taskProgress.ConsecutiveFailureCount >= autoconfig.FailureCount)
                             {
                                 _logger.LogInformation("调度器任务出现未预期的异常，自动重启bgi");
                                 Notify.Event(NotificationEvent.GroupEnd).Error("调度器任务出现未预期的异常，自动重启bgi");
@@ -556,7 +577,7 @@ public partial class ScriptService : IScriptService
 
                     _logger.LogInformation("配置组 {Name} 的 {Cnt} 个项目全部按执行周期跳过，本组正常结束", groupName, cycleSkippedProjects);
                 }
-            }, job: job, requireGame: !shellOnly);
+            }, job: job, requireGame: requiresGame);
         
 
         // 还原定时器

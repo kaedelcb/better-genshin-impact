@@ -6,8 +6,7 @@ namespace BgiCoordinatorServer.Services;
 /// 断线清理（自 CoordinatorHub.OnDisconnectedAsync 逐字搬迁）。
 /// 旧 CoordinatorHub 与新 GatewayHub 的 OnDisconnectedAsync 都委托到这里——
 /// 宽限期/房主关房/同步点重评估/万叶顶替/控制房间清理/日志订阅清理单一事实源。
-/// 注意：控制房间清理依赖本类静态 _connectionGroups 跟踪表（TrackGroup 也在本类），
-/// 必须与组跟踪同源，否则断线清理找不到所属 Group。
+/// 只清理断开连接自己的控制房间登记及订阅，不影响同 UID 的其他房间或新连接。
 /// </summary>
 public sealed partial class RoomOperations
 {
@@ -107,55 +106,9 @@ public sealed partial class RoomOperations
         _logger.LogInformation("连接 {ConnId} 断开，房间={Room}",
             ctx.ConnectionId, disconnectedRoomCode ?? "(无)");
 
-        // 清理控制房间成员（必须在移除 _connectionGroups 跟踪之前执行，否则找不到所属 Group）
-        try
-        {
-            // 从 `_connectionGroups` 中找出当前连接所属的所有 Group
-            if (_connectionGroups.TryGetValue(ctx.ConnectionId, out var groups))
-            {
-                List<string> groupList;
-                lock (groups) { groupList = [.. groups]; }
+        try { await DisconnectControlRoomAsync(ctx.ConnectionId); }
+        catch (Exception ex) { _logger.LogWarning(ex, "清理控制房间连接时发生异常"); }
 
-                foreach (var group in groupList)
-                {
-                    if (group.StartsWith("CTRL_"))
-                    {
-                        ObserveHoeingDisconnected(group, ctx.ConnectionId);
-                        _roomManager.RemoveFromControlRoom(group, ctx.ConnectionId);
-                        ReleaseDisconnectedCompletionWaits(group);
-                        // 遥控端不入 _controlRooms，RemoveFromControlRoom 对其 no-op；
-                        // 需单独清理遥控端连接登记，防止 _remoteControlConnections 残留。
-                        _roomManager.RemoveRemoteConnection(group, ctx.ConnectionId);
-                        // 断线标记离线后全量广播最新成员列表（统一出口，payload 形状与增量路径一致）
-                        _ = BroadcastControlRoomPlayersAsync(group, forceFull: true);
-                        _logger.LogInformation("控制房间 {Group} 成员断线，已标记离线", group);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // 清理 group 跟踪表时发生异常，忽略
-            _logger.LogWarning(ex, "清理控制房间 Group 时发生异常");
-        }
-
-        // 控制房间成员清理后释放截图窗口墓碑和在途帧；新物理连接独立计时。
-        await ClearControlPresenceConnectionAsync(ctx.ConnectionId);
-        await ClearDesktopControlConnectionAsync(ctx.ConnectionId);
-        ClearScreenshotConnection(ctx.ConnectionId);
-
-        // 清理 group 跟踪表，避免静态字典内存泄漏
         _connectionGroups.TryRemove(ctx.ConnectionId, out _);
-
-        // 日志订阅清理（房间实时日志汇聚）：断线连接从所有订阅中移除，并通知各目标成员最新订阅数
-        try
-        {
-            foreach (var (group, targetUid, count) in _roomManager.RemoveLogSubscriberEverywhere(ctx.ConnectionId))
-                await NotifyLogSubscriberCountAsync(group, targetUid, count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "清理日志订阅时发生异常");
-        }
     }
 }

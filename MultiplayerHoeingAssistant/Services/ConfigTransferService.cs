@@ -294,7 +294,37 @@ public class ConfigTransferService
         Set("bgiPackageDir", imported.BgiPackageDir);
         var confirmationKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineRequiresConfirmation", StringComparison.OrdinalIgnoreCase))
             ?? "scheduledOnlineRequiresConfirmation";
-        document[confirmationKey] = ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(local, imported);
+        var requiresConfirmation = ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(local, imported);
+        var profilesKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("roomProfiles", StringComparison.OrdinalIgnoreCase)) ?? "roomProfiles";
+        var activeKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("activeRoomProfileId", StringComparison.OrdinalIgnoreCase)) ?? "activeRoomProfileId";
+        imported.EnsureRoomProfiles();
+        local?.EnsureRoomProfiles();
+        var dateKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineLastFireDate", StringComparison.OrdinalIgnoreCase))
+            ?? "scheduledOnlineLastFireDate";
+        if (imported.RoomProfiles is { Count: > 0 })
+        {
+            foreach (var profile in imported.RoomProfiles)
+            {
+                var previous = local is not null && local.ServerUrl == imported.ServerUrl && local.PlayerUid == imported.PlayerUid
+                    ? local.RoomProfiles.FirstOrDefault(p => p.RoomCode == profile.RoomCode) : null;
+                var active = profile.Id == imported.ActiveRoomProfileId;
+                profile.ScheduledOnlineLastFireDate = previous?.ScheduledOnlineLastFireDate;
+                if (profile.ScheduledOnlineLastFireDate is null && previous is not null
+                    && previous.Id.StartsWith("legacy-", StringComparison.Ordinal) && profile.Id == previous.Id)
+                {
+                    var legacy = Path.Combine(_configDir, "assistant-online-fired-date.txt");
+                    if (File.Exists(legacy) && DateTime.TryParse(File.ReadAllText(legacy), out var fired))
+                        profile.ScheduledOnlineLastFireDate = fired.Date;
+                }
+                profile.ScheduledOnlineRequiresConfirmation = active ? requiresConfirmation
+                    : !string.IsNullOrEmpty(profile.ScheduledOnlineTime);
+            }
+            document[profilesKey] = JsonSerializer.SerializeToNode(imported.RoomProfiles, Options);
+            document[activeKey] = imported.ActiveRoomProfileId;
+        }
+        document[confirmationKey] = requiresConfirmation;
+        document[dateKey] = JsonSerializer.SerializeToNode(imported.ActiveRoomProfile?.ScheduledOnlineLastFireDate
+            ?? (imported.ActiveRoomProfile is null ? local?.ScheduledOnlineLastFireDate : null), Options);
         return JsonSerializer.SerializeToUtf8Bytes(document, Options);
         void Set(string key, string value)
         {

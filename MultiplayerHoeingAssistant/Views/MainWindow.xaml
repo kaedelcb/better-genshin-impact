@@ -906,12 +906,92 @@
                             </Style>
                         </Grid.Style>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <Border Grid.Row="0" Style="{StaticResource QuestCard}" Padding="12,9">
+                            <StackPanel>
+                                <TextBlock Foreground="{StaticResource GoldText}" FontSize="12" TextWrapping="Wrap">
+                                    <Run Text="最后确认的房间："/>
+                                    <Run Text="{Binding ActiveRoomProfile.Name, Mode=OneWay, FallbackValue=未选择, TargetNullValue=未选择}"/>
+                                    <Run Text="{Binding ActiveRoomProfile.RoomCode, Mode=OneWay, StringFormat='（{0}）', FallbackValue=''}"/>
+                                </TextBlock>
+                                <Grid Margin="0,6,0,0" IsEnabled="{Binding CanEditConfiguration}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="AssistantRoomSelector" ItemsSource="{Binding RoomSwitchChoices}"
+                                              SelectedValuePath="Id" SelectedValue="{Binding ActiveRoomProfile.Id, Mode=OneWay}"
+                                              MinHeight="30" MaxDropDownHeight="200" Margin="0,0,8,0" VerticalContentAlignment="Center"
+                                              AutomationProperties.Name="选择目标房间">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                                    <Run Text="{Binding RoomCode, Mode=OneWay}"/>
+                                                    <Run Text=" · "/>
+                                                    <Run Text="{Binding Name, Mode=OneWay}"/>
+                                                </TextBlock>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Button Grid.Column="1" Content="切换房间" Margin="0,0,8,0"
+                                            Command="{Binding SwitchAssistantRoomCommand}"
+                                            CommandParameter="{Binding SelectedItem, ElementName=AssistantRoomSelector}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource BtnGold}">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SelectedItem, ElementName=AssistantRoomSelector}" Value="{x:Null}">
+                                                        <Setter Property="IsEnabled" Value="False"/>
+                                                    </DataTrigger>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter Property="Opacity" Value="0.45"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <Button Grid.Column="2" Content="管理房间" Style="{StaticResource BtnGhost}"
+                                            Command="{Binding OpenAssistantRoomsCommand}"/>
+                                </Grid>
+                                <DockPanel>
+                                    <DockPanel.Resources>
+                                        <Style x:Key="RoomSwitchRecoveryButton" TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+                                            <Setter Property="Margin" Value="8,6,0,0"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsEnabled" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DockPanel.Resources>
+                                    <Button DockPanel.Dock="Right" Content="停止本机" Command="{Binding StopLocalDuringAssistantRoomSwitchCommand}"
+                                            Style="{StaticResource RoomSwitchRecoveryButton}"/>
+                                    <Button DockPanel.Dock="Right" Content="重新检查" Command="{Binding RecheckAssistantRoomSwitchCommand}"
+                                            Style="{StaticResource RoomSwitchRecoveryButton}"/>
+                                    <Button DockPanel.Dock="Right" Content="取消等待" Command="{Binding CancelAssistantRoomSwitchCommand}"
+                                            Style="{StaticResource RoomSwitchRecoveryButton}"/>
+                                    <TextBlock Text="{Binding RoomSwitchStatus}" FontSize="12" TextWrapping="Wrap"
+                                               Foreground="{StaticResource GoldText}" Margin="0,6,0,0" VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Style.Triggers>
+                                                    <Trigger Property="Text" Value="">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- 单机或房间尚未返回成员卡时，也能查看已发现的本机更新。 -->
-                        <Button x:Name="BgiUpdateWithoutMembersButton" Grid.Row="0" Panel.ZIndex="1" HorizontalAlignment="Left"
+                        <Button x:Name="BgiUpdateWithoutMembersButton" Grid.Row="1" Panel.ZIndex="1" HorizontalAlignment="Left"
                                 VerticalAlignment="Top" Margin="12,5,0,0" FontSize="11" Padding="0"
                                 Command="{Binding OpenUpdateBgiCommand}" ToolTip="有 BGI 更新可用，点击查看"
                                 AutomationProperties.Name="有 BGI 更新可用">
@@ -937,7 +1017,8 @@
                         </Button>
 
                         <!-- 成员委托卡列表 -->
-                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}"
+                                      IsEnabled="{Binding CanUseAssistantRoomMemberActions}">
                             <ItemsControl ItemsSource="{Binding Members}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -1313,7 +1394,7 @@
                             </ScrollViewer>
 
                             <!-- 快捷指令 -->
-                            <Border Grid.Row="1" Style="{StaticResource QuestCard}" Padding="14,11">
+                            <Border Grid.Row="2" Style="{StaticResource QuestCard}" Padding="14,11">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,9">
                                         <TextBlock Text="快捷指令" Style="{StaticResource SectionTitle}"/>

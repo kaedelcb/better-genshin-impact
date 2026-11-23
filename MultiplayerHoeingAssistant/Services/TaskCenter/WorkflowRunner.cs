@@ -417,6 +417,8 @@ public sealed partial class WorkflowRunner
                     Log(runId, "等待期间无执行中节点，跳过请求不登记。");
                     break;
                 }
+                if (rec is not null && !rec.StopRequested && TaskFlowRuntime.HasPendingRoomSwitch(rec))
+                    _opt.FlowRuntime?.RequestRoomSwitchSkip(rec); // 联机停驻竞态下把跳过保留在同一原请求上。
                 control.PendingSkip = rec?.Cursor is { } cursor
                     ? new SkipRequest(cursor.NodeId, cursor.Occurrence, cursor.LoopIteration)
                     : new SkipRequest("", -1, -1); // 无游标：永不命中，仅留痕
@@ -564,6 +566,17 @@ public sealed partial class WorkflowRunner
                 _boundary.SuppressConfigCompletionSupported, validateMigrationEntry: run.ExplicitEntryNodeId is null); // R4.6 I1/B6：能力协商预检（含 suppress 能力）
             if (!preflight.Executable)
                 throw new InvalidOperationException("流程预检未通过：" + string.Join("；", preflight.BlockingReasons));
+
+            if (TaskFlowRuntime.HasPendingRoomSwitch(run)
+                && _opt.FlowRuntime?.CanResumeRoomSwitch(run, snapshot.Revision) != true)
+            {
+                if (_opt.FlowRuntime is { } runtime) await runtime.CloseRunAsync(run.RunId).ConfigureAwait(false);
+                run.State = WorkflowRunState.Unknown;
+                run.OnlineHoeingGateParked = false;
+                run.Note = AppendNote(run.Note, "原切房请求已中断或计划已修改：结果待核对，不自动重发。");
+                _runs.Update(run);
+                return run;
+            }
 
             plan.ValidatePathCursor(run); // 改状态/取消旧等待前核对原车道身份。
             if (run.LocalWaitDecision is { Kind: LocalWaitDecisionKind.Wait or LocalWaitDecisionKind.Hold } priorDecision
@@ -877,11 +890,12 @@ public sealed partial class WorkflowRunner
                     continue;
                 }
 
-                if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
-                if (!IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var nextRound))
+                var finishingRoomSwitch = TaskFlowRuntime.HasPendingRoomSwitch(run);
+                if (!finishingRoomSwitch && !IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
+                if (!finishingRoomSwitch && !IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var nextRound))
                 { occurrence = nextRound; continue; }
                 // B9：轮次起点等待统一在新一轮边界（成功/过滤跳过/失败续跑同路径；不占槽位）
-                if (!IsSingleNodeRun(run) && occurrence.LoopIteration > 0 && plan.IsStructuralRoundEntry(occurrence)
+                if (!finishingRoomSwitch && !IsSingleNodeRun(run) && occurrence.LoopIteration > 0 && plan.IsStructuralRoundEntry(occurrence)
                     && occurrence.LoopIteration != run.LastScheduledRoundWait)
                 {
                     if (!await AwaitLoopRoundStartAsync(run, plan, occurrence, control, ct).ConfigureAwait(false))
@@ -912,11 +926,11 @@ public sealed partial class WorkflowRunner
                 }
 
                 var node = plan.NodeAt(occurrence);
-                var scheduleResult = await AwaitNodeScheduleAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false);
+                var scheduleResult = finishingRoomSwitch || await AwaitNodeScheduleAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false);
                 if (control.PauseRequested) return Pause(run);
-                // 等待醒来后重新检查持久截止，不能把到点等待当成新节点执行许可。
-                if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
-                if (!IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var afterExpiredRound))
+                // 已提交的切房先核对原结果；正常新到达仍须重新检查持久截止和轮次。
+                if (!finishingRoomSwitch && !IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
+                if (!finishingRoomSwitch && !IsSingleNodeRun(run) && SkipExpiredScheduledRound(run, plan, occurrence, out var afterExpiredRound))
                 { occurrence = afterExpiredRound; continue; }
                 if (!scheduleResult)
                 {
@@ -932,7 +946,7 @@ public sealed partial class WorkflowRunner
                 if (!ReferenceEquals(arrivalPlan, plan)) continue;
 
                 // 时段「等待到点」：当天开始时间还没到、其他条件都放行时，等到开始时间再执行，而不是直接跳过。
-                if (await AwaitTimeWindowStartAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false))
+                if (!finishingRoomSwitch && await AwaitTimeWindowStartAsync(run, plan, node, occurrence, control, ct).ConfigureAwait(false))
                 {
                     if (control.PauseRequested) return Pause(run);
                     if (!IsSingleNodeRun(run) && TrySettleLoopDeadline(run, plan)) break;
@@ -951,7 +965,7 @@ public sealed partial class WorkflowRunner
                         occurrence = Relocate(run, plan); continue;
                     }
                     var flowGate = plan.EvaluateNode(occurrence, _opt.Clock(), _boundary.SingleNativeSupported);
-                    if (flowGate.Action != NodeGateAction.Proceed)
+                    if (!finishingRoomSwitch && flowGate.Action != NodeGateAction.Proceed)
                     {
                         if (node.Flow?.ExitStepId is { Length: > 0 } || WorkflowComposition.HasInlineDecision(node))
                         {
@@ -968,9 +982,8 @@ public sealed partial class WorkflowRunner
                         var executable = WorkflowComposition.HasInlineDecision(node)
                             ? new WorkflowNode { NodeId = node.NodeId, Kind = "control.flow", Flow = node.Lanes!.Decision }
                             : node;
-                        var result = await runtime.ExecuteAsync(run, executable, occurrence.LoopIteration, () => SaveTaskFlowProgress(run), ct).ConfigureAwait(false);
-                        await CommitTaskFlowOutcomeAsync(run, plan, occurrence,
-                            result is {} b ? b ? "branchYes" : "branchNo" : "succeeded", ct).ConfigureAwait(false);
+                        var result = await ExecuteTaskFlowRowAsync(runtime, run, executable, occurrence, control, ct).ConfigureAwait(false);
+                        await CommitTaskFlowOutcomeAsync(run, plan, occurrence, result, ct).ConfigureAwait(false);
                     }
                     catch (TaskFlowOnlineParkException)
                     {
@@ -978,8 +991,18 @@ public sealed partial class WorkflowRunner
                         ParkTaskFlowForOnline(run); return run;
                     }
                     catch (OperationCanceledException) { throw; }
+                    catch (TaskFlowRoomSwitchFailedException ex)
+                    {
+                        await CommitTaskFlowOutcomeAsync(run, plan, occurrence, "failed", ct, Sanitize(ex.Message)).ConfigureAwait(false);
+                        return run; // 切房明确失败，不走普通失败续跑或流程收尾。
+                    }
                     catch (Exception ex)
                     {
+                        if (TaskFlowRuntime.HasPendingRoomSwitch(run) && _runs.Load(run.RunId) is { } latest)
+                        {
+                            RunStore.RebaseOnto(run, latest);
+                            if (run.StopRequested) throw new OperationCanceledException("原计划已停止", ct);
+                        }
                         run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "流程未确认：" + Sanitize(ex.Message));
                         _runs.Update(run); return run;
                     }
@@ -1332,8 +1355,16 @@ public sealed partial class WorkflowRunner
                 }
             }
             // 已清偿的收尾不能仅因旧Completing标签保留责任；外部事实仍逐项核验。
+            if (TaskFlowRuntime.HasPendingRoomSwitch(run) && _opt.FlowRuntime is { } cancelRuntime)
+            {
+                var roomResult = await cancelRuntime.CancelRoomSwitchAsync(run.RunId, _opt.SkipConfirmTimeout).ConfigureAwait(false);
+                if (_runs.Load(run.RunId) is { } stopped) RunStore.RebaseOnto(run, stopped);
+                TaskFlowRuntime.SettleRoomSwitchCancellation(run, roomResult);
+                if (TaskFlowRuntime.HasPendingRoomSwitch(run))
+                    run.Note = AppendNote(run.Note, "切换结果待核对，流程已停止后继：" + Sanitize(roomResult?.Message));
+            }
             run.State = WorkflowRunState.Cancelled;
-            run.State = RunStore.HasUnresolvedTerminalResponsibility(run)
+            run.State = RunStore.HasUnresolvedTerminalResponsibility(run) || TaskFlowRuntime.HasPendingRoomSwitch(run)
                 ? WorkflowRunState.Unknown : WorkflowRunState.Cancelled;
             run.Note = AppendNote(run.Note, run.State == WorkflowRunState.Unknown
                 ? "停止已请求，远端退出/效果未确认；原身份和责任保留，不推进、不触发收尾。"
@@ -1347,6 +1378,7 @@ public sealed partial class WorkflowRunner
             {
                 if (!(run.OnlineHoeingGateParked && run.State == WorkflowRunState.LocalWaitParking && !run.StopRequested))
                     await runtime.CloseRunAsync(run.RunId, CancellationToken.None).ConfigureAwait(false);
+                if (run.IsTerminal || run.StopRequested) runtime.ForgetRoomDependency(run.RunId);
                 if (runtime.GetError(run.RunId) is {} triggerError && run.State == WorkflowRunState.Succeeded)
                 {
                     run.State = WorkflowRunState.Unknown; run.Note = AppendNote(run.Note, "后台触发结果未确认：" + triggerError);
@@ -1372,8 +1404,74 @@ public sealed partial class WorkflowRunner
         RunStore.RebaseOnto(run, parked);
     }
 
+    private async Task<string> ExecuteTaskFlowRowAsync(TaskFlowRuntime runtime, WorkflowRunRecord run, WorkflowNode node,
+        WorkflowNodeOccurrence occurrence, RunControl control, CancellationToken ct)
+    {
+        string ToOutcome(bool? branch) => branch is { } chosen ? chosen ? "branchYes" : "branchNo" : "succeeded";
+        void Save() => SaveTaskFlowProgress(run);
+        if (!TaskFlowNodeCatalog.HasRoomSwitch(node.Flow))
+            return ToOutcome(await runtime.ExecuteAsync(run, node, occurrence.LoopIteration, Save, ct).ConfigureAwait(false));
+
+        using var leaf = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        lock (control.Sync)
+        {
+            control.LeafCts = leaf;
+            if (control.PendingSkip?.Matches(occurrence) == true || runtime.IsRoomSwitchSkipRequested(run.RunId)) leaf.Cancel();
+        }
+        try
+        {
+            leaf.Token.ThrowIfCancellationRequested();
+            var runId = run.RunId;
+            var source = WorkflowStopAuthority.Current(run);
+            var result = await runtime.ExecuteAsync(run, node, occurrence.LoopIteration, Save, leaf.Token,
+                (key, token) => VerifyRoomSwitchSourceAsync(runId, source, key, token)).ConfigureAwait(false);
+            leaf.Token.ThrowIfCancellationRequested();
+            return ToOutcome(result);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested
+            && (leaf.IsCancellationRequested || runtime.IsRoomSwitchSkipRequested(run.RunId)))
+        {
+            var result = await runtime.CancelRoomSwitchAsync(run.RunId, _opt.SkipConfirmTimeout).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            if (TaskFlowRuntime.HasPendingRoomSwitch(run))
+            {
+                if (!TaskFlowRuntime.SettleRoomSwitchCancellation(run, result))
+                    throw new WorkflowObservationUnknownException("跳过时切换结果待核对：" + result?.Message);
+                runtime.ForgetRoomDependency(run.RunId);
+                Save();
+            }
+            if (TaskFlowRuntime.HasUnconfirmedStep(run, node.NodeId, occurrence.LoopIteration))
+                throw new WorkflowObservationUnknownException("该流程行仍有先前动作结果未确认，不能按已跳过继续");
+            await runtime.CloseSkippedRoomFlowAsync(run.RunId, node.NodeId, ct).ConfigureAwait(false);
+            lock (control.Sync)
+                if (control.PendingSkip?.Matches(occurrence) == true) control.PendingSkip = null;
+            return "skippedUser";
+        }
+        finally
+        {
+            lock (control.Sync) control.LeafCts = null;
+        }
+    }
+
+    private async Task VerifyRoomSwitchSourceAsync(string runId, WorkflowStopAuthorityRecord? original, string stepKey, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        TaskCenterDriveAuthority.VerifyCurrent();
+        // 联机停驻期间原请求仍可观察；只用新读的副本复核，绝不并发改动旧驱动的游标。
+        var observed = _runs.Load(runId) ?? throw new InvalidOperationException("原切房运行不可确认");
+        if (observed.StopRequested || _runs.IsPhysicallyAbandoned(observed)
+            || observed.State is not (WorkflowRunState.Running or WorkflowRunState.LocalWaitParking or WorkflowRunState.OnlineHoeingParking)
+            || !TaskFlowRuntime.IsPendingRoomSwitchStep(observed, stepKey) || WorkflowStopAuthority.Current(observed) != original)
+            throw new OperationCanceledException("原切房来源已停止或变更", ct);
+        await VerifyStopAuthorityAsync(observed, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        if (WorkflowStopAuthority.Current(observed) != original)
+            throw new OperationCanceledException("原切房来源的 BGI 实例已变化", ct);
+        TaskCenterDriveAuthority.VerifyCurrent();
+    }
+
     private async Task CommitTaskFlowOutcomeAsync(WorkflowRunRecord run, WorkflowPlan plan,
-        WorkflowNodeOccurrence occurrence, string result, CancellationToken ct)
+        WorkflowNodeOccurrence occurrence, string result, CancellationToken ct, string? failureReason = null)
     {
         while (true)
         {
@@ -1389,7 +1487,13 @@ public sealed partial class WorkflowRunner
             }
             try
             {
-                CommitOutcome(latest, plan, occurrence, result, "流程节点与选路结果已确认");
+                if (result == "failed")
+                {
+                    latest.State = WorkflowRunState.Failed;
+                    latest.Note = AppendNote(latest.Note, "切换助手房间失败，已停止后继：" + failureReason);
+                }
+                CommitOutcome(latest, plan, occurrence, result, failureReason
+                    ?? (result == "skippedUser" ? "已取消流程行的切房等待并跳过" : "流程节点与选路结果已确认"));
                 RunStore.RebaseOnto(run, latest); return;
             }
             catch (RunRecordConflictException) { await Task.Delay(25, ct).ConfigureAwait(false); }
@@ -2390,6 +2494,8 @@ public sealed partial class WorkflowRunner
             }
         }
 
+        // 原请求完成前保留其定义；接续时也核对修订，禁止把旧请求移交给修改后的行。
+        if (TaskFlowRuntime.HasPendingRoomSwitch(run)) return (plan, occurrence);
         var snapshot = _workflows.LoadSnapshot(run.WorkflowId); // 文档+修订同源（B1）
         if (!reloadRequested && snapshot.Revision == run.WorkflowRevision) return (plan, occurrence);
 

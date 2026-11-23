@@ -468,6 +468,7 @@ public partial class MainViewModel
                     client.ConnectionStateChanged += OnBgiExternalConnectionStateChanged;
                     client.EpochChanged += OnBgiExternalEpochChanged;
                     _externalClient = client;
+                    StartBgiRoomMailbox(client);
                     _ = RefreshTaskCenterCatalogAfterConnectionAsync();
                 }
                 else
@@ -489,7 +490,10 @@ public partial class MainViewModel
             }
 
             if (_externalClient.State == BgiExternalLinkState.Ready)
+            {
                 _lastProbeState = BgiExternalLinkState.Ready;
+                if (_bgiRoomMailboxCancellation is null) StartBgiRoomMailbox(_externalClient);
+            }
             return _externalClient.IsEventChannelActive;
         }
         catch
@@ -507,6 +511,7 @@ public partial class MainViewModel
         {
             if (state != BgiExternalConnectionState.Ready)
             {
+                StopBgiRoomMailbox();
                 lock (_latestExtStatusGate)
                 {
                     _latestExtStatusJson = null;
@@ -516,6 +521,7 @@ public partial class MainViewModel
             AddLog($"[ext] BGI 外部接口通道状态 → {state}");
             if (state == BgiExternalConnectionState.Ready)
             {
+                if (_externalClient is { } peer) StartBgiRoomMailbox(peer);
                 _ = RefreshTaskCenterCatalogAfterConnectionAsync();
                 RetryPendingCoordinatedCleanupAfterConnection();
             }
@@ -621,7 +627,7 @@ public partial class MainViewModel
                 triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
             }
             // [P1] 首见判定/新鲜度校验/基线同步/双来源对齐/防抖全部收编进状态机
-            ApplyOnlineGenerationEdge(gen, triggeredAt);
+            ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(doc.RootElement, "onlineWorkflowRunId"));
         }
         catch
         {
@@ -646,7 +652,10 @@ public partial class MainViewModel
                     return;
                 }
 
-                ApplyOnlineGenerationEdge(gen);
+                DateTime? triggeredAt = evt.Payload.TryGetProperty("triggeredAt", out var time)
+                    && time.ValueKind == System.Text.Json.JsonValueKind.String && time.TryGetDateTime(out var utc)
+                    ? utc.ToUniversalTime() : null;
+                ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(evt.Payload, "workflowRunId"));
                 return;
             }
 

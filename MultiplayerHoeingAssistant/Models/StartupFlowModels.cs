@@ -14,7 +14,7 @@ public enum NodeRunState
     Running,
     /// <summary>动作执行成功。</summary>
     Success,
-    /// <summary>动作执行失败（流程继续后续节点）。</summary>
+    /// <summary>动作执行失败或结果未确认；是否终止后继由节点策略决定。</summary>
     Failed,
     /// <summary>节点已禁用，被跳过。</summary>
     Skipped,
@@ -191,6 +191,11 @@ public class StartupStep
     [JsonPropertyName("waitSeconds")]
     public int WaitSeconds { get; set; } = 10;
 
+    /// <summary>切换助手房间的本机档案 ID；不按名称或房间号回退。</summary>
+    [JsonPropertyName("roomProfileId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RoomProfileId { get; set; }
+
     /// <summary>触发时间 HH:mm（timerTrigger 用；今天的该时刻已过则顺延到明天）。</summary>
     [JsonPropertyName("triggerTime")]
     public string TriggerTime { get; set; } = "08:00";
@@ -300,6 +305,17 @@ public static class StartupStepNumbering
         }
     }
 
+    /// <summary>只遍历主链及条件的是/否子链，不进入后台触发链。</summary>
+    internal static IEnumerable<StartupStep> OrdinarySteps(IEnumerable<StartupStep> chain)
+    {
+        foreach (var step in chain)
+        {
+            yield return step;
+            if (step.NodeType == "condition")
+                foreach (var child in OrdinarySteps(step.TrueSteps.Concat(step.FalseSteps))) yield return child;
+        }
+    }
+
     public static Dictionary<string, int> Build(IEnumerable<StartupStep> root)
     {
         var map = new Dictionary<string, int>();
@@ -352,6 +368,15 @@ public static class StartupStatusSource
     public static readonly string[] All = [CurrentSession, StartupOrder, UserName];
 }
 
+/// <summary>流程只消费业务终态；Identity 是不落盘的已就绪连接身份。</summary>
+public sealed record FlowRoomSwitchResult(bool Success, bool Unknown, string Message, string? Identity = null);
+
+/// <summary>两个本机流程编辑器只消费档案 ID 与展示文本。</summary>
+public sealed record RoomSwitchChoice(string Id, string Display)
+{
+    public override string ToString() => Display;
+}
+
 public static class StartupStepKinds
 {
     // ---- 条件判断 ----
@@ -378,6 +403,7 @@ public static class StartupStepKinds
     public const string KillProgram = "killProgram";
     public const string RunCmd = "runCmd";
     public const string Wait = "wait";
+    public const string SwitchAssistantRoom = "switchAssistantRoom";
     /// <summary>进入任务中心执行：流程走到此节点，携带双重身份向任务中心宿主移交（R4.9；受理成功/已受理即终止本启动链）。</summary>
     public const string EnterTaskCenter = "enterTaskCenter";
     /// <summary>结束流程：立即终止整条启动流程（含所有外层链）。</summary>
@@ -425,6 +451,7 @@ public static class StartupStepKinds
         new(KillProgram, "action", "关闭程序", "▶", "按进程名强制结束当前会话的指定程序（如第三方工具）"),
         new(RunCmd, "action", "执行 CMD 命令", "▶", "以 cmd /c 隐藏窗口执行一条命令，不等待结果"),
         new(Wait, "action", "等待", "▶", "流程内延时 N 秒（等程序就绪时常用）"),
+        new(SwitchAssistantRoom, "action", "切换助手房间", "▶", "选择本机房间档案；目标房间就绪后才继续。仅支持主链和普通条件分支"),
         new(EnterTaskCenter, "action", "进入任务中心执行", "➤", "环境准备完毕，移交任务中心受理并接管执行（受理成功后终止本启动链；目标流程与移交语义在节点参数里设置）"),
         new(TimerTrigger, "action", "定时触发器", "⏰", "挂载定时器，到指定时间执行「到点执行」子链；定时中显示状态、可随时取消"),
         new(Watchdog, "action", "电子狗", "🐕", "循环盯梢：每 N 秒检查条件，由不成立变成立时执行「触发执行」子链；触发后默认继续循环，可改为触发后停止；防抖复核可调，挂载时已成立则确认后触发一次"),

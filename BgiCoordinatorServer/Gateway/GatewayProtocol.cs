@@ -158,7 +158,12 @@ public static class GatewayProtocol
         public const string AnomalyWaitPointReached = "anomaly.waitPointReached";
         public const string AnomalyFightingStatusChanged = "anomaly.fightingStatusChanged";
 
+        public const string ControlCreateRoom = "control.createRoom";
         public const string ControlJoinRoom = "control.joinRoom";
+        public const string ControlReadyRoom = "control.readyRoom";
+        public const string ControlLeaveRoom = "control.leaveRoom";
+        public const string ControlRoomSnapshot = "control.roomSnapshot";
+        public const string ControlRoomAccess = "control.roomAccess";
         public const string ControlSendCommand = "control.sendCommand";
         public const string ControlReportStatus = "control.reportStatus";
         public const string ControlConfirmAllReady = "control.confirmAllReady";

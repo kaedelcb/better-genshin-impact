@@ -66,7 +66,7 @@ public class RemoteConfigReplyRoutingTests
         reply.CommandId = request.CommandId;
         await h.Ops.SendRemoteCommandAsync(Ctx(executor), reply);
         obsProxy.Verify(x => x.SendCoreAsync("RemoteCommand", It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Once);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("sameUid"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"sameUid"));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class RemoteConfigReplyRoutingTests
         // 修复后：回复必须定向送达监控端连接
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
         // 回复命令不进离线缓存（发起方 20s 超时后冲刷出来的只是迟到噪音）
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs"));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public class RemoteConfigReplyRoutingTests
         h.LegacyHub.Verify(x => x.Clients.Client(connExec), Times.AtLeastOnce);
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
         // 目标 UID 有在线执行端，本就不缓存
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs"));
     }
 
     /// <summary>
@@ -134,7 +134,7 @@ public class RemoteConfigReplyRoutingTests
         await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", cmd));
 
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs"));
     }
 
     /// <summary>同 UID 双端时策略回复同样双投（执行端走 ResolveTargets，监控端走回投）。</summary>
@@ -154,7 +154,7 @@ public class RemoteConfigReplyRoutingTests
 
         h.LegacyHub.Verify(x => x.Clients.Client(connExec), Times.AtLeastOnce);
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.AtLeastOnce);
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("uidObs"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs"));
     }
 
     /// <summary>回归：策略族的请求命令（task_policy.pull，非回复）仍按执行类语义走离线缓存，
@@ -172,7 +172,7 @@ public class RemoteConfigReplyRoutingTests
         await h.Ops.SendRemoteCommandAsync(Ctx(connMember), NewCmd(room, "uidB", "uidObs", "task_policy.pull"));
 
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.Never);
-        var pending = h.RoomManager.GetAndClearPendingCommands("uidObs");
+        var pending = h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs");
         Assert.Single(pending);
         Assert.Equal("task_policy.pull", pending[0].Cmd);
     }
@@ -192,7 +192,7 @@ public class RemoteConfigReplyRoutingTests
 
         h.LegacyHub.Verify(x => x.Clients.Client(connObs), Times.Never);
         // 维持既有语义：目标离线进缓存，上线后冲刷下发
-        var pending = h.RoomManager.GetAndClearPendingCommands("uidObs");
+        var pending = h.RoomManager.GetAndClearPendingCommands("CTRL_" + room,"uidObs");
         Assert.Single(pending);
         Assert.Equal("start_bgi", pending[0].Cmd);
     }

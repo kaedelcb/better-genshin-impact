@@ -66,14 +66,18 @@ public sealed class GatewayBroadcaster
     }
 
     /// <summary>向指定连接定向发送：按该连接的协议登记只发一份（旧名或 evt）。</summary>
-    public async Task SendToConnectionAsync(string connectionId, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
+    public Task SendToConnectionAsync(string connectionId, string legacyEventName, object? evtPayload, params object?[] legacyArgs)
+        => SendToConnectionAsync(connectionId, legacyEventName, evtPayload, legacyArgs, roomCode: null);
+
+    public async Task SendToConnectionAsync(string connectionId, string legacyEventName, object? evtPayload,
+        object?[] legacyArgs, string? roomCode)
     {
         if (_sessions.IsV3(connectionId))
         {
             var newName = MapEventName(legacyEventName);
             if (newName != null)
             {
-                await SendEvtSafeAsync(_gatewayHub.Clients.Client(connectionId), null, legacyEventName, evtPayload);
+                await SendEvtSafeAsync(_gatewayHub.Clients.Client(connectionId), roomCode, legacyEventName, evtPayload);
             }
             else
             {

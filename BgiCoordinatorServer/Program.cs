@@ -28,6 +28,11 @@ var routeForwarding = builder.Services.AddRoutePackageServices(builder.Configura
 var roomLogRoot = builder.Configuration["ROOM_LOG_ROOT"];
 var resolvedRoomLogRoot = string.IsNullOrWhiteSpace(roomLogRoot)
     ? Path.Combine(builder.Environment.ContentRootPath, "data", "room-logs") : roomLogRoot;
+var controlRoomRoot = builder.Configuration["CONTROL_ROOM_REGISTRY_ROOT"];
+var controlRoomCap = int.TryParse(builder.Configuration["CONTROL_ROOM_MAX_PER_UID"], out var cap) && cap > 0
+    ? cap : ControlRoomAuth.DefaultMaxRoomsPerUid;
+builder.Services.AddSingleton(new ControlRoomAuth(string.IsNullOrWhiteSpace(controlRoomRoot)
+    ? Path.Combine(resolvedRoomLogRoot, "control-rooms") : controlRoomRoot, controlRoomCap));
 var roomLogArchive = new RoomLogArchive(resolvedRoomLogRoot);
 builder.Services.AddSingleton(new RoomHoeingHistory(Path.Combine(resolvedRoomLogRoot, "hoeing-history")));
 builder.Services.AddSingleton(new AdminControlRoomNotes(resolvedRoomLogRoot));

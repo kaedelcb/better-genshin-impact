@@ -214,16 +214,15 @@ internal sealed class ExternalInterfaceEventObserver
         }
 
         // 4. 联机锄地上线：generation 边沿 + 30s 近因窗口（与 HandleTaskStatus 口径一致）
-        var generation = NotifyOnlineTask.CurrentGeneration;
-        if (generation > _lastOnlineGeneration
-            && NotifyOnlineTask.LastTriggeredAt != DateTime.MinValue
-            && (now - NotifyOnlineTask.LastTriggeredAt).TotalSeconds
-                < ExternalInterfaceProtocol.OnlineRecentWindowSeconds)
+        var online = NotifyOnlineTask.ReadSignal();
+        if (online.Generation > _lastOnlineGeneration
+            && online.TriggeredAt != DateTime.MinValue
+            && (now - online.TriggeredAt).TotalSeconds < ExternalInterfaceProtocol.OnlineRecentWindowSeconds)
         {
-            _lastOnlineGeneration = generation;
+            _lastOnlineGeneration = online.Generation;
             hub.Publish(
                 ExternalInterfaceEventNames.OnlineTriggered,
-                new { generation, triggeredAt = NotifyOnlineTask.LastTriggeredAt });
+                new { generation = online.Generation, triggeredAt = online.TriggeredAt, workflowRunId = online.WorkflowRunId?.ToString("N") });
         }
     }
 

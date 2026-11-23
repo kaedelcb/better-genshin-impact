@@ -5,6 +5,8 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
+internal sealed class StartupRoomSwitchException(string message) : Exception(message);
+
 /// <summary>
 /// 槲寄生 · 启动中心——启动流程执行引擎（树形分支版）。
 /// 主链顺序执行；条件节点求值后递归执行「是」或「否」子链，子链跑完回到父链继续（分支汇合）。
@@ -22,6 +24,9 @@ public sealed class StartupFlowRunner
     private readonly Func<string, Dictionary<string, object>?, Task<CommandResult>> _bgiExecutor;
     /// <summary>进入任务中心移交入口（R4.9：携带双重身份请求 → 结构化回执；由宿主 VM 注入，路由到 TaskCenterHost.RegisterHandoffAsync）。</summary>
     private readonly Func<StartupHandoffRequest, CancellationToken, Task<StartupHandoffResult>> _enterTaskCenter;
+    private readonly Func<string, Func<CancellationToken, Task>, CancellationToken, Task<FlowRoomSwitchResult>>? _switchRoom;
+    private readonly Func<string, bool>? _roomIdentityCurrent;
+    private readonly Func<StartupSourceIntent, bool, CancellationToken, Task<WorkflowStopAuthorityRecord?>>? _roomSourceAuthorityProvider;
     /// <summary>定时触发器挂载入口（由宿主 VM 注入：负责登记定时状态、到点执行 FireSteps、取消）。</summary>
     private readonly Action<StartupStep> _armTimer;
     /// <summary>电子狗挂载入口（由宿主 VM 注入：负责登记盯梢状态、边沿触发执行 FireSteps、取消）。</summary>
@@ -74,9 +79,15 @@ public sealed class StartupFlowRunner
         Func<string, string, string, CancellationToken, Task<string>>? userProgramLauncher = null,
         RegisterBankService? registerBank = null,
         Func<IReadOnlyList<StartupStep>>? jumpRoot = null,
-        Func<string, bool>? isTriggerArmed = null)
+        Func<string, bool>? isTriggerArmed = null,
+        Func<string, Func<CancellationToken, Task>, CancellationToken, Task<FlowRoomSwitchResult>>? switchRoom = null,
+        Func<string, bool>? roomIdentityCurrent = null,
+        Func<StartupSourceIntent, bool, CancellationToken, Task<WorkflowStopAuthorityRecord?>>? roomSourceAuthorityProvider = null)
     {
         _jumpRoot = jumpRoot;
+        _roomSourceAuthorityProvider = roomSourceAuthorityProvider;
+        _switchRoom = switchRoom;
+        _roomIdentityCurrent = roomIdentityCurrent;
         _isTriggerArmed = isTriggerArmed;
         _registers = registerBank;
         _bgiExecutor = bgiExecutor;
@@ -115,6 +126,8 @@ public sealed class StartupFlowRunner
         public StartupSourceIntent? SourceIntent { get; set; }
         public bool PassiveTriggerMounted { get; set; }
         public bool TaskCenterAccepted { get; set; }
+        public string? AssistantRoomIdentity { get; set; }
+        public WorkflowStopAuthorityRecord? AssistantRoomSourceAuthority { get; set; }
         /// <summary>本次执行传入的节点链（跳转目标的后备查找范围）。</summary>
         public IReadOnlyList<StartupStep> RootSteps { get; init; } = [];
         /// <summary>当前跳转嵌套层数。</summary>
@@ -130,8 +143,8 @@ public sealed class StartupFlowRunner
     }
 
     /// <summary>
-    /// 从主链开始执行整条启动流程。本方法不抛业务异常（单节点失败不炸整条链）；
-    /// OperationCanceledException 会原样抛出给调用方（取消语义）。
+    /// 从主链开始执行整条启动流程。普通动作失败沿用各自策略；
+    /// 切房失败或待核对，以及取消，传给调用方显示且不执行后继。
     /// </summary>
     public async Task RunAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, StartupTriggerInfo? trigger = null, StartupSourceIntent? sourceIntent = null)
     {
@@ -152,7 +165,7 @@ public sealed class StartupFlowRunner
         _log($"[槲寄生] 启动流程开始执行（主链 {steps.Count} 个节点，执行 {ctx.ShortId}）");
         try
         {
-            await RunChainAsync(steps, ct, ctx, depth: 0);
+            await RunChainAsync(steps, ct, ctx, depth: 0, allowRoomSwitch: trigger is null || trigger.Kind == "startup");
             _log($"[槲寄生] 启动流程执行完毕（执行 {ctx.ShortId}）");
         }
         catch (FlowEndException ex)
@@ -166,16 +179,17 @@ public sealed class StartupFlowRunner
     }
 
     /// <summary>递归执行一条节点链（主链或条件的子链）。depth 仅用于日志缩进可读性。</summary>
-    private async Task VerifySourceAsync(RunContext ctx, bool required, CancellationToken ct)
+    private async Task VerifySourceAsync(RunContext ctx, bool required, CancellationToken ct, bool roomSwitch = false)
     {
-        if (_sourceAuthorityProvider is null) return; // component seams do not prove production authority.
+        var provider = roomSwitch ? _roomSourceAuthorityProvider ?? _sourceAuthorityProvider : _sourceAuthorityProvider;
+        if (provider is null) return; // component seams do not prove production authority.
         if (ctx.SourceIntent is null) throw new OperationCanceledException("原来源意图缺失", ct);
-        try { await ctx.SourceIntent.GetOrCheckAsync(_sourceAuthorityProvider, required, ct); }
+        try { await ctx.SourceIntent.GetOrCheckAsync(provider, required, ct); }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { throw new OperationCanceledException("来源停止权威已撤销或不可确认；旧回调停止", ex, ct); }
     }
 
-    private async Task RunChainAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, RunContext ctx, int depth)
+    private async Task RunChainAsync(IReadOnlyList<StartupStep> steps, CancellationToken ct, RunContext ctx, int depth, bool allowRoomSwitch)
     {
         for (var i = 0; i < steps.Count; i++)
         {
@@ -185,10 +199,11 @@ public sealed class StartupFlowRunner
             // 新来源的被动触发器由独立循环在触发前核来源；主链后续有副作用的动作仍须先核。
             // 已冻结来源继续逐节点复核，停止后的旧来源连新触发器也不能挂载。
             var frozenSource = ctx.SourceIntent?.Authority is not null;
-            if (_sourceAuthorityProvider is not null
+            if (_sourceAuthorityProvider is not null && step.Kind != StartupStepKinds.SwitchAssistantRoom
                 && (frozenSource || (ctx.PassiveTriggerMounted && !IsBackgroundTrigger(step.Kind)
                     && NeedsSourceBeforeAction(step))))
-                await VerifySourceAsync(ctx, required: frozenSource && ctx.SourceIntent?.AuxiliaryOnly != true, ct);
+                await VerifySourceAsync(ctx, required: frozenSource && ctx.SourceIntent?.AuxiliaryOnly != true, ct,
+                    roomSwitch: step.Kind == StartupStepKinds.EnterTaskCenter && ctx.AssistantRoomIdentity is not null);
             var indent = new string('　', depth); // 全角空格缩进，分支层级一目了然
             var display = DisplayName(step, i);
 
@@ -204,6 +219,12 @@ public sealed class StartupFlowRunner
             {
                 Report(step, NodeRunState.Failed, "寄存器节点类型与参数不符");
                 throw new FlowEndException("寄存器节点类型无效，已终止本次流程");
+            }
+            if (step.Kind == StartupStepKinds.SwitchAssistantRoom && (!allowRoomSwitch || step.NodeType != "action"))
+            {
+                const string detail = "切换助手房间只支持主链和普通条件分支，未执行此节点";
+                Report(step, NodeRunState.Failed, detail);
+                throw new StartupRoomSwitchException(detail);
             }
             if (step.NodeType == "condition")
             {
@@ -239,14 +260,14 @@ public sealed class StartupFlowRunner
                 }
                 else
                 {
-                    await RunChainAsync(branch, ct, ctx, depth + 1);
+                    await RunChainAsync(branch, ct, ctx, depth + 1, allowRoomSwitch);
                 }
                 continue;
             }
 
             if (step.Kind == StartupStepKinds.JumpTo)
             {
-                await RunJumpAsync(step, display, indent, ct, ctx, depth);
+                await RunJumpAsync(step, display, indent, ct, ctx, depth, allowRoomSwitch);
                 // 跳转是链尾节点：本链到此结束；旧配置里跳转后面残留的节点不执行，如实标为跳过
                 for (var k = i + 1; k < steps.Count; k++)
                     Report(steps[k], NodeRunState.Skipped, "位于跳转之后，不执行");
@@ -259,6 +280,11 @@ public sealed class StartupFlowRunner
             Report(step, NodeRunState.Running);
             bool ok;
             try { ok = await ExecuteActionAsync(step, display, indent, ct, ctx); }
+            catch (StartupRoomSwitchException ex)
+            {
+                Report(step, NodeRunState.Failed, ex.Message);
+                throw;
+            }
             catch (OperationCanceledException ex)
             {
                 Report(step, ct.IsCancellationRequested ? NodeRunState.Skipped : NodeRunState.Failed,
@@ -288,7 +314,7 @@ public sealed class StartupFlowRunner
 
     /// <summary>跳转：从目标节点开始执行它所在链的剩余节点；返回后由调用方结束跳转所在的链。
     /// 目标未选/已删除 → 节点失败、链继续；嵌套超过 <see cref="MaxJumpDepth"/> 层 → 终止本次流程（防循环）。</summary>
-    private async Task RunJumpAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx, int depth)
+    private async Task RunJumpAsync(StartupStep step, string display, string indent, CancellationToken ct, RunContext ctx, int depth, bool allowRoomSwitch)
     {
         Report(step, NodeRunState.Running);
         var targetId = (step.JumpTargetId ?? "").Trim();
@@ -314,6 +340,7 @@ public sealed class StartupFlowRunner
                 if (StartupStepNumbering.Locate(root, targetId) is not { } hit) continue;
                 // 取快照再执行：执行中编辑器改动链结构不影响本次跳转
                 tail = hit.Chain.Skip(hit.Index).ToList();
+                allowRoomSwitch &= StartupStepNumbering.OrdinarySteps(root).Any(s => ReferenceEquals(s, tail[0]));
                 number = StartupStepNumbering.Build(root).TryGetValue(targetId, out var n) ? n : null;
                 break;
             }
@@ -342,7 +369,7 @@ public sealed class StartupFlowRunner
         Report(step, NodeRunState.Success, $"跳到「{targetText}」");
         ctx.JumpDepth++;
         ctx.ActiveJumpIds.Add(step.Id);
-        try { await RunChainAsync(tail, ct, ctx, depth + 1); }
+        try { await RunChainAsync(tail, ct, ctx, depth + 1, allowRoomSwitch); }
         finally
         {
             ctx.ActiveJumpIds.Remove(step.Id);
@@ -613,6 +640,9 @@ public sealed class StartupFlowRunner
                     _log($"[槲寄生] {indent}关闭 BGI：{r.Message}");
                     return r.Status == "success";
                 }
+                case StartupStepKinds.SwitchAssistantRoom:
+                    await SwitchRoomAsync(step, ctx, ct);
+                    return true;
                 case StartupStepKinds.EnterTaskCenter:
                 {
                     // R4.9 §5/§7：真实移交。校验顺序与宿主一致（三轮 重要5：显式未知 mode 先于空目标检查，
@@ -773,6 +803,7 @@ public sealed class StartupFlowRunner
         {
             throw; // 移交终态控制流，逐层展开（R4.9 §7：绝不能被通用 catch 吞掉）
         }
+        catch (StartupRoomSwitchException) { throw; } // 切房失败/未知不能按普通动作失败继续。
         catch (OperationCanceledException)
         {
             throw; // 取消是正常控制流，抛给 RunAsync 的调用方处理
@@ -783,6 +814,39 @@ public sealed class StartupFlowRunner
             _log($"[槲寄生] {indent}节点「{display}」执行异常：{ex.Message}");
             return false;
         }
+    }
+
+    private async Task SwitchRoomAsync(StartupStep step, RunContext ctx, CancellationToken ct)
+    {
+        if (ctx.TaskCenterAccepted || ctx.SourceIntent?.LocalOnly == true)
+            throw new StartupRoomSwitchException("当前启动来源无本机切房授权，或已移交任务中心");
+        var profile = step.RoomProfileId;
+        if (string.IsNullOrWhiteSpace(profile)) throw new StartupRoomSwitchException("请选择目标房间档案");
+        var switchRoom = _switchRoom ?? throw new StartupRoomSwitchException("助手切房入口未就绪");
+        // Switching the assistant room is allowed before BGI starts; once a BGI stop fence
+        // exists it must still be positively verified, never refreshed onto another process.
+        await VerifySourceAsync(ctx, required: ctx.SourceIntent?.Authority is not null, ct, roomSwitch: true);
+        var original = ctx.SourceIntent?.Authority;
+        async Task Verify(CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            await VerifySourceAsync(ctx, required: original is not null, token, roomSwitch: true);
+            if (ctx.SourceIntent?.Authority != original)
+                throw new OperationCanceledException("原切房来源的 BGI 实例或停止授权已变化", token);
+        }
+
+        FlowRoomSwitchResult result;
+        try { result = await switchRoom(profile, Verify, ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) { throw new StartupRoomSwitchException("切换结果待核对：" + ex.Message); }
+        if (result.Unknown || result.Success && string.IsNullOrWhiteSpace(result.Identity))
+            throw new StartupRoomSwitchException("切换结果待核对：" + result.Message);
+        ct.ThrowIfCancellationRequested();
+        if (!result.Success) throw new StartupRoomSwitchException(result.Message);
+        await Verify(ct);
+        ctx.AssistantRoomIdentity = result.Identity;
+        ctx.AssistantRoomSourceAuthority = original;
+        _log("[槲寄生] " + result.Message);
     }
 
     /// <summary>「进入任务中心执行」移交（R4.9 §6/§7）：语义校验 → 混用守卫（主证据）→ 构建双重身份请求 → 委托回执 → 节点终态单处回报。</summary>
@@ -820,10 +884,13 @@ public sealed class StartupFlowRunner
         }
 
         // 双重身份（§2）：ExecutionId=本次执行；IntentKey=计划出现（触发器=种类:实例:日程日；手动=每次新意图）
-        await VerifySourceAsync(ctx, required: true, ct);
+        await VerifySourceAsync(ctx, required: true, ct, roomSwitch: ctx.AssistantRoomSourceAuthority is not null);
+        if (ctx.AssistantRoomSourceAuthority is not null && ctx.SourceIntent?.Authority != ctx.AssistantRoomSourceAuthority)
+            throw new StartupRoomSwitchException("前置切房的原 BGI 停止授权已变化，未移交任务中心");
         StartupHandoffRequest CreateRequest() => new StartupHandoffRequest
         {
             StopAuthority = ctx.SourceIntent?.Authority,
+            AssistantRoomIdentity = ctx.AssistantRoomIdentity,
             ExecutionId = ctx.ExecutionId,
             StepId = step.Id,
             TriggerKind = ctx.Trigger?.Kind,
@@ -843,8 +910,12 @@ public sealed class StartupFlowRunner
             var waiting = false;
             while (true)
             {
+                if (request.AssistantRoomIdentity is { } identity && _roomIdentityCurrent?.Invoke(identity) != true)
+                    throw new StartupRoomSwitchException("前置切房的目标连接已变化，未移交任务中心");
                 result = await _enterTaskCenter(request, ct);
-                if (ctx.SourceIntent?.AllowProcessRecovery != true || result.Outcome != HandoffOutcome.Rejected
+                if (result.ReasonCode == HandoffReasonCodes.AssistantRoomChanged)
+                    throw new StartupRoomSwitchException(result.Reason ?? "前置切房身份不再有效，未移交任务中心");
+                if (request.AssistantRoomIdentity is not null || ctx.SourceIntent?.AllowProcessRecovery != true || result.Outcome != HandoffOutcome.Rejected
                     || result.ReasonCode is not (HandoffReasonCodes.NotReady or HandoffReasonCodes.StatusUncertain)) break;
                 if (!waiting) _log($"[槲寄生] 等待任务中心恢复：{result.Reason}（保留同一执行身份）");
                 waiting = true;
@@ -857,6 +928,7 @@ public sealed class StartupFlowRunner
         {
             throw; // 取消语义原样上传
         }
+        catch (StartupRoomSwitchException) { throw; }
         catch (Exception ex)
         {
             // 委托异常=受理事实未决（可能已受理）——按 Rejected+终止链兜底，绝不假装成功

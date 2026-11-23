@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace MultiplayerHoeingAssistant.Models;
@@ -17,6 +19,74 @@ public class AssistConfig : IJsonOnDeserialized
 
     [JsonPropertyName("teamUids")]
     public List<string> TeamUids { get; set; } = [];
+
+    private List<AssistantRoomProfile> _roomProfiles = [];
+    private bool _roomProfilesSpecified;
+
+    [JsonPropertyName("roomProfiles")]
+    public List<AssistantRoomProfile> RoomProfiles
+    {
+        get => _roomProfiles;
+        set
+        {
+            _roomProfiles = value ?? [];
+            _roomProfilesSpecified = true;
+        }
+    }
+
+    [JsonPropertyName("activeRoomProfileId")]
+    public string ActiveRoomProfileId { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public AssistantRoomProfile? ActiveRoomProfile
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(ActiveRoomProfileId)) return null;
+            AssistantRoomProfile? selected = null;
+            foreach (var profile in RoomProfiles)
+            {
+                if (profile is null || !string.Equals(profile.Id, ActiveRoomProfileId, StringComparison.Ordinal)) continue;
+                if (selected != null) return null;
+                selected = profile;
+            }
+            return selected;
+        }
+    }
+
+    [JsonIgnore]
+    public string EffectiveRoomCode => ActiveRoomProfile?.RoomCode
+        ?? (CanMigrateLegacyRoom ? GenerateLegacyRoomCode(TeamUids) : string.Empty);
+
+    // 显式空列表是新版的未配置状态，不可仅因用户后来改了本机身份而匹配到遗留 UID 列表。
+    private bool CanMigrateLegacyRoom => !_roomProfilesSpecified && RoomProfiles.Count == 0
+        && string.IsNullOrEmpty(ActiveRoomProfileId)
+        && !string.IsNullOrWhiteSpace(PlayerUid)
+        && !string.IsNullOrEmpty(ControlRoomPassword)
+        && TeamUids is { Count: > 0 }
+        && TeamUids.All(uid => !string.IsNullOrWhiteSpace(uid))
+        && TeamUids.Contains(PlayerUid, StringComparer.Ordinal);
+
+    /// <summary>原房间号用于查询旧资料；已有档案的激活指针有歧义时不猜测。</summary>
+    public bool EnsureRoomProfiles()
+    {
+        ActiveRoomProfileId ??= string.Empty;
+        if (!CanMigrateLegacyRoom) return false;
+
+        var code = GenerateLegacyRoomCode(TeamUids);
+        var profile = new AssistantRoomProfile { Id = $"legacy-{code}", Name = "默认房间", RoomCode = code };
+        profile.Capture(this);
+        RoomProfiles.Add(profile);
+        _roomProfilesSpecified = true;
+        ActiveRoomProfileId = profile.Id;
+        return true;
+    }
+
+    internal static string GenerateLegacyRoomCode(IEnumerable<string> playerUids)
+    {
+        var input = string.Join(",", playerUids.OrderBy(uid => uid));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input)))[..6];
+    }
 
     [JsonPropertyName("bgiPath")]
     public string BgiPath { get; set; } = string.Empty;
@@ -88,7 +158,9 @@ public class AssistConfig : IJsonOnDeserialized
 
     /// <summary>一键快捷命令绑定：命令名 → 配置组名/一条龙名</summary>
     [JsonPropertyName("quickCommands")]
-    public Dictionary<string, string> QuickCommands { get; set; } = new()
+    public Dictionary<string, string> QuickCommands { get; set; } = DefaultQuickCommands();
+
+    internal static Dictionary<string, string> DefaultQuickCommands() => new()
     {
         ["一键传奇"] = "",
         ["一键次数盾"] = "",
@@ -131,6 +203,10 @@ public class AssistConfig : IJsonOnDeserialized
     /// <summary>迁入的闹钟或其执行目标尚未经本机确认；重启和普通设置保存均不能自动武装。</summary>
     [JsonPropertyName("scheduledOnlineRequiresConfirmation")]
     public bool ScheduledOnlineRequiresConfirmation { get; set; }
+
+    /// <summary>当前房间最近一次定时上线已触发或已跳过的本地日期。</summary>
+    [JsonPropertyName("scheduledOnlineLastFireDate")]
+    public DateTime? ScheduledOnlineLastFireDate { get; set; }
 
     /// <summary>联机锄地配置组名称列表（多个，如传奇/精英/小怪）</summary>
     [JsonPropertyName("onlineHoeingGroupNames")]

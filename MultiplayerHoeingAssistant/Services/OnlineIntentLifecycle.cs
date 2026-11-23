@@ -366,6 +366,27 @@ public sealed class OnlineIntentLifecycle
         ClearCurrentOnline("状态重置", suppressScheduledOnline: false);
     }
 
+    internal int? ArmedOnlineGeneration
+    {
+        get { lock (_gate) return _state == OnlineIntentState.Armed && _armedIntentGeneration > 0 ? _armedIntentGeneration : null; }
+    }
+
+    internal void ChangeAssistantRoom(bool suppressScheduledOnline)
+    {
+        string? transitionLog;
+        lock (_gate)
+        {
+            transitionLog = TransitionLocked(OnlineIntentState.Idle, "切换控制房间");
+            _pendingOnlineReportGen = 0;
+            _lastReportedOnlineGen = 0;
+            _armedIntentGeneration = 0;
+            _activeCoordinatedBatchId = null;
+            _lastOnlineEventReportedAtUtc = DateTime.MinValue;
+            _manuallyClearedOnline = suppressScheduledOnline;
+        }
+        if (transitionLog != null) _log(transitionLog);
+    }
+
     private void ClearCurrentOnline(string reason, bool suppressScheduledOnline)
     {
         string? transitionLog;

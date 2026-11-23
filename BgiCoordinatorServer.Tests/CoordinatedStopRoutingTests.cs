@@ -99,7 +99,7 @@ public sealed class CoordinatedStopRoutingTests
         h.RoomManager.RemoveFromControlRoom("CTRL_" + room, clients[1].ConnectionId);
         await h.Ops.SendRemoteCommandAsync(clients[0], Stop(room, ["u1"]));
         Assert.Empty(Delivered(h));
-        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("u1"));
+        Assert.Empty(h.RoomManager.GetAndClearPendingCommands("CTRL_" + room, "u1"));
     }
 
     [Theory]

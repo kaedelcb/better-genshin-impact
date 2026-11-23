@@ -5,7 +5,7 @@ namespace BgiCoordinatorServer.Models;
 /// Full=true 时填 Players（全量列表）；Full=false 时填 Changed（变更成员）+ Removed（离房 uid 列表）。
 /// Revision 为服务端单调递增的广播序号（从 1 开始），供客户端丢包/乱序自检；
 /// 无变化时服务端不发送，Revision 允许跳号（客户端不得假设连续）。
-/// JSON 走 SignalR 默认 camelCase（full/revision/players/changed/removed）。
+/// JSON 走 SignalR 默认 camelCase（full/revision/baseRevision/players/changed/removed）。
 /// </summary>
 public class ControlRoomPlayersUpdate
 {
@@ -13,6 +13,8 @@ public class ControlRoomPlayersUpdate
     public bool Full { get; set; }
     /// <summary>广播序号（per-group 单调递增，从 1 开始；无变化不发送故允许跳号）。</summary>
     public long Revision { get; set; }
+    /// <summary>仅增量使用：本次差异依赖的上次广播 revision，不要求相邻。</summary>
+    public long BaseRevision { get; set; }
     /// <summary>Full=true 时填：当前成员全量列表。</summary>
     public List<ControlRoomPlayer>? Players { get; set; }
     /// <summary>Full=false 时填：相对上次广播有字段变化（或新增）的成员。</summary>

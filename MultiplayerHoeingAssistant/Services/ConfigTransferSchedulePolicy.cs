@@ -10,6 +10,7 @@ internal static class ConfigTransferSchedulePolicy
         if (string.IsNullOrEmpty(imported.ScheduledOnlineTime)) return false;
         return local is null || local.ScheduledOnlineRequiresConfirmation
             || local.ScheduledOnlineTime != imported.ScheduledOnlineTime
+            || local.EffectiveRoomCode != imported.EffectiveRoomCode
             || local.ServerUrl != imported.ServerUrl || local.ControlRoomPassword != imported.ControlRoomPassword
             || local.PlayerUid != imported.PlayerUid || local.ObserverMode != imported.ObserverMode
             || local.StandaloneMode != imported.StandaloneMode

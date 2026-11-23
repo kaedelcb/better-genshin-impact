@@ -47,27 +47,25 @@ public partial class RoomManager
     private readonly ConcurrentDictionary<string, List<ControlRoomPlayer>> _controlRooms = new();
     // 仅成功入房的执行端可恢复原登记；不能信任状态包自报的 UID。
     // 被同身份新连接替换后仍保留，断开/退组/转遥控端时撤销。所有访问与对应 players 共锁。
-    private sealed record ControlRoomConnection(string PlayerUid, string ClientInstanceId, string MachineId, ControlRoomPlayer Player);
+    private sealed record ControlRoomConnection(string PlayerUid, string ClientInstanceId, string MachineId, ControlRoomPlayer Player)
+    {
+        public HashSet<int> AcceptedOnlineGenerations { get; } = [];
+    }
     private readonly ConcurrentDictionary<(string Group, string ConnectionId), ControlRoomConnection> _controlRoomConnections = new();
     // 控制房间广播快照（带宽优化）：group → (uid → 上次广播时该成员的规范化 JSON 串)。
-    // 用于 ControlRoomPlayersUpdated 增量比对：序列化串不变即视为无变化，不再全量广播（N² 放大止血）。
-    // 快照随房间存在即可（maxRooms=50 上限，量小），不做复杂回收；组内成员快照随 removed 同步剔除。
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _controlRoomBroadcastSnapshots = new();
-    // 控制房间广播序号（group → 已用最大 revision，NextControlRoomRevision CAS 递增，从 1 开始）
-    private readonly ConcurrentDictionary<string, long> _controlRoomRevisions = new();
-    // 控制房间 AllReady 广播幂等标志（独立于锄地房间 Room 对象，因为控制房间可能没有对应的锄地房间）
-    private readonly ConcurrentDictionary<string, bool> _controlRoomAllReadyBroadcasted = new();
-    // 遥控端连接登记（group → connectionId → playerUid）。遥控端不入 _controlRooms 成员列表，
-    // 只加 SignalR Group 收广播；登记到此集合供 SendRemoteCommand 发送方校验放行，
-    // 以及远程配置编辑的回复命令（remote_config.data / push_result）按 UID 定向回投。
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string>> _remoteControlConnections = new();
-    // 离线命令缓存：playerUid → 待执行的命令列表
-    private readonly ConcurrentDictionary<string, List<RemoteCommand>> _pendingCommands = new();
+    private readonly object _pendingCommandGate = new();
+    private readonly Dictionary<(string Group, string Uid), List<RemoteCommand>> _pendingCommands = new();
+    private static readonly TimeSpan OnlineIntentLifetime = TimeSpan.FromMinutes(30);
+    private readonly TimeProvider _controlTime;
+    internal DateTime ControlUtcNow => _controlTime.GetUtcNow().UtcDateTime;
 
-    public RoomManager(int maxRooms = 50, ILogger<RoomManager>? logger = null)
+    public RoomManager(int maxRooms = 50, ILogger<RoomManager>? logger = null, TimeProvider? controlTimeProvider = null)
     {
         _maxRooms = maxRooms;
         _logger = logger;
+        _controlTime = controlTimeProvider ?? TimeProvider.System;
     }
 
     /// <summary>创建房间，返回唯一6位字母数字房间码。同一 UID 只保留最新房间。</summary>
@@ -1320,26 +1318,25 @@ public partial class RoomManager
     /// <summary>将玩家添加到控制房间。按 ConnectionId 匹配（同 UID 多连接各自独立条目），
     /// 找不到时按 (PlayerUid, ClientInstanceId) 查找旧条目更新 ConnectionId（断线重连场景）。</summary>
     public void AddToControlRoom(string group, string connectionId, string playerUid, string playerName,
-        string clientInstanceId = "", string machineId = "")
+        string clientInstanceId = "", string machineId = "", ControlStatus? initialStatus = null)
     {
         var players = _controlRooms.GetOrAdd(group, _ => []);
         lock (players)
         {
             var existing = players.Find(p => p.ConnectionId == connectionId);
             if (existing == null && !string.IsNullOrEmpty(clientInstanceId))
-            {
-                // 断线重连：按 (PlayerUid, ClientInstanceId) 查找旧条目，更新 ConnectionId
                 existing = players.Find(p => p.PlayerUid == playerUid && p.ClientInstanceId == clientInstanceId);
-                if (existing != null)
-                {
-                    existing.ConnectionId = connectionId;
-                    existing.Online = true;
-                    existing.PlayerName = playerName;
-                    existing.MachineId = machineId;
-                }
-            }
             if (existing != null)
             {
+                if (existing.ConnectionId != connectionId || existing.PlayerUid != playerUid
+                    || existing.ClientInstanceId != clientInstanceId)
+                {
+                    // 上线收据属于连接，换连接不得把旧代序号当成新连接已受理的意图。
+                    existing.OnlineEventGeneration = 0;
+                    existing.OnlineEventTime = DateTime.MinValue;
+                    DisarmOnlineIntent(existing);
+                }
+                existing.ConnectionId = connectionId;
                 existing.Online = true;
                 if (existing.HoeingStartPhase == "offlineCompletion")
                 {
@@ -1369,8 +1366,14 @@ public partial class RoomManager
                     BgiStatus = "unknown"
                 });
             }
-            _controlRoomConnections[(group, connectionId)] = new(playerUid, clientInstanceId ?? "", machineId ?? "",
-                players.First(p => p.ConnectionId == connectionId));
+            var member = players.First(p => p.ConnectionId == connectionId);
+            var key = (group, connectionId);
+            if (!_controlRoomConnections.TryGetValue(key, out var identity) || identity.PlayerUid != playerUid
+                || identity.ClientInstanceId != clientInstanceId || identity.MachineId != machineId
+                || !ReferenceEquals(identity.Player, member))
+                _controlRoomConnections[key] = new(playerUid, clientInstanceId ?? "", machineId ?? "", member);
+            // Prepared members only become visible to command routing together with their target configuration.
+            if (initialStatus is not null) UpdateControlStatus(group, connectionId, initialStatus);
         }
     }
 
@@ -1435,6 +1438,7 @@ public partial class RoomManager
                 ClientInstanceId = p.ClientInstanceId, Online = p.Online,
                 BgiVersion = p.BgiVersion,
                 OnlineEventConsumed = p.OnlineEventConsumed, OnlineEventGeneration = p.OnlineEventGeneration,
+                OnlineReadyExpireTime = p.OnlineReadyExpireTime,
                 OnlineHoeingGroupNames = p.OnlineHoeingGroupNames?.ToList() ?? [],
                 OnlineHoeingGroupTypes = p.OnlineHoeingGroupTypes?.ToList() ?? [],
                 QuickCommands = p.QuickCommands?.ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.Ordinal) ?? new(),
@@ -1500,22 +1504,6 @@ public partial class RoomManager
 
     /// <summary>快照规范化序列化选项：camelCase，与线上 SignalR JSON 命名一致（剔除字段按 camelCase 名匹配）。</summary>
     private static readonly JsonSerializerOptions ControlRoomSnapshotJsonOptions = new(JsonSerializerDefaults.Web);
-
-    /// <summary>取该组下一个广播 revision（CAS 递增，从 1 开始；无变化不广播时允许跳号）。</summary>
-    public long NextControlRoomRevision(string group)
-    {
-        while (true)
-        {
-            var current = _controlRoomRevisions.GetOrAdd(group, 0L);
-            var next = current + 1;
-            if (_controlRoomRevisions.TryUpdate(group, next, current))
-                return next;
-        }
-    }
-
-    /// <summary>该组是否已有广播快照（无快照 = 首次广播，必须发全量建立基线）。</summary>
-    public bool HasControlRoomSnapshot(string group)
-        => _controlRoomBroadcastSnapshots.ContainsKey(group);
 
     /// <summary>
     /// 计算控制房间成员列表相对上次广播的增量，并同步刷新快照为本次结果。
@@ -1711,16 +1699,15 @@ public partial class RoomManager
                     // 断线时重置上线事件代序号：BGI 重启后 generation 从 1 重新开始，
                     // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
                     player.OnlineEventGeneration = 0;
-                    player.OnlineEventConsumed = true;
                     player.OnlineEventTime = DateTime.MinValue;
-                    player.OnlineReady = false;
+                    DisarmOnlineIntent(player);
                 }
             }
         }
     }
 
     /// <summary>更新控制房间中玩家的状态</summary>
-    public void UpdateControlStatus(string group, string connectionId, ControlStatus status)
+    public bool UpdateControlStatus(string group, string connectionId, ControlStatus status)
     {
         if (_controlRooms.TryGetValue(group, out var players))
         {
@@ -1730,6 +1717,7 @@ public partial class RoomManager
                     ?? RecoverControlRoomConnection(group, connectionId, status, players);
                 if (player != null)
                 {
+                    var now = ControlUtcNow;
                     player.BgiStatus = status.BgiStatus;
                     player.BgiVersion = status.BgiVersion;
                     player.ConfigGroups = status.ConfigGroups;
@@ -1754,7 +1742,7 @@ public partial class RoomManager
                         player.ScriptTaskProgress = taskRunning ? status.ScriptTaskProgress : null;
                         player.FriendshipProgress = taskRunning ? status.FriendshipProgress : null;
                         player.TaskRunningExpireTime = taskRunning
-                            ? DateTime.UtcNow.AddSeconds(TaskRunningTimeoutSec)
+                            ? now.AddSeconds(TaskRunningTimeoutSec)
                             : DateTime.MinValue;
                     }
                     player.AutoHoeingRunning = status.AutoHoeingRunning;
@@ -1763,19 +1751,17 @@ public partial class RoomManager
                     player.HoeingStartPhase = status.HoeingStartPhase;
                     player.HoeingStartMessage = status.HoeingStartMessage;
                     player.HoeingCompletionAction = status.HoeingCompletionAction;
-                    player.OnlineReady = status.OnlineReady;
+                    // 心跳只上报状态和配置；它不能建立、续期或复活已经结清的上线意图。
+                    if (!player.OnlineEventConsumed && !HasLiveOnlineIntent(player, now)) DisarmOnlineIntent(player);
+                    player.OnlineReady = HasLiveOnlineIntent(player, now);
                     player.OnlineMode = status.OnlineMode;
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;
                     player.OnlineHoeingGroupNames = status.OnlineHoeingGroupNames;
                     player.OnlineHoeingGroupTypes = status.OnlineHoeingGroupTypes ?? [];
                     player.QuickCommands = status.QuickCommands ?? new();
                     player.ExpectedHoeingPlayers = status.ExpectedHoeingPlayers;
-                    if (status.OnlineReady)
-                    {
-                        // 设置上线状态过期时间（默认 30 分钟）
-                        player.OnlineReadyExpireTime = DateTime.UtcNow.AddMinutes(30);
-                    }
-                    player.LastHeartbeat = DateTime.UtcNow;
+                    player.LastHeartbeat = now;
+                    return true;
                 }
                 else
                 {
@@ -1792,25 +1778,33 @@ public partial class RoomManager
         {
             _logger?.LogWarning("[UpdateControlStatus] 控制房间 {Group} 不存在，状态上报被丢弃", group);
         }
+        return false;
     }
 
-    /// <summary>缓存离线命令（目标 UID → 命令）</summary>
-    public void CachePendingCommand(string targetUid, RemoteCommand command)
+    /// <summary>离线命令只属于原控制房间及目标 UID，不转移到另一个房间。</summary>
+    public void CachePendingCommand(string group, string targetUid, RemoteCommand command)
     {
-        command.ExpiresAtUtc ??= DateTimeOffset.UtcNow.AddMinutes(2);
-        if (command.ExpiresAtUtc <= DateTimeOffset.UtcNow) return;
-        var list = _pendingCommands.GetOrAdd(targetUid, _ => []);
-        lock (list) { list.Add(command); }
-    }
-
-    /// <summary>获取并清空某玩家的离线缓存命令</summary>
-    public List<RemoteCommand> GetAndClearPendingCommands(string targetUid)
-    {
-        if (_pendingCommands.TryRemove(targetUid, out var list))
+        if (group != $"CTRL_{command.RoomCode}") return;
+        var now = ControlUtcNow;
+        command.ExpiresAtUtc ??= now.AddMinutes(2);
+        if (command.ExpiresAtUtc <= now) return;
+        lock (_pendingCommandGate)
         {
-            lock (list) { return [.. list.Where(c => c.ExpiresAtUtc is { } expiry && expiry > DateTimeOffset.UtcNow)]; }
+            var key = (group, targetUid);
+            if (!_pendingCommands.TryGetValue(key, out var pending)) _pendingCommands[key] = pending = [];
+            pending.RemoveAll(cmd => cmd.ExpiresAtUtc <= now);
+            pending.Add(command);
         }
-        return [];
+    }
+
+    public List<RemoteCommand> GetAndClearPendingCommands(string group, string targetUid)
+    {
+        lock (_pendingCommandGate)
+        {
+            if (!_pendingCommands.Remove((group, targetUid), out var pending)) return [];
+            var now = ControlUtcNow;
+            return pending.Where(cmd => $"CTRL_{cmd.RoomCode}" == group && cmd.ExpiresAtUtc > now).ToList();
+        }
     }
 
     /// <summary>检查目标 UID 是否在线</summary>
@@ -1881,54 +1875,107 @@ public partial class RoomManager
 
     private readonly ConcurrentDictionary<string, RoomAllReadyState> _roomAllReadyStates = new();
 
-    /// <summary>上报上线事件（带 generation 代序号）。由 ReportOnlineEvent 端点调用。</summary>
-    public void ReportOnlineEvent(string group, string connectionId, int generation)
+    public void ReportOnlineEvent(string group, string connectionId, int generation) =>
+        AcceptOnlineEvent(group, connectionId, generation, isOnlineReady: true, ControlUtcNow);
+
+    // 调用方持有批次准入锁；只有当前连接实际受理过的代序号能返回幂等成功。
+    internal (bool Accepted, bool Changed) AcceptOnlineEvent(string group, string connectionId, int generation,
+        bool isOnlineReady, DateTime now)
     {
-        if (_controlRooms.TryGetValue(group, out var players))
+        if (generation <= 0 || !_controlRooms.TryGetValue(group, out var players)) return (false, false);
+        lock (players)
         {
-            lock (players)
-            {
-                var player = players.FirstOrDefault(p => p.ConnectionId == connectionId);
-                if (player == null) return;
-                if (generation <= player.OnlineEventGeneration)
-                {
-                    // 同轮旧事件（未消费且非过期）→ 忽略。
-                    // [实机修复] 自愈放行：上一轮已消费，或槽位事件已过期（>10 分钟，确认阶段最长 90s，
-                    // 超时耗尽轮次不会消费槽位）时，接受更小的 gen 作为新一轮意图——
-                    // 双来源计数器竞争（BGI 侧冲高、助手本地计数落后）曾把定时上线事件当旧事件静默丢弃，
-                    // 表现为"两个助手都上线了但就是不开锄"。客户端已有计数器对齐兜底，此处兜底槽位残留。
-                    var stale = player.OnlineEventConsumed
-                        || (DateTime.UtcNow - player.OnlineEventTime) > TimeSpan.FromMinutes(10);
-                    if (!stale)
-                    {
-                        Console.WriteLine($"[探针服务端] ReportOnlineEvent: 忽略旧事件 gen={generation} <= 槽位 {player.OnlineEventGeneration}（未消费）, uid={player.PlayerUid}");
-                        return;
-                    }
-                    Console.WriteLine($"[探针服务端] ReportOnlineEvent: 接受较小 gen={generation}（槽位 {player.OnlineEventGeneration} 已消费/过期）作为新一轮, uid={player.PlayerUid}");
-                }
+            var player = players.Find(p => p.ConnectionId == connectionId && p.Online);
+            if (player is null || !_controlRoomConnections.TryGetValue((group, connectionId), out var identity)
+                || !ReferenceEquals(player, identity.Player)) return (false, false);
 
-                // 更新玩家 generation
-                player.OnlineEventGeneration = generation;
-                player.OnlineEventConsumed = false;
-                player.OnlineEventTime = DateTime.UtcNow;
-                player.OnlineReady = true;  // 保留 UI 显示用
-                player.OnlineReadyExpireTime = DateTime.UtcNow.AddMinutes(30);
+            if (!isOnlineReady)
+            {
+                if (generation != player.OnlineEventGeneration || !identity.AcceptedOnlineGenerations.Contains(generation))
+                    return (false, false);
+                if (player.OnlineEventConsumed) return (true, false);
+                DisarmOnlineIntent(player);
+                return (true, true);
             }
+            if (identity.AcceptedOnlineGenerations.Contains(generation)) return (true, false);
+            if ((generation <= player.OnlineEventGeneration && HasLiveOnlineIntent(player, now))
+                || identity.AcceptedOnlineGenerations.Count >= 4096) return (false, false);
 
-            // 新 generation 上报 → 重置房间状态机到 idle，使 CheckAndTransition 可以再次触发。
-            // [实机修复] 确认中（confirming）的轮次不打断：打断会产生两个 StartConfirmAsync 并行，
-            // 旧轮超时耗尽会把新轮的 confirming 状态一并踩掉（实机出现过 gen15/gen16 两轮交错互杀）。
-            // 新事件保持 armed（未消费），由 StartConfirmAsync 成功收尾后的补评估接续。
-            if (_roomAllReadyStates.TryGetValue(group, out var state)
-                && state.State != "confirming")
-            {
+            identity.AcceptedOnlineGenerations.Add(generation);
+            player.OnlineEventGeneration = generation;
+            player.OnlineEventConsumed = false;
+            player.OnlineEventTime = now;
+            player.OnlineReady = true;
+            player.OnlineReadyExpireTime = now + OnlineIntentLifetime;
+
+            if (_roomAllReadyStates.TryGetValue(group, out var state) && state.State != "confirming")
                 state.State = "idle";
+            return (true, true);
+        }
+    }
+
+    internal static bool HasLiveOnlineIntent(ControlRoomPlayer player, DateTime now) => player.Online
+        && !player.OnlineEventConsumed && player.OnlineEventGeneration > 0 && player.OnlineReadyExpireTime > now;
+
+    internal bool HasLiveOnlineIntent(string group, string uid, DateTime now)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return false;
+        lock (players) return players.Any(player => player.PlayerUid == uid && HasLiveOnlineIntent(player, now));
+    }
+
+    internal bool ExpireOnlineIntents(string group, DateTime now)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return false;
+        var changed = false;
+        lock (players)
+        {
+            foreach (var player in players)
+            {
+                if (player.OnlineEventConsumed || player.OnlineEventGeneration <= 0
+                    || player.OnlineReadyExpireTime > now) continue;
+                DisarmOnlineIntent(player);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    internal void ExpireControlRoomTaskStatus(string group, DateTime now)
+    {
+        if (!_controlRooms.TryGetValue(group, out var players)) return;
+        lock (players)
+        {
+            foreach (var player in players)
+            {
+                if (!TaskRunningExpiryDecisions.ShouldResetTaskRunning(player.TaskRunning, now.Ticks, player.TaskRunningExpireTime.Ticks))
+                    continue;
+                _logger?.LogWarning("控制房间 {Group} 成员 {PlayerName}({Uid}) 任务运行态已超时，自动复位为未运行",
+                    group, player.PlayerName, player.PlayerUid);
+                player.TaskRunning = false;
+                player.TaskStatusAvailable = false;
+                player.TaskPaused = false;
+                player.CurrentTaskName = null;
+                player.CurrentTaskGroupName = null;
+                player.CurrentRouteDisplay = null;
+                player.CurrentScriptRouteName = null;
+                player.ScriptTaskProgress = null;
+                player.FriendshipProgress = null;
+                player.TaskRunningExpireTime = DateTime.MinValue;
             }
         }
     }
 
-    /// <summary>检查并转换状态机。返回 true 表示可通过 AllReady 广播，out generation 为当前轮次。</summary>
-    public bool CheckAndTransition(string group, out int generation)
+    private static void DisarmOnlineIntent(ControlRoomPlayer player)
+    {
+        player.OnlineEventConsumed = true;
+        player.OnlineReady = false;
+        player.OnlineMode = "none";
+        player.OnlineReadyExpireTime = DateTime.MinValue;
+    }
+
+    public bool CheckAndTransition(string group, out int generation) => CheckAndTransition(group, ControlUtcNow, out generation);
+
+    internal bool CheckAndTransition(string group, DateTime now, out int generation)
     {
         generation = 0;
         var state = _roomAllReadyStates.GetOrAdd(group, _ => new RoomAllReadyState());
@@ -1941,7 +1988,7 @@ public partial class RoomManager
         if (onlinePlayers.Count == 0) return false;
 
         // 就绪成员 = 有新上线事件（未消费）的成员
-        var readyPlayers = onlinePlayers.Where(p => !p.OnlineEventConsumed && p.OnlineEventGeneration > 0).ToList();
+        var readyPlayers = onlinePlayers.Where(p => HasLiveOnlineIntent(p, now)).ToList();
         // 预期开锄人数 = 所有在线成员上报的 ExpectedHoeingPlayers 的最小值（下限保底 1，防止默认 0）。
         // 严格以设置人数为准，不按在线人数封顶：缺人（含助手从未连接/已离线的成员）就等，不开锄。
         // 人少的队伍应把人数改成实际人数。（推翻 R6 封顶修复：用户明确取舍"缺 1 人都不开锄"。）
@@ -2072,11 +2119,8 @@ public partial class RoomManager
                         });
                         while (p.OnlineHistory.Count > 20)
                             p.OnlineHistory.RemoveAt(0);
-                        // 标记已消费（边沿检测：允许下次新的 generation 再次触发）
-                        p.OnlineEventConsumed = true;
-                        p.OnlineReady = false;
-                        p.OnlineMode = "none";
-                        p.OnlineReadyExpireTime = DateTime.MinValue;
+                        // 标记已消费（保留该连接的业务收据，不续期或重新布防）。
+                        DisarmOnlineIntent(p);
                         consumed++;
                     }
                 }

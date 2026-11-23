@@ -11,6 +11,15 @@ namespace MultiplayerHoeingAssistant.Views;
 public partial class BasicTaskCenterView
 {
     internal TaskCenterPanelViewModel? CompositionHost => Host;
+
+    public static readonly DependencyProperty RoomSwitchChoicesProviderProperty = DependencyProperty.Register(
+        nameof(RoomSwitchChoicesProvider), typeof(Func<IReadOnlyList<RoomSwitchChoice>>), typeof(BasicTaskCenterView));
+
+    public Func<IReadOnlyList<RoomSwitchChoice>>? RoomSwitchChoicesProvider
+    {
+        get => (Func<IReadOnlyList<RoomSwitchChoice>>?)GetValue(RoomSwitchChoicesProviderProperty);
+        set => SetValue(RoomSwitchChoicesProviderProperty, value);
+    }
     // Disclosure is transient view state, scoped to the selected executor and plan.
     private TaskCenterPanelViewModel? _expansionHost;
     private string? _expansionPlan;
@@ -97,7 +106,8 @@ public partial class BasicTaskCenterView
         var original = source is null ? null : JsonSerializer.Serialize(source.Model.Flow);
         var flow = source?.Model.Flow ?? new WorkflowFlowDefinition { Name = requireExit ? "车道判断" : "流程" };
         // 旧版车道的条件流程不支持跳转，不显示跳转设置。
-        var window = new TaskFlowEditorWindow(flow, initial.Draft.Nodes, selectedStepId, owner.AllowedTaskPrograms, requireExit)
+        var window = new TaskFlowEditorWindow(flow, initial.Draft.Nodes, selectedStepId, owner.AllowedTaskPrograms, requireExit,
+            RoomSwitchChoicesProvider)
         {
             Owner = Window.GetWindow(this),
             JumpChoices = requireExit || !string.IsNullOrEmpty(flow.ExitStepId) ? null : initial.JumpTargetChoices(sourceId, flow.JumpTo),

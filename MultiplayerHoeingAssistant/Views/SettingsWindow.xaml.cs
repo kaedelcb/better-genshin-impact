@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Windows;
 using System.Reflection;
 using MultiplayerHoeingAssistant.Helpers;
@@ -7,7 +8,10 @@ namespace MultiplayerHoeingAssistant.Views;
 
 public partial class SettingsWindow : Window
 {
-    private readonly AssistConfig _configCopy;
+    private readonly AssistConfig _sourceConfig;
+    private readonly string? _editedRoomId;
+    private readonly string? _editedRoomCode;
+    private AssistConfig? _savedConfig;
 
     /// <summary>
     /// 获取带版本号的窗口标题，与 MainWindow 共享。
@@ -22,28 +26,32 @@ public partial class SettingsWindow : Window
 
     private SettingsWindow(AssistConfig config)
     {
-        _configCopy = config;
+        _sourceConfig = config;
+        var room = config.ActiveRoomProfile;
+        _editedRoomId = room?.Id;
+        _editedRoomCode = room?.RoomCode;
         DpiAwarenessController.Initialize(this);
         InitializeComponent();
         Title = GetVersionedTitle("设置");
 
-        // 预填现有配置
-        if (!string.IsNullOrEmpty(config.ServerUrl))
-            ServerUrlBox.Text = config.ServerUrl;
-        if (!string.IsNullOrEmpty(config.ControlRoomPassword))
-            PasswordBox.Password = config.ControlRoomPassword;
-        if (!string.IsNullOrEmpty(config.PlayerName))
-            PlayerNameBox.Text = config.PlayerName;
-        if (!string.IsNullOrEmpty(config.PlayerUid))
-            PlayerUidBox.Text = config.PlayerUid;
-        if (config.TeamUids.Count > 0)
-            TeamUidsBox.Text = string.Join(",", config.TeamUids);
-        if (!string.IsNullOrEmpty(config.BgiPath))
-            BgiPathBox.Text = config.BgiPath;
-        ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
+        ServerUrlBox.Text = config.ServerUrl ?? "";
+        PlayerNameBox.Text = config.PlayerName ?? "";
+        PlayerUidBox.Text = config.PlayerUid ?? "";
+        BgiPathBox.Text = config.BgiPath ?? "";
         ObserverModeCheckBox.IsChecked = config.ObserverMode;
         BypassSystemProxyCheckBox.IsChecked = config.BypassSystemProxy;
-        // 监控模式（遥控器）不入房间成员表，本机填的预期开锄人数不参与服务端取 min → 整段隐藏，并随勾选状态联动
+
+        // 新用户先填写本机信息，再以房间号加入或登记房间。只编辑已明确归属的当前档案。
+        RoomCredentialsPanel.Visibility = room is null ? Visibility.Collapsed : Visibility.Visible;
+        RoomSetupHint.Visibility = room is null ? Visibility.Visible : Visibility.Collapsed;
+        if (room != null)
+        {
+            RoomEditingHint.Text = $"正在编辑：{room.Name}（{room.RoomCode}）";
+            PasswordBox.Password = config.ControlRoomPassword ?? "";
+            TeamUidsBox.Text = string.Join(",", config.TeamUids ?? []);
+            ExpectedPlayersBox.Text = config.ExpectedHoeingPlayers.ToString();
+        }
+        // 监控模式（遥控器）不入房间成员表，本机填的预期开锄人数不参与服务端取 min。
         UpdateExpectedPlayersVisibility(!config.ObserverMode);
         ObserverModeCheckBox.Checked += (_, _) => UpdateExpectedPlayersVisibility(false);
         ObserverModeCheckBox.Unchecked += (_, _) => UpdateExpectedPlayersVisibility(true);
@@ -52,7 +60,7 @@ public partial class SettingsWindow : Window
     /// <summary>预期开锄人数整段（标签+输入框+说明）显隐：遥控器模式下隐藏。</summary>
     private void UpdateExpectedPlayersVisibility(bool visible)
     {
-        var v = visible ? Visibility.Visible : Visibility.Collapsed;
+        var v = visible && _editedRoomId != null ? Visibility.Visible : Visibility.Collapsed;
         ExpectedPlayersLabel.Visibility = v;
         ExpectedPlayersBox.Visibility = v;
         ExpectedPlayersHint.Visibility = v;
@@ -64,98 +72,67 @@ public partial class SettingsWindow : Window
     public static AssistConfig? ShowSettingsDialog(AssistConfig config, Window? owner = null)
     {
         var dialog = new SettingsWindow(config) { Owner = owner ?? Application.Current?.MainWindow };
-        return dialog.ShowDialog() == true ? dialog.BuildConfig() : null;
+        return dialog.ShowDialog() == true ? dialog._savedConfig : null;
     }
 
     private AssistConfig? BuildConfig()
     {
+        var room = _sourceConfig.ActiveRoomProfile;
+        if (room?.Id != _editedRoomId || room?.RoomCode != _editedRoomCode)
+        {
+            ErrorText.Text = "当前房间已变化，请关闭后重新打开设置。";
+            return null;
+        }
+
         var serverUrl = ServerUrlBox.Text.Trim().TrimEnd('/');
-        var password = PasswordBox.Password;
         var playerName = PlayerNameBox.Text.Trim();
         var playerUid = PlayerUidBox.Text.Trim();
-        var bgiPath = BgiPathBox.Text.Trim();
-
-        // 校验 TeamUids
-        var teamUids = TeamUidsBox.Text
-            .Split(',', '，', ';', '；', ' ', '\n', '\r')
-            .Select(x => x.Trim())
-            .Where(x => x.Length > 0)
-            .ToList();
-
-        // [离线优先] 服务器地址留空 = 恒定单机模式：槲寄生等本地功能可用，联机字段（密码/队伍UID/玩家UID）留空合法
-        var standaloneMode = string.IsNullOrEmpty(serverUrl);
-        if (!standaloneMode)
+        var editingOnlineSetup = !_sourceConfig.StandaloneMode && serverUrl.Length > 0;
+        if (editingOnlineSetup && (playerName.Length == 0 || playerUid.Length == 0))
         {
-        if (password.Length < 4 || password.Length > 8)
-        {
-            ErrorText.Text = "密码长度需为 4-8 位";
+            ErrorText.Text = "联机需填写本机玩家名称和 UID。";
             return null;
         }
-        if (teamUids.Count < 1)
+
+        // 复制整个设置，包含其他房间和全部列表；不让窗口中的编辑触碰正在运行的对象。
+        var result = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.SerializeToUtf8Bytes(_sourceConfig))!;
+        result.ServerUrl = serverUrl;
+        result.PlayerName = playerName;
+        result.PlayerUid = playerUid;
+        result.BgiPath = BgiPathBox.Text.Trim();
+        result.ObserverMode = ObserverModeCheckBox.IsChecked == true;
+        result.BypassSystemProxy = BypassSystemProxyCheckBox.IsChecked == true;
+        if (result.ActiveRoomProfile is not { } editedRoom) return result;
+
+        var password = PasswordBox.Password;
+        var teamUids = TeamUidsBox.Text.Split([',', '，', ';', '；', ' ', '\n', '\r'],
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+        if (editingOnlineSetup && (string.IsNullOrEmpty(password) || !teamUids.Contains(playerUid, StringComparer.Ordinal)))
         {
-            ErrorText.Text = "请至少填写 1 个队伍 UID";
+            ErrorText.Text = "请填写当前房间密码，并确认本机玩家 UID 在成员 UID 列表中。";
             return null;
-        }
-        if (teamUids.Any(u => u == playerUid) == false)
-        {
-            ErrorText.Text = "玩家 UID 必须包含在队伍 UID 中";
-            return null;
-        }
         }
 
-        return new AssistConfig
+        result.ControlRoomPassword = password;
+        result.TeamUids = teamUids;
+        if (!result.ObserverMode)
         {
-            ServerUrl = serverUrl,
-            ControlRoomPassword = password,
-            PlayerName = playerName,
-            PlayerUid = playerUid,
-            TeamUids = teamUids,
-            BgiPath = bgiPath,
-            BgiPackageDir = _configCopy?.BgiPackageDir ?? "",
-            BgiPickedPackages = _configCopy?.BgiPickedPackages ?? [],
-            BgiUpdateExcludeDirs = _configCopy?.BgiUpdateExcludeDirs ?? [],
-            BgiUpdateBackupDirs = _configCopy?.BgiUpdateBackupDirs?.ToList() ?? AssistConfig.DefaultBgiUpdateBackupDirs(),
-            BgiUpdateBackupBeforeUpdate = _configCopy?.BgiUpdateBackupBeforeUpdate ?? true,
-            BgiUpdateSourceId = _configCopy?.BgiUpdateSourceId,
-            BgiCustomUpdateSources = _configCopy?.BgiCustomUpdateSources ?? [],
-            // 保留其他字段（不因设置弹窗保存而重置）
-            ObserverMode = ObserverModeCheckBox.IsChecked == true,
-            BypassSystemProxy = BypassSystemProxyCheckBox.IsChecked == true,
-            ExpectedHoeingPlayers = int.TryParse(ExpectedPlayersBox.Text.Trim(), out var ep) && ep >= 1 && ep <= 4 ? ep : 4,
-            ScheduledOnlineTime = _configCopy?.ScheduledOnlineTime ?? "",
-            ScheduledOnlineRequiresConfirmation = _configCopy?.ScheduledOnlineRequiresConfirmation ?? false,
-            OnlineHoeingGroupNames = _configCopy?.OnlineHoeingGroupNames ?? [],
-            OnlineHoeingGroupIndex = _configCopy?.OnlineHoeingGroupIndex ?? 0,
-            DisclaimerAccepted = _configCopy?.DisclaimerAccepted ?? false,
-            QuickCommands = _configCopy?.QuickCommands ?? new(),
-            AutoLaunchWithBgi = _configCopy?.AutoLaunchWithBgi ?? false,
-            AutoLaunchWithBgiMinimized = _configCopy?.AutoLaunchWithBgiMinimized ?? true,
-            AutoLaunchOnBoot = _configCopy?.AutoLaunchOnBoot ?? false,
-            AutoLaunchOnBootMinimized = _configCopy?.AutoLaunchOnBootMinimized ?? true,
-            CheckBgiUpdatesOnStartup = _configCopy?.CheckBgiUpdatesOnStartup ?? false,
-            GuardBgi = _configCopy?.GuardBgi ?? false,
-            // 实例标识必须保留：被清空后重新入房时服务端无法按 (UID, ClientInstanceId) 回收旧条目，
-            // 会追加新条目并残留离线幽灵条目，导致成员"假离线"（在线状态被幽灵条目覆盖）
-            ClientInstanceId = _configCopy?.ClientInstanceId ?? "",
-            // 总开关·手动单机 同样必须保留（设置弹窗不展示该字段，丢失会把单机用户静默拉回联机）
-            StandaloneMode = _configCopy?.StandaloneMode ?? false,
-            OnlineHoeingGroupTypes = _configCopy?.OnlineHoeingGroupTypes ?? [],
-            OnlineHoeingCompletionPolicy = _configCopy?.OnlineHoeingCompletionPolicy ?? "resume",
-            OnlineHoeingSpecifiedTaskType = _configCopy?.OnlineHoeingSpecifiedTaskType ?? "group",
-            OnlineHoeingSpecifiedTaskName = _configCopy?.OnlineHoeingSpecifiedTaskName ?? "",
-            OnlineHoeingSpecifiedTaskPriority = _configCopy?.OnlineHoeingSpecifiedTaskPriority ?? 0,
-            OnlineHoeingSpecifiedStartMode = _configCopy?.OnlineHoeingSpecifiedStartMode ?? "default",
-            OnlineHoeingSpecifiedStartTaskId = _configCopy?.OnlineHoeingSpecifiedStartTaskId ?? "",
-            OnlineHoeingSpecifiedStartTaskName = _configCopy?.OnlineHoeingSpecifiedStartTaskName ?? "",
-            OnlineHoeingSpecifiedConfigRevision = _configCopy?.OnlineHoeingSpecifiedConfigRevision ?? "",
-            OnlineHoeingSpecifiedWorkflowId = _configCopy?.OnlineHoeingSpecifiedWorkflowId ?? ""
-        };
+            if (!int.TryParse(ExpectedPlayersBox.Text.Trim(), out var count) || count is < 1 or > 4)
+            {
+                ErrorText.Text = "预期开锄人数须为 1–4。";
+                return null;
+            }
+            result.ExpectedHoeingPlayers = count;
+        }
+        // 设置弹窗不改变档案 ID、房间号或激活指针。
+        editedRoom.Capture(result);
+        return result;
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
-        var cfg = BuildConfig();
-        if (cfg == null) return;
+        _savedConfig = BuildConfig();
+        if (_savedConfig == null) return;
         DialogResult = true;
     }
 

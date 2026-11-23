@@ -314,9 +314,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 设置弹窗：联机模式下配置不完整（缺密码 / 缺 TeamUids / 缺 PlayerName / 缺 PlayerUid），弹出一次性设置弹窗。
         // [离线优先] 单机模式（手动单机或服务器地址留空）下联机字段留空合法，不弹窗、不阻断启动
         if (!IsStandaloneMode
-            && (string.IsNullOrEmpty(_config.ControlRoomPassword)
-            || _config.TeamUids.Count == 0
-            || string.IsNullOrEmpty(_config.PlayerName)
+            && (string.IsNullOrEmpty(_config.PlayerName)
             || string.IsNullOrEmpty(_config.PlayerUid)))
         {
             var newConfig = SettingsWindow.ShowSettingsDialog(_config);
@@ -333,13 +331,16 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
 
         // 生成房间码
-        RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+        RoomCode = _config.EffectiveRoomCode;
 
         // S3：generation 持久化恢复已收编进 OnlineIntentLifecycle 构造函数（语义不变：重启不复位）。
 
         // [实机修复 2026-09-05] 定时上线"已触发日期"持久化恢复：重启不失忆，
         // 到点已过且超出宽限窗的场景（如设 1:00、1:30 才打开助手）不再被补触发上线。
-        _lastScheduledFireDate = LoadPersistedScheduledFireDate();
+        _lastScheduledFireDate = _config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
+        LoadAssistantRoomSwitchRecord();
+        NotifyRoomProfiles();
+        if (_configManager.RoomProfileMigrationWarning is { Length: > 0 } warning) AddLog(warning);
 
         // 普通启动保留旧定时上线行为；正式包的手动入口只读取旧值，不在启动时武装。
         if (App.LaunchIntent.AllowsAutomaticStartup)
@@ -384,11 +385,21 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>[P1] onlineGeneration 边沿入口（事件帧/快照/v2 轮询共用）：状态判定全部收口到
     /// OnlineIntentLifecycle.ApplyEdge（BGI 重启归零下行对齐、双来源对齐写盘、2 分钟新鲜度窗、60s 防抖）；
     /// 意图被接受（Accepted）时由本类完成 SignalR 上报（网络 IO 不进状态机）。</summary>
-    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null)
+    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null, string? workflowRunId = null)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return;
+        var committed = Volatile.Read(ref _roomSwitchCommittedAtUtc);
+        if (committed != 0 && (!triggeredAtUtc.HasValue || triggeredAtUtc.Value.ToUniversalTime().Ticks <= committed)) return;
+        if (workflowRunId is not null && !TaskCenterHost.VerifyFlowRoomDependency(workflowRunId))
+        {
+            AddLog("BGI 上线未提交：原任务中心流程的房间连接未确认");
+            return;
+        }
         var edgeResult = _intentLifecycle.ApplyEdge(gen, triggeredAtUtc, out var genToReport);
         if (edgeResult == OnlineEdgeResult.Accepted)
         {
+            _workflowOnlineOrigin = workflowRunId is null ? null : new(genToReport, workflowRunId, CurrentControlContext());
             _ = ReportOnlineEventTrackedAsync(genToReport);
         }
         else if (edgeResult == OnlineEdgeResult.Debounced)
@@ -456,12 +467,17 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 替代旧的 fire-and-forget 静默丢弃（那是"偶发执行了不上线"的直接根因）。</summary>
     private async Task<bool> ReportOnlineEventTrackedAsync(int gen)
     {
-        if (_signalRClient == null)
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return false;
+        var client = _signalRClient;
+        if (client == null)
         {
             _intentLifecycle.NoteReportPending(gen);
             return false;
         }
-        var ok = await _signalRClient.ReportOnlineEventAsync(gen, true);
+        var roomIdentity = client.ControlContext;
+        var ok = await client.ReportOnlineEventAsync(gen, true);
+        if (!ReferenceEquals(client, _signalRClient) || client.ControlContext != roomIdentity || RoomSwitchBlocksRoomOperations) return false;
         if (ok)
         {
             _intentLifecycle.NoteReportDelivered(gen);
@@ -480,9 +496,16 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 调用点：连接恢复钩子、10s 状态轮询（仅挂起待补报时）。</summary>
     private async Task ReReportOnlineIntentIfNeededAsync()
     {
-        if (_signalRClient?.IsConnected != true) return;
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null || _signalRClient is not { IsConnected: true } client) return;
         if (!_intentLifecycle.TryGetReReportGen(out var gen)) return;
-        if (await _signalRClient.ReportOnlineEventAsync(gen, true))
+        if (_workflowOnlineOrigin is { } origin && origin.Generation == gen
+            && (origin.ControlContext != CurrentControlContext() || !TaskCenterHost.VerifyFlowRoomDependency(origin.RunId)))
+        {
+            _intentLifecycle.OnResetCleared();
+            return;
+        }
+        if (await client.ReportOnlineEventAsync(gen, true) && ReferenceEquals(client, _signalRClient) && !RoomSwitchBlocksRoomOperations)
         {
             _intentLifecycle.NoteReReportDelivered(gen);
             AddLog($"已向服务端补报上线意图（generation={gen}）");
@@ -1285,7 +1308,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                             triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
                         }
                         // [P1] 首见判定收编进状态机；边沿检测/基线同步/双来源对齐/防抖/上报全部收口到共享方法（与快照路径同款语义）
-                        ApplyOnlineGenerationEdge(gen, triggeredAt);
+                        ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(sdata, "onlineWorkflowRunId"));
                         // 同步本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用旧值覆盖服务端
                         status.OnlineReady = _intentLifecycle.IsOnlineReady;
                         status.OnlineMode = _intentLifecycle.OnlineMode;
@@ -1294,7 +1317,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     else if (sdata.TryGetProperty("recentTaskName", out var rtn) && rtn.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
                         var recentTask = rtn.GetString() ?? "";
-                        if (recentTask == "联机锄地上线" && !_intentLifecycle.IsOnlineReady)
+                        if (recentTask == "联机锄地上线" && !_intentLifecycle.IsOnlineReady
+                            && Volatile.Read(ref _roomSwitchCommittedAtUtc) == 0)
                         {
                             _ = MarkOnlineAsync("command");
                         }
@@ -1443,7 +1467,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (localVersionChanged && _startupBgiUpdate != null && !_disposing)
             Application.Current?.Dispatcher.BeginInvoke(new Action(NotifyRemoteUpdateStateChanged));
         // [离线优先] 单机模式/刷新重建窗口 signalRClient 为 null：跳过上报，采集结果已落 LatestLocalStatus
-        if (signalRClient == null) return;
+        if (signalRClient == null || !ReferenceEquals(signalRClient, _signalRClient) || RoomSwitchBlocksRoomOperations) return;
         try
         {
             await signalRClient.ReportControlStatusAsync(status);
@@ -1459,6 +1483,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// [P1] 连接就绪判定留在本方法（依赖 SignalRClient）；gen 自增+写盘+清零守卫+置 Armed 收口进状态机。</summary>
     private async Task<bool> MarkOnlineAsync(string mode)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return false;
         if (!TryEnterConfigTransferOperation("online", out var transferOperation))
         {
             AddLog(ConfigTransferBlockedMessage); return false;
@@ -1529,56 +1555,18 @@ public partial class MainViewModel : INotifyPropertyChanged
     // [P1] 本地 generation 持久化（LocalGenerationFilePath/LoadPersistedLocalGeneration/PersistLocalGeneration）
     // 已随状态机搬入 OnlineIntentLifecycle。
 
-    /// <summary>[实机修复 2026-09-05] 定时上线"已触发日期"持久化文件（与 assistant-config.json 同目录）。</summary>
-    private static string ScheduledFireDateFilePath => Path.Combine(
-        AssistantDataDirectory.Root, "assistant-online-fired-date.txt");
-
-    /// <summary>启动时读取已触发日期。文件不存在/解析失败 = 未触发过。</summary>
-    private DateTime LoadPersistedScheduledFireDate()
-    {
-        try
-        {
-            var path = ScheduledFireDateFilePath;
-            if (File.Exists(path)
-                && DateTime.TryParse(File.ReadAllText(path).Trim(), out var saved))
-            {
-                return saved.Date;
-            }
-        }
-        catch (Exception ex)
-        {
-            AddLog($"[定时上线] 读取 assistant-online-fired-date.txt 失败，按未触发处理: {ex.Message}");
-        }
-        return DateTime.MinValue;
-    }
-
-    /// <summary>触发/过期跳过后写盘。失败仅记日志。</summary>
     private void PersistScheduledFireDate(DateTime date)
     {
-        try
-        {
-            File.WriteAllText(ScheduledFireDateFilePath, date.ToString("yyyy-MM-dd"));
-        }
-        catch (Exception ex)
-        {
-            AddLog($"[定时上线] 写入 assistant-online-fired-date.txt 失败: {ex.Message}");
-        }
+        if (_config is not { } config) return;
+        config.ScheduledOnlineLastFireDate = date.Date;
+        _configManager?.Save(config);
     }
 
-    /// <summary>回滚（上报失败需重试）或重新设定时间时清除持久化标记。</summary>
     private void ClearPersistedScheduledFireDate()
     {
-        try
-        {
-            if (File.Exists(ScheduledFireDateFilePath))
-            {
-                File.Delete(ScheduledFireDateFilePath);
-            }
-        }
-        catch
-        {
-            // 清理失败仅影响极端边界（重启后少触发一次），可忽略
-        }
+        if (_config is not { } config) return;
+        config.ScheduledOnlineLastFireDate = null;
+        _configManager?.Save(config);
     }
 
     /// <summary>启动定时上线定时器（每 30 秒检查一次）。
@@ -1593,7 +1581,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 if (!TryEnterConfigTransferOperation("scheduled_online", out var transferOperation)) return;
                 using var configTransferOperation = transferOperation;
-                if (_config == null) return;
+                using var roomEffect = TryEnterAssistantRoomEffect();
+                if (_config == null || roomEffect is null) return;
                 // 监控模式：本机不占成员名额也不参与上线（服务端成员表无本端条目，上报是 no-op），
                 // 跳过避免本地误打"已上线(scheduled)"日志误导；给执行端设定时上线走弹窗远程下发，不经本定时器
                 if (_config.ObserverMode) return;
@@ -1638,9 +1627,11 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task SendAckAsync(RemoteCommand originalCmd, string status, string message)
     {
-        if (_signalRClient == null) return;
+        var client = _signalRClient;
+        if (client is null || !string.IsNullOrEmpty(originalCmd.RoomCode) && originalCmd.RoomCode != client.CurrentRoomCode) return;
         var ack = new RemoteCommand
         {
+            RoomCode = originalCmd.RoomCode,
             Cmd = "ack",
             Sender = _config?.PlayerName ?? "",
             SenderUid = _config?.PlayerUid ?? "",
@@ -1648,7 +1639,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             CommandId = originalCmd.CommandId,
             Params = new Dictionary<string, object> { { "status", status }, { "message", message } }
         };
-        await _signalRClient.SendRemoteCommandAsync(ack);
+        await client.SendRemoteCommandAsync(ack);
     }
 
     /// <summary>
@@ -2477,6 +2468,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开定时上线设置弹窗（设定 HH:mm，保存到本地配置并重启定时器、立即上报）。</summary>
     private void OnScheduledOnline(object? parameter)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return;
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
@@ -3037,6 +3030,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     private async Task ClearLocalOnline(bool preserveScheduledOnline = false)
     {
         CancelPendingCoordinatedBegin();
+        var roomClient = _signalRClient;
+        var onlineGeneration = _intentLifecycle.ArmedOnlineGeneration;
         // 清除当前上线及挂起补报；仅“清除上线”置手动抑制，状态重置保留未来定时的原有决定。
         if (preserveScheduledOnline)
             _intentLifecycle.OnResetCleared();
@@ -3090,6 +3085,10 @@ public partial class MainViewModel : INotifyPropertyChanged
             self.OnlineMode = "none";
         }
         AddLog(preserveScheduledOnline ? "[状态重置] 已清除当前上线状态，定时上线设置保持不变" : "已清除上线状态");
+        if (onlineGeneration is > 0 && roomClient is { IsControlRoomReady: true }
+            && ReferenceEquals(roomClient, _signalRClient)
+            && !await roomClient.ReportOnlineEventAsync(onlineGeneration.Value, false))
+            AddLog("服务端尚未确认撤回本轮上线，切房前仍需等待其结清");
         _ = ReportStatusAsync();
     }
 
@@ -3636,6 +3635,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开联机锄地配置组绑定弹窗（多选）。所有人可编辑。</summary>
     private async void OnBindHoeingGroup(object? parameter)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return;
         if (_config == null) return;
 
         // 判断目标：点自己的卡片还是别人的
@@ -4627,6 +4628,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
+        CancelWaitingAssistantRoomSwitch();
+        StopBgiRoomMailbox();
         _startupBgiUpdateRequest?.Cancel();
         StopBgiUpdateCoordinationWatcher();
         DisposeRegisters();
@@ -4726,6 +4729,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task<bool> RefreshAsync()
     {
+        if (RoomSwitchBlocksRoomOperations) return false;
         if (!TryEnterConfigTransferOperation("connection_refresh", out var transferOperation)) return false;
         using var configTransferOperation = transferOperation;
         // 离线优先：单机模式下不发起连接，刷新无意义（本地状态采集循环独立运行，不靠刷新驱动）
@@ -4822,6 +4826,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             Application.Current.Dispatcher.Invoke(() =>
             {
+                if (!AcceptAssistantRoomMembers(client, update)) return;
                 // 单成员合并/新增：已存在按 uid 原地逐字段更新，不存在则轮换头像新增到末尾。
                 void UpsertMember(ControlRoomPlayer np)
                 {
@@ -4976,6 +4981,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         client.OnAllReadyConfirmed += generation =>
         {
+            if (!ReferenceEquals(client, _signalRClient) || RoomSwitchBlocksRoomOperations) return;
             ObserveOnlineTask(OnAllReadyConfirmedInternal(generation), "全员就绪启动");
         };
         client.OnHoeingBatchStart += batch =>
@@ -5003,11 +5009,13 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         client.OnAllReadyConfirmReceived += generation =>
         {
+            if (!ReferenceEquals(client, _signalRClient) || RoomSwitchBlocksRoomOperations) return;
             ObserveOnlineTask(ConfirmAllReadyAndStartAsync(generation), "全员就绪确认");
         };
 
         client.OnAllReadyAbort += (generation, targetUids, reason) =>
         {
+            if (!ReferenceEquals(client, _signalRClient) || RoomSwitchBlocksRoomOperations) return;
             // 服务端中止/手动重置先取消本地批次；其 finally 会继续走
             // takeoverTicket/执行纪元收口。只复位本端上线状态仍受 targetUids 约束。
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
@@ -5039,6 +5047,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 不抛；任何逃逸异常都会变成 AppDomain 未处理异常（进程终止），这里整体兜底留痕。
             try
             {
+            if (!ReferenceEquals(client, _signalRClient) || cmd.RoomCode != RoomCode) return;
+            using var roomEffect = cmd.Cmd == "stop" ? null : TryEnterAssistantRoomEffect();
+            if (roomEffect is null && cmd.Cmd != "stop") return;
+            if (!ReferenceEquals(client, _signalRClient) || cmd.RoomCode != RoomCode
+                || cmd.ExpiresAtUtc is { } expires && expires <= DateTimeOffset.UtcNow) return;
             if (cmd.Cmd == RemoteCenterProtocol.ReplyCommand)
             {
                 CompleteRemoteCenterReply(cmd);
@@ -5048,8 +5061,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 var reply = await Application.Current.Dispatcher.InvokeAsync(
                     () => HandleRemoteCenterRequestAsync(cmd)).Task.Unwrap();
-                if (reply != null && _signalRClient is { IsConnected: true } centerClient)
-                    await centerClient.SendRemoteCenterCommandAsync(reply);
+                if (reply != null && ReferenceEquals(client, _signalRClient) && client.IsConnected && !RoomSwitchBlocksRoomOperations)
+                    await client.SendRemoteCenterCommandAsync(reply);
                 return;
             }
             if (cmd.Cmd == "ack")
@@ -5320,19 +5333,16 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
         };
 
-        client.OnRemoteCommandResult += OnRemoteCommandResultReceived;
+        client.OnRemoteCommandResult += result =>
+        {
+            if (ReferenceEquals(client, _signalRClient) && !RoomSwitchBlocksRoomOperations) OnRemoteCommandResultReceived(result);
+        };
 
         client.OnJoinRejected += reason =>
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                MessageBox.Show($"加入控制房间失败: {reason}");
-                if (_config != null && _configManager != null)
-                {
-                    _config.ControlRoomPassword = "";
-                    _configManager.Save(_config);
-                }
-            });
+            if (!client.IsRetired && (ReferenceEquals(client, _signalRClient)
+                || ReferenceEquals(client, _pendingControlClient)))
+                AddLog("加入控制房间失败：" + reason);
         };
     }
 
@@ -6144,15 +6154,18 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开房间设置弹窗（复用 SettingsWindow）。</summary>
     private void OpenRoomSettings()
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null || RoomSwitchHasPendingRequest) return;
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
         if (newConfig != null)
         {
+            if (!_configManager.TrySave(newConfig)) { AddLog("房间设置未能保存，仍使用原设置"); return; }
             InvalidateChangedControlSettings(newConfig);
             _config = newConfig;
-            _configManager.Save(_config);
-            RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+            RoomCode = _config.EffectiveRoomCode;
+            NotifyRoomProfiles();
             SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings；清空地址 = 单机模式需即时断开
             AddLog("房间配置已保存并生效");
         }
@@ -6488,6 +6501,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OpenSettings()
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null || RoomSwitchHasPendingRequest) return;
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         var newConfig = SettingsWindow.ShowSettingsDialog(_config);
@@ -6497,7 +6512,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             _config = newConfig;
             _configManager.Save(_config);
             SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings（ObserverMode 显隐 + 离线派生属性）；清空地址 = 单机模式需即时断开
-            RoomCode = AssistConfigManager.GenerateControlRoomCode(_config.TeamUids);
+            RoomCode = _config.EffectiveRoomCode;
+            NotifyRoomProfiles();
             AddLog("配置已保存并生效");
         }
     }
@@ -6507,6 +6523,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 不用本机列表——各成员的 BGI 配置清单不同，绑错名字对方执行时找不到配置。</summary>
     private async Task<bool> BindQuickCommandAsync(string key, MemberViewModel? targetMember = null)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null) return false;
         if (_config == null || _configManager == null) return false;
         List<string> groups;
         List<string> oneClicks;

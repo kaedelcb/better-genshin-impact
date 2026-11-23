@@ -582,6 +582,18 @@ public sealed partial class RunStore
                 recovered.Add(rec);
                 continue;
             }
+            if (TaskFlowRuntime.HasPendingRoomSwitch(rec))
+            {
+                if (rec.State != WorkflowRunState.Unknown || rec.OnlineHoeingGateParked)
+                {
+                    rec.State = WorkflowRunState.Unknown;
+                    rec.OnlineHoeingGateParked = false;
+                    rec.Note = AppendNote(rec.Note, "助手重启：原切房请求已中断，结果待核对；不会重发或推进后继。");
+                    Persist(rec, rec.RecordRevision);
+                }
+                recovered.Add(rec);
+                continue;
+            }
             var hasUnresolvedExternalFact = HasUnresolvedExternalFact(rec);
             if (rec.StopRequested)
             {

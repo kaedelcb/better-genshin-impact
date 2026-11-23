@@ -59,6 +59,29 @@ public sealed class RoomLogLinkageTests
     }
 
     [Fact]
+    public async Task UnconfirmedBatchDoesNotFallBackToSameRosterLegacyRoom()
+    {
+        using var logs = new ContextLogHarness();
+        logs.Context.RegisterControlRoster("DC54A4", Team[0], Team);
+        var code = logs.Manager.CreateRoom("host", "房主", playerUid: Team[0], expectedPlayerCount: Team.Length,
+            hoeingBatchId: "unconfirmed-batch", expectedParticipantUids: Team);
+        var logger = logs.Factory.CreateLogger("Game");
+        using (logs.Context.BeginConnectionScope(logger, "host")) logger.LogInformation("新房同名单的世界记录");
+        Assert.Null(await ReadControlDownload(logs));
+
+        logs.Context.RegisterBatch("NEW001", "unconfirmed-batch", Team);
+        Assert.Null(await ReadControlDownload(logs));
+        var date = DateTime.UtcNow.AddHours(8).ToString("yyyy-MM-dd");
+        Assert.True(RoomLogRange.TryParse(date + "T00:00", date + "T23:59", out var range, out _));
+        await using var result = await logs.Archive.OpenRangeAsync("NEW001", range!);
+        Assert.NotNull(result);
+        using var output = new MemoryStream();
+        await result.CopyToAsync(output, CancellationToken.None);
+        Assert.Contains("新房同名单的世界记录", System.Text.Encoding.UTF8.GetString(output.ToArray()));
+        Assert.NotNull(logs.Manager.GetRoom(code));
+    }
+
+    [Fact]
     public void RoomLifecycleObserversRunOutsideRoomLockAndCannotBreakBusiness()
     {
         using var logs = new ContextLogHarness();

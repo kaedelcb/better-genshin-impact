@@ -9,8 +9,7 @@ namespace BgiCoordinatorServer.Tests;
 /// <summary>
 /// 控制房间带宽优化测试：ControlRoomPlayersUpdated 快照哈希去重 + 增量推送，
 /// MemberLogBatch 只发订阅者。
-/// 每个测试用随机 roomCode + 唯一 connectionId，避开 ControlRoomAuth/限流表/
-/// _connectionGroups 静态表的跨测试污染（风格同 ScreenshotOnDemandTests）。
+/// 每个测试用随机 roomCode + 唯一 connectionId，避免重用成员身份影响断线及增量场景。
 /// </summary>
 public class ControlRoomDeltaBroadcastTests
 {
@@ -71,6 +70,51 @@ public class ControlRoomDeltaBroadcastTests
         // revision 从 1 开始单调递增
         Assert.Equal(1, updates[0].Revision);
         Assert.True(updates[1].Revision > updates[0].Revision);
+        // 无变化消耗一个序号，不发送；下一条增量仍以前一次实际发布为基准。
+        var next = NewStatus(room, "uidA", "成员A");
+        next.BgiStatus = "stopped";
+        await h.Ops.ReportControlStatusAsync(Ctx(connA), next);
+        Assert.Equal(3, updates.Count);
+        Assert.Equal(updates[0].Revision, updates[1].BaseRevision);
+        Assert.Equal(updates[1].Revision, updates[2].BaseRevision);
+        Assert.Equal(updates[1].Revision + 2, updates[2].Revision);
+    }
+
+    [Fact]
+    public async Task DeltaWaitsForFullBroadcastInTheSameRoom()
+    {
+        var h = new GatewayTestHarness();
+        var (room, pwd) = NewRoom();
+        var conn = Conn("baseline");
+        var fullStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFull = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var updates = new List<ControlRoomPlayersUpdate>();
+        h.LegacyGroupProxy.Setup(p => p.SendCoreAsync("ControlRoomPlayersUpdated",
+                It.IsAny<object?[]>(), It.IsAny<CancellationToken>()))
+            .Returns<string, object?[], CancellationToken>((_, args, _) =>
+            {
+                var update = Assert.IsType<ControlRoomPlayersUpdate>(args[0]);
+                updates.Add(update);
+                if (!update.Full) return Task.CompletedTask;
+                fullStarted.TrySetResult();
+                return releaseFull.Task;
+            });
+        var join = JoinAsync(h, conn, room, pwd, "uid", "成员");
+        Task? second = null;
+        try
+        {
+            await fullStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            second = h.Ops.ReportControlStatusAsync(Ctx(conn), NewStatus(room, "uid", "成员"));
+            Assert.False(second.IsCompleted);
+        }
+        finally { releaseFull.TrySetResult(); }
+        await join;
+        Assert.NotNull(second);
+        await second;
+        Assert.Equal(2, updates.Count);
+        Assert.True(updates[0].Full);
+        Assert.False(updates[1].Full);
+        Assert.Equal(updates[0].Revision, updates[1].BaseRevision);
     }
 
     [Fact]

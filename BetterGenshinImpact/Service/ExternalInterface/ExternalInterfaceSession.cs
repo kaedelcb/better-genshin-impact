@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using BetterGenshinImpact.GameTask.AutoOnline;
 using BetterGenshinImpact.Service.Instance;
 using BetterGenshinImpact.Service.Instance.MessageHandlers;
 using Microsoft.Extensions.Logging;
@@ -31,6 +32,7 @@ internal sealed class ExternalInterfaceSession
 
     private readonly InstanceConnection _connection;
     private readonly ILogger _logger;
+    private bool _helloCompleted;
 
     // [A3.4] 幂等窗口已上移到 JobRegistry（进程级、跨连接存活，总计划 §4.1）——
     // 断线重连后新会话重发同 key 写操作也能命中缓存响应，不再重复执行。
@@ -65,7 +67,12 @@ internal sealed class ExternalInterfaceSession
             switch (request.Operation)
             {
                 case ExternalInterfaceOperations.Hello:
-                    return HandleHello(request);
+                    var hello = HandleHello(request);
+                    _helloCompleted = true;
+                    return hello;
+                case ExternalInterfaceOperations.RoomActionPeek:
+                case ExternalInterfaceOperations.RoomActionAck:
+                    return HandleRoomAction(request, cancellationToken);
                 case ExternalInterfaceOperations.EventSubscribe:
                     return await ExternalInterfaceEventPlane.HandleSubscribeAsync(this, request, cancellationToken)
                         .ConfigureAwait(false);
@@ -128,6 +135,37 @@ internal sealed class ExternalInterfaceSession
             System.Diagnostics.Process.GetCurrentProcess().SessionId,
             Environment.ProcessId);
         return InstanceIpcEnvelope.Response(request, data);
+    }
+
+    private InstanceIpcEnvelope HandleRoomAction(InstanceIpcEnvelope request, CancellationToken lifetime)
+    {
+        if (!_helloCompleted)
+            return InstanceIpcEnvelope.Failure(request, "room_action_handshake_required", "房间信号需要先在本连接完成 ext.hello");
+
+        if (request.Operation == ExternalInterfaceOperations.RoomActionPeek)
+        {
+            if (!RoomActionMailbox.TryPeek(SessionId, lifetime, out var signal))
+                return InstanceIpcEnvelope.Failure(request, "room_action_peer_conflict", "房间信号已有另一条本机 IPC 连接负责接收");
+
+            var payload = signal is null ? JValue.CreateNull() : (JToken)new JObject
+            {
+                ["id"] = signal.Id.ToString("N"),
+                ["runId"] = signal.RunId.ToString("N"),
+                ["kind"] = signal.Kind,
+                ["targetRoomName"] = signal.TargetRoomName is { } name ? new JValue(name) : JValue.CreateNull(),
+                ["stopVersion"] = signal.StopVersion,
+            };
+            return InstanceIpcEnvelope.Response(request, new JObject { ["signal"] = payload });
+        }
+
+        if (request.Data?["id"] is not { Type: JTokenType.String } idToken
+            || !Guid.TryParse(idToken.Value<string>(), out var id) || id == Guid.Empty
+            || request.Data?["accepted"] is not { Type: JTokenType.Boolean } acceptedToken)
+            return InstanceIpcEnvelope.Failure(request, "invalid_request", "房间信号确认需要 id 与布尔值 accepted");
+
+        return RoomActionMailbox.Acknowledge(SessionId, id, acceptedToken.Value<bool>())
+            ? InstanceIpcEnvelope.Response(request, new { confirmed = true })
+            : InstanceIpcEnvelope.Failure(request, "room_action_receipt_not_current", "原房间信号、接收决定或 IPC 会话已失效，未确认");
     }
 
     private async Task<InstanceIpcEnvelope> DispatchToPlaneAsync(

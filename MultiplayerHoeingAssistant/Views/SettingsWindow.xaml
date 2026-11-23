@@ -29,11 +29,14 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16,20,20">
             <TextBlock Text="Nexus-BGI 设置" FontSize="18" FontWeight="SemiBold" Foreground="#1D1D1F"/>
-            <TextBlock Text="请填写以下配置，保存后自动应用。" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,12"/>
+            <TextBlock Text="服务器地址、玩家身份和 BGI 路径适用于本机所有房间。"
+                       TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
+            <TextBlock x:Name="RoomSetupHint" Text="保存本机设置后，可在耕地机页的「管理房间」创建房间或保存已有房间。"
+                       TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
 
             <!-- 服务器地址 -->
             <TextBlock Text="服务器地址" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="ServerUrlBox" Style="{StaticResource Txt}" Text="http://your-server.com:8080"/>
+            <TextBox x:Name="ServerUrlBox" Style="{StaticResource Txt}"/>
             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
                 <Run Text="BgiCoordinatorServer 的地址，"/><Run FontWeight="Bold" Text="不要带 /hub"/><Run Text="。"/>
                 <LineBreak/>
@@ -53,15 +56,6 @@
                 </TextBlock>
             </CheckBox>
 
-            <!-- 房间密码 -->
-            <TextBlock Text="控制房间密码" Style="{StaticResource Lbl}"/>
-            <PasswordBox x:Name="PasswordBox" Height="32" FontSize="13" Padding="8,4" Background="White" Foreground="#1D1D1F" BorderBrush="#D1D1D6"/>
-            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
-                <Run Text="房主首次加入时设置密码，其他人填入相同密码即可加入。"/>
-                <LineBreak/>
-                <Run Text="密码长度 4-8 位，所有成员使用同一个密码。"/>
-            </TextBlock>
-
             <!-- 玩家名称 -->
             <TextBlock Text="玩家名称" Style="{StaticResource Lbl}"/>
             <TextBox x:Name="PlayerNameBox" Style="{StaticResource Txt}"/>
@@ -77,18 +71,7 @@
             <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
                 <Run Text="你在游戏中的 UID，用于服务器识别身份。"/>
                 <LineBreak/>
-                <Run Text="示例：171007645。必须包含在下面的「队伍 UID」列表中。"/>
-            </TextBlock>
-
-            <!-- 队友 UID（逗号分隔） -->
-            <TextBlock Text="队伍 UID（4 个，逗号分隔）" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="TeamUidsBox" Style="{StaticResource Txt}" TextWrapping="Wrap" Height="60" VerticalContentAlignment="Top" AcceptsReturn="False"/>
-            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
-                <Run Text="各台机器各自的 UID，"/><Run FontWeight="Bold" Text="至少 1 个"/><Run Text="。用逗号分隔。"/>
-                <LineBreak/>
-                <Run Text="房间码基于所有 UID 生成，所有机器必须填写完全相同的 UID 列表！"/>
-                <LineBreak/>
-                <Run Text="示例：171007645,123456789,987654321,555555555"/>
+                <Run Text="如已选房间，此 UID 须包含在该房间的成员列表内。"/>
             </TextBlock>
 
             <!-- BGI 路径 -->
@@ -108,14 +91,29 @@
                 <Run Text="示例：E:\Program Files\BetterGI\BetterGI.exe。可点击「浏览」按钮选择。留空也可以。"/>
             </TextBlock>
 
-            <!-- 预期开锄人数 -->
-            <TextBlock x:Name="ExpectedPlayersLabel" Text="预期开锄人数（几人一起开车）" Style="{StaticResource Lbl}"/>
-            <TextBox x:Name="ExpectedPlayersBox" Style="{StaticResource Txt}" Text="4"/>
-            <TextBlock x:Name="ExpectedPlayersHint" TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
-                <Run Text="填写 1-4。以该人数为准：凑齐这么多成员上线才触发联机锄地，缺人不开锄。"/>
-                <LineBreak/>
-                <Run Text="各成员填自己的预期，服务端取最小值判断。示例：都填 3，则 3 人上线就开锄。"/>
-            </TextBlock>
+            <!-- 仅编辑当前档案的房间设置 -->
+            <StackPanel x:Name="RoomCredentialsPanel" Margin="0,12,0,0">
+                <TextBlock x:Name="RoomEditingHint" TextWrapping="Wrap" FontSize="12" FontWeight="SemiBold" Foreground="#1D1D1F"/>
+                <TextBlock Text="控制房间密码" Style="{StaticResource Lbl}"/>
+                <PasswordBox x:Name="PasswordBox" Height="32" FontSize="13" Padding="8,4" Background="White"
+                             Foreground="#1D1D1F" BorderBrush="#D1D1D6" AutomationProperties.Name="控制房间密码"/>
+                <TextBlock Text="请填写此房间使用的密码。保存设置不会更改房间号。"
+                           TextWrapping="Wrap" FontSize="11" Foreground="#6E6E73" Margin="0,2,0,0"/>
+
+                <TextBlock Text="成员 UID（逗号分隔）" Style="{StaticResource Lbl}"/>
+                <TextBox x:Name="TeamUidsBox" Style="{StaticResource Txt}" TextWrapping="Wrap" Height="60"
+                         VerticalContentAlignment="Top" AcceptsReturn="False" AutomationProperties.Name="当前房间成员 UID"/>
+                <TextBlock Text="填写当前房间的成员 UID，列表须包含本机玩家的 UID。"
+                           TextWrapping="Wrap" FontSize="11" Foreground="#6E6E73" Margin="0,2,0,0"/>
+
+                <TextBlock x:Name="ExpectedPlayersLabel" Text="预期开锄人数（几人一起开车）" Style="{StaticResource Lbl}"/>
+                <TextBox x:Name="ExpectedPlayersBox" Style="{StaticResource Txt}" Text="4" AutomationProperties.Name="当前房间预期开锄人数"/>
+                <TextBlock x:Name="ExpectedPlayersHint" TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
+                    <Run Text="填写 1-4。以该人数为准：凑齐这么多成员上线才触发联机锄地，缺人不开锄。"/>
+                    <LineBreak/>
+                    <Run Text="各成员填自己的预期，服务端取最小值判断。示例：都填 3，则 3 人上线就开锄。"/>
+                </TextBlock>
+            </StackPanel>
 
             <!-- 遥控器模式 -->
             <CheckBox x:Name="ObserverModeCheckBox" IsChecked="False" Margin="0,12,0,0" Cursor="Hand">
@@ -136,9 +134,9 @@
 
             <!-- 按钮 -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
-                <Button x:Name="CancelButton" Content="取消" Width="90" Height="34" Margin="0,0,10,0"
+                <Button x:Name="CancelButton" Content="取消" Width="90" Height="34" Margin="0,0,10,0" IsCancel="True"
                         Background="#E9E9EB" Foreground="#1D1D1F" BorderThickness="0" Cursor="Hand" Click="CancelButton_Click"/>
-                <Button x:Name="SaveButton" Content="保存并连接" Width="110" Height="34"
+                <Button x:Name="SaveButton" Content="保存设置" Width="110" Height="34" IsDefault="True"
                         Background="#007AFF" Foreground="White" BorderThickness="0" Cursor="Hand" Click="SaveButton_Click"/>
             </StackPanel>
         </StackPanel>

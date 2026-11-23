@@ -8,6 +8,7 @@ public class ControlRoomPlayersUpdate
 {
     public bool Full { get; set; }
     public long Revision { get; set; }
+    public long? BaseRevision { get; set; }
     public List<ControlRoomPlayer>? Players { get; set; }
     public List<ControlRoomPlayer>? Changed { get; set; }
     public List<string>? Removed { get; set; }

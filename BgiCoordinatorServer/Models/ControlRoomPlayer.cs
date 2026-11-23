@@ -2,7 +2,12 @@
 
 public class ControlRoomPlayer
 {
-    internal ControlRoomPlayer SnapshotForBroadcast() => (ControlRoomPlayer)MemberwiseClone();
+    internal ControlRoomPlayer SnapshotForBroadcast()
+    {
+        var copy = (ControlRoomPlayer)MemberwiseClone();
+        copy.OnlineHistory = [.. OnlineHistory];
+        return copy;
+    }
     public string? HoeingBatchId { get; set; }
     public string? HoeingStartPhase { get; set; }
     public string? HoeingStartMessage { get; set; }

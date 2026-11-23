@@ -55,6 +55,10 @@ internal static class ExternalInterfaceOperations
     public const string JobStatus = "ext.job.status";
     public const string ManualStopFence = "ext.execution.manualStopFence";
 
+    // 房间信号的 ACK 只在原会话的有界邮箱内去重，不进入跨连接写操作窗口。
+    public const string RoomActionPeek = "ext.roomAction.peek";
+    public const string RoomActionAck = "ext.roomAction.ack";
+
     /// <summary>[A3.2] 注册表全量快照（在队+在跑+未淘汰终态）：助手 reconcile 循环（§4.5）的输入。</summary>
     public const string JobList = "ext.job.list";
 
@@ -180,6 +184,7 @@ internal static class ExternalInterfaceProtocol
                 ["execution.contract.v1"] = true,
                 ["execution.exit.confirmed.v1"] = true,
                 ["execution.manualStopFence.v1"] = true,
+                ["roomAction.mailbox.v1"] = true,
                 ["config.revision"] = true,
                 ["config.taskLayout"] = true,
                 ["config.resourceEditor"] = true,

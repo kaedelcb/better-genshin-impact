@@ -925,6 +925,26 @@
                                              Style="{StaticResource GoldInput}" Width="64" Padding="6,2" HorizontalContentAlignment="Center"/>
                                 </WrapPanel>
 
+                                <!-- switchAssistantRoom -->
+                                <WrapPanel>
+                                    <WrapPanel.Style>
+                                        <Style TargetType="WrapPanel" BasedOn="{StaticResource FieldGroup}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Kind}" Value="switchAssistantRoom">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </WrapPanel.Style>
+                                    <TextBlock Text="目标房间（必选）" Style="{StaticResource FieldLabel}"/>
+                                    <ComboBox Style="{StaticResource GoldComboBox}" Width="240"
+                                              AutomationProperties.Name="目标房间"
+                                              ItemsSource="{Binding RoomSwitchChoices}" DisplayMemberPath="Display" SelectedValuePath="Id"
+                                              SelectedValue="{Binding RoomProfileId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                    <TextBlock Text="房间就绪后才执行后继" FontSize="10" Foreground="{DynamicResource Dim}"
+                                               VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </WrapPanel>
+
                                 <!-- startGroup / startOneClick（旧版遗留节点，仍可读任务名） -->
                                 <WrapPanel>
                                     <WrapPanel.Style>
@@ -1766,6 +1786,7 @@
                     </Grid.RowDefinitions>
                     <!-- 第一版基础模式：按 BGI 原生计划表/一条龙页面复刻。 -->
                     <views:BasicTaskCenterView Grid.Row="0" VerticalAlignment="Stretch" x:Name="TaskCenterScroller" DataContext="{Binding TaskCenter}"
+                                               RoomSwitchChoicesProvider="{Binding DataContext.RoomSwitchChoicesProvider, ElementName=MistletoeRoot}"
                                                Visibility="{Binding DataContext.IsBasicTaskCenterMode,
                                                                     RelativeSource={RelativeSource AncestorType=UserControl},
                                                                     Converter={StaticResource BoolToVis}}" />
