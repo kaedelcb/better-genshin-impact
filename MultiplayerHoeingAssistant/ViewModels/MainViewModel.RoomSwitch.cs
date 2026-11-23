@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
+using MultiplayerHoeingAssistant.Views;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.Services.Gateway;
@@ -11,7 +11,8 @@ namespace MultiplayerHoeingAssistant.ViewModels;
 public partial class MainViewModel
 {
     private sealed record RoomSwitchRecord(string RequestId, string ServerUrl, string Uid,
-        string OriginalProfileId, string TargetProfileId, string OriginalRoom, string TargetRoom, bool ReadyAttempted = false);
+        string OriginalProfileId, string TargetProfileId, string OriginalRoom, string TargetRoom,
+        bool ReadyAttempted = false, string? TargetServerUrl = null);
 
     private readonly SemaphoreSlim _assistantRoomSwitchGate = new(1, 1);
     private CancellationTokenSource? _assistantRoomSwitchCancellation;
@@ -53,6 +54,7 @@ public partial class MainViewModel
     public IReadOnlyList<AssistantRoomProfile> RoomSwitchChoices => _config?.RoomProfiles ?? [];
     public AssistantRoomProfile? ActiveRoomProfile => _config?.ActiveRoomProfile;
     public string RoomSwitchStatus => _roomSwitchStatus;
+    internal event Action? AssistantRoomChanged;
     public bool CanUseAssistantRoomMemberActions => !RoomSwitchBlocksRoomOperations;
     private bool RoomSwitchBlocksRoomOperations => _changingAssistantRoom || _unconfirmedRoomSwitch is not null || _roomSwitchRecordUnreadable;
     private bool RoomSwitchHasPendingRequest => _assistantRoomSwitchGate.CurrentCount == 0;
@@ -135,6 +137,7 @@ public partial class MainViewModel
     {
         var current = _signalRClient;
         return !RoomSwitchBlocksRoomOperations && current is { IsControlRoomReady: true }
+            && current.CurrentRoomCode == RoomCode && RoomServerAddress.Same(current.CurrentServerUrl, _config?.ServerUrl)
             ? current.DesktopControlContext : null;
     }
 
@@ -166,11 +169,12 @@ public partial class MainViewModel
         SignalRClient? candidate = null;
         var submittedLeave = false;
         var confirmedLeave = false;
+        var readyAttempted = false;
         var connectionGate = false;
         var restartSource = false;
         try
         {
-            if (_disposing || IsStandaloneMode || _config is not { } config || _configManager is null)
+            if (_disposing || _config is not { StandaloneMode: false } config || _configManager is null)
                 return new(false, false, "单机模式或配置未就绪，未切换房间");
             if (RoomSwitchBlocksRoomOperations) return new(false, true, "切换结果待核对");
             if (!TryEnterConfigTransferOperation("room_switch", out var transfer))
@@ -179,6 +183,8 @@ public partial class MainViewModel
             var source = config.ActiveRoomProfile;
             if (config.RoomProfiles.SingleOrDefault(p => p.Id == profileId) is not { } target)
                 return new(false, false, "找不到目标房间档案");
+            if (!RoomServerAddress.TryNormalize(config.GetRoomServerUrl(target), out var targetServer))
+                return new(false, false, "目标档案的服务器地址无效，请在管理房间中核对");
             var old = _signalRClient;
             var identity = GetAssistantRoomIdentity();
             var firstRoom = source is null && old is null && string.IsNullOrEmpty(RoomCode);
@@ -196,14 +202,15 @@ public partial class MainViewModel
             wait.CancelAfter(waitForOnlineRound ? TimeSpan.FromHours(6) : TimeSpan.FromSeconds(45));
             var comparedTarget = (target.RoomCode, target.Password, Uids: string.Join('\n', target.TeamUids));
             var record = new RoomSwitchRecord(Guid.NewGuid().ToString("N"), config.ServerUrl, config.PlayerUid,
-                source?.Id ?? "", target.Id, source?.RoomCode ?? "", target.RoomCode);
+                source?.Id ?? "", target.Id, source?.RoomCode ?? "", target.RoomCode, TargetServerUrl: targetServer);
             SetRoomSwitchStatus("等待切换到「" + target.Name + "」");
             while (true)
             {
                 wait.Token.ThrowIfCancellationRequested();
                 if (verifySource is not null) await verifySource(wait.Token);
-                if (identity != GetAssistantRoomIdentity() || !ReferenceEquals(config, _config) || IsStandaloneMode
-                    || !config.RoomProfiles.Contains(target) || comparedTarget != (target.RoomCode, target.Password, string.Join('\n', target.TeamUids)))
+                if (identity != GetAssistantRoomIdentity() || !ReferenceEquals(config, _config) || config.StandaloneMode
+                    || !config.RoomProfiles.Contains(target) || !RoomServerAddress.Same(targetServer, config.GetRoomServerUrl(target))
+                    || comparedTarget != (target.RoomCode, target.Password, string.Join('\n', target.TeamUids)))
                     return new(false, false, "房间连接或档案已变化，未切换");
                 if (AssistantRoomHasBatch() || Volatile.Read(ref _ordinaryStopInProgress) != 0
                     || _localResetGate.CurrentCount == 0 || Volatile.Read(ref _refreshRunning) != 0
@@ -277,13 +284,14 @@ public partial class MainViewModel
             candidate.PrepareRoomSwitch();
             // Candidate has no batch authority before acceptance. Its join is serialized by the attempt gate.
             candidate.CoordinateRoomJoin = null;
-            await candidate.ConnectAsync(config.ServerUrl, target.RoomCode, target.Password, config.PlayerUid,
+            await candidate.ConnectAsync(targetServer, target.RoomCode, target.Password, config.PlayerUid,
                 config.PlayerName, [.. target.TeamUids], config.ObserverMode, config.ClientInstanceId,
                 config.BypassSystemProxy, joinBudget.Token);
             _roomPreviewClient = candidate;
             candidate.ApplyRoomSnapshot(candidate.PreparedRoomSnapshot!);
             if (verifySource is not null) await verifySource(joinBudget.Token);
             RecordAssistantRoomSwitch(record with { ReadyAttempted = true });
+            readyAttempted = true;
             var ready = await candidate.ConfirmRoomSwitchAsync(BuildTargetRoomStatus(config, target), joinBudget.Token);
             if (verifySource is not null) await verifySource(joinBudget.Token);
             joinBudget.Token.ThrowIfCancellationRequested();
@@ -294,18 +302,21 @@ public partial class MainViewModel
             Application.Current.Dispatcher.Invoke(() =>
             {
                 joinBudget.Token.ThrowIfCancellationRequested();
-                if (!ReferenceEquals(_config, config) || IsStandaloneMode || _disposing)
+                if (!ReferenceEquals(_config, config) || config.StandaloneMode || _disposing)
                     throw new OperationCanceledException("设置或运行模式已变化");
                 var previous = source ?? new AssistantRoomProfile();
                 previous.Capture(config);
+                var previousTargetFireDate = target.ScheduledOnlineLastFireDate;
                 var now = DateTime.Now;
                 if (source is not null && TimeSpan.TryParse(target.ScheduledOnlineTime, out var schedule)
                     && now >= now.Date.Add(schedule) && target.ScheduledOnlineLastFireDate?.Date != now.Date)
                     target.ScheduledOnlineLastFireDate = now.Date; // A room that was inactive at its scheduled time does not catch up on switch.
                 target.ApplyTo(config);
+                config.ServerUrl = targetServer;
                 config.ActiveRoomProfileId = target.Id;
                 if (!_configManager.TrySave(config))
                 {
+                    target.ScheduledOnlineLastFireDate = previousTargetFireDate;
                     previous.ApplyTo(config);
                     config.ActiveRoomProfileId = originalId;
                     throw new IOException("目标档案未写入，切换结果待核对");
@@ -318,6 +329,13 @@ public partial class MainViewModel
                 _intentLifecycle.ChangeAssistantRoom(newSuppression);
                 Volatile.Write(ref _roomSwitchCommittedAtUtc, DateTime.UtcNow.Ticks);
                 _lastScheduledFireDate = config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
+                lock (_batchGate)
+                {
+                    _lastHoeingBatchId = null;
+                    _lastHoeingStartPhase = null;
+                    _lastHoeingStartMessage = null;
+                }
+                _lastLoggedProgress = "";
                 _signalRClient = candidate;
                 candidate.ApplyRoomSnapshot(ready);
                 candidate.CompleteRoomSwitch();
@@ -326,6 +344,10 @@ public partial class MainViewModel
                 IsConnected = true;
                 OnPropertyChanged(nameof(RoomCode));
                 NotifyRoomProfiles();
+                OnPropertyChanged(nameof(IsStandaloneMode));
+                OnPropertyChanged(nameof(ConfigurationTransferStatusMessage));
+                try { AssistantRoomChanged?.Invoke(); }
+                catch (Exception observerError) { AddLog("跨房间刷新失败：" + observerError.Message); }
                 RefreshCompleted?.Invoke();
             });
             _roomPreviewClient = null;
@@ -338,16 +360,26 @@ public partial class MainViewModel
             ObserveOnlineTask(ReportStatusAsync(), "切房后状态上报");
             return new(true, false, RoomSwitchStatus, committed.DesktopControlContext);
         }
-        catch (SignalRClient.RoomJoinRejectedException ex) when (confirmedLeave)
+        catch (Exception ex) when (confirmedLeave && !readyAttempted)
         {
-            // A business rejection before preparation registered no target execution rights.
-            try { ClearAssistantRoomSwitchRecord(); restartSource = true; }
-            catch (Exception storageError)
+            // The target is still read-only, even if its preparation reply was lost.
+            try
             {
-                SetRoomSwitchStatus("切换结果待核对：" + storageError.Message);
+                if (candidate is not null)
+                {
+                    await candidate.DisposeAsync();
+                    candidate = null;
+                }
+                ClearAssistantRoomSwitchRecord();
+                restartSource = !string.IsNullOrEmpty(RoomCode);
+            }
+            catch (Exception cleanupError)
+            {
+                SetRoomSwitchStatus("切换结果待核对：" + cleanupError.Message);
                 return new(false, true, RoomSwitchStatus);
             }
-            SetRoomSwitchStatus("入房失败，尝试恢复原房间：" + ex.Message);
+            var prefix = restartSource ? "目标入房未完成，尝试恢复原服务器的房间：" : "目标入房未完成：";
+            SetRoomSwitchStatus(prefix + ex.Message);
             return new(false, false, RoomSwitchStatus);
         }
         catch (Exception ex)
@@ -419,28 +451,36 @@ public partial class MainViewModel
         if (!await _assistantRoomSwitchGate.WaitAsync(0)) return;
         try
         {
-            if (_unconfirmedRoomSwitch is not { } record || _config is not { } config || IsStandaloneMode) return;
-            if (record.ServerUrl != config.ServerUrl || record.Uid != config.PlayerUid || AssistantRoomHasBatch())
+            if (_unconfirmedRoomSwitch is not { } record || _config is not { StandaloneMode: false } config) return;
+            // In-flight records from the old shared-address version have no TargetServerUrl.
+            var targetServer = record.TargetServerUrl ?? record.ServerUrl;
+            if (record.Uid != config.PlayerUid || AssistantRoomHasBatch()
+                || !((config.ActiveRoomProfileId == record.OriginalProfileId && RoomServerAddress.Same(config.ServerUrl, record.ServerUrl))
+                    || (config.ActiveRoomProfileId == record.TargetProfileId && RoomServerAddress.Same(config.ServerUrl, targetServer))))
             { SetRoomSwitchStatus("切换结果待核对：原执行身份已变化或联机尚未收尾"); return; }
             using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             var retainedSource = _signalRClient;
             ControlRoomPlayersUpdate? retainedSourceSnapshot = null;
-            await using var probe = new MhaGatewayClient();
-            await probe.ConnectAsync(MhaGatewayClient.NormalizeBaseUrl(config.ServerUrl, out _), config.BypassSystemProxy, budget.Token);
-            foreach (var (id, code) in new[] { (record.OriginalProfileId, record.OriginalRoom), (record.TargetProfileId, record.TargetRoom) })
+            foreach (var (id, code, address, isTarget) in new[]
+                { (record.OriginalProfileId, record.OriginalRoom, record.ServerUrl, false),
+                  (record.TargetProfileId, record.TargetRoom, targetServer, true) })
             {
-                if (string.IsNullOrEmpty(code) || code == record.TargetRoom && !record.ReadyAttempted) continue;
-                var profile = config.RoomProfiles.SingleOrDefault(p => p.Id == id && p.RoomCode == code);
-                if (profile is null) throw new InvalidOperationException("原房间档案已变化");
+                if (string.IsNullOrEmpty(code) || isTarget && !record.ReadyAttempted) continue;
+                var profile = config.RoomProfiles.SingleOrDefault(p => p.Id == id && p.RoomCode == code
+                    && RoomServerAddress.Same(config.GetRoomServerUrl(p), address));
+                if (profile is null || !RoomServerAddress.TryNormalize(address, out var server))
+                    throw new InvalidOperationException("待核对的服务器或档案已变化");
+                await using var probe = new MhaGatewayClient();
+                await probe.ConnectAsync(server, config.BypassSystemProxy, budget.Token);
                 var reply = await probe.InvokeCommandAsync("control.roomAccess", new { roomCode = code, password = profile.Password, playerUid = config.PlayerUid }, ct: budget.Token);
                 if (reply.Payload?["success"]?.GetValue<bool>() != true || reply.Payload?["busy"]?.GetValue<bool>() != false
                     || reply.Payload?["joined"] is null)
-                    throw new InvalidOperationException("房间 " + code + " 未确认释放批次责任");
+                    throw new InvalidOperationException("房间 " + profile.Name + "（" + server + "）未确认释放批次责任");
                 if (reply.Payload["joined"]!.GetValue<bool>())
                 {
-                    if (code != record.OriginalRoom || retainedSource?.CurrentRoomCode != code
+                    if (isTarget || retainedSource?.CurrentRoomCode != code || !RoomServerAddress.Same(retainedSource.CurrentServerUrl, server)
                         || await retainedSource.ReadRoomSnapshotAsync(budget.Token) is not { Full: true } snapshot)
-                        throw new InvalidOperationException("房间 " + code + " 未确认释放成员资格");
+                        throw new InvalidOperationException("房间 " + profile.Name + "（" + server + "）未确认释放成员资格");
                     retainedSourceSnapshot = snapshot;
                 }
             }
@@ -480,8 +520,9 @@ public partial class MainViewModel
 
     private bool AcceptAssistantRoomMembers(SignalRClient client, ControlRoomPlayersUpdate update)
     {
-        if (_disposing || client.IsRetired || client.CurrentRoomCode != RoomCode && !ReferenceEquals(client, _roomPreviewClient)) return false;
+        if (_disposing || client.IsRetired) return false;
         var preview = ReferenceEquals(client, _roomPreviewClient);
+        if (!preview && (client.CurrentRoomCode != RoomCode || !RoomServerAddress.Same(client.CurrentServerUrl, _config?.ServerUrl))) return false;
         if (!preview && !ReferenceEquals(client, _signalRClient) && !ReferenceEquals(client, _pendingControlClient)) return false;
         if (!preview && RoomSwitchBlocksRoomOperations) return false;
         var epoch = client.DesktopControlContext;
@@ -513,114 +554,127 @@ public partial class MainViewModel
         finally { Interlocked.Exchange(ref _requestingFullRoomSnapshot, 0); }
     }
 
-    private async Task EditAssistantRoomsAsync()
+    private Task EditAssistantRoomsAsync()
     {
         using var roomEffect = TryEnterAssistantRoomEffect();
-        if (roomEffect is null || RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations || !CanEditConfiguration
-            || _config is not { } config || _configManager is null) return;
-        var window = new Window { Title = "助手房间档案", Width = 440, Height = 410,
-            Owner = Application.Current.MainWindow, WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize };
-        var layout = new StackPanel { Margin = new Thickness(16) };
-        var selector = new ComboBox { ItemsSource = RoomSwitchChoices.ToList(), DisplayMemberPath = nameof(AssistantRoomProfile.Name),
-            SelectedItem = config.ActiveRoomProfile, Margin = new Thickness(0, 0, 0, 8) };
-        var name = new TextBox();
-        var code = new TextBox();
-        var password = new PasswordBox();
-        var members = new TextBox();
-        var result = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
-        void Row(string caption, Control control) { layout.Children.Add(new TextBlock { Text = caption }); layout.Children.Add(control); }
-        void Fill(AssistantRoomProfile? entry)
+        if (roomEffect is null || RoomSwitchHasPendingRequest || !CanEditConfiguration
+            || _config is not { } config || _configManager is null) return Task.CompletedTask;
+        config.FillLegacyRoomServerUrls();
+        var window = new AssistantRoomProfilesWindow(config.RoomProfiles.ToList(), config.ActiveRoomProfileId,
+            config.ServerUrl, config.PlayerUid, SaveProfileAsync, RemoveProfile)
+        { Owner = Application.Current.MainWindow };
+        window.ShowDialog();
+        return Task.CompletedTask;
+
+        void VerifyEditable()
         {
-            name.Text = entry?.Name ?? ""; code.Text = entry?.RoomCode ?? "";
-            password.Password = entry?.Password ?? ""; members.Text = entry is null ? "" : string.Join(",", entry.TeamUids);
+            if (_disposing || RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations || !CanEditConfiguration
+                || !ReferenceEquals(config, _config))
+                throw new InvalidOperationException("房间或本机设置已变化，请关闭后重新打开房间管理");
         }
-        selector.SelectionChanged += (_, _) => Fill(selector.SelectedItem as AssistantRoomProfile);
-        layout.Children.Add(selector);
-        Row("名称（供 BGI 配置组引用）", name);
-        Row("房间号（创建时留空）", code);
-        Row("房间密码", password);
-        Row("成员 UID（逗号分隔）", members);
-        var panel = new WrapPanel { Margin = new Thickness(0, 10, 0, 0) };
-        void Button(string caption, RoutedEventHandler handler)
+
+        async Task SaveProfileAsync(AssistantRoomProfile? selected, AssistantRoomDraft draft, bool create)
         {
-            var button = new Button { Content = caption, Margin = new Thickness(0, 0, 8, 4), Padding = new Thickness(6, 3, 6, 3) };
-            button.Click += handler; panel.Children.Add(button);
-        }
-        async Task Save(string action)
-        {
-            if (RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations || !ReferenceEquals(config, _config)
-                || !TryEnterConfigTransferOperation("room_profile_edit", out var lease)) return;
+            VerifyEditable();
+            if (!TryEnterConfigTransferOperation("room_profile_edit", out var lease))
+                throw new InvalidOperationException(ConfigTransferBlockedMessage);
             using var transfer = lease;
-            panel.IsEnabled = false;
-            try
+            var label = draft.Name.Trim();
+            if (label.Length is 0 or > 64 || config.RoomProfiles.Any(p => p != selected
+                && string.Equals(p.Name, label, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("档案名称必须填写，并且不能与本机其他房间重名");
+            if (!RoomServerAddress.TryNormalize(draft.ServerUrl, out var server))
+                throw new InvalidOperationException("服务器地址必须是有效的 http 或 https 基地址");
+            if (draft.ExpectedPlayers is < 1 or > 4)
+                throw new InvalidOperationException("预期开锄人数必须是 1–4 人");
+            var code = draft.RoomCode.Trim().ToUpperInvariant();
+            var uids = draft.MemberUids.Split([',', '，', ' ', '\n', '\r'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Distinct(StringComparer.Ordinal).ToList();
+            var active = selected is not null && selected.Id == config.ActiveRoomProfileId;
+            var index = selected is null ? -1 : config.RoomProfiles.IndexOf(selected);
+            if (selected is not null && index < 0)
+                throw new InvalidOperationException("该档案已被移除");
+            if (active)
             {
-                var selected = selector.SelectedItem as AssistantRoomProfile;
-                var label = name.Text.Trim();
-                if (label.Length is 0 or > 64 || config.RoomProfiles.Any(p => (action != "rename" || p != selected)
-                    && string.Equals(p.Name, label, StringComparison.OrdinalIgnoreCase)))
-                    throw new InvalidOperationException("房间名称须非空且在本机唯一");
-                if (action == "rename")
-                {
-                    if (selected is null) throw new InvalidOperationException("请选择要改名的档案");
-                    var previous = selected.Name;
-                    selected.Name = label;
-                    if (!_configManager.TrySave(config)) { selected.Name = previous; throw new IOException("档案未保存"); }
-                }
-                else
-                {
-                    if (config.RoomProfiles.Count >= 5) throw new InvalidOperationException("本机最多保存 5 个房间档案");
-                    var roomCode = code.Text.Trim().ToUpperInvariant();
-                    var secret = password.Password;
-                    var uids = members.Text.Split([',', '，', ' ', '\n', '\r'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                        .Distinct(StringComparer.Ordinal).ToList();
-                    if (uids.Count == 0 || uids.Any(uid => uid.Length is < 1 or > 16 || !uid.All(char.IsAsciiDigit))
-                        || !uids.Contains(config.PlayerUid, StringComparer.Ordinal) || string.IsNullOrWhiteSpace(secret))
-                        throw new InvalidOperationException("请填写房间密码和包含本机的有效成员 UID");
-                    if (action == "create")
-                    {
-                        if (IsStandaloneMode) throw new InvalidOperationException("请先设置在线模式及服务器地址");
-                        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
-                        await using var gateway = new MhaGatewayClient();
-                        await gateway.ConnectAsync(MhaGatewayClient.NormalizeBaseUrl(config.ServerUrl, out _), config.BypassSystemProxy, timeout.Token);
-                        var reply = await gateway.InvokeCommandAsync("control.createRoom", new
-                        { password = secret, playerUid = config.PlayerUid, allowedUids = uids }, ct: timeout.Token);
-                        if (reply.Payload?["success"]?.GetValue<bool>() != true)
-                            throw new InvalidOperationException(reply.GetString("reason", "服务端未确认建房"));
-                        roomCode = reply.GetString("roomCode");
-                    }
-                    if (roomCode.Length != 6 || roomCode.Any(c => !char.IsAsciiLetterOrDigit(c))
-                        || config.RoomProfiles.Any(p => p.RoomCode == roomCode))
-                        throw new InvalidOperationException("请输入不同的 6 位房间号");
-                    var profile = new AssistantRoomProfile { Id = Guid.NewGuid().ToString("N"), Name = label,
-                        RoomCode = roomCode, Password = secret, TeamUids = uids, ExpectedHoeingPlayers = Math.Clamp(uids.Count, 1, 4) };
-                    config.RoomProfiles.Add(profile);
-                    if (!_configManager.TrySave(config)) { config.RoomProfiles.Remove(profile); throw new IOException("档案未保存"); }
-                }
-                NotifyRoomProfiles();
-                window.Close();
+                if (create || selected!.RoomCode != code || !RoomServerAddress.Same(config.ServerUrl, server)
+                    || draft.Password != config.ControlRoomPassword || !uids.SequenceEqual(config.TeamUids, StringComparer.Ordinal))
+                    throw new InvalidOperationException("不能在这里改变正在使用的服务器或入房凭据，可添加另一个房间档案后切换");
+                if (draft.ExpectedPlayers != config.ExpectedHoeingPlayers && (AssistantRoomHasBatch() || _intentLifecycle.IsOnlineReady))
+                    throw new InvalidOperationException("当前房间正在等待开锄或执行任务，请等本轮结束再修改开锄人数");
             }
-            catch (Exception ex) { result.Text = ex.Message; }
-            finally { panel.IsEnabled = true; }
+            else
+            {
+                if (selected is null && config.RoomProfiles.Count >= 5)
+                    throw new InvalidOperationException("本机最多保存 5 个房间档案");
+                if (uids.Count == 0 || uids.Count > 64 || uids.Any(uid => uid.Length is < 1 or > 16 || !uid.All(char.IsAsciiDigit))
+                    || !uids.Contains(config.PlayerUid, StringComparer.Ordinal))
+                    throw new InvalidOperationException("请填写有效的成员 UID，并将本机玩家的 UID 加入名单");
+                if (string.IsNullOrWhiteSpace(draft.Password) || draft.Password.Length > 128)
+                    throw new InvalidOperationException("请填写房间密码，最多 128 个字符");
+                if (create)
+                {
+                    if (selected is not null || code.Length != 0 || config.StandaloneMode)
+                        throw new InvalidOperationException("请在联网模式添加新档案，并将房间号留空后建房");
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+                    await using var gateway = new MhaGatewayClient();
+                    await gateway.ConnectAsync(server, config.BypassSystemProxy, timeout.Token);
+                    var reply = await gateway.InvokeCommandAsync("control.createRoom", new
+                    { password = draft.Password, playerUid = config.PlayerUid, allowedUids = uids }, ct: timeout.Token);
+                    if (reply.Payload?["success"]?.GetValue<bool>() != true)
+                        throw new InvalidOperationException(reply.GetString("reason", "服务器未确认建房"));
+                    code = reply.GetString("roomCode");
+                    VerifyEditable();
+                }
+                if (code.Length != 6 || code.Any(c => !char.IsAsciiLetterOrDigit(c)))
+                    throw new InvalidOperationException("请输入服务器上的 6 位房间号");
+                if (config.RoomProfiles.Any(p => p != selected && p.RoomCode == code && RoomServerAddress.Same(config.GetRoomServerUrl(p), server)))
+                    throw new InvalidOperationException("此服务器上的这个房间已保存，请编辑已有档案");
+            }
+
+            var profile = selected is null ? new AssistantRoomProfile { Id = Guid.NewGuid().ToString("N") }
+                : JsonSerializer.Deserialize<AssistantRoomProfile>(JsonSerializer.Serialize(selected))!;
+            if (selected is not null && (!RoomServerAddress.Same(config.GetRoomServerUrl(selected), server) || selected.RoomCode != code))
+            {
+                profile.ScheduledOnlineLastFireDate = null;
+                profile.ScheduledOnlineRequiresConfirmation = !string.IsNullOrEmpty(profile.ScheduledOnlineTime);
+            }
+            profile.Name = label;
+            profile.ServerUrl = active ? config.ServerUrl : server;
+            profile.RoomCode = code;
+            profile.Password = draft.Password;
+            profile.TeamUids = uids;
+            profile.ExpectedHoeingPlayers = draft.ExpectedPlayers;
+            var previousCount = config.ExpectedHoeingPlayers;
+            if (index >= 0) config.RoomProfiles[index] = profile;
+            else config.RoomProfiles.Add(profile);
+            if (active) config.ExpectedHoeingPlayers = draft.ExpectedPlayers;
+            if (!_configManager.TrySave(config))
+            {
+                if (selected is not null) config.RoomProfiles[index] = selected;
+                else config.RoomProfiles.Remove(profile);
+                config.ExpectedHoeingPlayers = previousCount;
+                throw new IOException(create ? "房间已创建（" + code + "），但档案未能保存。请用房间号添加已有房间。" : "档案未能保存，原设置保留");
+            }
+            NotifyRoomProfiles();
+            if (active) ObserveOnlineTask(ReportStatusAsync(), "更新当前房间人数");
         }
-        Button("新建档案", (_, _) => { selector.SelectedItem = null; Fill(null); });
-        Button("建房并保存", async (_, _) => await Save("create"));
-        Button("保存已有房间", async (_, _) => await Save("existing"));
-        Button("保存新名称", async (_, _) => await Save("rename"));
-        Button("移除本机档案", (_, _) =>
+
+        void RemoveProfile(AssistantRoomProfile selected)
         {
-            if (RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations || !CanEditConfiguration
-                || selector.SelectedItem is not AssistantRoomProfile selected || selected.Id == config.ActiveRoomProfileId) return;
-            if (MessageBox.Show(window, "移除此本机档案？服务器和历史记录不变。", "移除房间档案", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+            VerifyEditable();
+            if (selected.Id == config.ActiveRoomProfileId) throw new InvalidOperationException("请先切到另一个房间，再移除此档案");
+            if (!TryEnterConfigTransferOperation("room_profile_edit", out var lease))
+                throw new InvalidOperationException(ConfigTransferBlockedMessage);
+            using var transfer = lease;
             var index = config.RoomProfiles.IndexOf(selected);
             if (index < 0) return;
             config.RoomProfiles.RemoveAt(index);
-            if (!_configManager.TrySave(config)) { config.RoomProfiles.Insert(index, selected); result.Text = "档案未保存"; return; }
-            NotifyRoomProfiles(); window.Close();
-        });
-        layout.Children.Add(panel); layout.Children.Add(result); window.Content = layout;
-        Fill(selector.SelectedItem as AssistantRoomProfile);
-        window.ShowDialog();
-        await Task.CompletedTask;
+            if (!_configManager.TrySave(config))
+            {
+                config.RoomProfiles.Insert(index, selected);
+                throw new IOException("档案未能移除，原设置保留");
+            }
+            NotifyRoomProfiles();
+        }
     }
 }

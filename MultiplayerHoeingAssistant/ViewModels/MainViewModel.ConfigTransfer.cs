@@ -298,7 +298,8 @@ public partial class MainViewModel
             ?? throw new InvalidDataException("无法保存导入前的运行绑定快照");
 
     internal static bool ConfigTransferRuntimeBindingsChanged(AssistConfig previous, AssistConfig imported)
-        => previous.ServerUrl != imported.ServerUrl || previous.ControlRoomPassword != imported.ControlRoomPassword
+        => !RoomServerAddress.Same(previous.GetRoomServerUrl(previous.ActiveRoomProfile), imported.GetRoomServerUrl(imported.ActiveRoomProfile))
+            || previous.ControlRoomPassword != imported.ControlRoomPassword
             || previous.EffectiveRoomCode != imported.EffectiveRoomCode
             || previous.PlayerUid != imported.PlayerUid || previous.ClientInstanceId != imported.ClientInstanceId
             || previous.ObserverMode != imported.ObserverMode || previous.StandaloneMode != imported.StandaloneMode
@@ -367,6 +368,9 @@ public partial class MainViewModel
                 ?? throw new InvalidOperationException("助手配置管理器尚未初始化"),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidDataException("助手主配置为空");
+        config.EnsureRoomProfiles();
+        config.FillLegacyRoomServerUrls();
+        config.ActiveRoomProfile?.ApplyTo(config);
         _config = config;
         if (previous?.AutoLaunchOnBoot != config.AutoLaunchOnBoot
             || previous?.AutoLaunchOnBootMinimized != config.AutoLaunchOnBootMinimized)
@@ -377,7 +381,6 @@ public partial class MainViewModel
         }
         RefreshSetupBindings();
         OnPropertyChanged(nameof(Config));
-        config.EnsureRoomProfiles();
         RoomCode = config.EffectiveRoomCode;
         _lastScheduledFireDate = config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
         NotifyRoomProfiles();

@@ -13,13 +13,15 @@ internal sealed class RemoteLogRoomSession : IAsyncDisposable
     private long _revision;
 
     public SignalRClient Client { get; } = new();
+    public string ServerUrl { get; }
     public string RoomCode { get; }
     public string? Error { get; private set; }
     public bool IsReady { get { lock (_gate) return !_disposed && _joined && Client.IsConnected; } }
     public event Action? Changed;
 
-    private RemoteLogRoomSession(string roomCode)
+    private RemoteLogRoomSession(string serverUrl, string roomCode)
     {
+        ServerUrl = serverUrl;
         RoomCode = roomCode;
         Client.OnPlayersUpdated += UpdatePlayers;
         Client.OnJoinRejected += Reject;
@@ -29,7 +31,9 @@ internal sealed class RemoteLogRoomSession : IAsyncDisposable
     public static async Task<RemoteLogRoomSession> ConnectAsync(string serverUrl, string roomCode,
         string password, bool bypassSystemProxy, CancellationToken cancellationToken)
     {
-        var session = new RemoteLogRoomSession(roomCode);
+        if (!RoomServerAddress.TryNormalize(serverUrl, out var server))
+            throw new ArgumentException("协调服务器地址无效", nameof(serverUrl));
+        var session = new RemoteLogRoomSession(server, roomCode);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
         try

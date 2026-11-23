@@ -38,6 +38,7 @@ public class SignalRClient : IAsyncDisposable
     private volatile bool _retired;
     internal bool IsControlRoomReady => _roomReady && !_retired && IsConnected;
     internal string CurrentRoomCode => _roomCode;
+    internal string CurrentServerUrl => _serverUrl;
     private readonly string _desktopControlInstance = Guid.NewGuid().ToString("N");
     private long _desktopControlEpoch;
     internal virtual bool DesktopControlReady => !_disposed && IsControlRoomReady;

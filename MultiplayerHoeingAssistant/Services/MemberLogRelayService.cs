@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using MultiplayerHoeingAssistant.Models;
 
@@ -34,18 +33,26 @@ public sealed class MemberLogRelayService : IDisposable
     private readonly Func<SignalRClient?> _clientProvider;
     private readonly BgiLogTailService _tail;
     private readonly Timer _flushTimer;
-    private readonly ConcurrentQueue<string> _pendingLines = new();
+    private readonly object _gate = new();
+    private readonly Queue<string> _pendingLines = new();
     /// <summary>最近条目环形（补发用；无论有无订阅者都维护，只存引用不渲染）。</summary>
-    private readonly ConcurrentQueue<LogEntry> _recentEntries = new();
+    private readonly Queue<LogEntry> _recentEntries = new();
 
     private SignalRClient? _hooked;
+    private Action<MemberLogBatch>? _batchHandler;
+    private Action<int>? _subscribersHandler;
+    private Action<bool>? _connectionHandler;
+    private string? _recentServerUrl;
+    private string? _recentRoomCode;
+    private volatile bool _disposed;
     /// <summary>当前订阅者数（服务端 MemberLogSubscribersChanged 推送；断线清零）。</summary>
     private int _subscriberCount;
-    /// <summary>因截断/超限丢弃的行数（下一批尾部插标记行用；入队线程与 Timer 线程并发，走 Interlocked）。</summary>
+    /// <summary>因截断/超限丢弃的行数（下一批尾部插标记行用）。</summary>
     private int _droppedSinceLastBatch;
 
     /// <summary>收到成员日志批（含自己的批——订阅方按 uid 自滤）。</summary>
     public event Action<MemberLogBatch>? BatchReceived;
+    internal event Action<SignalRClient, MemberLogBatch>? BatchReceivedFromClient;
 
     /// <summary>当前订阅者数（界面显示"N 人在看"用）。</summary>
     public int SubscriberCount => Volatile.Read(ref _subscriberCount);
@@ -58,6 +65,7 @@ public sealed class MemberLogRelayService : IDisposable
         _tail = tail;
         _settingsService = settingsService;
         _clientProvider = clientProvider;
+        EnsureHooked();
         _tail.EntryReceived += OnLocalEntry;
         _flushTimer = new Timer(Tick, null, FlushInterval, FlushInterval);
     }
@@ -66,22 +74,26 @@ public sealed class MemberLogRelayService : IDisposable
     {
         try
         {
-            if (!_settingsService.Current.ShareRealtimeLog) return;
+            lock (_gate)
+            {
+                if (_disposed || !_settingsService.Current.ShareRealtimeLog) return;
+                if (!ReferenceEquals(_hooked, _clientProvider())) EnsureHooked();
 
-            // 补发环形始终维护（只存引用，成本极低），有订阅者切来时才有上下文可发
-            _recentEntries.Enqueue(entry);
-            while (_recentEntries.Count > RecentRingCapacity && _recentEntries.TryDequeue(out _)) { }
+                // 补发环形始终维护（只存引用，成本极低），有订阅者切来时才有上下文可发
+                _recentEntries.Enqueue(entry);
+                if (_recentEntries.Count > RecentRingCapacity) _recentEntries.Dequeue();
 
-            // 观众驱动核心门槛：没人看就零渲染零入队零发送
-            if (Volatile.Read(ref _subscriberCount) <= 0) return;
-            if (_clientProvider()?.IsConnected != true) return;
-            // 省流模式：只放行 INF/WRN/ERR
-            if (_settingsService.Current.ShareLogInfoOnly && entry.Level == LogLevels.Dbg) return;
+                // 观众驱动核心门槛：没人看就零渲染零入队零发送
+                if (_subscriberCount <= 0 || _hooked is not { } client || !IsCurrentClient(client)) return;
+                if (_settingsService.Current.ShareLogInfoOnly && entry.Level == LogLevels.Dbg) return;
 
-            _pendingLines.Enqueue(MemberLogLineCodec.Render(entry));
-            // 队列上限兜底，超了丢最旧并计数（下一批批尾插丢弃标记行）
-            while (_pendingLines.Count > MaxPendingLines && _pendingLines.TryDequeue(out _))
-                Interlocked.Increment(ref _droppedSinceLastBatch);
+                _pendingLines.Enqueue(MemberLogLineCodec.Render(entry));
+                if (_pendingLines.Count > MaxPendingLines)
+                {
+                    _pendingLines.Dequeue();
+                    _droppedSinceLastBatch++;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -90,21 +102,22 @@ public sealed class MemberLogRelayService : IDisposable
     }
 
     /// <summary>订阅数变化（SignalR 回调线程）：0→1 边沿补发最近 200 行；1→0 边沿清空待发队列。</summary>
-    private void HandleSubscribersChanged(int count)
+    private void HandleSubscribersChanged(SignalRClient source, int count)
     {
         try
         {
-            var prev = Interlocked.Exchange(ref _subscriberCount, count);
-            if (count > 0 && prev == 0)
+            LogEntry[]? recent = null;
+            lock (_gate)
             {
-                SendBackfill();
+                if (!ReferenceEquals(source, _hooked) || !IsCurrentClient(source)) return;
+                var previousCount = _subscriberCount;
+                Volatile.Write(ref _subscriberCount, count);
+                if (count > 0 && previousCount == 0)
+                    recent = _recentEntries.ToArray();
+                else if (count == 0 && previousCount > 0)
+                    ClearPendingLines();
             }
-            else if (count == 0 && prev > 0)
-            {
-                // 观众走光：清掉待发队列，下次有人订阅时从补发重新开始（不发陈旧行）
-                while (_pendingLines.TryDequeue(out _)) { }
-                Interlocked.Exchange(ref _droppedSinceLastBatch, 0);
-            }
+            if (recent != null) SendBackfill(source, recent);
         }
         catch (Exception ex)
         {
@@ -113,21 +126,19 @@ public sealed class MemberLogRelayService : IDisposable
     }
 
     /// <summary>订阅生效补发：最近 200 行渲染成一批发出（批首插标记行）。</summary>
-    private void SendBackfill()
+    private void SendBackfill(SignalRClient source, LogEntry[] recent)
     {
-        var client = _clientProvider();
-        if (client?.IsConnected != true) return;
         if (!_settingsService.Current.ShareRealtimeLog) return;
 
         var infoOnly = _settingsService.Current.ShareLogInfoOnly;
-        var snapshot = _recentEntries
+        var snapshot = recent
             .Where(e => !infoOnly || e.Level != LogLevels.Dbg)
             .TakeLast(BackfillLines)
             .Select(MemberLogLineCodec.Render)
             .ToList();
-        if (snapshot.Count == 0) return;
+        if (snapshot.Count == 0 || !IsCurrentClient(source)) return;
         snapshot.Insert(0, "...[以下为最近历史补发]...");
-        _ = client.ReportMemberLogBatchAsync(snapshot, infoOnly);
+        _ = source.ReportMemberLogBatchAsync(snapshot, infoOnly);
     }
 
     private void Tick(object? state)
@@ -135,30 +146,30 @@ public sealed class MemberLogRelayService : IDisposable
         try
         {
             EnsureHooked();
-
-            if (_pendingLines.IsEmpty) return;
-            // 共享关闭 / 无人订阅 / 未连接：清空不发送（语义：关闭期间与无观众期间不留积压）
-            if (!_settingsService.Current.ShareRealtimeLog
-                || Volatile.Read(ref _subscriberCount) <= 0
-                || _clientProvider()?.IsConnected != true)
+            SignalRClient client;
+            List<string> batch;
+            bool infoOnly;
+            lock (_gate)
             {
-                while (_pendingLines.TryDequeue(out _)) { }
-                Interlocked.Exchange(ref _droppedSinceLastBatch, 0);
-                return;
+                if (_pendingLines.Count == 0) return;
+                if (_hooked is not { } source || !IsCurrentClient(source)
+                    || !_settingsService.Current.ShareRealtimeLog || _subscriberCount <= 0)
+                {
+                    // 共享关闭、无人订阅或连接已换，不保留待发送日志。
+                    ClearPendingLines();
+                    return;
+                }
+                client = source;
+                infoOnly = _settingsService.Current.ShareLogInfoOnly;
+                batch = new List<string>(MaxLinesPerBatch);
+                while (batch.Count < MaxLinesPerBatch && _pendingLines.TryDequeue(out var line))
+                    batch.Add(line);
+                var dropped = _droppedSinceLastBatch + _pendingLines.Count;
+                ClearPendingLines();
+                if (dropped > 0)
+                    batch.Add($"...[日志转发丢弃 {dropped} 行]...");
             }
-            var client = _clientProvider()!;
-
-            var batch = new List<string>(MaxLinesPerBatch);
-            while (batch.Count < MaxLinesPerBatch && _pendingLines.TryDequeue(out var line))
-                batch.Add(line);
-            // 防积压：超上限的行丢弃并计数，批尾插标记行
-            var overflow = 0;
-            while (_pendingLines.TryDequeue(out _)) overflow++;
-            var dropped = Interlocked.Exchange(ref _droppedSinceLastBatch, 0) + overflow;
-            if (dropped > 0)
-                batch.Add($"...[日志转发丢弃 {dropped} 行]...");
-
-            _ = client.ReportMemberLogBatchAsync(batch, _settingsService.Current.ShareLogInfoOnly);
+            if (IsCurrentClient(client)) _ = client.ReportMemberLogBatchAsync(batch, infoOnly);
         }
         catch (Exception ex)
         {
@@ -167,34 +178,77 @@ public sealed class MemberLogRelayService : IDisposable
     }
 
     /// <summary>客户端实例懒解析换绑（_signalRClient 可能晚于本服务创建）。</summary>
-    private void EnsureHooked()
+    internal void EnsureHooked()
     {
-        var client = _clientProvider();
-        if (ReferenceEquals(client, _hooked)) return;
-        if (_hooked != null)
+        lock (_gate)
         {
-            _hooked.OnMemberLogBatch -= HandleBatch;
-            _hooked.OnMemberLogSubscribersChanged -= HandleSubscribersChanged;
-            _hooked.OnConnectionStateChanged -= HandleConnectionState;
-        }
-        _hooked = client;
-        if (_hooked != null)
-        {
-            _hooked.OnMemberLogBatch += HandleBatch;
-            _hooked.OnMemberLogSubscribersChanged += HandleSubscribersChanged;
-            _hooked.OnConnectionStateChanged += HandleConnectionState;
+            if (_disposed) return;
+            var client = _clientProvider();
+            if (client?.IsRetired == true) client = null;
+            if (ReferenceEquals(client, _hooked)) return;
+
+            Unhook();
+            Volatile.Write(ref _subscriberCount, 0);
+            ClearPendingLines();
+            if (client == null) return;
+
+            // 跨房间不补发原房间的本机日志；同源断线重连保留最近上下文。
+            if (_recentServerUrl != null && (!RoomServerAddress.Same(_recentServerUrl, client.CurrentServerUrl)
+                || _recentRoomCode != client.CurrentRoomCode))
+                _recentEntries.Clear();
+            _recentServerUrl = client.CurrentServerUrl;
+            _recentRoomCode = client.CurrentRoomCode;
+            _hooked = client;
+            _batchHandler = batch => HandleBatch(client, batch);
+            _subscribersHandler = count => HandleSubscribersChanged(client, count);
+            _connectionHandler = connected => HandleConnectionState(client, connected);
+            client.OnMemberLogBatch += _batchHandler;
+            client.OnMemberLogSubscribersChanged += _subscribersHandler;
+            client.OnConnectionStateChanged += _connectionHandler;
         }
     }
 
-    /// <summary>断线重连（一致性细节 11）：连接断开时订阅数清零——服务端订阅表已被断线清理。</summary>
-    private void HandleConnectionState(bool connected)
+    private bool IsCurrentClient(SignalRClient client) => !_disposed && !client.IsRetired
+        && client.IsConnected && ReferenceEquals(client, _clientProvider());
+
+    private void ClearPendingLines()
     {
-        if (!connected) Interlocked.Exchange(ref _subscriberCount, 0);
+        _pendingLines.Clear();
+        _droppedSinceLastBatch = 0;
     }
 
-    private void HandleBatch(MemberLogBatch batch)
+    private void Unhook()
     {
-        try { BatchReceived?.Invoke(batch); }
+        if (_hooked == null) return;
+        _hooked.OnMemberLogBatch -= _batchHandler;
+        _hooked.OnMemberLogSubscribersChanged -= _subscribersHandler;
+        _hooked.OnConnectionStateChanged -= _connectionHandler;
+        _hooked = null;
+        _batchHandler = null;
+        _subscribersHandler = null;
+        _connectionHandler = null;
+    }
+
+    /// <summary>断线时服务端已清除订阅，原连接的待发日志随之清除。</summary>
+    private void HandleConnectionState(SignalRClient source, bool connected)
+    {
+        if (connected) return;
+        lock (_gate)
+        {
+            if (!ReferenceEquals(source, _hooked)) return;
+            Volatile.Write(ref _subscriberCount, 0);
+            ClearPendingLines();
+        }
+    }
+
+    private void HandleBatch(SignalRClient source, MemberLogBatch batch)
+    {
+        try
+        {
+            if (!IsCurrentClient(source)) return;
+            BatchReceivedFromClient?.Invoke(source, batch);
+            BatchReceived?.Invoke(batch);
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MemberLogRelay] 批分发失败: {ex.Message}");
@@ -205,12 +259,10 @@ public sealed class MemberLogRelayService : IDisposable
     {
         _flushTimer.Dispose();
         _tail.EntryReceived -= OnLocalEntry;
-        if (_hooked != null)
+        lock (_gate)
         {
-            _hooked.OnMemberLogBatch -= HandleBatch;
-            _hooked.OnMemberLogSubscribersChanged -= HandleSubscribersChanged;
-            _hooked.OnConnectionStateChanged -= HandleConnectionState;
-            _hooked = null;
+            _disposed = true;
+            Unhook();
         }
     }
 }

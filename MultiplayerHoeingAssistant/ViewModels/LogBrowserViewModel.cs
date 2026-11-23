@@ -41,6 +41,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
         RemoteFiles.CollectionChanged += (_, _) => RebuildRemoteDateFilterItems();
         // 结果集合增删后同步 HasSearchResults（结果框显隐 / 收起冗余状态栏行）
         SearchResults.CollectionChanged += OnSearchResultsChanged;
+        _mainVm.AssistantRoomChanged += OnAssistantRoomChanged;
     }
 
     // ========== 文件列表 ==========
@@ -737,6 +738,8 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     private const int RemoteTimeoutSeconds = 30;
 
     private SignalRClient? _hooked;
+    private Action<MemberLogFileList>? _fileListHandler;
+    private Action<MemberLogFileChunk>? _fileChunkHandler;
     /// <summary>待认领的文件列表请求 Id（null=无在途请求）。</summary>
     private string? _pendingListRequestId;
     private DateTime _listRequestedAtUtc;
@@ -823,17 +826,25 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
         var client = LogClient;
         if (ReferenceEquals(client, _hooked)) return;
         ResetRemoteRequests();
-        if (_hooked != null)
-        {
-            _hooked.OnMemberLogFileList -= HandleFileList;
-            _hooked.OnMemberLogFileChunk -= HandleFileChunk;
-        }
+        UnhookSignalR();
         _hooked = client;
-        if (_hooked != null)
+        if (client != null)
         {
-            _hooked.OnMemberLogFileList += HandleFileList;
-            _hooked.OnMemberLogFileChunk += HandleFileChunk;
+            _fileListHandler = list => HandleFileList(client, list);
+            _fileChunkHandler = chunk => HandleFileChunk(client, chunk);
+            client.OnMemberLogFileList += _fileListHandler;
+            client.OnMemberLogFileChunk += _fileChunkHandler;
         }
+    }
+
+    private void UnhookSignalR()
+    {
+        if (_hooked == null) return;
+        _hooked.OnMemberLogFileList -= _fileListHandler;
+        _hooked.OnMemberLogFileChunk -= _fileChunkHandler;
+        _hooked = null;
+        _fileListHandler = null;
+        _fileChunkHandler = null;
     }
 
     /// <summary>获取选中成员的远程文件列表。</summary>
@@ -859,9 +870,9 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     public RelayCommand DownloadRemoteFileCommand => new(_ =>
     {
         if (IsRoomLogDownloadRunning) { RemoteStatus = "正在收集全房间日志，请稍候或取消批量下载"; return; }
+        EnsureSignalRHooked();
         var member = SelectedRemoteMember;
         var file = SelectedRemoteFile;
-        EnsureSignalRHooked();
         var client = LogClient;
         if (member == null || file == null || _listMemberUid != member.Uid || !RemoteFiles.Contains(file)) { RemoteStatus = "请先获取文件列表并选择文件"; return; }
         if (!LogRoomReady || client?.IsConnected != true) { RemoteStatus = "未连接到当前日志房间"; return; }
@@ -873,14 +884,16 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
             return;
         }
 
-        // 落盘目标：<助手目录>\log\remote_downloads\{成员名}\{文件名}
-        var dir = _assistedRoom is { } room
-            ? Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", "协助房间-" + SanitizeDirName(room.RoomCode),
-                SanitizeDirName(member.Name) + "_" + SanitizeDirName(member.Uid))
-            : Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", SanitizeDirName(member.Name));
+        var contextVersion = _remoteContextVersion;
+        var assisted = _assistedRoom;
+        var roomCode = assisted?.RoomCode ?? client.CurrentRoomCode;
+        var roomLabel = assisted == null ? "本房间" : "协助房间";
         string targetPath;
         try
         {
+            var dir = Path.Combine(RemoteDownloadRoot(client.CurrentServerUrl),
+                $"{roomLabel}-{SanitizeDirName(roomCode)}-{DownloadDirectoryKey(roomCode)}",
+                $"{SanitizeDirName(member.Name)}_{SanitizeDirName(member.Uid)}-{DownloadDirectoryKey(member.Uid)}");
             Directory.CreateDirectory(dir);
             targetPath = Path.Combine(dir, file.Name);
         }
@@ -889,10 +902,13 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
             RemoteStatus = $"创建下载目录失败: {ex.Message}";
             return;
         }
-        // 重复下载同文件：覆盖确认（本工程无 ThemedMessageBox，沿用项目现有 MessageBox 用法）
-        if (File.Exists(targetPath)
-            && MessageBox.Show($"已存在 {file.Name}，覆盖下载？", "远程日志下载",
-                   MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        // 覆盖确认会运行嵌套 Dispatcher，返回后再次核对房间、成员及文件列表。
+        var overwrite = !File.Exists(targetPath)
+            || MessageBox.Show($"已存在 {file.Name}，覆盖下载？", "远程日志下载",
+                   MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        if (contextVersion != _remoteContextVersion || !IsCurrentLogSource(client) || !LogRoomReady
+            || _download != null || IsRoomLogDownloadRunning || !RemoteFiles.Contains(file)) return;
+        if (!overwrite)
         {
             RemoteStatus = "已取消（保留已有文件）";
             return;
@@ -905,7 +921,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
             FileName = file.Name,
             MemberName = member.Name,
             MemberUid = member.Uid,
-            ContextVersion = _remoteContextVersion,
+            ContextVersion = contextVersion,
             TargetPath = targetPath,
             LastProgressAtUtc = DateTime.UtcNow
         };
@@ -916,13 +932,12 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     });
 
     /// <summary>文件列表应答（SignalR 线程）：先在本线程判 requestId 归属，非本 VM 请求直接丢，不切 UI。</summary>
-    private void HandleFileList(MemberLogFileList list)
+    private void HandleFileList(SignalRClient source, MemberLogFileList list)
     {
-        // 回调线程预过滤（string 引用读写原子；UI 线程内再复核一次防竞态）
-        if (list.RequestId != _pendingListRequestId) return;
+        if (_pendingListRequestId is not { } requestId || list.RequestId != requestId) return;
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            if (list.RequestId != _pendingListRequestId || list.Uid != _listMemberUid) return; // 非本次请求（别的观众/过期应答）
+            if (!IsCurrentLogSource(source) || list.RequestId != _pendingListRequestId || list.Uid != _listMemberUid) return;
             _pendingListRequestId = null;
             RemoteFiles.Clear();
             foreach (var f in list.Files) RemoteFiles.Add(f);
@@ -935,16 +950,14 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
 
     /// <summary>文件分块（SignalR 线程）：先在本线程判 requestId 归属，非本次下载直接丢，不切 UI；
     /// 认领后切 UI 重组，解码后的字节进缓冲，完成后后台落盘。</summary>
-    private void HandleFileChunk(MemberLogFileChunk chunk)
+    private void HandleFileChunk(SignalRClient source, MemberLogFileChunk chunk)
     {
-        // 回调线程预过滤：服务端已按 requestId 单播，这里是双保险（本地引用读原子，过期引用顶多误判放行一次，
-        // UI 线程内会再复核）
-        if (_download == null || chunk.RequestId != _download.RequestId) return;
+        if (_download is not { } pending || chunk.RequestId != pending.RequestId) return;
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
-            var dl = _download;
-            if (dl == null || chunk.RequestId != dl.RequestId || chunk.Uid != dl.MemberUid
-                || chunk.FileName != dl.FileName) return; // 非本次下载
+            if (!IsCurrentLogSource(source) || !ReferenceEquals(_download, pending)
+                || chunk.Uid != pending.MemberUid || chunk.FileName != pending.FileName) return;
+            var dl = pending;
             dl.LastProgressAtUtc = DateTime.UtcNow;
 
             // 忙/拒绝/失败标记块（协议：done=true, totalChunks=0）
@@ -979,14 +992,14 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
 
             if (chunk.Done)
             {
-                if (dl.Received == dl.TotalChunks) FinishDownload(dl);
+                if (dl.Received == dl.TotalChunks) FinishDownload(source, dl);
                 else FailDownload($"块不完整（{dl.Received}/{dl.TotalChunks}），下载失败");
             }
         });
     }
 
     /// <summary>全部块到齐：后台拼接 → gzip 解压 → 落盘，完成后刷新列表并直接打开。</summary>
-    private void FinishDownload(RemoteDownloadState dl)
+    private void FinishDownload(SignalRClient source, RemoteDownloadState dl)
     {
         _download = null; // 先清在途标记（落盘期间允许发起新下载）
         StopTimeoutTimerIfIdle();
@@ -1016,7 +1029,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
 
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
-                    if (_disposed || dl.ContextVersion != _remoteContextVersion) return;
+                    if (!IsCurrentLogSource(source) || dl.ContextVersion != _remoteContextVersion) return;
                     RemoteStatus = $"已下载到 {dl.TargetPath}";
                     DownloadProgress = 1;
                     // 落盘后刷新日志浏览列表（remote_downloads 已纳入枚举），并直接打开下载的文件
@@ -1031,7 +1044,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
                 try { if (File.Exists(temporaryPath)) File.Delete(temporaryPath); } catch { }
                 Application.Current.Dispatcher.BeginInvoke(() =>
                 {
-                    if (!_disposed && dl.ContextVersion == _remoteContextVersion) RemoteStatus = $"落盘失败: {ex.Message}";
+                    if (IsCurrentLogSource(source) && dl.ContextVersion == _remoteContextVersion) RemoteStatus = $"落盘失败: {ex.Message}";
                 });
             }
         });
@@ -1080,7 +1093,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     private static string SanitizeDirName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars();
-        var chars = name.ToCharArray();
+        var chars = name[..Math.Min(name.Length, 48)].ToCharArray();
         for (var i = 0; i < chars.Length; i++)
             if (Array.IndexOf(invalid, chars[i]) >= 0) chars[i] = '_';
         var s = new string(chars).Trim();
@@ -1111,6 +1124,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
     {
         CancelRoomLogDownload("日志页面已释放，批量下载已取消");
         _disposed = true;
+        _mainVm.AssistantRoomChanged -= OnAssistantRoomChanged;
         _roomConnectCts?.Cancel();
         _roomConnectCts = null;
         if (_assistedRoom is { } room) _ = DisposeLogRoomAsync(room);
@@ -1120,12 +1134,7 @@ public sealed partial class LogBrowserViewModel : ViewModelBase
         _remoteTimeoutTimer = null;
         _download = null;
         _pendingListRequestId = null;
-        if (_hooked != null)
-        {
-            _hooked.OnMemberLogFileList -= HandleFileList;
-            _hooked.OnMemberLogFileChunk -= HandleFileChunk;
-            _hooked = null;
-        }
+        UnhookSignalR();
     }
 
     // ========== 导出 ==========

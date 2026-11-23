@@ -16,9 +16,15 @@ public sealed partial class LogBrowserViewModel
     public bool CanReturnToOwnLogRoom => IsAssistedLogRoom || IsConnectingLogRoom;
     public string LogRoomServerUrl => _mainVm.Config?.ServerUrl ?? "";
     public string LogRoomLabel => _assistedRoom is { } room
-        ? $"协助房间：{room.RoomCode}" : "本房间";
+        ? $"协助房间：{room.RoomCode} · {room.ServerUrl}" : "本房间";
     private SignalRClient? LogClient => _assistedRoom?.Client ?? _mainVm.SignalR;
-    private bool LogRoomReady => _assistedRoom?.IsReady ?? (!_mainVm.IsStandaloneMode && LogClient?.IsConnected == true);
+    private bool LogRoomReady => _assistedRoom?.IsReady
+        ?? (LogClient is { IsConnected: true } client && IsCurrentLogSource(client));
+
+    private bool IsCurrentLogSource(SignalRClient source) => !_disposed && !source.IsRetired
+        && ReferenceEquals(source, LogClient)
+        && (_assistedRoom != null || (!_mainVm.IsStandaloneMode
+            && RoomServerAddress.Same(source.CurrentServerUrl, LogRoomServerUrl)));
 
     public RelayCommand ReturnToOwnLogRoomCommand => new(_ => ReturnToOwnLogRoom());
 
@@ -32,18 +38,22 @@ public sealed partial class LogBrowserViewModel
     }
 
     /// <summary>连接成功才替换当前日志来源；失败、取消保留原房间。连接记录由弹窗在成功后保存。</summary>
-    public async Task<bool> ConnectAssistedLogRoomAsync(string roomCode, string password,
+    public Task<bool> ConnectAssistedLogRoomAsync(string roomCode, string password,
         CancellationToken cancellationToken = default)
+        => ConnectAssistedLogRoomAsync(LogRoomServerUrl, roomCode, password, cancellationToken);
+
+    internal async Task<bool> ConnectAssistedLogRoomAsync(string serverUrl, string roomCode, string password,
+        CancellationToken cancellationToken)
     {
         if (_disposed || IsConnectingLogRoom) return false;
         roomCode = roomCode.Trim();
-        var config = _mainVm.Config;
         if (string.IsNullOrWhiteSpace(roomCode) || string.IsNullOrEmpty(password))
         { RemoteStatus = "请输入房间号和密码"; return false; }
-        if (string.IsNullOrWhiteSpace(config?.ServerUrl))
+        if (string.IsNullOrWhiteSpace(serverUrl))
         { RemoteStatus = "请先在设置中填写协调服务器地址"; return false; }
         if (_mainVm.IsStandaloneMode)
         { RemoteStatus = "请先在设置中关闭单机模式，再连接协助房间"; return false; }
+        var bypassSystemProxy = _mainVm.Config?.BypassSystemProxy == true;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _roomConnectCts = cts;
@@ -51,12 +61,11 @@ public sealed partial class LogBrowserViewModel
         RemoteStatus = "正在连接协助房间…";
         try
         {
-            var room = await RemoteLogRoomSession.ConnectAsync(config.ServerUrl, roomCode, password,
-                config.BypassSystemProxy, cts.Token);
+            var room = await RemoteLogRoomSession.ConnectAsync(serverUrl, roomCode, password,
+                bypassSystemProxy, cts.Token);
             if (_disposed || cts.IsCancellationRequested || !ReferenceEquals(_roomConnectCts, cts))
             { await room.DisposeAsync(); return false; }
             var old = _assistedRoom;
-            ResetRemoteRequests();
             _assistedRoom = room;
             room.Changed += () => Application.Current.Dispatcher.BeginInvoke(() =>
             {
@@ -65,9 +74,7 @@ public sealed partial class LogBrowserViewModel
                 RefreshRemoteMembers();
                 if (!room.IsReady) RemoteStatus = room.Error ?? "协助房间尚未连接";
             });
-            EnsureSignalRHooked();
-            RefreshRemoteMembers();
-            NotifyLogRoom();
+            ResetLogRoomSource();
             RemoteStatus = RemoteMembers.Count == 0 ? "已连接协助房间，当前没有在线成员" : "已连接协助房间，请选择成员获取日志列表";
             if (old != null) await DisposeLogRoomAsync(old);
             return true;
@@ -96,12 +103,28 @@ public sealed partial class LogBrowserViewModel
         _roomConnectCts = null;
         var room = _assistedRoom;
         _assistedRoom = null;
-        ResetRemoteRequests();
+        ResetLogRoomSource();
+        RemoteStatus = "已返回本房间，请选择成员获取日志列表";
+        if (room != null) _ = DisposeLogRoomAsync(room);
+    }
+
+    private void OnAssistantRoomChanged()
+    {
+        if (_disposed) return;
+        OnPropertyChanged(nameof(LogRoomServerUrl));
+        if (_assistedRoom != null) return;
+        ResetLogRoomSource();
+        RemoteStatus = "本房间已切换，请选择成员获取日志列表";
+    }
+
+    private void ResetLogRoomSource()
+    {
+        ResetRoomLogDownloadSource();
+        ResetRemoteRequests(cancelRoomBatch: false);
+        SelectedRemoteMember = null;
         EnsureSignalRHooked();
         RefreshRemoteMembers();
         NotifyLogRoom();
-        RemoteStatus = "已返回本房间，请选择成员获取日志列表";
-        if (room != null) _ = DisposeLogRoomAsync(room);
     }
 
     private static async Task DisposeLogRoomAsync(RemoteLogRoomSession room)

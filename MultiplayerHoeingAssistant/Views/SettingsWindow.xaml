@@ -29,15 +29,15 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16,20,20">
             <TextBlock Text="Nexus-BGI 设置" FontSize="18" FontWeight="SemiBold" Foreground="#1D1D1F"/>
-            <TextBlock Text="服务器地址、玩家身份和 BGI 路径适用于本机所有房间。"
+            <TextBlock Text="玩家身份和 BGI 路径适用于本机。服务器地址随房间档案切换。"
                        TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
             <TextBlock x:Name="RoomSetupHint" Text="保存本机设置后，可在耕地机页的「管理房间」创建房间或保存已有房间。"
                        TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
 
             <!-- 服务器地址 -->
-            <TextBlock Text="服务器地址" Style="{StaticResource Lbl}"/>
+            <TextBlock x:Name="ServerUrlLabel" Text="新房间的默认服务器地址" Style="{StaticResource Lbl}"/>
             <TextBox x:Name="ServerUrlBox" Style="{StaticResource Txt}"/>
-            <TextBlock TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
+            <TextBlock x:Name="ServerUrlHint" TextWrapping="Wrap" FontSize="10" Foreground="#8E8E93" Margin="0,2,0,0">
                 <Run Text="BgiCoordinatorServer 的地址，"/><Run FontWeight="Bold" Text="不要带 /hub"/><Run Text="。"/>
                 <LineBreak/>
                 <Run Text="示例：http://your-server.com:8080（Docker 部署）或 http://localhost:5000（本地直连）"/>

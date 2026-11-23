@@ -123,18 +123,17 @@ public partial class RemoteLogRoomWindow : Window
         StatusText.Text = "正在连接…";
         try
         {
-            var serverUrl = _browser.LogRoomServerUrl;
             var roomCode = RoomCodeBox.Text;
             var password = RoomPasswordBox.Password;
             var note = RoomNoteBox.Text.Trim();
             var selected = HistoryRoomsBox.SelectedItem as RemoteLogRoomHistoryEntry;
             // 未编辑的备注不覆盖磁盘上的值（例如手动输入了已有房间的房间号）。
             string? noteToSave = note == (selected?.Note ?? "") ? null : note;
-            var connected = await _browser.ConnectAssistedLogRoomAsync(roomCode, password, _closed.Token);
+            var connected = await _browser.ConnectAssistedLogRoomAsync(_serverUrl, roomCode, password, _closed.Token);
             if (_closed.IsCancellationRequested) return;
             if (connected)
             {
-                try { _history.Remember(serverUrl, roomCode, password, noteToSave); }
+                try { _history.Remember(_serverUrl, roomCode, password, noteToSave); }
                 catch (Exception ex) { _browser.RemoteStatus += "；房间记录保存失败：" + ex.Message; }
                 DialogResult = true;
             }

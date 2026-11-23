@@ -34,7 +34,13 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         Title = GetVersionedTitle("设置");
 
-        ServerUrlBox.Text = config.ServerUrl ?? "";
+        ServerUrlBox.Text = config.GetRoomServerUrl(room);
+        if (room is not null)
+        {
+            ServerUrlLabel.Text = "当前房间的服务器地址";
+            ServerUrlBox.IsReadOnly = true;
+            ServerUrlHint.Text = "每个房间可单独设置地址。请在「管理房间」中添加或编辑房间档案。";
+        }
         PlayerNameBox.Text = config.PlayerName ?? "";
         PlayerUidBox.Text = config.PlayerUid ?? "";
         BgiPathBox.Text = config.BgiPath ?? "";

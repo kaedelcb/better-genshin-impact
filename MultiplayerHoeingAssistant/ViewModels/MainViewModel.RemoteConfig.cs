@@ -10,22 +10,34 @@ public partial class MainViewModel
 {
     private LocalConfigEditChannel? _localConfigChannel;
 
+    private LocalConfigEditChannel.RoomAuthentication ReadLocalRoomAuthentication() =>
+        Application.Current.Dispatcher.Invoke(() =>
+            new LocalConfigEditChannel.RoomAuthentication(_config?.ServerUrl, _config?.ControlRoomPassword));
+
+    private bool IsCurrentLocalRoomAuthentication(LocalConfigEditChannel.RoomAuthentication authentication) =>
+        _config is { } config && RoomServerAddress.Same(config.ServerUrl, authentication.ServerUrl)
+        && config.ControlRoomPassword == authentication.Password;
+
     private void StartLocalConfigChannel()
     {
         try
         {
             _localConfigChannel = new LocalConfigEditChannel(
-                () => _config?.ControlRoomPassword,
-                cmd => Application.Current.Dispatcher.InvokeAsync(() => HandleLocalConfigRequestAsync(cmd)).Task.Unwrap(),
+                ReadLocalRoomAuthentication,
+                (cmd, authentication) => Application.Current.Dispatcher.InvokeAsync(
+                    () => HandleLocalConfigRequestAsync(cmd, authentication)).Task.Unwrap(),
                 AddLog);
         }
         catch (Exception ex) { AddLog($"本地配置通道不可用，将使用服务器：{ex.Message}"); }
     }
 
-    private async Task<RemoteCommand?> HandleLocalConfigRequestAsync(RemoteCommand cmd)
+    private async Task<RemoteCommand?> HandleLocalConfigRequestAsync(RemoteCommand cmd,
+        LocalConfigEditChannel.RoomAuthentication authentication)
     {
-        // 认证通过仍须确认角色、房间、目标；监控端永远不作为配置落盘目标。
-        if (!CanHandleLocalConfigRequest(_config, RoomCode, cmd)) return null;
+        // 在调度到主线程后核对握手时的服务器，并阻止本次 IPC 执行中切房。
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null || !IsCurrentLocalRoomAuthentication(authentication)
+            || !CanHandleLocalConfigRequest(_config, RoomCode, cmd)) return null;
 
         if (cmd.Cmd == "remote_config.pull") return await HandleRemoteConfigPullAsync(cmd);
         if (cmd.Cmd == "remote_config.push") return await HandleRemoteConfigPushAsync(cmd);
@@ -73,8 +85,10 @@ public partial class MainViewModel
 
     private async Task<bool> SendConfigViaServerAsync(RemoteCommand command)
     {
+        using var roomEffect = TryEnterAssistantRoomEffect();
         var client = _signalRClient;
-        if (client is not { IsConnected: true }) return false;
+        if (roomEffect is null || client is not { IsConnected: true }
+            || !RoomServerAddress.Same(client.CurrentServerUrl, _config?.ServerUrl)) return false;
         await client.SendRemoteCommandAsync(command);
         return true;
     }
@@ -82,7 +96,7 @@ public partial class MainViewModel
     /// <summary>拉取和保存固定使用本次选中的目标与通道；写入结果不明时不跨通道重发。</summary>
     private async void OnRemoteConfigEdit(object? parameter)
     {
-        if (parameter is not MemberViewModel member || string.IsNullOrEmpty(member.PlayerUid)) return;
+        if (parameter is not MemberViewModel member || string.IsNullOrEmpty(member.PlayerUid) || !Members.Contains(member)) return;
         if (member.PlayerUid == _config?.PlayerUid && !IsObserverMode)
         {
             AddLog("执行端不能远程编辑自己的配置组（请在本机直接修改）");
@@ -94,22 +108,45 @@ public partial class MainViewModel
             var room = RoomCode;
             var password = _config?.ControlRoomPassword ?? "";
             var senderUid = _config?.PlayerUid ?? "";
+            var serverUrl = _config?.ServerUrl;
+            var observer = IsObserverMode;
+            var targetUid = member.PlayerUid;
+            var serverClient = _signalRClient;
+
+            IDisposable EnterEditRoom()
+            {
+                var effect = TryEnterAssistantRoomEffect();
+                if (effect is not null && _config is { } current && RoomCode == room && IsObserverMode == observer
+                    && current.PlayerUid == senderUid && current.ControlRoomPassword == password
+                    && RoomServerAddress.Same(serverUrl, current.ServerUrl)) return effect;
+                effect?.Dispose();
+                throw new InvalidOperationException("编辑期间房间、服务器或身份已变化，请重新发起编辑");
+            }
+
+            bool CanSendToServer() => serverClient is { IsConnected: true }
+                && ReferenceEquals(serverClient, _signalRClient) && serverClient.CurrentRoomCode == room
+                && RoomServerAddress.Same(serverClient.CurrentServerUrl, serverUrl);
+
             var probe = new RemoteCommand
             {
                 Cmd = "remote_config.probe", RoomCode = room, SenderUid = senderUid,
-                Sender = _config?.PlayerName ?? "", Target = [member.PlayerUid],
+                Sender = _config?.PlayerName ?? "", Target = [targetUid],
                 CommandId = Guid.NewGuid().ToString("N")
             };
-            var endpoint = string.IsNullOrEmpty(password) ? null : await LocalConfigEditChannel.FindAsync(probe, password);
+            LocalConfigEditChannel.Endpoint? endpoint;
+            using (EnterEditRoom())
+            {
+                endpoint = !string.IsNullOrEmpty(password) && RoomServerAddress.TryNormalize(serverUrl, out _)
+                    ? await LocalConfigEditChannel.FindAsync(probe, password, serverUrl: serverUrl) : null;
+            }
             var groups = member.ConfigGroups ?? [];
-            var serverClient = _signalRClient;
             Func<RemoteCommand, Task<bool>> send = async command =>
             {
-                if (RoomCode != room || _config?.PlayerUid != senderUid || !ReferenceEquals(serverClient, _signalRClient))
-                    throw new InvalidOperationException("编辑期间房间、身份或连接已变化，请重新发起编辑");
-                if (serverClient is not { IsConnected: true }) return false;
+                using var roomEffect = EnterEditRoom();
+                if (!CanSendToServer()) return false;
+                command.RoomCode = room;
                 command.SenderUid = senderUid;
-                await serverClient.SendRemoteCommandAsync(command);
+                await serverClient!.SendRemoteCommandAsync(command);
                 return true;
             };
 
@@ -120,13 +157,20 @@ public partial class MainViewModel
             {
                 AddLog($"配置编辑：已匹配 {member.PlayerName} 的本地执行端，拉取和保存将使用本地通道");
                 probe.Cmd = "remote_config.list";
-                var list = await LocalConfigEditChannel.SendAsync(endpoint, probe, password);
-                groups = JsonSerializer.Deserialize<List<string>>(GetRemoteParam(list?.Params, "configGroups") ?? "[]") ?? [];
+                RemoteCommand? list;
+                using (EnterEditRoom())
+                {
+                    list = await LocalConfigEditChannel.SendAsync(endpoint, probe, password, serverUrl: serverUrl);
+                }
+                if (list?.Cmd != "remote_config.list_result")
+                    throw new InvalidOperationException("本地执行端已不可用或身份/模式已变化，请重新发起编辑");
+                groups = JsonSerializer.Deserialize<List<string>>(GetRemoteParam(list.Params, "configGroups") ?? "[]") ?? [];
                 send = async command =>
                 {
+                    using var roomEffect = EnterEditRoom();
                     command.RoomCode = room;
                     command.SenderUid = senderUid;
-                    var reply = await LocalConfigEditChannel.SendAsync(endpoint, command, password);
+                    var reply = await LocalConfigEditChannel.SendAsync(endpoint, command, password, serverUrl: serverUrl);
                     if (reply == null) throw new InvalidOperationException("本地执行端已不可用或身份/模式已变化，请重新发起编辑");
                     var expectedReply = command.Cmd == "remote_config.pull" ? "remote_config.data" : "remote_config.push_result";
                     if (reply.Cmd != expectedReply) throw new InvalidOperationException("本地执行端返回了不匹配的配置回复");
@@ -134,7 +178,7 @@ public partial class MainViewModel
                     return true;
                 };
             }
-            else if (!member.Online || _signalRClient is not { IsConnected: true })
+            else if (!member.Online || !CanSendToServer())
             {
                 AddLog($"未发现 {member.PlayerName} 的本地执行端，且成员离线或服务器未连接，无法编辑配置");
                 return;
@@ -151,7 +195,7 @@ public partial class MainViewModel
             }
             var groupName = RemoteConfigGroupSelectWindow.ShowSelectDialog(groups, member.PlayerName, Application.Current.MainWindow);
             if (!string.IsNullOrEmpty(groupName))
-                await _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName, send);
+                await _remoteConfigEditService.RunAsync(targetUid, member.PlayerName, groupName, send);
         }
         catch (Exception ex) { AddLog($"配置编辑失败：{ex.Message}"); }
     }

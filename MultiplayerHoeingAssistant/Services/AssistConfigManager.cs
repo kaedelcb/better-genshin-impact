@@ -89,7 +89,15 @@ public class AssistConfigManager
             }
             else if (config.ActiveRoomProfile is { } active)
             {
+                // Copy the previous shared address before replacing the runtime address with the active profile's.
+                var filledRoomServers = config.FillLegacyRoomServerUrls();
                 active.ApplyTo(config);
+                if (filledRoomServers && !TryStore(config, expectedRaw: json))
+                    RoomProfileMigrationWarning = "旧房间服务器地址未能保存，原配置仍保留；可重启重试。";
+            }
+            else if (config.FillLegacyRoomServerUrls() && !TryStore(config, expectedRaw: json))
+            {
+                RoomProfileMigrationWarning = "旧房间服务器地址未能保存，原配置仍保留；可重启重试。";
             }
             else if (config.ActiveRoomProfileId.Length > 0 || (config.RoomProfiles.Count == 0
                 && (config.TeamUids is { Count: > 0 } || File.Exists(_legacyFireDatePath))))
@@ -153,6 +161,7 @@ public class AssistConfigManager
                 var raw = File.Exists(_configPath) ? File.ReadAllText(_configPath) : null;
                 if (expectedRaw != null && !string.Equals(raw, expectedRaw, StringComparison.Ordinal)) return false;
                 var diskHasRooms = HasStoredRoomProfiles(raw);
+                config.FillLegacyRoomServerUrls();
                 if (rawEdit)
                 {
                     // 不能用一份旧格式文本编辑静默覆盖已有的独立档案。

@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Windows;
+using System.Windows.Threading;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
@@ -21,6 +23,95 @@ namespace MultiplayerHoeingAssistant.LogRoom.IntegrationTest;
 /// <summary>四条真实本地网关连接；不启动游戏、不接触运行中的助手或真实 User。</summary>
 public sealed class FourMemberConnectionRecoveryGatewayTests
 {
+    [Fact]
+    public async Task AssistantSwitchesServersWithIdenticalRoomCodesAndReturnsToOriginAfterRejection()
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "必须使用隔离助手配置目录");
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+                app.Dispatcher.InvokeAsync(new Action(async () =>
+                {
+                    try { await VerifyAsync(); finished.SetResult(); }
+                    catch (Exception ex) { finished.SetException(ex); }
+                    finally { app.Shutdown(); }
+                }));
+                app.Run();
+            }
+            catch (Exception ex) { finished.TrySetException(ex); }
+        }) { IsBackground = true, Name = "isolated-room-server-switch" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await finished.Task.WaitAsync(TimeSpan.FromSeconds(85));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)));
+
+        static async Task VerifyAsync()
+        {
+            await using var a = await Server.StartAsync();
+            await using var b = await Server.StartAsync();
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(65));
+            const string player = "111111111";
+            const string peer = "222222222";
+            const string code = "A12345";
+            var list = new List<string> { player, peer };
+            var source = new AssistantRoomProfile { Id = "cross-a", Name = "A", ServerUrl = a.Url, RoomCode = code, Password = "isolated-a",
+                TeamUids = list, ExpectedHoeingPlayers = 2, OnlineHoeingGroupNames = ["A 的绑定"], OnlineHoeingGroupTypes = ["group"] };
+            var target = new AssistantRoomProfile { Id = "cross-b", Name = "B", ServerUrl = b.Url, RoomCode = code, Password = "isolated-b",
+                TeamUids = list, ExpectedHoeingPlayers = 3, OnlineHoeingGroupNames = ["B 的绑定"], OnlineHoeingGroupTypes = ["group"] };
+            await using var peerA = new SignalRClient();
+            await using var peerB = new SignalRClient();
+            await peerA.ConnectAsync(a.Url, code, source.Password, peer, "A 队友", list, cancellationToken: budget.Token);
+            await peerB.ConnectAsync(b.Url, code, target.Password, peer, "B 队友", list, cancellationToken: budget.Token);
+            var vm = new MultiplayerHoeingAssistant.ViewModels.MainViewModel();
+            var config = new AssistConfig { PlayerUid = player, PlayerName = "隔离测试", ClientInstanceId = "cross-server-test",
+                RoomProfiles = [source, target], ActiveRoomProfileId = source.Id };
+            source.ApplyTo(config);
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var type = vm.GetType();
+            type.GetField("_config", flags)!.SetValue(vm, config);
+            type.GetField("_configManager", flags)!.SetValue(vm, new AssistConfigManager());
+            vm.RoomCode = code;
+            try
+            {
+                await (Task)type.GetMethod("ConnectSignalRAsync", flags)!.Invoke(vm, null)!;
+                Assert.Contains(vm.Members, member => member.PlayerName == "A 队友");
+                var switchRoom = type.GetMethod("SwitchAssistantRoomForFlowAsync", flags)!;
+                Task<FlowRoomSwitchResult> Switch(string id) =>
+                    (Task<FlowRoomSwitchResult>)switchRoom.Invoke(vm, [id, null, budget.Token])!;
+                var toB = await Switch(target.Id);
+                Assert.True(toB.Success, toB.Message);
+                Assert.Equal(b.Url, config.ServerUrl);
+                Assert.Equal(code, vm.RoomCode);
+                Assert.DoesNotContain(vm.Members, member => member.PlayerName == "A 队友");
+                Assert.Contains(vm.Members, member => member.PlayerName == "B 队友");
+                Assert.DoesNotContain(a.Manager.GetControlRoomPlayers("CTRL_" + code), p => p.PlayerUid == player && p.Online);
+                var bMember = Assert.Single(b.Manager.GetControlRoomPlayers("CTRL_" + code).Where(p => p.PlayerUid == player && p.Online));
+                Assert.Equal(3, bMember.ExpectedHoeingPlayers);
+                Assert.Equal("B 的绑定", Assert.Single(bMember.OnlineHoeingGroupNames));
+                var toA = await Switch(source.Id);
+                Assert.True(toA.Success, toA.Message);
+                Assert.Equal(a.Url, config.ServerUrl);
+                target.Password = "incorrect";
+                var rejected = await Switch(target.Id);
+                Assert.False(rejected.Success);
+                Assert.False(rejected.Unknown, rejected.Message);
+                Assert.Equal(source.Id, config.ActiveRoomProfileId);
+                Assert.Equal(a.Url, config.ServerUrl);
+                Assert.True(vm.IsConnected);
+                Assert.Contains(vm.Members, member => member.PlayerName == "A 队友");
+                Assert.DoesNotContain(vm.Members, member => member.PlayerName == "B 队友");
+                var saved = new AssistConfigManager().Load();
+                Assert.Equal(a.Url, saved.ServerUrl);
+                Assert.Equal(b.Url, saved.RoomProfiles.Single(p => p.Id == target.Id).ServerUrl);
+            }
+            finally { vm.Shutdown(); }
+        }
+    }
+
     [Fact]
     public async Task ControlRoomSwitchConfirmsBusinessResultsAndReturnsToOriginalRoom()
     {

@@ -61,6 +61,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private readonly Dictionary<string, string> _memberNames = new();
     /// <summary>各远程来源的省流（仅 INF+）标志，随批更新，用于状态栏提示。仅 UI 线程访问。</summary>
     private readonly Dictionary<string, bool> _sourceInfoOnly = new();
+    private int _remoteLogRoomVersion;
+    private volatile bool _disposed;
     /// <summary>缓冲与可见列表的锁（本机/远程两路都在 UI 线程入缓冲，锁仅作防御）。</summary>
     private readonly object _bufLock = new();
 
@@ -124,8 +126,8 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
             desktopControl: _desktopControl);
 
         // 房间实时日志汇聚：本机上报（500ms 合批）+ 成员日志批接收 → 实时日志 Tab 多来源
-        _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR);
-        _logRelay.BatchReceived += OnLogBatchReceived;
+        _logRelay = new MemberLogRelayService(_tailService, _settingsService, () => ViewerClient);
+        _logRelay.BatchReceivedFromClient += OnLogBatchReceived;
 
         // 远程成员完整日志下载·被下载端：应答文件列表请求 / 分块上行（懒绑定由 FlushPending 节拍驱动）
         _logShare = new MemberLogShareService(_settingsService, () => _mainVm.IsStandaloneMode ? null : _mainVm.SignalR,
@@ -146,6 +148,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _mainVm.MemberOnlineChanged += OnMemberOnlineChanged;
         // 离开嘟嘟可页面（CurrentPage 变化）是退订时机之一
         _mainVm.PropertyChanged += OnMainVmPropertyChanged;
+        _mainVm.AssistantRoomChanged += OnAssistantRoomChanged;
 
         _tailService.EntryReceived += OnEntryReceived;
         _tailService.HistoryBatchReceived += OnHistoryBatch;
@@ -392,9 +395,10 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>按房间成员重建来源下拉（本机 + 在线/离线成员 + 有缓存流的已退出成员），尽量保留选中。</summary>
-    private void RebuildLogSources()
+    private void RebuildLogSources(bool resetRemoteSelection = false)
     {
         var prevKey = CurrentSourceKey;
+        var keepKey = resetRemoteSelection ? LocalSourceKey : prevKey;
         foreach (var m in _mainVm.Members)
             if (!string.IsNullOrEmpty(m.PlayerUid)) _memberNames[m.PlayerUid] = m.PlayerName;
 
@@ -424,7 +428,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
                 LogSources.Add(new LogSourceOption(uid,
                     $"{(_memberNames.TryGetValue(uid, out var n) ? n : uid)}（离线）"));
             }
-            _selectedSource = LogSources.FirstOrDefault(o => o.Key == prevKey) ?? LogSources[0];
+            _selectedSource = LogSources.FirstOrDefault(o => o.Key == keepKey) ?? LogSources[0];
             OnPropertyChanged(nameof(SelectedSource));
         }
         finally
@@ -446,6 +450,9 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     private string? _currentSubscription;
     /// <summary>观看端懒绑定的 SignalR 客户端（重连补订阅用）。</summary>
     private SignalRClient? _viewerHooked;
+    private Action<bool>? _viewerConnectionHandler;
+    private SignalRClient? ViewerClient => !_mainVm.IsStandaloneMode && _mainVm.SignalR is { IsRetired: false } client
+        ? client : null;
 
     /// <summary>期望的订阅目标：选中远程在线成员 + 在实时日志 Tab + 在嘟嘟可页面。不满足则为 null。</summary>
     private string? DesiredSubscriptionTarget()
@@ -465,13 +472,13 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         EnsureViewerHooked();
         var want = DesiredSubscriptionTarget();
         if (want == _currentSubscription) return;
-        var client = _mainVm.SignalR;
+        var client = _viewerHooked;
         if (_currentSubscription != null)
         {
             _ = client?.UnsubscribeMemberLogAsync(_currentSubscription);
             _currentSubscription = null;
         }
-        if (want != null && client != null)
+        if (want != null && client?.IsControlRoomReady == true)
         {
             _ = client.SubscribeMemberLogAsync(want);
             _currentSubscription = want;
@@ -481,22 +488,37 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>观看端懒绑定 SignalR 客户端（连接状态事件：重连后补订阅）。</summary>
     private void EnsureViewerHooked()
     {
-        var client = _mainVm.SignalR;
+        var client = ViewerClient;
         if (ReferenceEquals(client, _viewerHooked)) return;
-        if (_viewerHooked != null) _viewerHooked.OnConnectionStateChanged -= OnViewerConnectionState;
+        UnhookViewer();
         _viewerHooked = client;
-        if (_viewerHooked != null) _viewerHooked.OnConnectionStateChanged += OnViewerConnectionState;
+        if (client != null)
+        {
+            _viewerConnectionHandler = connected => OnViewerConnectionState(client, connected);
+            client.OnConnectionStateChanged += _viewerConnectionHandler;
+        }
+    }
+
+    private void UnhookViewer()
+    {
+        if (_viewerHooked is not { } old) return;
+        old.OnConnectionStateChanged -= _viewerConnectionHandler;
+        if (_currentSubscription != null && !old.IsRetired)
+            _ = old.UnsubscribeMemberLogAsync(_currentSubscription);
+        _currentSubscription = null;
+        _viewerHooked = null;
+        _viewerConnectionHandler = null;
     }
 
     /// <summary>断线重连（一致性细节 10）：服务端订阅表已被断线清理清空，仍选中远程成员则补发订阅。</summary>
-    private void OnViewerConnectionState(bool connected)
+    private void OnViewerConnectionState(SignalRClient source, bool connected)
     {
         Application.Current.Dispatcher.BeginInvoke(() =>
         {
+            if (_disposed || !ReferenceEquals(source, ViewerClient) || !ReferenceEquals(source, _viewerHooked)) return;
             if (connected)
             {
-                _currentSubscription = null; // 强制 Evaluate 重发
-                EvaluateSubscription();
+                _currentSubscription = null; // 强制重建时补订阅
             }
             // 连接更替可能带来服务端能力变化（旧服务端标注/新连接重置），刷一遍来源下拉标注
             RebuildLogSources();
@@ -504,9 +526,11 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>收到远程成员日志批（UI 线程入口）：自滤、补下拉项，解析与异常监控喂入放后台线程。</summary>
-    private void OnRemoteBatch(MemberLogBatch batch)
+    private void OnRemoteBatch(SignalRClient source, int roomVersion, MemberLogBatch batch)
     {
-        if (batch.Lines.Count == 0) return;
+        if (!IsCurrentRemoteLogSource(source, roomVersion)
+            || !RoomServerAddress.Same(source.CurrentServerUrl, _mainVm.Config?.ServerUrl)
+            || batch.Lines.Count == 0) return;
 
         // 执行端过滤自身回送，避免与本机 tail 重复；监控端同 UID/同名来自执行端，必须保留。
         // 旧协议缺 UID 时按名字兜底；执行模式无法确认本机身份时仍保守丢弃。
@@ -556,10 +580,14 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
                 var e = batch.SenderName.Length > 0
                     ? e0 with { Instance = e0.Instance != null ? $"{batch.SenderName}·{e0.Instance}" : batch.SenderName }
                     : e0;
+                if (!IsCurrentRemoteLogSource(source, roomVersion)) return;
                 entries.Add(e);
                 _watchService.FeedRemoteEntry(e);
             }
-            Application.Current.Dispatcher.BeginInvoke(() => AddRemoteEntries(key, entries));
+            Application.Current.Dispatcher.BeginInvoke(() =>
+            {
+                if (IsCurrentRemoteLogSource(source, roomVersion)) AddRemoteEntries(key, entries);
+            });
         });
     }
 
@@ -919,7 +947,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
     /// <summary>200ms 合帧：把队列中的本机新条目批量入本机缓冲并刷到界面（选中本机来源时）。</summary>
     private void FlushPending()
     {
-        EnsureViewerHooked(); // 200ms 节拍顺带保持观看端 SignalR 懒绑定（重连补订阅依赖此事件）
+        if (!ReferenceEquals(ViewerClient, _viewerHooked)) EvaluateSubscription();
         // 远程日志下载两端的 SignalR 懒绑定也挂在这个节拍上（零额外 Timer）
         _logShare.EnsureHooked();
         _webRelay.EnsureHooked();
@@ -1149,26 +1177,41 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>日志批接收（SignalR/Timer 线程回调）：切 UI 线程入缓冲。</summary>
-    private void OnLogBatchReceived(MemberLogBatch batch)
-        => Application.Current.Dispatcher.BeginInvoke(() => OnRemoteBatch(batch));
+    private void OnAssistantRoomChanged()
+    {
+        Interlocked.Increment(ref _remoteLogRoomVersion);
+        _logRelay.EnsureHooked();
+        lock (_bufLock)
+        {
+            foreach (var key in _buffers.Keys.Where(key => key != LocalSourceKey).ToArray())
+                _buffers.Remove(key);
+        }
+        _memberNames.Clear();
+        _sourceInfoOnly.Clear();
+        RebuildLogSources(resetRemoteSelection: true);
+        LogWatcherText = "";
+        _lastWatcherCount = -1;
+    }
+
+    private bool IsCurrentRemoteLogSource(SignalRClient source, int roomVersion) => !_disposed
+        && roomVersion == Volatile.Read(ref _remoteLogRoomVersion) && ReferenceEquals(source, ViewerClient);
+
+    /// <summary>日志批接收（SignalR/Timer 线程回调）：切 UI 前保留产生批次的客户端和房间版本。</summary>
+    private void OnLogBatchReceived(SignalRClient source, MemberLogBatch batch)
+    {
+        var roomVersion = Volatile.Read(ref _remoteLogRoomVersion);
+        Application.Current.Dispatcher.BeginInvoke(() => OnRemoteBatch(source, roomVersion, batch));
+    }
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _flushTimer.Stop();
         LocalBrowserService.Dispose();
         _settingsService.SettingsChanged -= OnSettingsChanged;
-        // 页面销毁前退订（服务端断线清理是兜底，主动退订让对方尽早停发）
-        if (_currentSubscription != null)
-        {
-            _ = _mainVm.SignalR?.UnsubscribeMemberLogAsync(_currentSubscription);
-            _currentSubscription = null;
-        }
-        if (_viewerHooked != null)
-        {
-            _viewerHooked.OnConnectionStateChanged -= OnViewerConnectionState;
-            _viewerHooked = null;
-        }
+        UnhookViewer();
+        _mainVm.AssistantRoomChanged -= OnAssistantRoomChanged;
         _mainVm.PropertyChanged -= OnMainVmPropertyChanged;
         _mainVm.MemberOnlineChanged -= OnMemberOnlineChanged;
         _watchService.RecordAdded -= OnWatchRecordAdded;
@@ -1176,7 +1219,7 @@ public sealed class DodocoViewModel : ViewModelBase, IDisposable
         _tailService.HistoryBatchReceived -= OnHistoryBatch;
         _tailService.TargetFileChanged -= OnTargetFileChanged;
         _mainVm.Members.CollectionChanged -= OnMembersChanged;
-        _logRelay.BatchReceived -= OnLogBatchReceived;
+        _logRelay.BatchReceivedFromClient -= OnLogBatchReceived;
         Browser.Dispose();
         Monitor.Dispose();
         _desktopControl.Dispose();

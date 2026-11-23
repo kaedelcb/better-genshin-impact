@@ -11,7 +11,8 @@ internal static class ConfigTransferSchedulePolicy
         return local is null || local.ScheduledOnlineRequiresConfirmation
             || local.ScheduledOnlineTime != imported.ScheduledOnlineTime
             || local.EffectiveRoomCode != imported.EffectiveRoomCode
-            || local.ServerUrl != imported.ServerUrl || local.ControlRoomPassword != imported.ControlRoomPassword
+            || !RoomServerAddress.Same(local.GetRoomServerUrl(local.ActiveRoomProfile), imported.GetRoomServerUrl(imported.ActiveRoomProfile))
+            || local.ControlRoomPassword != imported.ControlRoomPassword
             || local.PlayerUid != imported.PlayerUid || local.ObserverMode != imported.ObserverMode
             || local.StandaloneMode != imported.StandaloneMode
             || !local.TeamUids.OrderBy(uid => uid, StringComparer.Ordinal)

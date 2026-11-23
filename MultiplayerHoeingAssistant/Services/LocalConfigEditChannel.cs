@@ -13,15 +13,23 @@ namespace MultiplayerHoeingAssistant.Services;
 /// <summary>
 /// 助手之间的配置编辑通道。跨 Windows 用户只转发配置请求给目标助手，
 /// 再由它走所属会话的 BGI IPC；不放宽 BGI 的会话隔离或只读状态管道。
-/// 每次连接使用随机挑战和房间密码 HMAC，消息有大小/超时限制。
+/// 每次连接使用服务器地址和房间密码认证，消息有大小/超时限制。
 /// </summary>
 internal sealed class LocalConfigEditChannel : IDisposable
 {
-    internal sealed record Endpoint(string PipeName, int ProcessId, long StartTicks);
+    internal sealed record Endpoint(string PipeName, int ProcessId, long StartTicks)
+    {
+        internal string? ServerUrl { get; init; }
+    }
+
+    internal sealed record RoomAuthentication(string? ServerUrl, string? Password);
     private sealed record Envelope(string CommandJson, string Proof);
     private const int MaxFrameBytes = 10 * 1024 * 1024;
-    private readonly Func<string?> _getSecret;
-    private readonly Func<RemoteCommand, Task<RemoteCommand?>> _handle;
+    private const int NonceBytes = 32;
+    private const string ClientProof = "client", ServerProof = "server";
+    internal static string DefaultServerUrl { get; } = new AssistConfig().ServerUrl;
+    private readonly Func<RoomAuthentication> _getRoom;
+    private readonly Func<RemoteCommand, RoomAuthentication, Task<RemoteCommand?>> _handle;
     private readonly Action<string> _report;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _listener;
@@ -30,8 +38,16 @@ internal sealed class LocalConfigEditChannel : IDisposable
     public LocalConfigEditChannel(Func<string?> getSecret,
         Func<RemoteCommand, Task<RemoteCommand?>> handle, Action<string> report, string? pipeName = null,
         string channel = "config")
+        : this(() => new RoomAuthentication(DefaultServerUrl, getSecret()),
+            (command, _) => handle(command), report, pipeName, channel)
     {
-        _getSecret = getSecret;
+    }
+
+    internal LocalConfigEditChannel(Func<RoomAuthentication> getRoom,
+        Func<RemoteCommand, RoomAuthentication, Task<RemoteCommand?>> handle, Action<string> report,
+        string? pipeName = null, string channel = "config")
+    {
+        _getRoom = getRoom;
         _handle = handle;
         _report = report;
         using var process = Process.GetCurrentProcess();
@@ -68,19 +84,7 @@ internal sealed class LocalConfigEditChannel : IDisposable
                     {
                         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
                         timeout.CancelAfter(TimeSpan.FromSeconds(12));
-                        var nonce = RandomNumberGenerator.GetBytes(32);
-                        await WriteFrameAsync(pipe, nonce, timeout.Token).ConfigureAwait(false);
-                        var envelope = JsonSerializer.Deserialize<Envelope>(
-                            await ReadFrameAsync(pipe, timeout.Token).ConfigureAwait(false));
-                        var secret = _getSecret();
-                        if (envelope != null && !string.IsNullOrEmpty(secret)
-                            && CryptographicOperations.FixedTimeEquals(
-                                Sign(secret, nonce, envelope.CommandJson), Convert.FromBase64String(envelope.Proof)))
-                        {
-                            var command = JsonSerializer.Deserialize<RemoteCommand>(envelope.CommandJson);
-                            var reply = command == null ? null : await _handle(command).WaitAsync(timeout.Token).ConfigureAwait(false);
-                            await WriteFrameAsync(pipe, JsonSerializer.SerializeToUtf8Bytes(reply), timeout.Token).ConfigureAwait(false);
-                        }
+                        await HandleConnectionAsync(pipe, timeout.Token).ConfigureAwait(false);
                     }
                     catch (Exception ex) when (ex is IOException or OperationCanceledException or JsonException or FormatException)
                     {
@@ -99,11 +103,35 @@ internal sealed class LocalConfigEditChannel : IDisposable
         finally { pipe.Dispose(); }
     }
 
+    private async Task HandleConnectionAsync(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        var authentication = _getRoom();
+        if (string.IsNullOrEmpty(authentication.Password)
+            || !RoomServerAddress.TryNormalize(authentication.ServerUrl, out var server)) return;
+
+        // 公告服务器标识；只在客户端证明其持有房间密码后，回复受密码保护的挑战证明。
+        var key = ServerKey(authentication.Password, server);
+        var nonce = RandomNumberGenerator.GetBytes(NonceBytes);
+        await WriteFrameAsync(pipe, nonce.Concat(ServerFingerprint(server)).ToArray(), ct).ConfigureAwait(false);
+        var clientProof = await ReadFrameAsync(pipe, ct).ConfigureAwait(false);
+        if (!CryptographicOperations.FixedTimeEquals(clientProof, Sign(key, nonce, ClientProof))) return;
+        await WriteFrameAsync(pipe, Sign(key, nonce, ServerProof), ct).ConfigureAwait(false);
+
+        var envelope = JsonSerializer.Deserialize<Envelope>(await ReadFrameAsync(pipe, ct).ConfigureAwait(false));
+        if (envelope is null || !CryptographicOperations.FixedTimeEquals(
+            Sign(key, nonce, envelope.CommandJson), Convert.FromBase64String(envelope.Proof))) return;
+
+        var command = JsonSerializer.Deserialize<RemoteCommand>(envelope.CommandJson);
+        var reply = command is null ? null
+            : await _handle(command, authentication).WaitAsync(ct).ConfigureAwait(false);
+        await WriteFrameAsync(pipe, JsonSerializer.SerializeToUtf8Bytes(reply), ct).ConfigureAwait(false);
+    }
+
     /// <summary>按目标 UID + 房间认证探测全部本机助手；多个匹配拒绝选择，不能误写另一个执行端。</summary>
     internal static async Task<Endpoint?> FindAsync(RemoteCommand probe, string secret,
-        string expectedProbeReply = "remote_config.probe_result", string channel = "config")
+        string expectedProbeReply = "remote_config.probe_result", string channel = "config", string? serverUrl = null)
     {
-        var found = await FindAllAsync(probe, secret, expectedProbeReply, channel);
+        var found = await FindAllAsync(probe, secret, expectedProbeReply, channel, serverUrl);
         return found.Count switch
         {
             0 => null,
@@ -115,8 +143,10 @@ internal sealed class LocalConfigEditChannel : IDisposable
     }
 
     internal static async Task<IReadOnlyList<Endpoint>> FindAllAsync(RemoteCommand probe, string secret,
-        string expectedProbeReply = "remote_config.probe_result", string channel = "config")
+        string expectedProbeReply = "remote_config.probe_result", string channel = "config", string? serverUrl = null)
     {
+        var address = serverUrl ?? DefaultServerUrl;
+        if (!RoomServerAddress.TryNormalize(address, out _)) return [];
         using var current = Process.GetCurrentProcess();
         // The pipe namespace is visible across Windows user sessions. Enumerating process
         // start times is not: an ordinary user may be denied access to another user's process.
@@ -164,9 +194,10 @@ internal sealed class LocalConfigEditChannel : IDisposable
         {
             try
             {
-                var reply = await SendAsync(endpoint, probe, secret, TimeSpan.FromSeconds(2));
+                var candidate = endpoint with { ServerUrl = address };
+                var reply = await SendAsync(candidate, probe, secret, TimeSpan.FromSeconds(2)).ConfigureAwait(false);
                 if (reply?.Cmd != expectedProbeReply) return null;
-                if (channel != "center") return endpoint;
+                if (channel != "center") return candidate;
                 var json = RemoteCenterProtocol.PayloadOf(reply);
                 var centerReply = string.IsNullOrEmpty(json)
                     ? null : JsonSerializer.Deserialize<RemoteCenterReply>(json);
@@ -174,7 +205,7 @@ internal sealed class LocalConfigEditChannel : IDisposable
                 return centerReply?.Status == "ok"
                     && (string.IsNullOrEmpty(expectedInstance)
                         || centerReply.TargetInstanceId == expectedInstance)
-                    ? endpoint : null;
+                    ? candidate : null;
             }
             catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException
                 or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception
@@ -187,8 +218,13 @@ internal sealed class LocalConfigEditChannel : IDisposable
     }
 
     internal static async Task<RemoteCommand?> SendAsync(Endpoint endpoint, RemoteCommand command,
-        string secret, TimeSpan? timeout = null)
+        string secret, TimeSpan? timeout = null, string? serverUrl = null)
     {
+        var address = serverUrl ?? endpoint.ServerUrl ?? DefaultServerUrl;
+        if (!RoomServerAddress.TryNormalize(address, out var server)
+            || (endpoint.ServerUrl is not null && !RoomServerAddress.Same(endpoint.ServerUrl, address)))
+            throw new IOException("本地通道服务器不匹配，请重新扫描执行端");
+
         using var limit = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(12));
         if (endpoint.StartTicks == 0)
         {
@@ -208,10 +244,20 @@ internal sealed class LocalConfigEditChannel : IDisposable
         using var pipe = new NamedPipeClientStream(".", endpoint.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
         await pipe.ConnectAsync(limit.Token).ConfigureAwait(false);
         WindowsSessionIdentity.VerifyPipeServer(pipe, endpoint.ProcessId);
-        var nonce = await ReadFrameAsync(pipe, limit.Token).ConfigureAwait(false);
-        if (nonce.Length != 32) throw new InvalidDataException("本地配置通道握手无效");
+        var challenge = await ReadFrameAsync(pipe, limit.Token).ConfigureAwait(false);
+        if (challenge.Length != 2 * NonceBytes
+            || !CryptographicOperations.FixedTimeEquals(challenge.AsSpan(NonceBytes), ServerFingerprint(server)))
+            throw new IOException("本地通道服务器不匹配或不支持服务器认证");
+
+        var nonce = challenge[..NonceBytes];
+        var key = ServerKey(secret, server);
+        await WriteFrameAsync(pipe, Sign(key, nonce, ClientProof), limit.Token).ConfigureAwait(false);
+        var serverProof = await ReadFrameAsync(pipe, limit.Token).ConfigureAwait(false);
+        if (!CryptographicOperations.FixedTimeEquals(serverProof, Sign(key, nonce, ServerProof)))
+            throw new IOException("本地通道房间密码未通过认证");
+
         var json = JsonSerializer.Serialize(command);
-        var envelope = new Envelope(json, Convert.ToBase64String(Sign(secret, nonce, json)));
+        var envelope = new Envelope(json, Convert.ToBase64String(Sign(key, nonce, json)));
         await WriteFrameAsync(pipe, JsonSerializer.SerializeToUtf8Bytes(envelope), limit.Token).ConfigureAwait(false);
         var reply = JsonSerializer.Deserialize<RemoteCommand>(await ReadFrameAsync(pipe, limit.Token).ConfigureAwait(false));
         if (reply != null && (reply.CommandId != command.CommandId || reply.SenderUid != command.Target.Single()))
@@ -219,8 +265,13 @@ internal sealed class LocalConfigEditChannel : IDisposable
         return reply;
     }
 
-    private static byte[] Sign(string secret, byte[] nonce, string json) =>
-        HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), nonce.Concat(Encoding.UTF8.GetBytes(json)).ToArray());
+    private static byte[] ServerFingerprint(string server) => SHA256.HashData(Encoding.UTF8.GetBytes(server));
+
+    private static byte[] ServerKey(string password, string server) =>
+        HMACSHA256.HashData(Encoding.UTF8.GetBytes(password), Encoding.UTF8.GetBytes(server));
+
+    private static byte[] Sign(byte[] key, byte[] nonce, string message) =>
+        HMACSHA256.HashData(key, nonce.Concat(Encoding.UTF8.GetBytes(message)).ToArray());
 
     private static async Task WriteFrameAsync(Stream stream, byte[] data, CancellationToken ct)
     {

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MultiplayerHoeingAssistant.Models;
 
-/// <summary>本机保存的单个控制房间档案。实例、玩家身份与服务器地址不随房间切换。</summary>
+/// <summary>本机保存的单个控制房间档案。实例和玩家身份不随服务器或房间切换。</summary>
 public sealed class AssistantRoomProfile
 {
     [JsonPropertyName("id")]
@@ -10,6 +10,9 @@ public sealed class AssistantRoomProfile
 
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("serverUrl")]
+    public string ServerUrl { get; set; } = string.Empty;
 
     [JsonPropertyName("roomCode")]
     public string RoomCode { get; set; } = string.Empty;
@@ -74,6 +77,7 @@ public sealed class AssistantRoomProfile
     /// <summary>从当前运行设置捕获房间字段，不改档案身份或房间号。</summary>
     public void Capture(AssistConfig config)
     {
+        ServerUrl = config.ServerUrl;
         Password = config.ControlRoomPassword;
         TeamUids = config.TeamUids?.ToList() ?? [];
         ExpectedHoeingPlayers = config.ExpectedHoeingPlayers;
@@ -98,6 +102,7 @@ public sealed class AssistantRoomProfile
     /// <summary>将房间字段复制到运行设置；何时确认激活由调用方决定。</summary>
     public void ApplyTo(AssistConfig config)
     {
+        config.ServerUrl = config.GetRoomServerUrl(this);
         config.ControlRoomPassword = Password;
         config.TeamUids = TeamUids?.ToList() ?? [];
         config.ExpectedHoeingPlayers = ExpectedHoeingPlayers;

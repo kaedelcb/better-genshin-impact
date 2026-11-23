@@ -294,19 +294,25 @@ public class ConfigTransferService
         Set("bgiPackageDir", imported.BgiPackageDir);
         var confirmationKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineRequiresConfirmation", StringComparison.OrdinalIgnoreCase))
             ?? "scheduledOnlineRequiresConfirmation";
-        var requiresConfirmation = ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(local, imported);
         var profilesKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("roomProfiles", StringComparison.OrdinalIgnoreCase)) ?? "roomProfiles";
         var activeKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("activeRoomProfileId", StringComparison.OrdinalIgnoreCase)) ?? "activeRoomProfileId";
         imported.EnsureRoomProfiles();
+        imported.FillLegacyRoomServerUrls();
+        imported.ActiveRoomProfile?.ApplyTo(imported);
         local?.EnsureRoomProfiles();
+        local?.FillLegacyRoomServerUrls();
+        if (local is not null) local.ActiveRoomProfile?.ApplyTo(local);
+        var requiresConfirmation = ConfigTransferSchedulePolicy.RequiresConfirmationAfterImport(local, imported);
+        Set("serverUrl", imported.ServerUrl);
         var dateKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineLastFireDate", StringComparison.OrdinalIgnoreCase))
             ?? "scheduledOnlineLastFireDate";
         if (imported.RoomProfiles is { Count: > 0 })
         {
             foreach (var profile in imported.RoomProfiles)
             {
-                var previous = local is not null && local.ServerUrl == imported.ServerUrl && local.PlayerUid == imported.PlayerUid
-                    ? local.RoomProfiles.FirstOrDefault(p => p.RoomCode == profile.RoomCode) : null;
+                var previous = local is not null && local.PlayerUid == imported.PlayerUid
+                    ? local.RoomProfiles.FirstOrDefault(p => p.RoomCode == profile.RoomCode
+                        && RoomServerAddress.Same(local.GetRoomServerUrl(p), imported.GetRoomServerUrl(profile))) : null;
                 var active = profile.Id == imported.ActiveRoomProfileId;
                 profile.ScheduledOnlineLastFireDate = previous?.ScheduledOnlineLastFireDate;
                 if (profile.ScheduledOnlineLastFireDate is null && previous is not null

@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Windows.Input;
 using MultiplayerHoeingAssistant.Services;
 
@@ -58,6 +60,31 @@ public sealed partial class LogBrowserViewModel
         _roomLogDownloadCts.Cancel();
     }
 
+    private void ResetRoomLogDownloadSource()
+    {
+        var reason = IsRoomLogDownloadRunning ? "日志房间已切换，已请求取消原房间的批量下载" : "";
+        CancelRoomLogDownload(reason);
+        // 旧任务仍在原目录收尾，回贴时用 CTS 引用区分新旧任务。
+        _roomLogDownloadCts = null;
+        IsRoomLogDownloadRunning = false;
+        LastRoomLogDownloadResult = null;
+        OnPropertyChanged(nameof(LastRoomLogDownloadResult));
+        RoomLogDownloadDirectory = "";
+        RoomLogDownloadProgress = 0;
+        RoomLogDownloadStatus = reason;
+    }
+
+    private static string RemoteDownloadRoot(string serverUrl)
+    {
+        // 兼容旧地址格式；使用服务器全地址的摘要区分端口、协议和部署子路径。
+        var serverKey = RoomServerAddress.TryNormalize(serverUrl, out var normalized) ? normalized : serverUrl.Trim();
+        var label = Uri.TryCreate(serverKey, UriKind.Absolute, out var uri) ? SanitizeDirName(uri.Authority) : "未知";
+        return Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads", $"服务器-{label}-{DownloadDirectoryKey(serverKey)}");
+    }
+
+    private static string DownloadDirectoryKey(string value) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..24];
+
     public async Task DownloadRoomTodayLogsAsync()
     {
         if (_disposed || IsRoomLogDownloadRunning) return;
@@ -72,6 +99,9 @@ public sealed partial class LogBrowserViewModel
 
         var assisted = _assistedRoom;
         var ownRoomCode = _mainVm.RoomCode;
+        var serverUrl = client.CurrentServerUrl;
+        var roomName = assisted?.RoomCode ?? client.CurrentRoomCode;
+        var date = DateTime.Today;
         var members = assisted != null
             ? assisted.PlayersSnapshot().Select(p => new RoomLogMember(p.PlayerUid, p.PlayerName, p.Online)).ToArray()
             : _mainVm.Members.Select(p => new RoomLogMember(p.PlayerUid, p.PlayerName, p.Online)).ToArray();
@@ -87,12 +117,14 @@ public sealed partial class LogBrowserViewModel
         RoomLogDownloadDirectory = "";
         RoomLogDownloadProgress = 0;
         IsRoomLogDownloadRunning = true;
-        RoomLogDownloadStatus = $"正在收集 {DateTime.Today:yyyy-MM-dd} 的全房间日志，共 {members.Length} 位成员…";
+        RoomLogDownloadStatus = $"正在收集 {date:yyyy-MM-dd} 的全房间日志，共 {members.Length} 位成员…";
+        bool IsCurrentDownload() => !_disposed && ReferenceEquals(_roomLogDownloadCts, cts);
         PropertyChangedEventHandler roomChanged = (_, e) =>
         {
-            if (assisted == null && (e.PropertyName is nameof(MainViewModel.RoomCode) or nameof(MainViewModel.IsConnected) or nameof(MainViewModel.IsStandaloneMode)))
-                if (_mainVm.RoomCode != ownRoomCode || _mainVm.IsStandaloneMode || !client.IsConnected
-                    || !ReferenceEquals(client, LogClient))
+            if (assisted == null && IsCurrentDownload()
+                && (e.PropertyName is nameof(MainViewModel.RoomCode) or nameof(MainViewModel.IsConnected) or nameof(MainViewModel.IsStandaloneMode)))
+                if (_mainVm.RoomCode != ownRoomCode || !client.IsConnected
+                    || !RoomServerAddress.Same(serverUrl, LogRoomServerUrl) || !IsCurrentLogSource(client))
                     CancelRoomLogDownload("本房间或连接已切换，批量下载已取消");
         };
         _mainVm.PropertyChanged += roomChanged;
@@ -100,13 +132,13 @@ public sealed partial class LogBrowserViewModel
         {
             var progress = new Progress<RoomLogDownloadProgress>(value =>
             {
-                if (_disposed || !ReferenceEquals(_roomLogDownloadCts, cts)) return;
+                if (!IsCurrentDownload()) return;
                 RoomLogDownloadProgress = value.Fraction;
                 RoomLogDownloadStatus = value.Message;
             });
-            var roomName = assisted?.RoomCode ?? (string.IsNullOrWhiteSpace(ownRoomCode) ? "本房间" : ownRoomCode);
-            var result = await new RoomLogDownloadService(client).DownloadAsync(roomName, members, DateTime.Today,
-                Path.Combine(LogFileBrowser.AssistantLogDir, "remote_downloads"), progress, cts.Token);
+            var result = await new RoomLogDownloadService(client).DownloadAsync(roomName, members, date,
+                RemoteDownloadRoot(serverUrl), progress, cts.Token);
+            if (!IsCurrentDownload()) return;
             LastRoomLogDownloadResult = result;
             OnPropertyChanged(nameof(LastRoomLogDownloadResult));
             RoomLogDownloadDirectory = result.OutputDirectory;
@@ -120,14 +152,21 @@ public sealed partial class LogBrowserViewModel
             if (!_disposed && files > 0) RefreshFiles();
         }
         catch (OperationCanceledException)
-        { RoomLogDownloadStatus = _roomLogCancellationReason ?? "批量下载已取消"; }
+        {
+            if (IsCurrentDownload()) RoomLogDownloadStatus = _roomLogCancellationReason ?? "批量下载已取消";
+        }
         catch (Exception ex)
-        { RoomLogDownloadStatus = "全房间日志收集失败：" + ex.Message; }
+        {
+            if (IsCurrentDownload()) RoomLogDownloadStatus = "全房间日志收集失败：" + ex.Message;
+        }
         finally
         {
             _mainVm.PropertyChanged -= roomChanged;
-            if (ReferenceEquals(_roomLogDownloadCts, cts)) _roomLogDownloadCts = null;
-            IsRoomLogDownloadRunning = false;
+            if (ReferenceEquals(_roomLogDownloadCts, cts))
+            {
+                _roomLogDownloadCts = null;
+                IsRoomLogDownloadRunning = false;
+            }
         }
     }
 }

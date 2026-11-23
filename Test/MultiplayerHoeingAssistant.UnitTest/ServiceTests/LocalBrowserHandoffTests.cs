@@ -72,6 +72,29 @@ public class LocalBrowserHandoffTests
     }
 
     [Fact]
+    public async Task PairingRejectsAnExecutorThatSwitchedServersWithTheSameRoomAndIdentity()
+    {
+        var origin = Identity() with { ServerUrl = "https://executor-a.example.test/app" };
+        var executor = origin;
+        var created = 0;
+        const string pairingUrl = "http://127.0.0.1:1234/#token=";
+        using var handoff = new LocalBrowserHandoff(() => executor, _ =>
+        {
+            created++;
+            return pairingUrl + new string('a', 64);
+        }, _ => { });
+        var endpoint = handoff.Address with { ServerUrl = origin.ServerUrl };
+        var target = new LocalBrowserHandoff.Target(endpoint, origin.Uid, origin.Name,
+            origin.RoomCode, origin.InstanceId, origin.SessionId);
+        var caller = origin with { ServerUrl = "https://EXECUTOR-a.example.test:443/app/hub/", IsExecutor = false };
+        Assert.StartsWith(pairingUrl, await LocalBrowserHandoff.GetPairingUrlAsync(caller, target));
+
+        executor = origin with { ServerUrl = "https://executor-b.example.test/app" };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => LocalBrowserHandoff.GetPairingUrlAsync(caller, target));
+        Assert.Equal(1, created);
+    }
+
+    [Fact]
     public async Task WrongPasswordIsRejectedBeforePairing()
     {
         using var handoff = new LocalBrowserHandoff(() => Identity(), _ => throw new Exception("不得创建链接"), _ => { });

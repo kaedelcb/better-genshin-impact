@@ -6,6 +6,7 @@ namespace MultiplayerHoeingAssistant.Models;
 
 public class AssistConfig : IJsonOnDeserialized
 {
+    // 供现有连接、重连和状态订阅使用的当前房间地址；未设置房间时是新建档案的默认地址。
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = "http://localhost:5000";
 
@@ -57,6 +58,22 @@ public class AssistConfig : IJsonOnDeserialized
     [JsonIgnore]
     public string EffectiveRoomCode => ActiveRoomProfile?.RoomCode
         ?? (CanMigrateLegacyRoom ? GenerateLegacyRoomCode(TeamUids) : string.Empty);
+
+    internal string GetRoomServerUrl(AssistantRoomProfile? profile) =>
+        string.IsNullOrWhiteSpace(profile?.ServerUrl) ? ServerUrl ?? "" : profile.ServerUrl;
+
+    internal bool FillLegacyRoomServerUrls()
+    {
+        if (string.IsNullOrWhiteSpace(ServerUrl)) return false;
+        var changed = false;
+        foreach (var profile in RoomProfiles)
+        {
+            if (profile is null || !string.IsNullOrWhiteSpace(profile.ServerUrl)) continue;
+            profile.ServerUrl = ServerUrl;
+            changed = true;
+        }
+        return changed;
+    }
 
     // 显式空列表是新版的未配置状态，不可仅因用户后来改了本机身份而匹配到遗留 UID 列表。
     private bool CanMigrateLegacyRoom => !_roomProfilesSpecified && RoomProfiles.Count == 0

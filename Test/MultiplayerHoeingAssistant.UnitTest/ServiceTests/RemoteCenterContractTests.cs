@@ -81,11 +81,13 @@ public sealed class RemoteCenterContractTests
             "{\"schema\":\"mistletoe.local-package\",\"schemaVersion\":1,\"ipcIsolation\":true}");
         var config = new AssistConfig
         {
+            ServerUrl = "https://center-test.example.test/bgi",
             PlayerUid = uid, PlayerName = "隔离执行端", TeamUids = [uid],
             ControlRoomPassword = secret, StandaloneMode = true, ObserverMode = false,
             BgiPath = bgiPath,
             DisclaimerAccepted = true, ClientInstanceId = "center-smoke-" + Guid.NewGuid().ToString("N")
         };
+        Assert.True(config.EnsureRoomProfiles());
         File.WriteAllText(Path.Combine(root, "assistant-config.json"), JsonSerializer.Serialize(config));
         var lockPath = Path.Combine(root, ".config-transfer.lock");
         File.WriteAllBytes(lockPath, []);
@@ -102,12 +104,15 @@ public sealed class RemoteCenterContractTests
             WorkingDirectory = Path.GetDirectoryName(exe)!
         };
         start.Environment["NEXUSBGI_DATA_ROOT"] = root;
+        var temporary = Directory.CreateDirectory(Path.Combine(root, "temp")).FullName;
+        start.Environment["TMP"] = temporary;
+        start.Environment["TEMP"] = temporary;
         using var child = Process.Start(start) ?? throw new InvalidOperationException("隔离执行端未启动");
         Process? restarted = null;
         var passed = false;
         try
         {
-            var room = AssistConfigManager.GenerateControlRoomCode([uid]);
+            var room = config.EffectiveRoomCode;
             RemoteCenterReply? probeReply = null;
             LocalConfigEditChannel.Endpoint? endpoint = null;
             for (var attempt = 0; attempt < 12 && !child.HasExited; attempt++)
@@ -117,7 +122,7 @@ public sealed class RemoteCenterContractTests
                 try
                 {
                     endpoint = await LocalConfigEditChannel.FindAsync(probe, secret,
-                        RemoteCenterProtocol.ReplyCommand, "center");
+                        RemoteCenterProtocol.ReplyCommand, "center", config.ServerUrl);
                     if (endpoint is null) { await Task.Delay(250); continue; }
                     var wire = await LocalConfigEditChannel.SendAsync(endpoint, probe, secret,
                         TimeSpan.FromSeconds(2));
@@ -134,14 +139,14 @@ public sealed class RemoteCenterContractTests
             var wrongInstance = RemoteCenterProtocol.Request(room, uid, "隔离监控端", uid,
                 new RemoteCenterRequest { Operation = "probe", TargetInstanceId = "missing-instance" });
             Assert.Null(await LocalConfigEditChannel.FindAsync(wrongInstance, secret,
-                RemoteCenterProtocol.ReplyCommand, "center"));
+                RemoteCenterProtocol.ReplyCommand, "center", config.ServerUrl));
             var instance = probeReply!.TargetInstanceId;
             Assert.False(string.IsNullOrWhiteSpace(instance));
             var monitor = new MainViewModel { RoomCode = room };
             typeof(MainViewModel).GetField("_config", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(monitor, new AssistConfig
                 {
-                    PlayerUid = uid, PlayerName = "隔离监控端", TeamUids = [uid],
+                    ServerUrl = config.ServerUrl, PlayerUid = uid, PlayerName = "隔离监控端", TeamUids = [uid],
                     ControlRoomPassword = secret, ObserverMode = true, StandaloneMode = true
                 });
             var target = Assert.Single(await monitor.FindLocalCenterExecutorsAsync());
@@ -300,7 +305,7 @@ public sealed class RemoteCenterContractTests
             Assert.Contains(doc.WorkflowId, listed.PayloadJson);
             var flowExport = await monitor.RequestRemoteCenterAsync(target,
                 "task.flow.export", doc.WorkflowId);
-            Assert.Equal("ok", flowExport.Status);
+            Assert.True(flowExport.Status == "ok", flowExport.Message);
             var flowJson = JsonSerializer.Deserialize<string>(flowExport.PayloadJson!)!;
             var flowForImport = System.Text.Json.Nodes.JsonNode.Parse(flowJson)!.AsObject();
             flowForImport["workflowId"] = "wf-" + Guid.NewGuid().ToString("N");

@@ -55,19 +55,7 @@ public sealed partial class RemoteLogRoomTests
     {
         var root = AssistantDataDirectory.Root;
         Directory.CreateDirectory(root);
-        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root });
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
-        builder.Logging.ClearProviders();
-        builder.Services.AddSingleton(_ => new RoomManager(50));
-        builder.Services.AddSingleton<GatewaySessionTracker>();
-        builder.Services.AddSingleton<GatewayBroadcaster>();
-        builder.Services.AddSingleton<RoomPhaseObserver>();
-        builder.Services.AddSingleton<RoomOperations>();
-        builder.Services.AddSingleton<GatewayDispatcher>();
-        builder.Services.AddSignalR(o => o.MaximumReceiveMessageSize = 10 * 1024 * 1024);
-        await using var server = builder.Build();
-        server.MapHub<GatewayHub>("/gateway");
-        server.MapHub<CoordinatorHub>("/hub");
+        await using var server = CreateLogServer(root);
         await server.StartAsync();
         var url = server.Urls.Single();
         var suffix = Guid.NewGuid().ToString("N")[..10];
@@ -110,8 +98,10 @@ public sealed partial class RemoteLogRoomTests
             ControlRoomPassword = password, TeamUids = ["own", "peer"], DisclaimerAccepted = true, ObserverMode = false,
             BgiPath = Path.Combine(root, "main-window", "BetterGI.exe") });
         SetField(vm, "_signalRClient", own);
+        vm.RoomCode = ownRoom;
         vm.Members.Add(new MemberViewModel { PlayerUid = "own", PlayerName = "本人", IsSelf = true, Online = true });
-        vm.Members.Add(new MemberViewModel { PlayerUid = "peer", PlayerName = "本房间成员" + suffix, Online = true });
+        var peerName = "本房间成员" + suffix;
+        vm.Members.Add(new MemberViewModel { PlayerUid = "peer", PlayerName = peerName, Online = true });
         var membersBefore = vm.Members.ToArray();
         var window = new MainWindow(vm) { Width = 1280, Height = 860, ShowActivated = false, Left = -20000, Top = -20000 };
         try
@@ -253,7 +243,8 @@ public sealed partial class RemoteLogRoomTests
             browser.SelectedRemoteFile = browser.RemoteFiles.First(f => f.Name == fileName);
             browser.DownloadRemoteFileCommand.Execute(null);
             await Until(() => browser.RemoteStatus.StartsWith("已下载到 "));
-            Assert.Equal(bytes, await File.ReadAllBytesAsync(browser.RemoteStatus["已下载到 ".Length..]));
+            var ownDownloadedPath = browser.RemoteStatus["已下载到 ".Length..];
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(ownDownloadedPath));
             Snapshot(window, Path.Combine(root, "own-room.png"));
 
             // 在线增量、离线移除；跨房间同名文件不会覆盖。
@@ -347,12 +338,103 @@ public sealed partial class RemoteLogRoomTests
             Assert.Equal(targetBefore, manager.GetControlRoomPlayers("CTRL_" + targetRoom).Where(p => p.Online).Select(p => (p.PlayerUid, p.ConnectionId)).ToArray());
             Assert.Equal(0, commandCount);
             Assert.True(manager.GetControlRoomPlayers("CTRL_" + ownRoom).Single(p => p.PlayerUid == "own").TaskRunning);
+
+            // 两个服务器使用完全相同的房间号、成员 UID、成员名和文件名。
+            await using var nextServer = CreateLogServer(root);
+            await nextServer.StartAsync();
+            var nextUrl = nextServer.Urls.Single();
+            await using var nextOwn = new SignalRClient();
+            await using var nextPeer = new SignalRClient();
+            await nextOwn.ConnectAsync(nextUrl, ownRoom, password, "own", "本人", []);
+            await nextPeer.ConnectAsync(nextUrl, ownRoom, password, "peer", peerName, []);
+            var nextLogDir = Path.Combine(root, "second-server-logs");
+            Directory.CreateDirectory(nextLogDir);
+            var nextBytes = Encoding.UTF8.GetBytes("[11:02:00.000] [INF] 第二台服务器的日志\n");
+            await File.WriteAllBytesAsync(Path.Combine(nextLogDir, fileName), nextBytes);
+            using var nextShare = new MemberLogShareService(new DodocoSettingsService(), () => nextPeer, () => nextLogDir);
+            nextShare.EnsureHooked();
+
+            var logs = window.Dodoco;
+            logs.SelectedSource = logs.LogSources.Single(entry => entry.Key == "peer");
+            var oldBatch = Assert.IsType<Action<MemberLogBatch>>(typeof(SignalRClient)
+                .GetField(nameof(SignalRClient.OnMemberLogBatch), BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(own));
+            MemberLogBatch Batch(string message) => new()
+            {
+                Uid = "peer", SenderName = peerName, Lines = [message], ServerTime = DateTime.UtcNow
+            };
+            oldBatch(Batch("原房间已缓存行"));
+            await Until(() => logs.VisibleEntries.Any(entry => entry.Message == "原房间已缓存行"));
+
+            remotePopup = await OpenDialogAsync<RemoteMemberLogsWindow>(remoteLogsButton);
+            var pinnedDialog = await OpenDialogAsync((Button)remotePopup.FindName("AssistLogRoomButton"));
+            var pinnedHistory = (ComboBox)pinnedDialog.FindName("HistoryRoomsBox");
+            pinnedHistory.SelectedItem = pinnedHistory.Items.Cast<RemoteLogRoomHistoryEntry>().Single(entry => entry.RoomCode == ownRoom);
+            const string crossServerNote = "切换后仍保存到原服务器";
+            ((TextBox)pinnedDialog.FindName("RoomNoteBox")).Text = crossServerNote;
+
+            // 在旧批次等待 Dispatcher 时模拟主 VM 的提交顺序，房间号保持不变。
+            var delayedBatch = Batch("原服务器迟到行");
+            delayedBatch.InfoOnly = true;
+            oldBatch(delayedBatch);
+            vm.Config!.ServerUrl = nextUrl;
+            SetField(vm, "_signalRClient", nextOwn);
+            Assert.IsType<Action>(typeof(MainViewModel).GetField("AssistantRoomChanged",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm))();
+            Assert.Equal(DodocoViewModel.LocalSourceKey, logs.SelectedSource!.Key);
+            logs.SelectedSource = logs.LogSources.Single(entry => entry.Key == "peer");
+            await window.Dispatcher.InvokeAsync(() => { }, DispatcherPriority.ApplicationIdle);
+            Assert.Empty(logs.VisibleEntries);
+            Assert.DoesNotContain("省流", logs.StatusText);
+
+            Invoke((Button)pinnedDialog.FindName("ConnectButton"));
+            await Until(() => !pinnedDialog.IsVisible && browser.IsAssistedLogRoom);
+            Assert.Contains(url, browser.LogRoomLabel);
+            var history = new RemoteLogRoomHistoryStore();
+            Assert.Equal(crossServerNote, history.GetRooms(url).Single(entry => entry.RoomCode == ownRoom).Note);
+            Assert.Empty(history.GetRooms(nextUrl));
+            browser.ReturnToOwnLogRoom();
+            browser.SelectedRemoteMember = browser.RemoteMembers.Single(entry => entry.Uid == "peer");
+            browser.FetchRemoteFilesCommand.Execute(null);
+            await Until(() => browser.RemoteFiles.Any(file => file.Name == fileName));
+            browser.SelectedRemoteFile = browser.RemoteFiles.Single(file => file.Name == fileName);
+            browser.DownloadRemoteFileCommand.Execute(null);
+            await Until(() => browser.RemoteStatus.StartsWith("已下载到 "));
+            var nextDownloadedPath = browser.RemoteStatus["已下载到 ".Length..];
+            Assert.NotEqual(ownDownloadedPath, nextDownloadedPath);
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(ownDownloadedPath));
+            Assert.Equal(nextBytes, await File.ReadAllBytesAsync(nextDownloadedPath));
+            remotePopup.Close();
+
+            logs.SelectedTabIndex = 0;
+            var nextManager = nextServer.Services.GetRequiredService<RoomManager>();
+            await Until(() => nextManager.GetLogSubscriberCount("CTRL_" + ownRoom, "peer") == 1);
+            await nextPeer.ReportMemberLogBatchAsync(["第二台服务器的实时行"], false);
+            await Until(() => logs.VisibleEntries.Any(entry => entry.Message == "第二台服务器的实时行"));
+            Assert.DoesNotContain(logs.VisibleEntries, entry => entry.Message.StartsWith("原服务器") || entry.Message.StartsWith("原房间"));
         }
         finally
         {
             window.Hide();
             await server.StopAsync();
         }
+    }
+
+    private static WebApplication CreateLogServer(string root)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root });
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton(_ => new RoomManager(50));
+        builder.Services.AddSingleton<GatewaySessionTracker>();
+        builder.Services.AddSingleton<GatewayBroadcaster>();
+        builder.Services.AddSingleton<RoomPhaseObserver>();
+        builder.Services.AddSingleton<RoomOperations>();
+        builder.Services.AddSingleton<GatewayDispatcher>();
+        builder.Services.AddSignalR(o => o.MaximumReceiveMessageSize = 10 * 1024 * 1024);
+        var server = builder.Build();
+        server.MapHub<GatewayHub>("/gateway");
+        server.MapHub<CoordinatorHub>("/hub");
+        return server;
     }
 
     private static void SetField(object instance, string name, object value) =>

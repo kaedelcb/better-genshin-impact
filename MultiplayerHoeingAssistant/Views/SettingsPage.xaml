@@ -282,7 +282,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
                         <TextBlock Text="本机与控制房间" FontSize="15" FontWeight="Medium" Foreground="{DynamicResource White}"/>
-                        <TextBlock Text="本机设置适用于所有房间；房间密码、成员和预期人数只保存到当前档案。"
+                        <TextBlock Text="服务器地址、房间密码、成员和预期开锄人数随房间档案保存。"
                                    FontSize="11" Foreground="{DynamicResource Dim}" Margin="0,2,0,0" TextWrapping="Wrap"/>
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

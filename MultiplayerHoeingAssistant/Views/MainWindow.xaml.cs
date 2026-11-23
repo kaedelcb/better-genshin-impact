@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Threading;
 using System.Reflection;
 using System.Text.Json;
 using MultiplayerHoeingAssistant.Models;
@@ -14,6 +16,7 @@ public partial class MainWindow : Window
 {
     public MainViewModel ViewModel { get; }
     private LocalBrowserBridge? _localBrowserBridge;
+    private string? _localBrowserServerUrl;
     private LocalBrowserHandoff? _localBrowserHandoff;
     private bool _openingLocalBrowser;
 
@@ -28,13 +31,21 @@ public partial class MainWindow : Window
             if (ViewModel.IsObserverMode)
             {
                 var caller = ReadBrowserHandoffIdentity();
-                var targets = await LocalBrowserHandoff.FindExecutorsAsync(caller);
+                IReadOnlyList<LocalBrowserHandoff.Target> targets;
+                using (ViewModel.TryEnterLocalBrowserRoomEffect()
+                    ?? throw new InvalidOperationException("房间正在切换或等待核对，请稍后打开本机网页。"))
+                {
+                    targets = await LocalBrowserHandoff.FindExecutorsAsync(caller);
+                }
                 if (targets.Count == 0)
-                    throw new InvalidOperationException("未找到正在运行的同机执行端。请确认执行端助手已运行，并且两端的 UID、控制房间和房间密码一致。");
+                    throw new InvalidOperationException("未找到正在运行的同机执行端。请确认两端的服务器、UID、控制房间和房间密码一致。");
                 var target = targets.Count == 1 ? targets[0] : ChooseBrowserExecutor(targets);
                 if (target is null) return;
+                using var roomEffect = ViewModel.TryEnterLocalBrowserRoomEffect();
+                if (roomEffect is null || !IsBrowserHandoffIdentityCurrent(caller))
+                    throw new InvalidOperationException("监控端配置已变化，请重新打开本机网页。");
                 url = await LocalBrowserHandoff.GetPairingUrlAsync(caller, target);
-                if (ReadBrowserHandoffIdentity() != caller)
+                if (!IsBrowserHandoffIdentityCurrent(caller))
                     throw new InvalidOperationException("监控端配置已变化，请重新打开本机网页。");
             }
             else url = CreateOwnBrowserPairingUrl(ReadBrowserHandoffIdentity());
@@ -48,20 +59,37 @@ public partial class MainWindow : Window
         finally { _openingLocalBrowser = false; }
     }
 
-    private LocalBrowserHandoff.Identity ReadBrowserHandoffIdentity()
+    private LocalBrowserHandoff.Identity ReadBrowserHandoffIdentity(bool forHandoff = false)
     {
         var config = ViewModel.Config;
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
         return new(config?.PlayerUid ?? "", config?.PlayerName ?? "", ViewModel.RoomCode,
-            config?.ClientInstanceId ?? "", config?.ControlRoomPassword ?? "", ViewModel.IsExecutorMode,
-            System.Diagnostics.Process.GetCurrentProcess().SessionId);
+            config?.ClientInstanceId ?? "", config?.ControlRoomPassword ?? "",
+            ViewModel.IsExecutorMode && (!forHandoff || ViewModel.CanUseAssistantRoomMemberActions),
+            process.SessionId) { ServerUrl = config?.ServerUrl ?? "" };
     }
 
-    private string CreateOwnBrowserPairingUrl(LocalBrowserHandoff.Identity expected)
+    private bool IsBrowserHandoffIdentityCurrent(LocalBrowserHandoff.Identity expected)
     {
-        if (ReadBrowserHandoffIdentity() != expected || !expected.IsExecutor)
-            throw new InvalidOperationException("执行端已切换模式或身份已变化，请重新打开。");
-        _localBrowserBridge ??= new LocalBrowserBridge(ExecuteLocalBrowserAsync,
-            Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
+        var current = ReadBrowserHandoffIdentity();
+        return RoomServerAddress.Same(current.ServerUrl, expected.ServerUrl)
+            && (current with { ServerUrl = expected.ServerUrl }) == expected;
+    }
+
+    private string CreateOwnBrowserPairingUrl(LocalBrowserHandoff.Identity expected, bool fromHandoff = false)
+    {
+        using var roomEffect = fromHandoff ? ViewModel.TryEnterLocalBrowserRoomEffect() : null;
+        if ((fromHandoff && roomEffect is null) || !IsBrowserHandoffIdentityCurrent(expected) || !expected.IsExecutor)
+            throw new InvalidOperationException("执行端房间、模式或身份已变化，请重新打开。");
+        if (_localBrowserBridge is null || !RoomServerAddress.Same(_localBrowserServerUrl, expected.ServerUrl))
+        {
+            var server = expected.ServerUrl;
+            var bridge = new LocalBrowserBridge((request, ct) => ExecuteLocalBrowserAsync(request, ct, server),
+                Dodoco.LocalBrowserService.ReleaseSession, ViewModel.AddLog);
+            _localBrowserBridge?.Dispose();
+            _localBrowserBridge = bridge;
+            _localBrowserServerUrl = server;
+        }
         return _localBrowserBridge.CreatePairingUrl();
     }
 
@@ -89,8 +117,12 @@ public partial class MainWindow : Window
     }
 
     /// <summary>本机网页的同一配对会话同时承载嘟嘟可与槲寄生；槲寄生请求转交执行端中心处理。</summary>
-    private async Task<LocalBrowserResult> ExecuteLocalBrowserAsync(LocalBrowserRequest request, CancellationToken cancellationToken)
+    private async Task<LocalBrowserResult> ExecuteLocalBrowserAsync(LocalBrowserRequest request,
+        CancellationToken cancellationToken, string server)
     {
+        using var roomEffect = ViewModel.TryEnterLocalBrowserRoomEffect();
+        if (roomEffect is null || !RoomServerAddress.Same(server, ViewModel.Config?.ServerUrl))
+            return new LocalBrowserResult("error", "助手房间正在切换或服务器已变化，请从助手重新打开本机网页");
         if (request.Operation is not ("mistletoe.read" or "mistletoe.request"))
             return await Dodoco.LocalBrowserService.ExecuteAsync(request, cancellationToken);
         try
@@ -160,7 +192,55 @@ public partial class MainWindow : Window
         if (sender is Button { IsVisible: false, Tag: Popup popup }) popup.IsOpen = false;
     }
 
-    private async void CopyRoomCodeClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void HeaderRoomClick(object sender, RoutedEventArgs e)
+    {
+        AssistantRoomPopup.IsOpen = !AssistantRoomPopup.IsOpen;
+        e.Handled = true;
+    }
+
+    private static CustomPopupPlacement[] PlaceAssistantRoomPopup(Size popupSize, Size targetSize, Point offset) =>
+    [
+        new(new Point(targetSize.Width - popupSize.Width + 12, targetSize.Height + 6), PopupPrimaryAxis.Horizontal),
+        new(new Point(targetSize.Width - popupSize.Width + 12, -popupSize.Height - 6), PopupPrimaryAxis.Horizontal)
+    ];
+
+    private void AssistantRoomPopupOpened(object? sender, EventArgs e)
+    {
+        // Reopening always shows the confirmed room, not an abandoned selection.
+        AssistantRoomSelector.SetCurrentValue(Selector.SelectedValueProperty, ViewModel.ActiveRoomProfile?.Id);
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        {
+            if (!AssistantRoomPopup.IsOpen) return;
+            if (AssistantRoomSelector.SelectedItem is { } room &&
+                AssistantRoomSelector.ItemContainerGenerator.ContainerFromItem(room) is ListBoxItem row && row.Focus()) return;
+            if (!AssistantRoomSelector.IsVisible || !AssistantRoomSelector.Focus()) ManageAssistantRoomsButton.Focus();
+        }));
+    }
+
+    private void AssistantRoomPopupClosed(object? sender, EventArgs e)
+    {
+        _roomCodeCopyHintTimer.Stop();
+        RoomCodeCopyHintText.Visibility = Visibility.Collapsed;
+    }
+
+    private void CloseAssistantRoomPopupClick(object sender, RoutedEventArgs e) => DismissAssistantRoomPopup();
+
+    private void AssistantRoomPopupPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        DismissAssistantRoomPopup();
+        e.Handled = true;
+    }
+
+    private void ManageAssistantRoomsClick(object sender, RoutedEventArgs e) => DismissAssistantRoomPopup();
+
+    private void DismissAssistantRoomPopup()
+    {
+        AssistantRoomPopup.IsOpen = false;
+        HeaderRoomButton.Focus();
+    }
+
+    private async void CopyRoomCodeClick(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
         if (_copyingRoomCode) return;
@@ -205,10 +285,10 @@ public partial class MainWindow : Window
 
     private void ShowRoomCodeCopyHint(string message, double seconds)
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || !AssistantRoomPopup.IsOpen) return;
         _roomCodeCopyHintTimer.Stop();
         RoomCodeCopyHintText.Text = message;
-        RoomCodeCopyHint.IsOpen = true;
+        RoomCodeCopyHintText.Visibility = Visibility.Visible;
         _roomCodeCopyHintTimer.Interval = TimeSpan.FromSeconds(seconds);
         _roomCodeCopyHintTimer.Start();
     }
@@ -229,7 +309,7 @@ public partial class MainWindow : Window
         private set => SetValue(ActiveMistletoeProperty, value);
     }
     private readonly Dictionary<string, MistletoeViewModel> _parkedRemoteCenters = new(StringComparer.Ordinal);
-    private static string RemoteKey(RemoteCenterTarget target) => target.PlayerUid + ":" + target.ClientInstanceId;
+    private string RemoteKey(RemoteCenterTarget target) => ViewModel.GetRemoteCenterScopeKey(target);
 
     public async Task<string?> ShowRemoteMistletoeAsync(RemoteCenterTarget target)
     {
@@ -328,8 +408,8 @@ public partial class MainWindow : Window
         try
         {
             _localBrowserHandoff = new LocalBrowserHandoff(
-                () => Dispatcher.Invoke(ReadBrowserHandoffIdentity),
-                expected => Dispatcher.Invoke(() => CreateOwnBrowserPairingUrl(expected)), ViewModel.AddLog);
+                () => Dispatcher.Invoke(() => ReadBrowserHandoffIdentity(forHandoff: true)),
+                expected => Dispatcher.Invoke(() => CreateOwnBrowserPairingUrl(expected, fromHandoff: true)), ViewModel.AddLog);
         }
         catch (Exception ex) { ViewModel.AddLog("本机网页跨会话入口不可用：" + ex.Message); }
         Application.Current.Exit += (_, _) => { _localBrowserHandoff?.Dispose(); _localBrowserBridge?.Dispose(); };
@@ -343,15 +423,17 @@ public partial class MainWindow : Window
         Pet = new PetViewModel(viewModel, Dodoco, new PetSettingsService(), ShowToForeground, Dodoco.LogTail);
         DataContext = ViewModel;
         InitializeComponent();
+        AssistantRoomPopup.CustomPopupPlacementCallback = PlaceAssistantRoomPopup;
         _roomCodeCopyHintTimer.Tick += (_, _) =>
         {
             _roomCodeCopyHintTimer.Stop();
-            RoomCodeCopyHint.IsOpen = false;
+            RoomCodeCopyHintText.Visibility = Visibility.Collapsed;
         };
+        IsVisibleChanged += (_, _) => { if (!IsVisible) AssistantRoomPopup.IsOpen = false; };
         Closed += (_, _) =>
         {
+            AssistantRoomPopup.IsOpen = false;
             _roomCodeCopyHintTimer.Stop();
-            RoomCodeCopyHint.IsOpen = false;
         };
         // 动态设置标题：Nexus-BGI · 版本号
         Title = GetVersionedTitle();

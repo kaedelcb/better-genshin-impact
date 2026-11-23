@@ -20,17 +20,27 @@ public partial class MainViewModel
         TaskCompletionSource<RemoteCenterReply> Completion);
     private readonly ConcurrentDictionary<string, PendingCenterReply> _pendingCenterReplies = new();
 
+    internal IDisposable? TryEnterLocalBrowserRoomEffect() => TryEnterAssistantRoomEffect();
+
     private void StartLocalCenterChannel()
     {
         try
         {
             _localCenterChannel = new LocalConfigEditChannel(
-                () => _config?.ControlRoomPassword,
-                cmd => Application.Current.Dispatcher.InvokeAsync(
-                    () => HandleRemoteCenterRequestAsync(cmd)).Task.Unwrap(),
+                ReadLocalRoomAuthentication,
+                (cmd, authentication) => Application.Current.Dispatcher.InvokeAsync(
+                    () => HandleLocalRemoteCenterRequestAsync(cmd, authentication)).Task.Unwrap(),
                 AddLog, channel: "center");
         }
         catch (Exception ex) { AddLog("本地中心通道不可用：" + ex.Message); }
+    }
+
+    private async Task<RemoteCommand?> HandleLocalRemoteCenterRequestAsync(RemoteCommand command,
+        LocalConfigEditChannel.RoomAuthentication authentication)
+    {
+        using var roomEffect = TryEnterAssistantRoomEffect();
+        if (roomEffect is null || !IsCurrentLocalRoomAuthentication(authentication)) return null;
+        return await HandleRemoteCenterRequestAsync(command);
     }
 
     private async Task<RemoteCommand?> HandleRemoteCenterRequestAsync(RemoteCommand command, bool allowLocalObserver = false)

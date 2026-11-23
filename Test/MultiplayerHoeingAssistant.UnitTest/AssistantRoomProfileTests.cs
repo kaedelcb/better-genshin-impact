@@ -28,6 +28,30 @@ public sealed class AssistantRoomProfileTests
     }
 
     [Fact]
+    public void OldProfilesInheritSharedServerWithoutOverwritingExplicitAddresses()
+    {
+        var config = new AssistConfig { ServerUrl = "https://original.example.test/gateway-bgi" };
+        var inherited = new AssistantRoomProfile { Id = "old", RoomCode = "ABCDEF" };
+        var explicitServer = new AssistantRoomProfile { Id = "other", RoomCode = "ABCDEF", ServerUrl = "https://other.example.test" };
+        config.RoomProfiles.AddRange([inherited, explicitServer]);
+        Assert.True(config.FillLegacyRoomServerUrls());
+        Assert.False(config.FillLegacyRoomServerUrls());
+        explicitServer.ApplyTo(config);
+        Assert.Equal("https://other.example.test", config.ServerUrl);
+        Assert.Equal("https://original.example.test/gateway-bgi", config.GetRoomServerUrl(inherited));
+        inherited.ApplyTo(config);
+        Assert.Equal("https://original.example.test/gateway-bgi", config.ServerUrl);
+    }
+
+    [Theory]
+    [InlineData("https://ROOMS.example.test/app/hub/", "https://rooms.example.test:443/app", true)]
+    [InlineData("https://rooms.example.test/app/sub/../hub", "https://rooms.example.test/app", true)]
+    [InlineData("https://rooms.example.test/app", "https://rooms.example.test/App", false)]
+    [InlineData("http://localhost:5010", "http://localhost:5011", false)]
+    public void ServerIdentityNormalizesAliasesButKeepsDifferentEndpoints(string first, string second, bool same)
+        => Assert.Equal(same, RoomServerAddress.Same(first, second));
+
+    [Fact]
     public void ApplyingAnotherRoomDoesNotChangeOldRoomOrGlobalIdentity()
     {
         var config = new AssistConfig { PlayerUid = "111111111", BgiPath = "bgi.exe" };
