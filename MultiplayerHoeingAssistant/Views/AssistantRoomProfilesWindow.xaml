@@ -124,7 +124,7 @@
             <Grid Grid.Row="1" Margin="16,14,16,0">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="172"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <DockPanel Margin="0,0,14,0">
-                    <Button DockPanel.Dock="Top" Content="添加房间" Style="{StaticResource RoomAction}" Click="NewProfileClick" Margin="0,0,0,10"/>
+                    <Button x:Name="NewProfileButton" DockPanel.Dock="Top" Content="添加房间" Style="{StaticResource RoomAction}" Click="NewProfileClick" Margin="0,0,0,10"/>
                     <ListBox x:Name="ProfilesList" Background="Transparent" BorderThickness="0" Foreground="#F4F2FA"
                              ItemContainerStyle="{StaticResource RoomProfileRow}" SelectionChanged="ProfileChanged"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="已保存房间">
@@ -152,7 +152,8 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,6,0">
                                 <Label Content="房间号" Target="{Binding ElementName=RoomCodeBox}" Style="{StaticResource RoomFormLabel}"/>
-                                <TextBox x:Name="RoomCodeBox" MaxLength="6" CharacterCasing="Upper"/>
+                                <TextBox x:Name="RoomCodeBox" MaxLength="6" CharacterCasing="Upper"
+                                         ToolTip="旧房间号按完整成员 UID 自动填写。新建房间由服务器分配号码。"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0">
                                 <Label Content="房间密码" Target="{Binding ElementName=RoomPasswordBox}" Style="{StaticResource RoomFormLabel}"/>

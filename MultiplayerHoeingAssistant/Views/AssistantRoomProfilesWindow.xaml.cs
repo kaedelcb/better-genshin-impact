@@ -8,7 +8,16 @@ using MultiplayerHoeingAssistant.Services;
 namespace MultiplayerHoeingAssistant.Views;
 
 internal sealed record AssistantRoomDraft(string Name, string ServerUrl, string RoomCode, string Password,
-    string MemberUids, int ExpectedPlayers);
+    List<string> MemberUids, int ExpectedPlayers)
+{
+    internal static List<string> ParseMemberUids(string text) => text
+        .Split([',', '，', ' ', '\n', '\r'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+        .Distinct(StringComparer.Ordinal).ToList();
+
+    internal static bool HasValidMemberUids(List<string> uids, string selfUid) =>
+        uids.Count is >= 1 and <= 64 && uids.Contains(selfUid, StringComparer.Ordinal)
+        && uids.All(uid => uid.Length is >= 1 and <= 16 && uid.All(char.IsAsciiDigit));
+}
 
 public partial class AssistantRoomProfilesWindow : Window
 {
@@ -17,6 +26,7 @@ public partial class AssistantRoomProfilesWindow : Window
     private readonly string _selfUid;
     private readonly Func<AssistantRoomProfile?, AssistantRoomDraft, bool, Task> _save;
     private readonly Action<AssistantRoomProfile> _remove;
+    private string _calculatedRoomCode = "";
     private bool _saving;
 
     internal AssistantRoomProfilesWindow(IReadOnlyList<AssistantRoomProfile> profiles, string activeId, string server, string selfUid,
@@ -30,6 +40,7 @@ public partial class AssistantRoomProfilesWindow : Window
         DpiAwarenessController.Initialize(this);
         InitializeComponent();
         ExpectedCountBox.ItemsSource = new[] { 1, 2, 3, 4 };
+        MemberUidsBox.TextChanged += (_, _) => UpdateLegacyRoomCode(AssistantRoomDraft.ParseMemberUids(MemberUidsBox.Text));
         ProfilesList.ItemsSource = profiles;
         ProfilesList.SelectedItem = profiles.FirstOrDefault(p => p.Id == activeId) ?? profiles.FirstOrDefault();
         Fill(ProfilesList.SelectedItem as AssistantRoomProfile);
@@ -53,16 +64,19 @@ public partial class AssistantRoomProfilesWindow : Window
     {
         var active = room is not null && room.Id == _activeId;
         EditorTitle.Text = room is null ? "添加房间" : active ? "当前房间" : "编辑房间";
-        EditorHint.Text = room is null ? "已有房间请填写房间号；要新建房间，请留空并点「建房并保存」。"
-            : active ? "当前连接的地址和房间号保持不变。可在这里改名或调整人数。"
-            : "保存档案不会连接服务器；切到此档案时才会连接它的地址。";
+        EditorHint.Text = room is null ? "填写完整成员 UID 可自动填入旧房间号。新建房间由服务器分配号码。"
+            : active ? "可在这里改名或调整人数。"
+            : string.IsNullOrWhiteSpace(room.RoomCode) ? "填写完整成员 UID 可自动填入旧房间号。"
+            : "保存档案后，切到此房间时会连接这里的服务器。";
         RoomNameBox.Text = room?.Name ?? "";
         ServerBox.Text = room?.ServerUrl ?? _defaultServer;
+        _calculatedRoomCode = "";
+        ServerBox.IsReadOnly = RoomCodeBox.IsReadOnly = MemberUidsBox.IsReadOnly = active;
         RoomCodeBox.Text = room?.RoomCode ?? "";
         RoomPasswordBox.Password = room?.Password ?? "";
         MemberUidsBox.Text = room is null ? _selfUid : string.Join(", ", room.TeamUids);
+        UpdateLegacyRoomCode(AssistantRoomDraft.ParseMemberUids(MemberUidsBox.Text));
         ExpectedCountBox.SelectedItem = Math.Clamp(room?.ExpectedHoeingPlayers ?? 4, 1, 4);
-        ServerBox.IsReadOnly = RoomCodeBox.IsReadOnly = MemberUidsBox.IsReadOnly = active;
         RoomPasswordBox.IsEnabled = !active;
         SaveProfileButton.Content = room is null ? "保存已有房间" : "保存档案";
         CreateRoomButton.Visibility = room is null ? Visibility.Visible : Visibility.Collapsed;
@@ -83,6 +97,15 @@ public partial class AssistantRoomProfilesWindow : Window
         ShowResult("");
     }
 
+    private void UpdateLegacyRoomCode(List<string> memberUids)
+    {
+        if (RoomCodeBox.IsReadOnly || (!string.IsNullOrWhiteSpace(RoomCodeBox.Text) && RoomCodeBox.Text != _calculatedRoomCode))
+            return;
+        _calculatedRoomCode = AssistantRoomDraft.HasValidMemberUids(memberUids, _selfUid)
+            ? AssistConfigManager.GenerateControlRoomCode(memberUids) : "";
+        RoomCodeBox.Text = _calculatedRoomCode;
+    }
+
     private async void SaveProfileClick(object sender, RoutedEventArgs e) => await SaveAsync(create: false);
     private async void CreateRoomClick(object sender, RoutedEventArgs e) => await SaveAsync(create: true);
 
@@ -95,15 +118,17 @@ public partial class AssistantRoomProfilesWindow : Window
             ServerBox.Focus();
             return;
         }
-        if (create && !string.IsNullOrWhiteSpace(RoomCodeBox.Text))
+        var memberUids = AssistantRoomDraft.ParseMemberUids(MemberUidsBox.Text);
+        UpdateLegacyRoomCode(memberUids);
+        if (create && RoomCodeBox.Text.Trim() != _calculatedRoomCode && !string.IsNullOrWhiteSpace(RoomCodeBox.Text))
         {
-            ShowResult("建房由服务器分配房间号，请先留空；已有房间请点「保存已有房间」。");
+            ShowResult("已填写现有房间号，请点「保存已有房间」。");
             RoomCodeBox.Focus();
             return;
         }
         var selected = ProfilesList.SelectedItem as AssistantRoomProfile;
-        var draft = new AssistantRoomDraft(RoomNameBox.Text, ServerBox.Text, RoomCodeBox.Text, RoomPasswordBox.Password,
-            MemberUidsBox.Text, ExpectedCountBox.SelectedItem is int players ? players : 4);
+        var draft = new AssistantRoomDraft(RoomNameBox.Text, ServerBox.Text, create ? "" : RoomCodeBox.Text, RoomPasswordBox.Password,
+            memberUids, ExpectedCountBox.SelectedItem is int players ? players : 4);
         _saving = true;
         try
         {

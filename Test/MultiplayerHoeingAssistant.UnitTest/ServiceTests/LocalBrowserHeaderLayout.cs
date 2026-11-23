@@ -74,6 +74,7 @@ internal static class LocalBrowserHeaderLayout
         }
         AssertAssistantRoomPopup(window, currentRoom, targetRoom);
         AssertRoomProfilesEditor(application, vm, currentRoom, targetRoom);
+        AssertLegacyRoomNumber(application, vm);
         vm.OpenSettingsCommand.Execute(null); window.UpdateLayout();
         var page = FindChild<SettingsPage>(window) ?? throw new InvalidOperationException("未找到设置页");
         // 网页设置现为可折叠卡片，验收入口前先从真实设置页展开。
@@ -173,6 +174,56 @@ internal static class LocalBrowserHeaderLayout
         if (failure is not null) throw failure;
         if (!checkedEditor) throw new InvalidOperationException("没有运行档案窗口验证");
         Console.WriteLine("PASS: the real profile editor shows separate addresses, editable player counts, and profile settings.");
+    }
+
+    private static void AssertLegacyRoomNumber(Application application, MainViewModel vm)
+    {
+        var config = vm.Config!;
+        var legacy = new AssistantRoomProfile { Id = "legacy-draft", Name = "旧房间示例", ServerUrl = "https://legacy.example.test",
+            Password = "fixture", TeamUids = ["111111111", "222222222"] };
+        config.RoomProfiles.Add(legacy);
+        var expected = AssistConfigManager.GenerateControlRoomCode(legacy.TeamUids);
+        Exception? failure = null;
+        var persisted = false;
+        application.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            var dialog = application.Windows.OfType<AssistantRoomProfilesWindow>().SingleOrDefault();
+            try
+            {
+                if (dialog is null) throw new InvalidOperationException("缺少房间档案窗口");
+                var code = (TextBox)dialog.FindName("RoomCodeBox");
+                var uids = (TextBox)dialog.FindName("MemberUidsBox");
+                var profiles = (ListBox)dialog.FindName("ProfilesList");
+                ((Button)dialog.FindName("NewProfileButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                uids.Text = "222222222，111111111, 222222222";
+                if (code.Text != expected) throw new InvalidOperationException("添加档案时应按成员 UID 自动计算旧房间号");
+                ((TextBox)dialog.FindName("RoomNameBox")).Text = "新房间示例";
+                ((PasswordBox)dialog.FindName("RoomPasswordBox")).Password = "fixture";
+                ((Button)dialog.FindName("CreateRoomButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var status = (TextBlock)dialog.FindName("ResultText");
+                if (!status.Text.Contains("联网模式")) throw new InvalidOperationException("自动号码不应阻挡建新房流程");
+                profiles.SelectedItem = config.RoomProfiles.Single(room => room.Id == "target");
+                uids.Text = "111111111, 222222222";
+                if (code.Text != "B98765") throw new InvalidOperationException("修改成员名单不应覆盖已保存的房间号");
+                profiles.SelectedItem = legacy;
+                if (code.Text != expected) throw new InvalidOperationException("加载空房间号的档案时未自动填号");
+                uids.Text = "222222222";
+                if (code.Text.Length != 0) throw new InvalidOperationException("名单缺少本机 UID 时应清除自动号码");
+                uids.Text = "111111111, 333333333";
+                var updated = AssistConfigManager.GenerateControlRoomCode(["111111111", "333333333"]);
+                if (code.Text != updated || updated == expected) throw new InvalidOperationException("名单变化后未重新计算房间号");
+                ((Button)dialog.FindName("SaveProfileButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var saved = new AssistConfigManager().Load();
+                persisted = saved.RoomProfiles.Single(room => room.Id == legacy.Id).RoomCode == updated
+                    && saved.ActiveRoomProfileId == config.ActiveRoomProfileId;
+            }
+            catch (Exception ex) { failure = ex; }
+            finally { if (dialog is { IsVisible: true }) dialog.Close(); }
+        }));
+        vm.OpenAssistantRoomsCommand.Execute(null);
+        if (failure is not null) throw failure;
+        if (!persisted) throw new InvalidOperationException("应保存自动计算的旧号码并保留当前房间");
+        Console.WriteLine("PASS: old room numbers are filled from member UIDs and saved without overriding registered numbers.");
     }
 
     private static void AssertAssistantRoomPopup(MainWindow window, AssistantRoomProfile current, AssistantRoomProfile target)

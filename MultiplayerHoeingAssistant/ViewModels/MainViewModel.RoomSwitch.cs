@@ -588,8 +588,7 @@ public partial class MainViewModel
             if (draft.ExpectedPlayers is < 1 or > 4)
                 throw new InvalidOperationException("预期开锄人数必须是 1–4 人");
             var code = draft.RoomCode.Trim().ToUpperInvariant();
-            var uids = draft.MemberUids.Split([',', '，', ' ', '\n', '\r'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .Distinct(StringComparer.Ordinal).ToList();
+            var uids = draft.MemberUids;
             var active = selected is not null && selected.Id == config.ActiveRoomProfileId;
             var index = selected is null ? -1 : config.RoomProfiles.IndexOf(selected);
             if (selected is not null && index < 0)
@@ -606,8 +605,7 @@ public partial class MainViewModel
             {
                 if (selected is null && config.RoomProfiles.Count >= 5)
                     throw new InvalidOperationException("本机最多保存 5 个房间档案");
-                if (uids.Count == 0 || uids.Count > 64 || uids.Any(uid => uid.Length is < 1 or > 16 || !uid.All(char.IsAsciiDigit))
-                    || !uids.Contains(config.PlayerUid, StringComparer.Ordinal))
+                if (!AssistantRoomDraft.HasValidMemberUids(uids, config.PlayerUid))
                     throw new InvalidOperationException("请填写有效的成员 UID，并将本机玩家的 UID 加入名单");
                 if (string.IsNullOrWhiteSpace(draft.Password) || draft.Password.Length > 128)
                     throw new InvalidOperationException("请填写房间密码，最多 128 个字符");
