@@ -1334,6 +1334,7 @@ public partial class RoomManager
                     // 上线收据属于连接，换连接不得把旧代序号当成新连接已受理的意图。
                     existing.OnlineEventGeneration = 0;
                     existing.OnlineEventTime = DateTime.MinValue;
+                    existing.ExpiredOnlineEventGeneration = 0;
                     DisarmOnlineIntent(existing);
                 }
                 existing.ConnectionId = connectionId;
@@ -1700,6 +1701,7 @@ public partial class RoomManager
                     // 若保留旧值（如 2/3），新 generation(1) <= 旧值会被永久忽略，导致无法上线。
                     player.OnlineEventGeneration = 0;
                     player.OnlineEventTime = DateTime.MinValue;
+                    player.ExpiredOnlineEventGeneration = 0;
                     DisarmOnlineIntent(player);
                 }
             }
@@ -1751,10 +1753,29 @@ public partial class RoomManager
                     player.HoeingStartPhase = status.HoeingStartPhase;
                     player.HoeingStartMessage = status.HoeingStartMessage;
                     player.HoeingCompletionAction = status.HoeingCompletionAction;
-                    // 心跳只上报状态和配置；它不能建立、续期或复活已经结清的上线意图。
-                    if (!player.OnlineEventConsumed && !HasLiveOnlineIntent(player, now)) DisarmOnlineIntent(player);
+                    // 心跳只对当前仍存活且未结清的上线意图顺延保活；
+                    // 既不能新建上线意图，也不能复活已消费、已撤回或已过期的旧意图。
+                    if (HasLiveOnlineIntent(player, now))
+                    {
+                        if (status.OnlineReady)
+                        {
+                            player.OnlineReadyExpireTime = now + OnlineIntentLifetime;
+                        }
+                    }
+                    else if (!player.OnlineEventConsumed && player.OnlineEventGeneration > 0
+                        && player.OnlineReadyExpireTime <= now)
+                    {
+                        ExpireOnlineIntent(group, player, "状态上报");
+                    }
                     player.OnlineReady = HasLiveOnlineIntent(player, now);
-                    player.OnlineMode = status.OnlineMode;
+                    if (player.OnlineReady)
+                    {
+                        if (status.OnlineReady) player.OnlineMode = status.OnlineMode;
+                    }
+                    else
+                    {
+                        player.OnlineMode = "none";
+                    }
                     player.ScheduledOnlineTime = status.ScheduledOnlineTime;
                     player.OnlineHoeingGroupNames = status.OnlineHoeingGroupNames;
                     player.OnlineHoeingGroupTypes = status.OnlineHoeingGroupTypes ?? [];
@@ -1907,6 +1928,7 @@ public partial class RoomManager
             player.OnlineEventTime = now;
             player.OnlineReady = true;
             player.OnlineReadyExpireTime = now + OnlineIntentLifetime;
+            player.ExpiredOnlineEventGeneration = 0;
 
             if (_roomAllReadyStates.TryGetValue(group, out var state) && state.State != "confirming")
                 state.State = "idle";
@@ -1933,11 +1955,22 @@ public partial class RoomManager
             {
                 if (player.OnlineEventConsumed || player.OnlineEventGeneration <= 0
                     || player.OnlineReadyExpireTime > now) continue;
-                DisarmOnlineIntent(player);
+                ExpireOnlineIntent(group, player, "超时检查");
                 changed = true;
             }
         }
         return changed;
+    }
+
+    private void ExpireOnlineIntent(string group, ControlRoomPlayer player, string source)
+    {
+        var generation = player.OnlineEventGeneration;
+        var expireUtc = player.OnlineReadyExpireTime;
+        player.ExpiredOnlineEventGeneration = generation;
+        DisarmOnlineIntent(player);
+        _logger?.LogWarning(
+            "[联机锄地] 控制房间 {Group} 成员 {PlayerName}({Uid}) 上线意图已超时（{Source}，gen={Generation}，到期时间={ExpireUtc:yyyy-MM-dd HH:mm:ss}Z），自动清除上线状态",
+            group, player.PlayerName, player.PlayerUid, source, generation, expireUtc);
     }
 
     internal void ExpireControlRoomTaskStatus(string group, DateTime now)

@@ -366,6 +366,28 @@ public sealed class OnlineIntentLifecycle
         ClearCurrentOnline("状态重置", suppressScheduledOnline: false);
     }
 
+    /// <summary>服务端因超时自动清除了当前武装中的上线意图：仅当本地仍处于同一 generation 的 Armed 状态时同步归零。</summary>
+    public bool OnServerOnlineExpired(int expiredGeneration)
+    {
+        string? transitionLog = null;
+        bool changed = false;
+        lock (_gate)
+        {
+            if (expiredGeneration > 0
+                && _state == OnlineIntentState.Armed
+                && _armedIntentGeneration == expiredGeneration)
+            {
+                transitionLog = TransitionLocked(OnlineIntentState.Idle,
+                    $"服务端上线意图超时过期 generation={expiredGeneration}");
+                _pendingOnlineReportGen = 0;
+                _armedIntentGeneration = 0;
+                changed = true;
+            }
+        }
+        if (transitionLog != null) _log(transitionLog);
+        return changed;
+    }
+
     internal int? ArmedOnlineGeneration
     {
         get { lock (_gate) return _state == OnlineIntentState.Armed && _armedIntentGeneration > 0 ? _armedIntentGeneration : null; }

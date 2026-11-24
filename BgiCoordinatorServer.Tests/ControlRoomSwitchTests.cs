@@ -157,7 +157,7 @@ public sealed class ControlRoomSwitchTests
     }
 
     [Fact]
-    public async Task HeartbeatsAndDuplicateGenerationCannotExtendIntentOrStartExpiredMemberBeforeScan()
+    public async Task LiveOnlineHeartbeatRenewsIntentWhileDuplicateGenerationAndExpiredIntentCannotRearm()
     {
         var clock = new Clock();
         var h = new GatewayTestHarness(controlTimeProvider: clock);
@@ -171,17 +171,42 @@ public sealed class ControlRoomSwitchTests
         Assert.False((await Online(h, member, "OTHER1", 7)).Success);
         Assert.False((await Online(h, member, room, 6)).Success);
         Assert.True((await Leave(h, member, room)).Busy);
-        var expires = h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime;
-        clock.Now += TimeSpan.FromMinutes(20);
-        var status = Status(room, "member"); status.OnlineReady = true;
-        await h.Ops.ReportControlStatusAsync(member, status);
-        Assert.True((await Online(h, member, room, 7)).Success);
-        Assert.Equal(expires, h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime);
+        var initialExpires = h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime;
 
-        clock.Now = new DateTimeOffset(expires, TimeSpan.Zero);
+        // 未携带 OnlineReady=true 的普通心跳不续期；携带 OnlineReady=true 的存活心跳顺延 30 分钟
+        clock.Now += TimeSpan.FromMinutes(20);
+        await h.Ops.ReportControlStatusAsync(member, Status(room, "member"));
+        Assert.Equal(initialExpires, h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime);
+
+        var status = Status(room, "member"); status.OnlineReady = true; status.OnlineMode = "command";
+        await h.Ops.ReportControlStatusAsync(member, status);
+        var renewedExpires = h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime;
+        Assert.Equal(clock.Now.UtcDateTime + TimeSpan.FromMinutes(30), renewedExpires);
+        Assert.True(renewedExpires > initialExpires);
+
+        // 重复上报同一 generation 仅返回幂等回执，不延长到期时间
+        clock.Now += TimeSpan.FromMinutes(5);
+        Assert.True((await Online(h, member, room, 7)).Success);
+        Assert.Equal(renewedExpires, h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReadyExpireTime);
+
+        // 超过最初的 30 分钟节点后，已由心跳续期的成员仍保持就绪与忙碌
+        clock.Now = new DateTimeOffset(initialExpires, TimeSpan.Zero);
+        Assert.True((await Access(h, peer, room, "member")).Busy);
+        Assert.True(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReady);
+
+        // 停止心跳直到续期后的到期点：准入与访问在扫描前即判定超时过期，且晚到心跳/重复代序号不能复活
+        clock.Now = new DateTimeOffset(renewedExpires, TimeSpan.Zero);
         Assert.False((await Access(h, peer, room, "member")).Busy);
         Assert.True((await Online(h, peer, room, 8)).Success);
         Assert.Null(h.Ops.CurrentCoordinatedBatch(peer));
+        var expiredMember = h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member");
+        Assert.False(expiredMember.OnlineReady);
+        Assert.Equal("none", expiredMember.OnlineMode);
+        Assert.Equal(7, expiredMember.ExpiredOnlineEventGeneration);
+
+        await h.Ops.ReportControlStatusAsync(member, status);
+        Assert.False((await Access(h, peer, room, "member")).Busy);
+        Assert.False(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "member").OnlineReady);
         Assert.True((await Online(h, member, room, 7)).Success); // receipt only, never rearms
         Assert.True((await Leave(h, member, room)).Success);
         Assert.True((await Leave(h, member, room)).Success);
@@ -189,8 +214,77 @@ public sealed class ControlRoomSwitchTests
         await h.Ops.ReportControlStatusAsync(member, status);
         Assert.False((await Online(h, member, room, 7)).Success);
         Assert.False((await Join(h, member, room, "member")).Success);
+
+        // 显式撤回上线后，晚到的 OnlineReady=true 心跳也不能复活意图
         Assert.True((await Online(h, peer, room, 8, isOnlineReady: false)).Success);
+        var peerStatus = Status(room, "peer"); peerStatus.OnlineReady = true; peerStatus.OnlineMode = "command";
+        await h.Ops.ReportControlStatusAsync(peer, peerStatus);
+        Assert.False((await Access(h, peer, room, "peer")).Busy);
+        Assert.False(h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(p => p.PlayerUid == "peer").OnlineReady);
         Assert.True((await Leave(h, peer, room)).Success);
+    }
+
+    [Fact]
+    public async Task EarlyOnlineMembersStayArmedAcrossHoursOfHeartbeatsAndStartBatchWhenLastMemberJoins()
+    {
+        var clock = new Clock();
+        var h = new GatewayTestHarness(controlTimeProvider: clock);
+        var c1 = await Connect(h); var c2 = await Connect(h); var c3 = await Connect(h); var c4 = await Connect(h);
+        string[] roster = ["u1", "u2", "u3", "u4"];
+        var room = (await Create(h, c1, "u1", roster)).RoomCode;
+        foreach (var (ctx, uid) in new[] { (c1, "u1"), (c2, "u2"), (c3, "u3"), (c4, "u4") })
+        {
+            Assert.True((await Join(h, ctx, room, uid)).Success);
+            Assert.True((await Ready(h, ctx, Status(room, uid, expected: 4))).Success);
+        }
+
+        // 05:11 成员 1 先上线；随后 05:48 / 05:51 成员 2、3 上线；期间持续 15 分钟心跳与定时扫描超过 2 小时
+        Assert.True((await Online(h, c1, room, 51)).Success);
+        var armed = new HashSet<(GatewayHandlerContext Ctx, string Uid)> { (c1, "u1") };
+        for (var step = 1; step <= 9; step++)
+        {
+            clock.Now += TimeSpan.FromMinutes(15);
+            foreach (var (ctx, uid) in armed)
+            {
+                var st = Status(room, uid, expected: 4);
+                st.OnlineReady = true;
+                st.OnlineMode = "command";
+                await h.Ops.ReportControlStatusAsync(ctx, st);
+            }
+            await h.Ops.ScanControlRoomTimeoutsAsync();
+            if (step == 2)
+            {
+                Assert.True((await Online(h, c2, room, 21)).Success);
+                armed.Add((c2, "u2"));
+            }
+            else if (step == 3)
+            {
+                Assert.True((await Online(h, c3, room, 20)).Success);
+                armed.Add((c3, "u3"));
+            }
+        }
+
+        var playersBeforeFourth = h.RoomManager.GetControlRoomPlayers("CTRL_" + room);
+        Assert.All(["u1", "u2", "u3"], uid =>
+        {
+            var p = playersBeforeFourth.Single(x => x.PlayerUid == uid);
+            Assert.True(p.OnlineReady);
+            Assert.Equal(0, p.ExpiredOnlineEventGeneration);
+        });
+        Assert.Null(h.Ops.CurrentCoordinatedBatch(c1));
+
+        // 2 小时 15 分钟后第 4 人上线，应立刻凑齐 4/4 开批
+        Assert.True((await Online(h, c4, room, 19)).Success);
+        var batch = h.Ops.CurrentCoordinatedBatch(c4);
+        Assert.NotNull(batch);
+        Assert.Equal(4, batch!.ParticipantUids.Count);
+
+        // 开批消费后，晚到心跳不得复活上线状态，且不被标为超时过期
+        var late = Status(room, "u1", expected: 4); late.OnlineReady = true; late.OnlineMode = "command";
+        await h.Ops.ReportControlStatusAsync(c1, late);
+        var u1After = h.RoomManager.GetControlRoomPlayers("CTRL_" + room).Single(x => x.PlayerUid == "u1");
+        Assert.False(u1After.OnlineReady);
+        Assert.Equal(0, u1After.ExpiredOnlineEventGeneration);
     }
 
     [Fact]

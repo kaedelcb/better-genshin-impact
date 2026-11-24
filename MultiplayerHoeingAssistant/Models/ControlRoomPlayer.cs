@@ -44,6 +44,8 @@ public class ControlRoomPlayer
     public DateTime LastHeartbeat { get; set; }
     /// <summary>是否已上线（标记了"已上线"但联机锄地尚未开始）。</summary>
     public bool OnlineReady { get; set; } = false;
+    /// <summary>服务端因超时自动清除的上线事件代序号（0 表示未因超时清除）。与服务端模型保持同步。</summary>
+    public int ExpiredOnlineEventGeneration { get; set; } = 0;
     /// <summary>上线方式：scheduled / command / none。</summary>
     public string OnlineMode { get; set; } = "none";
     /// <summary>定时上线时间（HH:mm）。</summary>

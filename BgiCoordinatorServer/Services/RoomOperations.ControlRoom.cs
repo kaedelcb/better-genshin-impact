@@ -418,7 +418,7 @@ public sealed partial class RoomOperations
             var group = $"CTRL_{status.RoomCode}";
             lock (_batchGate)
             {
-                // 普通状态不能代替 readyRoom，也不能延长上线意图。
+                // 普通状态不能代替 readyRoom，也不能新建或复活已结清的上线意图；仅对仍存活的意图顺延保活。
                 if (!_roomManager.UpdateControlStatus(group, ctx.ConnectionId, status)) return;
             }
             ObserveHoeingMember(group, ctx.ConnectionId, status);

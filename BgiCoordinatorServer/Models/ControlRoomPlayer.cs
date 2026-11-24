@@ -86,4 +86,6 @@ public class ControlRoomPlayer
     public bool OnlineEventConsumed { get; set; } = true;
     /// <summary>该 generation 的上线触发时间（UTC）。</summary>
     public DateTime OnlineEventTime { get; set; } = DateTime.MinValue;
+    /// <summary>服务端因超时自动清除的上线事件代序号（0 表示未因超时清除；客户端据此仅同步复位对应 Armed 状态）。</summary>
+    public int ExpiredOnlineEventGeneration { get; set; } = 0;
 }

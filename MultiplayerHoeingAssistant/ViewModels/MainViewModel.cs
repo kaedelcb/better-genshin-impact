@@ -4815,6 +4815,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         return false;
     }
 
+    /// <summary>服务端因超时清除了本机当前武装中的上线意图时，同步将本地状态机归零，避免残留 Armed。</summary>
+    private void SyncServerExpiredOnlineIntent(SignalRClient client, ControlRoomPlayer player)
+    {
+        if (!ReferenceEquals(client, _signalRClient) || RoomSwitchBlocksRoomOperations || !IsExecutorMode) return;
+        if (_config is null || !string.Equals(player.PlayerUid, _config.PlayerUid, StringComparison.Ordinal)) return;
+        if (!string.IsNullOrEmpty(player.ClientInstanceId)
+            && !string.Equals(player.ClientInstanceId, _config.ClientInstanceId, StringComparison.Ordinal)) return;
+        if (player.OnlineReady || player.ExpiredOnlineEventGeneration <= 0) return;
+        _intentLifecycle.OnServerOnlineExpired(player.ExpiredOnlineEventGeneration);
+    }
+
     /// <summary>把 SignalR 的成员/命令/入房被拒事件接到 MainViewModel（在重建连接时复用同一组订阅逻辑）。</summary>
     private void WireSignalRClient(SignalRClient client)
     {
@@ -4956,6 +4967,11 @@ public partial class MainViewModel : INotifyPropertyChanged
                             }
                         }
                     }
+                }
+
+                foreach (var p in (update.Full ? update.Players : update.Changed) ?? [])
+                {
+                    SyncServerExpiredOnlineIntent(client, p);
                 }
 
                 UpdateRemoteCenterTargets(update);
