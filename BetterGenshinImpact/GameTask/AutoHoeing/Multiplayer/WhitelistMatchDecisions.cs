@@ -2,6 +2,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 
@@ -95,6 +97,141 @@ public static class WhitelistMatchDecisions
                 {
                     if (FuzzyMatch(name, wl, threshold))
                         return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 协同批次模式下的申请者核对：
+    /// 1. 白名单为空或批次名单为空时一律返回 false（暂停自动同意，提示房主核对）；
+    /// 2. 优先走候选名精确匹配，避免相似名（如 "茶包1"/"茶包2"）互相串扰；
+    /// 3. 精确未命中时回退到既有的 60% 模糊容错（<see cref="FuzzyMatch"/>），吸收 OCR 偶发漏字/错字；
+    /// 4. 无论精确还是容错，都必须唯一解析到 1 位在 <paramref name="batchRoster"/> 中的成员 UID，
+    ///    同名或跨条目歧义一律返回 false。
+    /// </summary>
+    public static bool ConfirmBatchApplicant(
+        string? applicant,
+        string[]? configuredWhitelist,
+        IReadOnlyList<string>? batchRoster,
+        IEnumerable<(string PlayerUid, string PlayerName)>? roomPlayers,
+        double threshold = 0.6)
+    {
+        if (string.IsNullOrWhiteSpace(applicant)
+            || configuredWhitelist is not { Length: > 0 }
+            || batchRoster is not { Count: > 0 }
+            || roomPlayers is null)
+        {
+            return false;
+        }
+
+        var applicantCandidates = ExtractNameCandidates(applicant);
+        if (applicantCandidates.Count == 0) return false;
+
+        var validPlayers = roomPlayers
+            .Where(p => !string.IsNullOrWhiteSpace(p.PlayerUid) && !string.IsNullOrWhiteSpace(p.PlayerName))
+            .Select(p => (Uid: p.PlayerUid, Candidates: ExtractNameCandidates(p.PlayerName)))
+            .Where(p => p.Candidates.Count > 0)
+            .ToArray();
+        if (validPlayers.Length == 0) return false;
+
+        var wlEntries = configuredWhitelist
+            .Select(entry => ExtractNameCandidates(entry))
+            .Where(cands => cands.Count > 0)
+            .ToArray();
+        if (wlEntries.Length == 0) return false;
+
+        // 1. 精确匹配优先（保留原精确路径，避免 "茶包4" 精确命中白名单后误模糊匹配到 "茶包1"）
+        var exactWlEntries = wlEntries
+            .Where(cands => cands.Any(c => applicantCandidates.Contains(c, StringComparer.Ordinal)))
+            .ToArray();
+        if (exactWlEntries.Length > 0)
+        {
+            var exactLinkNames = exactWlEntries
+                .SelectMany(cands => cands)
+                .ToHashSet(StringComparer.Ordinal);
+            var exactUids = validPlayers
+                .Where(player => player.Candidates.Any(exactLinkNames.Contains))
+                .Select(player => player.Uid)
+                .Distinct(StringComparer.Ordinal)
+                .Take(2)
+                .ToArray();
+            return exactUids.Length == 1 && batchRoster.Contains(exactUids[0], StringComparer.Ordinal);
+        }
+
+        // 2. 精确未命中：沿用白名单模糊容错（默认 60%），但仍须唯一归属到本批成员
+        var fuzzyWlEntries = wlEntries
+            .Where(cands => HasFuzzyCandidateMatch(applicantCandidates, cands, threshold))
+            .ToArray();
+        if (fuzzyWlEntries.Length == 0) return false;
+
+        var fuzzyLinkNames = fuzzyWlEntries
+            .SelectMany(cands => cands)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var matchedPlayers = validPlayers
+            .Where(player =>
+                player.Candidates.Any(fuzzyLinkNames.Contains)
+                || HasFuzzyCandidateMatch(applicantCandidates, player.Candidates, threshold))
+            .ToArray();
+
+        var matchedUids = matchedPlayers
+            .Select(player => player.Uid)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (matchedUids.Length != 1 || !batchRoster.Contains(matchedUids[0], StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        var matchedPlayerCandidates = matchedPlayers
+            .SelectMany(player => player.Candidates)
+            .ToHashSet(StringComparer.Ordinal);
+        return fuzzyWlEntries.All(cands => cands.Any(matchedPlayerCandidates.Contains));
+    }
+
+    /// <summary>
+    /// 协同批次模式下的模板匹配兜底核对：仅当命中模板文件名（去扩展名）对应本批成员 UID，
+    /// 或经 <see cref="ConfirmBatchApplicant"/> 唯一确认属于本批成员时放行，防止跨房间模板误放行。
+    /// </summary>
+    public static bool ConfirmBatchTemplateMatch(
+        string? matchedTemplateFile,
+        string[]? configuredWhitelist,
+        IReadOnlyList<string>? batchRoster,
+        IEnumerable<(string PlayerUid, string PlayerName)>? roomPlayers,
+        double threshold = 0.6)
+    {
+        if (string.IsNullOrWhiteSpace(matchedTemplateFile)
+            || configuredWhitelist is not { Length: > 0 }
+            || batchRoster is not { Count: > 0 })
+        {
+            return false;
+        }
+
+        var stem = Path.GetFileNameWithoutExtension(matchedTemplateFile).Trim();
+        if (string.IsNullOrEmpty(stem)) return false;
+
+        if (batchRoster.Contains(stem, StringComparer.Ordinal))
+        {
+            return true;
+        }
+
+        return ConfirmBatchApplicant(stem, configuredWhitelist, batchRoster, roomPlayers, threshold);
+    }
+
+    private static bool HasFuzzyCandidateMatch(
+        IReadOnlyList<string> leftCandidates,
+        IReadOnlyList<string> rightCandidates,
+        double threshold)
+    {
+        foreach (var left in leftCandidates)
+        {
+            foreach (var right in rightCandidates)
+            {
+                if (FuzzyMatch(left, right, threshold))
+                {
+                    return true;
                 }
             }
         }

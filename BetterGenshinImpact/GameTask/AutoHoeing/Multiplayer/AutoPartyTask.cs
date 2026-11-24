@@ -58,6 +58,14 @@ public class AutoPartyTask
     // 已知 2P~4P 名字起点 Y（1080P）
     private static readonly double[] PlayerNameY1080P = [307, 429, 555];
 
+    // 申请加入弹窗玩家名 1080P 裁剪区域：
+    // 1920x1080 全屏实测：申请者头像右缘 X=654，纯白间隙 X=655..676，首字左缘 X=678（抗锯齿外缘 X=677）；
+    // 旧值 x=682 会直接切掉首字左侧 4~5px 导致 PaddleOCR 漏检/错检首字，左移至 x=664 距头像 10px 并在首字左侧留出 14px 纯白边。
+    internal const int ApplicantNameRoiX1080P = 664;
+    internal const int ApplicantNameRoiY1080P = 512;
+    internal const int ApplicantNameRoiW1080P = 438;
+    internal const int ApplicantNameRoiH1080P = 50;
+
     // ===== 模板匹配兜底（member-name-template-fallback）：全部内聚在本文件 =====
     private const double TemplateMatchDefaultThreshold = 0.8;
     private const double TemplateMatchMinThreshold = 0.6;
@@ -365,8 +373,8 @@ public class AutoPartyTask
     {
         var batchRoster = BetterGenshinImpact.Service.Execution.CoordinatedHoeingScope.Current?.ExpectedParticipantUids;
         var strictlyConfirmed = batchRoster is { Count: > 0 };
-        Func<string, bool>? canAccept = strictlyConfirmed
-            ? applicant => ConfirmBatchApplicant(applicant, whitelist, batchRoster!, client) : null;
+        Func<string, Mat?, bool>? canAccept = strictlyConfirmed
+            ? (applicant, applicantRoi) => TryConfirmBatchApplicant(applicant, applicantRoi, whitelist, batchRoster!, client) : null;
         if (strictlyConfirmed && whitelist is not { Length: > 0 })
         {
             _logger.LogWarning("[自动组队] 本批未配置可核对的游戏昵称白名单。自动同意已暂停，请核对本房间绑定。");
@@ -407,7 +415,7 @@ public class AutoPartyTask
         // F2 诊断日志节流状态（策略 D：变化立即输出 + 无变化每 5s 兜底心跳）
         F2DiagnosticLogThrottle.F2Metrics? lastEmittedF2Metrics = null;
         DateTime lastF2DiagnosticEmitTime = DateTime.MinValue;
-        var reportedUnconfirmedApplicant = false;
+        string? lastUnconfirmedApplicant = null;
 
         try
         {
@@ -446,17 +454,19 @@ public class AutoPartyTask
                         if (canAccept is not null)
                         {
                             var (applicantName, applicantRoi) = CaptureApplicantRoi();
-                            using (applicantRoi) shouldAccept = canAccept(applicantName);
+                            using (applicantRoi) shouldAccept = canAccept(applicantName, applicantRoi);
                             if (!shouldAccept)
                             {
-                                if (!reportedUnconfirmedApplicant)
+                                var unconfirmedKey = string.IsNullOrEmpty(applicantName) ? "<空>" : applicantName;
+                                if (!string.Equals(lastUnconfirmedApplicant, unconfirmedKey, StringComparison.Ordinal))
                                 {
-                                    _logger.LogWarning("[自动组队] 未确认申请者是本批成员，已暂停自动同意，请房主核对。");
-                                    reportedUnconfirmedApplicant = true;
+                                    _logger.LogWarning("[自动组队] 未确认申请者 [{Name}] 是本批成员，已暂停自动同意，请房主核对。", unconfirmedKey);
+                                    lastUnconfirmedApplicant = unconfirmedKey;
                                 }
                                 await Delay(500, ct);
                                 continue;
                             }
+                            lastUnconfirmedApplicant = null;
                         }
                         else if (whitelist != null && whitelist.Length > 0)
                         {
@@ -753,23 +763,38 @@ public class AutoPartyTask
         }
     }
 
-    /// <summary>打开 F2 多人游戏界面，重试 3 次。每次重试间隙检测申请弹窗并处理。</summary>
-    private static bool ConfirmBatchApplicant(string? applicant, string[]? configured,
+    /// <summary>协同批次申请者核对：精确优先 + 60% 白名单容错 + 模板匹配兜底，均须唯一归属本批 UID。</summary>
+    private bool TryConfirmBatchApplicant(string? applicant, Mat? applicantRoi, string[]? configured,
         IReadOnlyList<string> batchRoster, CoordinatorClient client)
     {
-        if (string.IsNullOrWhiteSpace(applicant) || configured is not { Length: > 0 }) return false;
-        var name = WhitelistMatchDecisions.ExtractNameCandidates(applicant);
-        var exactMatch = configured.SelectMany(WhitelistMatchDecisions.ExtractNameCandidates)
-            .Intersect(name, StringComparer.Ordinal).ToHashSet(StringComparer.Ordinal);
-        if (exactMatch.Count == 0) return false;
-        var matches = client.CurrentPlayerList.Where(player =>
-                WhitelistMatchDecisions.ExtractNameCandidates(player.PlayerName).Any(exactMatch.Contains))
-            .Select(player => player.PlayerUid).Distinct(StringComparer.Ordinal).Take(2).ToArray();
-        return matches.Length == 1 && batchRoster.Contains(matches[0], StringComparer.Ordinal);
+        var players = (client.CurrentPlayerList ?? [])
+            .Select(player => (player.PlayerUid, player.PlayerName))
+            .ToArray();
+        if (WhitelistMatchDecisions.ConfirmBatchApplicant(applicant, configured, batchRoster, players))
+        {
+            _logger.LogInformation("[自动组队-房主] 批次申请者核对通过: OCR={Name}", applicant);
+            return true;
+        }
+
+        if (ShouldFallback(applicant, false)
+            && TemplateMatchTryMatch(applicantRoi, out var matchedTemplate))
+        {
+            if (WhitelistMatchDecisions.ConfirmBatchTemplateMatch(matchedTemplate, configured, batchRoster, players))
+            {
+                _logger.LogInformation("[自动组队-房主] 批次模板匹配兜底命中 [{Matched}]，已确认本批成员，接受申请者 [OCR={Raw}]",
+                    matchedTemplate, applicant);
+                return true;
+            }
+            _logger.LogWarning("[自动组队-房主] 模板匹配命中 [{Matched}]，但未能确认其属于本批成员，忽略兜底 [OCR={Raw}]",
+                matchedTemplate, applicant);
+        }
+
+        return false;
     }
 
+    /// <summary>打开 F2 多人游戏界面，重试 3 次。每次重试间隙检测申请弹窗并处理。</summary>
     private async Task<bool> OpenCoOpScreen(CancellationToken ct, string[]? whitelist = null,
-        Func<string, bool>? canAccept = null)
+        Func<string, Mat?, bool>? canAccept = null)
     {
         for (int i = 0; i < 3; i++)
         {
@@ -793,10 +818,11 @@ public class AutoPartyTask
                 if (canAccept is not null)
                 {
                     var (applicantName, applicantRoi) = CaptureApplicantRoi();
-                    using (applicantRoi) shouldAccept = canAccept(applicantName);
+                    using (applicantRoi) shouldAccept = canAccept(applicantName, applicantRoi);
                     if (!shouldAccept)
                     {
-                        _logger.LogWarning("[自动组队] 未确认申请者是本批成员，未自动同意，请核对名单。");
+                        _logger.LogWarning("[自动组队] 未确认申请者 [{Name}] 是本批成员，未自动同意，请核对名单。",
+                            string.IsNullOrEmpty(applicantName) ? "<空>" : applicantName);
                         await Delay(500, ct);
                         continue;
                     }
@@ -984,8 +1010,8 @@ public class AutoPartyTask
     }
 
     /// <summary>
-    /// 截一帧并抠出申请弹窗玩家名 ROI（1080P 区域同 <see cref="OcrApplicantName"/>：x=682,y=512,w=420,h=50，
-    /// x 向左偏移 10px 避免首字被截断；按 ScaleTo1080PRatio 缩放 + 越界裁剪）。
+    /// 截一帧并抠出申请弹窗玩家名 ROI（1080P 区域：x=664,y=512,w=438,h=50，
+    /// 1920x1080 实测头像右缘 X=654、首字左缘 X=678，x=664 距头像 10px 且首字左侧留白 14px，避免首字被截断/漏检；按 ScaleTo1080PRatio 缩放 + 越界裁剪）。
     /// 输出 text（OCR 玩家名，空串=识别失败/无文本）与 roi（灰度转化前的原图 ROI Mat，调用方负责 using）。
     /// 单帧同时产出 text 与 roi，供弹窗块"白名单未命中时对同一 ROI 做模板匹配兜底"复用，避免重复截图。
     /// </summary>
@@ -995,10 +1021,10 @@ public class AutoPartyTask
         {
             using var ra = CaptureToRectArea();
             var scale = TaskContext.Instance().SystemInfo.ScaleTo1080PRatio;
-            var x = (int)(682 * scale);
-            var y = (int)(512 * scale);
-            var w = (int)(420 * scale);
-            var h = (int)(50 * scale);
+            var x = (int)(ApplicantNameRoiX1080P * scale);
+            var y = (int)(ApplicantNameRoiY1080P * scale);
+            var w = (int)(ApplicantNameRoiW1080P * scale);
+            var h = (int)(ApplicantNameRoiH1080P * scale);
 
             // 边界检查
             if (x + w > ra.SrcMat.Width) w = ra.SrcMat.Width - x;
