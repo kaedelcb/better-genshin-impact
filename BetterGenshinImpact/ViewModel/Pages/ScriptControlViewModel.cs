@@ -4,6 +4,7 @@ using BetterGenshinImpact.Core.Script.Group;
 using BetterGenshinImpact.Core.Script.Project;
 using BetterGenshinImpact.Core.Script.Utils;
 using BetterGenshinImpact.GameTask;
+using BetterGenshinImpact.GameTask.AutoOnline;
 using BetterGenshinImpact.GameTask.AutoPathing.Model;
 using BetterGenshinImpact.GameTask.LogParse;
 using BetterGenshinImpact.GameTask.TaskProgress;
@@ -1896,9 +1897,15 @@ public partial class ScriptControlViewModel : ViewModel
     }
 
     [RelayCommand]
-    public void OnEditSoloTaskSettings(ScriptGroupProject? item)
+    public async Task OnEditSoloTaskSettings(ScriptGroupProject? item)
     {
         if (item == null || item.Type != "SoloTask") return;
+
+        if (item.Name == SwitchAssistantRoomTask.TaskName)
+        {
+            await ShowAssistantRoomSettingsDialogAsync(item);
+            return;
+        }
 
         item.SoloTaskSettingsObject ??= new Dictionary<string, object?>();
 
@@ -2041,6 +2048,35 @@ public partial class ScriptControlViewModel : ViewModel
                 });
             }
         });
+    }
+
+    private async Task ShowAssistantRoomSettingsDialogAsync(ScriptGroupProject item)
+    {
+        var explicitRoot = Environment.GetEnvironmentVariable("NEXUSBGI_DATA_ROOT");
+        var rooms = await Task.Run(() => SwitchAssistantRoomTask.ReadSavedRoomNames(explicitRoot,
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)));
+        var currentRoom = SwitchAssistantRoomTask.ReadTargetRoomName(item.SoloTaskSettingsObject);
+        var (dialog, selector) = AssistantRoomTaskSettingsDialog.Create(rooms, currentRoom, Application.Current.MainWindow);
+        if (await dialog.ShowDialogAsync() != MessageBoxResult.Primary || selector.SelectedItem is not string selectedRoom)
+            return;
+
+        var group = ScriptGroups.FirstOrDefault(candidate => candidate.Projects.Contains(item));
+        if (group is null)
+        {
+            Toast.Warning("找不到这项独立任务所属的配置组，请重新打开设置。");
+            return;
+        }
+
+        var previousSettings = item.SoloTaskSettingsObject;
+        item.SoloTaskSettingsObject = previousSettings is null ? new() : new(previousSettings, previousSettings.Comparer);
+        item.SoloTaskSettingsObject[SwitchAssistantRoomTask.TargetRoomName] = selectedRoom;
+        if (!TryWriteScriptGroupToDisk(group, out var error))
+        {
+            item.SoloTaskSettingsObject = previousSettings;
+            Toast.Warning($"目标房间保存失败：{error}");
+            return;
+        }
+        Toast.Success("目标房间已保存");
     }
 
     private void ShowHoeingSettingsDialog(ScriptGroupProject item)
