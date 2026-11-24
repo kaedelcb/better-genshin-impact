@@ -132,6 +132,28 @@
                             <DataTemplate>
                                 <StackPanel>
                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
+                                    <TextBlock Text="本机房间 · 不可删除" Foreground="{StaticResource GoldText}" FontSize="11" Margin="0,3,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers><DataTrigger Binding="{Binding IsLocalRoom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock x:Name="CurrentRoomMarker" Foreground="{StaticResource GoldText}" FontSize="11" Margin="0,3,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Setter Property="Text" Value="当前房间 · 不可删除"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsActiveRoom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding DataContext.IsConnected, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                        <Setter Property="Text" Value="连接中房间 · 不可删除"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                     <TextBlock Text="{Binding RoomCode}" Foreground="{StaticResource GoldText}" FontSize="11" Margin="0,3,0,0"/>
                                     <TextBlock Text="{Binding ServerUrl}" Foreground="{StaticResource RoomMuted}" FontSize="11" Margin="0,2,0,0"
                                                TextTrimming="CharacterEllipsis" ToolTip="{Binding ServerUrl}"/>
@@ -146,6 +168,8 @@
                         <TextBlock x:Name="EditorHint" Foreground="{StaticResource RoomMuted}" TextWrapping="Wrap" Margin="0,4,0,12"/>
                         <Label Content="档案名称" Target="{Binding ElementName=RoomNameBox}" Style="{StaticResource RoomFormLabel}"/>
                         <TextBox x:Name="RoomNameBox" MaxLength="64"/>
+                        <Label Content="备注" Target="{Binding ElementName=RoomNoteBox}" Style="{StaticResource RoomFormLabel}" Margin="0,11,0,5"/>
+                        <TextBox x:Name="RoomNoteBox" MaxLength="256" ToolTip="可记录房间成员名称等信息"/>
                         <Label Content="助手控制服务器地址" Target="{Binding ElementName=ServerBox}" Style="{StaticResource RoomFormLabel}" Margin="0,11,0,5"/>
                         <TextBox x:Name="ServerBox"/>
                         <Grid Margin="0,11,0,0">
@@ -153,7 +177,7 @@
                             <StackPanel Margin="0,0,6,0">
                                 <Label Content="房间号" Target="{Binding ElementName=RoomCodeBox}" Style="{StaticResource RoomFormLabel}"/>
                                 <TextBox x:Name="RoomCodeBox" MaxLength="6" CharacterCasing="Upper"
-                                         ToolTip="旧房间号按完整成员 UID 自动填写。新建房间由服务器分配号码。"/>
+                                         ToolTip="修改成员 UID 时自动计算旧房间号；服务器分配的房间号可手动填写。"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="6,0,0,0">
                                 <Label Content="房间密码" Target="{Binding ElementName=RoomPasswordBox}" Style="{StaticResource RoomFormLabel}"/>

@@ -865,15 +865,19 @@
                             <Button x:Name="HeaderRoomButton" Height="22" Width="{Binding ActualWidth, ElementName=HeaderSettingsButton}"
                                     VerticalAlignment="Center" HorizontalAlignment="Left" Cursor="Hand"
                                     Foreground="{StaticResource GoldText}" FontSize="10" Background="Transparent"
-                                    ToolTip="选择房间、管理档案或复制房间号"
-                                    AutomationProperties.Name="{Binding RoomCode, StringFormat='房间 {0}，打开房间面板'}"
-                                    Click="HeaderRoomClick">
+                                    ToolTip="选择房间、管理档案或复制房间号" Click="HeaderRoomClick">
+                                <AutomationProperties.Name>
+                                    <MultiBinding StringFormat="{}{0}，房间号 {1}，打开房间面板">
+                                        <Binding Path="ActiveRoomProfile.Name" TargetNullValue="未选择" FallbackValue="未选择"/>
+                                        <Binding Path="RoomCode" TargetNullValue="未设置" FallbackValue="未设置"/>
+                                    </MultiBinding>
+                                </AutomationProperties.Name>
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Grid Background="{TemplateBinding Background}">
                                             <Rectangle x:Name="Outline" RadiusX="4" RadiusY="4" Fill="#0DE8C96D" Stroke="{StaticResource GoldLine}"
                                                        StrokeThickness="0.8" StrokeDashArray="3,3" StrokeDashCap="Round" IsHitTestVisible="False"/>
-                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
                                         </Grid>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -890,11 +894,18 @@
                                         </ControlTemplate.Triggers>
                                     </ControlTemplate>
                                 </Button.Template>
-                                <StackPanel x:Name="HeaderRoomLabel" Orientation="Horizontal" Margin="6,0">
-                                    <TextBlock Text="{Binding RoomCode, StringFormat='房间 {0}'}" VerticalAlignment="Center"/>
-                                    <Path Data="M 0,0 L 3,3 L 6,0" Stroke="{StaticResource Gold}" StrokeThickness="1"
-                                          StrokeLineJoin="Round" Margin="4,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
-                                </StackPanel>
+                                <Grid x:Name="HeaderRoomLabel" Margin="6,0">
+                                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock x:Name="HeaderRoomNameText" Text="{Binding HeaderRoomName}"
+                                                       VerticalAlignment="Center" ToolTip="{Binding ActiveRoomProfile.Name}"/>
+                                            <TextBlock x:Name="HeaderRoomCodeText" Text="{Binding RoomCode}" Margin="5,0,0,0"
+                                                       VerticalAlignment="Center"/>
+                                            <Path x:Name="HeaderRoomArrow" Data="M 0,0 L 3,3 L 6,0" Stroke="{StaticResource Gold}" StrokeThickness="1"
+                                                  StrokeLineJoin="Round" Margin="4,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                        </StackPanel>
+                                    </Viewbox>
+                                </Grid>
                             </Button>
                             <Popup x:Name="AssistantRoomPopup" Placement="Custom" PlacementTarget="{Binding ElementName=HeaderRoomButton}"
                                    DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
@@ -1004,8 +1015,15 @@
                                                                 </Style>
                                                             </Path.Style>
                                                         </Path>
-                                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                        <TextBlock Grid.Column="2" Text="{Binding RoomCode}" Margin="10,0,0,0" FontSize="11"
+                                                        <Grid Grid.Column="1">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                            <TextBlock x:Name="RoomChoiceName" Text="{Binding Name}" FontSize="12" MaxWidth="110"
+                                                                       TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="RoomChoiceNote" Grid.Column="1" Text="{Binding Note}" Margin="8,0,0,0" FontSize="11"
+                                                                       Foreground="{StaticResource Dim}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                                                                       ToolTip="{Binding Note}"/>
+                                                        </Grid>
+                                                        <TextBlock x:Name="RoomChoiceCode" Grid.Column="2" Text="{Binding RoomCode}" Margin="10,0,0,0" FontSize="11"
                                                                    Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
                                                     </Grid>
                                                 </DataTemplate>

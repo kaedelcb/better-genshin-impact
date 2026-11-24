@@ -13,21 +13,146 @@ public partial class MainViewModel
     private int _connectionRecoveryRunning;
     private readonly CoordinatedControlAuthority _controlAuthority = new();
     private readonly SemaphoreSlim _connectionAttemptGate = new(1, 1);
+    private readonly SemaphoreSlim _settingsReconnectGate = new(1, 1);
+    private long _settingsReconnectVersion;
+    private int _settingsReconnectPending;
     private SignalRClient? _pendingControlClient;
     private long _controlContextVersion;
 
-    private static string ControlSettingsIdentity(AssistConfig? config, string room) => string.Join("\n",
-        config?.ServerUrl?.Trim().TrimEnd('/'), room, config?.PlayerUid, config?.ClientInstanceId,
-        config?.StandaloneMode == true || string.IsNullOrWhiteSpace(config?.ServerUrl), config?.ObserverMode == true);
+    private static string ControlSettingsIdentity(AssistConfig? config, string room)
+    {
+        // 入房参数全部参与代际核对，但连接上下文不明文携带密码或成员名单。
+        var identity = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            Server = config?.ServerUrl?.Trim().TrimEnd('/'), Room = room, PlayerUid = config?.PlayerUid,
+            ClientInstanceId = config?.ClientInstanceId,
+            Standalone = config?.StandaloneMode == true || string.IsNullOrWhiteSpace(config?.ServerUrl),
+            ObserverMode = config?.ObserverMode, Password = config?.ControlRoomPassword,
+            PlayerName = config?.PlayerName, BypassSystemProxy = config?.BypassSystemProxy,
+            Members = (config?.TeamUids ?? []).OrderBy(uid => uid, StringComparer.Ordinal).ToArray()
+        });
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(identity)));
+    }
 
     private string CurrentControlContext() => Interlocked.Read(ref _controlContextVersion) + "\n"
         + ControlSettingsIdentity(_config, RoomCode);
 
+    private bool ConnectionSettingsChanged(AssistConfig config)
+    {
+        var previous = _config;
+        if (previous is null) return false;
+        return ControlSettingsIdentity(previous, RoomCode) != ControlSettingsIdentity(config, config.EffectiveRoomCode);
+    }
+
+    private string? ValidateSettingsConnectionChange(AssistConfig config)
+        => ConnectionSettingsChanged(config) && AssistantRoomHasBatch()
+            ? "当前房间有联机任务正在执行或收尾，请等本轮结束后再修改连接信息。其他设置仍可修改。" : null;
+
     private void InvalidateChangedControlSettings(AssistConfig config)
     {
-        var room = config.EffectiveRoomCode;
-        if (ControlSettingsIdentity(_config, RoomCode) != ControlSettingsIdentity(config, room))
+        if (ConnectionSettingsChanged(config)) InvalidateCoordinatedControlContext();
+    }
+
+    private bool ApplySavedAssistantSettings(AssistConfig config)
+    {
+        if (_config is null || _configManager is null) return false;
+        if (ValidateSettingsConnectionChange(config) is { Length: > 0 } blocked)
+        {
+            AddLog(blocked);
+            return false;
+        }
+        var changed = ConnectionSettingsChanged(config);
+        var roomChanged = RoomCode != config.EffectiveRoomCode
+            || !RoomServerAddress.Same(_config.ServerUrl, config.ServerUrl);
+        var reconnect = changed && (_signalRClient is not null || _pendingControlClient is not null
+            || _retryTimer is not null || Volatile.Read(ref _refreshRunning) != 0 || Volatile.Read(ref _retryRunning) != 0
+            || Volatile.Read(ref _settingsReconnectPending) != 0);
+        if (!_configManager.TrySave(config))
+        {
+            AddLog("设置未能保存，仍使用原设置");
+            return false;
+        }
+
+        SignalRClient? old = null;
+        var version = Interlocked.Read(ref _settingsReconnectVersion);
+        if (changed)
+        {
             InvalidateCoordinatedControlContext();
+            version = Interlocked.Increment(ref _settingsReconnectVersion);
+            StopSignalRRecovery();
+            _retryTimer?.Dispose();
+            _retryTimer = null;
+            old = _signalRClient;
+            _signalRClient = null;
+            old?.RetireForReplacement();
+            _pendingControlClient?.RetireForReplacement();
+        }
+        _config = config;
+        RoomCode = config.EffectiveRoomCode;
+        if (changed)
+        {
+            IsConnected = false;
+            Members.Clear();
+            ResetRoomMemberRevision();
+            MemberOnlineChanged?.Invoke();
+        }
+        if (roomChanged && changed)
+        {
+            _intentLifecycle.ChangeAssistantRoom(suppressScheduledOnline: true);
+            AddLog("本机房间已变化，原房间的上线状态已清除。");
+        }
+        NotifyRoomProfiles();
+        if (reconnect && !IsStandaloneMode) NotifyModeBindings();
+        else SyncStandaloneStateAfterSettingsSaved();
+        if (reconnect)
+        {
+            AddLog("设置已保存，正在按新设置重建房间连接。");
+            Interlocked.Increment(ref _settingsReconnectPending);
+            ObserveOnlineTask(ReconnectAfterSettingsAsync(old, version), "按新设置重建连接");
+        }
+        else
+        {
+            if (old is not null) ObserveOnlineTask(old.DisposeAsync().AsTask(), "关闭旧房间连接");
+            AddLog("设置已保存并生效");
+        }
+        return true;
+    }
+
+    private async Task ReconnectAfterSettingsAsync(SignalRClient? old, long version)
+    {
+        try
+        {
+            if (old is not null)
+            {
+                try { await old.DisposeAsync(); }
+                catch (Exception ex) { AddLog("旧房间连接关闭失败：" + ex.Message); }
+            }
+            await _settingsReconnectGate.WaitAsync();
+            try
+            {
+                while (!_disposing && version == Interlocked.Read(ref _settingsReconnectVersion) && !IsStandaloneMode)
+                {
+                    if (Volatile.Read(ref _refreshRunning) != 0 || Volatile.Read(ref _retryRunning) != 0
+                        || RoomSwitchBlocksRoomOperations || RoomSwitchHasPendingRequest || !CanEditConfiguration)
+                    {
+                        await Task.Delay(200);
+                        continue;
+                    }
+                    using var roomEffect = TryEnterAssistantRoomEffect();
+                    if (roomEffect is null) { await Task.Delay(200); continue; }
+                    _retryTimer?.Dispose();
+                    _retryTimer = null;
+                    if (await RefreshAsync()) return;
+                    if (version != Interlocked.Read(ref _settingsReconnectVersion) || _disposing || IsStandaloneMode) return;
+                    if (Volatile.Read(ref _refreshRunning) != 0 || Volatile.Read(ref _retryRunning) != 0) continue;
+                    if (_retryTimer is null) StartSignalRRetryTimer(fireRefreshCompletedOnSuccess: true);
+                    AddLog("新设置已保存，房间连接尚未确认，将继续重试。");
+                    return;
+                }
+            }
+            finally { _settingsReconnectGate.Release(); }
+        }
+        finally { Interlocked.Decrement(ref _settingsReconnectPending); }
     }
 
     private void InvalidateCoordinatedControlContext()

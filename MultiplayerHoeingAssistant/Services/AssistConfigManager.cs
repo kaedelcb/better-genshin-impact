@@ -91,9 +91,10 @@ public class AssistConfigManager
             {
                 // Copy the previous shared address before replacing the runtime address with the active profile's.
                 var filledRoomServers = config.FillLegacyRoomServerUrls();
+                var fixedLocalRoom = config.EnsureLocalRoomProfile();
                 active.ApplyTo(config);
-                if (filledRoomServers && !TryStore(config, expectedRaw: json))
-                    RoomProfileMigrationWarning = "旧房间服务器地址未能保存，原配置仍保留；可重启重试。";
+                if ((filledRoomServers || fixedLocalRoom) && !TryStore(config, expectedRaw: json))
+                    RoomProfileMigrationWarning = "房间设置接续未能保存，原配置仍保留；可重启重试。";
             }
             else if (config.FillLegacyRoomServerUrls() && !TryStore(config, expectedRaw: json))
             {
@@ -169,6 +170,7 @@ public class AssistConfigManager
                     config.ActiveRoomProfile?.ApplyTo(config);
                 }
                 config.EnsureRoomProfiles();
+                config.EnsureLocalRoomProfile();
                 if (config.RoomProfiles.Count > 0 && !diskHasRooms && raw != null && !BackUpBeforeRoomProfiles(raw))
                     return false;
                 config.ActiveRoomProfile?.Capture(config);

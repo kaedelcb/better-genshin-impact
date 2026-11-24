@@ -317,7 +317,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             && (string.IsNullOrEmpty(_config.PlayerName)
             || string.IsNullOrEmpty(_config.PlayerUid)))
         {
-            var newConfig = SettingsWindow.ShowSettingsDialog(_config);
+            var newConfig = SettingsWindow.ShowSettingsDialog(_config, validate: ValidateSettingsConnectionChange);
             if (newConfig == null)
             {
                 MessageBox.Show("设置已取消，请重新启动助手完成配置。");
@@ -6174,17 +6174,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (roomEffect is null || RoomSwitchHasPendingRequest) return;
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
-        var newConfig = SettingsWindow.ShowSettingsDialog(_config);
-        if (newConfig != null)
-        {
-            if (!_configManager.TrySave(newConfig)) { AddLog("房间设置未能保存，仍使用原设置"); return; }
-            InvalidateChangedControlSettings(newConfig);
-            _config = newConfig;
-            RoomCode = _config.EffectiveRoomCode;
-            NotifyRoomProfiles();
-            SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings；清空地址 = 单机模式需即时断开
-            AddLog("房间配置已保存并生效");
-        }
+        var newConfig = SettingsWindow.ShowSettingsDialog(_config, validate: ValidateSettingsConnectionChange);
+        if (newConfig != null) ApplySavedAssistantSettings(newConfig);
         }
 
     /// <summary>当前配置（供 XAML 绑定启动策略开关/下拉选择）。</summary>
@@ -6521,17 +6512,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (roomEffect is null || RoomSwitchHasPendingRequest) return;
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
-        var newConfig = SettingsWindow.ShowSettingsDialog(_config);
-        if (newConfig != null)
-        {
-            InvalidateChangedControlSettings(newConfig);
-            _config = newConfig;
-            _configManager.Save(_config);
-            SyncStandaloneStateAfterSettingsSaved(); // 含 NotifyModeBindings（ObserverMode 显隐 + 离线派生属性）；清空地址 = 单机模式需即时断开
-            RoomCode = _config.EffectiveRoomCode;
-            NotifyRoomProfiles();
-            AddLog("配置已保存并生效");
-        }
+        var newConfig = SettingsWindow.ShowSettingsDialog(_config, validate: ValidateSettingsConnectionChange);
+        if (newConfig != null) ApplySavedAssistantSettings(newConfig);
     }
 
     /// <summary>配置一个一键按钮的绑定（弹窗选配置组或一条龙）。返回 true 表示绑定成功。

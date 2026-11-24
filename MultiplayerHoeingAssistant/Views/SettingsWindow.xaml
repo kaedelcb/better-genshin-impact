@@ -29,7 +29,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="20,16,20,20">
             <TextBlock Text="Nexus-BGI 设置" FontSize="18" FontWeight="SemiBold" Foreground="#1D1D1F"/>
-            <TextBlock Text="玩家身份和 BGI 路径适用于本机。服务器地址随房间档案切换。"
+            <TextBlock Text="玩家身份和 BGI 路径适用于本机。这里的房间设置属于固定的本机房间。"
                        TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
             <TextBlock x:Name="RoomSetupHint" Text="保存本机设置后，可在耕地机页的「管理房间」创建房间或保存已有房间。"
                        TextWrapping="Wrap" FontSize="12" Foreground="#6E6E73" Margin="0,4,0,0"/>
@@ -97,13 +97,13 @@
                 <TextBlock Text="控制房间密码" Style="{StaticResource Lbl}"/>
                 <PasswordBox x:Name="PasswordBox" Height="32" FontSize="13" Padding="8,4" Background="White"
                              Foreground="#1D1D1F" BorderBrush="#D1D1D6" AutomationProperties.Name="控制房间密码"/>
-                <TextBlock Text="请填写此房间使用的密码。保存设置不会更改房间号。"
+                <TextBlock Text="请填写本机房间使用的密码。修改成员 UID 时会重新计算房间号。"
                            TextWrapping="Wrap" FontSize="11" Foreground="#6E6E73" Margin="0,2,0,0"/>
 
                 <TextBlock Text="成员 UID（逗号分隔）" Style="{StaticResource Lbl}"/>
                 <TextBox x:Name="TeamUidsBox" Style="{StaticResource Txt}" TextWrapping="Wrap" Height="60"
                          VerticalContentAlignment="Top" AcceptsReturn="False" AutomationProperties.Name="当前房间成员 UID"/>
-                <TextBlock Text="填写当前房间的成员 UID，列表须包含本机玩家的 UID。"
+                <TextBlock Text="填写本机房间的成员 UID，列表须包含本机玩家的 UID。"
                            TextWrapping="Wrap" FontSize="11" Foreground="#6E6E73" Margin="0,2,0,0"/>
 
                 <TextBlock x:Name="ExpectedPlayersLabel" Text="预期开锄人数（几人一起开车）" Style="{StaticResource Lbl}"/>

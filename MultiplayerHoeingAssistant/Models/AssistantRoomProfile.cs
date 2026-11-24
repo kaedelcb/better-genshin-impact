@@ -11,6 +11,15 @@ public sealed class AssistantRoomProfile
     [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
 
+    [JsonPropertyName("note")]
+    public string Note { get; set; } = string.Empty;
+
+    [JsonIgnore]
+    public bool IsLocalRoom { get; set; }
+
+    [JsonIgnore]
+    public bool IsActiveRoom { get; set; }
+
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = string.Empty;
 

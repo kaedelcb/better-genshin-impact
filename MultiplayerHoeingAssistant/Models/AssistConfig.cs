@@ -38,21 +38,34 @@ public class AssistConfig : IJsonOnDeserialized
     [JsonPropertyName("activeRoomProfileId")]
     public string ActiveRoomProfileId { get; set; } = string.Empty;
 
+    [JsonPropertyName("localRoomProfileId")]
+    public string LocalRoomProfileId { get; set; } = string.Empty;
+
     [JsonIgnore]
-    public AssistantRoomProfile? ActiveRoomProfile
+    public AssistantRoomProfile? LocalRoomProfile => FindRoomProfile(LocalRoomProfileId);
+
+    private AssistantRoomProfile? FindRoomProfile(string? id)
     {
-        get
+        if (string.IsNullOrWhiteSpace(id)) return null;
+        AssistantRoomProfile? selected = null;
+        foreach (var profile in RoomProfiles)
         {
-            if (string.IsNullOrWhiteSpace(ActiveRoomProfileId)) return null;
-            AssistantRoomProfile? selected = null;
-            foreach (var profile in RoomProfiles)
-            {
-                if (profile is null || !string.Equals(profile.Id, ActiveRoomProfileId, StringComparison.Ordinal)) continue;
-                if (selected != null) return null;
-                selected = profile;
-            }
-            return selected;
+            if (profile is null || !string.Equals(profile.Id, id, StringComparison.Ordinal)) continue;
+            if (selected != null) return null;
+            selected = profile;
         }
+        return selected;
+    }
+
+    [JsonIgnore]
+    public AssistantRoomProfile? ActiveRoomProfile => FindRoomProfile(ActiveRoomProfileId);
+
+    /// <summary>旧设置未固定本机房间时，沿用原本机设置所编辑的当前房间。</summary>
+    internal bool EnsureLocalRoomProfile()
+    {
+        if (!string.IsNullOrEmpty(LocalRoomProfileId) || ActiveRoomProfile is not { } active) return false;
+        LocalRoomProfileId = active.Id;
+        return true;
     }
 
     [JsonIgnore]
@@ -96,6 +109,7 @@ public class AssistConfig : IJsonOnDeserialized
         RoomProfiles.Add(profile);
         _roomProfilesSpecified = true;
         ActiveRoomProfileId = profile.Id;
+        LocalRoomProfileId = profile.Id;
         return true;
     }
 

@@ -297,6 +297,8 @@ public class ConfigTransferService
         var profilesKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("roomProfiles", StringComparison.OrdinalIgnoreCase)) ?? "roomProfiles";
         var activeKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("activeRoomProfileId", StringComparison.OrdinalIgnoreCase)) ?? "activeRoomProfileId";
         imported.EnsureRoomProfiles();
+        imported.EnsureLocalRoomProfile();
+        Set("localRoomProfileId", imported.LocalRoomProfileId);
         imported.FillLegacyRoomServerUrls();
         imported.ActiveRoomProfile?.ApplyTo(imported);
         local?.EnsureRoomProfiles();

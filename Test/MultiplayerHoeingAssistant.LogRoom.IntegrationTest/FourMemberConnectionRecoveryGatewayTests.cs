@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Hubs;
@@ -23,6 +24,144 @@ namespace MultiplayerHoeingAssistant.LogRoom.IntegrationTest;
 /// <summary>四条真实本地网关连接；不启动游戏、不接触运行中的助手或真实 User。</summary>
 public sealed class FourMemberConnectionRecoveryGatewayTests
 {
+    [Fact]
+    public async Task LocalSettingsCanChangeWhileConnectedAndReconnectToUpdatedRoom()
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "必须使用隔离助手配置目录");
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+                app.Dispatcher.InvokeAsync(new Action(async () =>
+                {
+                    var owner = new Window { Width = 100, Height = 100, Left = -20000, Top = -20000, ShowInTaskbar = false };
+                    app.MainWindow = owner;
+                    owner.Show();
+                    try { await VerifyAsync(app); finished.SetResult(); }
+                    catch (Exception ex) { finished.SetException(ex); }
+                    finally { app.Shutdown(); }
+                }));
+                app.Run();
+            }
+            catch (Exception ex) { finished.TrySetException(ex); }
+        }) { IsBackground = true, Name = "connected-local-settings" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await finished.Task.WaitAsync(TimeSpan.FromSeconds(100));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)));
+
+        static async Task VerifyAsync(Application app)
+        {
+            await using var server = await Server.StartAsync();
+            const string uid = "111111111";
+            const string password = "fixture-password";
+            var oldUids = new List<string> { uid, "222222222" };
+            var newUids = new List<string> { uid, "333333333" };
+            var oldCode = AssistConfigManager.GenerateControlRoomCode(oldUids);
+            var newCode = AssistConfigManager.GenerateControlRoomCode(newUids);
+            await using var peer = new SignalRClient();
+            await peer.ConnectAsync(server.Url, newCode, password, "333333333", "隔离队友", newUids, bypassSystemProxy: true);
+            var home = new AssistantRoomProfile { Id = "local", Name = "本机房间", RoomCode = oldCode,
+                ServerUrl = server.Url, Password = password, TeamUids = oldUids };
+            var config = new AssistConfig { PlayerUid = uid, PlayerName = "隔离测试", ClientInstanceId = "settings-test",
+                BypassSystemProxy = true, RoomProfiles = [home], ActiveRoomProfileId = home.Id, LocalRoomProfileId = home.Id };
+            home.ApplyTo(config);
+            var vm = new MultiplayerHoeingAssistant.ViewModels.MainViewModel();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var type = vm.GetType();
+            type.GetField("_config", flags)!.SetValue(vm, config);
+            type.GetField("_configManager", flags)!.SetValue(vm, new AssistConfigManager());
+            vm.RoomCode = oldCode;
+            try
+            {
+                await (Task)type.GetMethod("ConnectSignalRAsync", flags)!.Invoke(vm, null)!;
+                Assert.True(vm.IsConnected);
+                var oldClient = type.GetField("_signalRClient", flags)!.GetValue(vm);
+                // 模拟保存时已有刷新在飞：新设置必须排队，而不能丢失重连请求。
+                var refreshing = type.GetField("_refreshRunning", flags)!;
+                refreshing.SetValue(vm, 1);
+                Exception? dialogFailure = null;
+                app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                {
+                    var dialog = app.Windows.OfType<MultiplayerHoeingAssistant.Views.SettingsWindow>().Single();
+                    try
+                    {
+                        ((TextBox)dialog.FindName("TeamUidsBox")).Text = string.Join(",", newUids);
+                        ((Button)dialog.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        if (dialog.IsVisible) throw new InvalidOperationException("连接中修改成员后应允许保存");
+                    }
+                    catch (Exception ex) { dialogFailure = ex; if (dialog.IsVisible) dialog.Close(); }
+                }));
+                vm.OpenRoomSettingsCommand.Execute(null);
+                if (dialogFailure is not null) throw dialogFailure;
+                Assert.False(vm.IsConnected);
+                Assert.Equal(newCode, vm.RoomCode);
+                refreshing.SetValue(vm, 0);
+                await WaitUntilAsync(() => Task.FromResult(vm.IsConnected && vm.RoomCode == newCode
+                    && type.GetField("_signalRClient", flags)!.GetValue(vm) is SignalRClient current
+                    && !ReferenceEquals(current, oldClient) && current.IsConnected));
+                var saved = new AssistConfigManager().Load();
+                Assert.Equal(newCode, saved.LocalRoomProfile!.RoomCode);
+                Assert.Equal(newUids, saved.TeamUids);
+                Assert.DoesNotContain(server.Manager.GetControlRoomPlayers("CTRL_" + oldCode), p => p.PlayerUid == uid && p.Online);
+                Assert.Contains(server.Manager.GetControlRoomPlayers("CTRL_" + newCode), p => p.PlayerUid == uid && p.Online);
+
+                // 目标房间拒绝密码时不能保留旧房间作为新设置的成功连接。
+                var rejectedUids = new List<string> { uid, "444444444" };
+                var rejectedCode = AssistConfigManager.GenerateControlRoomCode(rejectedUids);
+                await using var rejectedPeer = new SignalRClient();
+                await rejectedPeer.ConnectAsync(server.Url, rejectedCode, "other-password", "444444444", "隔离队友", rejectedUids, bypassSystemProxy: true);
+                SaveMembers(rejectedUids);
+                await WaitUntilAsync(() => Task.FromResult(vm.CommandLogsText.Contains("刷新失败") && !vm.IsConnected));
+                Assert.Equal(rejectedCode, vm.RoomCode);
+                Assert.DoesNotContain(server.Manager.GetControlRoomPlayers("CTRL_" + rejectedCode), p => p.PlayerUid == uid && p.Online);
+
+                // 失败后的再次保存应取消旧重试，只连接最后一次设置。
+                SaveMembers(newUids);
+                await WaitUntilAsync(() => Task.FromResult(vm.IsConnected && vm.RoomCode == newCode
+                    && type.GetField("_signalRClient", flags)!.GetValue(vm) is SignalRClient current && current.IsConnected));
+                Assert.Equal(newCode, new AssistConfigManager().Load().LocalRoomProfile!.RoomCode);
+
+                // 两次连续保存发生在重连还未取得执行权时，第二次必须接管并连接最终设置。
+                var reconnectGate = (SemaphoreSlim)type.GetField("_settingsReconnectGate", flags)!.GetValue(vm)!;
+                await reconnectGate.WaitAsync();
+                try
+                {
+                    SaveMembers(oldUids);
+                    SaveMembers(newUids);
+                    Assert.False(vm.IsConnected);
+                    Assert.True((int)type.GetField("_settingsReconnectPending", flags)!.GetValue(vm)! >= 2);
+                }
+                finally { reconnectGate.Release(); }
+                await WaitUntilAsync(() => Task.FromResult(vm.IsConnected && vm.RoomCode == newCode
+                    && type.GetField("_signalRClient", flags)!.GetValue(vm) is SignalRClient current && current.IsConnected));
+                Assert.Equal(newCode, new AssistConfigManager().Load().LocalRoomProfile!.RoomCode);
+
+                void SaveMembers(List<string> members)
+                {
+                    Exception? error = null;
+                    app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                    {
+                        var dialog = app.Windows.OfType<MultiplayerHoeingAssistant.Views.SettingsWindow>().Single();
+                        try
+                        {
+                            ((TextBox)dialog.FindName("TeamUidsBox")).Text = string.Join(",", members);
+                            ((Button)dialog.FindName("SaveButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                            if (dialog.IsVisible) throw new InvalidOperationException("连接中修改成员后应允许保存");
+                        }
+                        catch (Exception ex) { error = ex; if (dialog.IsVisible) dialog.Close(); }
+                    }));
+                    vm.OpenRoomSettingsCommand.Execute(null);
+                    if (error is not null) throw error;
+                }
+            }
+            finally { vm.Shutdown(); }
+        }
+    }
+
     [Fact]
     public async Task AssistantSwitchesServersWithIdenticalRoomCodesAndReturnsToOriginAfterRejection()
     {
