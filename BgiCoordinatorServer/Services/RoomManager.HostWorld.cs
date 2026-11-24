@@ -73,7 +73,9 @@ public partial class RoomManager
                 return (false, "player_standby_identity_mismatch");
             if (!room.GracePendingMembers.TryGetValue(previous.ConnectionId, out var deadline))
                 return (false, "host_world_reconnect_pending");
-            if (deadline <= DateTime.UtcNow || room.StandbyNegotiation!.IsTerminal)
+            var state = room.StandbyNegotiation!;
+            if (deadline <= DateTime.UtcNow || state.IsTerminal
+                && (state.Snapshot.Phase == "aborted" || room.HostConfig is not { MultiWorldEnabled: true }))
                 return (false, "host_world_session_mismatch");
 
             var oldConnection = previous.ConnectionId;
@@ -102,7 +104,8 @@ public partial class RoomManager
             return (true, null);
         }
 
-        if (!string.IsNullOrEmpty(standbySessionId)) return (false, "host_world_uid_mismatch");
+        if (!string.IsNullOrEmpty(standbySessionId) && room.WorldPlanParticipantUids == null)
+            return (false, "host_world_uid_mismatch");
         if (room.StandbyNegotiation!.Snapshot.Phase != "waiting" || room.IsStarted) return (false, "房间已开锄");
         if (standbyOnly && room.Players.Any(p => !p.NegotiatesStandby))
             return (false, "player_standby_peer_unsupported");

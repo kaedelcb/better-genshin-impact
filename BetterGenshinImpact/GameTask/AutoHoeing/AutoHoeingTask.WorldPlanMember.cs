@@ -53,8 +53,15 @@ public partial class AutoHoeingTask
                 }
             }
 
-            // A first-world-A plan can already have published HostReady. If config is unknown
-            // or enabled, its ticket wins over readiness and this member's local defaults.
+            // A modern standby room cannot know its world mode until the host configuration is readable.
+            // Do not ask for a world plan before then: the coordinator needs that room's route-package pin.
+            if (client.NegotiatesPlayerStandby && hostConfig == null)
+            {
+                await Task.Delay(250, ct);
+                continue;
+            }
+
+            // A first-world-A plan can already have published HostReady. Its ticket wins over readiness and local defaults.
             var admission = await client.AcquireWorldPlanAsync(ct);
             if (admission != null) return await AcceptAsync(admission);
 

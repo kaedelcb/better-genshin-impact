@@ -10,13 +10,16 @@ public sealed partial class RoomOperations
 
     public HostWorldSnapshot HostWorldOperation(GatewayHandlerContext ctx, string? roomCode, string sessionId,
         string? action = null, List<string>? routeNames = null, bool allowPartial = false, int partyCount = 0,
-        string? manifestDigest = null)
+        string? manifestDigest = null, string? routeName = null, double durationSeconds = 0)
     {
         if (!SupportsHostWorld(ctx)) throw new InvalidOperationException("host_world_capability_required");
         if (string.IsNullOrEmpty(roomCode) || string.IsNullOrEmpty(sessionId))
             throw new InvalidOperationException("host_world_session_required");
-        if (action is not (null or "start" or "publish" or "finish"))
+        if (action is not (null or "start" or "publish" or "finish" or "routeDone"))
             throw new InvalidOperationException("host_world_action_invalid");
+        if (action == "routeDone" && (string.IsNullOrWhiteSpace(routeName) || routeName.Length > 512
+            || !double.IsFinite(durationSeconds) || durationSeconds <= 0))
+            throw new InvalidOperationException("host_world_route_done_invalid");
         if (action == "publish" && (routeNames == null || routeNames.Count > 16384
             || routeNames.Any(n => string.IsNullOrWhiteSpace(n) || n.Length > 512)
             || routeNames.Distinct(StringComparer.Ordinal).Count() != routeNames.Count
@@ -40,7 +43,12 @@ public sealed partial class RoomOperations
                             if (state.Snapshot.Phase == "waiting") StartHostWorldIfReadyLocked(room, state, allowPartial, partyCount);
                             break;
                         case "publish":
-                            if (!state.IsTerminal) RequireRoomRoutePackage(room);
+                            if (!state.IsTerminal)
+                            {
+                                if (room.HostConfig is { MultiWorldEnabled: true } && !room.IsStarted)
+                                    throw new InvalidOperationException("host_world_start_required");
+                                RequireRoomRoutePackage(room);
+                            }
                             state.Publish(routeNames!, manifestDigest);
                             if (state.Snapshot.RouteNames is { } manifest)
                             {
@@ -50,6 +58,9 @@ public sealed partial class RoomOperations
                             break;
                         case "finish":
                             state.Finish(caller.PlayerUid);
+                            break;
+                        case "routeDone":
+                            state.RecordRouteDone(routeName!, Math.Min(durationSeconds, 6 * 60 * 60), manifestDigest, DateTime.UtcNow);
                             break;
                     }
                     return state.Snapshot;
@@ -63,6 +74,12 @@ public sealed partial class RoomOperations
         if (action == "publish" && retained.RouteNames is { } previous
             && (!previous.SequenceEqual(routeNames!, StringComparer.Ordinal) || retained.ManifestDigest != manifestDigest))
             throw new InvalidOperationException("host_world_routes_frozen");
+        if (action == "routeDone")
+        {
+            HostWorldExecution.RequirePublishedRoute(retained, routeName!, manifestDigest);
+            if (retained.RouteCompletions?.Any(receipt => receipt.RouteName == routeName) != true)
+                throw new InvalidOperationException("host_world_not_running");
+        }
         return retained;
     }
 
@@ -70,7 +87,7 @@ public sealed partial class RoomOperations
     {
         if ((action is "start" or "publish") && uid != state.HostUid)
             throw new InvalidOperationException("host_world_host_required");
-        if (action == "finish" && !state.ExecutorUids.Contains(uid, StringComparer.Ordinal))
+        if ((action is "finish" or "routeDone") && !state.ExecutorUids.Contains(uid, StringComparer.Ordinal))
             throw new InvalidOperationException("host_world_executor_required");
     }
 
@@ -81,6 +98,7 @@ public sealed partial class RoomOperations
         if (required < (standby.Length > 0 ? 2 : 1) || required > room.ExpectedPlayerCount
             || !allowPartial && required != room.ExpectedPlayerCount
             || room.HostConfig == null || !room.HostReady || room.Players.Count != required
+            || (room.WorldPlanParticipantUids != null && !_roomManager.GetHoeingStartupReadyLocked(room).Ready)
             || (standby.Length > 0 || !allowPartial) && _roomManager.GetLiveJoinedHostWorldCountLocked(room) != required)
             return;
         if (standby.Length > 0 && room.Players.Any(p => !p.NegotiatesStandby
@@ -88,7 +106,7 @@ public sealed partial class RoomOperations
             throw new InvalidOperationException("player_standby_peer_unsupported");
         RequireRoomRoutePackage(room);
         state.Start(room.Players.Where(p => !p.StandbyOnly).Select(p => p.PlayerUid), standby);
-        if (state.Snapshot.Phase == "aborted") return;
+        if (state.Snapshot.Phase == "aborted" || room.HostConfig.MultiWorldEnabled) return;
         room.IsStarted = true;
         room.StartedAtUtc = DateTime.UtcNow;
         ObservePhase(room, room.Code, "room.hostWorldUpdate.start");

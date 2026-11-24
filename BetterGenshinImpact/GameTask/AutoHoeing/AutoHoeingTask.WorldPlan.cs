@@ -265,7 +265,7 @@ public partial class AutoHoeingTask
             if (RouteKeywordFilterDecisions.ShouldSkip(Path.GetFileNameWithoutExtension(route.FileName), keywords))
                 return false;
             var cdRoute = route;
-            if (preview || _worldStartPlan != null)
+            if (preview || _worldStartPlan != null || (_hostWorldRoom && _standbyOnly))
             {
                 var (actual, _) = ResolveAndLoadActualVariant(route.FileName, route.FullPath,
                     Path.GetDirectoryName(route.FullPath) ?? "");
@@ -438,7 +438,8 @@ public partial class AutoHoeingTask
             await RequireStartupAdmissionAsync(client, ct);
             _worldStateMonitor!.IsPartyPhase = false;
             _multiplayerPartyReady = true;
-            lock (AutoHoeingProgress.Sync) AutoHoeingProgress.IsRunning = true;
+            if (!_standbyOnly)
+                lock (AutoHoeingProgress.Sync) AutoHoeingProgress.IsRunning = true;
             return true;
         }
         catch

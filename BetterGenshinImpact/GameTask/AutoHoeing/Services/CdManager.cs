@@ -47,18 +47,31 @@ public class CdManager
     {
         try
         {
-            var dir = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            var list = _records.Values.ToList();
-            var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(_filePath, json);
+            SaveOrThrow();
         }
         catch (Exception ex)
         {
             Logger.LogError("保存CD记录失败: {Msg}", ex.Message);
         }
+    }
+
+    internal void SaveOrThrow(bool atomic = false)
+    {
+        var dir = Path.GetDirectoryName(_filePath);
+        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+        var json = JsonSerializer.Serialize(_records.Values.ToList(), new JsonSerializerOptions { WriteIndented = true });
+        if (!atomic)
+        {
+            File.WriteAllText(_filePath, json);
+            return;
+        }
+        var candidate = _filePath + $".{Guid.NewGuid():N}.tmp";
+        try
+        {
+            File.WriteAllText(candidate, json);
+            File.Move(candidate, _filePath, overwrite: true);
+        }
+        finally { if (File.Exists(candidate)) File.Delete(candidate); }
     }
 
     /// <summary>
@@ -127,6 +140,29 @@ public class CdManager
             Records = route.Records.Where(v => v > 0).ToList(),
             Items = route.PickupHistory.Take(20).ToList()
         };
+    }
+
+    // A standby owner has no local pickup or timing observation. Keep existing route
+    // metadata and use the same cooldown function at the coordinator's actual completion time.
+    internal bool ApplyVerifiedCompletion(RouteInfo route, double duration, DateTime completedAtUtc)
+    {
+        if (!LoadSucceeded || string.IsNullOrWhiteSpace(_filePath))
+            throw new InvalidOperationException("未读到本轮房主 CD，禁止写入线路完成记录");
+        if (completedAtUtc.Kind != DateTimeKind.Utc || !double.IsFinite(duration) || duration <= 0)
+            throw new ArgumentException("线路完成凭证无效");
+        var cdTime = CalculateCdTime(completedAtUtc.ToLocalTime(), route.NormalMonsterCount > 0 && route.EliteMonsterCount == 0);
+        // The unchanged JSON format stores whole seconds; compare at that same precision on replay.
+        cdTime = cdTime.AddTicks(-(cdTime.Ticks % TimeSpan.TicksPerSecond));
+        var existing = _records.GetValueOrDefault(route.FileName);
+        if (existing != null && existing.CdTime >= cdTime) return false;
+        var record = existing ?? new CdRecord
+        {
+            FileName = route.FileName, Tags = route.Tags, EstimatedTime = route.AdjustedTime,
+        };
+        record.CdTime = cdTime;
+        record.Records = (record.Records ?? []).Append(duration).Where(v => v > 0).TakeLast(7).ToList();
+        _records[route.FileName] = record;
+        return true;
     }
 
     /// <summary>

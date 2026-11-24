@@ -1,6 +1,8 @@
 using BetterGenshinImpact.GameTask.AutoHoeing;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
+using BetterGenshinImpact.GameTask.AutoHoeing.Models;
+using BetterGenshinImpact.GameTask.AutoHoeing.Services;
 using BetterGenshinImpact.ViewModel.Pages.View;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
@@ -29,11 +31,11 @@ public sealed class HostWorldClientTests
     [Theory]
     [InlineData(true, false, false, false, false, true)]
     [InlineData(false, false, false, false, false, false)]
-    [InlineData(true, true, false, false, false, false)]
+    [InlineData(true, true, false, false, false, true)]
     [InlineData(true, false, true, false, false, false)]
     [InlineData(true, false, false, true, false, false)]
     [InlineData(true, false, false, false, true, false)]
-    public void OnlyRegularUnmanagedSingleWorldIsAllowed(bool multiplayer, bool multiWorld, bool debug,
+    public void NormalManualWorldsAllowStandbyWithoutAdmittingDebugOrManagedTasks(bool multiplayer, bool multiWorld, bool debug,
         bool soloDebug, bool managed, bool accepted)
     {
         Assert.Equal(accepted, AutoHoeingTask.HostWorldModeAllowed(multiplayer, multiWorld, debug, soloDebug, managed));
@@ -138,6 +140,50 @@ public sealed class HostWorldClientTests
         Assert.Throws<MultiplayerSessionFailedException>(() => state.RequireIdentity("instance", "host", true, "host", null, standbyOnly: true));
         var regular = new HostWorldState("instance", "host", [], "regular", null, null);
         Assert.Throws<MultiplayerSessionFailedException>(() => regular.RequireIdentity("instance", "idle", false, "host", null, standbyOnly: true));
+    }
+
+    [Fact]
+    public void RotationChangesTheWorldOwnerButNotPlayerChoices()
+    {
+        var first = new HostWorldState("one", "idle", ["runner"], "ready", null, null, StandbyUids: ["idle"]);
+        var second = first with { SessionId = "two", HostUid = "runner" };
+        Assert.True(AutoHoeingTask.HasSameStandbyRoles(first, second));
+        Assert.False(AutoHoeingTask.HasSameStandbyRoles(first, second with { ExecutorUids = ["idle"], StandbyUids = ["runner"] }));
+        Assert.False(AutoHoeingTask.HasSameStandbyRoles(first, second with { ExecutorUids = ["runner", "unexpected"] }));
+        Assert.False(AutoHoeingTask.HasSameStandbyRoles(first, second with { Phase = "regular", ExecutorUids = [], StandbyUids = null }));
+    }
+
+    [Fact]
+    public void ReceiptsUpdateOnlyTheOwnWorldCdAndDoNotExtendItOnReplay()
+    {
+        var data = Path.Combine(AppContext.BaseDirectory, $"standby-cd-{Guid.NewGuid():N}");
+        try
+        {
+            var route = new RouteInfo { FileName = "finished.json", NormalMonsterCount = 1, PickupHistory = ["keep"] };
+            var unconfirmed = new RouteInfo { FileName = "never-finished.json", EliteMonsterCount = 1 };
+            var owner = new CdManager();
+            var runner = new CdManager();
+            owner.Load(data, "owner");
+            runner.Load(data, "runner");
+            // A previous expired record on the owner is kept as metadata, not replaced with guest pickup data.
+            var completed = new DateTime(2026, 11, 24, 15, 30, 0, 345, DateTimeKind.Utc);
+            var old = new CdRecord { FileName = route.FileName, Items = ["keep"], CdTime = completed.ToLocalTime().AddDays(-1) };
+            Directory.CreateDirectory(Path.Combine(data, "records"));
+            File.WriteAllText(Path.Combine(data, "records", "owner.json"), System.Text.Json.JsonSerializer.Serialize(new[] { old }));
+            owner.Load(data, "owner");
+            Assert.True(owner.ApplyVerifiedCompletion(route, 15, completed));
+            owner.SaveOrThrow(atomic: true);
+            owner.Load(data, "owner");
+            Assert.False(owner.ApplyVerifiedCompletion(route, 15, completed));
+            Assert.False(owner.ApplyVerifiedCompletion(route, 50, completed.AddDays(-1)));
+            owner.InitializeRoute(route);
+            Assert.Equal(new DateTime(2026, 11, 25, 3, 30, 0, DateTimeKind.Utc), route.CdTime.ToUniversalTime());
+            Assert.Equal(new[] { 15d }, route.Records);
+            Assert.Contains("keep", route.PickupHistory);
+            Assert.False(owner.IsOnCooldownAt(unconfirmed, completed.ToLocalTime()));
+            Assert.False(runner.IsOnCooldownAt(route, completed.ToLocalTime()));
+        }
+        finally { if (Directory.Exists(data)) Directory.Delete(data, recursive: true); }
     }
 
     private static async Task JoinHostWorld(CoordinatorClient client)

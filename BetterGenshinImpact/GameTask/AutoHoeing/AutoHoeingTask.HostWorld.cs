@@ -20,14 +20,21 @@ public partial class AutoHoeingTask
 {
     private bool _standbyOnly;
     private bool _hostWorldRoom;
+    private bool _usedStandbyRoom;
+    private HostWorldState? _rotationStandbyRoles;
     private bool _standbyAdmissionPending;
     private volatile bool _hostWorldRoutePhase;
     private string[]? _hostWorldRouteNames;
     private string? _hostWorldManifestDigest;
+    private bool _worldOwnerIsStandby;
+    private Dictionary<RouteInfo, string>? _originalRouteNames;
+    private Dictionary<string, RouteInfo>? _standbyOwnerCdRoutes;
+    private readonly HashSet<string> _appliedOwnerCdReceipts = new(StringComparer.Ordinal);
+    private bool _ownerCdNeedsSave;
     private bool _hostWorldExecutorReachedEnd;
 
     internal static bool HostWorldModeAllowed(bool multiplayer, bool multiWorld, bool debug, bool soloDebug, bool managed)
-        => multiplayer && !multiWorld && !debug && !soloDebug && !managed;
+        => multiplayer && !debug && !soloDebug && !managed;
 
     private static bool IsManagedHostWorldInvocation => CoordinatedHoeingScope.IsActive
         || ExecutionScope.Current?.Descriptor.WorkflowRunId != null;
@@ -35,13 +42,17 @@ public partial class AutoHoeingTask
     private bool CanOfferStandby(bool isMember) => _settingsOverride is { Count: > 0 }
         && _config.MultiplayerEnabled && !_config.SoloDebugMode
         && !IsManagedHostWorldInvocation && !string.IsNullOrWhiteSpace(_config.PlayerUid)
-        && (isMember || (!_config.MultiWorldEnabled && !_config.DebugMode && _config.ExpectedPlayerCount is >= 2 and <= 4
+        && (isMember || (!_config.DebugMode && _config.ExpectedPlayerCount is >= 2 and <= 4
             && _config.OperationMode is "运行锄地路线" or "启用仅指定怪物模式"));
 
     private void RequireLocalStandbySetting()
     {
-        if (!CanOfferStandby(_config.MultiplayerRole == "member"))
-            throw new HoeingStartupException("仅组队，不跟跑", "请填写玩家 UID，从本机配置组启动单世界正常联机");
+        if (string.IsNullOrWhiteSpace(_config.PlayerUid))
+            throw new HoeingStartupException("仅组队，不跟跑", "请填写本机的玩家 UID");
+        if (_settingsOverride is not { Count: > 0 } || !_config.MultiplayerEnabled || IsManagedHostWorldInvocation)
+            throw new HoeingStartupException("仅组队，不跟跑", "请从本机联机锄地配置组启动；任务中心和协同批次暂不支持");
+        if (_config.SoloDebugMode)
+            throw new HoeingStartupException("仅组队，不跟跑", "请关闭单人调试模式");
         if (_config.MultiplayerRole != "member") RequireHostWorldModeAllowed();
     }
 
@@ -49,7 +60,7 @@ public partial class AutoHoeingTask
     {
         if (!HostWorldModeAllowed(_config.MultiplayerEnabled, _config.MultiWorldEnabled, _config.DebugMode,
                 _config.SoloDebugMode, IsManagedHostWorldInvocation))
-            throw new HoeingStartupException("仅提供世界", "请从本机配置组启动单世界联机锄地并关闭调试；任务中心和协同批次暂不支持");
+            throw new HoeingStartupException("仅组队，不跟跑", "请从本机配置组启动正常联机锄地并关闭调试；任务中心和协同批次暂不支持");
         if (_standbyOnly && _config.MultiplayerRole != "member" && (_config.ExpectedPlayerCount is < 2 or > 4
             || string.IsNullOrWhiteSpace(_config.PlayerUid)
             || _config.OperationMode is not ("运行锄地路线" or "启用仅指定怪物模式")))
@@ -63,7 +74,7 @@ public partial class AutoHoeingTask
         if (partyCount < 2 && _standbyOnly)
             throw new HoeingStartupException("仅组队，不跟跑", "未确认至少一人跟跑");
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(_ct);
-        budget.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(RemainingPartyWaitSeconds(), 1, 600)));
+        budget.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(RemainingPartyWaitSeconds(), 1, 86400)));
         try
         {
             await client.ReportWorldJoinedAsync(budget.Token);
@@ -83,7 +94,7 @@ public partial class AutoHoeingTask
     {
         _hostWorldRoutePhase = true; // A fast empty report may reach normal room close before this member gets the join receipt.
         using var report = CancellationTokenSource.CreateLinkedTokenSource(_ct);
-        report.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_config.PartyTimeoutSeconds, 1, 600)));
+        report.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_config.PartyTimeoutSeconds, 1, 86400)));
         try { await client.ReportWorldJoinedAsync(report.Token); }
         catch (Exception ex) when (!_ct.IsCancellationRequested
             && ex is OperationCanceledException or MultiplayerSessionFailedException)
@@ -106,7 +117,27 @@ public partial class AutoHoeingTask
             throw new HoeingStartupException("仅组队，不跟跑", state.Reason ?? "协作房间已中止");
         if (!_hostWorldRoom && state.Phase != "regular" || _hostWorldRoom && state.StandbyUids is not { Length: > 0 })
             throw new HoeingStartupException("仅组队，不跟跑", "未确认本场执行及待机名单");
+        if (_config.MultiWorldEnabled)
+        {
+            if (_rotationStandbyRoles is { } frozen && !HasSameStandbyRoles(frozen, state))
+                throw new HoeingStartupException("换世界", "新房间的待机/执行身份与本场开始时不一致");
+            if (_hostWorldRoom) _rotationStandbyRoles ??= state;
+        }
+        _usedStandbyRoom |= _hostWorldRoom;
         _standbyAdmissionPending = false;
+    }
+
+    internal static bool HasSameStandbyRoles(HostWorldState original, HostWorldState next)
+        => original.ExecutorUids.ToHashSet(StringComparer.Ordinal).SetEquals(next.ExecutorUids)
+            && (original.StandbyUids ?? []).ToHashSet(StringComparer.Ordinal).SetEquals(next.StandbyUids ?? []);
+
+    private void AdoptRotatedRoom(CoordinatorClient client)
+    {
+        _hostWorldRoom = false;
+        _hostWorldRoutePhase = false;
+        _standbyAdmissionPending = client.NegotiatesPlayerStandby;
+        if ((_standbyOnly || _rotationStandbyRoles != null) && !_standbyAdmissionPending)
+            throw new HoeingStartupException("换世界", "新房间未确认本机的待机协商，不进入错误世界");
     }
 
     private List<RouteInfo> PrepareHostWorldRoutes(List<List<string>> groupTags)
@@ -129,22 +160,31 @@ public partial class AutoHoeingTask
         return fixedRoutes;
     }
 
-    private async Task RunHostWorldAsync(string accountName, List<List<string>> groupTags)
+    private async Task RunHostWorldAsync(string accountName, List<List<string>> groupTags, bool amIHost,
+        MultiWorldRoundContext? roundContext = null)
     {
         var client = _coordinatorClientRef!;
         var taskToken = _ct;
         _hostWorldRoutePhase = true;
+        _hostWorldExecutorReachedEnd = false;
+        _worldOwnerIsStandby = false;
+        _originalRouteNames = null;
+        _standbyOwnerCdRoutes = null;
+        _appliedOwnerCdReceipts.Clear();
+        _ownerCdNeedsSave = false;
+        Volatile.Write(ref _hostWorldStopReceipt, null);
         using var run = CancellationTokenSource.CreateLinkedTokenSource(taskToken);
         run.CancelAfter(TimeSpan.FromHours(6));
         using var stopAtDeadline = run.Token.Register(() => _linkedStopCts!.Cancel());
         HostWorldState published;
         List<RouteInfo>? prepared = null;
-        if (_config.MultiplayerRole != "member")
+        if (amIHost)
         {
             prepared = PrepareHostWorldRoutes(groupTags);
             // Preparation and selection only. No route engine, position reports, sync or CD write.
             var selected = SelectHostWorldRoutes(prepared.Where(r => r.Group == _config.GroupIndex && r.Selected).ToList(), preview: false);
             var names = selected.Select(r => r.FileName).ToArray();
+            if (_standbyOnly) _standbyOwnerCdRoutes = ResolveStandbyOwnerCdRoutes(selected);
             var digest = names.Length == 0 ? null : ComputeHostWorldManifestDigest(selected.Select(r => r.FullPath), _ct);
             if (names.Length > 0 && _config.StartRouteIndex > names.Length)
                 throw new HoeingStartupException("借世界路线", "起始路线超出已选路线范围");
@@ -157,6 +197,7 @@ public partial class AutoHoeingTask
                 || !names.SequenceEqual(published.RouteNames, StringComparer.Ordinal)))
                 throw new HoeingStartupException("借世界路线", "服务端未确认同一份路线发布结果");
             _logger.LogInformation("[借世界] 已确认房主发布 {Count} 条路线", names.Length);
+            _hostWorldManifestDigest = digest;
         }
         else
         {
@@ -165,8 +206,11 @@ public partial class AutoHoeingTask
             published = await PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t),
                 s => s.Phase is not ("waiting" or "ready"), publication.Token);
         }
+        _worldOwnerIsStandby = published.StandbyUids?.Contains(published.HostUid, StringComparer.Ordinal) == true;
+        if (published.Phase == "running" && _worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
         if (_standbyOnly)
         {
+            ApplyVerifiedOwnerCd(published);
             _logger.LogInformation("[联机] 本机选择不跟跑，原地等待执行者收尾");
             var terminal = published.IsTerminal ? published : await PollHostWorldTerminalAsync(client, run.Token);
             RecordHostWorldTerminal(terminal);
@@ -181,7 +225,6 @@ public partial class AutoHoeingTask
 
         _hostWorldRouteNames = published.RouteNames!;
         _hostWorldManifestDigest = published.ManifestDigest;
-        if (_worldStateMonitor != null) _worldStateMonitor.IsPartyPhase = false;
         using var monitorEnd = CancellationTokenSource.CreateLinkedTokenSource(run.Token);
         var watch = ObserveHostWorldTerminalAsync(client, monitorEnd.Token);
         try
@@ -191,7 +234,7 @@ public partial class AutoHoeingTask
             var localRoutes = prepared ?? (_config.UseFixedDebugRoutes
                 ? LoadRoutesBasedOnConfig() : PrepareNormalWorldRoutes(groupTags, strict: true));
             ValidateTeam();
-            await ProcessRoutesByGroup(localRoutes, accountName);
+            await ProcessRoutesByGroup(localRoutes, accountName, roundContext);
             EnsureCooperativeExecutionAllowed();
             if (!_hostWorldExecutorReachedEnd)
                 throw new HoeingStartupException("借世界执行", "本机未到达完整路线和重跑收尾，不能上报完工");
@@ -259,11 +302,67 @@ public partial class AutoHoeingTask
         return Convert.ToHexString(manifest.GetHashAndReset());
     }
 
+    private Dictionary<string, RouteInfo> ResolveStandbyOwnerCdRoutes(IEnumerable<RouteInfo> routes)
+    {
+        var result = new Dictionary<string, RouteInfo>(StringComparer.Ordinal);
+        foreach (var route in routes)
+        {
+            _ct.ThrowIfCancellationRequested();
+            var (actual, _) = ResolveAndLoadActualVariant(route.FileName, route.FullPath, Path.GetDirectoryName(route.FullPath) ?? "");
+            if (actual == null || actual.Positions.Count == 0)
+                throw new HoeingStartupException("借世界路线", "无法确认房主本地路线身份: " + route.FileName);
+            result.Add(route.FileName, new RouteInfo
+            {
+                FileName = actual.FileName, NormalMonsterCount = route.NormalMonsterCount,
+                EliteMonsterCount = route.EliteMonsterCount, Tags = route.Tags, AdjustedTime = route.AdjustedTime,
+            });
+        }
+        return result;
+    }
+
+    private void ApplyVerifiedOwnerCd(HostWorldState state)
+    {
+        if (_standbyOwnerCdRoutes == null || state.RouteCompletions is not { Length: > 0 }) return;
+        if (state.ManifestDigest != _hostWorldManifestDigest)
+            throw new HoeingStartupException("房主路线 CD", "完成回执与本轮路线清单不匹配");
+        foreach (var receipt in state.RouteCompletions)
+        {
+            if (!_standbyOwnerCdRoutes.TryGetValue(receipt.RouteName, out var route))
+                throw new HoeingStartupException("房主路线 CD", "完成回执不属于本轮房主路线");
+            if (_appliedOwnerCdReceipts.Contains(receipt.RouteName)) continue;
+            _ownerCdNeedsSave |= _cdManager.ApplyVerifiedCompletion(route, receipt.DurationSeconds, receipt.CompletedAtUtc);
+            _appliedOwnerCdReceipts.Add(receipt.RouteName);
+        }
+        if (_ownerCdNeedsSave)
+        {
+            _cdManager.SaveOrThrow(atomic: true);
+            _ownerCdNeedsSave = false;
+        }
+    }
+
+    private async Task ReportVerifiedStandbyOwnerRouteAsync(RouteInfo route, double durationSeconds)
+    {
+        if (!_worldOwnerIsStandby) return;
+        if (_originalRouteNames == null || !_originalRouteNames.TryGetValue(route, out var name))
+            throw new HoeingStartupException("房主路线 CD", "找不到实际完成路线的原始编号");
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+        budget.CancelAfter(TimeSpan.FromSeconds(20));
+        var state = await PollHostWorldAsync(t => _coordinatorClientRef!.ReadOrUpdateHostWorldAsync(t, "routeDone",
+            manifestDigest: _hostWorldManifestDigest, routeName: name, durationSeconds: durationSeconds),
+            s => s.IsTerminal || s.RouteCompletions?.Any(r => r.RouteName == name) == true, budget.Token);
+        if (!state.IsTerminal && state.RouteCompletions?.Any(r => r.RouteName == name) != true)
+            throw new HoeingStartupException("房主路线 CD", "未确认服务器收到实际完成回执");
+    }
+
     private HostWorldState? _hostWorldStopReceipt;
 
     private Task<HostWorldState> PollHostWorldTerminalAsync(CoordinatorClient client, CancellationToken ct)
-        => PollHostWorldAsync(t => client.ReadOrUpdateHostWorldAsync(t), s => s.IsTerminal, ct,
-            checkRestriction: true);
+        => PollHostWorldAsync(async t =>
+        {
+            var state = await client.ReadOrUpdateHostWorldAsync(t);
+            ApplyVerifiedOwnerCd(state);
+            return state;
+        }, s => s.IsTerminal, ct, checkRestriction: true);
 
     private async Task<HostWorldState> PollHostWorldAsync(Func<CancellationToken, Task<HostWorldState>> read,
         Func<HostWorldState, bool> accept, CancellationToken ct, bool checkRestriction = false)
@@ -296,12 +395,12 @@ public partial class AutoHoeingTask
     {
         if (!state.IsSuccess)
             throw new HoeingStartupException("借世界收尾", state.Reason ?? "房间中断，未确认正常结束");
-        if (state.Phase == "expCap" && !_standbyOnly)
+        if (state.Phase == "expCap")
         {
             _expCapStopTriggered = true;
-            _stopReason = "执行成员均达经验上限，结束借世界锄地";
+            _stopReason = "执行成员均达经验上限，结束本场锄地";
         }
-        _completedNormally = true;
+        if (!_multiWorldRoundLoopEngaged) _completedNormally = true;
         _logger.LogInformation("[借世界] 已确认本场终态 {Phase}", state.Phase);
     }
 }

@@ -8,8 +8,11 @@ using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Gateway;
 
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer;
 
+internal sealed record HostWorldRouteCompletion(string RouteName, double DurationSeconds, DateTime CompletedAtUtc);
+
 internal sealed record HostWorldState(string SessionId, string HostUid, string[] ExecutorUids,
-    string Phase, string[]? RouteNames, string? Reason, string? ManifestDigest = null, string[]? StandbyUids = null)
+    string Phase, string[]? RouteNames, string? Reason, string? ManifestDigest = null, string[]? StandbyUids = null,
+    HostWorldRouteCompletion[]? RouteCompletions = null)
 {
     public bool IsSuccess => Phase is "completed" or "noRoutes" or "expCap";
     public bool IsTerminal => IsSuccess || Phase == "aborted";
@@ -72,9 +75,37 @@ public partial class CoordinatorClient
         return string.IsNullOrWhiteSpace(sessionId) ? null : sessionId;
     }
 
+    internal async Task ResetStandbyWorldRoundAsync(int newRound, CancellationToken ct)
+    {
+        RoomSession session;
+        lock (_roomLock)
+            session = _roomSession is { StandbySessionId: not null, IsRoomOwner: true } current ? current
+                : throw new MultiplayerSessionFailedException("没有可初始化的协商房主房间");
+        for (var attempt = 0; ; attempt++)
+        {
+            using var budget = CreateRpcBudget(ct);
+            try
+            {
+                await WaitForBusinessReadyAsync(budget.Token);
+                if (!IsCurrent(session)) throw new MultiplayerSessionFailedException("本轮房间已变更");
+                var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.WorldResetForNewRound,
+                    new { newRound, sessionId = session.StandbySessionId }, session.RoomCode, budget.Token);
+                budget.Token.ThrowIfCancellationRequested();
+                if (!IsCurrent(session) || !response.GetBool("ack") || response.GetInt("worldRound") != newRound
+                    || response.GetString("sessionId") != session.StandbySessionId)
+                    throw new MultiplayerSessionFailedException("未收到本轮房间的初始化确认");
+                return;
+            }
+            catch (Exception ex) when (attempt == 0 && !ct.IsCancellationRequested && IsCurrent(session) && IsTransportFailure(ex))
+            {
+                // Retry the exact room instance while the owner still has not published readiness.
+            }
+        }
+    }
+
     internal async Task<HostWorldState> ReadOrUpdateHostWorldAsync(CancellationToken ct, string? action = null,
         IReadOnlyList<string>? routeNames = null, bool allowPartial = false, int? partyCount = null,
-        string? manifestDigest = null)
+        string? manifestDigest = null, string? routeName = null, double? durationSeconds = null)
     {
         RoomSession session;
         lock (_roomLock)
@@ -92,7 +123,8 @@ public partial class CoordinatorClient
             ? await gateway.QueryAsync(GatewayProtocol.Names.RoomHostWorldState,
                 new { sessionId = session.StandbySessionId }, session.RoomCode, budget.Token)
             : await gateway.InvokeCommandAsync(GatewayProtocol.Names.RoomHostWorldUpdate,
-                new { sessionId = session.StandbySessionId, action, routeNames, allowPartial, partyCount, manifestDigest },
+                new { sessionId = session.StandbySessionId, action, routeNames, allowPartial, partyCount, manifestDigest,
+                    routeName, durationSeconds },
                 session.RoomCode, budget.Token);
         budget.Token.ThrowIfCancellationRequested();
         var state = response.Get<HostWorldState>("state")

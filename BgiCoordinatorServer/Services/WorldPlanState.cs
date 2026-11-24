@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Security.Cryptography;
 using System.Text.Json;
 using BgiCoordinatorServer.Models;
@@ -19,6 +20,8 @@ public sealed class WorldPlanState
     public List<PlayerInfo> Players { get; }
     public List<string> Participants { get; }
     public List<string> Candidates { get; }
+    internal IReadOnlyDictionary<string, bool>? StandbyAssignments { get; }
+    private readonly string? _initialStandbySession;
     private readonly Dictionary<string, string> _tickets;
     private readonly HashSet<string> _acquired = new(StringComparer.Ordinal);
     private readonly Dictionary<string, (bool Known, int Count)> _reports = new(StringComparer.Ordinal);
@@ -27,6 +30,7 @@ public sealed class WorldPlanState
     private string _stage;
     private string? _targetCode;
     private string? _targetSession;
+    private string? _targetStandbySession;
     private bool _sourceReleased;
     private bool _startupRetired;
     private readonly bool _currentPartyFrozen;
@@ -40,9 +44,18 @@ public sealed class WorldPlanState
         Players = Clone(room.Players);
         InitialHostUid = Players.Single(p => p.ConnectionId == room.HostConnectionId).PlayerUid;
         Participants = Players.Select(p => p.PlayerUid).ToList();
-        if (Participants.Count is < 1 or > 4 || capable && (Participants.Any(string.IsNullOrWhiteSpace)
-            || Participants.Distinct(StringComparer.Ordinal).Count() != Participants.Count))
+        var identifiable = Participants.All(uid => !string.IsNullOrWhiteSpace(uid))
+            && Participants.Distinct(StringComparer.Ordinal).Count() == Participants.Count;
+        if (Participants.Count is < 1 or > 4 || capable && !identifiable)
             throw new InvalidOperationException("world_plan_roster_invalid");
+        if (room.StandbyNegotiation is { } standby && identifiable)
+        {
+            _initialStandbySession = standby.Snapshot.SessionId;
+            // PlayerInfo's standby roles are server-side only and are excluded from the JSON clone.
+            StandbyAssignments = room.Players.ToFrozenDictionary(p => p.PlayerUid, p => p.StandbyOnly, StringComparer.Ordinal);
+            if ((capable || currentPartyFrozen) && StandbyAssignments.Values.All(value => value))
+                throw new InvalidOperationException("world_plan_no_executors");
+        }
         Candidates = RoundHostOrderDecisions.Build(Players, InitialHostUid, whitelist: Config.RoomWhitelist)
             .Take(Math.Clamp(Config.MultiWorldCount, 1, 4)).ToList();
         ExpiresAtUtc = now.AddSeconds(Math.Max(300L, (long)Math.Clamp(Config.PartyTimeoutSeconds, 1, 86400) * 3 + 120));
@@ -117,7 +130,7 @@ public sealed class WorldPlanState
                     _stage = _reports.Values.Any(r => !r.Known) ? "Legacy"
                         : Remaining().Count == 0 ? "NoWork" : "Committed";
                     if (_stage == "Committed" && Remaining()[0] == InitialHostUid)
-                        SetTarget(InitialRoomCode, InitialRoomSessionId);
+                        SetTarget(InitialRoomCode, InitialRoomSessionId, _initialStandbySession);
                 }
             }
             return Snapshot(now);
@@ -149,14 +162,15 @@ public sealed class WorldPlanState
         }
     }
 
-    public void SetTarget(string code, string session)
+    public void SetTarget(string code, string session, string? standbySession)
     {
         lock (Sync)
         {
-            if (_targetCode != null && (_targetCode != code || _targetSession != session))
+            if (_targetCode != null && (_targetCode != code || _targetSession != session || _targetStandbySession != standbySession))
                 throw new InvalidOperationException("world_plan_target_changed");
             _targetCode = code;
             _targetSession = session;
+            _targetStandbySession = standbySession;
         }
     }
 
@@ -205,7 +219,7 @@ public sealed class WorldPlanState
                 InitialRoomCode = InitialRoomCode, InitialRoomSessionId = InitialRoomSessionId,
                 ExpiresAtUtc = ExpiresAtUtc, ParticipantUids = [.. Participants], CandidateHostUids = [.. Candidates],
                 RemainingHostUids = Remaining(), HostConfig = Clone(Config), Players = Clone(Players),
-                TargetRoomCode = _targetCode, TargetRoomSessionId = _targetSession,
+                TargetRoomCode = _targetCode, TargetRoomSessionId = _targetSession, TargetStandbySessionId = _targetStandbySession,
                 SourceReleased = _sourceReleased,
                 CurrentPartyFrozen = _currentPartyFrozen,
             };

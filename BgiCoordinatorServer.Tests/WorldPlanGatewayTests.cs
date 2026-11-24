@@ -97,6 +97,97 @@ public sealed class WorldPlanGatewayTests
         Assert.Equal(0, h.RoomManager.GetWorldJoinedCount(room.Code));
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    public async Task FirstTargetKeepsFrozenStandbyAssignmentsAndLaterRoomUsesOrdinaryRoster(bool initialStandby, bool targetStandby)
+    {
+        var h = new GatewayTestHarness();
+        var host = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 3,
+            reportedVersion: Version, negotiateStandby: true, standbyOnly: initialStandby);
+        var config = new RoomConfig { MultiWorldEnabled = true, MultiWorldCount = 3 };
+        await h.Ops.SetRoomConfigAsync(C("A"), config);
+        Assert.True((await h.Ops.JoinRoomAsync(C("B"), host.Code, "B", "B", Version,
+            acceptsStandby: true, standbyOnly: targetStandby)).Success);
+        Assert.True((await h.Ops.JoinRoomAsync(C("C"), host.Code, "C", "C", Version, acceptsStandby: true)).Success);
+        var admissions = new[] { await h.Ops.BeginWorldPlanAsync(C("A")),
+            (await h.Ops.AcquireWorldPlanAsync(C("B")))!, (await h.Ops.AcquireWorldPlanAsync(C("C")))! };
+        Assert.Equal(new[] { "B", "C" }, (await Commit(h, admissions, 0, 2, 3)).RemainingHostUids);
+        await Release(h, admissions);
+
+        var b = admissions[1];
+        var target = await h.Ops.CreateWorldPlanTargetAsync(C("B"), b.PlanId, b.Ticket);
+        var room = h.RoomManager.GetRoom(target.TargetRoomCode!)!;
+        Assert.NotEqual(host.StandbySessionId, target.TargetStandbySessionId);
+        Assert.Equal(room.SessionId, target.TargetStandbySessionId);
+        Assert.Equal(target.TargetStandbySessionId,
+            (await h.Ops.CreateWorldPlanTargetAsync(C("B"), b.PlanId, b.Ticket)).TargetStandbySessionId);
+        Assert.Equal(targetStandby, Assert.Single(room.Players).StandbyOnly);
+        if (initialStandby || targetStandby)
+        {
+            h.Capabilities.UnsupportedCapabilities.Add(("old", GatewayProtocol.HostProvidesWorldCapability));
+            Assert.Equal("host_world_capability_required", (await h.Ops.JoinRoomAsync(C("old"), room.Code,
+                "C", "C", Version, acceptsStandby: true)).Error);
+        }
+        Assert.Equal("world_plan_not_participant", (await h.Ops.JoinRoomAsync(C("other"), room.Code,
+            "A", "other", Version, acceptsStandby: true)).Error);
+        Assert.Equal("player_standby_identity_mismatch", (await h.Ops.JoinRoomAsync(C("A"), room.Code,
+            "A", "A", Version, acceptsStandby: true, standbyOnly: !initialStandby)).Error);
+        Assert.True((await h.Ops.JoinRoomAsync(C("A"), room.Code, "A", "A", Version,
+            standbySessionId: target.TargetStandbySessionId, acceptsStandby: true, standbyOnly: initialStandby)).Success);
+        Assert.True((await h.Ops.JoinRoomAsync(C("C"), room.Code, "C", "C", Version, acceptsStandby: true)).Success);
+        Assert.Equal(room.SessionId, (await h.Ops.ValidateWorldPlanTargetAsync(C("C"), b.PlanId, admissions[2].Ticket)).TargetStandbySessionId);
+
+        await h.Ops.ResetWorldJoinedAsync(C("B"));
+        await h.Ops.ResetForNewWorldRoundAsync(C("B"), 1);
+        await h.Ops.ReportHostReadyAsync(C("B"));
+        await h.Ops.ReportWorldJoinedAsync(C("A"));
+        await h.Ops.ReportWorldJoinedAsync(C("B"));
+        Assert.Equal("waiting", h.Ops.HostWorldOperation(C("B"), room.Code, room.SessionId, "start").Phase);
+        await h.Ops.ReportWorldJoinedAsync(C("C"));
+        var sealedRoom = h.Ops.HostWorldOperation(C("B"), room.Code, room.SessionId, "start");
+        Assert.Equal(initialStandby || targetStandby ? "ready" : "regular", sealedRoom.Phase);
+        if (initialStandby || targetStandby)
+            Assert.Equal(new[] { initialStandby ? "A" : "B" }, sealedRoom.StandbyUids);
+        Assert.False(room.IsStarted);
+        await h.Ops.MarkRoomStartedAsync(C("B"), null, requireWorldPlanRoster: true, expectedRoomCode: room.Code);
+        Assert.True(room.IsStarted);
+        await h.Ops.CloseRoomAsync(C("B"));
+
+        var later = await h.Ops.CreateRoomAsync(C("C"), "C", whitelist: ["A", "B", "C"], playerUid: "C",
+            expectedPlayerCount: 3, reportedVersion: Version, worldPlanParticipantUids: ["A", "B", "C"], negotiateStandby: true);
+        await h.Ops.SetRoomConfigAsync(C("C"), config);
+        Assert.Equal("world_plan_not_participant", (await h.Ops.JoinRoomAsync(C("other"), later.Code,
+            "A", "other", Version, acceptsStandby: true)).Error);
+        Assert.True((await h.Ops.JoinRoomAsync(C("A"), later.Code, "A", "A", Version,
+            acceptsStandby: true, standbyOnly: initialStandby)).Success);
+        Assert.True((await h.Ops.JoinRoomAsync(C("B"), later.Code, "B", "B", Version,
+            acceptsStandby: true, standbyOnly: targetStandby)).Success);
+        await h.Ops.ReportHostReadyAsync(C("C"));
+        foreach (var uid in new[] { "A", "B", "C" }) await h.Ops.ReportWorldJoinedAsync(C(uid));
+        var laterState = h.Ops.HostWorldOperation(C("C"), later.Code, later.StandbySessionId!, "start");
+        Assert.Equal(sealedRoom.Phase, laterState.Phase);
+        Assert.Equal(sealedRoom.StandbyUids, laterState.StandbyUids);
+        await h.Ops.MarkRoomStartedAsync(C("C"), null, requireWorldPlanRoster: true, expectedRoomCode: later.Code);
+        Assert.True(h.RoomManager.GetRoom(later.Code)!.IsStarted);
+    }
+
+    [Fact]
+    public async Task AllStandbyCannotStartAPlanThatWouldReportNoWork()
+    {
+        var h = new GatewayTestHarness();
+        var room = await h.Ops.CreateRoomAsync(C("A"), "A", playerUid: "A", expectedPlayerCount: 2,
+            reportedVersion: Version, negotiateStandby: true, standbyOnly: true);
+        await h.Ops.SetRoomConfigAsync(C("A"), new RoomConfig { MultiWorldEnabled = true });
+        Assert.True((await h.Ops.JoinRoomAsync(C("B"), room.Code, "B", "B", Version,
+            acceptsStandby: true, standbyOnly: true)).Success);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.BeginWorldPlanAsync(C("A")));
+        Assert.Equal("world_plan_no_executors", error.Message);
+        Assert.Null(await h.Ops.AcquireWorldPlanAsync(C("B")));
+    }
+
     [Fact]
     public async Task LostTargetResponse_RetryReturnsSameRoom_AndLateSourceLeaveCannotDeleteIt()
     {

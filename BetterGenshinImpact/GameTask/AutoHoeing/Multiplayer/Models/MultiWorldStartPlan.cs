@@ -22,6 +22,7 @@ public sealed class MultiWorldStartPlan
     public bool SourceReleased { get; set; }
     public string? TargetRoomCode { get; set; }
     public string? TargetRoomSessionId { get; set; }
+    public string? TargetStandbySessionId { get; set; }
 }
 
 /// <summary>每个成员各自的短期查询凭据；不写日志、不借用其他成员的 ticket。</summary>

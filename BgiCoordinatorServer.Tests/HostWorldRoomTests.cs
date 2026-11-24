@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 using BgiCoordinatorServer.Services;
@@ -159,6 +160,9 @@ public sealed class HostWorldRoomTests
         var state = State(h, room, "host");
         Assert.Equal(new[] { "host" }, state.ExecutorUids);
         Assert.Equal(new[] { "idle" }, state.StandbyUids);
+        Assert.Equal("host_world_owner_not_standby", Assert.Throws<InvalidOperationException>(() =>
+            h.Ops.HostWorldOperation(Client("host"), room.Code, room.StandbySessionId!, "routeDone",
+                routeName: "route.json", durationSeconds: 5, manifestDigest: state.ManifestDigest)).Message);
         Assert.False(h.RoomManager.RecordArrival(room.Code, "point", "idle"));
         Assert.True(h.RoomManager.RecordArrival(room.Code, "point", "host"));
         Assert.Throws<InvalidOperationException>(() => State(h, room, "idle", "finish"));
@@ -215,6 +219,145 @@ public sealed class HostWorldRoomTests
             standbySessionId: room.StandbySessionId, acceptsStandby: true, standbyOnly: true);
         Assert.True(restored.Success);
         Assert.Equal(new[] { "host" }, State(h, room, "new").ExecutorUids);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RoundEndWaitsForThePhysicalPartyBeforeAndAfterRouteExecution(bool publishRoutes)
+    {
+        var (h, admission) = await Create(3);
+        await h.Ops.SetRoomConfigAsync(Client("host"), new RoomConfig { MultiWorldEnabled = true });
+        await Join(h, admission, "runner");
+        await Join(h, admission, "idle", standbyOnly: true);
+        foreach (var uid in new[] { "host", "runner", "idle" })
+            await h.Ops.ReportWorldJoinedAsync(Client(uid));
+        Assert.Equal("ready", State(h, admission, "host", "start").Phase);
+        var room = h.RoomManager.GetRoom(admission.Code)!;
+        Assert.False(room.IsStarted);
+        Assert.Throws<InvalidOperationException>(() => State(h, admission, "host", "publish", ["route.json"]));
+        await h.Ops.MarkRoomStartedAsync(Client("host"), null);
+
+        await h.Ops.ReportArrivalWithExpectedCountAsync(Client("runner"), "round_end_-1", 1);
+        await h.Ops.ReportArrivalAsync(Client("host"), "round_end_-1");
+        Assert.DoesNotContain("round_end_-1", room.BroadcastedSyncIds);
+        await h.Ops.ReportArrivalAsync(Client("idle"), "round_end_-1");
+        Assert.Contains("round_end_-1", room.BroadcastedSyncIds);
+
+        var published = State(h, admission, "host", "publish", publishRoutes ? ["route.json"] : []);
+        if (publishRoutes)
+        {
+            foreach (var uid in new[] { "host", "runner", "idle" })
+                await h.Ops.ReportArrivalAsync(Client(uid), "round_end_0");
+            Assert.DoesNotContain("round_end_0", room.BroadcastedSyncIds);
+        }
+        var terminal = publishRoutes ? State(h, admission, "runner", "finish") : published;
+        foreach (var uid in new[] { "host", "runner", "idle" })
+            await h.Ops.ReportArrivalAsync(Client(uid), "round_end_3");
+        Assert.DoesNotContain("round_end_3", room.BroadcastedSyncIds);
+        Assert.Equal(publishRoutes ? "completed" : "noRoutes", terminal.Phase);
+        await h.Ops.HandleDisconnectAsync(Client("idle"), null);
+        Assert.True((await h.Ops.JoinRoomAsync(Client("idle-reconnected"), admission.Code, "idle", "idle", "1.0.0",
+            standbySessionId: admission.StandbySessionId, acceptsStandby: true, standbyOnly: true)).Success);
+        await h.Ops.WaitForAllPlayersAsync(Client("runner"), "round_end_0");
+        await h.Ops.WaitForAllPlayersAsync(Client("host"), "round_end_0");
+        Assert.DoesNotContain("round_end_0", room.BroadcastedSyncIds);
+        await h.Ops.WaitForAllPlayersAsync(Client("idle-reconnected"), "round_end_0", 100);
+        Assert.Contains("round_end_0", room.BroadcastedSyncIds);
+        Assert.Empty(room.ArrivalSets);
+        Assert.All(room.Players, player => Assert.Equal(-1L, player.CurrentProgress));
+        Assert.Null(State(h, admission, "host").RouteCompletions);
+    }
+
+    [Fact]
+    public async Task RegularNegotiationStillUsesTheOrdinaryWhitelistStartupGate()
+    {
+        var (h, admission) = await Create(3, hostStandby: false);
+        var config = new RoomConfig { MultiWorldEnabled = true, MultiWorldCount = 3, RoomWhitelist = "second,host,old" };
+        await h.Ops.SetRoomConfigAsync(Client("host"), config);
+        await Join(h, admission, "second");
+        Assert.True((await h.Ops.JoinRoomAsync(Client("old"), admission.Code, "old", "old", "1.0.0")).Success);
+        await h.Ops.ResetForNewWorldRoundAsync(Client("host"), 1);
+        foreach (var uid in new[] { "host", "second", "old" })
+            await h.Ops.ReportWorldJoinedAsync(Client(uid));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.MarkRoomStartedAsync(Client("host"), null,
+            expectedRoomCode: admission.Code, requireRoundOrderStartup: true));
+        Assert.Equal("regular", State(h, admission, "host", "start").Phase);
+        var room = h.RoomManager.GetRoom(admission.Code)!;
+        Assert.False(room.IsStarted);
+        Assert.Null(room.HostWorld);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.ResetWorldJoinedAsync(Client("host")));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => h.Ops.ResetForNewWorldRoundAsync(Client("host"), 2));
+        await h.Ops.MarkRoomStartedAsync(Client("host"), null, expectedRoomCode: room.Code, requireRoundOrderStartup: true);
+        var order = new[] { "second", "host", "old" };
+        Assert.Equal(order, room.RoundHostOrder);
+        var confirmations = order.Select(uid => h.Ops.ConfirmRoundOrderAsync(Client(uid), room.Code, room.SessionId, order, 3));
+        Assert.All(await Task.WhenAll(confirmations), ready => Assert.True(ready));
+        await h.Ops.SetHostRouteListAsync(Client("host"), ["route.json"]);
+        Assert.True(h.RoomManager.RecordArrival(room.Code, "ordinary", "host", expectedCount: 1));
+    }
+
+    [Fact]
+    public async Task RouteReceiptRequiresAnExecutorAndExactPublishedRouteAndSurvivesAbort()
+    {
+        var (h, room) = await Create(4);
+        await Join(h, room, "runner");
+        await Join(h, room, "other-runner");
+        await Join(h, room, "idle", standbyOnly: true);
+        foreach (var uid in new[] { "host", "runner", "other-runner", "idle" })
+            await h.Ops.ReportWorldJoinedAsync(Client(uid));
+        Assert.Equal("ready", State(h, room, "host", "start").Phase);
+        Assert.Equal("running", State(h, room, "host", "publish", ["route.json", "pending.json"]).Phase);
+        await h.Ops.WaitForAllPlayersAsync(Client("runner"), "route_sync_done", -1);
+        await h.Ops.WaitForAllPlayersAsync(Client("other-runner"), "route_sync_done", -1);
+        Assert.Contains("route_sync_done", h.RoomManager.GetRoom(room.Code)!.BroadcastedSyncIds);
+        await h.Ops.HeartbeatWithProgressAsync(Client("runner"), 0, DateTime.UtcNow, 30);
+        Assert.Null(State(h, room, "host").RouteCompletions);
+        var digest = new string('a', 64);
+        HostWorldSnapshot RouteDone(string uid, string route = "route.json", double duration = 12.5, string? manifest = null) =>
+            h.Ops.HostWorldOperation(Client(uid), room.Code, room.StandbySessionId!, "routeDone",
+                routeName: route, durationSeconds: duration, manifestDigest: manifest ?? digest);
+        Assert.Throws<InvalidOperationException>(() => RouteDone("host"));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("idle"));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("other"));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("runner", "Route.json"));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("runner", manifest: new string('b', 64)));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("runner", duration: double.NaN));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("runner", duration: 0));
+
+        await h.Dispatcher.DispatchAsync(Client("runner"), GatewayTestHarness.HelloEnvelope());
+        var response = await h.Dispatcher.DispatchAsync(Client("runner"), new GatewayEnvelope
+        {
+            Type = GatewayProtocol.MessageTypes.Command,
+            Name = GatewayProtocol.Names.RoomHostWorldUpdate,
+            RoomCode = room.Code,
+            Payload = GatewayEnvelope.ToPayload(new
+            {
+                action = "routeDone", sessionId = room.StandbySessionId, routeName = "route.json",
+                durationSeconds = double.MaxValue, manifestDigest = digest,
+            }),
+        });
+        Assert.Null(GatewayTestHarness.ErrorCode(response));
+        var receipt = Assert.Single(response.Payload!["state"]!.Deserialize<HostWorldSnapshot>(GatewayJson.Options)!.RouteCompletions!);
+        Assert.Equal("route.json", receipt.RouteName);
+        Assert.Equal(TimeSpan.FromHours(6).TotalSeconds, receipt.DurationSeconds);
+        Assert.Equal(DateTimeKind.Utc, receipt.CompletedAtUtc.Kind);
+        Assert.Equal(receipt, Assert.Single(RouteDone("runner").RouteCompletions!));
+        Assert.Equal(receipt, Assert.Single(RouteDone("other-runner", duration: 23).RouteCompletions!));
+
+        await h.Ops.CloseRoomAsync(Client("host"));
+        var aborted = State(h, room, "host");
+        Assert.Equal("aborted", aborted.Phase);
+        Assert.Equal(receipt, Assert.Single(aborted.RouteCompletions!));
+        Assert.Equal(receipt, Assert.Single(RouteDone("runner").RouteCompletions!));
+        Assert.Throws<InvalidOperationException>(() => RouteDone("runner", "pending.json"));
+
+        var next = await h.Ops.CreateRoomAsync(Client("host"), "host", playerUid: "host", expectedPlayerCount: 3,
+            reportedVersion: "1.0.0", negotiateStandby: true, standbyOnly: true);
+        Assert.Null(State(h, next, "host").RouteCompletions);
+        Assert.Throws<InvalidOperationException>(() => h.Ops.HostWorldOperation(Client("runner"), next.Code,
+            room.StandbySessionId!, "routeDone", routeName: "route.json", durationSeconds: 12.5, manifestDigest: digest));
     }
 
     private static async Task Open(GatewayTestHarness h, RoomCreation room, params string[] runners)

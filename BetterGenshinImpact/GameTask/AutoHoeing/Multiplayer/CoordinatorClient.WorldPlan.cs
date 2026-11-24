@@ -100,7 +100,8 @@ public partial class CoordinatorClient
         return RequireSnapshot(response, admission);
     }
 
-    public async Task<MultiWorldStartPlan> CreateWorldPlanTargetAsync(WorldPlanAdmission admission, CancellationToken ct)
+    public async Task<MultiWorldStartPlan> CreateWorldPlanTargetAsync(WorldPlanAdmission admission, CancellationToken ct,
+        bool standbyOnly = false)
     {
         ThrowIfWorldPlanStopped(ct);
         using var budget = CreateWorldPlanBudget(ct, _testStrictWaitBudget ?? TimeSpan.FromSeconds(120));
@@ -117,8 +118,11 @@ public partial class CoordinatorClient
                 || string.IsNullOrEmpty(snapshot.TargetRoomSessionId)
                 || snapshot.RemainingHostUids.Count == 0 || snapshot.RemainingHostUids[0] != _playerUid)
                 throw new MultiplayerSessionFailedException("本端未获得本轮建房许可");
+            if (snapshot.TargetStandbySessionId != null && snapshot.TargetStandbySessionId != snapshot.TargetRoomSessionId
+                || standbyOnly && snapshot.TargetStandbySessionId == null)
+                throw new MultiplayerSessionFailedException("轮换目标未确认本机待机身份");
             var session = BeginRoomSession(snapshot.TargetRoomCode, _playerName ?? "", _playerUid,
-                snapshot.HostConfig?.HoeingBatchId);
+                snapshot.HostConfig?.HoeingBatchId, snapshot.TargetStandbySessionId, isRoomOwner: true, standbyOnly: standbyOnly);
             MarkRoomReady(session);
             CompleteExplicitRoomEvents();
             ThrowIfWorldPlanStopped(budget.Token);

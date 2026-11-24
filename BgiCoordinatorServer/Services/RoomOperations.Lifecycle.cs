@@ -31,9 +31,9 @@ public sealed partial class RoomOperations
         if (negotiateStandby)
         {
             if (!SupportsHostWorld(ctx)) throw new InvalidOperationException("host_world_capability_required");
-            if (!HostWorldExecution.IsValidUid(playerUid) || expectedPlayerCount is < 2 or > 4
-                || !string.IsNullOrEmpty(hoeingBatchId) || expectedParticipantUids is { Count: > 0 }
-                || worldPlanParticipantUids != null)
+            var minExpected = worldPlanParticipantUids is { Count: 1 } && !standbyOnly ? 1 : 2;
+            if (!HostWorldExecution.IsValidUid(playerUid) || expectedPlayerCount < minExpected || expectedPlayerCount > 4
+                || !string.IsNullOrEmpty(hoeingBatchId) || expectedParticipantUids is { Count: > 0 })
                 throw new InvalidOperationException("host_world_create_invalid");
         }
         if (_roomManager.GetRoomByConnectionId(ctx.ConnectionId).Room?.HostWorld != null)
@@ -270,13 +270,14 @@ public sealed partial class RoomOperations
                 ctx.ConnectionId, roomCode);
             return;
         }
-        if (room.StandbyNegotiation != null) throw new InvalidOperationException("host_world_start_required");
         RequireRoomRoutePackage(room);
         if (((requireWorldPlanRoster || requireRoundOrderStartup) && roomCode != expectedRoomCode)
             || (requireWorldPlanRoster && room.WorldPlanParticipantUids == null))
             throw new InvalidOperationException("world_plan_target_identity");
         lock (room)
         {
+            if (room.StandbyNegotiation != null && room.HostConfig is not { MultiWorldEnabled: true })
+                throw new InvalidOperationException("host_world_start_required");
             if (room.IsStarted)
             {
                 if (requireRoundOrderStartup && room.RoundOrderStartup == null)
@@ -305,6 +306,15 @@ public sealed partial class RoomOperations
                     if (requireRoundOrderStartup && room.RoundOrderStartup == null)
                         throw new InvalidOperationException("round_order_startup_missing");
                     return;
+                }
+                if (room.StandbyNegotiation is { } standby)
+                {
+                    var state = standby.Snapshot;
+                    if (state.Phase is not ("regular" or "ready"))
+                        throw new InvalidOperationException("host_world_start_required");
+                    if (state.Phase == "ready" && _roomManager.GetLiveJoinedHostWorldCountLocked(room)
+                        != state.ExecutorUids.Count + state.StandbyUids!.Count)
+                        throw new InvalidOperationException("host_world_roster_not_ready");
                 }
                 if (room.WorldPlanParticipantUids != null
                     && (!room.HostReady || !_roomManager.GetHoeingStartupReadyLocked(room).Ready))

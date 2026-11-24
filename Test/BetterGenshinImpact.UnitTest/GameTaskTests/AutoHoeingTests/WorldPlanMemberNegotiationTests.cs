@@ -42,6 +42,21 @@ public sealed class WorldPlanMemberNegotiationTests
     }
 
     [Fact]
+    public async Task NegotiatedSingleWorldWaitsForConfigurationWithoutRequestingAWorldPlan()
+    {
+        await using var client = await Member(negotiatesStandby: true);
+        var task = CreateTask();
+        var calls = 0;
+        client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal(GatewayProtocol.Names.RoomGetConfig, request.Name);
+            return Task.FromResult(Response(request, new { config = ++calls == 1 ? null : new RoomConfig { MultiWorldEnabled = false } }));
+        };
+        Assert.False(await Start(task, client).WaitAsync(TimeSpan.FromSeconds(3)));
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
     public async Task OrdinarySingleWorldWithReadyHostAndThreeConfigFailuresReturnsToLegacyStartup()
     {
         await using var client = await Member();
@@ -340,11 +355,12 @@ public sealed class WorldPlanMemberNegotiationTests
         }
     };
 
-    private static async Task<CoordinatorClient> Member()
+    private static async Task<CoordinatorClient> Member(bool negotiatesStandby = false)
     {
         var client = new CoordinatorClient { _testIsConnectedOverride = true };
         client.GetOrCreateGatewayForTest()._testInvokeOverride = (_, request, _) =>
-            System.Threading.Tasks.Task.FromResult(Response(request, new { success = true }));
+            System.Threading.Tasks.Task.FromResult(Response(request, new { success = true, negotiatesStandby,
+                standbySessionId = negotiatesStandby ? "source-instance" : null }));
         Assert.True(await client.JoinRoomAsync("source-A", "B", "B"));
         typeof(BgiGatewayClient).GetProperty(nameof(BgiGatewayClient.ServerCapabilities))!
             .SetValue(client.GetOrCreateGatewayForTest(), new[] { GatewayProtocol.WorldPlanCapability });

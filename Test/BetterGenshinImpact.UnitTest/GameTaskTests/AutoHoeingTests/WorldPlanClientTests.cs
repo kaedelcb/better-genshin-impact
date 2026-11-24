@@ -98,6 +98,81 @@ public sealed class WorldPlanClientTests
         Assert.True(client.IsHost);
     }
 
+    [Theory]
+    [InlineData("C-instance", true)]
+    [InlineData(null, false)]
+    [InlineData("other-instance", false)]
+    public async Task PassiveNewHostMustBindTheSameTargetRoomInstance(string? standbySessionId, bool accepted)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await Join(client);
+        using var transfer = client.EnterWorldPlanTransfer("plan-1", "A");
+        var admission = Admission();
+        var gateway = client.GetOrCreateGatewayForTest();
+        gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Response(request, new
+        {
+            snapshot = new MultiWorldStartPlan
+            {
+                PlanId = admission.PlanId, Stage = "Committed", TargetRoomCode = "C", TargetRoomSessionId = "C-instance",
+                TargetStandbySessionId = standbySessionId, RemainingHostUids = new() { "C", "D" },
+            },
+        }));
+        var creation = client.CreateWorldPlanTargetAsync(admission, CancellationToken.None, standbyOnly: true);
+        if (!accepted)
+        {
+            await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() => creation);
+            Assert.False(client.IsInRoom);
+            return;
+        }
+        await creation;
+        Event(client, "C", GatewayProtocol.Events.RoomPlayerListChanged,
+            new { players = new[] { new PlayerInfo { PlayerUid = "C" } } });
+        Assert.True(client.NegotiatesPlayerStandby);
+        gateway._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal("C-instance", request.GetString("sessionId"));
+            return Task.FromResult(Response(request, new
+            {
+                state = new HostWorldState("C-instance", "C", ["D"], "ready", null, null, StandbyUids: ["C"]),
+            }));
+        };
+        Assert.Equal("ready", (await client.ReadOrUpdateHostWorldAsync(CancellationToken.None)).Phase);
+    }
+
+    [Theory]
+    [InlineData("C-instance", true)]
+    [InlineData("stale-instance", false)]
+    public async Task RotationResetRetriesLostReplyButRequiresTheSameRoomEpoch(string responseSession, bool accepted)
+    {
+        await using var client = new CoordinatorClient { _testIsConnectedOverride = true };
+        await Join(client);
+        using var transfer = client.EnterWorldPlanTransfer("plan-1", "A");
+        var gateway = client.GetOrCreateGatewayForTest();
+        gateway._testInvokeOverride = (_, request, _) => Task.FromResult(Response(request, new
+        {
+            snapshot = new MultiWorldStartPlan
+            {
+                PlanId = "plan-1", Stage = "Committed", TargetRoomCode = "C", TargetRoomSessionId = "C-instance",
+                TargetStandbySessionId = "C-instance", RemainingHostUids = new() { "C", "D" },
+            },
+        }));
+        await client.CreateWorldPlanTargetAsync(Admission(), CancellationToken.None);
+        var attempts = 0;
+        gateway._testInvokeOverride = (_, request, _) =>
+        {
+            Assert.Equal(GatewayProtocol.Names.WorldResetForNewRound, request.Name);
+            Assert.Equal("C", request.RoomCode);
+            Assert.Equal("C-instance", request.GetString("sessionId"));
+            Assert.Equal(2, request.GetInt("newRound"));
+            if (++attempts == 1) throw new IOException("lost receipt");
+            return Task.FromResult(Response(request, new { ack = true, worldRound = 2, sessionId = responseSession }));
+        };
+        var reset = client.ResetStandbyWorldRoundAsync(2, CancellationToken.None);
+        if (accepted) await reset;
+        else await Assert.ThrowsAsync<MultiplayerSessionFailedException>(() => reset);
+        Assert.Equal(2, attempts);
+    }
+
     [Fact]
     public async Task TransferReconnectOnlyHellosAndReadsOriginalTicketWithoutRejoiningSource()
     {

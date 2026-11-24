@@ -1,3 +1,4 @@
+using System.Globalization;
 using BgiCoordinatorServer.Gateway;
 using BgiCoordinatorServer.Models;
 
@@ -18,11 +19,44 @@ namespace BgiCoordinatorServer.Services;
 /// </summary>
 public sealed partial class RoomOperations
 {
+    // World transitions wait for the physical party, including players excluded from route coordination.
+    private async Task<bool> TryReportStandbyRoundEndAsync(GatewayHandlerContext ctx, Room room, string syncId)
+    {
+        const string prefix = "round_end_";
+        if (!syncId.StartsWith(prefix, StringComparison.Ordinal)
+            || (syncId != "round_end_-1" && !int.TryParse(syncId.AsSpan(prefix.Length), NumberStyles.None,
+                CultureInfo.InvariantCulture, out _))) return false;
+
+        bool replay, release;
+        lock (room)
+        {
+            if (room.HostWorld is not { } state || room.HostConfig is not { MultiWorldEnabled: true }) return false;
+            var allowed = syncId == "round_end_-1"
+                ? state.Snapshot.Phase == "ready" && room.CurrentWorldRound <= 1
+                : syncId == $"round_end_{Math.Max(1, room.CurrentWorldRound) - 1}" && state.Snapshot.Phase is "completed" or "noRoutes";
+            if (!room.IsStarted || !allowed
+                || !_roomManager.CanUseHostWorldRoomLocked(room, ctx.ConnectionId)
+                || room.Players.SingleOrDefault(p => p.ConnectionId == ctx.ConnectionId) is not { } member) return true;
+
+            replay = room.BroadcastedSyncIds.Contains(syncId);
+            release = !replay && state.RecordRoundEnd(syncId, member.PlayerUid);
+            if (release) room.BroadcastedSyncIds.Add(syncId);
+        }
+
+        if (replay)
+            await _broadcaster.SendToCallerAsync(ctx, "AllArrived", new { syncPointId = syncId },
+                new object?[] { syncId }, roomCode: room.Code);
+        else if (release)
+            await _broadcaster.BroadcastGroupAsync(room.Code, "AllArrived", new { syncPointId = syncId }, syncId);
+        return true;
+    }
+
     /// <summary>上报到达集合点，全员到达时广播 AllArrived</summary>
     public async Task ReportArrivalAsync(GatewayHandlerContext ctx, string syncPointId)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        if (await TryReportStandbyRoundEndAsync(ctx, room, syncPointId)) return;
         lock (room)
             if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
@@ -59,6 +93,7 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        if (await TryReportStandbyRoundEndAsync(ctx, room, syncPointId)) return;
         lock (room)
             if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.reportArrival");
@@ -161,6 +196,7 @@ public sealed partial class RoomOperations
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
         if (room == null || roomCode == null) return;
+        if (await TryReportStandbyRoundEndAsync(ctx, room, syncId)) return;
         lock (room)
             if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
         ObservePhase(room, roomCode, "sync.waitForAllPlayers");

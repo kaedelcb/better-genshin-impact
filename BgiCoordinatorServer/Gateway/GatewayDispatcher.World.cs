@@ -19,8 +19,10 @@ public sealed partial class GatewayDispatcher
 
         _commands[GatewayProtocol.Names.WorldResetForNewRound] = async (env, ctx) =>
         {
-            await _ops.ResetForNewWorldRoundAsync(ctx, GetInt(env, "newRound"));
-            return new { ack = true };
+            var worldRound = GetInt(env, "newRound");
+            var sessionId = GetString(env, "sessionId");
+            await _ops.ResetForNewWorldRoundAsync(ctx, worldRound, env.RoomCode, sessionId);
+            return new { ack = true, worldRound, sessionId };
         };
     }
 }

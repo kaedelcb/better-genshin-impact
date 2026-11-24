@@ -41,21 +41,16 @@ public sealed partial class RoomOperations
             var capable = !forceLegacy && room.Players.All(p => !string.IsNullOrWhiteSpace(p.PlayerUid)
                 && _capabilityLookup?.Supports(p.ConnectionId, WorldPlanState.Capability) == true)
                 && room.Players.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).Count() == room.Players.Count;
-            var currentPartyFrozen = false;
-            if (freezeCurrentParty)
-            {
-                room.ExpectedPlayerCount = room.Players.Count;
-                var currentUids = room.Players.Select(p => p.PlayerUid).ToArray();
-                currentPartyFrozen = currentUids.All(uid => !string.IsNullOrWhiteSpace(uid))
-                    && currentUids.Distinct(StringComparer.Ordinal).Count() == currentUids.Length;
-                if (currentPartyFrozen) room.WorldPlanParticipantUids = currentUids;
-            }
+            var currentPartyFrozen = freezeCurrentParty && room.Players.All(p => !string.IsNullOrWhiteSpace(p.PlayerUid))
+                && room.Players.Select(p => p.PlayerUid).Distinct(StringComparer.Ordinal).Count() == room.Players.Count;
             var state = new WorldPlanState(room, capable, _worldPlanTime.GetUtcNow().UtcDateTime, currentPartyFrozen);
-            if (capable)
+            if (freezeCurrentParty) room.ExpectedPlayerCount = room.Players.Count;
+            if (capable || currentPartyFrozen)
             {
                 room.WorldPlanParticipantUids = state.Participants.AsReadOnly();
-                room.WorldPlanId = state.Id;
+                room.RequiredStandbyAssignments = state.StandbyAssignments;
             }
+            if (capable) room.WorldPlanId = state.Id;
             else room.UseLegacyWorldPlanOrder = true;
             _worldPlans[state.Id] = state;
             _worldPlansBySource[room.SessionId] = state.Id;
@@ -116,6 +111,7 @@ public sealed partial class RoomOperations
                     {
                         source.WorldPlanParticipantUids = null;
                         source.WorldPlanId = null;
+                        source.RequiredStandbyAssignments = null;
                         source.UseLegacyWorldPlanOrder = true;
                     }
         }
@@ -183,6 +179,11 @@ public sealed partial class RoomOperations
             var uid = plan.RequireTarget(ticket, _worldPlanTime.GetUtcNow().UtcDateTime);
             if (_capabilityLookup?.Supports(ctx.ConnectionId, WorldPlanState.Capability) != true)
                 throw new InvalidOperationException("world_plan_capability_required");
+            var assignments = plan.StandbyAssignments;
+            var negotiateStandby = assignments != null && SupportsHostWorld(ctx);
+            if (!negotiateStandby && assignments?.Values.Contains(true) == true)
+                throw new InvalidOperationException("host_world_capability_required");
+            var standbyOnly = assignments != null && assignments[uid];
             var player = plan.Players.Single(p => p.PlayerUid == uid);
             _routePackagePolicy?.RequireVersion(player.ReportedVersion);
             _routePackagePolicy?.RequireConnectionVersion(ctx.ConnectionId, player.ReportedVersion, ctx.IsV3);
@@ -198,7 +199,9 @@ public sealed partial class RoomOperations
                 RequireRoomRoutePackage(target);
                 if (target.HostConnectionId != ctx.ConnectionId)
                 {
-                    var joined = await JoinRoomAsync(ctx, target.Code, player.PlayerName, uid, player.ReportedVersion, plan.Config.HoeingBatchId);
+                    var joined = await JoinRoomAsync(ctx, target.Code, player.PlayerName, uid, player.ReportedVersion,
+                        plan.Config.HoeingBatchId, snapshot.TargetStandbySessionId,
+                        acceptsStandby: snapshot.TargetStandbySessionId != null, standbyOnly: standbyOnly);
                     if (!joined.Success) throw new InvalidOperationException(joined.Error ?? "world_plan_rejoin_failed");
                 }
                 // Group subscription may have failed after allocation; repeating it is safe.
@@ -213,7 +216,7 @@ public sealed partial class RoomOperations
                 var initial = _roomManager.GetRoom(plan.InitialRoomCode);
                 if (initial == null || initial.SessionId != plan.InitialRoomSessionId)
                     throw new InvalidOperationException("world_plan_source_ended");
-                plan.SetTarget(initial.Code, initial.SessionId);
+                plan.SetTarget(initial.Code, initial.SessionId, initial.StandbyNegotiation?.Snapshot.SessionId);
                 return plan.Snapshot(_worldPlanTime.GetUtcNow().UtcDateTime);
             }
             // Allocate and register before the first transport await, including a failed/lost acknowledgement.
@@ -222,10 +225,11 @@ public sealed partial class RoomOperations
                 plan.Players.Select(p => p.PlayerName).Where(n => !string.IsNullOrWhiteSpace(n)).Distinct().ToList(),
                 uid, plan.Participants.Count, player.ReportedVersion, plan.Config.HoeingBatchId,
                 plan.Config.HoeingBatchId == null ? null : plan.Participants,
-                plan.Participants, plan.Id, GatewayProtocol.RoomProtocols.V3, snapshot.HostConfig);
+                plan.Participants, plan.Id, GatewayProtocol.RoomProtocols.V3, snapshot.HostConfig,
+                negotiateStandby, standbyOnly, assignments);
             var room = _roomManager.GetRoom(code)!;
             RequireRoomRoutePackage(room);
-            plan.SetTarget(code, room.SessionId);
+            plan.SetTarget(code, room.SessionId, room.StandbyNegotiation?.Snapshot.SessionId);
             await LeaveAllGroupsAsync(ctx);
             await _broadcaster.AddToGroupAsync(ctx, code);
             TrackGroup(ctx, code);

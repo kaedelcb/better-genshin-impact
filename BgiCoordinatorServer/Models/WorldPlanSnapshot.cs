@@ -16,6 +16,7 @@ public sealed class WorldPlanSnapshot
     public List<PlayerInfo> Players { get; init; } = [];
     public string? TargetRoomCode { get; init; }
     public string? TargetRoomSessionId { get; init; }
+    public string? TargetStandbySessionId { get; init; }
     public bool SourceReleased { get; init; }
     public bool CurrentPartyFrozen { get; init; }
 }

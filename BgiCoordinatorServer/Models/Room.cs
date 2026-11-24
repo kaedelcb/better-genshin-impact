@@ -26,6 +26,7 @@ public class Room
 
     // An ordinary room may negotiate before start; its route gates remain unchanged unless someone chose standby.
     internal Services.HostWorldExecution? StandbyNegotiation { get; init; }
+    internal IReadOnlyDictionary<string, bool>? RequiredStandbyAssignments { get; set; }
     internal Services.HostWorldExecution? HostWorld => StandbyNegotiation is { UsesStandby: true } mode ? mode : null;
 
     // Physical membership includes the host. Only route coordination uses this projection (under the room lock).

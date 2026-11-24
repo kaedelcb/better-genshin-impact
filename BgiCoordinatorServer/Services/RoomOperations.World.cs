@@ -35,7 +35,6 @@ public sealed partial class RoomOperations
         ObservePhase(room, roomCode, "world.resetJoined");
         if (room != null && roomCode != null && room.HostConnectionId == ctx.ConnectionId)
         {
-            if (room.HostWorld != null) throw new InvalidOperationException("host_world_single_world_required");
             _roomManager.ResetWorldJoinedSet(roomCode);
             _logger.LogInformation("[ResetWorldJoined] 房间 {Code} WorldJoinedSet 已重置", roomCode);
         }
@@ -46,16 +45,25 @@ public sealed partial class RoomOperations
     /// 多轮世界重置（multiplayer-abnormal-wait-coordination 重构）
     /// 多轮世界新轮次开始时调用，清理所有等待点状态和异常状态
     /// </summary>
-    public Task ResetForNewWorldRoundAsync(GatewayHandlerContext ctx, int newRound)
+    public Task ResetForNewWorldRoundAsync(GatewayHandlerContext ctx, int newRound,
+        string? expectedRoomCode = null, string? expectedSessionId = null)
     {
         var (room, roomCode) = _roomManager.GetRoomByConnectionId(ctx.ConnectionId);
+        if (!string.IsNullOrEmpty(expectedSessionId) && (room == null || roomCode != expectedRoomCode
+            || room.SessionId != expectedSessionId || room.StandbyNegotiation == null))
+            throw new InvalidOperationException("host_world_session_mismatch");
         if (room == null || roomCode == null) return Task.CompletedTask;
-        if (room.HostWorld != null) throw new InvalidOperationException("host_world_single_world_required");
-
-        _phaseObserver.Mark(roomCode, RoomPhase.RoundTransition, "world.resetForNewRound");
 
         lock (room)
         {
+            if (room.StandbyNegotiation is { } standby)
+            {
+                if (room.HostConnectionId != ctx.ConnectionId) throw new InvalidOperationException("host_world_host_required");
+                if (!_roomManager.CanUseHostWorldRoomLocked(room, ctx.ConnectionId))
+                    throw new InvalidOperationException("host_world_session_mismatch");
+                if (standby.Snapshot.Phase != "waiting") throw new InvalidOperationException("host_world_reset_after_start");
+            }
+            _phaseObserver.Mark(roomCode, RoomPhase.RoundTransition, "world.resetForNewRound");
             room.RerunExecution?.Abort("WorldReset");
             room.RerunExecution = null;
             room.CurrentWorldRound = newRound;

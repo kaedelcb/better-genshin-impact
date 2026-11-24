@@ -40,7 +40,7 @@ public sealed partial class GatewayDispatcher
         {
             state = _ops.HostWorldOperation(ctx, env.RoomCode, GetString(env, "sessionId"), GetString(env, "action"),
                 GetStringList(env, "routeNames"), GetBool(env, "allowPartial"), GetInt(env, "partyCount"),
-                Get<string>(env, "manifestDigest")),
+                Get<string>(env, "manifestDigest"), Get<string>(env, "routeName"), GetDouble(env, "durationSeconds")),
         });
         _queries[GatewayProtocol.Names.RoomHostWorldState] = (env, ctx) => Task.FromResult<object?>(new
         {

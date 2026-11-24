@@ -72,7 +72,8 @@ public partial class RoomManager
     public string CreateRoom(string hostConnectionId, string playerName = "", List<string>? whitelist = null, string playerUid = "", int expectedPlayerCount = 4, string reportedVersion = "",
         string? hoeingBatchId = null, IReadOnlyList<string>? expectedParticipantUids = null,
         IReadOnlyList<string>? worldPlanParticipantUids = null, string? worldPlanId = null, string? protocol = null,
-        RoomConfig? hostConfig = null, bool negotiateStandby = false, bool standbyOnly = false)
+        RoomConfig? hostConfig = null, bool negotiateStandby = false, bool standbyOnly = false,
+        IReadOnlyDictionary<string, bool>? requiredStandbyAssignments = null)
     {
         var endedRooms = new List<Room>();
         var fixedUids = expectedParticipantUids?.ToArray() ?? [];
@@ -124,7 +125,9 @@ public partial class RoomManager
             CreatedAt = DateTime.UtcNow,
             // 服务端生成的会话身份（route-anchor）：区分房间实例，避免房间码复用导致跨实例串状态
             SessionId = sessionId,
-            StandbyNegotiation = negotiateStandby ? new HostWorldExecution(sessionId, playerUid, standbyOnly) : null,
+            StandbyNegotiation = negotiateStandby ? new HostWorldExecution(sessionId, playerUid,
+                standbyOnly || requiredStandbyAssignments?.Values.Contains(true) == true) : null,
+            RequiredStandbyAssignments = requiredStandbyAssignments,
             Whitelist = whitelist ?? [],
             ExpectedPlayerCount = fixedUids.Length > 0 ? fixedUids.Length : expectedPlayerCount,
             HostBaselineVersion = reportedVersion ?? "",
@@ -169,18 +172,18 @@ public partial class RoomManager
                 && _rooms.TryGetValue(activeCode, out var activeRoom) && activeRoom.HostWorld != null)
                 return (false, "host_world_other_room");
             if (standbyOnly && room.StandbyNegotiation == null) return (false, "player_standby_room_unsupported");
+            if (room.WorldPlanParticipantUids is { } planned && !planned.Contains(playerUid, StringComparer.Ordinal))
+                return (false, "world_plan_not_participant");
+            if (room.RequiredStandbyAssignments is { } assignments
+                && (!assignments.TryGetValue(playerUid, out var requiredStandby) || requiredStandby != standbyOnly))
+                return (false, "player_standby_identity_mismatch");
             if (room.StandbyNegotiation != null && (room.HostWorld != null || hasHostWorldCapability || standbyOnly))
                 return JoinHostWorldLocked(room, connectionId, playerId, playerName, playerUid, reportedVersion,
                     hasHostWorldCapability, standbySessionId, standbyOnly);
-            if (room.WorldPlanParticipantUids is { } planned)
-            {
-                if (!planned.Contains(playerUid, StringComparer.Ordinal))
-                    return (false, "world_plan_not_participant");
-                if (room.Players.Any(p => p.PlayerUid == playerUid && p.ConnectionId != connectionId
-                    && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
-                    && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
-                    return (false, "world_plan_duplicate_participant");
-            }
+            if (room.WorldPlanParticipantUids != null && room.Players.Any(p => p.PlayerUid == playerUid && p.ConnectionId != connectionId
+                && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
+                && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
+                return (false, "world_plan_duplicate_participant");
             if (room.HoeingBatchId is not null && !room.ExpectedParticipantUids.Contains(playerUid, StringComparer.Ordinal))
                 return (false, "hoeing_start_not_participant");
             if (room.HoeingBatchId is not null && room.Players.Any(p => p.PlayerUid == playerUid
@@ -247,7 +250,7 @@ public partial class RoomManager
             var isReconnect = reconnectByName != null || reconnectByUid != null;
 
             // === IsStarted 锁定（spec lock-room-after-start §2.1）：开锄后拒绝非重连新玩家 ===
-            if (!isReconnect && room.IsStarted)
+            if (!isReconnect && (room.IsStarted || room.StandbyNegotiation is { Snapshot.Phase: "regular" }))
                 return (false, "房间已开锄");
 
             // === ExpectedPlayerCount 上限（spec lock-room-after-start §2.2）：人数已达房主声明的期望值时拒绝 ===
@@ -811,7 +814,12 @@ public partial class RoomManager
     {
         if (!_rooms.TryGetValue(roomCode, out var room))
             return;
-        lock (room) { room.WorldJoinedSet.Clear(); }
+        lock (room)
+        {
+            if (room.StandbyNegotiation is { Snapshot.Phase: not "waiting" })
+                throw new InvalidOperationException("host_world_reset_after_start");
+            room.WorldJoinedSet.Clear();
+        }
     }
 
     internal HoeingStartupReadySnapshot GetHoeingStartupReadyLocked(Room room)

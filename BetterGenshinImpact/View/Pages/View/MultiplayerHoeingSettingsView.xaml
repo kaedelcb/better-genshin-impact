@@ -76,7 +76,7 @@
                                      IsChecked="{Binding StandbyOnly, Mode=TwoWay}" />
                     <ui:TextBlock Margin="12,0,0,0"
                                   Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
-                                  Text="仅影响本机。开启并保存后持续生效，重启软件也不会关闭；要恢复跟跑，请手动关闭并保存。修改不影响当前房间。开启后照常组队，房主仍会发布路线。仅限本机配置组的单世界联机，需协调服务和全员支持，且至少一人跟跑。"
+                                  Text="仅影响本机。保存后持续生效，直到手动关闭并保存；本场开始后修改不会改变本场选择。开启后照常组队、换世界，只跳过本机的路线执行。路线 CD 仍按实际完成记录；需协调服务和全员支持，至少一人跟跑。"
                                   TextWrapping="Wrap" />
                 </StackPanel>
             </ui:CardExpander>
