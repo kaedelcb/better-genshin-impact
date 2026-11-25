@@ -32,19 +32,19 @@ internal sealed class ConfigurationGroupRoomActions : IDisposable
     private readonly ExecutionScope _owner;
     private readonly Key _key;
     private readonly Chain _chain;
-    private readonly int _firstSwitchRow;
+    private readonly int _firstRoomActionRow;
 
-    private ConfigurationGroupRoomActions(ExecutionScope owner, Key key, Chain chain, int firstSwitchRow)
+    private ConfigurationGroupRoomActions(ExecutionScope owner, Key key, Chain chain, int firstRoomActionRow)
     {
         _owner = owner;
         _key = key;
         _chain = chain;
-        _firstSwitchRow = firstSwitchRow;
+        _firstRoomActionRow = firstRoomActionRow;
     }
 
-    public bool RoutesOnlineThroughMailbox(int row) => _chain.Started || (_chain.Interruption is not null && row >= _firstSwitchRow);
+    public bool RoutesOnlineThroughMailbox(int row) => _chain.Started || (_chain.Interruption is not null && row >= _firstRoomActionRow);
 
-    public static ConfigurationGroupRoomActions Begin(ExecutionScope owner, string groupName, int firstSwitchRow, bool isRecovery)
+    public static ConfigurationGroupRoomActions Begin(ExecutionScope owner, string groupName, int firstRoomActionRow, bool isRecovery)
     {
         var descriptor = owner.Descriptor;
         var key = new Key(owner.RunId, groupName, owner.Checkpoint?.OneDragonTaskId,
@@ -58,14 +58,14 @@ internal sealed class ConfigurationGroupRoomActions : IDisposable
                 else if (descriptor.Source == JobSource.Resume && key == suspended.Key)
                 {
                     _suspended = null;
-                    return new(owner, key, suspended.Chain, firstSwitchRow);
+                    return new(owner, key, suspended.Chain, firstRoomActionRow);
                 }
             }
         }
         return new(owner, key, new Chain
         {
             Interruption = isRecovery ? "原配置组房间动作的收件状态无法确认；不重复切房或改用普通上线。" : null
-        }, firstSwitchRow);
+        }, firstRoomActionRow);
     }
 
     public IDisposable EnterStep(string name, int row, int repeat)
@@ -85,9 +85,19 @@ internal sealed class ConfigurationGroupRoomActions : IDisposable
             ? step.Owner.SendAsync(step, "switch", targetRoomName, ct)
             : Task.FromException(new RoomActionHandoffException("切换助手房间须在实际配置组中运行，不能作为其他配置组的优先插入项目发出。"));
 
-    public static Task? TrySendOnlineAsync(CancellationToken ct)
-        => CurrentStep.Value is { Name: NotifyOnlineTask.TaskName } step && step.Owner.RoutesOnlineThroughMailbox(step.Row)
-            ? step.Owner.SendAsync(step, "online", null, ct) : null;
+    public static Task? TrySendOnlineAsync(string? targetRoomName, CancellationToken ct)
+    {
+        var explicitTarget = !string.IsNullOrWhiteSpace(targetRoomName);
+        if (CurrentStep.Value is { Name: NotifyOnlineTask.TaskName } step
+            && (explicitTarget || step.Owner.RoutesOnlineThroughMailbox(step.Row)))
+        {
+            // 使用独立动作类型，旧助手会拒绝它，避免忽略目标房间而在原房间上线。
+            return step.Owner.SendAsync(step, explicitTarget ? "switchOnline" : "online", targetRoomName, ct);
+        }
+        return explicitTarget
+            ? Task.FromException(new RoomActionHandoffException("指定房间的联机上线须在实际配置组中运行。"))
+            : null;
+    }
 
     private async Task SendAsync(Step step, string kind, string? targetRoomName, CancellationToken ct)
     {
@@ -102,7 +112,7 @@ internal sealed class ConfigurationGroupRoomActions : IDisposable
 
         try
         {
-            if (kind == "switch" && string.IsNullOrWhiteSpace(targetRoomName))
+            if (kind is "switch" or "switchOnline" && string.IsNullOrWhiteSpace(targetRoomName))
                 throw new RoomActionHandoffException("切换助手房间需要填写目标房间名称。");
             ct.ThrowIfCancellationRequested();
             _owner.ThrowIfStopped();

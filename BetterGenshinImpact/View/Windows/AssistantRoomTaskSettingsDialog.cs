@@ -12,11 +12,18 @@ namespace BetterGenshinImpact.View.Windows;
 
 internal static class AssistantRoomTaskSettingsDialog
 {
-    internal static (RoomDialog Dialog, ComboBox Selector) Create(IReadOnlyList<string> rooms, string? currentRoomName, Window? owner)
+    internal sealed record RoomChoice(string? RoomName, string Label);
+
+    internal static (RoomDialog Dialog, ComboBox Selector) Create(IReadOnlyList<string> rooms, string? currentRoomName, Window? owner, string taskName)
     {
+        var allowCurrentRoom = taskName == NotifyOnlineTask.TaskName;
+        var choices = rooms.Select(name => new RoomChoice(name, name)).ToList();
+        if (allowCurrentRoom)
+            choices.Insert(0, new RoomChoice(null, "当前登录房间（不切换）"));
+
         var dialog = new RoomDialog
         {
-            Title = $"修改独立任务配置 - {SwitchAssistantRoomTask.TaskName}",
+            Title = $"修改独立任务配置 - {taskName}",
             Owner = owner,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Width = 440,
@@ -25,12 +32,14 @@ internal static class AssistantRoomTaskSettingsDialog
         };
         var selector = new ComboBox
         {
-            ItemsSource = rooms,
-            SelectedItem = rooms.FirstOrDefault(name => string.Equals(name, currentRoomName, StringComparison.OrdinalIgnoreCase)),
-            IsEnabled = rooms.Count > 0
+            ItemsSource = choices,
+            DisplayMemberPath = nameof(RoomChoice.Label),
+            SelectedItem = choices.FirstOrDefault(choice => string.Equals(choice.RoomName,
+                string.IsNullOrWhiteSpace(currentRoomName) ? null : currentRoomName, StringComparison.OrdinalIgnoreCase)),
+            IsEnabled = choices.Count > 0
         };
         AutomationProperties.SetName(selector, "目标房间");
-        dialog.IsPrimaryButtonEnabled = selector.SelectedItem is string;
+        dialog.IsPrimaryButtonEnabled = selector.SelectedItem is RoomChoice;
 
         var form = new StackPanel { Margin = new Thickness(10) };
         form.Children.Add(new DialogText { Text = "目标房间", Margin = new Thickness(0, 0, 0, 6) });
@@ -50,7 +59,7 @@ internal static class AssistantRoomTaskSettingsDialog
         form.Children.Add(status);
         selector.SelectionChanged += (_, _) =>
         {
-            dialog.IsPrimaryButtonEnabled = selector.SelectedItem is string;
+            dialog.IsPrimaryButtonEnabled = selector.SelectedItem is RoomChoice;
             status.Visibility = hint is not null && !dialog.IsPrimaryButtonEnabled ? Visibility.Visible : Visibility.Collapsed;
         };
         dialog.Content = form;

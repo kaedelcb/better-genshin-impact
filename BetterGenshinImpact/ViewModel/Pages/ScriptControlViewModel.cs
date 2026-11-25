@@ -1901,7 +1901,7 @@ public partial class ScriptControlViewModel : ViewModel
     {
         if (item == null || item.Type != "SoloTask") return;
 
-        if (item.Name == SwitchAssistantRoomTask.TaskName)
+        if (item.Name is SwitchAssistantRoomTask.TaskName or NotifyOnlineTask.TaskName)
         {
             await ShowAssistantRoomSettingsDialogAsync(item);
             return;
@@ -2056,8 +2056,8 @@ public partial class ScriptControlViewModel : ViewModel
         var rooms = await Task.Run(() => SwitchAssistantRoomTask.ReadSavedRoomNames(explicitRoot,
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)));
         var currentRoom = SwitchAssistantRoomTask.ReadTargetRoomName(item.SoloTaskSettingsObject);
-        var (dialog, selector) = AssistantRoomTaskSettingsDialog.Create(rooms, currentRoom, Application.Current.MainWindow);
-        if (await dialog.ShowDialogAsync() != MessageBoxResult.Primary || selector.SelectedItem is not string selectedRoom)
+        var (dialog, selector) = AssistantRoomTaskSettingsDialog.Create(rooms, currentRoom, Application.Current.MainWindow, item.Name);
+        if (await dialog.ShowDialogAsync() != MessageBoxResult.Primary || selector.SelectedItem is not AssistantRoomTaskSettingsDialog.RoomChoice selectedRoom)
             return;
 
         var group = ScriptGroups.FirstOrDefault(candidate => candidate.Projects.Contains(item));
@@ -2069,7 +2069,7 @@ public partial class ScriptControlViewModel : ViewModel
 
         var previousSettings = item.SoloTaskSettingsObject;
         item.SoloTaskSettingsObject = previousSettings is null ? new() : new(previousSettings, previousSettings.Comparer);
-        item.SoloTaskSettingsObject[SwitchAssistantRoomTask.TargetRoomName] = selectedRoom;
+        item.SoloTaskSettingsObject[SwitchAssistantRoomTask.TargetRoomName] = selectedRoom.RoomName ?? "";
         if (!TryWriteScriptGroupToDisk(group, out var error))
         {
             item.SoloTaskSettingsObject = previousSettings;

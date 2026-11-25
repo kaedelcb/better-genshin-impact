@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BetterGenshinImpact.Core.Config;
@@ -10,8 +11,8 @@ using Microsoft.Extensions.Logging;
 namespace BetterGenshinImpact.GameTask.AutoOnline;
 
 /// <summary>
-/// "联机锄地上线"独立任务。执行时通知助手标记上线，然后立即返回（不阻塞）。
-/// 助手通过 IPC task.status 的 onlineGeneration 字段检测到新代序号后，通过 SignalR 上报服务端。
+/// "联机锄地上线"独立任务。指定房间时由助手接收切房上线请求；未指定房间时沿用普通上线信号。
+/// 普通上线由助手通过 IPC task.status 的 onlineGeneration 字段检测新代序号，再通过 SignalR 上报服务端。
 /// 该任务本身不做任何网络操作，纯粹轻量状态标记。
 /// 设计符合"助手做决策，BGI 做执行"的架构原则（bgi-implementation-patterns.md §31）。
 /// generation 单调递增，作为每次上线事件的唯一标识，用于边沿检测与幂等。
@@ -24,6 +25,16 @@ public class NotifyOnlineTask : ISoloTask
     public const string TaskName = "联机锄地上线";
 
     public string Name => TaskName;
+
+    private readonly string? _targetRoomName;
+
+    public NotifyOnlineTask(Dictionary<string, object?>? settings = null)
+    {
+        _targetRoomName = SwitchAssistantRoomTask.ReadTargetRoomName(settings);
+    }
+
+    internal static bool HasTargetRoom(Dictionary<string, object?>? settings) =>
+        !string.IsNullOrWhiteSpace(SwitchAssistantRoomTask.ReadTargetRoomName(settings));
 
     private static int? _nextGeneration;
     private static readonly object _genLock = new();
@@ -42,8 +53,8 @@ public class NotifyOnlineTask : ISoloTask
 
     public Task Start(CancellationToken ct)
     {
-        // 切过房间的原配置组只走本机收件通道，不写代序号，也不落回旧的上线广播。
-        if (ConfigurationGroupRoomActions.TrySendOnlineAsync(ct) is { } handoff)
+        // 指定房间或切过房间的配置组走本机收件通道，不落回普通上线广播。
+        if (ConfigurationGroupRoomActions.TrySendOnlineAsync(_targetRoomName, ct) is { } handoff)
             return handoff;
 
         lock (_genLock)

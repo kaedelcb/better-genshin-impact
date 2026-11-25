@@ -42,7 +42,7 @@ public static class SoloTaskRegistry
             "OCR切换武器" => new OcrSwitchWeaponTask(partyConfig, settings, groupName),
             "配对界面切换角色" => new AutoSwitchRolesTask(partyConfig, settings, groupName),
             "更新联机锄地线路" => new AutoHoeingRouteUpdateTask(),
-            NotifyOnlineTask.TaskName => new NotifyOnlineTask(),
+            NotifyOnlineTask.TaskName => new NotifyOnlineTask(settings),
             SwitchAssistantRoomTask.TaskName => new SwitchAssistantRoomTask(settings),
             _ => null
         };
@@ -59,7 +59,7 @@ public static class SoloTaskRegistry
             "好感任务自动完成" => AutoFriendshipTask.GetSettingDefinitions(),
             "OCR切换武器" => OcrSwitchWeaponTask.GetSettingDefinitions(),
             "配对界面切换角色" => AutoSwitchRolesTask.GetSettingDefinitions(),
-            SwitchAssistantRoomTask.TaskName => SwitchAssistantRoomTask.GetSettingDefinitions(),
+            SwitchAssistantRoomTask.TaskName or NotifyOnlineTask.TaskName => SwitchAssistantRoomTask.GetSettingDefinitions(),
             _ => new()
         };
     }

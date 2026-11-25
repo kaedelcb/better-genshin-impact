@@ -7,8 +7,39 @@ using Xunit;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
 
+[Collection("TaskTakeoverIncident")]
 public sealed class RoomActionMailboxTests
 {
+    [Fact]
+    public async Task ConfiguredOnlineTaskSendsTargetAndNeverFallsBackWhenRejected()
+    {
+        using var peerLifetime = new CancellationTokenSource();
+        var peer = Guid.NewGuid();
+        try
+        {
+            using var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "targeted-online", JobSource.Ui));
+            using var actions = ConfigurationGroupRoomActions.Begin(scope, "targeted-online", 0, false);
+            using var step = actions.EnterStep(NotifyOnlineTask.TaskName, 0, 0);
+            var settings = new System.Collections.Generic.Dictionary<string, object?> { [SwitchAssistantRoomTask.TargetRoomName] = "房间 B" };
+            var task = BetterGenshinImpact.GameTask.SoloTaskRegistry.CreateTask(NotifyOnlineTask.TaskName, null, settings)!;
+            var generation = NotifyOnlineTask.CurrentGeneration;
+            Assert.True(RoomActionMailbox.TryPeek(peer, peerLifetime.Token, out _));
+
+            var execution = task.Start(CancellationToken.None);
+            Assert.True(RoomActionMailbox.TryPeek(peer, peerLifetime.Token, out var signal));
+            Assert.NotNull(signal);
+            Assert.Equal("switchOnline", signal.Kind);
+            Assert.Equal("房间 B", signal.TargetRoomName);
+            Assert.True(RoomActionMailbox.Acknowledge(peer, signal.Id, false));
+            await Assert.ThrowsAsync<RoomActionHandoffException>(() => execution);
+            Assert.Equal(generation, NotifyOnlineTask.CurrentGeneration);
+        }
+        finally
+        {
+            peerLifetime.Cancel();
+        }
+    }
+
     [Fact]
     public async Task OnlyOriginalIpcPeerCanReceiveAndContinueTheChain()
     {

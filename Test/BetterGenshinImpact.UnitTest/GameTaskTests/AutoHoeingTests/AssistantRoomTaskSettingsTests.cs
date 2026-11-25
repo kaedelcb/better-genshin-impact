@@ -38,6 +38,18 @@ public sealed class AssistantRoomTaskSettingsTests
         }
     }
 
+    [Theory]
+    [InlineData("{}", false)]
+    [InlineData("{\"targetRoomName\":\"\"}", false)]
+    [InlineData("{\"targetRoomName\":\"  周末房间  \"}", true)]
+    public void OnlineTaskDistinguishesCurrentRoomFromExplicitTarget(string json, bool targeted)
+    {
+        var settings = JsonSerializer.Deserialize<Dictionary<string, object?>>(json);
+        Assert.Equal(targeted, NotifyOnlineTask.HasTargetRoom(settings));
+        Assert.Contains(BetterGenshinImpact.GameTask.SoloTaskRegistry.GetSettingItems(NotifyOnlineTask.TaskName),
+            item => item.Name == SwitchAssistantRoomTask.TargetRoomName);
+    }
+
     [Fact]
     public void ReadsPreviouslySavedTaskTarget()
     {

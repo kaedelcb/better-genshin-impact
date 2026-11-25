@@ -127,9 +127,10 @@ public partial class MainViewModel
                             var sameRun = admittedRun == signal.RunId;
                             var pending = Volatile.Read(ref outstanding);
                             accepted = !IsStandaloneMode && !_roomSwitchRecordUnreadable
-                                && signal.Kind is "switch" or "online" && pending < 3
+                                && signal.Kind is "switch" or "online" or "switchOnline" && pending < 3
+                                && (signal.Kind == "online" || !string.IsNullOrWhiteSpace(signal.Target))
                                 && (sameRun ? !RoomSwitchBlocksRoomOperations || _changingAssistantRoom && pending > 0
-                                    : signal.Kind == "switch" && pending == 0 && !RoomSwitchHasPendingRequest && !RoomSwitchBlocksRoomOperations);
+                                    : signal.Kind is "switch" or "switchOnline" && pending == 0 && !RoomSwitchHasPendingRequest && !RoomSwitchBlocksRoomOperations);
                         }
                         catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
                         var ack = await client.SendCommandAsync("ext.roomAction.ack", new { id = signal.Id, accepted },
@@ -187,7 +188,7 @@ public partial class MainViewModel
                     await Verify(signal.StopVersion, token);
                     if (roomIdentity is not null && !IsAssistantRoomIdentityCurrent(roomIdentity))
                         throw new InvalidOperationException("前序目标房间已变化，后续房间动作未提交");
-                    if (signal.Kind == "switch")
+                    if (signal.Kind is "switch" or "switchOnline")
                     {
                         var profileId = Application.Current.Dispatcher.Invoke(() => RoomSwitchChoices
                             .Where(p => string.Equals(p.Name, signal.Target, StringComparison.OrdinalIgnoreCase))
@@ -199,7 +200,7 @@ public partial class MainViewModel
                         roomIdentity = switched.Identity;
                         reportedOnline = false;
                     }
-                    else
+                    if (signal.Kind is "online" or "switchOnline")
                     {
                         if (roomIdentity is null || !IsAssistantRoomIdentityCurrent(roomIdentity))
                             throw new InvalidOperationException("前序目标房间已变化，未提交上线");

@@ -140,6 +140,13 @@ public partial class ScriptService : IScriptService
     private static bool IsEnabledRoomSwitch(ScriptGroupProject project) =>
         project is { Type: "SoloTask", Name: SwitchAssistantRoomTask.TaskName, Status: "Enabled", RunNum: > 0 };
 
+    private static bool IsTargetedOnline(ScriptGroupProject project) =>
+        project is { Type: "SoloTask", Name: NotifyOnlineTask.TaskName }
+        && NotifyOnlineTask.HasTargetRoom(project.SoloTaskSettingsObject);
+
+    private static bool IsEnabledRoomAction(ScriptGroupProject project) =>
+        IsEnabledRoomSwitch(project) || (project is { Status: "Enabled", RunNum: > 0 } && IsTargetedOnline(project));
+
     /// <param name="job">[A2] 作业描述符：非空时经 TaskRunner 漏斗登记进 JobRegistry；null = 不登记（旧行为）。</param>
     public async Task<TaskRunResult> RunMulti(IEnumerable<ScriptGroupProject> projectList, string? groupName = null,TaskProgress? taskProgress = null, JobDescriptor? job = null)
     {
@@ -242,10 +249,10 @@ public partial class ScriptService : IScriptService
         var runResult = await new TaskRunner()
             .RunThreadAsync(async () =>
             {
-                var firstSwitchRow = list.FindIndex(IsEnabledRoomSwitch);
+                var firstRoomActionRow = list.FindIndex(IsEnabledRoomAction);
                 // 原进程的联机让位可核对收件事实；仅有恢复游标不能证明可以继续交接房间动作。
-                using var roomActions = firstSwitchRow >= 0
-                    ? ConfigurationGroupRoomActions.Begin(scope, groupName, firstSwitchRow,
+                using var roomActions = firstRoomActionRow >= 0
+                    ? ConfigurationGroupRoomActions.Begin(scope, groupName, firstRoomActionRow,
                         scope.Descriptor.Source == JobSource.Resume || taskProgress?.Next is not null)
                     : null;
                 var failuresBefore = scope.FailureCount;
@@ -453,8 +460,8 @@ public partial class ScriptService : IScriptService
                                 var preExecution = RunnerContext.Instance.IsPreExecution;
                                 // 优先插入的项目不属于本次配置组。若前方切房同样被插入或跳过，不能把对应上线改投旧房。
                                 if (preExecution && exeProject is { Type: "SoloTask", Name: NotifyOnlineTask.TaskName }
-                                    && exeProject.GroupInfo?.Projects.TakeWhile(p => !ReferenceEquals(p, exeProject))
-                                        .Any(IsEnabledRoomSwitch) == true)
+                                    && (IsTargetedOnline(exeProject) || exeProject.GroupInfo?.Projects.TakeWhile(p => !ReferenceEquals(p, exeProject))
+                                        .Any(IsEnabledRoomAction) == true))
                                     throw new RoomActionHandoffException("优先插入的切房链不支持自动交接，未在当前房间上线。");
                                 var isRoomAction = !preExecution && roomActions is not null
                                     && exeProject.Type == "SoloTask"
@@ -462,6 +469,7 @@ public partial class ScriptService : IScriptService
                                 using var roomStep = isRoomAction ? roomActions!.EnterStep(exeProject.Name, x, i) : null;
                                 // 邮箱可能仍未确认；不能沿用普通上线「到达步骤即兑现」的续跑规则。
                                 var legacyOnline = SuspendContextCapture.IsOnlineSignalTask(exeProject.Name, exeProject.FolderName)
+                                    && !IsTargetedOnline(exeProject)
                                     && !(isRoomAction && roomActions!.RoutesOnlineThroughMailbox(x));
                                 var checkpointIndex = preExecution ? projectIndex : configurationIndex;
                                 var hasNextGroupProject = !preExecution && x + 1 < list.Count;
