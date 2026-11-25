@@ -73,7 +73,9 @@ internal static class LocalBrowserHeaderLayout
         {
             window.Width = width;
             window.UpdateLayout();
-            var settings = (FrameworkElement)window.FindName("HeaderSettingsButton");
+            var settings = (Button)window.FindName("HeaderSettingsButton");
+            var viewing = (Button)window.FindName("HeaderViewingRoomButton");
+            var viewingText = (TextBlock)window.FindName("HeaderViewingRoomText");
             var exit = (FrameworkElement)window.FindName("HeaderExitButton");
             var room = (FrameworkElement)window.FindName("HeaderRoomButton");
             var refresh = (FrameworkElement)window.FindName("HeaderRefreshButton");
@@ -81,12 +83,16 @@ internal static class LocalBrowserHeaderLayout
             var starHost = (FrameworkElement)window.FindName("HeaderStarHost");
             static Rect Bounds(FrameworkElement e, Visual root)
                 => e.TransformToAncestor(root).TransformBounds(new Rect(new Point(), e.RenderSize));
-            var s = Bounds(settings, window); var x = Bounds(exit, window);
+            var s = Bounds(settings, window); var v = Bounds(viewing, window); var x = Bounds(exit, window);
             var r = Bounds(room, window); var f = Bounds(refresh, window); var h = Bounds(starHost, window); var t = Bounds(star, window);
             var label = Bounds((FrameworkElement)window.FindName("HeaderRoomLabel"), window);
-            Console.WriteLine($"width={width} settings={s} exit={x} room={r} label={label} refresh={f} starHost={h} star={t}");
-            if (Math.Abs(s.Left-r.Left)>1 || Math.Abs(s.Right-r.Right)>1 || Math.Abs(x.Right-f.Right)>1 ||
-                s.Right>x.Left || x.Right>window.ActualWidth ||
+            Console.WriteLine($"width={width} viewing={v} settings={s} exit={x} room={r} label={label} refresh={f} starHost={h} star={t}");
+            if (!Equals(settings.Content, "⚙") || s.Width > 40)
+                throw new InvalidOperationException("设置按钮应精简为紧凑齿轮图标");
+            if (!viewing.IsVisible || viewingText.Text != "所有房间")
+                throw new InvalidOperationException("顶栏应默认显示正在查看「所有房间」标签");
+            if (Math.Abs(v.Left-r.Left)>1 || Math.Abs(s.Right-r.Right)>1 || Math.Abs(x.Right-f.Right)>1 ||
+                v.Right>s.Left || s.Right>x.Left || x.Right>window.ActualWidth ||
                 (star.IsVisible && (t.Left<h.Left || t.Right>h.Right)))
                 throw new InvalidOperationException($"头部控件在 {width} 宽度出现遮挡或错位");
             if (label.Left < r.Left + 4 || label.Right > r.Right - 4 || label.Top < r.Top || label.Bottom > r.Bottom)
@@ -501,9 +507,22 @@ internal static class LocalBrowserHeaderLayout
             || codeBounds.Right > item.ActualWidth || ((FrameworkElement)popup.Child).Width != 330)
             throw new InvalidOperationException("房间名称、备注和房间号应保持间距、截断长文本且不改变菜单宽度");
         list.SelectedItem = target;
+        list.UpdateLayout();
+        var currentItem = list.ItemContainerGenerator.ContainerFromItem(current) as ListBoxItem
+            ?? throw new InvalidOperationException("当前登录房间列表项未生成");
+        var goldText = window.FindResource("GoldText").ToString();
+        var whiteText = window.FindResource("White").ToString();
+        if (currentItem.Foreground.ToString() != goldText || item.Foreground.ToString() != whiteText)
+            throw new InvalidOperationException("点其他未登录房间时，当前登录房间必须保持金黄色，未登录房间必须保持白色");
         if (confirm.CommandParameter != target || confirm.Command == null || !confirm.IsEnabled
             || window.ViewModel.ActiveRoomProfile != current)
             throw new InvalidOperationException("选择候选房间只更新切换参数，不得直接替换当前档案");
+        if (window.ViewModel.ViewedRoomProfileId != target.Id)
+            throw new InvalidOperationException("点未登录房间应同步切换到该房间的只读查看视图");
+        var allRoomsBtn = (Button)window.FindName("AllRoomsViewButton");
+        allRoomsBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        if (!window.ViewModel.IsViewingAllRooms)
+            throw new InvalidOperationException("点击「所有房间」入口应切回所有房间汇总视图");
         if (Environment.GetEnvironmentVariable("ROOM_POPUP_SNAPSHOT") is { Length: > 0 } shot)
         {
             var panel = (FrameworkElement)popup.Child;

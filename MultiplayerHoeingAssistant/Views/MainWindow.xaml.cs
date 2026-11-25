@@ -204,10 +204,20 @@ public partial class MainWindow : Window
         new(new Point(targetSize.Width - popupSize.Width + 12, -popupSize.Height - 6), PopupPrimaryAxis.Horizontal)
     ];
 
+    private bool _syncingAssistantRoomSelector;
+
     private void AssistantRoomPopupOpened(object? sender, EventArgs e)
     {
-        // Reopening always shows the confirmed room, not an abandoned selection.
-        AssistantRoomSelector.SetCurrentValue(Selector.SelectedValueProperty, ViewModel.ActiveRoomProfile?.Id);
+        // Reopening always shows the confirmed room as the switch candidate, without altering the currently viewed room.
+        _syncingAssistantRoomSelector = true;
+        try
+        {
+            AssistantRoomSelector.SetCurrentValue(Selector.SelectedValueProperty, ViewModel.ActiveRoomProfile?.Id);
+        }
+        finally
+        {
+            _syncingAssistantRoomSelector = false;
+        }
         Dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
         {
             if (!AssistantRoomPopup.IsOpen) return;
@@ -215,6 +225,30 @@ public partial class MainWindow : Window
                 AssistantRoomSelector.ItemContainerGenerator.ContainerFromItem(room) is ListBoxItem row && row.Focus()) return;
             if (!AssistantRoomSelector.IsVisible || !AssistantRoomSelector.Focus()) ManageAssistantRoomsButton.Focus();
         }));
+    }
+
+    private void AllRoomsViewClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.SelectViewedRoom(AssistConfig.AllRoomsViewId);
+        e.Handled = true;
+    }
+
+    private void AssistantRoomSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncingAssistantRoomSelector || !AssistantRoomPopup.IsOpen) return;
+        if (AssistantRoomSelector.SelectedItem is AssistantRoomProfile profile)
+        {
+            ViewModel.SelectViewedRoom(profile.Id);
+        }
+    }
+
+    private void AssistantRoomItemMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_syncingAssistantRoomSelector) return;
+        if (sender is ListBoxItem { DataContext: AssistantRoomProfile profile })
+        {
+            ViewModel.SelectViewedRoom(profile.Id);
+        }
     }
 
     private void AssistantRoomPopupClosed(object? sender, EventArgs e)
@@ -604,10 +638,14 @@ public partial class MainWindow : Window
                     Content = name,
                     Style = tagStyle,
                     Tag = member,
-                    Margin = new System.Windows.Thickness(0, 0, 5, 5)
+                    Margin = new System.Windows.Thickness(0, 0, 5, 5),
+                    IsEnabled = !member.IsReadOnlyView,
+                    Opacity = member.IsReadOnlyView ? 0.65 : 1.0,
+                    ToolTip = member.IsReadOnlyView ? "其他房间仅支持只读查看，切换登录后可启动" : null
                 };
                 b.Click += (_, _) =>
                 {
+                    if (member.IsReadOnlyView) return;
                     if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, name);
                     else _ = ViewModel.StartGroupFromConfigAsync(member, name);
                 };
@@ -734,11 +772,14 @@ public partial class MainWindow : Window
                 Style = pillStyle,
                 FontSize = 13,
                 Margin = new System.Windows.Thickness(0, 0, 6, 6),
+                IsEnabled = !member.IsReadOnlyView,
+                Opacity = member.IsReadOnlyView ? 0.65 : 1.0,
+                ToolTip = member.IsReadOnlyView ? "其他房间仅支持只读查看，切换登录后可启动" : null,
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
                 Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
                 BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0))
             };
-            btn2.Click += (_, _) => { dlg.Close(); if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, item); else _ = ViewModel.StartGroupFromConfigAsync(member, item); };
+            btn2.Click += (_, _) => { if (member.IsReadOnlyView) return; dlg.Close(); if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, item); else _ = ViewModel.StartGroupFromConfigAsync(member, item); };
             wrap2.Children.Add(btn2);
         }
         panel.Children.Add(new System.Windows.Controls.ScrollViewer { Content = wrap2, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto, MaxHeight = 300 });

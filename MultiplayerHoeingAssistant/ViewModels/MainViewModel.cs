@@ -284,6 +284,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public MainViewModel()
     {
         _intentLifecycle = new OnlineIntentLifecycle(AddLog);
+        Members.CollectionChanged += (_, _) => RebuildDisplayedMembers();
     }
 
     public async Task InitializeAsync()
@@ -377,6 +378,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // 连接 SignalR（单机模式下由 ConnectSignalRAsync 入口门控直接跳过）
         await ConnectSignalRAsync();
+        SyncRoomViewSessions();
+        RebuildDisplayedMembers();
 
         // 槲寄生启动中心挂点：初始化全部完成后广播（自动执行启动流程监听此事件）
         Initialized?.Invoke();
@@ -1772,6 +1775,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void OnOpenUpdateBgi(object? parameter)
     {
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel m && !m.IsSelf) return;
         var window = new UpdateBgiWindow(this) { Owner = Application.Current.MainWindow };
         window.ShowDialog();
@@ -2133,6 +2137,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStop(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         // 停止前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
         var (confirmed, broadcastAll, closeBgi) = ShowStopStartConfirmDialogCore("确认全部停止", "停止当前执行、待执行任务和自动续跑？", showCloseBgi: true);
         if (!confirmed) return; // 用户取消
@@ -2316,6 +2321,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStartBgi(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         // 启动前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
         var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认启动 BGI", "确定要启动 BGI 吗？");
         if (!confirmed) return; // 用户取消
@@ -2403,6 +2409,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnExecuteHotkey(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member && member.Hotkeys.Count > 0)
         {
             var selected = ShowHotkeySelectDialog(member.Hotkeys);
@@ -2421,6 +2428,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnCloseGame(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
             var result = MessageBox.Show("确定要关闭该成员的游戏吗？", "关闭游戏", MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -2468,6 +2476,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开定时上线设置弹窗（设定 HH:mm，保存到本地配置并重启定时器、立即上报）。</summary>
     private void OnScheduledOnline(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null) return;
         if (_config == null) return;
@@ -2556,6 +2565,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task ResetStateAsync(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (!await _resetRequestGate.WaitAsync(0))
         {
             AddLog("[状态重置] 正在恢复执行环境，请等待本轮结果");
@@ -2805,6 +2815,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 弹窗确认：可勾选"同时清除所有成员已上线状态"（仅清 OnlineReady，保留上线记录 OnlineHistory）。</summary>
     private async void OnClearOnline(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
@@ -3635,6 +3646,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开联机锄地配置组绑定弹窗（多选）。所有人可编辑。</summary>
     private async void OnBindHoeingGroup(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null) return;
         if (_config == null) return;
@@ -4628,6 +4640,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
+        StopAllRoomSpectators();
         CancelWaitingAssistantRoomSwitch();
         StopBgiRoomMailbox();
         _startupBgiUpdateRequest?.Cancel();
@@ -4778,6 +4791,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 {
                     try { await old.DisposeAsync(); } catch { /* 旧连接清理不影响新连接 */ }
                 }
+                RefreshRoomSpectators();
                 return _signalRClient is { IsControlRoomReady: true };
             }
         }
@@ -4989,8 +5003,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                     }
                 }
 
-                // 成员 Online 状态是原地更新（不触发 CollectionChanged），这里统一通知一次，
+                // 成员 Online 状态是原地更新（不触发 CollectionChanged），这里先重建展示列表，再通知一次，
                 // 让 DodocoViewModel 重新评估日志订阅（离线退订 / 上线重订）。
+                RebuildDisplayedMembers();
                 MemberOnlineChanged?.Invoke();
             });
         };
@@ -5464,6 +5479,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStartGroup(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
             // 打开选择配置组对话框
@@ -5477,6 +5493,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStartOneClick(object? parameter)
     {
+        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
             var configName = ShowConfigSelectionDialog("一条龙", member.OneClickConfigs, member);
@@ -5545,6 +5562,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task StartGroupFromConfigAsync(MemberViewModel member, string configName)
     {
+        if (member.IsReadOnlyView) return;
         await StartGroupWithTaskListAsync(configName, member);
     }
 
@@ -5553,6 +5571,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task StartOneClickFromConfigAsync(MemberViewModel member, string configName)
     {
+        if (member.IsReadOnlyView) return;
         await StartOneClickWithTaskListAsync(configName, member);
     }
 
@@ -6688,6 +6707,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>执行一键命令：始终弹分成员列弹窗，可配置各成员绑定并执行。</summary>
     private async Task ExecuteQuickCommandAsync(string key)
     {
+        if (!CanOperateDisplayedRoom) return;
         if (_config == null || _configManager == null || _signalRClient == null)
         {
             MessageBox.Show("助手未初始化或未连接");
@@ -7089,6 +7109,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>一键锄地：向所有选中成员下发执行他们各自绑定的联机锄地配置组。</summary>
     private async Task ExecuteQuickHoeingAsync()
     {
+        if (!CanOperateDisplayedRoom) return;
         if (!TryEnterConfigTransferOperation("quick_hoeing", out var transferOperation))
         {
             AddLog(ConfigTransferBlockedMessage); return;
@@ -7949,13 +7970,79 @@ public class MemberViewModel : INotifyPropertyChanged
 
     /// <summary>成员 UID 是否与当前助手相同；不等于与助手处于同一 Windows 用户/会话。</summary>
     private bool _isSelf;
-    public bool IsSelf { get => _isSelf; set { if (_isSelf != value) { _isSelf = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
+    public bool IsSelf
+    {
+        get => _isSelf;
+        set
+        {
+            if (_isSelf == value) return;
+            _isSelf = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanRemoteEdit));
+            OnPropertyChanged(nameof(CanUpdateLocalBgi));
+        }
+    }
 
     private bool _isObserverMode;
     public bool IsObserverMode { get => _isObserverMode; set { if (_isObserverMode != value) { _isObserverMode = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanRemoteEdit)); } } }
 
-    /// <summary>监控端可编辑同 UID 执行端，并允许先探测本地离线成员；执行端保留禁止编辑自己的限制。</summary>
-    public bool CanRemoteEdit => !string.IsNullOrEmpty(PlayerUid) && (IsObserverMode || (!IsSelf && Online));
+    private string _sourceRoomProfileId = "";
+    /// <summary>成员卡片所属房间档案 ID（多房间只读/汇总视图使用）。</summary>
+    public string SourceRoomProfileId { get => _sourceRoomProfileId; set { if (_sourceRoomProfileId != value) { _sourceRoomProfileId = value; OnPropertyChanged(); } } }
+
+    private string _roomLabel = "";
+    /// <summary>成员卡片所属房间名（在「所有房间」视图下展示在设置齿轮右侧）。</summary>
+    public string RoomLabel
+    {
+        get => _roomLabel;
+        set
+        {
+            if (_roomLabel == value) return;
+            _roomLabel = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RoomLabelToolTip));
+        }
+    }
+
+    private bool _isActiveRoomMember = true;
+    /// <summary>是否属于当前登录房间。</summary>
+    public bool IsActiveRoomMember { get => _isActiveRoomMember; set { if (_isActiveRoomMember != value) { _isActiveRoomMember = value; OnPropertyChanged(); } } }
+
+    private bool _isReadOnlyView;
+    /// <summary>是否来自非登录房间的只读旁观视图。</summary>
+    public bool IsReadOnlyView
+    {
+        get => _isReadOnlyView;
+        set
+        {
+            if (_isReadOnlyView == value) return;
+            _isReadOnlyView = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanOperateCard));
+            OnPropertyChanged(nameof(CanRemoteEdit));
+            OnPropertyChanged(nameof(CanUpdateLocalBgi));
+            OnPropertyChanged(nameof(RoomLabelToolTip));
+        }
+    }
+
+    private bool _showRoomLabel;
+    /// <summary>是否在成员卡片名称行齿轮右侧显示房间标签（「所有房间」视图下全部成员卡片显示）。</summary>
+    public bool ShowRoomLabel { get => _showRoomLabel; set { if (_showRoomLabel != value) { _showRoomLabel = value; OnPropertyChanged(); } } }
+
+    /// <summary>该成员卡片是否允许发起操作（非登录房间卡片为只读，仅保留查看与记录）。</summary>
+    public bool CanOperateCard => !IsReadOnlyView;
+
+    /// <summary>仅当前登录房间的自机卡片允许点版本号打开本机 BGI 更新。</summary>
+    public bool CanUpdateLocalBgi => IsSelf && !IsReadOnlyView;
+
+    public string RoomLabelToolTip => string.IsNullOrWhiteSpace(RoomLabel)
+        ? ""
+        : IsReadOnlyView
+            ? $"所属房间：{RoomLabel}（只读查看）"
+            : $"所属房间：{RoomLabel}（当前登录房间）";
+
+    /// <summary>监控端可编辑同 UID 执行端，并允许先探测本地离线成员；执行端保留禁止编辑自己的限制。只读视图禁止编辑。</summary>
+    public bool CanRemoteEdit => !IsReadOnlyView && !string.IsNullOrEmpty(PlayerUid) && (IsObserverMode || (!IsSelf && Online));
 
     private string _bgiStatus = "unknown";
     public string BgiStatus { get => _bgiStatus; set { if (_bgiStatus != value) { _bgiStatus = value; OnPropertyChanged(); } } }
@@ -8273,6 +8360,13 @@ public class MemberViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(OnlineHoeingGroupNames));
         OnPropertyChanged(nameof(OnlineHoeingGroupTypes));
         OnPropertyChanged(nameof(CanRemoteEdit));
+        OnPropertyChanged(nameof(RoomLabel));
+        OnPropertyChanged(nameof(RoomLabelToolTip));
+        OnPropertyChanged(nameof(IsActiveRoomMember));
+        OnPropertyChanged(nameof(IsReadOnlyView));
+        OnPropertyChanged(nameof(CanOperateCard));
+        OnPropertyChanged(nameof(CanUpdateLocalBgi));
+        OnPropertyChanged(nameof(ShowRoomLabel));
     }
 }
 

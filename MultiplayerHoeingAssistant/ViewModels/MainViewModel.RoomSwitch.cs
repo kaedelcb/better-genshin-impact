@@ -65,6 +65,12 @@ public partial class MainViewModel
             if (ReferenceEquals(current.Source, source) && current.Version == version)
                 return current.Items;
             AssistantRoomProfile[] items = source is { Count: > 0 } ? [.. source] : [];
+            var activeId = _config?.ActiveRoomProfileId;
+            foreach (var item in items)
+            {
+                if (item is not null)
+                    item.IsActiveRoom = !string.IsNullOrEmpty(activeId) && string.Equals(item.Id, activeId, StringComparison.Ordinal);
+            }
             Volatile.Write(ref _roomSwitchChoices, new(source, version, items));
             return items;
         }
@@ -126,11 +132,23 @@ public partial class MainViewModel
 
     private void NotifyRoomProfiles()
     {
+        if (_config?.RoomProfiles is { Count: > 0 } rooms)
+        {
+            var activeId = _config.ActiveRoomProfileId;
+            foreach (var room in rooms)
+            {
+                if (room is not null)
+                    room.IsActiveRoom = !string.IsNullOrEmpty(activeId) && string.Equals(room.Id, activeId, StringComparison.Ordinal);
+            }
+        }
         Interlocked.Increment(ref _roomSwitchChoicesVersion);
         OnPropertyChanged(nameof(RoomSwitchChoices));
         OnPropertyChanged(nameof(ActiveRoomProfile));
         OnPropertyChanged(nameof(HeaderRoomName));
         OnPropertyChanged(nameof(Config));
+        NotifyRoomViewProperties();
+        SyncRoomViewSessions();
+        RebuildDisplayedMembers();
     }
 
     private void LoadAssistantRoomSwitchRecord()
@@ -713,10 +731,14 @@ public partial class MainViewModel
             using var transfer = lease;
             var index = config.RoomProfiles.IndexOf(selected);
             if (index < 0) return;
+            var previousViewedId = config.ViewedRoomProfileId;
+            if (string.Equals(config.ViewedRoomProfileId, selected.Id, StringComparison.Ordinal))
+                config.ViewedRoomProfileId = AssistConfig.AllRoomsViewId;
             config.RoomProfiles.RemoveAt(index);
             if (!_configManager.TrySave(config))
             {
                 config.RoomProfiles.Insert(index, selected);
+                config.ViewedRoomProfileId = previousViewedId;
                 throw new IOException("档案未能移除，原设置保留");
             }
             NotifyRoomProfiles();

@@ -530,6 +530,8 @@ public partial class MainViewModel
             NotifyModeBindings();
             AddLog("已切换到在线模式，正在连接服务器...");
             await ConnectSignalRAsync();
+            SyncRoomViewSessions();
+            RebuildDisplayedMembers();
         }
         else
         {
@@ -549,6 +551,7 @@ public partial class MainViewModel
     {
         InvalidateCoordinatedControlContext();
         StopSignalRRecovery();
+        StopAllRoomSpectators();
         _retryTimer?.Dispose();
         _retryTimer = null;
         var old = _signalRClient;
@@ -558,6 +561,7 @@ public partial class MainViewModel
             await old.DisposeAsync();
         }
         IsConnected = false;
+        RebuildDisplayedMembers();
         AddLog(reason);
     }
 

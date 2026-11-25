@@ -323,6 +323,7 @@ public partial class MainViewModel
         imported.RoomProfiles = previous.RoomProfiles;
         imported.ActiveRoomProfileId = previous.ActiveRoomProfileId;
         imported.LocalRoomProfileId = previous.LocalRoomProfileId;
+        imported.ViewedRoomProfileId = previous.ViewedRoomProfileId;
         imported.ObserverMode = previous.ObserverMode;
         imported.StandaloneMode = previous.StandaloneMode;
         imported.BgiPath = previous.BgiPath;

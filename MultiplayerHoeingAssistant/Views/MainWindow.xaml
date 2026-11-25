@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:views="clr-namespace:MultiplayerHoeingAssistant.Views"
         xmlns:vm="clr-namespace:MultiplayerHoeingAssistant.ViewModels"
+        xmlns:helpers="clr-namespace:MultiplayerHoeingAssistant.Helpers"
         Title="Nexus BGI"
         Width="1180" Height="860"
         MinWidth="980" MinHeight="720"
@@ -23,6 +24,7 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <helpers:StringEqualsMultiConverter x:Key="StringEqualsMulti"/>
         <!-- ========== 原神夜空色板 ========== -->
         <SolidColorBrush x:Key="Card" Color="#CC26234E"/>
         <SolidColorBrush x:Key="CardEdge" Color="#47D4AF37"/>
@@ -796,13 +798,76 @@
                                 </StackPanel>
                             </Button>
                         </Grid>
-                        <!-- Row 0 Col 2：设置 + 退出 -->
-                        <StackPanel x:Name="HeaderActions" Grid.Row="0" Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button x:Name="HeaderSettingsButton" Content="⚙ 设置" Style="{StaticResource BtnGold}" MinWidth="104"
-                                    Padding="14,4" Margin="0,0,0,0" Command="{Binding OpenSettingsCommand}"/>
-                            <Button x:Name="HeaderExitButton" Content="✕" Style="{StaticResource TextAction}" FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
+                        <!-- Row 0 Col 2：正在查看房间标签 + 齿轮设置 + 退出 -->
+                        <Grid x:Name="HeaderActions" Grid.Row="0" Grid.Column="2" HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel x:Name="HeaderPrimaryActions" Grid.Column="0" Orientation="Horizontal"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Button x:Name="HeaderViewingRoomButton" Height="24" Margin="0,0,6,0"
+                                        VerticalAlignment="Center" Cursor="Hand" Click="HeaderRoomClick"
+                                        ToolTip="{Binding HeaderViewingRoomToolTip}">
+                                    <AutomationProperties.Name>
+                                        <Binding Path="HeaderViewingRoomFullName" StringFormat="正在查看：{0}，点击切换查看房间"/>
+                                    </AutomationProperties.Name>
+                                    <Button.Template>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="ViewBadge" CornerRadius="8" Padding="8,2" BorderThickness="1"
+                                                    SnapsToDevicePixels="True">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="#1AE8C96D"/>
+                                                        <Setter Property="BorderBrush" Value="#59D4AF37"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsViewingReadOnlyRoom}" Value="True">
+                                                                <Setter Property="Background" Value="#243E5F8A"/>
+                                                                <Setter Property="BorderBrush" Value="#738FC1E8"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ViewBadge" Property="Opacity" Value="0.88"/>
+                                                </Trigger>
+                                                <Trigger Property="IsPressed" Value="True">
+                                                    <Setter TargetName="ViewBadge" Property="Opacity" Value="0.72"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Button.Template>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="查看" FontSize="10" Foreground="{StaticResource Dim}"
+                                                   Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="HeaderViewingRoomText" Text="{Binding HeaderViewingRoomName}"
+                                                   FontSize="10.5" FontWeight="Medium" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsViewingReadOnlyRoom}" Value="True">
+                                                            <Setter Property="Foreground" Value="{StaticResource Water}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="HeaderSettingsButton" Content="⚙" Style="{StaticResource BtnGold}"
+                                        Width="30" Height="24" Padding="0" FontSize="14"
+                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                        ToolTip="设置" AutomationProperties.Name="设置"
+                                        Command="{Binding OpenSettingsCommand}"/>
+                            </StackPanel>
+                            <Button x:Name="HeaderExitButton" Grid.Column="1" Content="✕" Style="{StaticResource TextAction}"
+                                    FontSize="16" Margin="6,0,0,0" VerticalAlignment="Center"
                                     ToolTip="完全退出 Nexus-BGI 联机助手" Command="{Binding ExitCommand}"/>
-                        </StackPanel>
+                        </Grid>
                         <!-- Row 1 Col 0：副标题 + 导航按钮（同行，与Row 0的标题+信息结构一致） -->
                         <StackPanel Grid.Row="1" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,3,0,0">
                             <TextBlock Text="Teyvat Biological Extinction Plan" FontSize="11" Foreground="{StaticResource Dim}" Margin="0,0,0,0" VerticalAlignment="Center"/>
@@ -855,17 +920,17 @@
                                 </Button.Style>
                             </Button>
                         </StackPanel>
-                        <!-- Row 1 Col 2：房间号 + 刷新按钮（在设置+退出正下方） -->
-                        <Grid x:Name="RoomCodeActions" Grid.Row="1" Grid.Column="2" Width="{Binding ActualWidth, ElementName=HeaderActions}"
-                              VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,3,0,0">
+                        <!-- Row 1 Col 2：房间号 + 刷新按钮（在查看+齿轮+退出正下方） -->
+                        <Grid x:Name="RoomCodeActions" Grid.Row="1" Grid.Column="2"
+                              VerticalAlignment="Center" HorizontalAlignment="Stretch" Margin="0,3,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="HeaderRoomButton" Height="22" Width="{Binding ActualWidth, ElementName=HeaderSettingsButton}"
-                                    VerticalAlignment="Center" HorizontalAlignment="Left" Cursor="Hand"
+                            <Button x:Name="HeaderRoomButton" Height="22" MinWidth="104"
+                                    VerticalAlignment="Center" HorizontalAlignment="Stretch" Cursor="Hand"
                                     Foreground="{StaticResource GoldText}" FontSize="10" Background="Transparent"
-                                    ToolTip="选择房间、管理档案或复制房间号" Click="HeaderRoomClick">
+                                    ToolTip="查看或切换房间、管理档案或复制房间号" Click="HeaderRoomClick">
                                 <AutomationProperties.Name>
                                     <MultiBinding StringFormat="{}{0}，房间号 {1}，打开房间面板">
                                         <Binding Path="ActiveRoomProfile.Name" TargetNullValue="未选择" FallbackValue="未选择"/>
@@ -940,8 +1005,68 @@
                                                       StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                                             </Button>
                                         </Grid>
+                                        <!-- 所有房间汇总查看入口（不改变当前登录房间） -->
+                                        <Button x:Name="AllRoomsViewButton" Click="AllRoomsViewClick" Cursor="Hand"
+                                                Margin="0,0,0,6" MinHeight="34" HorizontalContentAlignment="Stretch"
+                                                ToolTip="在耕地机页面汇总查看全部房间成员（其他房间只读）"
+                                                AutomationProperties.Name="所有房间">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Background" Value="#2E6E6EB4"/>
+                                                    <Setter Property="BorderBrush" Value="#479C97C0"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource White}"/>
+                                                    <Setter Property="Padding" Value="10,6"/>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border x:Name="AllRoomsRow" Background="{TemplateBinding Background}"
+                                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                                        BorderThickness="1" CornerRadius="7" Padding="{TemplateBinding Padding}">
+                                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                                      VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ControlTemplate.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="AllRoomsRow" Property="Background" Value="#428278C2"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasItems, ElementName=AssistantRoomSelector}" Value="False">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsViewingAllRooms}" Value="True">
+                                                            <Setter Property="Background" Value="#294868A8"/>
+                                                            <Setter Property="BorderBrush" Value="#8C8FC1E8"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="✦" FontSize="11" Foreground="{StaticResource Water}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="所有房间" FontSize="12" Foreground="{StaticResource White}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding AllRoomsCountText}" FontSize="11" Foreground="{StaticResource Dim}"
+                                                               Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <Border Grid.Column="2" CornerRadius="5" Padding="6,1" Margin="8,0,0,0"
+                                                        Background="#2E8FC1E8" BorderBrush="#668FC1E8" BorderThickness="1" VerticalAlignment="Center"
+                                                        Visibility="{Binding IsViewingAllRooms, Converter={StaticResource BoolToVis}}">
+                                                    <TextBlock Text="查看中" FontSize="10" Foreground="{StaticResource Water}" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Grid>
+                                        </Button>
                                         <ListBox x:Name="AssistantRoomSelector" ItemsSource="{Binding RoomSwitchChoices}"
                                                  SelectedValuePath="Id" SelectedValue="{Binding ActiveRoomProfile.Id, Mode=OneWay}"
+                                                 SelectionChanged="AssistantRoomSelectorSelectionChanged"
                                                  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{StaticResource White}"
                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                                  MaxHeight="224" IsEnabled="{Binding CanEditConfiguration}" AutomationProperties.Name="选择目标房间">
@@ -956,6 +1081,7 @@
                                             </ListBox.Style>
                                             <ListBox.ItemContainerStyle>
                                                 <Style TargetType="ListBoxItem">
+                                                    <EventSetter Event="PreviewMouseLeftButtonUp" Handler="AssistantRoomItemMouseLeftButtonUp"/>
                                                     <Setter Property="Background" Value="#2E6E6EB4"/>
                                                     <Setter Property="BorderBrush" Value="#479C97C0"/>
                                                     <Setter Property="Foreground" Value="{StaticResource White}"/>
@@ -978,13 +1104,36 @@
                                                                     <Trigger Property="IsMouseOver" Value="True">
                                                                         <Setter TargetName="RoomRow" Property="Background" Value="#428278C2"/>
                                                                     </Trigger>
+                                                                    <!-- 当前查看的非登录房间：冷色边框提示查看中，文字保持白色 -->
+                                                                    <DataTrigger Value="True">
+                                                                        <DataTrigger.Binding>
+                                                                            <MultiBinding Converter="{StaticResource StringEqualsMulti}">
+                                                                                <Binding Path="Id"/>
+                                                                                <Binding Path="DataContext.ViewedRoomProfileId" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
+                                                                            </MultiBinding>
+                                                                        </DataTrigger.Binding>
+                                                                        <Setter TargetName="RoomRow" Property="Background" Value="#294868A8"/>
+                                                                        <Setter TargetName="RoomRow" Property="BorderBrush" Value="#8C8FC1E8"/>
+                                                                    </DataTrigger>
+                                                                    <!-- 选中作为切换目标（非登录房间）：保持白色文字，仅加选中边框 -->
                                                                     <Trigger Property="IsSelected" Value="True">
+                                                                        <Setter TargetName="RoomRow" Property="Background" Value="#384C64A8"/>
+                                                                        <Setter TargetName="RoomRow" Property="BorderBrush" Value="#A68FC1E8"/>
+                                                                    </Trigger>
+                                                                    <!-- 正在登录的房间始终显示金黄色（后写优先，点其他房间也不丢失金色） -->
+                                                                    <DataTrigger Value="True">
+                                                                        <DataTrigger.Binding>
+                                                                            <MultiBinding Converter="{StaticResource StringEqualsMulti}">
+                                                                                <Binding Path="Id"/>
+                                                                                <Binding Path="DataContext.ActiveRoomProfile.Id" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
+                                                                            </MultiBinding>
+                                                                        </DataTrigger.Binding>
                                                                         <Setter TargetName="RoomRow" Property="Background" Value="#20E8C96D"/>
                                                                         <Setter TargetName="RoomRow" Property="BorderBrush" Value="{StaticResource GoldLine}"/>
                                                                         <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
-                                                                    </Trigger>
+                                                                    </DataTrigger>
                                                                     <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                                                        <Setter TargetName="RoomRow" Property="BorderBrush" Value="{StaticResource Gold}"/>
+                                                                        <Setter TargetName="RoomRow" Property="BorderThickness" Value="1.5"/>
                                                                     </Trigger>
                                                                     <Trigger Property="IsEnabled" Value="False">
                                                                         <Setter TargetName="RoomRow" Property="Opacity" Value="0.55"/>
@@ -1001,14 +1150,20 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <Path Data="M 0,4 L 3,7 L 8,1" Stroke="{StaticResource Gold}" StrokeThickness="1.5"
+                                                        <Path x:Name="ActiveRoomCheckMark" Data="M 0,4 L 3,7 L 8,1" Stroke="{StaticResource Gold}" StrokeThickness="1.5"
                                                               StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                                               Margin="0,0,8,0" VerticalAlignment="Center" IsHitTestVisible="False">
                                                             <Path.Style>
                                                                 <Style TargetType="Path">
                                                                     <Setter Property="Visibility" Value="Hidden"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                                                        <DataTrigger Value="True">
+                                                                            <DataTrigger.Binding>
+                                                                                <MultiBinding Converter="{StaticResource StringEqualsMulti}">
+                                                                                    <Binding Path="Id"/>
+                                                                                    <Binding Path="DataContext.ActiveRoomProfile.Id" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
+                                                                                </MultiBinding>
+                                                                            </DataTrigger.Binding>
                                                                             <Setter Property="Visibility" Value="Visible"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
@@ -1131,12 +1286,33 @@
                             </Style>
                         </Grid.Style>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
+                        <!-- 多房间只读查看连接提示（正常就绪时自动折叠不占高度） -->
+                        <Border x:Name="RoomViewNoticeBanner" Grid.Row="0" Margin="0,0,0,8" Padding="11,6"
+                                CornerRadius="8" Background="#243E5F8A" BorderBrush="#668FC1E8" BorderThickness="1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding RoomViewNoticeText}" Value="">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding RoomViewNoticeText}" Value="{x:Null}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding RoomViewNoticeText}" FontSize="11" Foreground="{StaticResource Water}"
+                                       TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </Border>
+
                         <!-- 单机或房间尚未返回成员卡时，也能查看已发现的本机更新。 -->
-                        <Button x:Name="BgiUpdateWithoutMembersButton" Grid.Row="0" Panel.ZIndex="1" HorizontalAlignment="Left"
+                        <Button x:Name="BgiUpdateWithoutMembersButton" Grid.Row="1" Panel.ZIndex="1" HorizontalAlignment="Left"
                                 VerticalAlignment="Top" Margin="12,5,0,0" FontSize="11" Padding="0"
                                 Command="{Binding OpenUpdateBgiCommand}" ToolTip="有 BGI 更新可用，点击查看"
                                 AutomationProperties.Name="有 BGI 更新可用">
@@ -1162,9 +1338,9 @@
                         </Button>
 
                         <!-- 成员委托卡列表 -->
-                        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}"
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}"
                                       IsEnabled="{Binding CanUseAssistantRoomMemberActions}">
-                            <ItemsControl ItemsSource="{Binding Members}">
+                            <ItemsControl x:Name="DisplayedMembersControl" ItemsSource="{Binding DisplayedMembers}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource QuestCard}">
@@ -1186,7 +1362,17 @@
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                                            <CheckBox IsChecked="{Binding IsSelected}" Style="{StaticResource GuildCheckBox}"/>
+                                                            <CheckBox IsChecked="{Binding IsSelected}" IsEnabled="{Binding CanOperateCard}">
+                                                                <CheckBox.Style>
+                                                                    <Style TargetType="CheckBox" BasedOn="{StaticResource GuildCheckBox}">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                <Setter Property="Opacity" Value="0.35"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </CheckBox.Style>
+                                                            </CheckBox>
                                                             <!-- 角色头像（元素色描边，圆角） -->
                                                             <Rectangle Width="38" Height="38" RadiusX="11" RadiusY="11" Margin="0,0,10,0">
                                                                 <Rectangle.Fill><ImageBrush ImageSource="{Binding AvatarPath}" Stretch="UniformToFill"/></Rectangle.Fill>
@@ -1201,20 +1387,51 @@
                                                                             IsEnabled="{Binding CanRemoteEdit}"
                                                                             Command="{Binding DataContext.RemoteConfigEditCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}"/>
+                                                                    <!-- 所有房间视图下：在设置齿轮右侧显示成员登录房间标签 -->
+                                                                    <Border x:Name="MemberRoomLabelBadge" CornerRadius="6" Padding="7,1.5" Margin="8,0,0,0"
+                                                                            BorderThickness="1" VerticalAlignment="Center"
+                                                                            ToolTip="{Binding RoomLabelToolTip}"
+                                                                            Visibility="{Binding ShowRoomLabel, Converter={StaticResource BoolToVis}}">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Setter Property="Background" Value="#24E8C96D"/>
+                                                                                <Setter Property="BorderBrush" Value="#66D4AF37"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                        <Setter Property="Background" Value="#244E6D9C"/>
+                                                                                        <Setter Property="BorderBrush" Value="#668FC1E8"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                        <TextBlock x:Name="MemberRoomLabelText" Text="{Binding RoomLabel}" FontSize="10" FontWeight="Medium"
+                                                                                   MaxWidth="120" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                            <Setter Property="Foreground" Value="{StaticResource Water}"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                    </Border>
                                                                 </StackPanel>
                                                                 <StackPanel Orientation="Horizontal" Margin="0,1,0,0">
                                                                     <TextBlock Text="{Binding DisplayUid, StringFormat='UID {0}'}" FontSize="10" Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
                                                                     <!-- UID 与版本号之间的 · 分隔 -->
                                                                     <TextBlock Text="·" FontSize="10" Foreground="{StaticResource Dim}" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                                                     <!-- BGI 版本号：与 UID 同字号同色的纯文本（无框），未上报显示 "-"。
-                                                                         自机=可点（TextAction 文本按钮，静止态与 UID 文本无异，悬停变亮+手型光标）打开"更新BGI"；他人=纯文本不可点 -->
+                                                                         登录房间自机=可点打开"更新BGI"；他人或只读视图=纯文本不可点 -->
                                                                     <TextBlock Text="{Binding BgiVersionDisplay}" FontSize="10" Foreground="#C8C4DD"
                                                                                Margin="4,0,0,0" VerticalAlignment="Center">
                                                                         <TextBlock.Style>
                                                                             <Style TargetType="TextBlock">
                                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                                                 <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding IsSelf}" Value="True">
+                                                                                    <DataTrigger Binding="{Binding CanUpdateLocalBgi}" Value="True">
                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     </DataTrigger>
                                                                                 </Style.Triggers>
@@ -1232,7 +1449,7 @@
                                                                                 <Setter Property="Foreground" Value="#C8C4DD"/>
                                                                                 <Setter Property="ToolTip" Value="点击更新本机 BGI"/>
                                                                                 <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding IsSelf}" Value="False">
+                                                                                    <DataTrigger Binding="{Binding CanUpdateLocalBgi}" Value="False">
                                                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                                                     </DataTrigger>
                                                                                     <DataTrigger Binding="{Binding DataContext.RemoteUpdateAvailable, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
@@ -1325,8 +1542,18 @@
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <StackPanel Orientation="Horizontal" Grid.Column="0">
-                                                                <Button Content="🔗 锄地" Style="{StaticResource TextAction}" 
+                                                            <StackPanel Orientation="Horizontal" Grid.Column="0" IsEnabled="{Binding CanOperateCard}">
+                                                                <StackPanel.Style>
+                                                                    <Style TargetType="StackPanel">
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                <Setter Property="Opacity" Value="0.45"/>
+                                                                                <Setter Property="ToolTip" Value="其他房间仅支持只读查看，切换登录后可操作"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </StackPanel.Style>
+                                                                <Button Content="🔗 锄地" Style="{StaticResource TextAction}"
                                                                         Command="{Binding DataContext.BindHoeingGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                         CommandParameter="{Binding}" Margin="0,0,2,0" FontSize="11" ToolTip="绑定联机锄地配置组（所有人可编辑）"/>
                                                                 <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
@@ -1346,12 +1573,21 @@
                                                             <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
                                                                 <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
                                                                         Background="#1F9C97C0" BorderBrush="#4D9C97C0">
-                                                                    <Button Content="记录" Style="{StaticResource TextAction}" 
+                                                                    <Button Content="记录" Style="{StaticResource TextAction}"
                                                                             Command="{Binding DataContext.ShowOnlineHistoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium"/>
                                                                 </Border>
                                                                 <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                                        Background="#1F9C97C0" BorderBrush="#4D9C97C0">
+                                                                        Background="#1F9C97C0" BorderBrush="#4D9C97C0" IsEnabled="{Binding CanOperateCard}">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
                                                                     <Button Style="{StaticResource TextAction}"
                                                                             Command="{Binding DataContext.ScheduledOnlineCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                             CommandParameter="{Binding}" Padding="0" FontSize="10" FontWeight="Medium">
@@ -1377,7 +1613,16 @@
                                                                 </Border>
                                                                 <!-- 清除上线：复位因定时/命令触发的已上线状态（不清除定时闹钟） -->
                                                                 <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                                        Background="#1F8E6E6E" BorderBrush="#4DD46E6E">
+                                                                        Background="#1F8E6E6E" BorderBrush="#4DD46E6E" IsEnabled="{Binding CanOperateCard}">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
                                                                     <Button Content="清除上线"
                                                                             Style="{StaticResource TextAction}"
                                                                             Command="{Binding DataContext.ClearOnlineCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1385,7 +1630,16 @@
                                                                 </Border>
                                                                 <!-- 重置状态：终止当前联机批次并清理本地接管票据/执行纪元 -->
                                                                 <Border CornerRadius="7" Padding="8,2" BorderThickness="1" VerticalAlignment="Center" Margin="0,0,4,0"
-                                                                        Background="#1F9C7A3C" BorderBrush="#4DD9A84E">
+                                                                        Background="#1F9C7A3C" BorderBrush="#4DD9A84E" IsEnabled="{Binding CanOperateCard}">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsReadOnlyView}" Value="True">
+                                                                                    <Setter Property="Opacity" Value="0.45"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
                                                                     <Button Content="重置状态"
                                                                             Style="{StaticResource TextAction}"
                                                                             Command="{Binding DataContext.ResetStateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1539,13 +1793,23 @@
                             </ScrollViewer>
 
                             <!-- 快捷指令 -->
-                            <Border Grid.Row="1" Style="{StaticResource QuestCard}" Padding="14,11">
+                            <Border Grid.Row="2" Style="{StaticResource QuestCard}" Padding="14,11">
                                 <StackPanel>
                                     <Grid Margin="0,0,0,9">
                                         <TextBlock Text="快捷指令" Style="{StaticResource SectionTitle}"/>
                                         <Border Height="1" Background="#40D4AF37" VerticalAlignment="Center" Margin="64,0,0,0"/>
                                     </Grid>
-                                    <Grid>
+                                    <Grid x:Name="QuickCommandsGrid" IsEnabled="{Binding CanOperateDisplayedRoom}">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CanOperateDisplayedRoom}" Value="False">
+                                                        <Setter Property="Opacity" Value="0.45"/>
+                                                        <Setter Property="ToolTip" Value="正在只读查看其他房间，快捷指令已禁用；切换回登录房间或「所有房间」后可用"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>

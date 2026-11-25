@@ -41,6 +41,13 @@ public class AssistConfig : IJsonOnDeserialized
     [JsonPropertyName("localRoomProfileId")]
     public string LocalRoomProfileId { get; set; } = string.Empty;
 
+    /// <summary>耕地机页面「所有房间」汇总视图标识。</summary>
+    public const string AllRoomsViewId = "__all_rooms__";
+
+    /// <summary>耕地机页面当前查看的房间视图 ID：空或 "__all_rooms__" 表示「所有房间」，否则为具体房间档案 Id。持久化，重启恢复。</summary>
+    [JsonPropertyName("viewedRoomProfileId")]
+    public string ViewedRoomProfileId { get; set; } = AllRoomsViewId;
+
     [JsonIgnore]
     public AssistantRoomProfile? LocalRoomProfile => FindRoomProfile(LocalRoomProfileId);
 

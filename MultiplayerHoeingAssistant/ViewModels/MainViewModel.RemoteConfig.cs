@@ -96,7 +96,7 @@ public partial class MainViewModel
     /// <summary>拉取和保存固定使用本次选中的目标与通道；写入结果不明时不跨通道重发。</summary>
     private async void OnRemoteConfigEdit(object? parameter)
     {
-        if (parameter is not MemberViewModel member || string.IsNullOrEmpty(member.PlayerUid) || !Members.Contains(member)) return;
+        if (parameter is not MemberViewModel member || member.IsReadOnlyView || string.IsNullOrEmpty(member.PlayerUid) || !Members.Contains(member)) return;
         if (member.PlayerUid == _config?.PlayerUid && !IsObserverMode)
         {
             AddLog("执行端不能远程编辑自己的配置组（请在本机直接修改）");
