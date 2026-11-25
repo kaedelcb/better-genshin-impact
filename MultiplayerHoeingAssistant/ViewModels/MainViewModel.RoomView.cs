@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using MultiplayerHoeingAssistant.Views;
 
 namespace MultiplayerHoeingAssistant.ViewModels;
 
@@ -11,6 +12,11 @@ public partial class MainViewModel
     private readonly Dictionary<string, IRoomSpectatorSession> _roomSpectators = new(StringComparer.Ordinal);
     private readonly Dictionary<(string ProfileId, string PlayerUid), MemberViewModel> _spectatorMemberCache = new();
     private readonly Dictionary<string, (string File, string Ring)> _spectatorAvatars = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string ProfileId, string TargetUid, string Cmd, string TaskName)> _otherRoomPendingCommandResults = new(StringComparer.Ordinal);
+    private readonly object _otherRoomResetAckGate = new();
+    private readonly Dictionary<string, TaskCompletionSource<CommandResult>> _otherRoomPendingResetAcks = new(StringComparer.Ordinal);
+    private readonly object _otherRoomPolicySyncGate = new();
+    private readonly List<TaskPolicySyncService> _otherRoomPolicySyncs = [];
     private int _spectatorAvatarCursor;
 
     /// <summary>测试注入用工厂：未设置时使用真实 SignalR 旁观连接。</summary>
@@ -60,10 +66,10 @@ public partial class MainViewModel
         : string.IsNullOrWhiteSpace(ViewedRoomProfile?.Name) ? "未选择" : ViewedRoomProfile!.Name;
 
     public string HeaderViewingRoomToolTip => IsViewingAllRooms
-        ? "当前耕地机页面正在查看：所有房间（其他房间成员为只读查看）"
+        ? "当前耕地机页面正在查看：所有房间（其他房间成员支持单卡片远控；底部快捷指令作用于当前登录房间）"
         : IsViewingActiveRoom
             ? $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（当前登录房间）"
-            : $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（只读查看，切换登录后可操作）";
+            : $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（支持单卡片远控；底部快捷指令仅作用于当前登录房间）";
 
     public string AllRoomsCountText => _config?.RoomProfiles is { Count: > 0 } rooms
         ? $"{rooms.Count} 个房间"
@@ -76,19 +82,19 @@ public partial class MainViewModel
             if (_config?.RoomProfiles is not { Count: > 0 }) return "";
             if (IsViewingReadOnlyRoom && ViewedRoomProfile is { } target)
             {
-                if (IsStandaloneMode) return $"当前为单机模式，无法实时查看「{target.Name}」的在线状态。";
+                if (IsStandaloneMode) return $"当前为单机模式，无法实时查看或远控「{target.Name}」。";
                 if (_roomSpectators.TryGetValue(target.Id, out var session))
                 {
                     var hasPlayers = session.GetPlayersSnapshot().Count > 0;
-                    if (session.IsConnecting && !hasPlayers) return $"正在连接「{target.Name}」只读视图…";
+                    if (session.IsConnecting && !hasPlayers) return $"正在连接「{target.Name}」实时视图…";
                     if (!string.IsNullOrWhiteSpace(session.Error) && !hasPlayers)
-                        return $"「{target.Name}」只读连接暂未就绪：{session.Error}";
+                        return $"「{target.Name}」连接暂未就绪：{session.Error}";
                 }
                 return "";
             }
             if (IsViewingAllRooms && _config.RoomProfiles.Count > 1)
             {
-                if (IsStandaloneMode) return "当前为单机模式，无法实时查看其他房间状态。";
+                if (IsStandaloneMode) return "当前为单机模式，无法实时查看或远控其他房间。";
                 var failed = new List<string>();
                 foreach (var profile in _config.RoomProfiles)
                 {
@@ -101,7 +107,7 @@ public partial class MainViewModel
                         failed.Add($"{profile.Name}（{session.Error}）");
                     }
                 }
-                if (failed.Count > 0) return "部分房间只读连接未就绪：" + string.Join("；", failed);
+                if (failed.Count > 0) return "部分房间连接未就绪：" + string.Join("；", failed);
             }
             return "";
         }
@@ -214,6 +220,8 @@ public partial class MainViewModel
             var session = RoomSpectatorFactory?.Invoke(entry.Profile, entry.ServerUrl, bypassProxy)
                 ?? new RoomSpectatorSession(profileId, entry.ServerUrl, entry.Profile.RoomCode, entry.Profile.Password, bypassProxy);
             session.Changed += () => OnSpectatorSessionChanged(profileId, session);
+            session.ReplyReceived += cmd => OnSpectatorReplyReceived(profileId, session, cmd);
+            session.CommandResultReceived += result => OnSpectatorCommandResultReceived(profileId, session, result);
             _roomSpectators[profileId] = session;
             session.Start();
         }
@@ -497,5 +505,378 @@ public partial class MainViewModel
                 DisplayedMembers.Insert(targetIndex, item);
             }
         }
+    }
+
+    // ===== 非登录房间单卡片远控隔离路由 =====
+
+    private static bool IsOtherRoomCard(MemberViewModel? member)
+        => member is { IsActiveRoomMember: false };
+
+    private string ResolveOtherRoomLabel(string profileId, string? fallback = null)
+    {
+        if (!string.IsNullOrWhiteSpace(fallback)) return fallback;
+        var profile = _config?.RoomProfiles.FirstOrDefault(p => string.Equals(p.Id, profileId, StringComparison.Ordinal));
+        return string.IsNullOrWhiteSpace(profile?.Name) ? profileId : profile.Name;
+    }
+
+    private bool TryGetOtherRoomSession(MemberViewModel member, out IRoomSpectatorSession session, out string roomLabel)
+    {
+        roomLabel = ResolveOtherRoomLabel(member.SourceRoomProfileId, member.RoomLabel);
+        session = null!;
+        if (IsStandaloneMode)
+        {
+            AddLog($"当前为单机模式，无法远控「{roomLabel}」中的 {member.PlayerName}");
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(member.SourceRoomProfileId)
+            || !_roomSpectators.TryGetValue(member.SourceRoomProfileId, out var found)
+            || !found.IsConnected)
+        {
+            AddLog($"房间「{roomLabel}」连接尚未就绪，未向 {member.PlayerName} 发送命令");
+            return false;
+        }
+        session = found;
+        return true;
+    }
+
+    internal IReadOnlyList<ControlRoomPlayer> GetOtherRoomPeersSnapshot(MemberViewModel member)
+    {
+        if (!string.IsNullOrWhiteSpace(member.SourceRoomProfileId)
+            && _roomSpectators.TryGetValue(member.SourceRoomProfileId, out var session))
+        {
+            return session.GetPlayersSnapshot();
+        }
+        return [];
+    }
+
+    internal async Task<bool> SendOtherRoomCardCommandAsync(
+        MemberViewModel member,
+        string cmd,
+        Dictionary<string, object>? parameters = null,
+        bool trackStartReceipt = false,
+        DateTimeOffset? expiresAtUtc = null,
+        string? customLogMessage = null)
+    {
+        if (!TryEnterConfigTransferOperation(cmd, out var transferOperation))
+        {
+            AddLog(ConfigTransferBlockedMessage);
+            return false;
+        }
+        using var _ = transferOperation;
+        if (!TryGetOtherRoomSession(member, out var session, out var roomLabel)) return false;
+
+        var remoteCmd = new RemoteCommand
+        {
+            Cmd = cmd,
+            RoomCode = session.RoomCode,
+            Sender = _config?.PlayerName ?? "",
+            SenderUid = session.SpectatorUid,
+            Target = [member.PlayerUid],
+            CommandId = "otherroom_" + Guid.NewGuid().ToString("N"),
+            ExpiresAtUtc = expiresAtUtc,
+            Params = parameters
+        };
+
+        if (trackStartReceipt && cmd is "start_group" or "start_oneclick")
+        {
+            TrackOtherRoomPendingCommandResult(remoteCmd, member);
+        }
+
+        bool sent;
+        try
+        {
+            sent = await session.SendRemoteCommandAsync(remoteCmd);
+        }
+        catch (Exception ex)
+        {
+            sent = false;
+            AddLog($"向「{roomLabel}」的 {member.PlayerName} 发送 {cmd} 失败：{ex.Message}");
+        }
+
+        if (!sent)
+        {
+            if (trackStartReceipt && _otherRoomPendingCommandResults.Remove(remoteCmd.CommandId))
+            {
+                if (member.RemoteStartResultState == "pending")
+                {
+                    member.RemoteStartResult = "发送失败（房间未连接）";
+                    member.RemoteStartResultState = "failed";
+                }
+            }
+            AddLog($"房间「{roomLabel}」连接已断开，未向 {member.PlayerName} 下发 {cmd}");
+            return false;
+        }
+
+        AddLog(customLogMessage ?? $"已向「{roomLabel}」的 {member.PlayerName} 远程下发 {cmd} 命令");
+        return true;
+    }
+
+    private void TrackOtherRoomPendingCommandResult(RemoteCommand cmd, MemberViewModel member)
+    {
+        var taskName = cmd.Params?.GetValueOrDefault(
+            cmd.Cmd == "start_group" ? "groupName" : "configName")?.ToString() ?? "";
+        _otherRoomPendingCommandResults[cmd.CommandId] = (member.SourceRoomProfileId, member.PlayerUid, cmd.Cmd, taskName);
+        var kindText = cmd.Cmd == "start_group" ? "配置组" : "一条龙";
+        member.RemoteStartResult = $"{kindText}「{taskName}」已下发，等待回执…";
+        member.RemoteStartResultState = "pending";
+        _ = ExpireOtherRoomPendingCommandResultAsync(cmd.CommandId);
+    }
+
+    private async Task ExpireOtherRoomPendingCommandResultAsync(string commandId)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(15));
+            void Expire()
+            {
+                if (!_otherRoomPendingCommandResults.Remove(commandId, out var pending)) return;
+                if (_spectatorMemberCache.TryGetValue((pending.ProfileId, pending.TargetUid), out var member)
+                    && member.RemoteStartResultState == "pending")
+                {
+                    member.RemoteStartResult = "已发送（无回执）";
+                    member.RemoteStartResultState = "noreceipt";
+                }
+            }
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess()) Expire();
+            else if (!dispatcher.HasShutdownStarted) _ = dispatcher.BeginInvoke(Expire);
+        }
+        catch { }
+    }
+
+    private void OnSpectatorReplyReceived(string profileId, IRoomSpectatorSession session, RemoteCommand cmd)
+    {
+        if (_disposing) return;
+        if (!_roomSpectators.TryGetValue(profileId, out var current) || !ReferenceEquals(current, session)) return;
+
+        if (string.Equals(cmd.Cmd, "ack", StringComparison.Ordinal))
+        {
+            var status = cmd.Params?.GetValueOrDefault("status")?.ToString() ?? "failed";
+            var message = cmd.Params?.GetValueOrDefault("message")?.ToString() ?? "";
+            lock (_otherRoomResetAckGate)
+            {
+                if (_otherRoomPendingResetAcks.TryGetValue($"{profileId}\0{cmd.CommandId}\0{cmd.SenderUid}", out var waiter))
+                {
+                    waiter.TrySetResult(new CommandResult { Status = status, Message = message });
+                }
+            }
+            var roomLabel = ResolveOtherRoomLabel(profileId);
+            InvokeOnUiThread(() => AddLog($"确认 [{roomLabel}]: {cmd.Sender} - {message}"));
+            return;
+        }
+
+        if (cmd.Cmd is "remote_config.data" or "remote_config.push_result")
+        {
+            _remoteConfigEditService?.TryComplete(cmd.CommandId, cmd);
+            return;
+        }
+
+        if (cmd.Cmd is "task_policy.data" or "task_policy.push_result")
+        {
+            List<TaskPolicySyncService> snapshot;
+            lock (_otherRoomPolicySyncGate) snapshot = [.. _otherRoomPolicySyncs];
+            foreach (var sync in snapshot)
+            {
+                if (sync.TryComplete(cmd.CommandId, cmd)) return;
+            }
+        }
+    }
+
+    private void OnSpectatorCommandResultReceived(string profileId, IRoomSpectatorSession session, RemoteCommandResult result)
+    {
+        if (_disposing) return;
+        InvokeOnUiThread(() =>
+        {
+            if (_disposing) return;
+            if (!_roomSpectators.TryGetValue(profileId, out var current) || !ReferenceEquals(current, session)) return;
+            var roomLabel = ResolveOtherRoomLabel(profileId);
+            var displayName = string.IsNullOrEmpty(result.TargetName) ? result.TargetUid : result.TargetName;
+            var statusText = result.Status switch
+            {
+                "success" => $"启动成功：{result.TaskName}",
+                "cancelled" => $"执行被取消：{result.TaskName}",
+                _ => $"启动失败：{(string.IsNullOrEmpty(result.Message) ? result.Status : result.Message)}"
+            };
+            AddLog($"[回执][{roomLabel}] {displayName} {result.Cmd}「{result.TaskName}」→ {statusText}");
+            _otherRoomPendingCommandResults.Remove(result.CommandId);
+
+            if (_spectatorMemberCache.TryGetValue((profileId, result.TargetUid), out var member))
+            {
+                member.RemoteStartResult = statusText;
+                member.RemoteStartResultState = result.Status == "success" ? "success" : "failed";
+            }
+        });
+    }
+
+    private void InvokeOnUiThread(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess()) action();
+        else if (!dispatcher.HasShutdownStarted) dispatcher.BeginInvoke(action);
+    }
+
+    private (TaskPolicySyncService Service, IDisposable Registration) EnterOtherRoomTaskPolicySync(
+        IRoomSpectatorSession session)
+    {
+        var sync = new TaskPolicySyncService(
+            async command =>
+            {
+                if (!session.IsConnected) return false;
+                command.RoomCode = session.RoomCode;
+                command.SenderUid = session.SpectatorUid;
+                return await session.SendRemoteCommandAsync(command);
+            },
+            () => session.SpectatorUid,
+            () => _config?.PlayerName ?? "");
+        lock (_otherRoomPolicySyncGate) _otherRoomPolicySyncs.Add(sync);
+        return (sync, new ActionDisposable(() =>
+        {
+            lock (_otherRoomPolicySyncGate) _otherRoomPolicySyncs.Remove(sync);
+        }));
+    }
+
+    internal async Task<bool> ClearOtherRoomOnlineHistoryAsync(MemberViewModel member)
+    {
+        if (!TryGetOtherRoomSession(member, out var session, out var roomLabel)) return false;
+        try
+        {
+            var ok = await session.ClearOnlineHistoryAsync(member.PlayerUid);
+            if (ok) AddLog($"已清除「{roomLabel}」中 {member.PlayerName} 的联机记录");
+            else AddLog($"清除「{roomLabel}」中 {member.PlayerName} 的联机记录失败：房间未连接");
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            AddLog($"清除「{roomLabel}」中 {member.PlayerName} 的联机记录失败：{ex.Message}");
+            return false;
+        }
+    }
+
+    internal async Task<bool> ResetOtherRoomCardStateAsync(MemberViewModel member)
+    {
+        if (!TryGetOtherRoomSession(member, out var session, out var roomLabel)) return false;
+
+        var resetId = "reset_" + Guid.NewGuid().ToString("N");
+        var expectedGeneration = 0;
+        var expectedBatchId = member.HoeingBatchId ?? "";
+        var serverResetConfirmed = false;
+
+        try
+        {
+            var current = await session.GetCurrentCoordinatedBatchAsync();
+            if (current != null) expectedBatchId = current.BatchId;
+            var reset = await session.ResetCoordinatedBatchAsync(
+                resetId, [member.PlayerUid],
+                expectedGeneration: current?.Generation,
+                expectedBatchId: current?.BatchId);
+            if (reset != null)
+            {
+                if (reset.Reason == "stale_reset")
+                {
+                    AddLog($"[状态重置][{roomLabel}] 目标房间批次已改变，旧重置请求未执行；目标任务保持运行");
+                    return false;
+                }
+                serverResetConfirmed = true;
+                expectedGeneration = reset.Generation;
+                expectedBatchId = reset.BatchId;
+                AddLog($"[状态重置][{roomLabel}] 服务端已处理单人重置 resetId={resetId}，批次={reset.BatchId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            AddLog($"[状态重置][{roomLabel}] 服务端批次失效未确认，将继续发送单人复位命令：{ex.Message}");
+        }
+
+        var ackKey = $"{member.SourceRoomProfileId}\0{resetId}\0{member.PlayerUid}";
+        var waiter = new TaskCompletionSource<CommandResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_otherRoomResetAckGate) _otherRoomPendingResetAcks[ackKey] = waiter;
+        try
+        {
+            var parameters = new Dictionary<string, object> { ["resetId"] = resetId };
+            if (expectedGeneration > 0) parameters["generation"] = expectedGeneration;
+            if (!string.IsNullOrWhiteSpace(expectedBatchId)) parameters["batchId"] = expectedBatchId;
+
+            var sent = await session.SendRemoteCommandAsync(new RemoteCommand
+            {
+                Cmd = "reset_state",
+                RoomCode = session.RoomCode,
+                Sender = _config?.PlayerName ?? "",
+                SenderUid = session.SpectatorUid,
+                Target = [member.PlayerUid],
+                CommandId = resetId,
+                Params = parameters
+            });
+            if (!sent)
+            {
+                AddLog($"[状态重置][{roomLabel}] 房间连接已断开，未发送单人复位命令");
+                return false;
+            }
+
+            var completed = await Task.WhenAny(waiter.Task, Task.Delay(TimeSpan.FromSeconds(18)));
+            if (completed == waiter.Task && waiter.Task.IsCompletedSuccessfully && waiter.Task.Result.Status == "success")
+            {
+                AddLog($"[状态重置][{roomLabel}] {member.PlayerName} 已完成单人复位");
+                return true;
+            }
+            var detail = completed == waiter.Task && waiter.Task.IsCompletedSuccessfully
+                ? waiter.Task.Result.Message
+                : "等待恢复结果超时，未冒认恢复成功";
+            AddLog($"[状态重置][{roomLabel}] {member.PlayerName} 未确认复位（服务端={(serverResetConfirmed ? "已处理" : "未确认")}）：{detail}");
+            return false;
+        }
+        finally
+        {
+            lock (_otherRoomResetAckGate) _otherRoomPendingResetAcks.Remove(ackKey);
+        }
+    }
+
+    internal async Task RemoteConfigEditOtherRoomCardAsync(MemberViewModel member)
+    {
+        if (!TryGetOtherRoomSession(member, out var session, out var roomLabel)) return;
+        if (!member.Online)
+        {
+            AddLog($"配置编辑：「{roomLabel}」中的 {member.PlayerName} 当前离线，无法远程编辑配置");
+            return;
+        }
+        var groups = member.ConfigGroups ?? [];
+        if (groups.Count == 0)
+        {
+            AddLog($"配置编辑：「{roomLabel}」中的 {member.PlayerName} 没有可用的配置组（可能状态尚未同步）");
+            return;
+        }
+
+        try
+        {
+            _remoteConfigEditService ??= new RemoteConfigEditService(
+                SendConfigViaServerAsync, () => _config?.PlayerUid ?? "", () => _config?.PlayerName ?? "",
+                AddLog, () => _externalClient, EnsureLocalBgiReadyAsync);
+
+            AddLog($"配置编辑：正在通过「{roomLabel}」远控通道编辑 {member.PlayerName} 的配置组");
+            var groupName = RemoteConfigGroupSelectWindow.ShowSelectDialog(groups, member.PlayerName, Application.Current.MainWindow);
+            if (string.IsNullOrEmpty(groupName)) return;
+
+            var profileId = member.SourceRoomProfileId;
+            await _remoteConfigEditService.RunAsync(member.PlayerUid, member.PlayerName, groupName, async command =>
+            {
+                if (!_roomSpectators.TryGetValue(profileId, out var current) || !ReferenceEquals(current, session) || !session.IsConnected)
+                {
+                    AddLog($"配置编辑：「{roomLabel}」连接已断开，请重新发起编辑");
+                    return false;
+                }
+                command.RoomCode = session.RoomCode;
+                command.SenderUid = session.SpectatorUid;
+                return await session.SendRemoteCommandAsync(command);
+            });
+        }
+        catch (Exception ex)
+        {
+            AddLog($"配置编辑失败（{roomLabel} / {member.PlayerName}）：{ex.Message}");
+        }
+    }
+
+    private sealed class ActionDisposable(Action dispose) : IDisposable
+    {
+        private Action? _dispose = dispose;
+        public void Dispose() => Interlocked.Exchange(ref _dispose, null)?.Invoke();
     }
 }

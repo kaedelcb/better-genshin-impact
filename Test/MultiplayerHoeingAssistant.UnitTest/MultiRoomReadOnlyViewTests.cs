@@ -7,6 +7,10 @@ using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest;
 
+[CollectionDefinition("MultiRoomWpf", DisableParallelization = true)]
+public sealed class MultiRoomWpfCollectionDefinition { }
+
+[Collection("MultiRoomWpf")]
 public sealed class MultiRoomReadOnlyViewTests
 {
     private sealed class FakeSpectatorSession : IRoomSpectatorSession
@@ -27,14 +31,22 @@ public sealed class MultiRoomReadOnlyViewTests
         public string RoomCode { get; }
         public string Password { get; }
         public bool BypassSystemProxy { get; }
+        public string SpectatorUid { get; } = "web_logviewer_test_" + Guid.NewGuid().ToString("N");
         public bool IsConnected { get; set; } = true;
         public bool IsConnecting { get; set; }
         public string? Error { get; set; }
         public int StartCount { get; private set; }
         public int ReconnectCount { get; private set; }
         public bool Disposed { get; private set; }
+        public List<RemoteCommand> SentCommands { get; } = [];
+        public List<string> ClearedHistoryUids { get; } = [];
+        public CoordinatedBatchSnapshot? CurrentBatch { get; set; }
+        public List<(string ResetId, IReadOnlyList<string> Targets)> BatchResets { get; } = [];
+        public Action<RemoteCommand>? OnCommandSent { get; set; }
 
         public event Action? Changed;
+        public event Action<RemoteCommand>? ReplyReceived;
+        public event Action<RemoteCommandResult>? CommandResultReceived;
 
         public IReadOnlyList<ControlRoomPlayer> GetPlayersSnapshot() => _players;
 
@@ -47,6 +59,46 @@ public sealed class MultiRoomReadOnlyViewTests
             _players = [.. players];
             Changed?.Invoke();
         }
+
+        public Task<bool> SendRemoteCommandAsync(RemoteCommand command)
+        {
+            if (!IsConnected) return Task.FromResult(false);
+            command.RoomCode = RoomCode;
+            command.SenderUid = SpectatorUid;
+            SentCommands.Add(command);
+            OnCommandSent?.Invoke(command);
+            return Task.FromResult(true);
+        }
+
+        public Task<bool> ClearOnlineHistoryAsync(string targetUid)
+        {
+            if (!IsConnected) return Task.FromResult(false);
+            ClearedHistoryUids.Add(targetUid);
+            return Task.FromResult(true);
+        }
+
+        public Task<CoordinatedBatchSnapshot?> GetCurrentCoordinatedBatchAsync(CancellationToken ct = default)
+            => Task.FromResult(IsConnected ? CurrentBatch : null);
+
+        public Task<CoordinatedBatchResetResult?> ResetCoordinatedBatchAsync(
+            string resetId, IReadOnlyList<string> requestedTargets,
+            int? expectedGeneration = null, string? expectedBatchId = null, CancellationToken ct = default)
+        {
+            if (!IsConnected) return Task.FromResult<CoordinatedBatchResetResult?>(null);
+            BatchResets.Add((resetId, requestedTargets));
+            return Task.FromResult<CoordinatedBatchResetResult?>(new CoordinatedBatchResetResult
+            {
+                Found = CurrentBatch != null,
+                BatchId = CurrentBatch?.BatchId ?? "",
+                Generation = CurrentBatch?.Generation ?? 1,
+                ResetId = resetId,
+                TargetUids = [.. requestedTargets]
+            });
+        }
+
+        public void EmitReply(RemoteCommand reply) => ReplyReceived?.Invoke(reply);
+
+        public void EmitCommandResult(RemoteCommandResult result) => CommandResultReceived?.Invoke(result);
 
         public ValueTask DisposeAsync()
         {
@@ -181,12 +233,14 @@ public sealed class MultiRoomReadOnlyViewTests
         Assert.True(selfCard.ShowRoomLabel);
         Assert.Equal(active.Name, selfCard.RoomLabel);
 
-        // 老鲨鱼：登录房间离线、1234 在线 -> 展示 1234 在线只读卡片
+        // 老鲨鱼：登录房间离线、1234 在线 -> 展示 1234 在线卡片（支持单卡片远控，但不参与登录房批量勾选）
         var sharkCard = vm.DisplayedMembers[1];
         Assert.True(sharkCard.Online);
+        Assert.False(sharkCard.IsActiveRoomMember);
         Assert.True(sharkCard.IsReadOnlyView);
-        Assert.False(sharkCard.CanOperateCard);
-        Assert.False(sharkCard.CanRemoteEdit);
+        Assert.True(sharkCard.CanOperateCard);
+        Assert.True(sharkCard.CanRemoteEdit);
+        Assert.False(sharkCard.CanUpdateLocalBgi);
         Assert.False(sharkCard.IsSelected);
         Assert.True(sharkCard.ShowRoomLabel);
         Assert.Equal(second.Name, sharkCard.RoomLabel);
@@ -194,14 +248,18 @@ public sealed class MultiRoomReadOnlyViewTests
         // 渺茫：两房均离线 -> 仅显示一张（登录房间优先），仍带房间标签
         var miaomangCard = vm.DisplayedMembers[2];
         Assert.False(miaomangCard.Online);
+        Assert.True(miaomangCard.IsActiveRoomMember);
         Assert.False(miaomangCard.IsReadOnlyView);
         Assert.True(miaomangCard.ShowRoomLabel);
         Assert.Equal(active.Name, miaomangCard.RoomLabel);
 
-        // 兴起：仅在 1234 -> 展示 1234 只读卡片与房间标签
+        // 兴起：仅在 1234 -> 展示 1234 卡片与房间标签
         var xingqiCard = vm.DisplayedMembers[3];
         Assert.True(xingqiCard.Online);
+        Assert.False(xingqiCard.IsActiveRoomMember);
         Assert.True(xingqiCard.IsReadOnlyView);
+        Assert.True(xingqiCard.CanOperateCard);
+        Assert.True(xingqiCard.CanRemoteEdit);
         Assert.True(xingqiCard.ShowRoomLabel);
         Assert.Equal(second.Name, xingqiCard.RoomLabel);
 
@@ -210,7 +268,7 @@ public sealed class MultiRoomReadOnlyViewTests
     }
 
     [Fact]
-    public async Task ViewingNonActiveRoomShowsReadOnlyRoomMembersWithoutChangingActiveLogin()
+    public void ViewingNonActiveRoomShowsRoomMembersWithoutChangingActiveLogin()
     {
         var (vm, active, second, sessions) = CreateTwoRoomFixture();
         var secondSession = sessions[second.Id];
@@ -231,14 +289,15 @@ public sealed class MultiRoomReadOnlyViewTests
         var selfInSecond = vm.DisplayedMembers[0];
         Assert.Equal("100000001", selfInSecond.PlayerUid);
         Assert.False(selfInSecond.Online); // 我在 1234 是离线的
-        Assert.True(selfInSecond.IsReadOnlyView);
-        Assert.False(selfInSecond.CanOperateCard);
-        Assert.False(selfInSecond.CanUpdateLocalBgi);
+        Assert.False(selfInSecond.IsActiveRoomMember);
+        Assert.True(selfInSecond.CanOperateCard);
+        Assert.False(selfInSecond.CanRemoteEdit); // 离线不可远程编辑
+        Assert.False(selfInSecond.CanUpdateLocalBgi); // 非登录房卡片不触发本机 BGI 更新
         Assert.False(selfInSecond.ShowRoomLabel); // 单房间视图不重复显示房间标签
 
-        // 只读卡片点击配置组/一条龙直接被安全拦截
-        await vm.StartGroupFromConfigAsync(selfInSecond, "测试配置组");
-        await vm.StartOneClickFromConfigAsync(selfInSecond, "测试一条龙");
+        var onlineInSecond = vm.DisplayedMembers[1];
+        Assert.Equal("100000004", onlineInSecond.PlayerUid);
+        Assert.True(onlineInSecond.CanRemoteEdit); // 在线支持远程配置编辑
 
         // 切回当前登录房间单房视图：释放非必要的旁观会话，且卡片不显示房间标签
         vm.SelectViewedRoom(active.Id, persist: false);
@@ -249,10 +308,104 @@ public sealed class MultiRoomReadOnlyViewTests
         Assert.Equal(3, vm.DisplayedMembers.Count);
         Assert.All(vm.DisplayedMembers, m =>
         {
+            Assert.True(m.IsActiveRoomMember);
             Assert.False(m.IsReadOnlyView);
             Assert.True(m.CanOperateCard);
             Assert.False(m.ShowRoomLabel);
         });
+    }
+
+    [Fact]
+    public async Task SingleCardRemoteControlRoutesStrictlyToTargetRoomSessionWithReceiptAndResetAck()
+    {
+        var (vm, active, second, sessions) = CreateTwoRoomFixture();
+        var secondSession = sessions[second.Id];
+        secondSession.SetPlayers(
+            new ControlRoomPlayer { PlayerUid = "100000001", PlayerName = "茶包", Online = false, BgiStatus = "offline" },
+            new ControlRoomPlayer { PlayerUid = "100000004", PlayerName = "兴起", Online = true, BgiStatus = "running" });
+
+        vm.SelectViewedRoom(second.Id, persist: false);
+        var target = Assert.Single(vm.DisplayedMembers, m => m.PlayerUid == "100000004");
+        var activeSelf = Assert.Single(vm.Members, m => m.PlayerUid == "100000001");
+
+        // 1. 下发单卡片启动配置组命令：路由到 1234 房间会话，带独立 SpectatorUid，并跟踪该卡片回执
+        var sent = await vm.SendOtherRoomCardCommandAsync(
+            target, "start_group",
+            new Dictionary<string, object> { ["groupName"] = "日常锄地", ["startFromIndex"] = 0 },
+            trackStartReceipt: true);
+        Assert.True(sent);
+        var startCmd = Assert.Single(secondSession.SentCommands);
+        Assert.Equal("start_group", startCmd.Cmd);
+        Assert.Equal(second.RoomCode, startCmd.RoomCode);
+        Assert.Equal(secondSession.SpectatorUid, startCmd.SenderUid);
+        Assert.Equal(["100000004"], startCmd.Target);
+        Assert.Equal("pending", target.RemoteStartResultState);
+        Assert.Equal("", activeSelf.RemoteStartResult); // 绝不污染当前登录房间成员
+
+        // 目标机返回回执：只更新 1234 房间目标卡片
+        secondSession.EmitCommandResult(new RemoteCommandResult
+        {
+            CommandId = startCmd.CommandId,
+            Cmd = "start_group",
+            TaskName = "日常锄地",
+            TargetUid = "100000004",
+            TargetName = "兴起",
+            Status = "success",
+            Message = "ok"
+        });
+        Assert.Equal("success", target.RemoteStartResultState);
+        Assert.Contains("日常锄地", target.RemoteStartResult);
+        Assert.Equal("", activeSelf.RemoteStartResult);
+
+        // 2. 清除上线记录：只调用 1234 会话，不干扰登录房
+        Assert.True(await vm.ClearOtherRoomOnlineHistoryAsync(target));
+        Assert.Equal(["100000004"], secondSession.ClearedHistoryUids);
+
+        // 3. 单卡片状态重置：只在 1234 会话上撤销目标批次并等待目标 ack
+        secondSession.CurrentBatch = new CoordinatedBatchSnapshot("batch-1234", 7, 1, 2, 1, "running", "100000004");
+        secondSession.OnCommandSent = cmd =>
+        {
+            if (cmd.Cmd == "reset_state")
+            {
+                secondSession.EmitReply(new RemoteCommand
+                {
+                    Cmd = "ack",
+                    CommandId = cmd.CommandId,
+                    SenderUid = "100000004",
+                    Sender = "兴起",
+                    Params = new Dictionary<string, object> { ["status"] = "success", ["message"] = "已重置" }
+                });
+            }
+        };
+        Assert.True(await vm.ResetOtherRoomCardStateAsync(target));
+        var resetReq = Assert.Single(secondSession.BatchResets);
+        Assert.Equal(["100000004"], resetReq.Targets);
+        Assert.Contains(secondSession.SentCommands, c => c.Cmd == "reset_state" && c.Target.SequenceEqual(["100000004"]));
+        Assert.Equal(active.Id, vm.ActiveRoomProfile?.Id);
+        Assert.Equal(3, vm.Members.Count);
+
+        // 4. 目标房间断连时，单卡片命令安全失败且不降级到登录房间
+        secondSession.IsConnected = false;
+        Assert.False(await vm.SendOtherRoomCardCommandAsync(target, "start_bgi"));
+    }
+
+    [Fact]
+    public async Task StandaloneModeBlocksOtherRoomSingleCardCommands()
+    {
+        var (vm, _, second, sessions) = CreateTwoRoomFixture(standalone: true);
+        Assert.Empty(sessions);
+        var ghost = new MemberViewModel
+        {
+            PlayerUid = "100000004",
+            PlayerName = "兴起",
+            SourceRoomProfileId = second.Id,
+            RoomLabel = second.Name,
+            IsActiveRoomMember = false,
+            IsReadOnlyView = true
+        };
+        Assert.False(await vm.SendOtherRoomCardCommandAsync(ghost, "stop"));
+        Assert.False(await vm.ClearOtherRoomOnlineHistoryAsync(ghost));
+        Assert.False(await vm.ResetOtherRoomCardStateAsync(ghost));
     }
 
     [Fact]

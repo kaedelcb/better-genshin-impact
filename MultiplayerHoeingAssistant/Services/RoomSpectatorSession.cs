@@ -2,7 +2,7 @@ using MultiplayerHoeingAssistant.Models;
 
 namespace MultiplayerHoeingAssistant.Services;
 
-/// <summary>耕地机多房间只读旁观会话接口（便于单元测试注入模拟房间数据）。</summary>
+/// <summary>耕地机多房间旁观/单卡远控会话接口（便于单元测试注入模拟房间数据与远控回执）。</summary>
 internal interface IRoomSpectatorSession : IAsyncDisposable
 {
     string ProfileId { get; }
@@ -10,19 +10,28 @@ internal interface IRoomSpectatorSession : IAsyncDisposable
     string RoomCode { get; }
     string Password { get; }
     bool BypassSystemProxy { get; }
+    string SpectatorUid { get; }
     bool IsConnected { get; }
     bool IsConnecting { get; }
     string? Error { get; }
     event Action? Changed;
+    event Action<RemoteCommand>? ReplyReceived;
+    event Action<RemoteCommandResult>? CommandResultReceived;
     IReadOnlyList<ControlRoomPlayer> GetPlayersSnapshot();
     void Start();
     void ForceReconnect();
+    Task<bool> SendRemoteCommandAsync(RemoteCommand command);
+    Task<bool> ClearOnlineHistoryAsync(string targetUid);
+    Task<CoordinatedBatchSnapshot?> GetCurrentCoordinatedBatchAsync(CancellationToken ct = default);
+    Task<CoordinatedBatchResetResult?> ResetCoordinatedBatchAsync(
+        string resetId, IReadOnlyList<string> requestedTargets,
+        int? expectedGeneration = null, string? expectedBatchId = null, CancellationToken ct = default);
 }
 
 /// <summary>
-/// 耕地机多房间只读旁观连接。
+/// 耕地机多房间旁观与单卡片远控连接。
 /// 使用独立 web_logviewer_ 旁观身份与 isRemote=true 加入目标控制房间，不注册执行端、不上报状态、
-/// 不订阅任务命令，也不会挤掉同机或异地的真实执行端。
+/// 不执行入站控制命令，也不会挤掉同机或异地的真实执行端；仅允许显式发起单卡片远控并接收对应的请求应答/回执。
 /// </summary>
 internal sealed class RoomSpectatorSession : IRoomSpectatorSession
 {
@@ -47,12 +56,15 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
     public string RoomCode { get; }
     public string Password { get; }
     public bool BypassSystemProxy { get; }
+    public string SpectatorUid { get; } = "web_logviewer_" + Guid.NewGuid().ToString("N");
     public bool IsConnected { get { lock (_gate) return !_disposed && _joined && _connected; } }
     public bool IsConnecting { get { lock (_gate) return !_disposed && _connecting; } }
     public string? Error { get { lock (_gate) return _error; } }
     private string? _error;
 
     public event Action? Changed;
+    public event Action<RemoteCommand>? ReplyReceived;
+    public event Action<RemoteCommandResult>? CommandResultReceived;
 
     public RoomSpectatorSession(string profileId, string serverUrl, string roomCode, string password, bool bypassSystemProxy)
     {
@@ -133,10 +145,14 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
                 void OnPlayers(ControlRoomPlayersUpdate update) => HandlePlayersUpdated(client, update, firstSnapshot);
                 void OnRejected(string reason) => HandleRejected(client, reason, firstSnapshot);
                 void OnConnChanged(bool connected) => HandleConnectionChanged(client, connected);
+                void OnCommand(RemoteCommand cmd) => HandleReplyReceived(client, cmd);
+                void OnCommandResult(RemoteCommandResult result) => HandleCommandResultReceived(client, result);
 
                 client.OnPlayersUpdated += OnPlayers;
                 client.OnJoinRejected += OnRejected;
                 client.OnConnectionStateChanged += OnConnChanged;
+                client.OnRemoteCommand += OnCommand;
+                client.OnRemoteCommandResult += OnCommandResult;
 
                 lock (_gate)
                 {
@@ -145,6 +161,8 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
                         client.OnPlayersUpdated -= OnPlayers;
                         client.OnJoinRejected -= OnRejected;
                         client.OnConnectionStateChanged -= OnConnChanged;
+                        client.OnRemoteCommand -= OnCommand;
+                        client.OnRemoteCommandResult -= OnCommandResult;
                         _ = SafeDisposeClientAsync(client);
                         return;
                     }
@@ -156,9 +174,10 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
                 {
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeoutCts.CancelAfter(ConnectTimeout);
-                    // 独立旁观身份 + isRemote=true：不注册执行端，不挤掉同机或异地真实成员。
+                    // 独立旁观身份 + isRemote=true：不注册执行端，不挤掉同机或异地真实成员；
+                    // 稳定 SpectatorUid 让服务端可以把 ack / .data / .push_result / 回执准确回投到本连接。
                     await client.ConnectAsync(normalizedServer, RoomCode, Password,
-                        "web_logviewer_" + Guid.NewGuid().ToString("N"), "房间旁观", [],
+                        SpectatorUid, "房间远控", [],
                         isRemote: true, bypassSystemProxy: BypassSystemProxy, cancellationToken: timeoutCts.Token);
                     var rejection = await firstSnapshot.Task.WaitAsync(timeoutCts.Token);
                     if (rejection != null)
@@ -167,12 +186,12 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
-                    await CleanupAttemptAsync(client, OnPlayers, OnRejected, OnConnChanged);
+                    await CleanupAttemptAsync(client, OnPlayers, OnRejected, OnConnChanged, OnCommand, OnCommandResult);
                     return;
                 }
                 catch (Exception ex)
                 {
-                    await CleanupAttemptAsync(client, OnPlayers, OnRejected, OnConnChanged);
+                    await CleanupAttemptAsync(client, OnPlayers, OnRejected, OnConnChanged, OnCommand, OnCommandResult);
                     var msg = ex is OperationCanceledException ? "连接超时" : ex.Message;
                     SetError(msg);
                 }
@@ -240,12 +259,85 @@ internal sealed class RoomSpectatorSession : IRoomSpectatorSession
         }
     }
 
+    private SignalRClient? GetReadyClient()
+    {
+        lock (_gate)
+        {
+            return !_disposed && _joined && _connected ? _client : null;
+        }
+    }
+
+    public async Task<bool> SendRemoteCommandAsync(RemoteCommand command)
+    {
+        var client = GetReadyClient();
+        if (client is null || !client.IsConnected) return false;
+        command.RoomCode = RoomCode;
+        command.SenderUid = SpectatorUid;
+        await client.SendRemoteCommandAsync(command).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<bool> ClearOnlineHistoryAsync(string targetUid)
+    {
+        var client = GetReadyClient();
+        if (client is null || !client.IsConnected || string.IsNullOrWhiteSpace(targetUid)) return false;
+        await client.ClearOnlineHistoryAsync(targetUid).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<CoordinatedBatchSnapshot?> GetCurrentCoordinatedBatchAsync(CancellationToken ct = default)
+    {
+        var client = GetReadyClient();
+        if (client is null || !client.IsConnected) return null;
+        return await client.GetCurrentCoordinatedBatchAsync(ct).ConfigureAwait(false);
+    }
+
+    public async Task<CoordinatedBatchResetResult?> ResetCoordinatedBatchAsync(
+        string resetId, IReadOnlyList<string> requestedTargets,
+        int? expectedGeneration = null, string? expectedBatchId = null, CancellationToken ct = default)
+    {
+        var client = GetReadyClient();
+        if (client is null || !client.IsConnected) return null;
+        return await client.ResetCoordinatedBatchAsync(resetId, requestedTargets, expectedGeneration, expectedBatchId, ct)
+            .ConfigureAwait(false);
+    }
+
+    private void HandleReplyReceived(SignalRClient source, RemoteCommand cmd)
+    {
+        lock (_gate)
+        {
+            if (_disposed || !ReferenceEquals(_client, source)) return;
+        }
+        // 旁观连接绝不执行任何入站控制命令，仅转发应答/确认类回复（ack / *.data / *.push_result）。
+        if (cmd is null || string.IsNullOrEmpty(cmd.Cmd)) return;
+        if (!string.Equals(cmd.Cmd, "ack", StringComparison.Ordinal)
+            && !cmd.Cmd.EndsWith(".data", StringComparison.Ordinal)
+            && !cmd.Cmd.EndsWith(".push_result", StringComparison.Ordinal))
+        {
+            return;
+        }
+        ReplyReceived?.Invoke(cmd);
+    }
+
+    private void HandleCommandResultReceived(SignalRClient source, RemoteCommandResult result)
+    {
+        lock (_gate)
+        {
+            if (_disposed || !ReferenceEquals(_client, source)) return;
+        }
+        if (result is null) return;
+        CommandResultReceived?.Invoke(result);
+    }
+
     private async Task CleanupAttemptAsync(SignalRClient client,
-        Action<ControlRoomPlayersUpdate> onPlayers, Action<string> onRejected, Action<bool> onConnChanged)
+        Action<ControlRoomPlayersUpdate> onPlayers, Action<string> onRejected, Action<bool> onConnChanged,
+        Action<RemoteCommand> onCommand, Action<RemoteCommandResult> onCommandResult)
     {
         client.OnPlayersUpdated -= onPlayers;
         client.OnJoinRejected -= onRejected;
         client.OnConnectionStateChanged -= onConnChanged;
+        client.OnRemoteCommand -= onCommand;
+        client.OnRemoteCommandResult -= onCommandResult;
         lock (_gate)
         {
             if (ReferenceEquals(_client, client))

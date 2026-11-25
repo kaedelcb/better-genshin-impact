@@ -639,13 +639,10 @@ public partial class MainWindow : Window
                     Style = tagStyle,
                     Tag = member,
                     Margin = new System.Windows.Thickness(0, 0, 5, 5),
-                    IsEnabled = !member.IsReadOnlyView,
-                    Opacity = member.IsReadOnlyView ? 0.65 : 1.0,
-                    ToolTip = member.IsReadOnlyView ? "其他房间仅支持只读查看，切换登录后可启动" : null
+                    ToolTip = member.IsActiveRoomMember ? null : $"远程启动「{member.RoomLabel}」中 {member.PlayerName} 的{(isOneClick ? "一条龙" : "配置组")}：{name}"
                 };
                 b.Click += (_, _) =>
                 {
-                    if (member.IsReadOnlyView) return;
                     if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, name);
                     else _ = ViewModel.StartGroupFromConfigAsync(member, name);
                 };
@@ -772,14 +769,12 @@ public partial class MainWindow : Window
                 Style = pillStyle,
                 FontSize = 13,
                 Margin = new System.Windows.Thickness(0, 0, 6, 6),
-                IsEnabled = !member.IsReadOnlyView,
-                Opacity = member.IsReadOnlyView ? 0.65 : 1.0,
-                ToolTip = member.IsReadOnlyView ? "其他房间仅支持只读查看，切换登录后可启动" : null,
+                ToolTip = member.IsActiveRoomMember ? null : $"远程启动「{member.RoomLabel}」中 {member.PlayerName} 的{label}：{item}",
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF4, 0xF2, 0xFA)),
                 Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x2E, 0x6E, 0x6E, 0xB4)),
                 BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x47, 0x9C, 0x97, 0xC0))
             };
-            btn2.Click += (_, _) => { if (member.IsReadOnlyView) return; dlg.Close(); if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, item); else _ = ViewModel.StartGroupFromConfigAsync(member, item); };
+            btn2.Click += (_, _) => { dlg.Close(); if (isOneClick) _ = ViewModel.StartOneClickFromConfigAsync(member, item); else _ = ViewModel.StartGroupFromConfigAsync(member, item); };
             wrap2.Children.Add(btn2);
         }
         panel.Children.Add(new System.Windows.Controls.ScrollViewer { Content = wrap2, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto, MaxHeight = 300 });

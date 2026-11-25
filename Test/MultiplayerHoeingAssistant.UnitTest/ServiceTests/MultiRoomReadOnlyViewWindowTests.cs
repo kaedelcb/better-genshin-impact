@@ -15,7 +15,8 @@ using Path = System.IO.Path;
 
 namespace MultiplayerHoeingAssistant.UnitTest.ServiceTests;
 
-/// <summary>多房间只读查看、顶栏齿轮与查看标签、房间弹窗金白配色、成员卡房间标签的实际 WPF 布局验收。</summary>
+/// <summary>多房间视图、顶栏固定宽度与 Star 文案、房间弹窗金白配色、成员卡房间标签及单卡远控 UI 的实际 WPF 布局验收。</summary>
+[Collection("MultiRoomWpf")]
 public sealed class MultiRoomReadOnlyViewWindowTests
 {
     private sealed class FakeRoomSpectator(AssistantRoomProfile profile, string serverUrl, bool bypassSystemProxy) : IRoomSpectatorSession
@@ -26,13 +27,24 @@ public sealed class MultiRoomReadOnlyViewWindowTests
         public string RoomCode { get; } = profile.RoomCode;
         public string Password { get; } = profile.Password;
         public bool BypassSystemProxy { get; } = bypassSystemProxy;
+        public string SpectatorUid { get; } = "web_logviewer_wpf_" + Guid.NewGuid().ToString("N");
         public bool IsConnected => true;
         public bool IsConnecting => false;
         public string? Error => null;
         public event Action? Changed;
+        public event Action<RemoteCommand>? ReplyReceived;
+        public event Action<RemoteCommandResult>? CommandResultReceived;
         public IReadOnlyList<ControlRoomPlayer> GetPlayersSnapshot() => _players;
         public void Start() { }
         public void ForceReconnect() { }
+        public Task<bool> SendRemoteCommandAsync(RemoteCommand command) => Task.FromResult(true);
+        public Task<bool> ClearOnlineHistoryAsync(string targetUid) => Task.FromResult(true);
+        public Task<CoordinatedBatchSnapshot?> GetCurrentCoordinatedBatchAsync(CancellationToken ct = default)
+            => Task.FromResult<CoordinatedBatchSnapshot?>(null);
+        public Task<CoordinatedBatchResetResult?> ResetCoordinatedBatchAsync(
+            string resetId, IReadOnlyList<string> requestedTargets,
+            int? expectedGeneration = null, string? expectedBatchId = null, CancellationToken ct = default)
+            => Task.FromResult<CoordinatedBatchResetResult?>(null);
         public void SetPlayers(params ControlRoomPlayer[] players)
         {
             _players = [.. players];
@@ -137,9 +149,14 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                             var exit = (FrameworkElement)window.FindName("HeaderExitButton");
                             var room = (FrameworkElement)window.FindName("HeaderRoomButton");
                             var refresh = (FrameworkElement)window.FindName("HeaderRefreshButton");
+                            var starMessage = (FrameworkElement)window.FindName("StarMessage");
 
                             Assert.Equal("⚙", settings.Content);
                             Assert.Equal("所有房间", viewingText.Text);
+                            if (width >= 1180d)
+                            {
+                                Assert.Equal(Visibility.Visible, starMessage.Visibility);
+                            }
                             var s = Bounds(settings, window);
                             var v = Bounds(viewing, window);
                             var x = Bounds(exit, window);
@@ -152,6 +169,46 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                             Assert.True(Math.Abs(x.Right - f.Right) <= 1.5, $"退出与刷新按钮右缘未对齐: x={x} f={f}");
                             Assert.True(s.Right <= x.Left + 0.5 && x.Right <= window.ActualWidth + 0.5);
                         }
+
+                        // 1b. 默认宽度 1180（及更宽窗口）切不同查看房间（所有房间 / 1234 / 罐传精队）时，
+                        //     顶栏查看按钮与房间号框宽度严格固定，且左侧 GitHub Star 文案绝不被隐藏。
+                        window.Width = 1180;
+                        window.UpdateLayout();
+                        var fixedViewingBtn = (Button)window.FindName("HeaderViewingRoomButton");
+                        var fixedRoomBtn = (FrameworkElement)window.FindName("HeaderRoomButton");
+                        var fixedStarMessage = (FrameworkElement)window.FindName("StarMessage");
+                        var baselineViewingWidth = fixedViewingBtn.ActualWidth;
+                        var baselineRoomWidth = fixedRoomBtn.ActualWidth;
+                        Assert.Equal(Visibility.Visible, fixedStarMessage.Visibility);
+
+                        foreach (var roomId in new[] { secondRoom.Id, activeRoom.Id, AssistConfig.AllRoomsViewId })
+                        {
+                            vm.SelectViewedRoom(roomId, persist: false);
+                            await Task.Delay(40);
+                            window.UpdateLayout();
+                            Assert.InRange(Math.Abs(fixedViewingBtn.ActualWidth - baselineViewingWidth), 0, 0.5);
+                            Assert.InRange(Math.Abs(fixedRoomBtn.ActualWidth - baselineRoomWidth), 0, 0.5);
+                            Assert.Equal(Visibility.Visible, fixedStarMessage.Visibility);
+                        }
+                        // 在极窄 980 宽度下也验证切房时顶栏宽度严格固定
+                        window.Width = 980;
+                        window.UpdateLayout();
+                        foreach (var roomId in new[] { secondRoom.Id, activeRoom.Id, AssistConfig.AllRoomsViewId })
+                        {
+                            vm.SelectViewedRoom(roomId, persist: false);
+                            await Task.Delay(40);
+                            window.UpdateLayout();
+                            Assert.InRange(Math.Abs(fixedViewingBtn.ActualWidth - baselineViewingWidth), 0, 0.5);
+                            Assert.InRange(Math.Abs(fixedRoomBtn.ActualWidth - baselineRoomWidth), 0, 0.5);
+                        }
+                        window.Width = 1180;
+                        window.UpdateLayout();
+                        // 重新补齐 1234 成员数据（切回 activeRoom 时会释放并重建 1234 旁观会话）
+                        sessions[secondRoom.Id].SetPlayers(
+                            new ControlRoomPlayer { PlayerUid = "100000001", PlayerName = "茶包", Online = false, BgiStatus = "offline" },
+                            new ControlRoomPlayer { PlayerUid = "100000004", PlayerName = "一时兴起", Online = true, BgiStatus = "running" });
+                        await Task.Delay(40);
+                        window.UpdateLayout();
 
                         // 2. 所有房间视图下，全部成员卡片都在齿轮右侧显示所属房间标签
                         var cardsControl = (ItemsControl)window.FindName("DisplayedMembersControl");
@@ -203,7 +260,7 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         Assert.Equal(Visibility.Visible, activeCheck.Visibility);
                         Assert.Equal(Visibility.Hidden, secondCheck.Visibility);
 
-                        // 耕地机已切到 1234 只读视图，且未改变当前登录房间
+                        // 耕地机已切到 1234 视图，且未改变当前登录房间；单卡片远控按钮可用，批量勾选与底部快捷指令保持隔离禁用
                         Assert.Equal(activeRoom.Id, vm.ActiveRoomProfile?.Id);
                         Assert.Equal(secondRoom.Id, vm.ViewedRoomProfileId);
                         Assert.Equal("1234", viewingLabel.Text);
@@ -212,6 +269,16 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         Assert.False(vm.DisplayedMembers[0].Online); // 我在 1234 是离线的
                         var singleRoomBadges = FindVisualChildren<Border>(cardsControl).Where(b => b.Name == "MemberRoomLabelBadge").ToList();
                         Assert.All(singleRoomBadges, b => Assert.Equal(Visibility.Collapsed, b.Visibility));
+
+                        var otherOnlineCard = (FrameworkElement)cardsControl.ItemContainerGenerator.ContainerFromIndex(1);
+                        var otherCheckBox = FindVisualChildren<CheckBox>(otherOnlineCard).First();
+                        Assert.False(otherCheckBox.IsEnabled); // 非登录房不参与登录房批量勾选
+                        var otherStopBtn = FindVisualChildren<Button>(otherOnlineCard).First(b => Equals(b.Content, "停止"));
+                        var otherStartBgiBtn = FindVisualChildren<Button>(otherOnlineCard).First(b => Equals(b.Content, "启动BGI"));
+                        var otherGearBtn = FindVisualChildren<Button>(otherOnlineCard).First(b => Equals(b.Content, "⚙"));
+                        Assert.True(otherStopBtn.IsEnabled);
+                        Assert.True(otherStartBgiBtn.IsEnabled);
+                        Assert.True(otherGearBtn.IsEnabled);
 
                         // 4. 点「所有房间」切回全房间视图
                         allRoomsBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

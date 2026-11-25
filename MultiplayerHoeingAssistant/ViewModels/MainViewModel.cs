@@ -1775,8 +1775,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     private void OnOpenUpdateBgi(object? parameter)
     {
         if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
-        if (parameter is MemberViewModel m && !m.IsSelf) return;
+        if (parameter is MemberViewModel m && (!m.IsSelf || !m.IsActiveRoomMember)) return;
         var window = new UpdateBgiWindow(this) { Owner = Application.Current.MainWindow };
         window.ShowDialog();
     }
@@ -2137,7 +2136,20 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStop(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
+        if (parameter is MemberViewModel other && IsOtherRoomCard(other))
+        {
+            var roomLabel = ResolveOtherRoomLabel(other.SourceRoomProfileId, other.RoomLabel);
+            var (otherConfirmed, _, otherCloseBgi) = ShowStopStartConfirmDialogCore(
+                "确认停止", $"停止「{roomLabel}」中 {other.PlayerName} 的当前执行、待执行任务和自动续跑？",
+                showCloseBgi: true, showBroadcastAll: false);
+            if (!otherConfirmed) return;
+            var stopParams = new Dictionary<string, object> { ["stopScope"] = "all" };
+            if (otherCloseBgi) stopParams["closeBgi"] = "true";
+            _ = SendOtherRoomCardCommandAsync(other, "stop", stopParams,
+                expiresAtUtc: DateTimeOffset.UtcNow.AddMinutes(2),
+                customLogMessage: $"已向「{roomLabel}」的 {other.PlayerName} 发送停止命令");
+            return;
+        }
         // 停止前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
         var (confirmed, broadcastAll, closeBgi) = ShowStopStartConfirmDialogCore("确认全部停止", "停止当前执行、待执行任务和自动续跑？", showCloseBgi: true);
         if (!confirmed) return; // 用户取消
@@ -2167,13 +2179,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         return (confirmed, broadcastAll);
     }
 
-    private (bool confirmed, bool broadcastAll, bool closeBgi) ShowStopStartConfirmDialogCore(string title, string message, bool showCloseBgi)
+    private (bool confirmed, bool broadcastAll, bool closeBgi) ShowStopStartConfirmDialogCore(
+        string title, string message, bool showCloseBgi, bool showBroadcastAll = true)
     {
         bool confirmed = false, broadcastAll = false, closeBgi = false;
         var window = new Window
         {
             Title = title,
-            Width = 330, Height = showCloseBgi ? 215 : 190,
+            Width = 330, Height = showCloseBgi ? (showBroadcastAll ? 215 : 195) : (showBroadcastAll ? 190 : 170),
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = Application.Current.MainWindow,
             WindowStyle = WindowStyle.SingleBorderWindow,
@@ -2233,7 +2246,10 @@ public partial class MainViewModel : INotifyPropertyChanged
         syncCheckBox.Checked += (_, _) => broadcastAll = true;
         syncCheckBox.Unchecked += (_, _) => broadcastAll = false;
         var checkPanel = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        checkPanel.Children.Add(syncCheckBox);
+        if (showBroadcastAll)
+        {
+            checkPanel.Children.Add(syncCheckBox);
+        }
         if (showCloseBgi)
         {
             var closeBgiCheckBox = new System.Windows.Controls.CheckBox
@@ -2241,7 +2257,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 Content = "同时关闭 BGI",
                 ToolTip = "停止任务后结束对应执行端的 BGI 进程（默认不勾选）",
                 FontSize = 12,
-                Margin = new Thickness(0, 6, 0, 0),
+                Margin = new Thickness(0, showBroadcastAll ? 6 : 0, 0, 0),
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 IsChecked = false
@@ -2321,7 +2337,17 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStartBgi(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
+        if (parameter is MemberViewModel other && IsOtherRoomCard(other))
+        {
+            var roomLabel = ResolveOtherRoomLabel(other.SourceRoomProfileId, other.RoomLabel);
+            var (otherConfirmed, _, _) = ShowStopStartConfirmDialogCore(
+                "确认启动 BGI", $"确定要启动「{roomLabel}」中 {other.PlayerName} 的 BGI 吗？",
+                showCloseBgi: false, showBroadcastAll: false);
+            if (!otherConfirmed) return;
+            _ = SendOtherRoomCardCommandAsync(other, "start_bgi",
+                customLogMessage: $"向「{roomLabel}」的 {other.PlayerName} 下发启动 BGI");
+            return;
+        }
         // 启动前弹窗确认，可选择是否发送给所有人执行（参考"清除上线"，见 ShowClearOnlineConfirmDialog）
         var (confirmed, broadcastAll) = ShowStopStartConfirmDialog("确认启动 BGI", "确定要启动 BGI 吗？");
         if (!confirmed) return; // 用户取消
@@ -2409,15 +2435,22 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnExecuteHotkey(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member && member.Hotkeys.Count > 0)
         {
             var selected = ShowHotkeySelectDialog(member.Hotkeys);
             if (!string.IsNullOrEmpty(selected))
             {
-                _ = ExecuteLocalCommandAsync("hotkey_execute",
-                    new Dictionary<string, object> { { "hotkeyConfigName", selected } },
-                    [member.PlayerUid]);
+                if (IsOtherRoomCard(member))
+                {
+                    _ = SendOtherRoomCardCommandAsync(member, "hotkey_execute",
+                        new Dictionary<string, object> { { "hotkeyConfigName", selected } });
+                }
+                else
+                {
+                    _ = ExecuteLocalCommandAsync("hotkey_execute",
+                        new Dictionary<string, object> { { "hotkeyConfigName", selected } },
+                        [member.PlayerUid]);
+                }
             }
         }
         else
@@ -2428,9 +2461,19 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnCloseGame(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
+            if (IsOtherRoomCard(member))
+            {
+                var roomLabel = ResolveOtherRoomLabel(member.SourceRoomProfileId, member.RoomLabel);
+                var otherResult = MessageBox.Show($"确定要关闭「{roomLabel}」中 {member.PlayerName} 的游戏吗？",
+                    "关闭游戏", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                if (otherResult == MessageBoxResult.Yes)
+                {
+                    _ = SendOtherRoomCardCommandAsync(member, "close_game");
+                }
+                return;
+            }
             var result = MessageBox.Show("确定要关闭该成员的游戏吗？", "关闭游戏", MessageBoxButton.YesNo, MessageBoxImage.Question);
             if (result == MessageBoxResult.Yes)
             {
@@ -2476,7 +2519,18 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开定时上线设置弹窗（设定 HH:mm，保存到本地配置并重启定时器、立即上报）。</summary>
     private void OnScheduledOnline(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
+        if (parameter is MemberViewModel other && IsOtherRoomCard(other))
+        {
+            var roomLabel = ResolveOtherRoomLabel(other.SourceRoomProfileId, other.RoomLabel);
+            var (otherTime, _) = ShowScheduledOnlineTimeDialog(other.ScheduledOnlineTime ?? "", showSyncToAll: false);
+            if (otherTime == null) return;
+            _ = SendOtherRoomCardCommandAsync(other, "set_scheduled_online_time",
+                new Dictionary<string, object> { { "scheduledOnlineTime", otherTime } },
+                customLogMessage: string.IsNullOrEmpty(otherTime)
+                    ? $"已向「{roomLabel}」的 {other.PlayerName} 下发清除定时上线"
+                    : $"向「{roomLabel}」的 {other.PlayerName} 下发定时上线时间: {otherTime}");
+            return;
+        }
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null) return;
         if (_config == null) return;
@@ -2565,7 +2619,16 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task ResetStateAsync(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
+        if (parameter is MemberViewModel other && IsOtherRoomCard(other))
+        {
+            var roomLabel = ResolveOtherRoomLabel(other.SourceRoomProfileId, other.RoomLabel);
+            var (otherConfirmed, _) = ShowClearOnlineConfirmDialog(isSelf: false, resetState: true,
+                showAllCheckbox: false,
+                customTip: $"将向「{roomLabel}」中的 {other.PlayerName} 发送单人状态重置请求（仅重置该成员，不影响当前登录房间与本机）。确定继续吗？");
+            if (!otherConfirmed) return;
+            await ResetOtherRoomCardStateAsync(other);
+            return;
+        }
         if (!await _resetRequestGate.WaitAsync(0))
         {
             AddLog("[状态重置] 正在恢复执行环境，请等待本轮结果");
@@ -2815,7 +2878,17 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// 弹窗确认：可勾选"同时清除所有成员已上线状态"（仅清 OnlineReady，保留上线记录 OnlineHistory）。</summary>
     private async void OnClearOnline(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
+        if (parameter is MemberViewModel other && IsOtherRoomCard(other))
+        {
+            var roomLabel = ResolveOtherRoomLabel(other.SourceRoomProfileId, other.RoomLabel);
+            var (otherConfirmed, _) = ShowClearOnlineConfirmDialog(isSelf: false, resetState: false,
+                showAllCheckbox: false,
+                customTip: $"确定要清除「{roomLabel}」中 {other.PlayerName} 的已上线状态吗？");
+            if (!otherConfirmed) return;
+            _ = SendOtherRoomCardCommandAsync(other, "clear_online", new Dictionary<string, object>(),
+                customLogMessage: $"向「{roomLabel}」的 {other.PlayerName} 下发清除上线");
+            return;
+        }
         if (_config == null) return;
         var targetMember = parameter as MemberViewModel;
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
@@ -2911,7 +2984,8 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>清除上线确认弹窗（深色鎏金主题）。
     /// 返回值：confirmed=是否确认，clearAll=是否同时清除所有成员已上线状态。</summary>
-    private (bool confirmed, bool clearAll) ShowClearOnlineConfirmDialog(bool isSelf, bool resetState = false)
+    private (bool confirmed, bool clearAll) ShowClearOnlineConfirmDialog(bool isSelf, bool resetState = false,
+        bool showAllCheckbox = true, string? customTip = null)
     {
         bool confirmed = false, clearAll = false;
         var window = new Window
@@ -2960,9 +3034,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         var tip = new TextBlock
         {
-            Text = resetState
+            Text = customTip ?? (resetState
                 ? "将先刷新房间连接和成员状态（单机模式跳过），再停止本机正在运行的单机和联机任务，清空任务中心运行状态，并恢复到可以重新组织联机锄地的初始状态。勾选下方选项后，还会向当前房间成员发送同样的重置请求。确定继续吗？"
-                : "确定要清除已上线状态吗？",
+                : "确定要清除已上线状态吗？"),
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -2977,7 +3051,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
-            IsChecked = false
+            IsChecked = false,
+            Visibility = showAllCheckbox ? Visibility.Visible : Visibility.Collapsed
         };
         syncCheckBox.Checked += (_, _) => clearAll = true;
         syncCheckBox.Unchecked += (_, _) => clearAll = false;
@@ -3261,6 +3336,11 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>清除指定成员的 OnlineHistory，通过 SignalR 通知服务端清空并广播。</summary>
     private async Task ClearOnlineHistoryInternalAsync(MemberViewModel member)
     {
+        if (IsOtherRoomCard(member))
+        {
+            await ClearOtherRoomOnlineHistoryAsync(member);
+            return;
+        }
         if (_signalRClient == null)
         {
             AddLog("清除记录失败：SignalR 未连接（_signalRClient == null）");
@@ -3287,7 +3367,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     /// <summary>定时上线时间弹窗（深色鎏金主题，时/分 ListBox 选择）。
     /// 返回值：time=null 用户取消，""=清除定时上线，"HH:mm"=设定时间；syncToAll=是否同步给所有成员。</summary>
-    private (string? time, bool syncToAll) ShowScheduledOnlineTimeDialog(string currentTime)
+    private (string? time, bool syncToAll) ShowScheduledOnlineTimeDialog(string currentTime, bool showSyncToAll = true)
     {
         // 解析当前已设定时间作初始选择（兼容 HH:mm 与单数 H:mm）
         int initHour = -1, initMinute = 0;
@@ -3401,7 +3481,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             FontSize = 12,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x9C, 0x97, 0xC0)),
             HorizontalAlignment = HorizontalAlignment.Center,
-            IsChecked = false
+            IsChecked = false,
+            Visibility = showSyncToAll ? Visibility.Visible : Visibility.Collapsed
         };
         syncCheckBox.Checked += (_, _) => syncToAll = true;
         syncCheckBox.Unchecked += (_, _) => syncToAll = false;
@@ -3646,14 +3727,25 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>打开联机锄地配置组绑定弹窗（多选）。所有人可编辑。</summary>
     private async void OnBindHoeingGroup(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
-        using var roomEffect = TryEnterAssistantRoomEffect();
-        if (roomEffect is null) return;
+        var targetMember = parameter as MemberViewModel;
+        var isOtherRoom = IsOtherRoomCard(targetMember);
+        using var roomEffect = isOtherRoom ? null : TryEnterAssistantRoomEffect();
+        if (!isOtherRoom && roomEffect is null) return;
         if (_config == null) return;
 
-        // 判断目标：点自己的卡片还是别人的
-        var targetMember = parameter as MemberViewModel;
-        var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
+        IRoomSpectatorSession? otherSession = null;
+        string? otherRoomLabel = null;
+        TaskPolicySyncService? otherPolicySync = null;
+        IDisposable? otherPolicyRegistration = null;
+        if (isOtherRoom)
+        {
+            if (!TryGetOtherRoomSession(targetMember!, out otherSession, out otherRoomLabel)) return;
+            (otherPolicySync, otherPolicyRegistration) = EnterOtherRoomTaskPolicySync(otherSession);
+        }
+        using var _otherPolicyCleanup = otherPolicyRegistration;
+
+        // 判断目标：点自己的卡片还是别人的（其他房间卡片一律按远端成员处理，绝不写本机配置）
+        var isSelf = !isOtherRoom && (targetMember == null || targetMember.PlayerUid == _config.PlayerUid);
 
         // 配置组列表来源：改自己 = 本机 BGI；改别人 = 对方的配置组（来自服务端该成员上报的 ConfigGroups）
         List<string> allGroups = [];
@@ -3749,10 +3841,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         }
         if (policyPullUid != null)
         {
-            if (policyPullTargetOnline && _signalRClient is { IsConnected: true })
+            var policyConnected = isOtherRoom
+                ? otherSession is { IsConnected: true }
+                : _signalRClient is { IsConnected: true };
+            var activePolicySync = isOtherRoom ? otherPolicySync! : GetTaskPolicySync();
+            if (policyPullTargetOnline && policyConnected)
             {
                 AddLog($"正在拉取 {policyPullDesc} 的上线锄地「完成后动作」配置...");
-                var pulled = await GetTaskPolicySync().PullAsync(policyPullUid);
+                var pulled = await activePolicySync.PullAsync(policyPullUid);
                 if (pulled != null)
                 {
                     completionStartSupported = pulled.GetValueOrDefault("completionStartVersion") == CompletionTargetCatalogService.Version;
@@ -4247,7 +4343,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                 ct.ThrowIfCancellationRequested();
                 if (policyPullUid == null)
                     return await RefreshCompletionCatalogAsync(type, name, workflowId, ct);
-                var data = await GetTaskPolicySync().PullAsync(policyPullUid, type, name, workflowId,
+                var activePolicySync = isOtherRoom ? otherPolicySync! : GetTaskPolicySync();
+                var data = await activePolicySync.PullAsync(policyPullUid, type, name, workflowId,
                     cancellationToken: ct, ensureBgiReady: true);
                 ct.ThrowIfCancellationRequested();
                 if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
@@ -4385,11 +4482,16 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 但一旦参加同一轮批次，服务端仍会要求其满足同一布局。
             var bindingTargetUid = targetMember?.PlayerUid ?? _config.PlayerUid;
             string? layoutConflict = null;
-            foreach (var other in Members.Where(m => m.Online
-                                                       && m.PlayerUid != bindingTargetUid
-                                                       && m.BgiStatus != "observer"))
+            IEnumerable<(string PlayerName, bool OnlineReady, List<string>? GroupNames, List<string>? GroupTypes)> peerBindings = isOtherRoom
+                ? GetOtherRoomPeersSnapshot(targetMember!)
+                    .Where(p => p.Online && p.PlayerUid != bindingTargetUid && p.BgiStatus != "observer")
+                    .Select(p => (p.PlayerName, p.OnlineReady, p.OnlineHoeingGroupNames, p.OnlineHoeingGroupTypes))
+                : Members
+                    .Where(m => m.Online && m.PlayerUid != bindingTargetUid && m.BgiStatus != "observer")
+                    .Select(m => (m.PlayerName, m.OnlineReady, m.OnlineHoeingGroupNames, m.OnlineHoeingGroupTypes));
+            foreach (var other in peerBindings)
             {
-                var otherNames = other.OnlineHoeingGroupNames ?? [];
+                var otherNames = other.GroupNames ?? [];
                 if (otherNames.Count == 0)
                 {
                     if (other.OnlineReady)
@@ -4398,7 +4500,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 else
                 {
                     var otherValidation = OnlineHoeingBindingValidator.Validate(
-                        otherNames, other.OnlineHoeingGroupTypes);
+                        otherNames, other.GroupTypes);
                     layoutConflict = OnlineHoeingBindingValidator.CompareLayout(
                         bindingValidation, otherValidation, $"成员「{other.PlayerName}」");
                 }
@@ -4447,6 +4549,28 @@ public partial class MainViewModel : INotifyPropertyChanged
                         AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
                         _ = ReportStatusAsync();
                     }
+                    else if (isOtherRoom)
+                    {
+                        var bindUid = targetMember?.PlayerUid;
+                        if (string.IsNullOrEmpty(bindUid) || otherSession is not { IsConnected: true })
+                            throw new InvalidOperationException($"房间「{otherRoomLabel}」未连接或目标不可用，绑定名单未发送。");
+                        var sent = await otherSession.SendRemoteCommandAsync(new RemoteCommand
+                        {
+                            Cmd = "bind_hoeing_group",
+                            RoomCode = otherSession.RoomCode,
+                            Sender = _config?.PlayerName ?? "",
+                            SenderUid = otherSession.SpectatorUid,
+                            Target = [bindUid],
+                            CommandId = "otherroom_" + DateTime.Now.Ticks,
+                            Params = new Dictionary<string, object>
+                            {
+                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 }
+                            }
+                        });
+                        if (!sent)
+                            throw new InvalidOperationException($"房间「{otherRoomLabel}」连接已断开，绑定名单未发送。");
+                        AddLog($"已向「{otherRoomLabel}」的 {targetMember!.PlayerName} 发送绑定联机锄地配置组（尚未确认执行端保存）: {string.Join(" → ", names)}");
+                    }
                     else
                     {
                         var bindUid = isSelf ? _config?.PlayerUid : targetMember?.PlayerUid;
@@ -4490,6 +4614,27 @@ public partial class MainViewModel : INotifyPropertyChanged
                 catch (Exception ex)
                 {
                     MessageBox.Show(ex.Message, "完成后动作未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+            }
+            else if (isOtherRoom)
+            {
+                var pushUid = targetMember?.PlayerUid;
+                var pushName = $"「{otherRoomLabel}」的 {targetMember?.PlayerName ?? "对方"}";
+                if (!string.IsNullOrEmpty(pushUid) && otherSession is { IsConnected: true })
+                {
+                    AddLog($"正在向 {pushName} 回传上线锄地「完成后动作」: {completionDesc}");
+                    var pushResult = await otherPolicySync!.PushAsync(pushUid, CompletionPolicyFields.Parameters(completion));
+                    AddLog(pushResult switch
+                    {
+                        null => $"回传 {pushName} 的「完成后动作」超时（对方可能已离线），修改可能未生效",
+                        { ok: true } r => $"对方已应用「完成后动作」: {r.message}",
+                        { } r => $"对方应用「完成后动作」失败：{r.message}"
+                    });
+                }
+                else
+                {
+                    AddLog($"房间「{otherRoomLabel}」未连接或目标不可用，「完成后动作」未回传");
                     return;
                 }
             }
@@ -5479,21 +5624,19 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private void OnStartGroup(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
             // 打开选择配置组对话框
             var groupName = ShowConfigSelectionDialog("配置组", member.ConfigGroups, member);
             if (string.IsNullOrEmpty(groupName)) return;
 
-            // 从本机 BGI 读取该配置组的任务列表（联机场景 4 台配置通常一致）
+            // 从本机 BGI 读取该配置组的任务列表（联机场景 4 台配置通常一致；其他房间仅用该成员快照）
             _ = StartGroupWithTaskListAsync(groupName, member);
         }
     }
 
     private void OnStartOneClick(object? parameter)
     {
-        if (parameter is MemberViewModel { IsReadOnlyView: true }) return;
         if (parameter is MemberViewModel member)
         {
             var configName = ShowConfigSelectionDialog("一条龙", member.OneClickConfigs, member);
@@ -5505,55 +5648,75 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private async Task StartGroupWithTaskListAsync(string groupName, MemberViewModel member)
     {
+        var isOtherRoom = IsOtherRoomCard(member);
+        Func<Dictionary<string, object>, Task>? sendTaskEnabledOverride = isOtherRoom
+            ? param => SendOtherRoomCardCommandAsync(member, "set_task_enabled", param)
+            : null;
+        Task DispatchStart(string startFrom)
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                { "groupName", groupName },
+                { "startFromIndex", int.TryParse(startFrom, out var sfi) ? sfi : 0 }
+            };
+            return isOtherRoom
+                ? SendOtherRoomCardCommandAsync(member, "start_group", parameters, trackStartReceipt: true)
+                : ExecuteLocalCommandAsync("start_group", parameters, [member.PlayerUid]);
+        }
+
         try
         {
             var (taskList, tasksWithStatus, missReason) = await GetTaskListAsync(groupName, isOneClick: false, targetMember: member);
             if (missReason != null) AddLog($"{missReason}；本次改为手动填写起始序号");
             var startFrom = ShowStartFromDialog(groupName, taskList, isOneClick: false, tasksWithStatus: tasksWithStatus,
-                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
+                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason,
+                sendTaskEnabledOverride: sendTaskEnabledOverride);
             if (startFrom == null) return; // 用户取消
-            _ = ExecuteLocalCommandAsync("start_group",
-                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", int.TryParse(startFrom, out var sfi) ? sfi : 0 } },
-                [member.PlayerUid]);
+            _ = DispatchStart(startFrom);
         }
         catch (Exception ex)
         {
             AddLog($"读取配置组任务列表失败: {ex.Message}");
-            var startFrom = ShowStartFromDialog(groupName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
+            var startFrom = ShowStartFromDialog(groupName, null, fallbackReason: $"读取任务清单异常：{ex.Message}",
+                sendTaskEnabledOverride: sendTaskEnabledOverride);
             if (startFrom == null) return; // 用户取消
-            _ = ExecuteLocalCommandAsync("start_group",
-                new Dictionary<string, object> { { "groupName", groupName }, { "startFromIndex", int.TryParse(startFrom, out var sfi) ? sfi : 0 } },
-                [member.PlayerUid]);
+            _ = DispatchStart(startFrom);
         }
     }
 
     private async Task StartOneClickWithTaskListAsync(string configName, MemberViewModel member)
     {
+        var isOtherRoom = IsOtherRoomCard(member);
+        Func<Dictionary<string, object>, Task>? sendTaskEnabledOverride = isOtherRoom
+            ? param => SendOtherRoomCardCommandAsync(member, "set_task_enabled", param)
+            : null;
+        Task DispatchStart(string startFrom)
+        {
+            // R3 原生身份：一条龙起点为 GUID taskId（"0"=从头开始，不携带该字段）
+            var oneClickParam = new Dictionary<string, object> { { "configName", configName } };
+            if (startFrom != "0") oneClickParam["startFromTaskId"] = startFrom;
+            return isOtherRoom
+                ? SendOtherRoomCardCommandAsync(member, "start_oneclick", oneClickParam, trackStartReceipt: true)
+                : ExecuteLocalCommandAsync("start_oneclick", oneClickParam, [member.PlayerUid]);
+        }
+
         try
         {
             var (taskList, tasksWithStatus, missReason) = await GetTaskListAsync(configName, isOneClick: true, targetMember: member);
             if (missReason != null) AddLog($"{missReason}；本次改为手动填写起始序号");
             var startFrom = ShowStartFromDialog(configName, taskList, isOneClick: true, tasksWithStatus: tasksWithStatus,
-                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason);
+                targetUids: [member.PlayerUid], sourceMember: member, fallbackReason: missReason,
+                sendTaskEnabledOverride: sendTaskEnabledOverride);
             if (startFrom == null) return; // 用户取消
-            // R3 原生身份：一条龙起点为 GUID taskId（"0"=从头开始，不携带该字段）
-            var oneClickParam = new Dictionary<string, object> { { "configName", configName } };
-            if (startFrom != "0") oneClickParam["startFromTaskId"] = startFrom;
-            _ = ExecuteLocalCommandAsync("start_oneclick",
-                oneClickParam,
-                [member.PlayerUid]);
+            _ = DispatchStart(startFrom);
         }
         catch (Exception ex)
         {
             AddLog($"读取一条龙任务列表失败: {ex.Message}");
-            var startFrom = ShowStartFromDialog(configName, null, fallbackReason: $"读取任务清单异常：{ex.Message}");
+            var startFrom = ShowStartFromDialog(configName, null, fallbackReason: $"读取任务清单异常：{ex.Message}",
+                sendTaskEnabledOverride: sendTaskEnabledOverride);
             if (startFrom == null) return; // 用户取消
-            // R3 原生身份：一条龙起点为 GUID taskId（"0"=从头开始，不携带该字段）
-            var oneClickParam = new Dictionary<string, object> { { "configName", configName } };
-            if (startFrom != "0") oneClickParam["startFromTaskId"] = startFrom;
-            _ = ExecuteLocalCommandAsync("start_oneclick",
-                oneClickParam,
-                [member.PlayerUid]);
+            _ = DispatchStart(startFrom);
         }
     }
 
@@ -5562,7 +5725,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task StartGroupFromConfigAsync(MemberViewModel member, string configName)
     {
-        if (member.IsReadOnlyView) return;
         await StartGroupWithTaskListAsync(configName, member);
     }
 
@@ -5571,7 +5733,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task StartOneClickFromConfigAsync(MemberViewModel member, string configName)
     {
-        if (member.IsReadOnlyView) return;
         await StartOneClickWithTaskListAsync(configName, member);
     }
 
@@ -5596,6 +5757,14 @@ public partial class MainViewModel : INotifyPropertyChanged
         string configName, bool isOneClick, MemberViewModel? targetMember)
     {
         var kind = isOneClick ? "一条龙" : "配置组";
+        if (IsOtherRoomCard(targetMember))
+        {
+            var (otherTasks, otherTasksWithStatus) = await TryMemberTaskListAsync(targetMember!, configName, isOneClick);
+            if (otherTasks != null) return (otherTasks, otherTasksWithStatus, null);
+            var roomLabel = ResolveOtherRoomLabel(targetMember!.SourceRoomProfileId, targetMember.RoomLabel);
+            var targetName = string.IsNullOrEmpty(targetMember.PlayerName) ? targetMember.PlayerUid : targetMember.PlayerName;
+            return (null, null, $"未取到「{roomLabel}」中 {targetName} 的{kind}「{configName}」任务清单（对方尚未上报）");
+        }
         var selfUid = _config?.PlayerUid ?? "";
         // "点自己"：执行模式下自己那台机器用本机直读最新；监控模式下同 UID 条目就是执行端，等同别人处理
         var isSelfTarget = targetMember != null && !string.IsNullOrEmpty(selfUid)
@@ -7303,7 +7472,8 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <param name="fallbackReason">清单取不到的原因（非 null = 已退化为手动填写起始序号），必须一并展示，禁止静默降级。</param>
     private string? ShowStartFromDialog(string configName, List<string>? taskList, bool isOneClick = false,
         List<object>? tasksWithStatus = null, List<string>? targetUids = null,
-        MemberViewModel? sourceMember = null, string? fallbackReason = null)
+        MemberViewModel? sourceMember = null, string? fallbackReason = null,
+        Func<Dictionary<string, object>, Task>? sendTaskEnabledOverride = null)
     {
         // 无任务列表时回退：配置组保持数字输入框；一条龙已切换 GUID 任务 ID 身份（R3），
         // 数字索引不再被 BGI 接受，无清单时按公版语义从头开始执行
@@ -7535,7 +7705,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                     // R3：一条龙按 GUID taskId 寻址；配置组保持数字 taskIndex
                     if (isOneClick) param["taskId"] = kv.Key;
                     else param["taskIndex"] = int.Parse(kv.Key);
-                    saveTasks.Add(ExecuteLocalCommandAsync("set_task_enabled", param, targetUids));
+                    saveTasks.Add(sendTaskEnabledOverride != null
+                        ? sendTaskEnabledOverride(param)
+                        : ExecuteLocalCommandAsync("set_task_enabled", param, targetUids));
                 }
                 try
                 {
@@ -8006,10 +8178,23 @@ public class MemberViewModel : INotifyPropertyChanged
 
     private bool _isActiveRoomMember = true;
     /// <summary>是否属于当前登录房间。</summary>
-    public bool IsActiveRoomMember { get => _isActiveRoomMember; set { if (_isActiveRoomMember != value) { _isActiveRoomMember = value; OnPropertyChanged(); } } }
+    public bool IsActiveRoomMember
+    {
+        get => _isActiveRoomMember;
+        set
+        {
+            if (_isActiveRoomMember == value) return;
+            _isActiveRoomMember = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CanOperateCard));
+            OnPropertyChanged(nameof(CanRemoteEdit));
+            OnPropertyChanged(nameof(CanUpdateLocalBgi));
+            OnPropertyChanged(nameof(RoomLabelToolTip));
+        }
+    }
 
     private bool _isReadOnlyView;
-    /// <summary>是否来自非登录房间的只读旁观视图。</summary>
+    /// <summary>是否来自非登录房间的旁观通道（视觉区分与非登录房归属标识；单卡片支持独立远控，不参与登录房批量勾选）。</summary>
     public bool IsReadOnlyView
     {
         get => _isReadOnlyView;
@@ -8029,20 +8214,21 @@ public class MemberViewModel : INotifyPropertyChanged
     /// <summary>是否在成员卡片名称行齿轮右侧显示房间标签（「所有房间」视图下全部成员卡片显示）。</summary>
     public bool ShowRoomLabel { get => _showRoomLabel; set { if (_showRoomLabel != value) { _showRoomLabel = value; OnPropertyChanged(); } } }
 
-    /// <summary>该成员卡片是否允许发起操作（非登录房间卡片为只读，仅保留查看与记录）。</summary>
-    public bool CanOperateCard => !IsReadOnlyView;
+    /// <summary>单卡片远控操作是否允许发起（登录房与非登录房卡片均允许单卡操作；批量勾选另以 IsActiveRoomMember 控制）。</summary>
+    public bool CanOperateCard => !string.IsNullOrEmpty(PlayerUid);
 
     /// <summary>仅当前登录房间的自机卡片允许点版本号打开本机 BGI 更新。</summary>
-    public bool CanUpdateLocalBgi => IsSelf && !IsReadOnlyView;
+    public bool CanUpdateLocalBgi => IsSelf && IsActiveRoomMember;
 
     public string RoomLabelToolTip => string.IsNullOrWhiteSpace(RoomLabel)
         ? ""
-        : IsReadOnlyView
-            ? $"所属房间：{RoomLabel}（只读查看）"
-            : $"所属房间：{RoomLabel}（当前登录房间）";
+        : IsActiveRoomMember
+            ? $"所属房间：{RoomLabel}（当前登录房间）"
+            : $"所属房间：{RoomLabel}（其他房间，支持单卡片远控）";
 
-    /// <summary>监控端可编辑同 UID 执行端，并允许先探测本地离线成员；执行端保留禁止编辑自己的限制。只读视图禁止编辑。</summary>
-    public bool CanRemoteEdit => !IsReadOnlyView && !string.IsNullOrEmpty(PlayerUid) && (IsObserverMode || (!IsSelf && Online));
+    /// <summary>登录房：监控端可编辑同 UID 执行端并探测本地离线成员，执行端禁编自己；其他房间：成员在线即支持远程配置编辑。</summary>
+    public bool CanRemoteEdit => !string.IsNullOrEmpty(PlayerUid)
+        && (IsActiveRoomMember ? (IsObserverMode || (!IsSelf && Online)) : Online);
 
     private string _bgiStatus = "unknown";
     public string BgiStatus { get => _bgiStatus; set { if (_bgiStatus != value) { _bgiStatus = value; OnPropertyChanged(); } } }
