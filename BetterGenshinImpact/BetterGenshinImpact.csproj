@@ -224,37 +224,17 @@
 <None Update="GameTask\OcrSwitchWeapon\Assets\weaponName.json">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
-		<!-- 配对界面切换角色：工程内资源副本(纳入 git)随构建输出到运行时读取路径 User\JsScript\AutoSwitchRoles\ -->
-		<!-- 注：别名表 combat_avatar.json 不在此拷贝，改由 AutoSwitchRolesResources 直接读 BGI 本体 GameTask\AutoFight\Assets\combat_avatar.json（同源、Debug/Release 均随构建输出）。 -->
-		<None Update="GameTask\AutoSwitchRoles\Assets\attribute.txt"
-		      Link="User\JsScript\AutoSwitchRoles\attribute.txt">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<!-- 用 Include（非 Update）：这三个文件可能未被 SDK 默认 None glob 纳入，Update 改不到不存在的 item。
-		     若 .json 被默认 glob 纳入会与此 Include 重复，届时报重复项再调整。 -->
-		<None Include="GameTask\AutoSwitchRoles\Assets\main.js"
-		      Link="User\JsScript\AutoSwitchRoles\main.js">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="GameTask\AutoSwitchRoles\Assets\manifest.json"
-		      Link="User\JsScript\AutoSwitchRoles\manifest.json">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<None Include="GameTask\AutoSwitchRoles\Assets\settings.json"
-		      Link="User\JsScript\AutoSwitchRoles\settings.json">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
-		<!-- 直接匹配平铺 png（该目录无嵌套子目录）；Link 目标只用 %(Filename)%(Extension)。
-		     切勿用 **\*.png + %(RecursiveDir)：MSBuild 会把从项目根到通配符前的完整相对目录塞进 %(RecursiveDir)，
-		     导致文件被拷到 characterimage\GameTask\AutoSwitchRoles\Assets\characterimage\ 这种错位深层路径，顶层反而残缺。 -->
+		<!-- 配对界面切换角色：构建/发布直接更新 JS 资源目录。
+		     原生任务仍使用 BGI 本体 AutoFight 的完整别名表；这里的 combat_avatar.json 仅供第三方 JS 使用。 -->
+		<None Update="GameTask\AutoSwitchRoles\Assets\attribute.txt;GameTask\AutoSwitchRoles\Assets\combat_avatar.json"
+		      Link="User\JsScript\AutoSwitchRoles\%(Filename)%(Extension)"
+		      CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
 		<None Update="GameTask\AutoSwitchRoles\Assets\RecognitionObject\*.png"
-		      Link="User\JsScript\AutoSwitchRoles\Assets\RecognitionObject\%(Filename)%(Extension)">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		      Link="User\JsScript\AutoSwitchRoles\Assets\RecognitionObject\%(Filename)%(Extension)"
+		      CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
 		<None Update="GameTask\AutoSwitchRoles\Assets\characterimage\*.png"
-		      Link="User\JsScript\AutoSwitchRoles\Assets\characterimage\%(Filename)%(Extension)">
-		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
+		      Link="User\JsScript\AutoSwitchRoles\Assets\characterimage\%(Filename)%(Extension)"
+		      CopyToOutputDirectory="Always" CopyToPublishDirectory="Always" />
 		<None Update="GameTask\CharacterDevelopment\Assets\1920x1080\**">
 		  <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>
@@ -444,6 +424,36 @@
 	<ItemGroup>
 		<None Update="Assets\Model\Domain\test_petrified_trees.jpg" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
 	</ItemGroup>
+
+	<!-- 第三方 JS 程序文件仅作为新安装的默认文件，不能把用户已下载的新版本覆盖成旧版。 -->
+	<ItemGroup>
+		<_AutoSwitchRolesScriptSeed Include="GameTask\AutoSwitchRoles\Assets\main.js;GameTask\AutoSwitchRoles\Assets\manifest.json;GameTask\AutoSwitchRoles\Assets\settings.json" />
+	</ItemGroup>
+	<!-- 旧构建把这三个 JS 文件记作生成物。迁移到只补缺后，先从当前输出的清理清单解除登记，避免增量构建或 Rebuild 删除用户脚本。 -->
+	<Target Name="ForgetAutoSwitchRolesScriptOutputs" BeforeTargets="CoreClean;_CleanGetCurrentAndPriorFileWrites"
+	        Condition="'$(TargetDir)' != '' And Exists('$(IntermediateOutputPath)$(CleanFile)')">
+		<ReadLinesFromFile File="$(IntermediateOutputPath)$(CleanFile)">
+			<Output TaskParameter="Lines" ItemName="_AutoSwitchRolesPriorWrites" />
+		</ReadLinesFromFile>
+		<ItemGroup>
+			<_AutoSwitchRolesPriorWrites Remove="@(_AutoSwitchRolesScriptSeed->'$(TargetDir)User\JsScript\AutoSwitchRoles\%(Filename)%(Extension)')" />
+		</ItemGroup>
+		<WriteLinesToFile File="$(IntermediateOutputPath)$(CleanFile)" Lines="@(_AutoSwitchRolesPriorWrites)"
+		                  Overwrite="true" WriteOnlyWhenDifferent="true" />
+	</Target>
+	<Target Name="SeedAutoSwitchRolesBuildScript" AfterTargets="Build">
+		<Copy SourceFiles="%(_AutoSwitchRolesScriptSeed.Identity)"
+		      DestinationFiles="$(TargetDir)User\JsScript\AutoSwitchRoles\%(_AutoSwitchRolesScriptSeed.Filename)%(_AutoSwitchRolesScriptSeed.Extension)"
+		      Condition="'$(TargetDir)' != '' And !Exists('$(TargetDir)User\JsScript\AutoSwitchRoles\%(_AutoSwitchRolesScriptSeed.Filename)%(_AutoSwitchRolesScriptSeed.Extension)')" />
+	</Target>
+	<Target Name="SeedAutoSwitchRolesPublishScript" AfterTargets="Publish" Condition="'$(PublishDir)' != ''">
+		<PropertyGroup>
+			<_AutoSwitchRolesPublishRoot>$([MSBuild]::EnsureTrailingSlash('$(PublishDir)'))User\JsScript\AutoSwitchRoles\</_AutoSwitchRolesPublishRoot>
+		</PropertyGroup>
+		<Copy SourceFiles="%(_AutoSwitchRolesScriptSeed.Identity)"
+		      DestinationFiles="$(_AutoSwitchRolesPublishRoot)%(_AutoSwitchRolesScriptSeed.Filename)%(_AutoSwitchRolesScriptSeed.Extension)"
+		      Condition="!Exists('$(_AutoSwitchRolesPublishRoot)%(_AutoSwitchRolesScriptSeed.Filename)%(_AutoSwitchRolesScriptSeed.Extension)')" />
+	</Target>
 
 	<!-- User 默认文件只补缺，不覆盖现有用户数据。 -->
 	<Import Project="UserDefaults.targets" />
