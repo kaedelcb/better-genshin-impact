@@ -39,27 +39,32 @@ public sealed partial class RoomOperations
         ObservePhase(room, roomCode, "route.reportList", routeReportActivity: true);
 
         ConcurrentDictionary<string, List<RouteHash>> roomReports;
-        List<string> onlineConnIds;
+        List<(string Key, string Label)> executors;
         lock (room)
         {
             if (!room.AllowsRouteReport(ctx.ConnectionId)) return;
             roomReports = RouteReports.GetOrAdd(roomCode, _ => new ConcurrentDictionary<string, List<RouteHash>>());
             var executor = room.HostWorld == null ? ctx.ConnectionId
                 : room.RouteExecutors.Single(p => p.ConnectionId == ctx.ConnectionId).PlayerUid;
-            roomReports[executor] = routes;
-            onlineConnIds = room.RouteExecutors.Select(p => room.HostWorld == null ? p.ConnectionId : p.PlayerUid).ToList();
+            roomReports[executor] = routes ?? [];
+            executors = room.RouteExecutors
+                .Select(p => (Key: room.HostWorld == null ? p.ConnectionId : p.PlayerUid, Label: FormatRouteExecutorLabel(p)))
+                .ToList();
         }
 
-        if (!onlineConnIds.All(id => roomReports.ContainsKey(id)))
+        if (!executors.All(e => roomReports.ContainsKey(e.Key)))
         {
             _logger.LogInformation("[ReportRouteList] 房间 {Code} 等待其他玩家上报，已上报: {Reported}/{Total}",
-                roomCode, roomReports.Count, onlineConnIds.Count);
+                roomCode, roomReports.Count, executors.Count);
             return; // 还有人未上报
         }
 
         // 所有人都上报了，开始对比
-        var allReports = onlineConnIds
-            .Select(id => roomReports[id])
+        var labeledReports = executors
+            .Select(e => (e.Label, Routes: roomReports[e.Key]))
+            .ToList();
+        var allReports = labeledReports
+            .Select(r => r.Routes)
             .ToList();
 
         try
@@ -73,7 +78,9 @@ public sealed partial class RoomOperations
             }
             else
             {
-                _logger.LogWarning("房间 {Code} 路线存在差异：{Files}", roomCode, string.Join(", ", diffFiles));
+                var diffDetail = FormatRouteDiffDetail(labeledReports, diffFiles);
+                _logger.LogWarning("房间 {Code} 路线存在差异（共 {Count} 个）：{Files}；成员明细：{Detail}",
+                    roomCode, diffFiles.Count, string.Join(", ", diffFiles), diffDetail);
                 await _broadcaster.BroadcastGroupAsync(roomCode, "RouteDiffReceived", new { diffFiles }, diffFiles);
             }
 
@@ -311,5 +318,39 @@ public sealed partial class RoomOperations
         }
 
         return [.. diffFiles];
+    }
+
+    private static string FormatRouteExecutorLabel(PlayerInfo player)
+    {
+        var name = string.IsNullOrWhiteSpace(player.PlayerName) ? player.ConnectionId : player.PlayerName;
+        return string.IsNullOrWhiteSpace(player.PlayerUid) ? name : $"{name}({player.PlayerUid})";
+    }
+
+    internal static string FormatRouteDiffDetail(
+        IReadOnlyList<(string Label, List<RouteHash> Routes)> labeledReports,
+        IReadOnlyList<string> diffFiles,
+        int maxFiles = 5)
+    {
+        if (labeledReports.Count == 0 || diffFiles.Count == 0) return "";
+        var perPlayerMaps = labeledReports
+            .Select(r => (
+                r.Label,
+                Map: r.Routes.GroupBy(h => h.FileName).ToDictionary(g => g.Key, g => g.First().Md5)))
+            .ToList();
+        var samples = diffFiles.Take(maxFiles).Select(fileName =>
+        {
+            var members = perPlayerMaps.Select(p =>
+            {
+                if (!p.Map.TryGetValue(fileName, out var md5) || string.IsNullOrEmpty(md5))
+                    return $"{p.Label}=缺失";
+                var shortHash = md5.Length > 8 ? md5[..8] : md5;
+                return $"{p.Label}={shortHash}";
+            });
+            return $"{fileName}[{string.Join(", ", members)}]";
+        });
+        var summary = string.Join("；", samples);
+        return diffFiles.Count > maxFiles
+            ? $"{summary}（其余 {diffFiles.Count - maxFiles} 个文件省略）"
+            : summary;
     }
 }

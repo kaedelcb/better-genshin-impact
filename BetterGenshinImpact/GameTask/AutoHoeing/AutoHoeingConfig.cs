@@ -252,7 +252,7 @@ public partial class AutoHoeingConfig : ObservableObject
 
     /// <summary>
     /// 自动下载本轮官方整包。关闭或下载失败时使用现有本地线路。
-    /// 默认开启；成员自动下载还须经过房主允许。
+    /// 默认开启（仅房主设置，联机同步给全体成员）。
     /// </summary>
     [ObservableProperty]
     private bool _autoUpdateRoutes = true;

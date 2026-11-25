@@ -40,23 +40,91 @@ public sealed class AutoHoeingRoutePackagePinTests
     }
 
     [Theory]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    public async Task EitherOptOutPreventsAllRouteRequestsIncludingRepair(bool localUpdates, bool hostUpdates)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HostOptOutPreventsAllMemberRouteRequestsIncludingRepair(bool localSetting)
     {
         using var files = new AutoHoeingRouteUpdaterTests.Fixture();
         var installed = files.Add();
         await files.Ensure();
         files.Requests.Clear();
-        var task = CreateTask(localUpdates);
+        var task = CreateTask(localSetting);
         Set(task, "_routePackageUpdater", files.Updater);
         try
         {
-            await Apply(task, Host, hostUpdates);
+            await Apply(task, Host, hostUpdates: false);
             Assert.False(await Prepare(task, repair: true));
-            Assert.Equal(localUpdates, Field<AutoHoeingConfig>(task, "_config").AutoUpdateRoutes);
+            Assert.Equal(localSetting, Field<AutoHoeingConfig>(task, "_config").AutoUpdateRoutes);
             Assert.Equal(installed.Id, Field<string>(task, "_confirmedRoutePackageId"));
             Assert.Empty(files.Requests);
+            await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
+            await Seal(task, routeHashesVerified: true);
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
+    }
+
+    [Fact]
+    public async Task MemberFollowsHostAutoUpdateEvenWhenLocalSettingIsFalse()
+    {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
+        var oldInstalled = files.Add();
+        await files.Ensure();
+        var hostPackage = files.Add();
+        files.Requests.Clear();
+        var task = CreateTask(autoUpdate: false, role: "member");
+        Set(task, "_routePackageUpdater", files.Updater);
+        try
+        {
+            await Apply(task, hostPackage.Id, hostUpdates: true);
+            Assert.False(Field<AutoHoeingConfig>(task, "_config").AutoUpdateRoutes);
+            Assert.Equal(hostPackage.Id, Field<string>(task, "_routePackageId"));
+            Assert.Equal(hostPackage.Id, Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.NotEqual(oldInstalled.Id, Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.Contains(files.Requests, path => path.EndsWith($"/{hostPackage.Id}/download", StringComparison.Ordinal));
+            Assert.True(await Prepare(task, repair: true));
+            await Seal(task);
+            Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose();
+
+            var restart = (AutoHoeingTask)Invoke(task, "CreateGuardRestartTask")!;
+            Set(restart, "_config", new AutoHoeingConfig
+            {
+                MultiplayerEnabled = true,
+                MultiplayerRole = "member",
+                AutoUpdateRoutes = false
+            });
+            Set(restart, "_routePackageUpdater", files.Updater);
+            try
+            {
+                Assert.True(await Prepare(restart));
+                Assert.Equal(hostPackage.Id, Field<string>(restart, "_confirmedRoutePackageId"));
+                await Seal(restart);
+            }
+            finally { Field<AutoHoeingRouteUpdater.Lease?>(restart, "_routePackageLease")?.Dispose(); }
+        }
+        finally { Field<AutoHoeingRouteUpdater.Lease?>(task, "_routePackageLease")?.Dispose(); }
+    }
+
+    [Fact]
+    public async Task MemberDownloadFailureFallsBackToLocalWithoutRepairLoopEvenWhenLocalSettingIsFalse()
+    {
+        using var files = new AutoHoeingRouteUpdaterTests.Fixture();
+        var installed = files.Add();
+        await files.Ensure();
+        var hostPackage = files.Add();
+        files.Requests.Clear();
+        files.Intercept = (request, _) => Task.FromResult<HttpResponseMessage?>(
+            request.RequestUri!.AbsolutePath.EndsWith("/download", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) : null);
+        var task = CreateTask(autoUpdate: false, role: "member");
+        Set(task, "_routePackageUpdater", files.Updater);
+        try
+        {
+            await Apply(task, hostPackage.Id, hostUpdates: true);
+            Assert.Contains(files.Requests, path => path.EndsWith($"/{hostPackage.Id}/download", StringComparison.Ordinal));
+            var requestCount = files.Requests.Count;
+            Assert.Equal(installed.Id, Field<string>(task, "_confirmedRoutePackageId"));
+            Assert.False(await Prepare(task, repair: true));
+            Assert.Equal(requestCount, files.Requests.Count);
             await Assert.ThrowsAsync<HoeingStartupException>(() => Seal(task));
             await Seal(task, routeHashesVerified: true);
         }

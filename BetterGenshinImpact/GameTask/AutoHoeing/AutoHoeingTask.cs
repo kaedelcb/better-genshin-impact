@@ -627,6 +627,7 @@ public partial class AutoHoeingTask : ISoloTask
             // === 守护模式重置（hoeing-multiplayer-guard-auto-restart）默认开启===
             _config.HoeingGuardMode = true;
             _config.GuardUnexecutedRouteThreshold = 3;
+            _config.AutoUpdateRoutes = true;
 
             // === 单人调试模式重置（hoeing-multiplayer-solo-debug-mode，纯本地）===
             _config.SoloDebugMode = false;
@@ -1277,7 +1278,7 @@ public partial class AutoHoeingTask : ISoloTask
                     HoeingGuardMode = _config.HoeingGuardMode,
                     GuardUnexecutedRouteThreshold = Multiplayer.HoeingGuardDecisions.ClampThreshold(_config.GuardUnexecutedRouteThreshold),
                     // === 自动更新线路上传（hoeing-autoupdate-routes）===
-                    AutoUpdateRoutes = _config.AutoUpdateRoutes && _roomAllowsRouteUpdate && !_roomUsesLocalRoutes && !_routeUpdateFailed,
+                    AutoUpdateRoutes = CanAutoUpdateRoutes,
                     RoutePackageId = _routePackageId,
                     UseLocalRouteFallback = _roomUsesLocalRoutes,
                     // === 执行期参数房主同步（hoeing-multiplayer-sync-execution-params spec §C1）===
@@ -3817,7 +3818,7 @@ public partial class AutoHoeingTask : ISoloTask
                             || !string.IsNullOrWhiteSpace(_config.FixedDebugRoutePath)
                             || AutoHoeingRoutePaths.IsLocalSelection(_config.SelectedBuiltinRoute))
                             throw new HoeingStartupException("路线一致性", "本地线路不一致，请核对各成员本地文件");
-                        _logger.LogWarning("[联机] 路线不一致，允许自动更新的成员尝试修复；全员随后重新校验");
+                        _logger.LogWarning("[联机] 路线不一致，尝试按房主本轮线路包修复；全员随后重新校验");
                         if (await RunAutoUpdateRoutesAsync(forceRepair: true))
                             groupRoutes = ReloadPinnedRoutes(routes, groupRoutes);
                         _logger.LogInformation("[联机] 重新进行路线一致性验证");
@@ -4973,6 +4974,9 @@ public partial class AutoHoeingTask : ISoloTask
     }
 
     private bool RequiresLocalRouteValidation => _roomUsesLocalRoutes || _confirmedRoutePackageId != _routePackageId;
+    private bool CanAutoUpdateRoutes =>
+        (_roomRouteIdentityKnown ? _roomAllowsRouteUpdate : _config.AutoUpdateRoutes)
+        && !_roomUsesLocalRoutes && !_routeUpdateFailed;
 
     /// <summary>选定本轮线路来源并持有租约。尝试修复后须重读线路，因为超时时安装事务可能已提交。</summary>
     private async Task<bool> RunAutoUpdateRoutesAsync(CancellationToken? operationToken = null, bool forceRepair = false)
@@ -4987,7 +4991,7 @@ public partial class AutoHoeingTask : ISoloTask
             if (_routePackageExecutionStarted)
                 throw new HoeingStartupException("本地线路", "线路已经执行，不能重新安装或改变本轮线路包");
 
-            var allowUpdate = _config.AutoUpdateRoutes && _roomAllowsRouteUpdate && !_roomUsesLocalRoutes && !_routeUpdateFailed;
+            var allowUpdate = CanAutoUpdateRoutes;
             if (forceRepair && !allowUpdate) return false;
             var pin = _routePackageId.Length == 0 ? null : _routePackageId;
             string? installed = null;
@@ -5037,12 +5041,19 @@ public partial class AutoHoeingTask : ISoloTask
             {
                 _routePackageId = installed ?? "";
                 _roomUsesLocalRoutes = !onlinePrepared;
+                _roomAllowsRouteUpdate = onlinePrepared;
                 _roomRouteIdentityKnown = true;
             }
             _confirmedRoutePackageId = installed ?? "";
             _routesPrepared = true;
-            _logger.LogInformation("[线路整包] {Source}：{Package}", onlinePrepared ? "已校验目标包" : "使用本地线路",
-                installed ?? "没有可确认的整包，按所选线路检查");
+            _logger.LogInformation(
+                "[线路整包] {Source}：已确认={Package}，本轮目标={Target}，房主允许更新={RoomAllow}，本地模式={LocalMode}，下载失败={Failed}",
+                onlinePrepared ? "已校验目标包" : "使用本地线路",
+                installed ?? "无",
+                _routePackageId.Length == 0 ? "无" : _routePackageId,
+                _roomAllowsRouteUpdate,
+                _roomUsesLocalRoutes,
+                _routeUpdateFailed);
             return onlinePrepared || forceRepair;
         }
         finally { _routePackagePreparation.Release(); }

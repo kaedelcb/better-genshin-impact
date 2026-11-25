@@ -448,9 +448,6 @@
                     <ui:TextBlock Foreground="{ui:ThemeResource TextFillColorTertiaryBrush}"
                                   Text="秒，默认300"
                                   TextWrapping="Wrap" />
-                    <ui:ToggleSwitch Margin="0,8,0,0"
-                                     Content="允许自动下载线路整包（还需房主开启）"
-                                     IsChecked="{Binding AutoUpdateRoutes, Mode=TwoWay}" />
                 </StackPanel>
             </ui:CardExpander>
 
