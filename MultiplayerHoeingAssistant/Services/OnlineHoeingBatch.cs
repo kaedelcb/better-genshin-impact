@@ -51,6 +51,7 @@ public sealed class OnlineHoeingBatch
         lock (_policyGate)
         {
             if (!PriorityRecoveryEnabled || ExplicitStopRequested || IsCancellationRequested
+                || IncomingRoomOrchestrationIntentId is not null && !TakenOver
                 || RecoveryStopSignal is null || RecoveryStopSignal.IsStopped
                 || !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, previous))
                 throw new InvalidOperationException("原批次停止事实不明或已撤销，不能向新进程恢复");
@@ -143,6 +144,98 @@ public sealed class OnlineHoeingBatch
         }
     }
     internal CoordinatedRecoveryProgress? RecoveryProgress { get; set; }
+
+    // Only actual, identity-matched BGI success receipts contribute to the new room action.
+    // Index advancement and cached UI state are not evidence of local successful execution.
+    private readonly Dictionary<int, RoomOrchestrationBindingEvidence> _roomBindingSuccess = new();
+    private long _roomAuthorityRevision = -1;
+    private bool _roomTeamSucceeded;
+    private bool _roomCleaned;
+    private bool _roomSwitchRevoked;
+    private bool _roomSwitchClaimed;
+    private long _roomReleaseBoundaryUtc;
+
+    internal void RecordRoomBindingSuccess(int index, int attempt, string jobId, string requestKey,
+        BgiEpoch epoch, BgiTaskQueueStatus terminal)
+    {
+        if (Policy?.RoomSwitch is null || index < 0 || index >= Bindings.Count || attempt < 0
+            || !Guid.TryParse(jobId, out var expectedJob) || !Guid.TryParse(terminal.TaskHandle, out var actualJob)
+            || expectedJob != actualJob || requestKey != terminal.IdempotencyKey
+            || requestKey != ViewModels.CoordinatedBatchLoop.RequestKey(BatchId, SelfUid, index, attempt)
+            || !ViewModels.CoordinatedBatchLoop.SameEpoch(epoch, terminal.Epoch)
+            || terminal is not { Status: "completed", Cancelled: false, ExecutionExitConfirmed: true }
+            || terminal.HoeingEvidence is not { } evidence || !evidence.MatchesTerminal(terminal)
+            || evidence.Started != evidence.Completed || evidence.Failed != 0 || evidence.Cancelled != 0) return;
+        lock (_policyGate)
+        {
+            if (IsCancellationRequested || _roomSwitchRevoked) return;
+            _roomBindingSuccess[index] = new(index, attempt, jobId, requestKey, epoch, evidence.Completed);
+        }
+    }
+
+    internal void ResetRoomBindingEvidence(int index)
+    {
+        lock (_policyGate) _roomBindingSuccess.Remove(index);
+    }
+
+    internal void ObserveRoomCompletionAuthority(CoordinatedBatchSnapshot state)
+    {
+        if (Policy?.RoomSwitch is null || Start is null || state.Protocol != "hoeing.start.v2"
+            || state.BatchId != BatchId || state.Generation != Generation
+            || !new HashSet<string>(Start.ParticipantUids, StringComparer.Ordinal).SetEquals(state.ParticipantUids)
+            || !state.Bindings.TryGetValue(SelfUid, out var bindings) || !Bindings.SequenceEqual(bindings)) return;
+        lock (_policyGate)
+        {
+            if (state.Revision < _roomAuthorityRevision) return;
+            _roomAuthorityRevision = state.Revision;
+            _roomTeamSucceeded = state.Phase == "completed" && state.Index == Bindings.Count
+                && state.Reason is "" or "shared_recovery"
+                && state.Members.Count == Start.ParticipantUids.Count
+                && new HashSet<string>(state.Members.Select(m => m.Uid), StringComparer.Ordinal).SetEquals(Start.ParticipantUids)
+                && state.Members.All(m => m.Result == "succeeded");
+            _roomCleaned = _roomTeamSucceeded && state.Members.Any(m => m.Uid == SelfUid && m.Stage == "cleaned");
+            if (state.Phase == "aborted") _roomSwitchRevoked = true;
+        }
+    }
+
+    internal bool RoomTeamSucceeded { get { lock (_policyGate) return _roomTeamSucceeded; } }
+    internal long RoomReleaseBoundaryUtc { get { lock (_policyGate) return _roomReleaseBoundaryUtc; } }
+    internal bool RoomSwitchRevoked { get { lock (_policyGate) return _roomSwitchRevoked; } }
+
+    internal void RecordRoomReleaseBoundary()
+    {
+        if (Policy?.RoomSwitch is null) return;
+        lock (_policyGate)
+            if (_roomReleaseBoundaryUtc == 0) _roomReleaseBoundaryUtc = DateTime.UtcNow.Ticks;
+        PersistRecovery?.Invoke();
+    }
+
+    internal void RevokeRoomCompletion()
+    {
+        if (Policy?.RoomSwitch is null) return;
+        lock (_policyGate) _roomSwitchRevoked = true;
+        PersistRecovery?.Invoke();
+    }
+
+    // Called exactly once at the authoritative cleaned boundary, before retiring the batch.
+    // A separate durable intent must be saved before dispatch; MarkSettled destroys the old recovery signal.
+    internal bool TryClaimRoomCompletion()
+    {
+        lock (_policyGate)
+        {
+            if (Policy is not { Policy: TaskConflictPolicy.Stop, RoomSwitch.IsValid: true }
+                || _roomSwitchClaimed || _roomSwitchRevoked || !IsAlive || IsCancellationRequested || ExplicitStopRequested
+                || RecoveryStopSignal?.IsStopped == true || !TakenOver || !LocalSucceeded || LocalTasksFailed || PendingBindingsSkipped
+                || !LocalExecutionReleased || !LocalCleanupConfirmed || !PolicyTicketReleased || PolicySendUnknown || PolicyRejectedBeforeStart
+                || !_roomTeamSucceeded || !_roomCleaned || ExecutionEpoch is null || StateContinuationStopVersion is null
+                || !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, LocalSuccessEpoch)
+                || _roomReleaseBoundaryUtc <= 0 || _roomBindingSuccess.Count != Bindings.Count
+                || !_roomBindingSuccess.Values.Any(e => e.NativeCompleted > 0)) return false;
+            _roomSwitchClaimed = true;
+            return true;
+        }
+    }
+
     internal bool RestoredFromRecovery { get; private set; }
     internal int RecoveryOwnerPid { get; private set; }
     internal long RecoveryOwnerStartTicks { get; private set; }
@@ -156,6 +249,7 @@ public sealed class OnlineHoeingBatch
             Revision = ++_recoveryRevision,
             Start = Start!, SelfUid = SelfUid, Token = Token, Policy = Policy!, Progress = RecoveryProgress,
             Epoch = ExecutionEpoch, StopVersion = _stateContinuationStopVersion, Ticket = TakeoverTicket,
+            IncomingRoomOrchestrationIntentId = IncomingRoomOrchestrationIntentId,
             RecoveryStopSignalName = RecoveryStopSignal?.Name ?? _savedStopSignalName, ProcessRecoveryPreviousEpoch = ProcessRecoveryPreviousEpoch,
             SuspendReceipt = _suspendedRawData, ConfigRevisions = new(_configRevisions),
             Prepared = Prepared, TakenOver = TakenOver, Stopped = ExplicitStopRequested,
@@ -172,7 +266,11 @@ public sealed class OnlineHoeingBatch
             PlanContinuation = _planResumeContinuation is null ? null : new(_planResumeContinuation),
             PolicyExecution = _policyExecution, PolicyTerminal = _policyTerminalResult,
             PolicyAcknowledged = _policyResultAcknowledged, PolicyTicketReleased = PolicyTicketReleased,
-            PolicyRejected = PolicyRejectedBeforeStart
+            PolicyRejected = PolicyRejectedBeforeStart,
+            RoomBindingSuccess = _roomBindingSuccess.Values.ToArray(), RoomAuthorityRevision = _roomAuthorityRevision,
+            RoomTeamSucceeded = _roomTeamSucceeded, RoomCleaned = _roomCleaned,
+            RoomSwitchRevoked = _roomSwitchRevoked, RoomSwitchClaimed = _roomSwitchClaimed,
+            RoomReleaseBoundaryUtc = _roomReleaseBoundaryUtc
         };
     }
 
@@ -190,6 +288,7 @@ public sealed class OnlineHoeingBatch
             ExecutionEpoch = saved.Epoch, ProcessRecoveryPreviousEpoch = saved.ProcessRecoveryPreviousEpoch,
             StateContinuationEnabled = true,
             StateContinuationStopVersion = saved.StopVersion, TakeoverTicket = saved.Ticket,
+            IncomingRoomOrchestrationIntentId = saved.IncomingRoomOrchestrationIntentId,
             SuspendedRawData = saved.SuspendReceipt, Prepared = saved.Prepared, TakenOver = saved.TakenOver,
             CoordinatedSucceeded = saved.CoordinatedSucceeded,
             PolicyStartAttempted = saved.PolicyStartAttempted, PolicyRequestIdentity = saved.PolicyRequestIdentity,
@@ -198,6 +297,21 @@ public sealed class OnlineHoeingBatch
             PolicyTicketReleased = saved.PolicyTicketReleased, PolicyRejectedBeforeStart = saved.PolicyRejected,
             PolicyResultAcknowledged = saved.PolicyAcknowledged
         };
+        if (saved.Policy.RoomSwitch is not null)
+        {
+            foreach (var evidence in saved.RoomBindingSuccess ?? [])
+                if (evidence.Index >= 0 && evidence.Index < batch.Bindings.Count && evidence.Attempt >= 0
+                    && evidence.NativeCompleted >= 0 && evidence.Epoch is { ProcessId: > 0, StartTicksUtc: > 0 }
+                    && Guid.TryParse(evidence.JobId, out _) && evidence.RequestKey == ViewModels.CoordinatedBatchLoop.RequestKey(
+                        batch.BatchId, batch.SelfUid, evidence.Index, evidence.Attempt))
+                    batch._roomBindingSuccess[evidence.Index] = evidence;
+            batch._roomAuthorityRevision = saved.RoomAuthorityRevision;
+            batch._roomTeamSucceeded = saved.RoomTeamSucceeded;
+            batch._roomCleaned = saved.RoomCleaned;
+            batch._roomSwitchRevoked = saved.RoomSwitchRevoked;
+            batch._roomSwitchClaimed = saved.RoomSwitchClaimed;
+            batch._roomReleaseBoundaryUtc = saved.RoomReleaseBoundaryUtc;
+        }
         batch._savedStopSignalName = saved.RecoveryStopSignalName;
         batch.RecoveryStopSignal = Mistletoe.Shared.CoordinatedStopSignal.Open(saved.RecoveryStopSignalName);
         batch._failedPolicyAttempts.AddRange(saved.FailedPolicyAttempts);
@@ -210,7 +324,12 @@ public sealed class OnlineHoeingBatch
         }
         if (saved.PolicyExecution is { } execution) batch.RecordPolicyExecution(execution);
         if (saved.PolicyTerminal is { } terminal) batch.PolicyTerminalResult = terminal;
-        if (saved.LocalReleased) batch.MarkLocalExecutionReleased();
+        if (saved.LocalReleased)
+        {
+            batch.MarkLocalExecutionReleased();
+            // Physical local release is recoverable. Server cleanup is independently re-queried.
+            if (saved.Policy.RoomSwitch is not null) batch.LocalCleanupConfirmed = true;
+        }
         if (saved.Stopped || batch.RecoveryStopSignal?.IsStopped == true) batch.Cancel();
         return batch;
     }
@@ -226,6 +345,28 @@ public sealed class OnlineHoeingBatch
     internal static bool IsExplicitStopReason(string reason) => reason is "manual_reset" or "user_stop_all" or "begin_cancelled";
     internal bool ExplicitStopRequested => Volatile.Read(ref _explicitStopRequested) != 0;
     private long? _stateContinuationStopVersion;
+    internal string? IncomingRoomOrchestrationIntentId { get; private set; }
+
+    internal void FreezeIncomingRoomOrchestrationAuthority(string intentId, BgiEpoch epoch, long stopVersion)
+    {
+        if (string.IsNullOrWhiteSpace(intentId) || stopVersion < 0 || epoch.ProcessId <= 0 || epoch.StartTicksUtc <= 0)
+            throw new InvalidOperationException("编排上线的原停止授权不完整");
+        lock (_policyGate)
+        {
+            if (IncomingRoomOrchestrationIntentId is not null && IncomingRoomOrchestrationIntentId != intentId
+                || ExecutionEpoch is not null && !ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, epoch)
+                || _stateContinuationStopVersion is { } previous && previous != stopVersion)
+                throw new InvalidOperationException("编排上线的停止授权已冻结");
+            IncomingRoomOrchestrationIntentId = intentId;
+            ExecutionEpoch = epoch;
+            StateContinuationStopVersion = stopVersion;
+        }
+    }
+
+    internal bool MatchesIncomingRoomOrchestrationFence(BgiEpoch? epoch, long? stopVersion)
+        => IncomingRoomOrchestrationIntentId is null || ViewModels.CoordinatedBatchLoop.SameEpoch(ExecutionEpoch, epoch)
+            && StateContinuationStopVersion is { } frozen && stopVersion == frozen;
+
     internal long? StateContinuationStopVersion
     {
         get { lock (_policyGate) return _stateContinuationStopVersion; }
@@ -666,7 +807,7 @@ public sealed class OnlineHoeingBatch
             SpecifiedTaskName = policy.SpecifiedTaskName, SpecifiedTaskPriority = policy.SpecifiedTaskPriority,
             SpecifiedStartMode = policy.SpecifiedStartMode, SpecifiedStartTaskId = policy.SpecifiedStartTaskId,
             SpecifiedStartTaskName = policy.SpecifiedStartTaskName, SpecifiedConfigRevision = policy.SpecifiedConfigRevision,
-            SpecifiedWorkflowId = policy.SpecifiedWorkflowId,
+            SpecifiedWorkflowId = policy.SpecifiedWorkflowId, RoomSwitch = policy.RoomSwitch,
         };
     }
 

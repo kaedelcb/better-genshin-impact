@@ -42,6 +42,7 @@ public partial class MainViewModel
                     EnsureTaskCenterExecutionReadyAsync); // 2026-09-20：执行入口环境确保（BGI 未运行自动拉起+有界等待通道就绪）
                 // R5.8 §21.4：注入**真实 BGI User 配置根来源**（迁移演练隔离校验用）；未配置/无法解析 ⇒ null ⇒ 演练**保守拒绝**。
                 host.UserConfigRootProvider ??= ResolveBgiUserConfigRoot;
+                host.RoomOrchestrationNewIntent ??= NoteRoomOrchestrationNewIntent;
             }
             // 兼容读取及日志通知不得持有宿主创建锁，联机进度保存也会读取此宿主。
             if (IsExecutorMode) host.EnsureLegacyCompatibility(TryResolveBgiUserConfigRoot(Config?.BgiPath));
@@ -595,6 +596,20 @@ public partial class MainViewModel
     /// 不再周期轮询 task.status），并做 onlineGeneration 边沿检测——与 v2 轮询路径的 P0-B
     /// 基线同步语义逐条一致（快照校准场景补报断线窗口内错过的上线事件）。
     /// </summary>
+    private static string? ReadBgiOnlineString(JsonElement data, string property)
+        => data.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static long? ReadBgiOnlineStopVersion(JsonElement data, string property)
+        => data.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var version)
+            ? version : null;
+
+    private static BgiEpoch? ReadBgiOnlineEpoch(JsonElement data)
+        => data.TryGetProperty("bgiEpoch", out var epoch) && epoch.ValueKind == JsonValueKind.Object
+            && epoch.TryGetProperty("processId", out var pid) && pid.TryGetInt32(out var processId)
+            && epoch.TryGetProperty("startTicksUtc", out var ticks) && ticks.TryGetInt64(out var startTicksUtc)
+            && processId > 0 && startTicksUtc > 0
+            ? new BgiEpoch { ProcessId = processId, StartTicksUtc = startTicksUtc } : null;
+
     private void OnBgiStatusSnapshotUpdated(BgiExternalStatusSnapshot snapshot)
     {
         try
@@ -627,7 +642,9 @@ public partial class MainViewModel
                 triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
             }
             // [P1] 首见判定/新鲜度校验/基线同步/双来源对齐/防抖全部收编进状态机
-            ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(doc.RootElement, "onlineWorkflowRunId"));
+            ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(doc.RootElement, "onlineWorkflowRunId"),
+                ReadBgiOnlineString(doc.RootElement, "onlineJobId"), ReadBgiOnlineString(doc.RootElement, "onlineSubmissionKey"),
+                ReadBgiOnlineStopVersion(doc.RootElement, "onlineStopVersion"), ReadBgiOnlineEpoch(doc.RootElement));
         }
         catch
         {
@@ -655,7 +672,9 @@ public partial class MainViewModel
                 DateTime? triggeredAt = evt.Payload.TryGetProperty("triggeredAt", out var time)
                     && time.ValueKind == System.Text.Json.JsonValueKind.String && time.TryGetDateTime(out var utc)
                     ? utc.ToUniversalTime() : null;
-                ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(evt.Payload, "workflowRunId"));
+                ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(evt.Payload, "workflowRunId"),
+                    ReadBgiOnlineString(evt.Payload, "jobId"), ReadBgiOnlineString(evt.Payload, "submissionKey"),
+                    ReadBgiOnlineStopVersion(evt.Payload, "stopVersion"), evt.Epoch);
                 return;
             }
 

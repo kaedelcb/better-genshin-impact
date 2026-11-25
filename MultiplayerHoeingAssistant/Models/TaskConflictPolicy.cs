@@ -41,8 +41,22 @@ public class TaskConflictPolicySettings
     public string SpecifiedConfigRevision { get; set; } = "";
     public string SpecifiedWorkflowId { get; set; } = "";
 
+    /// <summary>联机批次专用后继动作。旧批次使用 Stop 收尾，切房在确认清理后独立执行。</summary>
+    public RoomSwitchCompletion? RoomSwitch { get; set; }
+
+    internal bool HasSpecifiedTask => Policy == TaskConflictPolicy.RunSpecified || RoomSwitch?.RunAfterSwitch == true;
+
+    internal TaskConflictPolicySettings PostSwitchTask() => new()
+    {
+        Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskType = SpecifiedTaskType,
+        SpecifiedTaskName = SpecifiedTaskName, SpecifiedTaskPriority = SpecifiedTaskPriority,
+        SpecifiedStartMode = SpecifiedStartMode, SpecifiedStartTaskId = SpecifiedStartTaskId,
+        SpecifiedStartTaskName = SpecifiedStartTaskName, SpecifiedConfigRevision = SpecifiedConfigRevision,
+        SpecifiedWorkflowId = SpecifiedWorkflowId
+    };
+
     /// <summary>策略显示名（日志用）。</summary>
-    public string PolicyDisplayName => Policy switch
+    public string PolicyDisplayName => RoomSwitch is { } room ? $"切换助手房间「{room.TargetName}」" : Policy switch
     {
         TaskConflictPolicy.Resume => "恢复",
         TaskConflictPolicy.Stop => "不恢复直接停止",

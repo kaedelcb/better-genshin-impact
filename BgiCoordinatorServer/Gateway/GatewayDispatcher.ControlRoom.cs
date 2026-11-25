@@ -74,9 +74,24 @@ public sealed partial class GatewayDispatcher
             DateTimeOffset? expiry = null;
             if (env.Payload?["expiresAtUtc"] is { } node)
                 expiry = node.GetValue<DateTimeOffset>();
-            return await _ops.BeginManualCoordinatedBatchAsync(ctx, GetString(env, "requestId"),
-                GetStringList(env, "targetUids") ?? [], expiry, GetBool(env, "useCompletionActions"),
-                GetString(env, "quickCommandKey"));
+            try
+            {
+                return await _ops.BeginManualCoordinatedBatchAsync(ctx, GetString(env, "requestId"),
+                    GetStringList(env, "targetUids") ?? [], expiry, GetBool(env, "useCompletionActions"),
+                    GetString(env, "quickCommandKey"),
+                    Get<Dictionary<string, Services.CoordinatedCompletionAction>>(env, "confirmedCompletionActions"));
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("hoeing_completion_action_changed:", StringComparison.Ordinal)
+                || ex.Message.StartsWith("hoeing_completion_action_invalid:", StringComparison.Ordinal))
+            {
+                // 这是明确的准入拒绝，不是连接异常；客户端不可用原开始请求等待并自动重试。
+                return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest,
+                    message = "成员完成后动作配置不完整、已变化或未经确认，请重新打开确认窗口：" + ex.Message } };
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return new { error = new { code = GatewayProtocol.ErrorCodes.BadRequest, message = "完成动作确认格式错误，请重新确认。" } };
+            }
         };
 
         _commands[GatewayProtocol.Names.ControlBatchCancelBegin] = async (env, ctx) =>

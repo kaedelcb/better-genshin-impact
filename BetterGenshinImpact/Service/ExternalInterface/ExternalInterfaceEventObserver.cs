@@ -222,7 +222,9 @@ internal sealed class ExternalInterfaceEventObserver
             _lastOnlineGeneration = online.Generation;
             hub.Publish(
                 ExternalInterfaceEventNames.OnlineTriggered,
-                new { generation = online.Generation, triggeredAt = online.TriggeredAt, workflowRunId = online.WorkflowRunId?.ToString("N") });
+                new { generation = online.Generation, triggeredAt = online.TriggeredAt,
+                    workflowRunId = online.WorkflowRunId?.ToString("N"), jobId = online.JobId?.ToString("N"),
+                    submissionKey = online.SubmissionKey, stopVersion = online.StopVersion });
         }
     }
 

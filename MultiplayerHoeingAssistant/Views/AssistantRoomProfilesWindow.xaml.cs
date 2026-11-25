@@ -104,14 +104,37 @@ public partial class AssistantRoomProfilesWindow : Window
             var bindings = room.OnlineHoeingGroupNames.Count == 0 ? "未绑定" : string.Join("、", room.OnlineHoeingGroupNames);
             var scheduled = string.IsNullOrWhiteSpace(room.ScheduledOnlineTime) ? "未设置" : room.ScheduledOnlineTime
                 + (room.ScheduledOnlineRequiresConfirmation ? "（待确认）" : "");
-            var completion = room.OnlineHoeingCompletionPolicy switch
-            {
-                "stop" => "停止", "runSpecified" => "执行 " + room.OnlineHoeingSpecifiedTaskName, _ => "恢复被打断的任务"
-            };
+            var completion = DescribeCompletion(room);
             var shortcuts = room.QuickCommands.Count(pair => !string.IsNullOrWhiteSpace(pair.Value));
             HoeingSummary.Text = $"绑定项目：{bindings}\n定时上线：{scheduled}　　完成后：{completion}\n快捷指令：已设置 {shortcuts} 项";
         }
         ShowResult("");
+    }
+
+    private string DescribeCompletion(AssistantRoomProfile room)
+    {
+        if (room.OnlineHoeingCompletionPolicy != "switchRoom") return room.OnlineHoeingCompletionPolicy switch
+        {
+            "stop" => "停止", "runSpecified" => "执行 " + room.OnlineHoeingSpecifiedTaskName, _ => "恢复被打断的任务"
+        };
+        if (room.OnlineHoeingRoomSwitchCompletion is not { } link || !link.IsValid || link.SourceProfileId != room.Id
+            || !MatchesIdentity(room, link.SourceServerUrl, link.SourceRoomCode))
+            return "切换助手房间（源房间身份待重新确认）";
+        var targets = _profiles.Where(p => p.Id == link.TargetProfileId).ToArray();
+        if (targets.Length != 1 || !MatchesIdentity(targets[0], link.TargetServerUrl, link.TargetRoomCode))
+            return $"切换助手房间「{link.TargetName} · {link.TargetRoomCode}」（目标已失效，请重新选择）";
+        var target = targets[0];
+        var after = link.RunAfterSwitch
+            ? "执行 " + (room.OnlineHoeingSpecifiedTaskType switch { "group" => "配置组", "onedragon" => "一条龙", "workflow" => "计划表", _ => "指定任务" })
+                + "「" + room.OnlineHoeingSpecifiedTaskName + "」"
+            : "待命";
+        if (link.RunAfterSwitch && (room.OnlineHoeingSpecifiedStartMode is not ("beginning" or "node")
+            || string.IsNullOrWhiteSpace(room.OnlineHoeingSpecifiedConfigRevision))) after += "（任务待重新确认）";
+        return $"切换到「{target.Name} · {target.RoomCode}」；切换成功后：{after}";
+
+        bool MatchesIdentity(AssistantRoomProfile profile, string server, string roomCode)
+            => profile.RoomCode == roomCode && RoomServerAddress.Same(
+                string.IsNullOrWhiteSpace(profile.ServerUrl) ? _defaultServer : profile.ServerUrl, server);
     }
 
     private void UpdateLegacyRoomCode(List<string> memberUids)

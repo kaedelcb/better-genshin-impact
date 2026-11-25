@@ -48,6 +48,10 @@ public class AssistConfig : IJsonOnDeserialized
     [JsonPropertyName("viewedRoomProfileId")]
     public string ViewedRoomProfileId { get; set; } = AllRoomsViewId;
 
+    /// <summary>本机耕地机内容页记忆；与当前登录和所查看的房间 ID 独立。</summary>
+    [JsonPropertyName("showRoomOrchestration")]
+    public bool ShowRoomOrchestration { get; set; }
+
     [JsonIgnore]
     public AssistantRoomProfile? LocalRoomProfile => FindRoomProfile(LocalRoomProfileId);
 
@@ -278,16 +282,19 @@ public class AssistConfig : IJsonOnDeserialized
 
     // ========== 上线锄地「完成后动作」（持久化；绑定弹窗配置，全员就绪触发上线锄地固定打断当前任务）==========
 
-    /// <summary>上线锄地完成后动作："resume"=恢复任务（默认）/ "stop"=执行动作-停止 / "runSpecified"=执行动作-执行指定任务。
-    /// 作用于全员就绪上线锄地打断的原任务；批次末尾与 10s resume 定时器两处都按此配置走。</summary>
+    /// <summary>上线锄地完成后动作："resume"=恢复任务（默认）/ "stop"=停止 / "runSpecified"=执行指定任务 / "switchRoom"=切换助手房间。</summary>
     [JsonPropertyName("onlineHoeingCompletionPolicy")]
     public string OnlineHoeingCompletionPolicy { get; set; } = "resume";
 
-    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙 / "workflow"=计划表），仅 "runSpecified" 使用。</summary>
+    /// <summary>切房完成动作的源、目标档案身份；不是旧批次的执行/恢复授权。</summary>
+    [JsonPropertyName("onlineHoeingRoomSwitchCompletion")]
+    public RoomSwitchCompletion? OnlineHoeingRoomSwitchCompletion { get; set; }
+
+    /// <summary>上线锄地指定任务类型（"group"=配置组 / "onedragon"=一条龙 / "workflow"=计划表），供普通指定任务或切房后的指定任务使用。</summary>
     [JsonPropertyName("onlineHoeingSpecifiedTaskType")]
     public string OnlineHoeingSpecifiedTaskType { get; set; } = "group";
 
-    /// <summary>上线锄地指定任务名称，仅 "runSpecified" 使用；执行时校验存在性，不存在则日志报错退化为停止。</summary>
+    /// <summary>上线锄地指定任务名称，供普通指定任务或切房后的指定任务使用；执行时校验目录目标。</summary>
     [JsonPropertyName("onlineHoeingSpecifiedTaskName")]
     public string OnlineHoeingSpecifiedTaskName { get; set; } = "";
 

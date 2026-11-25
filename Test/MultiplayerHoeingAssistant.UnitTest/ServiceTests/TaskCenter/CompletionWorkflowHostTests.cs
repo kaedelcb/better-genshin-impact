@@ -147,6 +147,84 @@ public sealed class CompletionWorkflowHostTests : IDisposable
         return host.LoadFlowSnapshot(document.WorkflowId!);
     }
 
+    private static RoomOrchestrationLaunch RoomLaunch(WorkflowSnapshot snapshot, string id) => new(id,
+        new TaskConflictPolicySettings
+        {
+            Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskType = "workflow",
+            SpecifiedTaskName = snapshot.Document.Name, SpecifiedWorkflowId = snapshot.Document.WorkflowId,
+            SpecifiedConfigRevision = snapshot.Revision, SpecifiedStartMode = "node",
+            SpecifiedStartTaskId = "second", SpecifiedStartTaskName = "第二个",
+        }, Epoch, 3, System.Diagnostics.Stopwatch.GetTimestamp(), "confirmed-b");
+
+    [Fact]
+    public async Task RoomSuccessorRegistrationReturnsBeforeRunExitAndQueryNeverReplays()
+    {
+        var boundary = new Boundary(); var host = Host(boundary);
+        host.FlowRuntime.IsRoomIdentityCurrent = room => room == "confirmed-b";
+        try
+        {
+            var launch = RoomLaunch(Seed(host), "room-successor");
+            var receipt = await host.StartRoomOrchestrationWorkflowAsync(launch, _ => Task.CompletedTask, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("success", receipt.Status);
+            Assert.False(receipt.IsTerminal);
+            var run = Assert.Single(host.Runs.List());
+            Assert.Equal(receipt.JobId, run.RunId);
+            Assert.Equal("room-orchestration", Assert.Single(run.Handoffs).StepId);
+            Assert.Equal(launch.IntentId, run.StopAuthority!.IntentId);
+            Assert.Equal(launch.IntentTimestamp, run.StopAuthority.IntentTimestamp);
+            Assert.Equal(3, run.StopAuthority.Version);
+            Assert.Equal("second", run.ExplicitEntryNodeId);
+            await boundary.SecondStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False((await host.QueryRoomOrchestrationWorkflowAsync(run.RunId, launch.IntentId, CancellationToken.None))!.ExecutionExitConfirmed);
+            Assert.Null(await host.QueryRoomOrchestrationWorkflowAsync(run.RunId, "another-room-intent", CancellationToken.None));
+            boundary.SecondExit.TrySetResult();
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            BgiTaskQueueStatus? terminal;
+            do
+            {
+                terminal = await host.QueryRoomOrchestrationWorkflowAsync("", launch.IntentId, budget.Token);
+                if (terminal?.ExecutionExitConfirmed != true) await Task.Delay(10, budget.Token);
+            } while (terminal?.ExecutionExitConfirmed != true);
+            Assert.Equal("completed", terminal.Status);
+            Assert.Equal(run.WireRunId, terminal.WorkflowRunId);
+            Assert.Equal("confirmed-b", terminal.RoomIdentity);
+            Assert.Equal(3L, terminal.StopVersion);
+            Assert.False(terminal.StopRequested);
+            await host.StartRoomOrchestrationWorkflowAsync(launch, _ => Task.CompletedTask, CancellationToken.None);
+            Assert.Single(host.Runs.List());
+            Assert.Equal(new[] { "second" }, boundary.Nodes.ToArray());
+        }
+        finally { boundary.FirstExit.TrySetResult(); boundary.SecondExit.TrySetResult(); await host.ShutdownAsync(); }
+    }
+
+    [Fact]
+    public async Task RoomSuccessorFinalVerificationRefusalCancelsPreparedRunRatherThanParking()
+    {
+        var boundary = new Boundary(); var host = Host(boundary);
+        host.FlowRuntime.IsRoomIdentityCurrent = _ => true;
+        try
+        {
+            var launch = RoomLaunch(Seed(host), "room-final-refusal");
+            var checks = 0;
+            var receipt = await host.StartRoomOrchestrationWorkflowAsync(launch, ct =>
+            {
+                if (Interlocked.Increment(ref checks) >= 3) throw new OperationCanceledException("新联机批次优先", ct);
+                return Task.CompletedTask;
+            }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.NotEqual("success", receipt.Status);
+            Assert.True(checks >= 3);
+            var run = Assert.Single(host.Runs.List());
+            Assert.True(run.StopRequested);
+            Assert.Equal(WorkflowRunState.Cancelled, run.State);
+            Assert.False(run.OnlineHoeingGateParked);
+            Assert.Empty(boundary.Nodes);
+            Assert.False(host.IsDriving(run.WorkflowId));
+            Assert.True((await host.QueryRoomOrchestrationWorkflowAsync(run.RunId, launch.IntentId, CancellationToken.None))!.StopRequested);
+        }
+        finally { boundary.FirstExit.TrySetResult(); boundary.SecondExit.TrySetResult(); await host.ShutdownAsync(); }
+    }
+
     [Fact]
     public async Task SameRequestBindsOneRealRunAndTracksBothNodes()
     {

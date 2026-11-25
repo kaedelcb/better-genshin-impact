@@ -28,6 +28,8 @@ public sealed class CoordinatedLocalFinishWiringTests
         Set(vm, "_activeBatch", batch);
         Set(vm, "_reportStatusRunning", 1); // The focused VM tests do not start an unrelated status sampler.
         Set(vm, "_config", new AssistConfig { PlayerUid = "self" });
+        batch.FreezeControlContext((string)typeof(MainViewModel).GetMethod("CurrentControlContext",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null)!);
         if (executor is not null) Set(vm, "_commandExecutor", executor);
         return vm;
     }
@@ -240,7 +242,7 @@ public sealed class CoordinatedLocalFinishWiringTests
 
             batch.RunTask = Task.CompletedTask;
             typeof(MainViewModel).GetMethod("CompleteCoordinatedCleanup", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .Invoke(vm, [batch]);
+                .Invoke(vm, [batch, false]);
             var message = (string?)typeof(MainViewModel)
                 .GetField("_lastHoeingStartMessage", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm);
             if (warns) Assert.Contains(batch.CompletionActionWarning!, message);

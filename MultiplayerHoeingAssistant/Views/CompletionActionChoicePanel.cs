@@ -11,21 +11,26 @@ internal sealed class CompletionActionChoicePanel : StackPanel
     internal CheckBox CompletionOption { get; }
     internal bool UseCompletionActions => CompletionOption.IsEnabled && CompletionOption.IsChecked == true;
     private readonly TextBlock _unavailable;
+    private readonly TextBlock _explanation;
+    private readonly bool _isQuickCommand;
+    private bool _hasSwitchAction;
 
-    internal CompletionActionChoicePanel(bool supported, IReadOnlyList<CoordinatedCompletionAction?> actions)
+    internal CompletionActionChoicePanel(bool supported, IReadOnlyList<CoordinatedCompletionAction?> actions,
+        bool isQuickCommand = false)
     {
         CompletionOption = new CheckBox
         {
-            Content = "执行各成员在“绑定”中设置的锄地后动作",
+            Content = new TextBlock { Text = "执行各成员在“绑定”中设置的锄地后动作", TextWrapping = TextWrapping.Wrap },
             IsChecked = false,
             Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0xF2, 0xFA)),
             FontSize = 13, Margin = new Thickness(0, 8, 0, 6)
         };
         Children.Add(CompletionOption);
-        var explanation = Text("不勾选：本次锄完停止。", Color.FromRgb(0xB8, 0xB1, 0xD4));
-        CompletionOption.Checked += (_, _) => explanation.Text = "正常完成后执行各成员已有动作；失败或手动停止不触发。";
-        CompletionOption.Unchecked += (_, _) => explanation.Text = "不勾选：本次锄完停止。";
-        Children.Add(explanation);
+        _isQuickCommand = isQuickCommand;
+        _explanation = Text("不勾选：本次锄完停止。", Color.FromRgb(0xB8, 0xB1, 0xD4));
+        CompletionOption.Checked += (_, _) => UpdateExplanation();
+        CompletionOption.Unchecked += (_, _) => UpdateExplanation();
+        Children.Add(_explanation);
         _unavailable = Text("", Color.FromRgb(0xD9, 0xA8, 0x4E));
         _unavailable.FontSize = 11;
         Children.Add(_unavailable);
@@ -39,7 +44,18 @@ internal sealed class CompletionActionChoicePanel : StackPanel
         _unavailable.Text = !supported ? "服务端尚不支持此选项；不勾选仍可按原方式开始。"
             : actions.Count == 0 ? "请先选择已绑定任务的在线成员。"
             : "有成员的动作尚未上报或配置不完整，请检查该成员的“绑定”。";
+        _hasSwitchAction = actions.Any(a => a?.Policy == "switchRoom");
         _unavailable.Visibility = CompletionOption.IsEnabled ? Visibility.Collapsed : Visibility.Visible;
+        UpdateExplanation();
+    }
+
+    private void UpdateExplanation()
+    {
+        _explanation.Text = !UseCompletionActions ? "不勾选：本次锄完停止。"
+            : "正常完成后执行各成员已有动作；失败或手动停止不触发。"
+                + (!_hasSwitchAction ? "" : _isQuickCommand
+                    ? " 配置了切房的成员仅在实际联机锄地正常完成并结清后切房，纯普通任务完成时仅停止。"
+                    : " 切房须有实际联机锄地正常完成及结清的证据。");
     }
 
     private static TextBlock Text(string text, Color color) => new()
@@ -54,4 +70,6 @@ internal sealed class QuickCommandBindingWindow(CompletionActionChoicePanel comp
     internal CompletionActionChoicePanel CompletionChoice { get; } = completionChoice;
     internal Button ConfirmButton { get; set; } = null!;
     internal bool UseCompletionActions => CompletionChoice.UseCompletionActions;
+    internal IReadOnlyDictionary<string, CoordinatedCompletionAction>? ConfirmedCompletionActions { get; set; }
+    internal IReadOnlyList<string> ConfirmedTargetUids { get; set; } = [];
 }

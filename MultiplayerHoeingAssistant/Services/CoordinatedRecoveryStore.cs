@@ -13,6 +13,9 @@ internal sealed record CoordinatedRecoveryProgress(int Index, int Attempt, strin
     public BgiEpoch? ItemEpoch { get; init; }
 }
 
+internal sealed record RoomOrchestrationBindingEvidence(int Index, int Attempt, string JobId, string RequestKey,
+    BgiEpoch Epoch, int NativeCompleted);
+
 internal sealed record CoordinatedRecoverySnapshot
 {
     public int Version { get; init; } = 1;
@@ -29,6 +32,7 @@ internal sealed record CoordinatedRecoverySnapshot
     public BgiEpoch? Epoch { get; init; }
     public BgiEpoch? ProcessRecoveryPreviousEpoch { get; init; }
     public long? StopVersion { get; init; }
+    public string? IncomingRoomOrchestrationIntentId { get; init; }
     public string? RecoveryStopSignalName { get; init; }
     public string? Ticket { get; init; }
     public string? SuspendReceipt { get; init; }
@@ -57,6 +61,13 @@ internal sealed record CoordinatedRecoverySnapshot
     public bool PolicyAcknowledged { get; init; }
     public bool PolicyTicketReleased { get; init; }
     public bool PolicyRejected { get; init; }
+    public IReadOnlyList<RoomOrchestrationBindingEvidence> RoomBindingSuccess { get; init; } = [];
+    public long RoomAuthorityRevision { get; init; } = -1;
+    public bool RoomTeamSucceeded { get; init; }
+    public bool RoomCleaned { get; init; }
+    public bool RoomSwitchRevoked { get; init; }
+    public bool RoomSwitchClaimed { get; init; }
+    public long RoomReleaseBoundaryUtc { get; init; }
 }
 
 /// <summary>Only the existing batch's recovery record; it never dispatches or authorizes work.</summary>

@@ -84,6 +84,16 @@ public class MistletoeWebGateTests
     }
 
     [Fact]
+    public async Task DesktopRoomOrchestrationDoesNotExtendWebOperations()
+    {
+        var (vm, seen) = NewVm();
+        foreach (var request in new[] { Request("room.orchestration.get"), Request("room.orchestration.edit"),
+            Request("room.orchestration.save"), Request("operation.get", payload: JsonValue.Create("room-orchestration-fixture")) })
+            Assert.Equal("rejected", Reply(await vm.ExecuteMistletoeWebCoreAsync(request, "r", true, Recorder(seen)))["status"]!.GetValue<string>());
+        Assert.Empty(seen);
+    }
+
+    [Fact]
     public async Task IdentityReportsOwnershipWithoutExecuting_AndWrongInstanceIsRejected()
     {
         var (vm, seen) = NewVm();

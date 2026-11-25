@@ -23,6 +23,7 @@ public partial class CommandExecutor
     /// **null＝既有直启路径逐字不变**（未向旧用户强制切换；接线由组合根显式注入）。
     /// </summary>
     private readonly Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? _externalStartAdmission;
+    private readonly Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? _roomOrchestrationAdmission;
 
     /// <summary>[另案②] Resume 策略 task_busy 重试窗口标志（0/1，Interlocked 访问）。
     /// 窗口内 BGI 侧中断上下文是"待重试的恢复"而非孤儿残留——孤儿对账与按键清账
@@ -251,7 +252,8 @@ public partial class CommandExecutor
     public CommandExecutor(BgiProcessMonitor monitor, string bgiPath, Func<BgiExternalClient?>? externalClientProvider = null,
         Action<string>? logger = null, Func<bool>? isBatchInFlight = null,
         Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? externalStartAdmission = null,
-        Func<Task>? recoverOnlineHandoff = null)
+        Func<Task>? recoverOnlineHandoff = null,
+        Func<ExternalStartAdmissionRequest, CancellationToken, Task<ExternalStartAdmissionOutcome>>? roomOrchestrationAdmission = null)
     {
         _monitor = monitor;
         _bgiPath = bgiPath;
@@ -259,6 +261,7 @@ public partial class CommandExecutor
         _log = logger;
         _isBatchInFlight = isBatchInFlight;
         _externalStartAdmission = externalStartAdmission;
+        _roomOrchestrationAdmission = roomOrchestrationAdmission;
         _recoverOnlineHandoff = recoverOnlineHandoff;
     }
 

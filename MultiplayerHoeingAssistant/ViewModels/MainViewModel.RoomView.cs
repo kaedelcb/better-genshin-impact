@@ -30,10 +30,11 @@ public partial class MainViewModel
     {
         get
         {
-            var raw = _config?.ViewedRoomProfileId;
+            var config = RoomViewConfig;
+            var raw = config?.ViewedRoomProfileId;
             if (string.IsNullOrWhiteSpace(raw) || string.Equals(raw, AssistConfig.AllRoomsViewId, StringComparison.Ordinal))
                 return AssistConfig.AllRoomsViewId;
-            if (_config?.RoomProfiles.Any(p => string.Equals(p.Id, raw, StringComparison.Ordinal)) == true)
+            if (config?.RoomProfiles.Any(p => string.Equals(p.Id, raw, StringComparison.Ordinal)) == true)
                 return raw;
             return AssistConfig.AllRoomsViewId;
         }
@@ -43,39 +44,45 @@ public partial class MainViewModel
 
     public AssistantRoomProfile? ViewedRoomProfile => IsViewingAllRooms
         ? null
-        : _config?.RoomProfiles.FirstOrDefault(p => string.Equals(p.Id, ViewedRoomProfileId, StringComparison.Ordinal));
+        : RoomViewConfig?.RoomProfiles.FirstOrDefault(p => string.Equals(p.Id, ViewedRoomProfileId, StringComparison.Ordinal));
 
     public bool IsViewingActiveRoom => !IsViewingAllRooms
         && ViewedRoomProfile is not null
-        && ActiveRoomProfile is not null
-        && string.Equals(ViewedRoomProfile.Id, ActiveRoomProfile.Id, StringComparison.Ordinal);
+        && string.Equals(ViewedRoomProfile.Id, RoomViewConfig?.ActiveRoomProfileId, StringComparison.Ordinal);
 
     public bool IsViewingReadOnlyRoom => !IsViewingAllRooms
         && ViewedRoomProfile is not null
         && !IsViewingActiveRoom;
 
-    /// <summary>底部快捷指令是否允许对当前视图执行（查看其他只读房间时禁用，防止误操作到登录房间）。</summary>
-    public bool CanOperateDisplayedRoom => !IsViewingReadOnlyRoom;
+    /// <summary>底部快捷指令是否允许对当前视图执行（其他房间或编排页不执行批量快捷指令）。</summary>
+    public bool CanOperateDisplayedRoom => !IsShowingRoomOrchestration && !IsViewingReadOnlyRoom;
+    public bool IsDisplayingAllRoomsView => !IsShowingRoomOrchestration && IsViewingAllRooms;
+    public bool IsHeaderViewingReadOnlyRoom => !IsShowingRoomOrchestration && IsViewingReadOnlyRoom;
 
-    public string HeaderViewingRoomName => IsViewingAllRooms
+    public string HeaderViewingRoomName => IsShowingRoomOrchestration ? "任务编排" : IsViewingAllRooms
         ? "所有房间"
         : TruncateRoomLabel(ViewedRoomProfile?.Name, 4, "未选择");
 
-    public string HeaderViewingRoomFullName => IsViewingAllRooms
+    public string HeaderViewingRoomFullName => IsShowingRoomOrchestration ? "任务编排" : IsViewingAllRooms
         ? "所有房间"
         : string.IsNullOrWhiteSpace(ViewedRoomProfile?.Name) ? "未选择" : ViewedRoomProfile!.Name;
 
-    public string HeaderViewingRoomToolTip => IsViewingAllRooms
-        ? "当前耕地机页面正在查看：所有房间（其他房间成员支持单卡片远控；底部快捷指令作用于当前登录房间）"
-        : IsViewingActiveRoom
-            ? $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（当前登录房间）"
-            : $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（支持单卡片远控；底部快捷指令仅作用于当前登录房间）";
+    public string HeaderViewingRoomToolTip => IsShowingRoomOrchestration
+        ? "任务编排：本机各房间的联机绑定、完成动作和最近确认的接续状态。打开房间面板可返回成员列表。"
+        : IsViewingAllRooms
+            ? "当前耕地机页面正在查看：所有房间（其他房间成员支持单卡片远控；底部快捷指令作用于当前登录房间）"
+            : IsViewingActiveRoom
+                ? $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（当前登录房间）"
+                : $"当前耕地机页面正在查看：{HeaderViewingRoomFullName}（支持单卡片远控；底部快捷指令仅作用于当前登录房间）";
 
-    public string AllRoomsCountText => _config?.RoomProfiles is { Count: > 0 } rooms
+    public string AllRoomsCountText => RoomViewConfig?.RoomProfiles is { Count: > 0 } rooms
         ? $"{rooms.Count} 个房间"
         : "暂无房间";
 
-    public string RoomViewNoticeText
+    public string RoomViewNoticeText => string.Join("\n", new[] { RoomViewPreferenceMessage, RoomConnectionsNoticeText }
+        .Where(text => !string.IsNullOrWhiteSpace(text)));
+
+    private string RoomConnectionsNoticeText
     {
         get
         {
@@ -136,14 +143,12 @@ public partial class MainViewModel
             ? AssistConfig.AllRoomsViewId
             : targetId;
 
-        if (_config is not null && !string.Equals(_config.ViewedRoomProfileId, normalized, StringComparison.Ordinal))
+        var returningFromOrchestration = IsShowingRoomOrchestration;
+        if (_config is not null)
         {
-            _config.ViewedRoomProfileId = normalized;
-            if (persist && _configManager is not null && !_configTransferInProgress)
-            {
-                _configManager.TrySave(_config);
-            }
+            SetRoomViewPreference(false, normalized, persist);
         }
+        if (returningFromOrchestration) CurrentPage = AppPage.Home;
 
         NotifyRoomViewProperties();
         SyncRoomViewSessions();
@@ -157,10 +162,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(ViewedRoomProfile));
         OnPropertyChanged(nameof(IsViewingActiveRoom));
         OnPropertyChanged(nameof(IsViewingReadOnlyRoom));
-        OnPropertyChanged(nameof(CanOperateDisplayedRoom));
-        OnPropertyChanged(nameof(HeaderViewingRoomName));
-        OnPropertyChanged(nameof(HeaderViewingRoomFullName));
-        OnPropertyChanged(nameof(HeaderViewingRoomToolTip));
+        NotifyRoomOrchestrationModeProperties();
         OnPropertyChanged(nameof(AllRoomsCountText));
         OnPropertyChanged(nameof(RoomViewNoticeText));
     }

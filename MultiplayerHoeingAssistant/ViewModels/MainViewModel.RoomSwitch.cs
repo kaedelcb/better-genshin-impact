@@ -113,6 +113,7 @@ public partial class MainViewModel
 
     internal void CancelWaitingAssistantRoomSwitch()
     {
+        CancelRoomOrchestrationPending("用户取消待切换房间", revokeOnline: false);
         try { Volatile.Read(ref _assistantRoomSwitchCancellation)?.Cancel(); }
         catch (ObjectDisposedException) { }
     }
@@ -206,10 +207,14 @@ public partial class MainViewModel
 
     private async Task<FlowRoomSwitchResult> SwitchAssistantRoomCoreAsync(string profileId,
         Func<CancellationToken, Task>? verifySource, string? expectedSourceRoom, CancellationToken ct,
-        bool waitForOnlineRound = false)
+        bool waitForOnlineRound = false, RoomOrchestrationIntent? orchestration = null)
     {
         if (ct.IsCancellationRequested) return new(false, false, "切房已取消，未提交");
-        if (!_assistantRoomSwitchGate.Wait(0)) return new(false, false, "切换忙");
+        var replaced = orchestration is null && CancelRoomOrchestrationPending("有更新的手动或流程切房请求", revokeOnline: false);
+        // A manual/flow request superseding an automatic waiter may briefly wait for that
+        // waiter's cancellation to release the existing gate. Other callers retain immediate busy.
+        if (replaced ? !await _assistantRoomSwitchGate.WaitAsync(TimeSpan.FromSeconds(5), ct)
+            : !_assistantRoomSwitchGate.Wait(0)) return new(false, false, "切换忙");
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _assistantRoomSwitchCancellation = cancel;
         var token = cancel.Token;
@@ -229,6 +234,7 @@ public partial class MainViewModel
             using var transferOperation = transfer;
             config.EnsureLocalRoomProfile();
             var source = config.ActiveRoomProfile;
+            var sourceKey = GetRoomOrchestrationKey(source);
             if (config.RoomProfiles.SingleOrDefault(p => p.Id == profileId) is not { } target)
                 return new(false, false, "找不到目标房间档案");
             if (!RoomServerAddress.TryNormalize(config.GetRoomServerUrl(target), out var targetServer))
@@ -285,6 +291,9 @@ public partial class MainViewModel
                     await Task.Delay(250, wait.Token);
                     continue;
                 }
+                if (orchestration is not null && !UpdateRoomOrchestrationExecution(orchestration.Id, old => old with
+                    { SwitchState = "switching", Message = "正在确认原房间允许安全离开" }))
+                    throw new IOException("编排接续记录未保存，未提交离房");
                 RecordAssistantRoomSwitch(record);
                 // No outbound command or automatic reconnect can reassign the source during the leave.
                 submittedLeave = true;
@@ -304,6 +313,9 @@ public partial class MainViewModel
                 _connectionAttemptGate.Release();
                 connectionGate = false;
                 SetRoomSwitchStatus("等待切换到「" + target.Name + "」：当前房间仍在等待或收尾");
+                if (orchestration is not null)
+                    UpdateRoomOrchestrationExecution(orchestration.Id, old => old with
+                    { SwitchState = "waiting", Message = "本机已清理，等待原房间队友结束或收尾" });
                 await Task.Delay(750, wait.Token);
             }
 
@@ -352,6 +364,8 @@ public partial class MainViewModel
                 joinBudget.Token.ThrowIfCancellationRequested();
                 if (!ReferenceEquals(_config, config) || config.StandaloneMode || _disposing)
                     throw new OperationCanceledException("设置或运行模式已变化");
+                if (orchestration is not null)
+                    PrepareRoomOrchestrationCutover(orchestration, candidate.DesktopControlContext);
                 var previous = source ?? new AssistantRoomProfile();
                 previous.Capture(config);
                 var previousTargetFireDate = target.ScheduledOnlineLastFireDate;
@@ -377,6 +391,8 @@ public partial class MainViewModel
                 Interlocked.Increment(ref _controlContextVersion);
                 candidate.ControlContext = CurrentControlContext();
                 candidate.CoordinateRoomJoin = CoordinateControlRoomJoinAsync;
+                PublishCoordinatedResetFenceRoom(candidate);
+                if (sourceKey is not null) RevokeRoomOrchestrationOnline("已离开原房间", departed: sourceKey);
                 _intentLifecycle.ChangeAssistantRoom(newSuppression);
                 Volatile.Write(ref _roomSwitchCommittedAtUtc, DateTime.UtcNow.Ticks);
                 _lastScheduledFireDate = config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
@@ -392,6 +408,7 @@ public partial class MainViewModel
                 candidate.CompleteRoomSwitch();
                 _controlAuthority.Publish(candidate, candidate.ControlContext);
                 ClearAssistantRoomSwitchRecord();
+                if (orchestration is not null) ConfirmRoomOrchestrationCutover(orchestration);
                 IsConnected = true;
                 OnPropertyChanged(nameof(RoomCode));
                 NotifyRoomProfiles();
@@ -407,7 +424,26 @@ public partial class MainViewModel
             candidate = null;
             SetRoomSwitchStatus("已切换到「" + target.Name + "」");
             committed.DispatchPreparedRoomCommands();
-            ObserveOnlineTask(committed.RestoreCoordinatedAuthorityAsync(), "核对目标房间联机批次");
+            // The automatic second stage must not race the target's batch-current restore.
+            // Existing manual and independent BGI switches retain their asynchronous behavior.
+            if (orchestration is not null)
+            {
+                try { await committed.RestoreCoordinatedAuthorityAsync(token); }
+                catch (Exception ex)
+                {
+                    // The target room is already confirmed and the local profile committed. A
+                    // cancelled/failed successor eligibility read cannot turn a real switch into
+                    // an unknown leave/join transaction or authorize a rollback to the old room.
+                    AddLog("已切换房间，目标批次待核对，未推进自动后继：" + ex.Message);
+                    CancelRoomOrchestrationPending("目标房间批次核对未确认，未推进自动后继", revokeOnline: false, revokeBatch: false);
+                    UpdateRoomOrchestrationExecution(orchestration.Id, old => old with
+                    {
+                        SwitchState = "switched", PostState = old.Target.RunAfterSwitch ? "cancelled" : "none",
+                        Message = "房间已确认切换；目标批次尚未核对，未自动启动后继"
+                    });
+                }
+            }
+            else ObserveOnlineTask(committed.RestoreCoordinatedAuthorityAsync(), "核对目标房间联机批次");
             ObserveOnlineTask(ReportStatusAsync(), "切房后状态上报");
             return new(true, false, RoomSwitchStatus, committed.DesktopControlContext);
         }
@@ -478,7 +514,11 @@ public partial class MainViewModel
     private ControlStatus BuildTargetRoomStatus(AssistConfig config, AssistantRoomProfile profile)
     {
         var local = LatestLocalStatus;
-        var completionConfig = new AssistConfig();
+        var completionConfig = new AssistConfig
+        {
+            RoomProfiles = config.RoomProfiles.ToList(), ActiveRoomProfileId = profile.Id,
+            ServerUrl = config.GetRoomServerUrl(profile), PlayerUid = config.PlayerUid
+        };
         profile.ApplyTo(completionConfig);
         return new ControlStatus
         {
@@ -489,7 +529,7 @@ public partial class MainViewModel
             ScheduledOnlineTime = profile.ScheduledOnlineTime, ExpectedHoeingPlayers = profile.ExpectedHoeingPlayers,
             OnlineHoeingGroupNames = [.. profile.OnlineHoeingGroupNames], OnlineHoeingGroupTypes = [.. profile.OnlineHoeingGroupTypes],
             QuickCommands = new(profile.QuickCommands),
-            HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(CompletionPolicyFields.Snapshot(completionConfig)),
+            HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(CompletionPolicyFields.Snapshot(completionConfig), completionConfig),
             TaskStatusAvailable = local?.HasFreshTaskStatus(DateTimeOffset.UtcNow) == true,
             TaskRunning = local?.TaskRunning == true, CurrentTaskName = local?.CurrentTaskName,
         };

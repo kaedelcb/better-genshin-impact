@@ -121,6 +121,10 @@ public partial class MainViewModel
         }
         if (!owner)
             return WebReply("denied", "此浏览器尚未获得本人授权：请在执行端助手「设置 → 网页授权」生成授权码后输入", instanceId: instance);
+        if (operation.StartsWith("room.orchestration.", StringComparison.Ordinal)
+            || operation == "operation.get" && request["payload"] is JsonValue operationValue
+                && operationValue.TryGetValue<string>(out var operationId) && operationId.StartsWith("room-orchestration-", StringComparison.Ordinal))
+            return WebReply("rejected", "任务编排暂仅开放桌面助手，网页端未启用", instanceId: instance);
         if (operation.StartsWith(BgiWebUpdatePrefix, StringComparison.Ordinal))
             return await ExecuteBgiWebUpdateAsync(operation, request, local, config);
         if (!IsExecutorMode && operation.StartsWith("task.", StringComparison.Ordinal))

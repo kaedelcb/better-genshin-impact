@@ -10,6 +10,56 @@ public partial class MainViewModel
     private string? _lastCoordinatedAdmissionContext;
     private int _lastCoordinatedAdmissionGeneration;
 
+    private sealed record CoordinatedResetRoom(string Server, string RoomCode, string Uid);
+    private readonly Dictionary<CoordinatedResetRoom, int> _coordinatedRoomResetFences = new();
+    private CoordinatedResetRoom? _resetFenceRoom;
+
+    private CoordinatedResetRoom? GetConfiguredResetRoom()
+        => _config is { PlayerUid.Length: > 0 } config && !string.IsNullOrWhiteSpace(RoomCode)
+            && Services.RoomServerAddress.TryNormalize(config.ServerUrl, out var server)
+            ? new(server, RoomCode, config.PlayerUid) : null;
+
+    // A process-local generation only has meaning in its authoritative server/room. Preserve
+    // the previous room's fence on return and when replacing the transport for the same room.
+    private void PublishCoordinatedResetFenceRoom(Services.SignalRClient client)
+    {
+        lock (_batchGate)
+        {
+            var room = GetConfiguredResetRoom();
+            if (room is null || client.ControlContext != CurrentControlContext()
+                || client.CurrentRoomCode != room.RoomCode || !Services.RoomServerAddress.Same(client.CurrentServerUrl, room.Server)) return;
+            if (_resetFenceRoom == room) return;
+            if (_resetFenceRoom is { } previous) _coordinatedRoomResetFences[previous] = _resetFenceGeneration;
+            _resetFenceRoom = room;
+            _resetFenceGeneration = _coordinatedRoomResetFences.GetValueOrDefault(room);
+        }
+    }
+
+    private int ReadCoordinatedResetFence()
+    {
+        lock (_batchGate)
+        {
+            var room = GetConfiguredResetRoom();
+            // A local stop issued while disconnected still fences only its saved room. That
+            // room's stored value is also read before the next connection is published.
+            return room is null ? 0 : room == _resetFenceRoom ? _resetFenceGeneration
+                : _coordinatedRoomResetFences.GetValueOrDefault(room);
+        }
+    }
+
+    private void AdvanceCoordinatedResetFence(int generation, string? expectedContext = null)
+    {
+        lock (_batchGate)
+        {
+            if (expectedContext is not null && expectedContext != CurrentControlContext()) return;
+            if (GetConfiguredResetRoom() is not { } room) return;
+            if (_resetFenceRoom == room)
+                _resetFenceGeneration = Math.Max(_resetFenceGeneration, generation);
+            else
+                _coordinatedRoomResetFences[room] = Math.Max(_coordinatedRoomResetFences.GetValueOrDefault(room), generation);
+        }
+    }
+
     // Server generations distinguish a lagging local batch from a real successor.
     // Batch-id inequality alone cannot tell these two cases apart.
     internal static bool ResetTargetsSuccessor(string? activeBatchId, int activeGeneration,

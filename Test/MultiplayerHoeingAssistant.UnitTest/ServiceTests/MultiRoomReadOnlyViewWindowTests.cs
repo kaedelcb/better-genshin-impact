@@ -3,7 +3,9 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
@@ -244,6 +246,11 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         Assert.True(popup.IsOpen);
 
                         selector.SelectedItem = secondRoom;
+                        // Programmatic selected-item sync is not a user's view switch.
+                        Assert.True(vm.IsViewingAllRooms);
+                        var selectedRow = (ListBoxItem)selector.ItemContainerGenerator.ContainerFromItem(secondRoom);
+                        selectedRow.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                        { RoutedEvent = UIElement.PreviewMouseLeftButtonUpEvent, Source = selectedRow });
                         await Task.Delay(80);
                         selector.UpdateLayout();
                         cardsControl.UpdateLayout();
@@ -289,6 +296,149 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         Assert.True(quickCommands.IsEnabled);
                         Assert.Equal(3, vm.DisplayedMembers.Count);
 
+                        // Monitoring mode exposes the same entry and remembers both directions.
+                        // The unconnected monitor must not display its local room mirror as executor data.
+                        var testConfig = vm.Config!;
+                        var monitorManager = new AssistConfigManager();
+                        Assert.True(monitorManager.TrySave(testConfig));
+                        typeof(MainViewModel).GetField("_configManager", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm, monitorManager);
+                        testConfig.StandaloneMode = true; // no network access from the UI fixture
+                        if (!popup.IsOpen) trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(70);
+                        var monitorEntry = (Button)window.FindName("RoomOrchestrationEntryButton");
+                        Assert.Equal(Visibility.Visible, monitorEntry.Visibility);
+                        monitorEntry.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(70);
+                        Assert.True(vm.IsShowingRoomOrchestration);
+                        Assert.True(monitorManager.Load().ShowRoomOrchestration);
+                        Assert.Equal("任务编排", viewingLabel.Text);
+                        Assert.Empty(vm.GetRoomOrchestrationPresentation().Cards);
+                        Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("RoomOrchestrationHomeContent")).Visibility);
+                        var monitorRestart = new MainViewModel(); monitorRestart.PrimeStartupRoomView(monitorManager.Load());
+                        Assert.True(monitorRestart.IsShowingRoomOrchestration);
+                        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(70);
+                        monitorEntry.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(70);
+                        Assert.False(vm.IsShowingRoomOrchestration);
+                        Assert.False(monitorManager.Load().ShowRoomOrchestration);
+                        Assert.Equal(activeRoom.Id, vm.ActiveRoomProfile!.Id);
+                        testConfig.StandaloneMode = false;
+                        // Enter the dedicated Home content in an executor fixture, without creating a BGI or network connection.
+                        testConfig.ObserverMode = false;
+                        testConfig.OnlineHoeingGroupNames = ["罐传精英", "精英收尾"];
+                        testConfig.OnlineHoeingGroupTypes = ["group", "group"];
+                        secondRoom.OnlineHoeingGroupNames = ["精英讨伐"];
+                        secondRoom.OnlineHoeingGroupTypes = ["group"];
+                        CompletionPolicyFields.ApplyForProfile(testConfig, activeRoom.Id, new TaskConflictPolicySettings
+                        { Policy = TaskConflictPolicy.Stop, RoomSwitch = RoomSwitchCompletion.Choices(testConfig, activeRoom.Id).Single() });
+                        // Add a multi-room route and an independent profile to exercise the actual
+                        // vertical scroller, while keeping all execution/connection facts synthetic and isolated.
+                        var third = new AssistantRoomProfile { Id = "room-third", Name = "地脉房", RoomCode = "C12345",
+                            ServerUrl = activeRoom.ServerUrl, TeamUids = ["100000001"], OnlineHoeingGroupNames = ["地脉循环"], OnlineHoeingGroupTypes = ["group"] };
+                        var fourth = new AssistantRoomProfile { Id = "room-fourth", Name = "素材采集房", RoomCode = "D09281",
+                            ServerUrl = activeRoom.ServerUrl, TeamUids = ["100000001"], OnlineHoeingGroupNames = ["素材采集与日常准备"], OnlineHoeingGroupTypes = ["group"] };
+                        var fifth = new AssistantRoomProfile { Id = "room-fifth", Name = "每日任务房", RoomCode = "E07126",
+                            ServerUrl = activeRoom.ServerUrl, TeamUids = ["100000001"], OnlineHoeingGroupNames = ["日常准备"], OnlineHoeingGroupTypes = ["group"] };
+                        testConfig.RoomProfiles.AddRange([third, fourth, fifth]);
+                        foreach (var (sourceId, targetId) in new[] { (secondRoom.Id, third.Id), (third.Id, fourth.Id) })
+                            CompletionPolicyFields.ApplyForProfile(testConfig, sourceId, new TaskConflictPolicySettings
+                            { Policy = TaskConflictPolicy.Stop, RoomSwitch = RoomSwitchCompletion.Choices(testConfig, sourceId).Single(x => x.TargetProfileId == targetId) });
+                        var displayState = (RoomOrchestrationStateStore)typeof(MainViewModel).GetField("_roomOrchestrationState", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
+                        var key = vm.GetRoomOrchestrationKey(activeRoom)!;
+                        displayState.Begin(key, "fixture-room-completed", 1, [new("罐传精英", "group"), new("精英收尾", "group")]);
+                        displayState.SetItem(key, "fixture-room-completed", 1, 0, "completed", "");
+                        displayState.SetItem(key, "fixture-room-completed", 1, 1, "completed", "");
+                        displayState.SetPhase(key, "fixture-room-completed", 1, "succeeded", "最近一轮已确认完成", settled: true);
+                        typeof(MainViewModel).GetMethod("NotifyRoomProfiles", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null);
+                        // Establish a real isolated configuration store so the test verifies persistence, not only in-memory selection.
+                        var manager = new AssistConfigManager();
+                        Assert.True(manager.TrySave(testConfig));
+                        typeof(MainViewModel).GetField("_configManager", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm, manager);
+                        var otherRoomEdit = vm.ReadRoomOrchestrationEdit(secondRoom.Id);
+                        var activeBindingBefore = testConfig.OnlineHoeingGroupNames.ToArray();
+                        vm.CommitRoomOrchestrationEdit(otherRoomEdit, new RoomOrchestrationEditChanges(ExpectedPlayers: 3, Schedule: "19:30"), null);
+                        Assert.Equal(activeBindingBefore, testConfig.OnlineHoeingGroupNames);
+                        Assert.Equal(activeRoom.Id, testConfig.ActiveRoomProfileId);
+                        Assert.Equal(3, secondRoom.ExpectedHoeingPlayers);
+                        Assert.Equal("19:30", secondRoom.ScheduledOnlineTime);
+                        Assert.Equal(third.Id, secondRoom.OnlineHoeingRoomSwitchCompletion?.TargetProfileId);
+                        Assert.Equal(3, manager.Load().RoomProfiles.Single(p => p.Id == secondRoom.Id).ExpectedHoeingPlayers);
+                        Assert.Throws<InvalidOperationException>(() => vm.CommitRoomOrchestrationEdit(otherRoomEdit,
+                            new RoomOrchestrationEditChanges(ExpectedPlayers: 2), null));
+                        typeof(MainViewModel).GetMethod("NotifyModeBindings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null);
+                        var orchestrationEntry = (Button)window.FindName("RoomOrchestrationEntryButton");
+                        var graphPage = (FrameworkElement)window.FindName("RoomOrchestrationHomeContent");
+                        if (!popup.IsOpen) trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(80);
+                        orchestrationEntry.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(80);
+                        Assert.True(vm.IsShowingRoomOrchestration);
+                        Assert.True(manager.Load().ShowRoomOrchestration);
+                        Assert.Empty(vm.RoomViewPreferenceMessage);
+                        var restartedPreview = new MainViewModel();
+                        restartedPreview.PrimeStartupRoomView(manager.Load());
+                        Assert.True(restartedPreview.IsShowingRoomOrchestration);
+                        Assert.Equal("任务编排", restartedPreview.HeaderViewingRoomName);
+                        Assert.Equal("任务编排", viewingLabel.Text);
+                        Assert.Equal(Visibility.Visible, graphPage.Visibility);
+                        Assert.Equal(activeRoom.Id, vm.ActiveRoomProfile?.Id);
+                        Assert.True(vm.IsViewingAllRooms);
+                        foreach (var width in new[] { 1180d, 980d })
+                        {
+                            window.Width = width;
+                            window.Height = width == 980 ? 720 : 860;
+                            window.UpdateLayout();
+                            var graph = (RoomOrchestrationPage)graphPage;
+                            graph.RefreshPresentation();
+                            await Task.Delay(80);
+                            window.UpdateLayout();
+                            var scroll = (ScrollViewer)graph.FindName("RoomGraphScrollViewer");
+                            var presentationRoot = (Grid)graph.FindName("PresentationRoot");
+                            Assert.Equal(2, presentationRoot.RowDefinitions.Count);
+                            Assert.Equal(2, presentationRoot.Children.Count);
+                            Assert.Equal(1, Grid.GetRow(scroll));
+                            Assert.Equal(ScrollBarVisibility.Disabled, scroll.HorizontalScrollBarVisibility);
+                            Assert.True(scroll.ActualWidth > 0 && scroll.ActualHeight > 0);
+                            Assert.Equal(5, vm.GetRoomOrchestrationPresentation().Cards.Length);
+                            Assert.True(vm.GetRoomOrchestrationPresentation().Cards[0].CompletedCount == 2);
+                            var visual = (UIElement)window.Content;
+                            var image = new RenderTargetBitmap((int)Math.Ceiling(visual.RenderSize.Width), (int)Math.Ceiling(visual.RenderSize.Height), 96, 96, PixelFormats.Pbgra32);
+                            image.Render(visual);
+                            var encoder = new PngBitmapEncoder();
+                            encoder.Frames.Add(BitmapFrame.Create(image));
+                            Directory.CreateDirectory(AssistantDataDirectory.Root);
+                            using var output = File.Create(Path.Combine(AssistantDataDirectory.Root, $"room-orchestration-wpf-{width:0}.png"));
+                            encoder.Save(output);
+                            if (scroll.ScrollableHeight > 1)
+                            {
+                                scroll.ScrollToEnd();
+                                window.UpdateLayout();
+                                Assert.True(scroll.VerticalOffset > 0);
+                                scroll.ScrollToHome();
+                            }
+                        }
+                        window.Width = 1180;
+                        trigger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                        await Task.Delay(80);
+                        selector.SelectedItem = secondRoom;
+                        Assert.True(vm.IsShowingRoomOrchestration); // a refresh cannot leave the remembered graph
+                        Assert.True(vm.IsViewingAllRooms);
+                        var roomRow = (ListBoxItem)selector.ItemContainerGenerator.ContainerFromItem(secondRoom);
+                        roomRow.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                        { RoutedEvent = UIElement.PreviewMouseLeftButtonUpEvent, Source = roomRow });
+                        await Task.Delay(80);
+                        Assert.False(vm.IsShowingRoomOrchestration);
+                        Assert.Equal(secondRoom.Id, vm.ViewedRoomProfileId);
+                        Assert.Equal(activeRoom.Id, vm.ActiveRoomProfile?.Id);
+                        var reloaded = manager.Load();
+                        Assert.False(reloaded.ShowRoomOrchestration);
+                        Assert.Equal(secondRoom.Id, reloaded.ViewedRoomProfileId);
+                        Assert.Equal(activeRoom.Id, reloaded.ActiveRoomProfileId);
+                        var returnedPreview = new MainViewModel();
+                        returnedPreview.PrimeStartupRoomView(reloaded);
+                        Assert.False(returnedPreview.IsShowingRoomOrchestration);
+                        Assert.Equal(secondRoom.Id, returnedPreview.ViewedRoomProfileId);
                         popup.IsOpen = false;
                         done.SetResult();
                     }

@@ -287,7 +287,9 @@ public sealed partial class TaskCenterHost
             {
                 var driving = runs.Where(r => !r.StopRequested && (_drives.ContainsKey(r.WorkflowId)
                         || r.OnlineHoeingGateParked && r.State == WorkflowRunState.LocalWaitParking)
-                    && r.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking)
+                    && (r.State is WorkflowRunState.Running or WorkflowRunState.Waiting or WorkflowRunState.LocalWaitParking
+                        || r.State == WorkflowRunState.Planned && IsRoomOrchestrationWorkflowRun(r)
+                            && _drives.TryGetValue(r.WorkflowId, out var accepted) && accepted.RunId == r.RunId))
                     .ToList();
                 if (driving.Count > 1)
                     return new OnlineHoeingPreparation(false, null, "空隙中存在多条在驱动计划，无法唯一绑定恢复对象");
@@ -674,7 +676,7 @@ public sealed partial class TaskCenterHost
             if (current is null || !IsPendingOnlineWaiter(current)) continue;
             // The original Runner consumes this marker in the same write that changes it to Running.
             // A refusal or failed publication therefore cannot lose the only automatic wake request.
-            var resumed = await ResumeRunAsync(parked.RunId).ConfigureAwait(false);
+            var resumed = await ResumeRunCoreAsync(parked.RunId, notifyNewIntent: false).ConfigureAwait(false);
             if (!resumed.Ok) _log?.Invoke("[任务中心] 锄地后等待计划未能自动接续：" + resumed.Message);
             var remaining = _runs.Load(parked.RunId);
             pending |= remaining is not null && IsPendingOnlineWaiter(remaining);
@@ -926,7 +928,7 @@ public sealed partial class TaskCenterHost
         if (afterOpen.IsTerminal || IsDriving(afterOpen.WorkflowId)) return true;
         if (afterOpen.State == WorkflowRunState.LocalWaitParking)
         {
-            var resumed = await ResumeRunAsync(runId).ConfigureAwait(false);
+            var resumed = await ResumeRunCoreAsync(runId, notifyNewIntent: false).ConfigureAwait(false);
             if (!resumed.Ok && !released.StateContinuation)
                 MarkReleasedGapUnknown(runId, resumed.Message);
             return resumed.Ok;

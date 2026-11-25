@@ -35,6 +35,13 @@ public enum OnlineEdgeResult
 /// </summary>
 public sealed class OnlineIntentLifecycle
 {
+    /// <summary>Only the currently armed/executing orchestration intent, never a historical generation lookup.</summary>
+    internal sealed record OrchestrationOrigin(string IntentId, int Generation, string ControlContext);
+    private OrchestrationOrigin? _orchestrationOrigin;
+    internal OrchestrationOrigin? CurrentOrchestrationOrigin
+    {
+        get { lock (_gate) return _orchestrationOrigin; }
+    }
     private readonly object _gate = new();
     private readonly Action<string> _log;
 
@@ -151,6 +158,10 @@ public sealed class OnlineIntentLifecycle
     /// 返回 Accepted 时 genToReport 为应上报的 generation（SignalR 调用留在调用方）。
     /// </summary>
     public OnlineEdgeResult ApplyEdge(int gen, DateTime? triggeredAtUtc, out int genToReport)
+        => ApplyEdge(gen, triggeredAtUtc, out genToReport, null, null);
+
+    internal OnlineEdgeResult ApplyEdge(int gen, DateTime? triggeredAtUtc, out int genToReport,
+        string? orchestrationIntentId, string? orchestrationContext)
     {
         string? pendingLog = null;
         string? transitionLog = null;
@@ -220,6 +231,8 @@ public sealed class OnlineIntentLifecycle
                     // 避免历史高 gen 压住本轮（守卫只应防同一轮重复执行，不应跨轮压制新轮）
                     transitionLog = TransitionLocked(OnlineIntentState.Armed, $"边沿上线意图 generation={gen}");
                     _armedIntentGeneration = gen;
+                    _orchestrationOrigin = orchestrationIntentId is { Length: > 0 } && orchestrationContext is { Length: > 0 }
+                        ? new(orchestrationIntentId, gen, orchestrationContext) : null;
                     _onlineMode = "command";
                     _lastProcessedAllReadyGeneration = 0;
                     genToReport = gen;
@@ -238,7 +251,9 @@ public sealed class OnlineIntentLifecycle
     /// [P1] 本地上线意图（定时/手动）：gen 自增+写盘+清零 AllReady 执行守卫+置 Armed，返回新 gen。
     /// 连接就绪判定依赖 SignalRClient，留在 MainViewModel——未就绪时不调用本方法（不增 gen、不置 Armed）。
     /// </summary>
-    public int RaiseLocalIntent(string mode)
+    public int RaiseLocalIntent(string mode) => RaiseLocalIntent(mode, null, null);
+
+    internal int RaiseLocalIntent(string mode, string? orchestrationIntentId, string? orchestrationContext)
     {
         string? transitionLog;
         int gen;
@@ -247,6 +262,8 @@ public sealed class OnlineIntentLifecycle
             if (_activeCoordinatedBatchId is not null) return _localOnlineGeneration;
             gen = ++_localOnlineGeneration;
             _armedIntentGeneration = gen;
+            _orchestrationOrigin = orchestrationIntentId is { Length: > 0 } && orchestrationContext is { Length: > 0 }
+                ? new(orchestrationIntentId, gen, orchestrationContext) : null;
             // S3：自增后立即写盘，保证重启后单调递增。写盘失败仅记日志，不影响本次上线事件。
             PersistLocalGenerationLocked(gen);
             // 新一轮上线意图：清掉 AllReady 执行守卫的旧轮次残留
@@ -259,14 +276,18 @@ public sealed class OnlineIntentLifecycle
         return gen;
     }
 
-    public bool TryBeginCoordinatedBatch(string batchId, int generation, bool manual, int? intentGeneration, bool resuming = false)
+    public bool TryBeginCoordinatedBatch(string batchId, int generation, bool manual, int? intentGeneration, bool resuming = false,
+        string? expectedOrchestrationIntentId = null, string? expectedOrchestrationContext = null)
     {
         string? log;
         lock (_gate)
         {
             if (_activeCoordinatedBatchId is not null) return _activeCoordinatedBatchId == batchId;
-            if (!manual && !resuming && (_state != OnlineIntentState.Armed || intentGeneration != _armedIntentGeneration)) return false;
+            if (!manual && !resuming && (_state != OnlineIntentState.Armed || intentGeneration != _armedIntentGeneration
+                || _orchestrationOrigin?.IntentId != expectedOrchestrationIntentId
+                || _orchestrationOrigin?.ControlContext != expectedOrchestrationContext)) return false;
             _activeCoordinatedBatchId = batchId;
+            if (manual || resuming) _orchestrationOrigin = null;
             _pendingOnlineReportGen = 0;
             log = TransitionLocked(OnlineIntentState.Executing, $"联机批次已受理 {batchId}（{(manual ? "一键" : "上线")}）");
         }
@@ -368,17 +389,21 @@ public sealed class OnlineIntentLifecycle
 
     /// <summary>服务端因超时自动清除了当前武装中的上线意图：仅当本地仍处于同一 generation 的 Armed 状态时同步归零。</summary>
     public bool OnServerOnlineExpired(int expiredGeneration)
+        => RevokeArmedIntent(expiredGeneration, $"服务端上线意图超时过期 generation={expiredGeneration}");
+
+    /// <summary>仅撤销指定的尚未开批上线意图，不影响其他独立意图或已成立的批次。</summary>
+    internal bool RevokeArmedIntent(int generation, string reason, string? expectedOrchestrationId = null)
     {
         string? transitionLog = null;
         bool changed = false;
         lock (_gate)
         {
-            if (expiredGeneration > 0
+            if (generation > 0
                 && _state == OnlineIntentState.Armed
-                && _armedIntentGeneration == expiredGeneration)
+                && _armedIntentGeneration == generation
+                && (expectedOrchestrationId is null || _orchestrationOrigin?.IntentId == expectedOrchestrationId))
             {
-                transitionLog = TransitionLocked(OnlineIntentState.Idle,
-                    $"服务端上线意图超时过期 generation={expiredGeneration}");
+                transitionLog = TransitionLocked(OnlineIntentState.Idle, reason);
                 _pendingOnlineReportGen = 0;
                 _armedIntentGeneration = 0;
                 changed = true;
@@ -518,6 +543,7 @@ public sealed class OnlineIntentLifecycle
     /// <summary>锁内状态跃迁：Idle 时顺带复位模式为 none；返回待打日志（锁外触发）。</summary>
     private string? TransitionLocked(OnlineIntentState next, string reason)
     {
+        if (next == OnlineIntentState.Idle) _orchestrationOrigin = null;
         if (_state == next) return null;
         var message = $"[上线意图] {_state} → {next}（{reason}）";
         _state = next;

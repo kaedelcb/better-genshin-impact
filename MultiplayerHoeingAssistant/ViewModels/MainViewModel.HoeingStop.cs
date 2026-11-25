@@ -65,7 +65,7 @@ public partial class MainViewModel
         {
             // The server echo may add an authoritative generation after the local stop has started.
             if (int.TryParse(command.Params?.GetValueOrDefault("hoeingStopGeneration")?.ToString(), out var generation))
-                _resetFenceGeneration = Math.Max(_resetFenceGeneration, generation);
+                AdvanceCoordinatedResetFence(generation);
             if (!string.IsNullOrEmpty(command.CommandId)
                 && _handledAllStops.TryGetValue(command.CommandId, out var existing)) return existing;
             completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -106,10 +106,11 @@ public partial class MainViewModel
             var stopGeneration = batch?.Generation ?? 0;
             if (int.TryParse(command.Params?.GetValueOrDefault("hoeingStopGeneration")?.ToString(), out var remoteGeneration))
                 stopGeneration = Math.Max(stopGeneration, remoteGeneration);
-            _resetFenceGeneration = Math.Max(_resetFenceGeneration, stopGeneration);
+            AdvanceCoordinatedResetFence(stopGeneration);
         }
         try
         {
+            CancelRoomOrchestrationPending("本机全停止", revokeOnline: true);
             _intentLifecycle.OnManualCleared();
             _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
             _resumeTimeoutTimer?.Dispose();
@@ -196,6 +197,8 @@ public partial class MainViewModel
             && Volatile.Read(ref _ordinaryStopInProgress) > 0)
             return new CommandResult { ErrorCode = "stop_in_progress", Message = "正在完成停止，本次启动未发送" };
         if (IsAllStop(command)) return await ExecuteAllStopAsync(command);
+        if (command.Cmd is ("start_group" or "start_oneclick" or "start_bgi" or "hotkey_execute"))
+            NoteRoomOrchestrationNewIntent("有更新的本机任务指令");
         if (command.Cmd != "stop")
             return _commandExecutor is not null
                 ? await _commandExecutor.ExecuteAsync(command)
@@ -233,6 +236,7 @@ public partial class MainViewModel
         }
         try
         {
+            CancelRoomOrchestrationPending("本机停止", revokeOnline: true);
             return _commandExecutor is not null
                 ? await _commandExecutor.ExecuteAsync(command)
                 : new CommandResult { Message = "本机执行器不可用" };

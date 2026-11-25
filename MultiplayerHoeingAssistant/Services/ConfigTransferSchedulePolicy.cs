@@ -22,6 +22,7 @@ internal static class ConfigTransferSchedulePolicy
             || local.OnlineHoeingGroupIndex != imported.OnlineHoeingGroupIndex
             || local.ExpectedHoeingPlayers != imported.ExpectedHoeingPlayers
             || local.OnlineHoeingCompletionPolicy != imported.OnlineHoeingCompletionPolicy
+            || !SameRoomSwitch(local, imported)
             || local.OnlineHoeingSpecifiedTaskType != imported.OnlineHoeingSpecifiedTaskType
             || local.OnlineHoeingSpecifiedTaskName != imported.OnlineHoeingSpecifiedTaskName
             || local.OnlineHoeingSpecifiedTaskPriority != imported.OnlineHoeingSpecifiedTaskPriority
@@ -30,5 +31,23 @@ internal static class ConfigTransferSchedulePolicy
             || local.OnlineHoeingSpecifiedStartTaskName != imported.OnlineHoeingSpecifiedStartTaskName
             || local.OnlineHoeingSpecifiedConfigRevision != imported.OnlineHoeingSpecifiedConfigRevision
             || local.OnlineHoeingSpecifiedWorkflowId != imported.OnlineHoeingSpecifiedWorkflowId;
+    }
+
+    private static bool SameRoomSwitch(AssistConfig previous, AssistConfig imported)
+    {
+        var oldRoom = CompletionPolicyFields.Snapshot(previous).RoomSwitch;
+        var newRoom = CompletionPolicyFields.Snapshot(imported).RoomSwitch;
+        if (oldRoom is null && newRoom is null) return true;
+        // 只要去向、后继方式或已确认身份发生变化（包括失效），旧定时授权不能沿用。
+        // 纯显示名称变化不影响关系。
+        return oldRoom is not null && newRoom is not null && oldRoom.IsValid && newRoom.IsValid
+            && oldRoom.MatchesSource(previous) && oldRoom.MatchesTarget(previous)
+            && newRoom.MatchesSource(imported) && newRoom.MatchesTarget(imported)
+            && oldRoom.SourceProfileId == previous.ActiveRoomProfileId && newRoom.SourceProfileId == imported.ActiveRoomProfileId
+            && oldRoom.SourceProfileId == newRoom.SourceProfileId && oldRoom.TargetProfileId == newRoom.TargetProfileId
+            && RoomServerAddress.Same(oldRoom.SourceServerUrl, newRoom.SourceServerUrl)
+            && RoomServerAddress.Same(oldRoom.TargetServerUrl, newRoom.TargetServerUrl)
+            && oldRoom.SourceRoomCode == newRoom.SourceRoomCode && oldRoom.TargetRoomCode == newRoom.TargetRoomCode
+            && oldRoom.RunAfterSwitch == newRoom.RunAfterSwitch;
     }
 }

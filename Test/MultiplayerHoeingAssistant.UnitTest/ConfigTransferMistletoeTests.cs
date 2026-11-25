@@ -1,5 +1,8 @@
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using Xunit;
 
@@ -155,6 +158,74 @@ public sealed class ConfigTransferMistletoeTests
     [InlineData("flows\\wf-main.flow.json")]
     [InlineData("runs/wf-main.flow.json")]
     public void RuntimeOrTraversalEntryIsNotAPlan(string name) => Assert.False(ConfigTransferMistletoe.IsFlowEntry(name));
+
+    [Fact]
+    public void SwitchSuccessorPlanIdentityAndRevisionFollowTheImportedCopyInEveryRoom()
+    {
+        var plan = Plan("wf-main");
+        var source = Bytes(plan);
+        var revision = Convert.ToHexString(SHA256.HashData(source));
+        var local = (JsonObject)plan.DeepClone(); local["name"] = "本机其他计划";
+        var localBytes = Bytes(local);
+        var config = SwitchPlanConfiguration(revision);
+        var result = ConfigTransferMistletoe.PrepareImport(new Dictionary<string, byte[]>
+        {
+            [Entry("wf-main")] = source,
+            ["assistant-config.json"] = JsonSerializer.SerializeToUtf8Bytes(config)
+        }, new Dictionary<string, byte[]> { [Entry("wf-main")] = localBytes });
+        var imported = JsonSerializer.Deserialize<AssistConfig>(result.Files["assistant-config.json"])!;
+        var id = result.WorkflowIdMap["wf-main"];
+        Assert.NotEqual("wf-main", id);
+        Assert.Equal(id, imported.OnlineHoeingSpecifiedWorkflowId);
+        Assert.Equal(id, imported.RoomProfiles[1].OnlineHoeingSpecifiedWorkflowId);
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(result.Files[Entry(id)])), imported.OnlineHoeingSpecifiedConfigRevision);
+        Assert.Equal(imported.OnlineHoeingSpecifiedConfigRevision, imported.RoomProfiles[1].OnlineHoeingSpecifiedConfigRevision);
+        Assert.Equal("node-one", imported.OnlineHoeingSpecifiedStartTaskId);
+        Assert.Equal(config.OnlineHoeingRoomSwitchCompletion, imported.OnlineHoeingRoomSwitchCompletion);
+        Assert.Equal(config.RoomProfiles[1].OnlineHoeingRoomSwitchCompletion, imported.RoomProfiles[1].OnlineHoeingRoomSwitchCompletion);
+        Assert.Empty(result.Warnings);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UnknownSwitchPlanReferenceNeverAdoptsARevisionFromTheLocalPlan(bool hasPackagePlan)
+    {
+        var source = Bytes(Plan("wf-main"));
+        // 即使本机碰巧有同 ID 同名计划，来源缺失或冻结修订不匹配都不能认为这个后继已确认。
+        var config = SwitchPlanConfiguration("unconfirmed-revision");
+        var entries = new Dictionary<string, byte[]> { ["assistant-config.json"] = JsonSerializer.SerializeToUtf8Bytes(config) };
+        if (hasPackagePlan) entries[Entry("wf-main")] = source;
+        var result = ConfigTransferMistletoe.PrepareImport(entries, new Dictionary<string, byte[]> { [Entry("wf-main")] = source });
+        var imported = JsonSerializer.Deserialize<AssistConfig>(result.Files["assistant-config.json"])!;
+        Assert.Equal("wf-main", imported.OnlineHoeingSpecifiedWorkflowId);
+        Assert.Equal(config.OnlineHoeingRoomSwitchCompletion, imported.OnlineHoeingRoomSwitchCompletion);
+        Assert.Equal(config.RoomProfiles[1].OnlineHoeingRoomSwitchCompletion, imported.RoomProfiles[1].OnlineHoeingRoomSwitchCompletion);
+        Assert.Empty(imported.OnlineHoeingSpecifiedConfigRevision);
+        Assert.Empty(imported.RoomProfiles[1].OnlineHoeingSpecifiedConfigRevision);
+        Assert.Contains(result.Warnings, text => text.Contains("重新选择计划", StringComparison.Ordinal));
+    }
+
+    private static AssistConfig SwitchPlanConfiguration(string revision)
+    {
+        var active = new AssistantRoomProfile { Id = "a", Name = "甲", RoomCode = "AAAAAA", ServerUrl = "https://first.example.test" };
+        var inactive = new AssistantRoomProfile { Id = "b", Name = "乙", RoomCode = "BBBBBB", ServerUrl = "https://second.example.test" };
+        var config = new AssistConfig { RoomProfiles = [active, inactive], ActiveRoomProfileId = active.Id };
+        active.ApplyTo(config);
+        foreach (var profile in config.RoomProfiles)
+        {
+            var settings = new TaskConflictPolicySettings
+            {
+                Policy = TaskConflictPolicy.Stop,
+                RoomSwitch = Assert.Single(RoomSwitchCompletion.Choices(config, profile.Id)) with { RunAfterSwitch = true },
+                SpecifiedTaskType = "workflow", SpecifiedTaskName = "计划", SpecifiedWorkflowId = "wf-main",
+                SpecifiedStartMode = "node", SpecifiedStartTaskId = "node-one", SpecifiedStartTaskName = "daily",
+                SpecifiedConfigRevision = revision
+            };
+            CompletionPolicyFields.ApplyForProfile(config, profile.Id, settings);
+        }
+        return config;
+    }
 
     private static JsonObject Plan(string id) => new()
     {

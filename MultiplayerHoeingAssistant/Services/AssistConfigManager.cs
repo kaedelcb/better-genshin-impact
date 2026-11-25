@@ -151,6 +151,30 @@ public class AssistConfigManager
 
     public bool TrySave(AssistConfig config) => TryStore(config);
 
+    /// <summary>定向编辑在同一写入边界核对读取时的配置，避免旧副本覆盖并发更新。</summary>
+    internal bool TrySave(AssistConfig config, string expectedRaw) => TryStore(config, expectedRaw);
+
+    internal IDisposable AcquireWriteGate()
+    {
+        // Same order as TryStore. A short synchronous read/modify/readback operation cannot
+        // cause another in-process save to be rejected halfway through its own update.
+        Monitor.Enter(_configWriteGate);
+        try { return new ConfigWriteScope(_configWriteGate, ConfigFileWriteGate.Acquire(_configPath)); }
+        catch { Monitor.Exit(_configWriteGate); throw; }
+    }
+
+    private sealed class ConfigWriteScope(object memoryGate, IDisposable fileGate) : IDisposable
+    {
+        private bool _disposed;
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            try { fileGate.Dispose(); }
+            finally { Monitor.Exit(memoryGate); }
+        }
+    }
+
     private bool TryStore(AssistConfig config, string? expectedRaw = null, bool rawEdit = false)
     {
         lock (_configWriteGate)
@@ -235,8 +259,7 @@ public class AssistConfigManager
     public (bool Saved, string? Revision, string Message) SaveBgiPathChecked(
         string path, string? expectedRevision)
     {
-        using var writing = ConfigFileWriteGate.Acquire(_configPath);
-        lock (_configWriteGate)
+        using var writing = AcquireWriteGate();
         {
             if (_configTransferActive) return (false, null, "设置迁移尚未完成，配置写入已暂停");
             if (string.IsNullOrWhiteSpace(expectedRevision))

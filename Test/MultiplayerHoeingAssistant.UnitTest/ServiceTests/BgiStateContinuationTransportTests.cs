@@ -142,6 +142,52 @@ public sealed class BgiStateContinuationTransportTests : IAsyncLifetime
         Assert.Empty(Starts());
     }
 
+    private RoomOrchestrationLaunch RoomLaunch(string intentId, long stopVersion) => new(intentId,
+        new MultiplayerHoeingAssistant.Models.TaskConflictPolicySettings
+        {
+            Policy = MultiplayerHoeingAssistant.Models.TaskConflictPolicy.RunSpecified,
+            SpecifiedTaskType = "group", SpecifiedTaskName = "乙房准备", SpecifiedConfigRevision = "revision-frozen",
+            SpecifiedStartMode = "beginning",
+        }, Epoch, stopVersion, Stopwatch.GetTimestamp(), "confirmed-room-b");
+
+    [Fact]
+    public async Task RoomSuccessorExcludesSharedTicketBothAtFreezeAndActualSend()
+    {
+        _pipe.BodyForTest = (op, _) => op == WorkflowStopAuthority.Operation
+            ? (true, null, null, Fence(7)) : null;
+        _client.TakeoverTicket = "retired-ticket";
+        var launch = RoomLaunch("successor-A-B", 7);
+        var result = await _client.SubmitRoomOrchestrationTaskAsync(launch,
+            new("乙房准备", false, "revision-frozen", 2, null), _ =>
+            {
+                _client.TakeoverTicket = "later-batch-ticket";
+                return Task.CompletedTask;
+            }, CancellationToken.None);
+        Assert.True(result.Success);
+        var sent = Assert.Single(Starts());
+        Assert.Equal(JsonValueKind.Null, sent.GetProperty("takeoverTicket").ValueKind);
+        Assert.Equal(7, sent.GetProperty("expectedStopVersion").GetInt64());
+        Assert.Equal("revision-frozen", sent.GetProperty("expectedConfigRevision").GetString());
+        Assert.Equal("room-orchestration/successor-A-B", sent.GetProperty("idempotencyKey").GetString());
+        Assert.Equal("confirmed-room-b", sent.GetProperty("roomOrchestrationRoomIdentity").GetString());
+        Assert.True(sent.GetProperty("retainUntilAcknowledged").GetBoolean());
+        Assert.Equal("later-batch-ticket", _client.TakeoverTicket); // Ordinary entries keep their own shared context.
+    }
+
+    [Fact]
+    public async Task RoomSuccessorStopDriftAndFinalVerifierRefusalNeverSend()
+    {
+        _pipe.BodyForTest = (op, _) => op == WorkflowStopAuthority.Operation
+            ? (true, null, null, Fence(8)) : null;
+        await Assert.ThrowsAsync<BgiStateContinuationStoppedException>(() => _client.SubmitRoomOrchestrationTaskAsync(
+            RoomLaunch("stopped-before-freeze", 7), new("乙房准备", false, "revision-frozen", 2, null),
+            _ => Task.CompletedTask, CancellationToken.None));
+        await Assert.ThrowsAsync<BgiNotSentException>(() => _client.SubmitRoomOrchestrationTaskAsync(
+            RoomLaunch("competing-online-batch", 8), new("乙房准备", false, "revision-frozen", 2, null),
+            _ => throw new OperationCanceledException("乙批次已优先受理"), CancellationToken.None));
+        Assert.Empty(Starts());
+    }
+
     private Task<BgiTaskSubmitResult> Start(string key, string config = "收尾任务", string batch = "batch-A",
         IReadOnlyList<string>? participants = null, long? expectedStopVersion = null, BgiEpoch? targetEpoch = null)
     {

@@ -95,7 +95,7 @@ public sealed partial class FourMemberFinishEntryTests
             var beginMethod = typeof(MainViewModel).GetMethod("BeginCoordinatedWithContinuationAsync",
                 BindingFlags.Instance | BindingFlags.NonPublic)!;
             var started = await (Task<CoordinatedBatchSnapshot>)beginMethod.Invoke(vm,
-                [Guid.NewGuid().ToString("N"), uids, true, ""])!;
+                [Guid.NewGuid().ToString("N"), uids, true, "", null])!;
             Func<string> diagnostics = () => Diagnostics(vm, bgi, peers, server);
             await WaitAsync(() => bgi.CooperativeStarts == 1 && Active(vm)?.Phase == "running"
                 && peers.All(p => p.Last?.Phase == "running"), diagnostics);

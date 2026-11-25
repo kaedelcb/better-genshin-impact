@@ -100,6 +100,8 @@ public sealed class BgiTaskSubmitResult
     public string? ErrorCode { get; init; }
 
     public string? ErrorMessage { get; init; }
+
+    internal bool ServerRejectedBeforeAcceptance { get; init; }
 }
 
 /// <summary>[终态可拉取] ext.task.queueStatus 响应投影：pending/running/completed/failed/queueCancelled/not_found。</summary>
@@ -109,6 +111,12 @@ public sealed class BgiTaskQueueStatus
     public string? IdempotencyKey { get; init; }
     public BgiEpoch? Epoch { get; init; }
     public bool ExecutionExitConfirmed { get; init; }
+
+    // 计划表编排的本机台账投影，和 TaskHandle（本地 RunId）分离。
+    public string? WorkflowRunId { get; init; }
+    public string? RoomIdentity { get; init; }
+    public long? StopVersion { get; init; }
+    public bool StopRequested { get; init; }
 
     public CoordinatedHoeingEvidence? HoeingEvidence { get; init; }
 
@@ -213,6 +221,9 @@ public sealed class BgiTaskTerminalEvent
 public sealed class BgiExternalEvent
 {
     public required string Name { get; init; }
+
+    // 原始事件帧的进程纪元。异步消费者不能用可能已重连的 ServerEpoch 重新归属旧事件。
+    public BgiEpoch? Epoch { get; init; }
 
     /// <summary>与 ext.task.status 快照同源的状态版本号；客户端发现跳号可拉快照补齐。</summary>
     public long StateRevision { get; init; }
@@ -392,11 +403,15 @@ public sealed partial class BgiExternalClient : IDisposable
     }
 
     /// <summary>发送 ext.* 命令并等待响应。通道未就绪时抛 InvalidOperationException（调用方降级）。</summary>
-    public async Task<BgiExternalResponse> SendCommandAsync(
+    public Task<BgiExternalResponse> SendCommandAsync(
         string operation,
         object? payload = null,
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
+        => SendCommandCoreAsync(operation, payload, timeout, cancellationToken);
+
+    private async Task<BgiExternalResponse> SendCommandCoreAsync(string operation, object? payload,
+        TimeSpan? timeout, CancellationToken cancellationToken, CancellationToken? beforeWriteToken = null)
     {
         var pipe = _pipe;
         if (State != BgiExternalLinkState.Ready || pipe is null || !pipe.IsConnected)
@@ -440,7 +455,7 @@ public sealed partial class BgiExternalClient : IDisposable
                 fields["assistantRecovery"] = System.Text.Json.JsonSerializer.SerializeToNode(checkpoint);
                 payload = fields;
             }
-            await WriteEnvelopeAsync(pipe, operation, requestId, payload, cancellationToken)
+            await WriteEnvelopeAsync(pipe, operation, requestId, payload, cancellationToken, beforeWriteToken)
                 .ConfigureAwait(false);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, _lifetimeCts.Token);
@@ -1404,6 +1419,7 @@ public sealed partial class BgiExternalClient : IDisposable
                 EventReceived.Invoke(new BgiExternalEvent
                 {
                     Name = name,
+                    Epoch = ParseEpoch(root),
                     StateRevision = revision,
                     Payload = payload,
                 });
@@ -1457,7 +1473,7 @@ public sealed partial class BgiExternalClient : IDisposable
         string operation,
         string requestId,
         object? payload,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, CancellationToken? beforeWriteToken = null)
     {
         var envelope = new
         {
@@ -1474,9 +1490,16 @@ public sealed partial class BgiExternalClient : IDisposable
         frame[4] = 1; // InstanceIpcPayloadType.Utf8Json
         Buffer.BlockCopy(bytes, 0, frame, 5, bytes.Length);
 
-        await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { await _writeLock.WaitAsync(beforeWriteToken ?? cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (beforeWriteToken is not null)
+        {
+            throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "编排后继发包前已撤销");
+        }
         try
         {
+            // 编排启动在拿到真实写锁前仍可撤销；一旦开始写，不丢弃原受理回执。
+            if (beforeWriteToken?.IsCancellationRequested == true)
+                throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "编排后继发包前已撤销");
             await pipe.WriteAsync(frame, cancellationToken).ConfigureAwait(false);
             await pipe.FlushAsync(cancellationToken).ConfigureAwait(false);
         }

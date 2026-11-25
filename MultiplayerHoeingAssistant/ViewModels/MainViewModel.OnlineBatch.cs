@@ -397,6 +397,41 @@ public partial class MainViewModel
         if (string.IsNullOrWhiteSpace(uid) || !start.ParticipantUids.Contains(uid, StringComparer.Ordinal)) return;
         if (!IsExecutorMode || start.Protocol != "hoeing.start.v2") return;
         var controlContext = CurrentControlContext();
+        bool newRoomAdmission;
+        lock (_batchGate)
+        {
+            newRoomAdmission = start.Generation > ReadCoordinatedResetFence() && !_settledHoeingBatchIds.Contains(start.BatchId)
+                && !start.CleanupComplete && _activeBatch is not { IsAlive: true };
+            if (newRoomAdmission)
+                CancelRoomOrchestrationPending("新的联机批次正在受理", revokeOnline: false, revokeBatch: false);
+        }
+        // Replayed start events of an already active batch never cancel that batch's suspended tasks.
+        // A genuine new admission waits only for the bounded successor handoff, not the full run.
+        if (newRoomAdmission)
+        {
+            if (!await _roomOrchestrationSubmitGate.WaitAsync(TimeSpan.FromSeconds(50)))
+            {
+                if (controlContext == CurrentControlContext())
+                    await RejectCoordinatedStartAsync(start, uid, "原独立后继受理状态暂未确认，本次接管未执行");
+                return;
+            }
+            _roomOrchestrationSubmitGate.Release();
+        }
+        if (newRoomAdmission && controlContext != CurrentControlContext()) return;
+        if (newRoomAdmission && !RoomSwitchBlocksRoomOperations)
+        using (var queuedSuccessorBudget = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+        {
+            bool successorReady;
+            try { successorReady = await ResolveQueuedRoomOrchestrationBeforeBatchAsync(queuedSuccessorBudget.Token); }
+            catch (Exception ex) when (ex is IOException or TimeoutException or OperationCanceledException or InvalidOperationException or System.Text.Json.JsonException)
+            { successorReady = false; }
+            if (!successorReady)
+            {
+                if (controlContext == CurrentControlContext())
+                    await RejectCoordinatedStartAsync(start, uid, "旧编排后继仍在排队或身份待核对，未开始新的联机接管");
+                return;
+            }
+        }
         // resetCleaned can reach the server just before the local finally releases this gate.
         // Queue that start at the boundary instead of aborting the whole team as preparation_failed.
         if (!await _localResetGate.WaitAsync(TimeSpan.FromSeconds(90)))
@@ -432,9 +467,34 @@ public partial class MainViewModel
         OnlineHoeingBatch? batch = null;
         string? rejected = null;
         var recoveryPending = false;
+        // A successor's online report can race a later F11 or cancellation after the server
+        // formed a batch. Recheck only that exact new-origin generation before initial admission;
+        // already-owned/recovered batches keep their original lifecycle and stop path.
+        bool verifyRoomOrchestrationOnline;
+        lock (_batchGate) verifyRoomOrchestrationOnline = _activeBatch is null && recovered is null
+            && start.Source != "manual" && controlContext == CurrentControlContext()
+            && start.Generation > ReadCoordinatedResetFence() && !start.CleanupComplete;
+        OnlineIntentLifecycle.OrchestrationOrigin? incomingOrigin = null;
+        RoomOrchestrationExecutionRecord? incomingAuthority = null;
+        if (verifyRoomOrchestrationOnline && start.IntentGenerations.TryGetValue(uid, out var onlineGeneration))
+        {
+            incomingOrigin = GetRoomOrchestrationOnlineOrigin(onlineGeneration);
+            if (incomingOrigin is not null)
+            {
+                var verified = await VerifyRoomOrchestrationOnlineReportAsync(onlineGeneration, incomingOrigin.IntentId);
+                incomingAuthority = ReadRoomOrchestrationExecution(incomingOrigin.IntentId);
+                if (!verified || incomingAuthority is not { OnlineRevoked: false } || incomingAuthority.OnlineGeneration != onlineGeneration
+                    || GetRoomOrchestrationOnlineOrigin(onlineGeneration) != incomingOrigin)
+                {
+                    if (controlContext == CurrentControlContext())
+                        await RejectCoordinatedStartAsync(start, uid, "编排上线的原房间或停止授权已撤销，未接管本机任务");
+                    return;
+                }
+            }
+        }
         lock (_batchGate)
         {
-            if (start.Generation <= _resetFenceGeneration
+            if (controlContext != CurrentControlContext() || RoomSwitchBlocksRoomOperations || start.Generation <= ReadCoordinatedResetFence()
                 || _settledHoeingBatchIds.Contains(start.BatchId) || start.CleanupComplete) return;
             if (_activeBatch is { IsAlive: true } active)
             {
@@ -455,9 +515,19 @@ public partial class MainViewModel
             {
                 try
                 {
+                    var frozen = recovered?.Policy ?? SnapshotBatchCompletionPolicy(start);
+                    if (!(start.Source == "manual" && !start.UseCompletionActions)
+                        && !start.MatchesRoomSwitchCompletion(uid, frozen))
+                        throw new InvalidOperationException("完成后切房动作与本批确认内容不一致，请重新确认后开始");
+                    if (recovered is null && frozen.RoomSwitch is not null
+                        && (_config is not { } localConfig || CompletionPolicyFields.ValidateRoomSwitch(
+                            localConfig, localConfig.ActiveRoomProfileId, frozen) is not null))
+                        throw new InvalidOperationException("完成后切房的源、目标或指定任务已失效，请重新选择并确认");
                     var candidate = recovered is null
-                        ? new OnlineHoeingBatch(start, uid, SnapshotBatchCompletionPolicy(start))
+                        ? new OnlineHoeingBatch(start, uid, frozen)
                         : OnlineHoeingBatch.Restore(recovered);
+                    if (recovered is null && incomingAuthority is not null)
+                        candidate.FreezeIncomingRoomOrchestrationAuthority(incomingAuthority.IntentId, incomingAuthority.Epoch, incomingAuthority.StopVersion);
                     candidate.FreezeControlContext(CurrentControlContext());
                     candidate.PersistRecovery = () =>
                     {
@@ -492,13 +562,17 @@ public partial class MainViewModel
             return;
         }
         if (batch == null) return;
+        CancelRoomOrchestrationPending("新的联机批次已受理", revokeOnline: false, revokeBatch: false);
+        RegisterRoomOrchestrationBatch(batch);
         var expectedIntent = start.IntentGenerations.TryGetValue(uid, out var ownIntent) ? (int?)ownIntent : null;
         if (!batch.RestoredFromRecovery && batch.IsCancellationRequested
             || !_intentLifecycle.TryBeginCoordinatedBatch(start.BatchId,
-                start.Generation, start.Source == "manual", expectedIntent, resuming: batch.RestoredFromRecovery))
+                start.Generation, start.Source == "manual", expectedIntent, resuming: batch.RestoredFromRecovery,
+                expectedOrchestrationIntentId: incomingOrigin?.IntentId, expectedOrchestrationContext: incomingOrigin?.ControlContext))
         {
             await RejectCoordinatedStartAsync(start, uid, "本机上线意图已改变或已取消，本次开始未接受");
             batch.MarkSettled();
+            RecordRoomOrchestrationPhase(batch, "cancelled", "本机上线意图已改变或已取消，本次开始未接受", settled: true);
             lock (_batchGate) { if (ReferenceEquals(_activeBatch, batch)) _activeBatch = null; }
             return;
         }
@@ -514,7 +588,9 @@ public partial class MainViewModel
     {
         OnlineHoeingBatch? batch;
         lock (_batchGate) batch = _activeBatch;
-        if (batch?.BatchId != state.BatchId) return;
+        if (batch?.BatchId != state.BatchId || batch.Generation != state.Generation
+            || batch.ControlContext != CurrentControlContext()) return;
+        batch.ObserveRoomCompletionAuthority(state);
         if (batch.LocalExecutionReleased && _localResetGate.CurrentCount > 0)
         {
             ObserveOnlineTask(RetryCoordinatedCleanupAsync(batch), "已释放批次清理回执补报");
@@ -584,6 +660,7 @@ public partial class MainViewModel
 
     private void UpdateHoeingBatchStatus(OnlineHoeingBatch batch, string phase, string message)
     {
+        RecordRoomOrchestrationPhase(batch, phase, message);
         if (!batch.IsAlive || batch.Phase == phase && batch.Message == message) return;
         batch.Phase = phase;
         batch.Message = message;
@@ -627,7 +704,7 @@ public partial class MainViewModel
             {
                 preparation.Executor = _commandExecutor;
                 preparation.Host = IsExecutorMode ? TaskCenterHost : null;
-                if (preparation.Host is not null)
+                if (preparation.Host is not null && !(batch.Policy?.RoomSwitch is not null && batch.LocalExecutionReleased))
                 {
                     await preparation.Host.CloseOnlineHoeingSendAsync(priority: true);
                     preparation.SendGateClosed = true;
@@ -636,6 +713,15 @@ public partial class MainViewModel
                     batch.ConfigurePolicyCancellation(execution => execution.WorkflowRunId is not null
                         ? preparation.Host?.CancelCompletionWorkflowAsync(execution) ?? Task.FromResult(false)
                         : restoredExecutor.CancelHoeingPolicyExecutionAsync(execution));
+            }
+            if (batch.RestoredFromRecovery && batch.Policy?.RoomSwitch is not null && batch.LocalExecutionReleased)
+            {
+                // The old local Stop responsibility is already finished; only authority/cleaned
+                // reconciliation remains. Never re-enter the released execution or finalizer.
+                batch.CleanupConfirmed = true;
+                batch.LocalCleanupConfirmed = true;
+                batch.Message = "本端已结束，核对原批次的全队终态及清理回执";
+                return;
             }
             await RunCoordinatedBatchAsync(batch,
                 ct => PrepareCoordinatedStartAsync(batch, preparation, ct),
@@ -751,10 +837,13 @@ public partial class MainViewModel
         ct.ThrowIfCancellationRequested();
         lock (_batchGate)
             if (!ReferenceEquals(_activeBatch, batch) || !ReferenceEquals(_commandExecutor, executor)
-                || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0)
+                || batch.Generation <= ReadCoordinatedResetFence() || _localResetGate.CurrentCount == 0)
                 throw new OperationCanceledException("本批收尾权限已被本机停止或重置撤销");
         if (!batch.LocalCompletionReady || batch.PriorityRecoveryEnabled && !batch.CoordinatedSucceeded)
             throw new InvalidOperationException("全队锄地尚未完成，不提前执行绑定后续");
+        // The baseline describes the end of our owned execution, before Stop opens the old send gate.
+        // A newer ordinary job must win even if it finishes before the team's cleanup receipt arrives.
+        batch.RecordRoomReleaseBoundary();
         if (batch.StateContinuationEnabled || batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" })
         {
             await ApplyPolicyTeardownOnceAsync(batch, "联机锄地", false, batch.TakeoverTicket);
@@ -909,10 +998,13 @@ public partial class MainViewModel
             if (authority is not { IsConnected: true, SupportsCoordinatedStart: true })
                 throw new IOException("控制房间暂不可用，保留旧批次清理回执");
             var state = await authority.GetCurrentCoordinatedBatchAsync(timeout.Token);
-            if (!ReferenceEquals(authority, _signalRClient) || !authority.IsConnected || !authority.SupportsCoordinatedStart)
+            if (!ReferenceEquals(authority, _signalRClient) || !authority.IsConnected || !authority.SupportsCoordinatedStart
+                || authority.ControlContext != batch.ControlContext || batch.ControlContext != CurrentControlContext())
                 throw new IOException("控制房间查询期间已断线或更换，保留旧批次清理回执");
-            if (state?.BatchId == batch.BatchId)
+            var roomCleanedObserved = false;
+            if (state?.BatchId == batch.BatchId && state.Generation == batch.Generation)
             {
+                batch.ObserveRoomCompletionAuthority(state);
                 if (batch.LocalTasksFailed)
                 {
                     batch.ObserveLocalTasksFailureAccepted(state);
@@ -930,12 +1022,20 @@ public partial class MainViewModel
                     }
                 }
                 if (state.Phase is not ("completed" or "aborted")) return;
-                await authority.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token, batch.BatchId,
-                    string.Join(",", batch.Bindings.Select(i => i.Type)), state.Index, state.Attempt, "", timeout.Token, "cleaned");
+                var cleaned = state.Members.Any(m => m.Uid == batch.SelfUid && m.Stage == "cleaned")
+                    ? state : await authority.UpdateCoordinatedBatchAsync(batch.Generation, batch.Token, batch.BatchId,
+                        string.Join(",", batch.Bindings.Select(i => i.Type)), state.Index, state.Attempt, "", timeout.Token, "cleaned");
+                if (!ReferenceEquals(authority, _signalRClient) || !authority.IsControlRoomReady
+                    || authority.ControlContext != batch.ControlContext || batch.ControlContext != CurrentControlContext()
+                    || cleaned.BatchId != batch.BatchId || cleaned.Generation != batch.Generation)
+                    throw new IOException("清理回执未确认属于原控制房间及批次");
+                batch.ObserveRoomCompletionAuthority(cleaned);
+                roomCleanedObserved = cleaned.Members.Any(m => m.Uid == batch.SelfUid && m.Stage == "cleaned");
+                if (batch.Policy?.RoomSwitch is not null && !roomCleanedObserved) return;
             }
-            // 同批清理被确认，或权威服务器明确旧批次已不存在；都不操作后继任务。
+            // 查无旧批次只能结清责任，绝不能产生新的切房授权。
             batch.CleanupConfirmed = true;
-            CompleteCoordinatedCleanup(batch);
+            CompleteCoordinatedCleanup(batch, roomCleanedObserved);
         }
         catch (Exception ex)
         {
@@ -949,8 +1049,9 @@ public partial class MainViewModel
         finally { _coordinatedCleanupAckGate.Release(); }
     }
 
-    private void CompleteCoordinatedCleanup(OnlineHoeingBatch batch)
+    private void CompleteCoordinatedCleanup(OnlineHoeingBatch batch, bool roomCleanedObserved = false)
     {
+        RoomOrchestrationIntent? roomIntent = null;
         lock (_batchGate)
         {
             if (!ReferenceEquals(_activeBatch, batch)
@@ -961,6 +1062,9 @@ public partial class MainViewModel
         {
             if (!ReferenceEquals(_activeBatch, batch)
                 || !batch.LocalExecutionReleased && batch.IsCancellationRequested && batch.HasPolicyCleanup && !batch.CancelledPolicyCleanupConfirmed) return;
+            if (roomCleanedObserved && _localResetGate.CurrentCount > 0
+                && batch.Generation > ReadCoordinatedResetFence() && Volatile.Read(ref _ordinaryStopInProgress) == 0)
+                roomIntent = TryReserveRoomOrchestration(batch);
             batch.MarkSettled(waitForCallbacks: !batch.LocalExecutionReleased);
             _lastHoeingBatchId = batch.BatchId;
             _lastHoeingStartPhase = batch.LocalCompletionReady ? "completed" : batch.Outcome;
@@ -980,6 +1084,11 @@ public partial class MainViewModel
             if (_settledHoeingBatchIds.Count > 256) _settledHoeingBatchIds.Remove(_settledHoeingBatchIds.First());
             _activeBatch = null;
         }
+        RecordRoomOrchestrationPhase(batch, batch.IsCancellationRequested ? "cancelled"
+            : batch.LocalTasksFailed ? "failed" : batch.LocalSucceeded && batch.Outcome is "succeeded" ? "completed" : batch.Outcome,
+            batch.Message, settled: true);
+        if (roomIntent is not null)
+            ObserveOnlineTask(Task.Run(() => ExecuteRoomOrchestrationAsync(roomIntent)), "完成后独立切房");
         AddLog("[联机开始] " + batch.Message + "；本端清理已确认");
         ObserveOnlineTask(ReportStatusAsync(), "联机清理完成状态");
     }
@@ -1011,7 +1120,38 @@ public partial class MainViewModel
             if (!local.IsValid || !local.Names.SequenceEqual(names) || !local.Types.SequenceEqual(types))
                 throw new InvalidOperationException("绑定已改变或不合法，请重新开始以使用最新绑定");
         }
-        var ready = await EnsureTaskCenterExecutionReadyAsync(ct);
+        var inheritedRoomStart = batch.IncomingRoomOrchestrationIntentId is not null && !batch.TakenOver;
+        if (inheritedRoomStart)
+        {
+            var inheritedPeer = GetBoundTaskCenterClient();
+            var inheritedEpoch = inheritedPeer?.ServerEpoch;
+            if (inheritedEpoch is null)
+            {
+                if (batch.ExecutionEpoch is { } original && CommandExecutor.ProbeOriginalBgiProcess(original) == false)
+                {
+                    batch.Cancel();
+                    throw new BgiStateContinuationStoppedException("编排上线的原 BGI 已退出，未重新取得启动授权");
+                }
+                throw new IOException("编排上线原通道暂不可用，等待同一进程停止围栏");
+            }
+            if (!CoordinatedBatchLoop.SameEpoch(batch.ExecutionEpoch, inheritedEpoch)
+                || !inheritedPeer!.HasCapability(BgiExternalClient.StateContinuationCapability)
+                || _signalRClient?.SupportsStateContinuation != true)
+            {
+                batch.Cancel();
+                throw new BgiStateContinuationStoppedException("编排上线的原 BGI 身份或停止能力已改变");
+            }
+            var inheritedStop = await inheritedPeer.ReadStateContinuationStopVersionAsync(inheritedEpoch, ct);
+            if (inheritedStop is null || !ReferenceEquals(inheritedPeer, GetBoundTaskCenterClient()))
+                throw new IOException("编排上线的原停止围栏暂不可读，保留同一准备请求");
+            if (!batch.MatchesIncomingRoomOrchestrationFence(inheritedEpoch, inheritedStop))
+            {
+                batch.Cancel();
+                throw new BgiStateContinuationStoppedException("编排上线在登记期间的原停止授权已变化，未启动本批");
+            }
+        }
+        // A newly received orchestration batch must not auto-launch a replacement BGI to get a new stop fence.
+        var ready = inheritedRoomStart ? null : await EnsureTaskCenterExecutionReadyAsync(ct);
         if (ready != null) throw new InvalidOperationException(ready);
         ct.ThrowIfCancellationRequested();
         var ext = GetBoundTaskCenterClient() ?? throw new InvalidOperationException("BGI 通道身份未确认");
@@ -1026,12 +1166,14 @@ public partial class MainViewModel
                 if (batch.PriorityRecoveryEnabled) batch.ExecutionEpoch ??= originalEpoch;
             }
         }
-        if (batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" }
+        if ((batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" }
+                || batch.Policy?.RoomSwitch is not null)
             && batch.StateContinuationStopVersion is null)
         {
-            var originalEpoch = ext.ServerEpoch ?? throw new IOException("计划表完成动作缺少原 BGI 身份");
+            var originalEpoch = ext.ServerEpoch ?? throw new IOException("完成动作缺少原 BGI 身份");
             batch.StateContinuationStopVersion = await ext.ReadStateContinuationStopVersionAsync(originalEpoch, ct)
-                ?? throw new IOException("计划表完成动作缺少原批次停止基线，未接管当前执行");
+                ?? throw new IOException("完成动作缺少原批次停止基线，未接管当前执行");
+            if (batch.Policy?.RoomSwitch is not null) batch.ExecutionEpoch ??= originalEpoch;
         }
         if (batch.PriorityRecoveryEnabled)
             await ext.EnsureCoordinatedRecoveryStopAsync(batch, ct);

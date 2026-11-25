@@ -70,6 +70,8 @@ public partial class MainViewModel
             if (command.TargetInstanceId is { Length: > 0 } targetInstance
                 && targetInstance != _config.ClientInstanceId)
                 throw new InvalidOperationException("请求的执行端实例不匹配");
+            if (request.ExpectedMachineId is { } machine && machine != HostMachineIdentity.Current)
+                throw new InvalidOperationException("请求的执行端机器已变化，请重新连接");
             var fingerprint = RemoteCenterProtocol.RequestFingerprint(command, request);
             var claim = new CenterRequestClaim(fingerprint,
                 new TaskCompletionSource<RemoteCenterReply>(TaskCreationOptions.RunContinuationsAsynchronously));
@@ -120,7 +122,7 @@ public partial class MainViewModel
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
         "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure" or "registers.reset" or "registers.set"
         or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
-        or "task.flow.save" or "task.flow.delete" or "task.flow.restore";
+        or "task.flow.save" or "task.flow.delete" or "task.flow.restore" or "room.orchestration.save";
 
     private static bool UsesDurableCenterReceipt(RemoteCenterRequest request)
         => UsesImmediateCenterReceipt(request.Operation) || request.Operation is
@@ -129,7 +131,9 @@ public partial class MainViewModel
             or "task.migration.rehearsal" or "task.run.start" or "task.run.resume"
             or "task.flow.resetExecutionState"
         || request.Operation == "task.run.action"
-            && Decode<RunActionArgs>(request.PayloadJson).Action != nameof(WorkflowRunAction.Stop);
+            && Decode<RunActionArgs>(request.PayloadJson).Action != nameof(WorkflowRunAction.Stop)
+        || request.Operation is ("room.orchestration.names" or "room.orchestration.catalog")
+            && Decode<RemoteOrchestrationCatalogRequest>(request.PayloadJson).ExplicitRefresh;
 
     private async Task<RemoteCenterReply> ExecuteRemoteCenterOperationAsync(string requestId,
         RemoteCenterRequest request, string fingerprint)
@@ -140,6 +144,20 @@ public partial class MainViewModel
         if (!TryEnterConfigTransferOperation(isStop ? "stop" : request.Operation, out var transferOperation))
             return RemoteCenterReply.Rejected(ConfigTransferBlockedMessage);
         using var configTransferOperation = transferOperation;
+        if (request.Operation.StartsWith("room.orchestration.", StringComparison.Ordinal))
+        {
+            if (request.Operation is ("room.orchestration.catalog" or "room.orchestration.names")
+                && Decode<RemoteOrchestrationCatalogRequest>(request.PayloadJson).ExplicitRefresh)
+                return BeginRoomOrchestrationCatalogRefresh(requestId, fingerprint, request);
+            return await ExecuteRoomOrchestrationRemoteOperationAsync(request);
+        }
+        if (request.Operation == "operation.get")
+        {
+            var operationId = Decode<string>(request.PayloadJson);
+            return _centerOperations.TryGetValue(operationId, out var state)
+                ? state : _centerOperationStore.Get(operationId)
+                    ?? RemoteCenterReply.Rejected("执行端找不到这次操作，请刷新运行状态核对");
+        }
         var mistletoe = (Application.Current.MainWindow as MainWindow)?.Mistletoe
             ?? throw new InvalidOperationException("执行端启动中心尚未就绪");
         var host = TaskCenterHost;
@@ -560,13 +578,6 @@ public partial class MainViewModel
                         ? RemoteCenterReply.Rejected(result.Message) : RemoteCenterReply.Ok(message: result.Message);
                 }
                 return BeginTrackedOperation(requestId, fingerprint, () => host.RequestRunActionAsync(args.RunId, action));
-            }
-            case "operation.get":
-            {
-                var operationId = Decode<string>(request.PayloadJson);
-                return _centerOperations.TryGetValue(operationId, out var state)
-                    ? state : _centerOperationStore.Get(operationId)
-                        ?? RemoteCenterReply.Rejected("执行端找不到这次操作，请刷新运行状态核对");
             }
             default:
                 return RemoteCenterReply.Rejected("当前执行端不支持操作：" + request.Operation);

@@ -39,7 +39,8 @@ public class NotifyOnlineTask : ISoloTask
     private static int? _nextGeneration;
     private static readonly object _genLock = new();
     private static Signal _signal = new(0, DateTime.MinValue, null);
-    internal sealed record Signal(int Generation, DateTime TriggeredAt, Guid? WorkflowRunId);
+    internal sealed record Signal(int Generation, DateTime TriggeredAt, Guid? WorkflowRunId,
+        Guid? JobId = null, string? SubmissionKey = null, long? StopVersion = null);
 
     private static string GenerationFilePath => Global.Absolute("User/online_generation.txt");
 
@@ -62,13 +63,17 @@ public class NotifyOnlineTask : ISoloTask
             var generation = _nextGeneration ?? LoadPersistedGeneration();
             var nextGeneration = generation + 1;
             _nextGeneration = nextGeneration;
-            Volatile.Write(ref _signal, new Signal(generation, DateTime.UtcNow,
-                ExecutionScope.Current?.Descriptor.WorkflowRunId));
+            Volatile.Write(ref _signal, CreateSignal(generation, DateTime.UtcNow, ExecutionScope.Current));
             // 保持普通上线跨 BGI 重启的单调序号。
             PersistGeneration(nextGeneration);
         }
         return Task.CompletedTask;
     }
+
+    // 信号保留产生时的执行根身份及围栏，不使用推送/轮询时的当前任务或当前停止水位。
+    internal static Signal CreateSignal(int generation, DateTime triggeredAt, ExecutionScope? source)
+        => new(generation, triggeredAt, source?.Descriptor.WorkflowRunId, source?.Descriptor.JobId,
+            source?.Descriptor.IdempotencyKey, source?.StopVersion);
 
     /// <summary>从持久化文件读取下一个 generation。文件不存在/解析失败则从 1 开始（单机用户无感知）。</summary>
     private static int LoadPersistedGeneration()

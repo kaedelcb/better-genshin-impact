@@ -18,7 +18,8 @@ internal static class RoomActionMailbox
     private static Peer? _peer;
     private static Delivery? _pending;
 
-    internal sealed record Signal(Guid Id, Guid RunId, string Kind, string? TargetRoomName, long StopVersion);
+    internal sealed record Signal(Guid Id, Guid RunId, string Kind, string? TargetRoomName, long StopVersion,
+        Guid? JobId = null, string? SubmissionKey = null, Guid? WorkflowRunId = null);
     internal sealed record Outcome(Guid? PeerId, string? Error)
     {
         internal bool Accepted => Error is null;

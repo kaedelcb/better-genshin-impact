@@ -99,8 +99,14 @@ public class TaskPolicySyncService
     /// 回传编辑后的任务策略配置给对方应用。返回 null = 超时/发送失败；
     /// 否则为对方应用结果（ok/message）。
     /// </summary>
-    public async Task<(bool ok, string message)?> PushAsync(string targetUid, Dictionary<string, object> prms)
+    public async Task<(bool ok, string message)?> PushAsync(string targetUid, Dictionary<string, object> prms,
+        IReadOnlyDictionary<string, object>? expectedCompletion = null)
     {
+        // 新的切房关系只能由执行端编辑其本机档案；远控仍可明确改为原三种动作。
+        if (GetStringParam(prms, "policy") == "switchRoom")
+            return (false, "切房关系须在执行端本机编辑，未发送设置");
+        var expectedRevision = expectedCompletion == null ? null : CompletionEditRevision(
+            k => expectedCompletion.GetValueOrDefault(k)?.ToString());
         var usesStartFields = GetStringParam(prms, "completionStartVersion") != null
             || GetStringParam(prms, "specifiedType") == "workflow"
             || prms.Keys.Any(k => k is "specifiedStartMode" or "specifiedStartTaskId" or "specifiedStartTaskName" or "specifiedConfigRevision" or "specifiedWorkflowId");
@@ -114,8 +120,13 @@ public class TaskPolicySyncService
             if (current == null || !current.TryGetValue("completionStartVersion", out var version)
                 || version != CompletionTargetCatalogService.Version)
                 return (false, "执行端当前未确认执行起点协议，未发送新设置；请重新读取配置");
+            if ((current.GetValueOrDefault("policy") == "switchRoom" || expectedRevision != null)
+                && expectedRevision != CompletionEditRevision(k => current.GetValueOrDefault(k)))
+                return (false, "执行端的完成后动作已变化或未经确认，未发送设置；请重新打开绑定");
         }
-        var push = NewCommand("task_policy.push", targetUid, new Dictionary<string, object>(prms));
+        var parameters = new Dictionary<string, object>(prms);
+        if (expectedRevision != null) parameters["expectedCompletionRevision"] = expectedRevision;
+        var push = NewCommand("task_policy.push", targetUid, parameters);
         var (reply, sent) = await SendAndWaitReplyAsync(push, PushResultTimeout);
         if (!sent) return (false, "SignalR 未连接，无法发送");
         if (reply == null) return null;
@@ -124,10 +135,20 @@ public class TaskPolicySyncService
             if (GetStringParam(reply.Params, "completionStartVersion") != CompletionTargetCatalogService.Version)
                 return (false, "对方未确认起点协议版本，未证明已保存；请更新执行端并重新读取配置");
             if (GetStringParam(reply.Params, "ok") == "true"
-                && push.Params!.Any(pair => GetStringParam(reply.Params, pair.Key) != GetStringParam(push.Params, pair.Key)))
+                && push.Params!.Any(pair => pair.Key != "expectedCompletionRevision"
+                    && GetStringParam(reply.Params, pair.Key) != GetStringParam(push.Params, pair.Key)))
                 return (false, "对方未完整确认保存值，请重新读取配置核对；未更新本机镜像");
         }
         return (GetStringParam(reply.Params, "ok") == "true", GetStringParam(reply.Params, "message") ?? "");
+    }
+
+    /// <summary>同版完成动作编辑的读取修订，包括无效目标，避免按普通停止覆盖新配置。</summary>
+    internal static string CompletionEditRevision(Func<string, string?> get)
+    {
+        var fields = CompletionPolicyFields.Parameters(new TaskConflictPolicySettings()).Keys
+            .OrderBy(k => k, StringComparer.Ordinal).Select(k => new[] { k, get(k) ?? "" }).ToArray();
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(fields)));
     }
 
     private async Task CancelCatalogRefreshAsync(RemoteCommand original)

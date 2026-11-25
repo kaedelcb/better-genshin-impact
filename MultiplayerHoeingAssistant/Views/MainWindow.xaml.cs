@@ -233,18 +233,40 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void AssistantRoomSelectorSelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void RoomOrchestrationEntryClick(object sender, RoutedEventArgs e)
     {
-        if (_syncingAssistantRoomSelector || !AssistantRoomPopup.IsOpen) return;
-        if (AssistantRoomSelector.SelectedItem is AssistantRoomProfile profile)
+        if (!ViewModel.CanSelectRoomOrchestration) return;
+        if (ViewModel.IsShowingRoomOrchestration)
+            ViewModel.SelectViewedRoom(ViewModel.ViewedRoomProfileId);
+        else
+            ViewModel.SelectRoomOrchestration();
+        DismissAssistantRoomPopup();
+        e.Handled = true;
+    }
+
+    private void AssistantRoomSelectorKeyDown(object sender, KeyEventArgs e)
+    {
+        if (_syncingAssistantRoomSelector || !AssistantRoomPopup.IsOpen || !AssistantRoomSelector.IsEnabled) return;
+        // Only real input changes the viewed room. SelectedValue is also driven by confirmed-login changes
+        // and ItemsSource refresh, so SelectionChanged is not a user's instruction to leave orchestration.
+        if (e.Key is Key.Enter or Key.Space)
         {
-            ViewModel.SelectViewedRoom(profile.Id);
+            var selected = (e.OriginalSource is DependencyObject source
+                ? ItemsControl.ContainerFromElement(AssistantRoomSelector, source) as ListBoxItem : null)?.DataContext
+                as AssistantRoomProfile ?? AssistantRoomSelector.SelectedItem as AssistantRoomProfile;
+            if (selected is null) return;
+            AssistantRoomSelector.SetCurrentValue(Selector.SelectedItemProperty, selected);
+            ViewModel.SelectViewedRoom(selected.Id);
+            e.Handled = true;
         }
+        else if (e.Key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown
+            && AssistantRoomSelector.SelectedItem is AssistantRoomProfile profile)
+            ViewModel.SelectViewedRoom(profile.Id);
     }
 
     private void AssistantRoomItemMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (_syncingAssistantRoomSelector) return;
+        if (_syncingAssistantRoomSelector || !AssistantRoomPopup.IsOpen) return;
         if (sender is ListBoxItem { DataContext: AssistantRoomProfile profile })
         {
             ViewModel.SelectViewedRoom(profile.Id);
@@ -457,6 +479,7 @@ public partial class MainWindow : Window
         Pet = new PetViewModel(viewModel, Dodoco, new PetSettingsService(), ShowToForeground, Dodoco.LogTail);
         DataContext = ViewModel;
         InitializeComponent();
+        AssistantRoomSelector.AddHandler(Keyboard.KeyDownEvent, new KeyEventHandler(AssistantRoomSelectorKeyDown), handledEventsToo: true);
         AssistantRoomPopup.CustomPopupPlacementCallback = PlaceAssistantRoomPopup;
         _roomCodeCopyHintTimer.Tick += (_, _) =>
         {

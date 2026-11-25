@@ -218,14 +218,16 @@ internal sealed class LocalConfigEditChannel : IDisposable
     }
 
     internal static async Task<RemoteCommand?> SendAsync(Endpoint endpoint, RemoteCommand command,
-        string secret, TimeSpan? timeout = null, string? serverUrl = null)
+        string secret, TimeSpan? timeout = null, string? serverUrl = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var address = serverUrl ?? endpoint.ServerUrl ?? DefaultServerUrl;
         if (!RoomServerAddress.TryNormalize(address, out var server)
             || (endpoint.ServerUrl is not null && !RoomServerAddress.Same(endpoint.ServerUrl, address)))
             throw new IOException("本地通道服务器不匹配，请重新扫描执行端");
 
-        using var limit = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(12));
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        limit.CancelAfter(timeout ?? TimeSpan.FromSeconds(12));
         if (endpoint.StartTicks == 0)
         {
             var prefix = endpoint.PipeName.StartsWith("BetterGI.Assistant.browser-p", StringComparison.Ordinal)

@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Input;
 using System.Windows.Markup;
@@ -17,10 +19,13 @@ internal sealed class CompletionActionPanel
     private IReadOnlyList<string> _groups;
     private IReadOnlyList<string> _oneClicks;
     private readonly bool _supported;
+    private readonly bool _canEditRoomSwitch;
     private readonly TaskConflictPolicySettings _initialSettings;
     private (string Type, string Key) _targetIdentity;
     private readonly StackPanel _layer2Panel = new() { Margin = new Thickness(0, 8, 0, 0) };
+    private readonly StackPanel _roomSwitchPanel = new() { Margin = new Thickness(0, 8, 0, 0) };
     private readonly StackPanel _specifiedPanel = new() { Margin = new Thickness(0, 8, 0, 0) };
+    private readonly TextBlock _roomSelectionStatus;
     private readonly TextBlock _catalogStatus;
     private CompletionTargetCatalog? _catalog;
     private string _workflowId;
@@ -36,6 +41,8 @@ internal sealed class CompletionActionPanel
     internal StackPanel Root { get; } = new() { Margin = new Thickness(0, 10, 0, 0) };
     internal ComboBox PolicyCombo { get; }
     internal ComboBox ActionCombo { get; }
+    internal ComboBox RoomTargetCombo { get; }
+    internal ComboBox AfterSwitchCombo { get; }
     internal ComboBox TypeCombo { get; }
     internal ComboBox NameCombo { get; }
     internal ComboBox StartModeCombo { get; }
@@ -54,17 +61,29 @@ internal sealed class CompletionActionPanel
         public override string ToString() => Label;
     }
 
+    private sealed record RoomChoice(RoomSwitchCompletion Completion, bool Available)
+    {
+        public string Label => (Available ? "" : "已失效：")
+            + (string.IsNullOrWhiteSpace(Completion.TargetName) ? "未确认名称" : Completion.TargetName)
+            + " · " + (string.IsNullOrWhiteSpace(Completion.TargetRoomCode) ? "未选择房间" : Completion.TargetRoomCode)
+            + (string.IsNullOrWhiteSpace(Completion.TargetServerUrl) ? "" : " · " + Completion.TargetServerUrl);
+        public override string ToString() => Label;
+    }
+
     internal CompletionActionPanel(TaskConflictPolicySettings settings, IReadOnlyList<string> groups,
         IReadOnlyList<string> oneClicks, string description,
         Func<string, string, string, Task<CompletionTargetCatalog?>> loadCatalog, bool supported = true,
         Func<ComboBox>? createCombo = null,
-        Func<string, string, string, CancellationToken, Task<CompletionTargetCatalog?>>? refreshCatalog = null)
+        Func<string, string, string, CancellationToken, Task<CompletionTargetCatalog?>>? refreshCatalog = null,
+        IReadOnlyList<RoomSwitchCompletion>? roomSwitchChoices = null)
     {
         _groups = groups;
         _oneClicks = oneClicks;
         _loadCatalog = loadCatalog;
         _refreshCatalog = refreshCatalog;
         _supported = supported;
+        // null 表示远程入口，不代表执行端没有保存房间；不枚举远端档案，也不让远端改写去向。
+        _canEditRoomSwitch = roomSwitchChoices != null;
         _initialSettings = CopySettings(settings);
         _workflowId = settings.SpecifiedWorkflowId;
         _workflowName = settings.SpecifiedTaskName;
@@ -88,8 +107,48 @@ internal sealed class CompletionActionPanel
         PolicyCombo.ItemsSource = new[] { "恢复任务", "执行动作" };
         inner.Children.Add(PolicyCombo);
         ActionCombo = Combo();
-        ActionCombo.ItemsSource = new[] { "停止", "执行指定任务" };
+        ActionCombo.ItemsSource = _canEditRoomSwitch || settings.RoomSwitch != null
+            ? new[] { "停止", "执行指定任务", "切换助手房间" }
+            : new[] { "停止", "执行指定任务" };
         _layer2Panel.Children.Add(ActionCombo);
+        _roomSwitchPanel.Children.Add(Text("目标助手房间", gold, 12));
+        RoomTargetCombo = Combo();
+        RoomTargetCombo.ClipToBounds = true;
+        // 列表项换行而非无限扩展 Popup；收起时下方文字仍提供完整房间身份。
+        var roomLabel = new FrameworkElementFactory(typeof(TextBlock));
+        roomLabel.SetBinding(TextBlock.TextProperty, new Binding(nameof(RoomChoice.Label)));
+        roomLabel.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        roomLabel.SetBinding(FrameworkElement.MaxWidthProperty, new Binding(nameof(FrameworkElement.ActualWidth)) { Source = RoomTargetCombo });
+        RoomTargetCombo.ItemTemplate = new DataTemplate(typeof(RoomChoice)) { VisualTree = roomLabel };
+        AutomationProperties.SetName(RoomTargetCombo, "目标助手房间");
+        var choices = (roomSwitchChoices ?? []).Where(c => c.IsValid)
+            .Select(c => new RoomChoice(c, true)).ToList();
+        RoomChoice? selectedRoom = null;
+        if (settings.RoomSwitch is { } savedRoom)
+        {
+            selectedRoom = choices.FirstOrDefault(c => SameRoomSwitchIdentity(c.Completion, savedRoom));
+            if (selectedRoom == null)
+            {
+                // 保留已保存的失效关系供查看/修复，不能因房间改址或移除而自动换用同 ID 新去向。
+                selectedRoom = new RoomChoice(savedRoom, !_canEditRoomSwitch && savedRoom.IsValid);
+                choices.Insert(0, selectedRoom);
+            }
+        }
+        RoomTargetCombo.ItemsSource = choices;
+        RoomTargetCombo.SelectedItem = selectedRoom;
+        RoomTargetCombo.IsEnabled = _canEditRoomSwitch;
+        ToolTipService.SetShowOnDisabled(RoomTargetCombo, true);
+        _roomSwitchPanel.Children.Add(RoomTargetCombo);
+        _roomSelectionStatus = Text("", dim, 11);
+        _roomSwitchPanel.Children.Add(_roomSelectionStatus);
+        _roomSwitchPanel.Children.Add(Text("切换成功后执行动作", gold, 12));
+        AfterSwitchCombo = Combo();
+        AutomationProperties.SetName(AfterSwitchCombo, "切换成功后执行动作");
+        AfterSwitchCombo.ItemsSource = new[] { "待命", "执行指定任务" };
+        AfterSwitchCombo.SelectedIndex = settings.RoomSwitch?.RunAfterSwitch == true ? 1 : 0;
+        AfterSwitchCombo.IsEnabled = _canEditRoomSwitch;
+        _roomSwitchPanel.Children.Add(AfterSwitchCombo);
+        _layer2Panel.Children.Add(_roomSwitchPanel);
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -160,16 +219,18 @@ internal sealed class CompletionActionPanel
         _specifiedPanel.Children.Add(PriorityBox);
         _layer2Panel.Children.Add(_specifiedPanel);
         inner.Children.Add(_layer2Panel);
-        PolicyCombo.SelectedIndex = settings.Policy == TaskConflictPolicy.Resume ? 0 : 1;
-        ActionCombo.SelectedIndex = settings.Policy == TaskConflictPolicy.RunSpecified ? 1 : 0;
+        PolicyCombo.SelectedIndex = settings.RoomSwitch != null || settings.Policy != TaskConflictPolicy.Resume ? 1 : 0;
+        ActionCombo.SelectedIndex = settings.RoomSwitch != null ? 2 : settings.Policy == TaskConflictPolicy.RunSpecified ? 1 : 0;
         TypeCombo.SelectedIndex = settings.SpecifiedTaskType switch { "onedragon" => 1, "workflow" => 2, _ => 0 };
         SetNames(settings.SpecifiedTaskName);
         StartModeCombo.SelectedIndex = settings.SpecifiedStartMode switch { "beginning" => 0, "node" => 1, _ => -1 };
         UpdateVisibility();
         _targetIdentity = TargetIdentity;
         _updating = false;
-        PolicyCombo.SelectionChanged += (_, _) => UpdateVisibility();
-        ActionCombo.SelectionChanged += (_, _) => UpdateVisibility();
+        PolicyCombo.SelectionChanged += (_, _) => OnCompletionActionChanged();
+        ActionCombo.SelectionChanged += (_, _) => OnCompletionActionChanged();
+        RoomTargetCombo.SelectionChanged += (_, _) => OnCompletionActionChanged();
+        AfterSwitchCombo.SelectionChanged += (_, _) => OnCompletionActionChanged();
         TypeCombo.SelectionChanged += (_, _) =>
         {
             if (_updating) return;
@@ -221,7 +282,7 @@ internal sealed class CompletionActionPanel
         };
         RefreshButton.Click += (_, _) =>
         {
-            if (_loading) return;
+            if (_loading || !CanEditSpecifiedTask) return;
             // 保留已有确认和节点；同版本刷新无需重选，版本改变仍需用户确认。
             CatalogLoadTask = RefreshCatalogAsync(
                 confirmNewTarget: StartModeCombo.SelectedIndex == 0 && string.IsNullOrEmpty(_revision),
@@ -251,6 +312,22 @@ internal sealed class CompletionActionPanel
     private (string Type, string Key) TargetIdentity => (Type, Type == "workflow" ? WorkflowId : Name);
     private TaskConflictPolicy Policy => PolicyCombo.SelectedIndex != 1 ? TaskConflictPolicy.Resume
         : ActionCombo.SelectedIndex == 1 ? TaskConflictPolicy.RunSpecified : TaskConflictPolicy.Stop;
+    private bool IsRoomSwitch => PolicyCombo.SelectedIndex == 1 && ActionCombo.SelectedIndex == 2;
+    private bool HasSpecifiedTask => Policy == TaskConflictPolicy.RunSpecified || IsRoomSwitch && AfterSwitchCombo.SelectedIndex == 1;
+    private bool CanEditSpecifiedTask => _supported && HasSpecifiedTask && (!IsRoomSwitch || _canEditRoomSwitch);
+
+    private static bool SameRoomSwitchIdentity(RoomSwitchCompletion first, RoomSwitchCompletion second) =>
+        first.SourceProfileId == second.SourceProfileId && first.SourceRoomCode == second.SourceRoomCode
+        && RoomServerAddress.Same(first.SourceServerUrl, second.SourceServerUrl)
+        && first.TargetProfileId == second.TargetProfileId && first.TargetRoomCode == second.TargetRoomCode
+        && RoomServerAddress.Same(first.TargetServerUrl, second.TargetServerUrl);
+
+    private void OnCompletionActionChanged()
+    {
+        if (_updating) return;
+        UpdateVisibility();
+        ShowCatalogStatus();
+    }
 
     private void SetNames(string selected)
     {
@@ -368,12 +445,20 @@ internal sealed class CompletionActionPanel
     {
         settings = null;
         error = null;
-        if (!_supported) return true;
+        if (!_supported || IsRoomSwitch && !_canEditRoomSwitch) return true;
         var candidate = ReadSettings(out var priorityValid);
         var before = CompletionPolicyFields.Parameters(_initialSettings);
-        if (candidate.Policy == TaskConflictPolicy.RunSpecified)
+        if (candidate.HasSpecifiedTask)
             before["specifiedName"] = _initialSettings.SpecifiedTaskName.Trim();
-        var changed = (Policy == TaskConflictPolicy.RunSpecified && !priorityValid)
+        if (candidate.RoomSwitch is { } selected && _initialSettings.RoomSwitch is { } saved
+            && SameRoomSwitchIdentity(selected, saved))
+        {
+            // 房间改名、地址等价规范化不等于编辑去向。
+            before["roomSwitchTargetName"] = selected.TargetName;
+            before["roomSwitchSourceServerUrl"] = selected.SourceServerUrl;
+            before["roomSwitchTargetServerUrl"] = selected.TargetServerUrl;
+        }
+        var changed = (CanEditSpecifiedTask && !priorityValid)
             || CompletionPolicyFields.Parameters(candidate).Any(pair =>
                 // 同一个稳定计划身份的显示名变化不表示用户编辑了完成动作。
                 !(pair.Key == "specifiedName" && candidate.SpecifiedTaskType == "workflow"
@@ -388,12 +473,26 @@ internal sealed class CompletionActionPanel
     internal bool TryGetSettings(out TaskConflictPolicySettings settings, out string? error)
     {
         settings = ReadSettings(out var priorityValid);
-        error = !_supported ? "执行端尚未支持执行起点设置，请升级后重新读取。"
-            : Policy != TaskConflictPolicy.RunSpecified ? null
-            : !priorityValid ? "指定任务优先级必须是 32 位整数。"
-            : StartModeCombo.SelectedIndex < 0 ? "旧配置沿用原入口；保存指定任务前请选择从头或从某个任务开始。"
-            : _loading ? "任务目录正在读取，请稍后保存。"
-            : CompletionTargetCatalogService.Validate(settings, _catalog ?? new([], null, "请先读取任务目录。"));
+        if (!_supported)
+            error = "执行端尚未支持执行起点设置，请升级后重新读取。";
+        else if (IsRoomSwitch && !_canEditRoomSwitch)
+            error = "切房去向及切换后的动作只能在执行端本机编辑。"; // TryGetChanges 会保留原值，不发切房写入。
+        else if (IsRoomSwitch && (RoomTargetCombo.SelectedItem is not RoomChoice { Available: true }
+            || settings.RoomSwitch?.IsValid != true))
+            error = "请选择有效的其他助手房间；原去向失效时请重新确认。";
+        else if (IsRoomSwitch && AfterSwitchCombo.SelectedIndex is not (0 or 1))
+            error = "请选择切换成功后的动作。";
+        else if (!HasSpecifiedTask)
+            error = null;
+        else if (!priorityValid)
+            error = "指定任务优先级必须是 32 位整数。";
+        else if (StartModeCombo.SelectedIndex < 0)
+            error = "旧配置沿用原入口；保存指定任务前请选择从头或从某个任务开始。";
+        else if (_loading)
+            error = "任务目录正在读取，请稍后保存。";
+        else
+            error = CompletionTargetCatalogService.Validate(IsRoomSwitch ? settings.PostSwitchTask() : settings,
+                _catalog ?? new([], null, "请先读取任务目录。"));
         return error is null;
     }
 
@@ -401,16 +500,27 @@ internal sealed class CompletionActionPanel
     {
         priorityValid = int.TryParse(PriorityBox.Text.Trim(), System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var priority);
-        if (Policy != TaskConflictPolicy.RunSpecified)
+        if (IsRoomSwitch && !_canEditRoomSwitch)
+            return CopySettings(_initialSettings);
+        var room = IsRoomSwitch
+            ? ((RoomTargetCombo.SelectedItem as RoomChoice)?.Completion ?? new RoomSwitchCompletion())
+                with { RunAfterSwitch = AfterSwitchCombo.SelectedIndex == 1 }
+            : null;
+        if (!HasSpecifiedTask)
         {
-            // 恢复/停止的隐藏起点字段继续沿用保存值，不能在普通策略编辑时升级旧入口。
-            var preserved = CopySettings(_initialSettings);
-            preserved.Policy = Policy;
-            return preserved;
+            // 原有恢复/停止的隐藏起点字段继续沿用保存值；切房待命不携带指定任务。
+            // 已保存的待命关系即使有旧隐藏字段，未改动时也不发写入。
+            var preserve = room == null && _initialSettings.RoomSwitch == null
+                || room != null && _initialSettings.RoomSwitch is { RunAfterSwitch: false } saved
+                    && SameRoomSwitchIdentity(room, saved);
+            var settings = preserve ? CopySettings(_initialSettings) : new TaskConflictPolicySettings();
+            settings.Policy = Policy;
+            settings.RoomSwitch = room;
+            return settings;
         }
         return new()
         {
-            Policy = Policy, SpecifiedTaskType = Type, SpecifiedTaskName = Name,
+            Policy = Policy, RoomSwitch = room, SpecifiedTaskType = Type, SpecifiedTaskName = Name,
             SpecifiedTaskPriority = priority,
             SpecifiedStartMode = StartModeCombo.SelectedIndex switch { 0 => "beginning", 1 => "node", _ => "default" },
             SpecifiedStartTaskId = _nodeId, SpecifiedStartTaskName = _nodeName,
@@ -420,7 +530,7 @@ internal sealed class CompletionActionPanel
 
     private static TaskConflictPolicySettings CopySettings(TaskConflictPolicySettings settings) => new()
     {
-        Policy = settings.Policy, SpecifiedTaskType = settings.SpecifiedTaskType,
+        Policy = settings.Policy, RoomSwitch = settings.RoomSwitch, SpecifiedTaskType = settings.SpecifiedTaskType,
         SpecifiedTaskName = settings.SpecifiedTaskName, SpecifiedTaskPriority = settings.SpecifiedTaskPriority,
         SpecifiedStartMode = settings.SpecifiedStartMode, SpecifiedStartTaskId = settings.SpecifiedStartTaskId,
         SpecifiedStartTaskName = settings.SpecifiedStartTaskName, SpecifiedConfigRevision = settings.SpecifiedConfigRevision,
@@ -446,6 +556,12 @@ internal sealed class CompletionActionPanel
 
     private void ShowCatalogStatus()
     {
+        NameCombo.ToolTip = Name;
+        if (IsRoomSwitch && !_canEditRoomSwitch)
+        {
+            _catalogStatus.Text = $"已保存指定任务：{_initialSettings.SpecifiedTaskName}；后续动作仅在执行端本机编辑。";
+            return;
+        }
         TryGetSettings(out _, out var error);
         _catalogStatus.Text = error ?? (_catalog?.Target is { } target
             ? $"已读取 {target.Nodes.Count(n => n.Enabled)} 个已启用任务。" : _catalog?.Error ?? "");
@@ -453,7 +569,7 @@ internal sealed class CompletionActionPanel
 
     private void UpdateVisibility()
     {
-        if (Policy != TaskConflictPolicy.RunSpecified && _refreshCancellation != null)
+        if (!CanEditSpecifiedTask && _refreshCancellation != null)
         {
             ++_request;
             CancelCurrentRefresh();
@@ -461,8 +577,40 @@ internal sealed class CompletionActionPanel
             RefreshButton.IsEnabled = _supported;
         }
         _layer2Panel.Visibility = PolicyCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-        _specifiedPanel.Visibility = ActionCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        _roomSwitchPanel.Visibility = IsRoomSwitch ? Visibility.Visible : Visibility.Collapsed;
+        // 远程只展示已保存的切房后继摘要；用户选择其他普通动作时仍可编辑原有指定任务控件。
+        _specifiedPanel.Visibility = HasSpecifiedTask && (!IsRoomSwitch || _canEditRoomSwitch)
+            ? Visibility.Visible : Visibility.Collapsed;
+        _specifiedPanel.IsEnabled = !IsRoomSwitch || _canEditRoomSwitch;
         NodeCombo.Visibility = StartModeCombo.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRoomSelectionStatus();
+    }
+
+    private void UpdateRoomSelectionStatus()
+    {
+        var selected = RoomTargetCombo.SelectedItem as RoomChoice;
+        var detail = selected?.Label ?? "";
+        var hint = !_canEditRoomSwitch ? "切房去向及切换后的动作由执行端本机设置；这里仍可选择恢复、停止或普通指定任务。"
+            : selected is { Available: false } ? "原去向已失效，请重新选择有效房间。"
+            : selected == null ? (RoomTargetCombo.Items.Count == 0 ? "暂无其他有效房间，请先在房间管理中添加目标。" : "请选择目标房间。")
+            : "切房确认后再执行所选动作，切房本身不会自动上线。";
+        if (!_canEditRoomSwitch && _initialSettings.RoomSwitch is { } remote)
+        {
+            var after = !remote.RunAfterSwitch ? "待命"
+                : "执行 " + (_initialSettings.SpecifiedTaskType switch { "group" => "配置组", "onedragon" => "一条龙", "workflow" => "计划表", _ => "指定任务" })
+                    + "「" + _initialSettings.SpecifiedTaskName + "」；"
+                    + (_initialSettings.SpecifiedStartMode switch
+                    {
+                        "beginning" => "从头开始", "node" => "起点：" + _initialSettings.SpecifiedStartTaskName, _ => "起点待确认"
+                    }) + $"；优先级 {_initialSettings.SpecifiedTaskPriority}";
+            if (remote.RunAfterSwitch && (_initialSettings.SpecifiedStartMode is not ("beginning" or "node")
+                || CompletionTargetCatalogService.ValidateShape(_initialSettings.PostSwitchTask()) != null))
+                after += "（后继任务待重新确认）";
+            detail += "\n已保存切换后动作：" + after;
+        }
+        // 收起的下拉框长度受限时，仍能读取完整名称、房间号和服务器地址。
+        _roomSelectionStatus.Text = string.IsNullOrEmpty(detail) ? hint : detail + "\n" + hint;
+        RoomTargetCombo.ToolTip = _roomSelectionStatus.Text;
     }
 
     private static TextBlock Text(string text, Brush brush, double size = 10) => new()

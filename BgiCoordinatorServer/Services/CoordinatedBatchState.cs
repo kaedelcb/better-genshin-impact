@@ -2,12 +2,13 @@ namespace BgiCoordinatorServer.Services;
 
 public sealed record CoordinatedCompletionAction(string Policy, string TaskType, string TaskName, int Priority,
     string StartMode = "default", string StartTaskId = "", string StartTaskName = "",
-    string ConfigRevision = "", string WorkflowId = "")
+    string ConfigRevision = "", string WorkflowId = "",
+    string TargetName = "", string TargetRoomCode = "", bool RunAfterSwitch = false, string ActionRevision = "")
 {
-    // 只验证传输合同；目标目录、节点启用状态和修订仍须由该成员本地执行端核对。
+    // 只验证传输合同；房间身份、目录、节点与修订仍须由该成员本地执行端核对。
     public bool IsValid()
     {
-        if (Policy is not ("resume" or "stop" or "runSpecified")
+        if (Policy is not ("resume" or "stop" or "runSpecified" or "switchRoom")
             || TaskType is not ("group" or "onedragon" or "workflow")
             || TaskName is null || TaskName.Length > 1024
             || StartMode is not ("default" or "beginning" or "node")
@@ -15,7 +16,16 @@ public sealed record CoordinatedCompletionAction(string Policy, string TaskType,
             || StartTaskName is null || StartTaskName.Length > 1024
             || ConfigRevision is null || ConfigRevision.Length > 1024
             || WorkflowId is null || WorkflowId.Length > 1024) return false;
-        if (Policy != "runSpecified") return true;
+        if (Policy == "switchRoom")
+        {
+            if (string.IsNullOrWhiteSpace(TargetName) || TargetName.Length > 1024
+                || string.IsNullOrWhiteSpace(TargetRoomCode) || TargetRoomCode.Length > 1024
+                || ActionRevision is not { Length: 67 } || !ActionRevision.StartsWith("v1:", StringComparison.Ordinal)
+                || !ActionRevision[3..].All(Uri.IsHexDigit)) return false;
+            if (!RunAfterSwitch) return true;
+            if (StartMode == "default") return false;
+        }
+        else if (Policy != "runSpecified") return true;
         if (string.IsNullOrWhiteSpace(TaskName)) return false;
         if (TaskType == "workflow" ? string.IsNullOrWhiteSpace(WorkflowId) : WorkflowId.Length > 0) return false;
         return StartMode switch
@@ -26,6 +36,15 @@ public sealed record CoordinatedCompletionAction(string Policy, string TaskType,
                 && !string.IsNullOrWhiteSpace(StartTaskName),
             _ => false
         };
+    }
+
+    internal static bool MatchesRoomSwitchConfirmation(CoordinatedCompletionAction? confirmed, CoordinatedCompletionAction? actual)
+    {
+        if (confirmed?.Policy != "switchRoom" && actual?.Policy != "switchRoom") return true;
+        // 显示名可改；冻结的目标身份、后继任务和修订不能变。
+        return confirmed?.Policy == "switchRoom" && actual?.Policy == "switchRoom"
+            && confirmed.IsValid() && actual.IsValid()
+            && (confirmed with { TargetName = "" }) == (actual with { TargetName = "" });
     }
 }
 
@@ -47,6 +66,8 @@ public sealed record CoordinatedBatchSnapshot(string BatchId, int Generation, in
     public IReadOnlyDictionary<string, int> IntentGenerations { get; init; } = new Dictionary<string, int>();
     public IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>> Bindings { get; init; }
         = new Dictionary<string, IReadOnlyList<CoordinatedBatchBinding>>();
+    public IReadOnlyDictionary<string, CoordinatedCompletionAction> ConfirmedCompletionActions { get; init; }
+        = new Dictionary<string, CoordinatedCompletionAction>();
     public IReadOnlyList<CoordinatedBatchMemberSnapshot> Members { get; init; } = [];
     public IReadOnlyList<string> MissingRegistrationUids { get; init; } = [];
     public bool UseCompletionActions { get; init; }
@@ -94,6 +115,7 @@ public sealed class CoordinatedBatchState
     private readonly IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>> _bindings;
     private readonly IReadOnlyDictionary<string, int> _intentGenerations;
     private readonly IReadOnlyDictionary<string, string> _executorInstances;
+    private readonly IReadOnlyDictionary<string, CoordinatedCompletionAction> _confirmedCompletionActions;
     public string BatchId { get; } = Guid.NewGuid().ToString("N");
     public int Generation { get; }
     public string Source { get; }
@@ -118,7 +140,8 @@ public sealed class CoordinatedBatchState
         IReadOnlyDictionary<string, IReadOnlyList<CoordinatedBatchBinding>>? bindings = null,
         IReadOnlyDictionary<string, int>? intentGenerations = null,
         IReadOnlyDictionary<string, string>? executorInstances = null,
-        bool useCompletionActions = false, string quickCommandKey = "", bool stateContinuation = false, bool priorityRecovery = false)
+        bool useCompletionActions = false, string quickCommandKey = "", bool stateContinuation = false, bool priorityRecovery = false,
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null)
     {
         Generation = generation;
         Source = source;
@@ -138,6 +161,9 @@ public sealed class CoordinatedBatchState
             ?? new Dictionary<string, int>();
         _executorInstances = executorInstances?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             ?? new Dictionary<string, string>();
+        _confirmedCompletionActions = new System.Collections.ObjectModel.ReadOnlyDictionary<string, CoordinatedCompletionAction>(
+            confirmedCompletionActions?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
+            ?? new Dictionary<string, CoordinatedCompletionAction>());
         if (QuickCommandKey.Length > 0)
         {
             if (_bindings.Count != _members.Count || _members.Keys.Any(uid =>
@@ -175,6 +201,7 @@ public sealed class CoordinatedBatchState
         ParticipantUids = ParticipantUids,
         IntentGenerations = _intentGenerations,
         Bindings = _bindings,
+        ConfirmedCompletionActions = _confirmedCompletionActions,
         UseCompletionActions = UseCompletionActions,
         StateContinuation = StateContinuation,
         PriorityRecovery = PriorityRecovery,

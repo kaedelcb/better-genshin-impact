@@ -11,6 +11,7 @@ public sealed class RemoteCenterRequest
     public int Version { get; set; } = CurrentVersion;
     public string Operation { get; set; } = "";
     public string TargetInstanceId { get; set; } = "";
+    public string? ExpectedMachineId { get; set; }
     public string? PayloadJson { get; set; }
     public string? ExpectedRevision { get; set; }
     public int? FlowEditVersion { get; set; }
@@ -47,7 +48,11 @@ public static class RemoteCenterProtocol
         => command.Params?.GetValueOrDefault(PayloadKey)?.ToString();
 
     internal static string RequestFingerprint(RemoteCommand command, RemoteCenterRequest request)
-        => Convert.ToHexString(SHA256.HashData(request.FlowEditVersion is null ? JsonSerializer.SerializeToUtf8Bytes(new
+        => Convert.ToHexString(SHA256.HashData(request.ExpectedMachineId is not null ? JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            command.RoomCode, command.SenderUid, request.Version, request.TargetInstanceId, request.ExpectedMachineId,
+            request.Operation, request.ExpectedRevision, request.PayloadJson, request.FlowEditVersion
+        }) : request.FlowEditVersion is null ? JsonSerializer.SerializeToUtf8Bytes(new
         {
             command.RoomCode, command.SenderUid,
             request.Version, request.TargetInstanceId, request.Operation,

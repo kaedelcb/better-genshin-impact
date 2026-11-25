@@ -340,6 +340,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 到点已过且超出宽限窗的场景（如设 1:00、1:30 才打开助手）不再被补触发上线。
         _lastScheduledFireDate = _config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
         LoadAssistantRoomSwitchRecord();
+        LoadRoomOrchestrationExecution();
         NotifyRoomProfiles();
         if (_configManager.RoomProfileMigrationWarning is { Length: > 0 } warning) AddLog(warning);
 
@@ -388,12 +389,15 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>[P1] onlineGeneration 边沿入口（事件帧/快照/v2 轮询共用）：状态判定全部收口到
     /// OnlineIntentLifecycle.ApplyEdge（BGI 重启归零下行对齐、双来源对齐写盘、2 分钟新鲜度窗、60s 防抖）；
     /// 意图被接受（Accepted）时由本类完成 SignalR 上报（网络 IO 不进状态机）。</summary>
-    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null, string? workflowRunId = null)
+    private void ApplyOnlineGenerationEdge(int gen, DateTime? triggeredAtUtc = null, string? workflowRunId = null,
+        string? jobId = null, string? submissionKey = null, long? stopVersion = null, BgiEpoch? epoch = null)
     {
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null) return;
         var committed = Volatile.Read(ref _roomSwitchCommittedAtUtc);
         if (committed != 0 && (!triggeredAtUtc.HasValue || triggeredAtUtc.Value.ToUniversalTime().Ticks <= committed)) return;
+        if (SuppressPersistedRoomOrchestrationSignal(gen, triggeredAtUtc, epoch)) return;
+        if (HandleRoomOrchestrationOnlineSignal(gen, triggeredAtUtc, workflowRunId, jobId, submissionKey, stopVersion, epoch)) return;
         if (workflowRunId is not null && !TaskCenterHost.VerifyFlowRoomDependency(workflowRunId))
         {
             AddLog("BGI 上线未提交：原任务中心流程的房间连接未确认");
@@ -402,6 +406,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         var edgeResult = _intentLifecycle.ApplyEdge(gen, triggeredAtUtc, out var genToReport);
         if (edgeResult == OnlineEdgeResult.Accepted)
         {
+            CancelRoomOrchestrationPending("本机产生新的普通命令上线", revokeOnline: false);
             _workflowOnlineOrigin = workflowRunId is null ? null : new(genToReport, workflowRunId, CurrentControlContext());
             _ = ReportOnlineEventTrackedAsync(genToReport);
         }
@@ -468,10 +473,12 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>[B157] 上报上线事件并跟踪结果：送达则记入状态机送达台账（防抖与重连补报基准）；
     /// 未送达（无客户端/未连接/调用失败）则挂起待补报，由 10s 轮询与重连钩子自动补报。
     /// 替代旧的 fire-and-forget 静默丢弃（那是"偶发执行了不上线"的直接根因）。</summary>
-    private async Task<bool> ReportOnlineEventTrackedAsync(int gen)
+    private async Task<bool> ReportOnlineEventTrackedAsync(int gen, string? expectedOrchestrationIntentId = null)
     {
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null) return false;
+        var orchestration = GetRoomOrchestrationOnlineOrigin(gen);
+        if (orchestration?.IntentId != expectedOrchestrationIntentId) return false;
         var client = _signalRClient;
         if (client == null)
         {
@@ -479,11 +486,19 @@ public partial class MainViewModel : INotifyPropertyChanged
             return false;
         }
         var roomIdentity = client.ControlContext;
+        if (orchestration is not null && !await VerifyRoomOrchestrationOnlineReportAsync(gen, orchestration.IntentId)) return false;
+        if (!ReferenceEquals(client, _signalRClient) || client.ControlContext != roomIdentity || RoomSwitchBlocksRoomOperations) return false;
         var ok = await client.ReportOnlineEventAsync(gen, true);
         if (!ReferenceEquals(client, _signalRClient) || client.ControlContext != roomIdentity || RoomSwitchBlocksRoomOperations) return false;
+        if (orchestration is not null && !await VerifyRoomOrchestrationOnlineReportAsync(gen, orchestration.IntentId))
+        {
+            if (ok) await RetractRoomOrchestrationOnlineReportAsync(gen, client, orchestration.IntentId);
+            return false;
+        }
         if (ok)
         {
             _intentLifecycle.NoteReportDelivered(gen);
+            if (orchestration is not null) NoteRoomOrchestrationOnlineReported(gen, orchestration.IntentId);
         }
         else
         {
@@ -502,15 +517,27 @@ public partial class MainViewModel : INotifyPropertyChanged
         using var roomEffect = TryEnterAssistantRoomEffect();
         if (roomEffect is null || _signalRClient is not { IsConnected: true } client) return;
         if (!_intentLifecycle.TryGetReReportGen(out var gen)) return;
-        if (_workflowOnlineOrigin is { } origin && origin.Generation == gen
+        var orchestration = GetRoomOrchestrationOnlineOrigin(gen);
+        if (orchestration is not null && !await VerifyRoomOrchestrationOnlineReportAsync(gen, orchestration.IntentId)) return;
+        if (orchestration is null && _workflowOnlineOrigin is { } origin && origin.Generation == gen
             && (origin.ControlContext != CurrentControlContext() || !TaskCenterHost.VerifyFlowRoomDependency(origin.RunId)))
         {
             _intentLifecycle.OnResetCleared();
             return;
         }
-        if (await client.ReportOnlineEventAsync(gen, true) && ReferenceEquals(client, _signalRClient) && !RoomSwitchBlocksRoomOperations)
+        var context = client.ControlContext;
+        if (!ReferenceEquals(client, _signalRClient) || RoomSwitchBlocksRoomOperations) return;
+        var accepted = await client.ReportOnlineEventAsync(gen, true);
+        if (!ReferenceEquals(client, _signalRClient) || client.ControlContext != context || RoomSwitchBlocksRoomOperations) return;
+        if (orchestration is not null && !await VerifyRoomOrchestrationOnlineReportAsync(gen, orchestration.IntentId))
+        {
+            if (accepted) await RetractRoomOrchestrationOnlineReportAsync(gen, client, orchestration.IntentId);
+            return;
+        }
+        if (accepted)
         {
             _intentLifecycle.NoteReReportDelivered(gen);
+            if (orchestration is not null) NoteRoomOrchestrationOnlineReported(gen, orchestration.IntentId);
             AddLog($"已向服务端补报上线意图（generation={gen}）");
         }
     }
@@ -853,6 +880,10 @@ public partial class MainViewModel : INotifyPropertyChanged
         // [离线优先] signalRClient 为 null 不再整轮早退：本地采集（IPC/ext → LatestLocalStatus）是槲寄生
         // 条件/电子狗的事实源，单机模式也必须运行；仅末尾 SignalR 上报段以 null 守卫跳过。
         var signalRClient = _signalRClient;
+
+        // 即使后继任务已经结束，目标房间仍在等人时也要核验原上线授权。
+        if (_intentLifecycle.ArmedOnlineGeneration is { } armed && IsRoomOrchestrationOnlineGeneration(armed))
+            await VerifyRoomOrchestrationOnlineReportAsync(armed);
 
         // [B157] 上线事件上报失败的待补报重试（每 10s 一跳）：旧实现 fire-and-forget 静默丢弃后
         // 客户端已自认"已上线"，不再重试——偶发断线即永久不上线。服务端按 gen 边沿去重，重试安全。
@@ -1241,7 +1272,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             HoeingBatchId = visibleBatch?.BatchId ?? _lastHoeingBatchId,
             HoeingStartPhase = visibleBatch?.Phase ?? _lastHoeingStartPhase,
             HoeingStartMessage = visibleBatch?.Message ?? _lastHoeingStartMessage,
-            HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()),
+            HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy(), _config),
             PlayerUid = _config!.PlayerUid,
             PlayerName = _config.PlayerName,
             BgiStatus = _config?.ObserverMode == true ? "observer" : (_processMonitor?.IsBgiRunning == true ? "running" : "stopped"),
@@ -1311,7 +1342,9 @@ public partial class MainViewModel : INotifyPropertyChanged
                             triggeredAt = taVal.Kind == DateTimeKind.Utc ? taVal : taVal.ToUniversalTime();
                         }
                         // [P1] 首见判定收编进状态机；边沿检测/基线同步/双来源对齐/防抖/上报全部收口到共享方法（与快照路径同款语义）
-                        ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(sdata, "onlineWorkflowRunId"));
+                        ApplyOnlineGenerationEdge(gen, triggeredAt, ReadBgiOnlineWorkflowRunId(sdata, "onlineWorkflowRunId"),
+                            ReadBgiOnlineString(sdata, "onlineJobId"), ReadBgiOnlineString(sdata, "onlineSubmissionKey"),
+                            ReadBgiOnlineStopVersion(sdata, "onlineStopVersion"), ReadBgiOnlineEpoch(sdata));
                         // 同步本地已构造的 status 对象，防止后续 ReportControlStatusAsync 用旧值覆盖服务端
                         status.OnlineReady = _intentLifecycle.IsOnlineReady;
                         status.OnlineMode = _intentLifecycle.OnlineMode;
@@ -1528,6 +1561,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 定时尚未受理，保留原闹钟，让既有宽限窗内的检查继续等清理完成。
             return mode != "scheduled";
         }
+        CancelRoomOrchestrationPending("本机产生新的上线意图", revokeOnline: false);
         var gen = _intentLifecycle.RaiseLocalIntent(mode);
         AddLog($"已上线（{mode}）");
         // 立即上报服务端，让卡片实时更新（不等下一次 10 秒轮询）
@@ -2022,7 +2056,10 @@ public partial class MainViewModel : INotifyPropertyChanged
             CancelCompletionCatalogRefresh(cmd.SenderUid, cancelledId);
             return;
         }
-        var replyParams = CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy());
+        var policySnapshot = SnapshotOnlineHoeingPolicy();
+        var replyParams = CompletionPolicyFields.Parameters(policySnapshot);
+        if (policySnapshot.RoomSwitch != null)
+            replyParams["roomSwitchDescription"] = CoordinatedCompletionAction.FromSettings(policySnapshot, _config).Description;
         replyParams["ok"] = "true"; // 配置快照读取成功；目录是否就绪仅由 catalog.Target/Error 表达。
         var catalogType = GetRemoteParam(cmd.Params, "catalogType") ?? _config?.OnlineHoeingSpecifiedTaskType ?? "group";
         var catalogName = GetRemoteParam(cmd.Params, "catalogName") ?? _config?.OnlineHoeingSpecifiedTaskName ?? "";
@@ -2072,12 +2109,20 @@ public partial class MainViewModel : INotifyPropertyChanged
         var version = GetRemoteParam(cmd.Params, "completionStartVersion");
         try
         {
-            var current = SnapshotOnlineHoeingPolicy();
+            var baseline = CaptureOnlineHoeingEdit();
+            var current = baseline.Completion;
             var policy = GetRemoteParam(cmd.Params, "policy");
             var type = GetRemoteParam(cmd.Params, "specifiedType");
             var name = GetRemoteParam(cmd.Params, "specifiedName");
-            if (_config == null || _configManager == null) throw new InvalidOperationException("本机配置存储未就绪。");
+            if (_config == null || _configManager == null || _config.ObserverMode)
+                throw new InvalidOperationException("本机执行端配置存储未就绪。");
+            if (policy == "switchRoom") throw new InvalidOperationException("切房关系须在执行端本机编辑。");
             if (policy is not ("resume" or "stop" or "runSpecified")) throw new InvalidOperationException("未知完成后动作。");
+            var expectedRevision = GetRemoteParam(cmd.Params, "expectedCompletionRevision");
+            var before = CompletionPolicyFields.Parameters(current);
+            if ((current.RoomSwitch != null || expectedRevision != null) &&
+                expectedRevision != TaskPolicySyncService.CompletionEditRevision(key => before.GetValueOrDefault(key)?.ToString()))
+                throw new InvalidOperationException("完成动作已变化或未经确认，请重新读取后保存。");
             if (type is not ("group" or "onedragon" or "workflow") || name == null) throw new InvalidOperationException("指定任务类型或名称不合法。");
             if (!int.TryParse(GetRemoteParam(cmd.Params, "specifiedPriority"), System.Globalization.NumberStyles.Integer,
                     System.Globalization.CultureInfo.InvariantCulture, out var priority)) throw new InvalidOperationException("任务优先级必须是 32 位整数。");
@@ -2106,10 +2151,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             var validation = candidate.Policy == TaskConflictPolicy.RunSpecified
                 ? await GetCompletionTargetCatalogService().ValidateAsync(candidate) : null;
             if (validation != null) throw new InvalidOperationException(validation);
-            var before = CompletionPolicyFields.Parameters(current);
-            if (CompletionPolicyFields.Parameters(SnapshotOnlineHoeingPolicy()).Any(p => !Equals(before[p.Key], p.Value)))
-                throw new InvalidOperationException("完成动作配置已变化，请重新读取后保存。");
-            SaveOnlineHoeingPolicy(candidate);
+            SaveOnlineHoeingRoomFields(null, null, candidate, baseline);
             ok = true;
             message = "已应用上线锄地完成后动作（已持久化）";
             _ = ReportStatusAsync();
@@ -2645,6 +2687,12 @@ public partial class MainViewModel : INotifyPropertyChanged
         var isSelf = targetMember == null || targetMember.PlayerUid == _config.PlayerUid;
         var (confirmed, resetAll) = ShowClearOnlineConfirmDialog(isSelf, resetState: true);
         if (!confirmed) return;
+        if ((isSelf || resetAll) && IsExecutorMode)
+        {
+            CancelWaitingAssistantRoomSwitch();
+            CancelRoomOrchestrationPending("本机用户重置状态", revokeOnline: true);
+        }
+        var resetContext = CurrentControlContext();
 
         var resetId = "reset_" + Guid.NewGuid().ToString("N");
         var requestedTargets = resetAll
@@ -2655,7 +2703,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         expectedGeneration = Math.Max(expectedGeneration, _intentLifecycle.LastProcessedAllReadyGeneration);
         string expectedBatchId;
         lock (_batchGate) expectedBatchId = _activeBatch?.Start?.BatchId ?? targetMember?.HoeingBatchId ?? "";
-        lock (_batchGate) _resetFenceGeneration = Math.Max(_resetFenceGeneration, expectedGeneration);
+        AdvanceCoordinatedResetFence(expectedGeneration, resetContext);
         var serverResetGeneration = expectedGeneration;
         var serverResetConfirmed = false;
 
@@ -2692,7 +2740,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 serverResetConfirmed = true;
                 serverResetGeneration = reset.Generation; // Forward the exact server grant, not a local high-water mark.
                 expectedBatchId = reset.BatchId;
-                lock (_batchGate) _resetFenceGeneration = Math.Max(_resetFenceGeneration, serverResetGeneration);
+                AdvanceCoordinatedResetFence(serverResetGeneration, resetContext);
                 var missing = reset.MissingRegistrationUids.Count == 0
                     ? "无"
                     : string.Join(",", reset.MissingRegistrationUids);
@@ -3118,6 +3166,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         CancelPendingCoordinatedBegin();
         var roomClient = _signalRClient;
         var onlineGeneration = _intentLifecycle.ArmedOnlineGeneration;
+        CancelWaitingAssistantRoomSwitch();
+        CancelRoomOrchestrationPending("本机清除上线或重置", revokeOnline: true);
         // 清除当前上线及挂起补报；仅“清除上线”置手动抑制，状态重置保留未来定时的原有决定。
         if (preserveScheduledOnline)
             _intentLifecycle.OnResetCleared();
@@ -3202,9 +3252,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 if (IsCoordinatedResetStale(expectedBatchId, expectedGeneration))
                     return new CommandResult { Status = "failed", ErrorCode = "stale_reset", Message = "批次身份已改变，未影响当前任务" };
-                _resetFenceGeneration = Math.Max(_resetFenceGeneration, expectedGeneration);
+                AdvanceCoordinatedResetFence(expectedGeneration);
                 batchToWait = _activeBatch;
             }
+            CancelWaitingAssistantRoomSwitch();
+            CancelRoomOrchestrationPending("本机状态重置", revokeOnline: true);
             CancelPendingCoordinatedBegin();
             _intentLifecycle.OnResetCleared();
             _intentLifecycle.SealBaselineAfterManualClear(int.MaxValue);
@@ -3289,6 +3341,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (batchToWait != null)
                 {
                     batchToWait.CleanupConfirmed = true;
+                    RecordRoomOrchestrationPhase(batchToWait, "cancelled", "人工重置已完成", settled: true);
                     batchToWait.MarkSettled(waitForCallbacks: false);
                     _intentLifecycle.FinishCoordinatedBatch(batchToWait.BatchId, "人工重置已完成");
                     lock (_batchGate)
@@ -3732,6 +3785,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         using var roomEffect = isOtherRoom ? null : TryEnterAssistantRoomEffect();
         if (!isOtherRoom && roomEffect is null) return;
         if (_config == null) return;
+        if (!TryEnterConfigTransferOperation("bind_hoeing_group", out var transferOperation))
+        { AddLog(ConfigTransferBlockedMessage); return; }
+        using var configTransferOperation = transferOperation;
 
         IRoomSpectatorSession? otherSession = null;
         string? otherRoomLabel = null;
@@ -3746,6 +3802,9 @@ public partial class MainViewModel : INotifyPropertyChanged
 
         // 判断目标：点自己的卡片还是别人的（其他房间卡片一律按远端成员处理，绝不写本机配置）
         var isSelf = !isOtherRoom && (targetMember == null || targetMember.PlayerUid == _config.PlayerUid);
+        var editsLocal = isSelf && !_config.ObserverMode;
+        var editBaseline = CaptureOnlineHoeingEdit();
+        var editControlContext = CurrentControlContext();
 
         // 配置组列表来源：改自己 = 本机 BGI；改别人 = 对方的配置组（来自服务端该成员上报的 ConfigGroups）
         List<string> allGroups = [];
@@ -3818,7 +3877,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         // [fix 2026-09-13] 遥控器模式改自己必须实拉：权威副本在执行端，本机 _config 只是镜像，
         // 历史上初始值直接读本机镜像导致监控端打开自己的绑定弹窗恒显示"恢复执行"（本次回归根因）。
         // 路由依据：pull 只投执行端连接（FR-3，监控端不收执行类命令），回复按 47116892 双投回监控端。
-        var initialCompletion = SnapshotOnlineHoeingPolicy();
+        var initialCompletion = editsLocal ? editBaseline.Completion : new TaskConflictPolicySettings();
+        IReadOnlyDictionary<string, object>? remoteCompletionBaseline = null;
+        string? remoteSwitchDescription = null;
         var completionStartSupported = true;
         // 拉取失败或未确认起点协议时，禁用完成动作保存，不能用本机镜像覆盖执行端配置。
         var policyPullFailed = false;
@@ -3852,9 +3913,12 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (pulled != null)
                 {
                     completionStartSupported = pulled.GetValueOrDefault("completionStartVersion") == CompletionTargetCatalogService.Version;
+                    remoteCompletionBaseline = pulled.ToDictionary(p => p.Key, p => (object)p.Value, StringComparer.Ordinal);
+                    remoteSwitchDescription = pulled.GetValueOrDefault("roomSwitchDescription");
                     initialCompletion = new TaskConflictPolicySettings
                     {
                         Policy = PolicyFromString(pulled.GetValueOrDefault("policy")),
+                        RoomSwitch = CompletionPolicyFields.RoomSwitchFromParameters(key => pulled.GetValueOrDefault(key)),
                         SpecifiedTaskType = pulled.GetValueOrDefault("specifiedType") ?? "group",
                         SpecifiedTaskName = pulled.GetValueOrDefault("specifiedName") ?? "",
                         SpecifiedTaskPriority = int.TryParse(pulled.GetValueOrDefault("specifiedPriority"),
@@ -4030,11 +4094,9 @@ public partial class MainViewModel : INotifyPropertyChanged
         System.Windows.Controls.ScrollViewer.SetHorizontalScrollBarVisibility(selectedListBox, System.Windows.Controls.ScrollBarVisibility.Disabled);
         // 当前已选配置组列表（可修改的副本）。改别人时用对方的已选配置组（来自服务端同步），改自己用本机绑定。
         // 遥控器模式：从执行端成员取已绑定的配置组（本机无 BGI，无本地配置）。
-        var rawSelected = isSelf
-            ? (_config?.ObserverMode == true
-                ? (Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupNames ?? [])
-                : (_config.OnlineHoeingGroupNames ?? []))
-            : (targetMember?.OnlineHoeingGroupNames ?? []);
+        var rawSelected = editsLocal ? editBaseline.Names
+            : (isSelf ? Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupNames
+                : targetMember?.OnlineHoeingGroupNames)?.ToArray() ?? [];
         // [fix 2026-09-13] 已选回填必须带 [配置]/[一条龙] 类型前缀：配置与广播里只存裸名，
         // 裸名回填后保存解析（无前缀→默认 group）会把一条龙绑定静默翻成配置组，
         // 下次触发按 start_group 下发 → BGI 报"配置组不存在"（实机事故：[一条龙]联机锄地
@@ -4048,9 +4110,13 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (allGroups.Contains(name)) return "[配置]" + name;
             return name;
         }
-        var selfTypes = (isSelf && _config?.ObserverMode != true) ? _config?.OnlineHoeingGroupTypes : null;
+        var savedTypes = editsLocal ? editBaseline.Types
+            : (isSelf ? Members.FirstOrDefault(m => m.PlayerUid == _config.PlayerUid)?.OnlineHoeingGroupTypes
+                : targetMember?.OnlineHoeingGroupTypes)?.ToArray() ?? [];
         var currentSelected = new System.Collections.ObjectModel.ObservableCollection<string>(
-            rawSelected.Select((n, i) => PrefixSelected(n, (selfTypes?.Count > i) ? selfTypes[i] : null)));
+            rawSelected.Select((n, i) => PrefixSelected(n, savedTypes.Length > i ? savedTypes[i] : null)));
+        var initialSelection = currentSelected.ToArray();
+        var expectedBindingRevision = OnlineHoeingBindingRevision(rawSelected, savedTypes);
 
         // 先声明可选列表框（供 RefreshAvailableList 使用）
         var availableListBox = new System.Windows.Controls.ListBox
@@ -4325,14 +4391,16 @@ public partial class MainViewModel : INotifyPropertyChanged
         // ========== 完成后动作（上线锄地打断的原任务如何处置；全员就绪触发上线锄地固定打断，此处只配完成后动作）==========
         var completionPanel = new CompletionActionPanel(
             initialCompletion, allGroups, allOneClicks,
-            isSelf
+            (isSelf
                 ? "全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置锄地完成后如何处置被中断的原任务；配置持久化保存，重启保留。"
-                : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。",
+                : $"全员就绪触发上线锄地必定打断当前任务（固定行为）。此处配置 {targetMember?.PlayerName ?? "对方"} 锄地完成后如何处置被中断的原任务；保存后落到对方本机配置并持久化。")
+                + (string.IsNullOrWhiteSpace(remoteSwitchDescription) ? "" : "\n执行端当前已保存：" + remoteSwitchDescription),
             async (type, name, workflowId) =>
             {
                 if (policyPullUid == null)
                     return await GetCompletionTargetCatalogService().LoadAsync(type, name, workflowId);
-                var data = await GetTaskPolicySync().PullAsync(policyPullUid, type, name, workflowId);
+                var activePolicySync = isOtherRoom ? otherPolicySync! : GetTaskPolicySync();
+                var data = await activePolicySync.PullAsync(policyPullUid, type, name, workflowId);
                 if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
                     return new CompletionTargetCatalog([], null, "执行端未确认执行起点协议，请更新并重新打开绑定。");
                 var json = data.GetValueOrDefault("catalog");
@@ -4341,20 +4409,36 @@ public partial class MainViewModel : INotifyPropertyChanged
             refreshCatalog: async (type, name, workflowId, ct) =>
             {
                 ct.ThrowIfCancellationRequested();
+                CompletionTargetCatalog catalog;
                 if (policyPullUid == null)
-                    return await RefreshCompletionCatalogAsync(type, name, workflowId, ct);
-                var activePolicySync = isOtherRoom ? otherPolicySync! : GetTaskPolicySync();
-                var data = await activePolicySync.PullAsync(policyPullUid, type, name, workflowId,
-                    cancellationToken: ct, ensureBgiReady: true);
+                    catalog = await RefreshCompletionCatalogAsync(type, name, workflowId, ct);
+                else
+                {
+                    var activePolicySync = isOtherRoom ? otherPolicySync! : GetTaskPolicySync();
+                    var data = await activePolicySync.PullAsync(policyPullUid, type, name, workflowId,
+                        cancellationToken: ct, ensureBgiReady: true);
+                    ct.ThrowIfCancellationRequested();
+                    if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
+                        return new CompletionTargetCatalog([], null, "执行端未确认目录刷新，请确认目标成员在线并重试。");
+                    var json = data.GetValueOrDefault("catalog");
+                    catalog = (string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CompletionTargetCatalog>(json))
+                        ?? new CompletionTargetCatalog([], null, "执行端未返回任务目录，未确认刷新成功。");
+                }
                 ct.ThrowIfCancellationRequested();
-                if (data?.GetValueOrDefault("completionStartVersion") != CompletionTargetCatalogService.Version)
-                    return new CompletionTargetCatalog([], null, "执行端未确认目录刷新，请确认目标成员在线并重试。");
-                var json = data.GetValueOrDefault("catalog");
-                var catalog = string.IsNullOrEmpty(json) ? null : JsonSerializer.Deserialize<CompletionTargetCatalog>(json);
-                return catalog == null
-                    ? new CompletionTargetCatalog([], null, "执行端未返回任务目录，未确认刷新成功。")
-                    : CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, catalog);
-            });
+                catalog = CompletionTargetCatalogService.ValidateExplicitRefreshCatalog(type, catalog);
+                // 与完成动作面板使用同一份新目录；绑定项的可选列表和保存校验不能仍用旧缓存。
+                if (catalog.ConfigGroups is { } groups && catalog.OneClickConfigs is { } oneClicks)
+                {
+                    allGroups = groups.ToList();
+                    allOneClicks = oneClicks.ToList();
+                    RefreshAvailableList();
+                }
+                return catalog;
+            }, roomSwitchChoices: editsLocal && _config != null
+                ? RoomSwitchCompletion.Choices(_config, editBaseline.ProfileId) : null);
+        // A failed pull does not establish a default Stop/Resume. Show the last reported
+        // summary, explicitly as unconfirmed, rather than a misleading disabled editor.
+        if (policyPullFailed) completionPanel.Root.Visibility = Visibility.Collapsed;
         scrollContent.Children.Add(completionPanel.Root);
 
         // 未确认执行端当前配置时只提示重读，不提供默认值覆盖入口。
@@ -4369,9 +4453,12 @@ public partial class MainViewModel : INotifyPropertyChanged
             Visibility = policyPullFailed ? Visibility.Visible : Visibility.Collapsed
         };
         var policyWarnPanel = new System.Windows.Controls.StackPanel();
+        var lastReportedAction = (isSelf && !editsLocal
+            ? Members.FirstOrDefault(m => m.PlayerUid == policyPullUid) : targetMember)?.HoeingCompletionAction;
         policyWarnPanel.Children.Add(new System.Windows.Controls.TextBlock
         {
-            Text = $"未取到 {policyPullDesc} 当前的「完成后动作」配置。请确认执行端在线并重新打开绑定，再保存完成后动作。",
+            Text = $"未取到 {policyPullDesc} 当前的「完成后动作」配置。请确认执行端在线并重新打开绑定，再保存完成后动作。"
+                + (lastReportedAction == null ? "" : "\n最后上报（待核对）：" + lastReportedAction.Description),
             FontSize = 11,
             Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF0, 0xB0, 0x8A)),
             TextWrapping = System.Windows.TextWrapping.Wrap
@@ -4440,7 +4527,13 @@ public partial class MainViewModel : INotifyPropertyChanged
         saveBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x3A, 0x2F, 0x16));
         saveBtn.Click += async (_, _) =>
         {
+            if (!isOtherRoom && (editControlContext != CurrentControlContext() || !editBaseline.MatchesIdentity(_config)))
+            {
+                MessageBox.Show("编辑期间本机房间或运行角色已变化，请关闭后重新打开绑定。", "绑定无法保存");
+                return;
+            }
             var selected = currentSelected.ToList();
+            var bindingChanged = !selected.SequenceEqual(initialSelection, StringComparer.Ordinal);
 
             // 解析带前缀的名字为 (Name, Type) 元组
             var names = new List<string>();
@@ -4469,8 +4562,8 @@ public partial class MainViewModel : INotifyPropertyChanged
             // 绑定校验前置到保存：名称/类型必须一一对应、类型不能未知、同类型同名不能重复，
             // 且当前列表可确认时必须确实存在。这样错误不会等到批次注册后才变成模糊的 layout 拒绝。
             var bindingValidation = OnlineHoeingBindingValidator.Validate(
-                names, types, allGroups, allOneClicks, checkAvailability: true);
-            if (!bindingValidation.IsValid)
+                names, types, allGroups, allOneClicks, checkAvailability: bindingChanged);
+            if (bindingChanged && !bindingValidation.IsValid)
             {
                 MessageBox.Show(
                     "当前绑定不符合联机锄地规则：\n• " + string.Join("\n• ", bindingValidation.Errors),
@@ -4489,7 +4582,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 : Members
                     .Where(m => m.Online && m.PlayerUid != bindingTargetUid && m.BgiStatus != "observer")
                     .Select(m => (m.PlayerName, m.OnlineReady, m.OnlineHoeingGroupNames, m.OnlineHoeingGroupTypes));
-            foreach (var other in peerBindings)
+            foreach (var other in peerBindings.Where(_ => bindingChanged))
             {
                 var otherNames = other.GroupNames ?? [];
                 if (otherNames.Count == 0)
@@ -4528,9 +4621,10 @@ public partial class MainViewModel : INotifyPropertyChanged
                 MessageBox.Show(completionError, "完成后动作无法保存", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (completion is { Policy: TaskConflictPolicy.RunSpecified } && policyPullUid == null)
+            if (completion?.HasSpecifiedTask == true && editsLocal)
             {
-                completionError = await GetCompletionTargetCatalogService().ValidateAsync(completion);
+                completionError = await GetCompletionTargetCatalogService().ValidateAsync(completion.RoomSwitch != null
+                    ? completion.PostSwitchTask() : completion);
                 if (completionError != null)
                 {
                     MessageBox.Show(completionError, "完成后动作无法保存", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -4539,17 +4633,37 @@ public partial class MainViewModel : INotifyPropertyChanged
             }
             var completionDesc = completion == null ? null : CoordinatedCompletionAction.FromSettings(completion).Description;
 
-            if (names.Count > 0)
+            if (editsLocal)
             {
                 try
                 {
-                    if (isSelf && _config?.ObserverMode != true)
+                    if (bindingChanged || completion != null)
                     {
-                        SaveOnlineHoeingBindings(names, types);
-                        AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
+                        SaveOnlineHoeingRoomFields(bindingChanged ? names : null, bindingChanged ? types : null,
+                            completion, editBaseline);
+                        if (bindingChanged) AddLog($"已绑定联机锄地配置组（按顺序执行）: {string.Join(" → ", names)}");
+                        if (completion != null) AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
                         _ = ReportStatusAsync();
                     }
-                    else if (isOtherRoom)
+                    window.Close();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message, "绑定或完成后动作未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                return;
+            }
+
+            if (completion?.RoomSwitch != null)
+            {
+                MessageBox.Show("切房关系须在执行端本机编辑。", "完成后动作无法保存");
+                return;
+            }
+            if (bindingChanged && names.Count > 0)
+            {
+                try
+                {
+                    if (isOtherRoom)
                     {
                         var bindUid = targetMember?.PlayerUid;
                         if (string.IsNullOrEmpty(bindUid) || otherSession is not { IsConnected: true })
@@ -4564,7 +4678,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                             CommandId = "otherroom_" + DateTime.Now.Ticks,
                             Params = new Dictionary<string, object>
                             {
-                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 }
+                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 },
+                                { "expectedBindingRevision", expectedBindingRevision }
                             }
                         });
                         if (!sent)
@@ -4585,7 +4700,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                             CommandId = "local_" + DateTime.Now.Ticks,
                             Params = new Dictionary<string, object>
                             {
-                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 }
+                                { "groupNames", names }, { "groupTypes", types }, { "groupIndex", 0 },
+                                { "expectedBindingRevision", expectedBindingRevision }
                             }
                         });
                         AddLog($"已发送绑定联机锄地配置组（尚未确认执行端保存）: {string.Join(" → ", names)}");
@@ -4603,20 +4719,6 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 AddLog("完成后动作未修改，保留原设置。");
             }
-            else if (isSelf && _config?.ObserverMode != true)
-            {
-                try
-                {
-                    SaveOnlineHoeingPolicy(completion);
-                    AddLog($"已保存上线锄地「完成后动作」: {completionDesc}");
-                    _ = ReportStatusAsync();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message, "完成后动作未确认保存", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-            }
             else if (isOtherRoom)
             {
                 var pushUid = targetMember?.PlayerUid;
@@ -4624,13 +4726,18 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (!string.IsNullOrEmpty(pushUid) && otherSession is { IsConnected: true })
                 {
                     AddLog($"正在向 {pushName} 回传上线锄地「完成后动作」: {completionDesc}");
-                    var pushResult = await otherPolicySync!.PushAsync(pushUid, CompletionPolicyFields.Parameters(completion));
+                    var pushResult = await otherPolicySync!.PushAsync(pushUid, CompletionPolicyFields.Parameters(completion), remoteCompletionBaseline);
                     AddLog(pushResult switch
                     {
                         null => $"回传 {pushName} 的「完成后动作」超时（对方可能已离线），修改可能未生效",
                         { ok: true } r => $"对方已应用「完成后动作」: {r.message}",
                         { } r => $"对方应用「完成后动作」失败：{r.message}"
                     });
+                    if (pushResult is not { ok: true })
+                    {
+                        MessageBox.Show(pushResult?.message ?? "执行端保存未确认，请重新打开绑定核对。", "完成后动作未确认保存");
+                        return;
+                    }
                 }
                 else
                 {
@@ -4646,7 +4753,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 if (!string.IsNullOrEmpty(pushUid) && _signalRClient is { IsConnected: true })
                 {
                     AddLog($"正在向 {pushName} 回传上线锄地「完成后动作」: {completionDesc}");
-                    var pushResult = await GetTaskPolicySync().PushAsync(pushUid, CompletionPolicyFields.Parameters(completion));
+                    var pushResult = await GetTaskPolicySync().PushAsync(pushUid, CompletionPolicyFields.Parameters(completion), remoteCompletionBaseline);
                     AddLog(pushResult switch
                     {
                         null => $"回传 {pushName} 的「完成后动作」超时（对方可能已离线），修改可能未生效",
@@ -4660,7 +4767,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                     if (pushResult is not { ok: true }) return;
                     if (isSelf && _config?.ObserverMode == true)
                     {
-                        try { SaveOnlineHoeingPolicy(completion); }
+                        try { SaveOnlineHoeingRoomFields(null, null, completion, editBaseline, allowObserverMirror: true); }
                         catch (Exception ex)
                         {
                             AddLog("执行端已保存，但本机镜像未确认：" + ex.Message);
@@ -4786,6 +4893,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
         StopAllRoomSpectators();
+        StopRoomOrchestrationMonitor();
         CancelWaitingAssistantRoomSwitch();
         StopBgiRoomMailbox();
         _startupBgiUpdateRequest?.Cancel();
@@ -5197,7 +5305,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             // [B157] 服务端确认超时放弃本轮（缺人不开锄）：仅当本端是本轮参与者才复位本地"已上线"。
             // 旧实现服务端耗尽后无任何通知，_isOnlineReady 永久残留，后续命令上线全被客户端守卫吞掉。
             if (!targetUids.Contains(_config?.PlayerUid)) return;
-            if (generation <= Volatile.Read(ref _resetFenceGeneration))
+            if (generation <= ReadCoordinatedResetFence())
                 return;
             lock (_batchGate)
             {
@@ -5346,10 +5454,14 @@ public partial class MainViewModel : INotifyPropertyChanged
                     types = bindingValidation.Types.ToList();
                     if (_config != null)
                     {
-                        _config.OnlineHoeingGroupNames = names;
-                        _config.OnlineHoeingGroupTypes = types;
-                        _config.OnlineHoeingGroupIndex = 0;
-                        _configManager?.Save(_config);
+                        try { SaveOnlineHoeingRoomFields(names, types, null,
+                            expectedBindingRevision: GetRemoteParam(cmd.Params, "expectedBindingRevision")); }
+                        catch (Exception ex)
+                        {
+                            AddLog($"收自 {cmd.Sender} 的绑定未确认保存：{ex.Message}");
+                            await SendAckAsync(cmd, "failed", ex.Message);
+                            return;
+                        }
                         AddLog($"收到绑定联机锄地配置组: {string.Join(", ", names)}（来自 {cmd.Sender}）");
                         await ReportStatusAsync();
                         await SendAckAsync(cmd, "success", $"已绑定: {string.Join(", ", names)}");
@@ -5371,14 +5483,37 @@ public partial class MainViewModel : INotifyPropertyChanged
             {
                 var key = cmd.Params?.GetValueOrDefault("key")?.ToString();
                 var value = cmd.Params?.GetValueOrDefault("value")?.ToString();
-                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value) && _config != null)
+                if (!string.IsNullOrEmpty(key) && !string.IsNullOrEmpty(value) && _config is { } config
+                    && _configManager is { } manager)
                 {
-                    _config.QuickCommands[key] = value;
-                    _configManager?.Save(_config);
-                    var isOneClick = value.StartsWith("ONEDRAGON:");
-                    var displayValue = isOneClick ? value["ONEDRAGON:".Length..] : value["GROUP:".Length..];
-                    AddLog($"收到绑定 {key}: {(isOneClick ? "一条龙" : "配置组")}「{displayValue}」（来自 {cmd.Sender}）");
-                    await SendAckAsync(cmd, "success", $"{key} 已绑定: {value}");
+                    var saved = false;
+                    try
+                    {
+                        using var writing = manager.AcquireWriteGate();
+                        if (ReferenceEquals(config, _config))
+                        {
+                            var hadPrevious = config.QuickCommands.TryGetValue(key, out var previous);
+                            config.QuickCommands[key] = value;
+                            saved = manager.TrySave(config);
+                            if (!saved)
+                            {
+                                if (hadPrevious) config.QuickCommands[key] = previous!;
+                                else config.QuickCommands.Remove(key);
+                                config.ActiveRoomProfile?.Capture(config);
+                            }
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or InvalidOperationException)
+                    { AddLog("快捷指令配置暂不可写：" + ex.Message); }
+                    if (saved)
+                    {
+                        var isOneClick = value.StartsWith("ONEDRAGON:");
+                        var displayValue = isOneClick ? value["ONEDRAGON:".Length..]
+                            : value.StartsWith("GROUP:") ? value["GROUP:".Length..] : value;
+                        AddLog($"收到绑定 {key}: {(isOneClick ? "一条龙" : "配置组")}「{displayValue}」（来自 {cmd.Sender}）");
+                        await SendAckAsync(cmd, "success", $"{key} 已绑定: {value}");
+                    }
+                    else await SendAckAsync(cmd, "failed", "快捷指令配置未确认保存，请重新读取后重试");
                 }
                 else
                 {
@@ -6111,6 +6246,7 @@ public partial class MainViewModel : INotifyPropertyChanged
             return new CommandResult { Status = "failed", Message = "未配置 BGI 路径，无法执行 BGI 命令" };
         }
 
+        NoteRoomOrchestrationNewIntent("启动中心产生新的本机执行意图");
         var selfUid = _config?.PlayerUid ?? "";
         return await _commandExecutor.ExecuteAsync(new RemoteCommand
         {
@@ -6223,7 +6359,8 @@ public partial class MainViewModel : INotifyPropertyChanged
                     TaskCenterHost? host;
                     lock (_taskCenterHostGate) host = _taskCenterHost;
                     return host?.HasUnsettledOnlineHoeingHandoff == true;
-                }, recoverOnlineHandoff: () => TaskCenterHost.RecoverOnlineHandoffsBeforeStartAsync());
+                }, recoverOnlineHandoff: () => TaskCenterHost.RecoverOnlineHandoffsBeforeStartAsync(),
+                roomOrchestrationAdmission: (request, ct) => TaskCenterHost.AdmitRoomOrchestrationStartAsync(request, ct));
         }
     }
 
@@ -6242,6 +6379,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         ApplyModeRuntime(targetObserver);
         OnPropertyChanged(nameof(IsObserverMode));
         OnPropertyChanged(nameof(IsExecutorMode));
+        NotifyRoomOrchestrationModeProperties();
         foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         AddLog($"已切换为{modeName}模式，正在重建连接...");
         await RefreshAsync();
@@ -6601,38 +6739,174 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     private static TaskConflictPolicy PolicyFromString(string? value) => value switch
     {
-        "stop" => TaskConflictPolicy.Stop,
+        "stop" or "switchRoom" => TaskConflictPolicy.Stop,
         "runSpecified" => TaskConflictPolicy.RunSpecified,
         _ => TaskConflictPolicy.Resume
     };
 
     /// <summary>[任务策略] 上线锄地完成后动作快照（持久化字段 → 不可变快照，传给 CommandExecutor 收尾用；
     /// 批次末尾与 10s resume 定时器两处共用）。</summary>
-    private TaskConflictPolicySettings SnapshotOnlineHoeingPolicy() => CompletionPolicyFields.Snapshot(_config);
-
-    private void SaveOnlineHoeingBindings(List<string> names, List<string> types)
+    private TaskConflictPolicySettings SnapshotOnlineHoeingPolicy()
     {
-        if (_configManager == null || _config == null) throw new InvalidOperationException("本机配置存储未就绪。");
-        var candidate = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(_config))
-            ?? throw new InvalidDataException("无法创建绑定配置副本。");
-        candidate.OnlineHoeingGroupNames = names.ToList();
-        candidate.OnlineHoeingGroupTypes = types.ToList();
-        candidate.OnlineHoeingGroupIndex = 0;
-        _configManager.Save(candidate);
-        var saved = JsonSerializer.Deserialize<AssistConfig>(_configManager.ReadRawJson(),
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        if (saved == null || !names.SequenceEqual(saved.OnlineHoeingGroupNames ?? [])
-            || !types.SequenceEqual(saved.OnlineHoeingGroupTypes ?? []) || saved.OnlineHoeingGroupIndex != 0)
-            throw new IOException("绑定名单写入结果未确认，请重新读取核对。");
-        _config.OnlineHoeingGroupNames = names.ToList();
-        _config.OnlineHoeingGroupTypes = types.ToList();
-        _config.OnlineHoeingGroupIndex = 0;
+        lock (_onlineHoeingRoomSaveGate) return CompletionPolicyFields.Snapshot(_config);
     }
 
-    private void SaveOnlineHoeingPolicy(TaskConflictPolicySettings settings)
+    private sealed record OnlineHoeingEditBaseline(string ProfileId, string Server, string RoomCode,
+        string Uid, bool ObserverMode, string BgiPath, string[] Names, string[] Types, TaskConflictPolicySettings Completion)
     {
-        if (_configManager == null || _config == null) throw new InvalidOperationException("本机配置存储未就绪。");
-        CompletionPolicyFields.SaveChecked(_configManager, _config, settings);
+        public bool MatchesIdentity(AssistConfig? config) => config != null && config.ActiveRoomProfileId == ProfileId
+            && config.EffectiveRoomCode == RoomCode && RoomServerAddress.Same(config.ServerUrl, Server)
+            && config.PlayerUid == Uid && config.ObserverMode == ObserverMode;
+    }
+
+    private OnlineHoeingEditBaseline CaptureOnlineHoeingEdit()
+    {
+        lock (_onlineHoeingRoomSaveGate)
+        {
+            var config = _config ?? throw new InvalidOperationException("本机配置未就绪。");
+            return new(config.ActiveRoomProfileId, config.ServerUrl, config.EffectiveRoomCode, config.PlayerUid,
+                config.ObserverMode, config.BgiPath, config.OnlineHoeingGroupNames?.ToArray() ?? [],
+                config.OnlineHoeingGroupTypes?.ToArray() ?? [], CompletionPolicyFields.Snapshot(config));
+        }
+    }
+
+    private void SaveOnlineHoeingBindings(List<string> names, List<string> types)
+        => SaveOnlineHoeingRoomFields(names, types, null);
+
+    private void SaveOnlineHoeingPolicy(TaskConflictPolicySettings settings)
+        => SaveOnlineHoeingRoomFields(null, null, settings);
+
+    private static string OnlineHoeingBindingRevision(IReadOnlyList<string> names, IReadOnlyList<string> types)
+        => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            JsonSerializer.SerializeToUtf8Bytes(new { names, types })));
+
+    private readonly object _onlineHoeingRoomSaveGate = new();
+    private readonly System.Windows.Threading.Dispatcher? _onlineHoeingCommitDispatcher =
+        Application.Current?.Dispatcher.CheckAccess() == true ? Application.Current.Dispatcher : null;
+
+    /// <summary>只修改本次编辑的字段，活动档案及运行字段作为一次落盘事务确认。</summary>
+    private void SaveOnlineHoeingRoomFields(List<string>? names, List<string>? types,
+        TaskConflictPolicySettings? completion, OnlineHoeingEditBaseline? baseline = null, bool allowObserverMirror = false,
+        string? expectedBindingRevision = null)
+    {
+        // 本机编辑器、远程策略与远程绑定使用同一同步提交点，不能在读回前发布半份新策略。
+        if (_disposing || _onlineHoeingCommitDispatcher is { HasShutdownStarted: true })
+            throw new InvalidOperationException("助手正在退出，未保存配置。");
+        if (_onlineHoeingCommitDispatcher is { } dispatcher && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(() => SaveOnlineHoeingRoomFields(names, types, completion, baseline, allowObserverMirror,
+                expectedBindingRevision));
+            return;
+        }
+        lock (_onlineHoeingRoomSaveGate)
+        {
+            if (!CanEditConfiguration || RoomSwitchBlocksRoomOperations || _configManager == null || _config == null)
+                throw new InvalidOperationException("配置存储或房间状态未就绪，未保存。");
+            if (!TryEnterConfigTransferOperation("room_profile_edit", out var configWriteLease))
+                throw new InvalidOperationException(ConfigTransferBlockedMessage);
+            using var transferOperation = configWriteLease;
+            using var writing = _configManager.AcquireWriteGate();
+            var expectedRaw = _configManager.ReadRawJson();
+            var current = _config;
+            if (current.ObserverMode && !allowObserverMirror)
+                throw new InvalidOperationException("遥控端不能直接修改本机执行端配置。");
+            if (expectedBindingRevision != null && expectedBindingRevision != OnlineHoeingBindingRevision(
+                current.OnlineHoeingGroupNames ?? [], current.OnlineHoeingGroupTypes ?? []))
+                throw new InvalidOperationException("执行端绑定已变化，请重新打开窗口。");
+            static bool SameCompletion(TaskConflictPolicySettings a, TaskConflictPolicySettings b)
+            {
+                var actual = CompletionPolicyFields.Parameters(b);
+                return CompletionPolicyFields.Parameters(a).All(p => actual.TryGetValue(p.Key, out var value) && Equals(value, p.Value));
+            }
+            if (baseline != null)
+            {
+                if (!baseline.MatchesIdentity(current)
+                    || (names != null || completion?.HasSpecifiedTask == true) && baseline.BgiPath != current.BgiPath
+                    || names != null && (!baseline.Names.SequenceEqual(current.OnlineHoeingGroupNames ?? [])
+                        || !baseline.Types.SequenceEqual(current.OnlineHoeingGroupTypes ?? []))
+                    || completion != null && !SameCompletion(baseline.Completion, CompletionPolicyFields.Snapshot(current)))
+                    throw new InvalidOperationException("房间或正在编辑的配置已变化，请重新打开后保存。");
+            }
+            if (completion != null && CompletionPolicyFields.ValidateRoomSwitch(current, current.ActiveRoomProfileId, completion) is { } error)
+                throw new InvalidOperationException(error);
+            // 在持有共享配置写入许可时从最新盘面构造定向更新，不能把无关房间或其它设置恢复到旧内存副本。
+            var candidate = JsonSerializer.Deserialize<AssistConfig>(expectedRaw,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidDataException("无法读取最近保存的房间配置。");
+            if (candidate.ActiveRoomProfileId != current.ActiveRoomProfileId
+                || candidate.EffectiveRoomCode != current.EffectiveRoomCode
+                || !RoomServerAddress.Same(candidate.ServerUrl, current.ServerUrl)
+                || candidate.PlayerUid != current.PlayerUid || candidate.ObserverMode != current.ObserverMode
+                || (names != null || completion?.HasSpecifiedTask == true) && candidate.BgiPath != current.BgiPath
+                || names != null && (!(candidate.OnlineHoeingGroupNames ?? []).SequenceEqual(current.OnlineHoeingGroupNames ?? [])
+                    || !(candidate.OnlineHoeingGroupTypes ?? []).SequenceEqual(current.OnlineHoeingGroupTypes ?? []))
+                || completion != null && !SameCompletion(CompletionPolicyFields.Snapshot(candidate), CompletionPolicyFields.Snapshot(current)))
+                throw new InvalidOperationException("盘面房间身份或正在编辑的字段已变化，请重新读取后保存。");
+            if (completion != null && CompletionPolicyFields.ValidateRoomSwitch(candidate, candidate.ActiveRoomProfileId, completion) is { } diskError)
+                throw new InvalidOperationException(diskError);
+            if (names != null)
+            {
+                candidate.OnlineHoeingGroupNames = names.ToList();
+                candidate.OnlineHoeingGroupTypes = types?.ToList() ?? throw new InvalidDataException("缺少绑定类型。");
+                candidate.OnlineHoeingGroupIndex = 0;
+            }
+            if (completion != null) CompletionPolicyFields.Apply(candidate, completion);
+            if (!_configManager.TrySave(candidate, expectedRaw)) throw new IOException("房间配置保存失败或已被更新，原运行配置未修改。");
+            var saved = JsonSerializer.Deserialize<AssistConfig>(_configManager.ReadRawJson(),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var expectedCompletion = CompletionPolicyFields.Snapshot(candidate);
+            bool HasExpectedProfileCompletion(AssistantRoomProfile profile)
+            {
+                var profileFields = new AssistConfig();
+                profile.ApplyCompletionTo(profileFields);
+                return SameCompletion(expectedCompletion, CompletionPolicyFields.Snapshot(profileFields));
+            }
+            bool HasExpectedBindings(IReadOnlyList<string>? savedNames, IReadOnlyList<string>? savedTypes, int index)
+                => (candidate.OnlineHoeingGroupNames ?? []).SequenceEqual(savedNames ?? [])
+                    && (candidate.OnlineHoeingGroupTypes ?? []).SequenceEqual(savedTypes ?? [])
+                    && candidate.OnlineHoeingGroupIndex == index;
+            if (saved == null || saved.ActiveRoomProfileId != candidate.ActiveRoomProfileId
+                || !HasExpectedBindings(saved.OnlineHoeingGroupNames, saved.OnlineHoeingGroupTypes, saved.OnlineHoeingGroupIndex)
+                || !SameCompletion(expectedCompletion, CompletionPolicyFields.Snapshot(saved))
+                || candidate.ActiveRoomProfile is { } profile && (saved.ActiveRoomProfile is not { } actualProfile
+                    || actualProfile.Id != profile.Id || actualProfile.RoomCode != profile.RoomCode
+                    || !RoomServerAddress.Same(saved.GetRoomServerUrl(actualProfile), candidate.GetRoomServerUrl(profile))
+                    || !HasExpectedBindings(actualProfile.OnlineHoeingGroupNames, actualProfile.OnlineHoeingGroupTypes, actualProfile.OnlineHoeingGroupIndex)
+                    || !HasExpectedProfileCompletion(actualProfile)))
+                throw new IOException("房间配置写入结果未确认，请重新读取核对。");
+            if (names != null)
+            {
+                current.OnlineHoeingGroupNames = names.ToList();
+                current.OnlineHoeingGroupTypes = types!.ToList();
+                current.OnlineHoeingGroupIndex = 0;
+            }
+            if (completion != null) CompletionPolicyFields.Apply(current, completion);
+            // 普通设置窗口会从档案 ApplyTo；必须立即同步，防止后来保存复活旧完成动作和旧绑定。
+            if (current.ActiveRoomProfile is { } active)
+            {
+                if (names != null)
+                {
+                    active.OnlineHoeingGroupNames = current.OnlineHoeingGroupNames?.ToList() ?? [];
+                    active.OnlineHoeingGroupTypes = current.OnlineHoeingGroupTypes?.ToList() ?? [];
+                    active.OnlineHoeingGroupIndex = current.OnlineHoeingGroupIndex;
+                }
+                if (completion != null) active.CaptureCompletion(current);
+            }
+        }
+        // Update only the confirmed local card fields; no spectator connection or selection changes.
+        if (_config is { ObserverMode: false } local && Members.FirstOrDefault(m => m.IsSelf) is { } self)
+        {
+            if (names != null)
+            {
+                self.OnlineHoeingGroupNames = names.ToList();
+                self.OnlineHoeingGroupTypes = types!.ToList();
+            }
+            if (completion != null)
+                self.HoeingCompletionAction = CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy(), local);
+        }
+        // The orchestration page derives from actual saved room data; do not refresh/rebuild room connections.
+        OnPropertyChanged(nameof(Config));
+        OnPropertyChanged(nameof(ActiveRoomProfile));
     }
 
     /// <summary>目录初始化只读保存的计划；不经 TaskCenterHost getter 的旧配置迁移路径。</summary>
@@ -6689,6 +6963,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     {
         OnPropertyChanged(nameof(IsObserverMode));
         OnPropertyChanged(nameof(IsExecutorMode));
+        NotifyRoomOrchestrationModeProperties();
         foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         // 服务器地址/单机开关变化同样影响派生属性（设置弹窗清空地址 = 单机模式）
         OnPropertyChanged(nameof(IsStandaloneMode));
@@ -6958,15 +7233,22 @@ public partial class MainViewModel : INotifyPropertyChanged
             return;
         }
 
+        var context = CurrentControlContext();
         var dialog = CreateQuickCommandBindingWindow(key, onlineMembers);
         dialog.Owner = Application.Current.MainWindow;
         if (dialog.ShowDialog() != true) return;
-        await ExecuteBoundQuickCommandAsync(key, onlineMembers, dialog.UseCompletionActions);
+        if (context != CurrentControlContext() || RoomSwitchBlocksRoomOperations)
+        {
+            AddLog("确认窗口的房间已变化，请重新确认快捷指令。");
+            return;
+        }
+        await ExecuteBoundQuickCommandAsync(key, onlineMembers, dialog.UseCompletionActions,
+            dialog.ConfirmedCompletionActions, dialog.ConfirmedTargetUids);
     }
 
     private CoordinatedCompletionAction? MemberCompletionAction(MemberViewModel member)
         => member.PlayerUid == _config?.PlayerUid && IsExecutorMode
-            ? CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()) : member.HoeingCompletionAction;
+            ? CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy(), _config) : member.HoeingCompletionAction;
 
     private string QuickCommandBinding(string key, MemberViewModel member)
         => member.PlayerUid == _config?.PlayerUid && IsExecutorMode
@@ -6975,11 +7257,15 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     internal QuickCommandBindingWindow CreateQuickCommandBindingWindow(string key, IReadOnlyList<MemberViewModel> onlineMembers)
     {
-        CoordinatedCompletionAction?[] Actions() => onlineMembers
-            .Where(m => m.IsSelected && m.Online && ParseQuickCommandBinding(QuickCommandBinding(key, m)) != null)
-            .Select(MemberCompletionAction).ToArray();
+        // Freeze exactly what these member rows show. Status broadcasts arriving while the
+        // window is open are not another user confirmation of a different completion action.
+        var displayedActions = onlineMembers.Distinct().ToDictionary(m => m, MemberCompletionAction);
+        MemberViewModel[] Selected() => onlineMembers
+            .Where(m => m.IsSelected && m.Online && ParseQuickCommandBinding(QuickCommandBinding(key, m)) != null).ToArray();
+        CoordinatedCompletionAction?[] Actions() => Selected()
+            .Select(m => displayedActions[m]).ToArray();
         var completionChoice = new CompletionActionChoicePanel(
-            _signalRClient?.SupportsQuickCommandCompletion == true && _signalRClient.SupportsCompletionChoice, Actions());
+            _signalRClient?.SupportsQuickCommandCompletion == true && _signalRClient.SupportsCompletionChoice, Actions(), isQuickCommand: true);
         var dialog = new QuickCommandBindingWindow(completionChoice)
         {
             Title = $"为成员配置「{key}」",
@@ -7003,6 +7289,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                 }
             }
         };
+        QuickHoeingConfirmationWindow.FitToOwnerWorkArea(dialog);
         var panel = new Grid { Margin = new Thickness(16) };
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // 0: 标题
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // 1: 成员列
@@ -7026,8 +7313,17 @@ public partial class MainViewModel : INotifyPropertyChanged
         {
             memberGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         }
-        Grid.SetRow(memberGrid, 1);
-        panel.Children.Add(memberGrid);
+        // A switch action can include a long target name and post-switch task summary.
+        // Keep the full confirmation accessible without moving the fixed action buttons.
+        var memberScroll = new ScrollViewer
+        {
+            Content = memberGrid, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        if (Application.Current?.TryFindResource("GoldScrollViewer") is Style scrollStyle)
+            memberScroll.Style = scrollStyle;
+        Grid.SetRow(memberScroll, 1);
+        panel.Children.Add(memberScroll);
 
         var bindingLabels = new Dictionary<string, TextBlock>();
         for (int i = 0; i < onlineMembers.Count; i++)
@@ -7092,9 +7388,12 @@ public partial class MainViewModel : INotifyPropertyChanged
                     && _signalRClient.SupportsCompletionChoice, Actions());
             };
             colPanel.Children.Add(selectBtn);
+            var displayed = displayedActions[member];
+            var actionText = "锄地后动作：" + (displayed?.Description ?? "尚未上报（需重新读取该成员）")
+                + (displayed?.Policy == "switchRoom" ? "（仅实际联机锄地正常完成后）" : "");
             colPanel.Children.Add(new TextBlock
             {
-                Text = "锄地后动作：" + (MemberCompletionAction(member)?.Description ?? "尚未上报（需更新该成员助手）"),
+                Text = actionText, ToolTip = actionText,
                 FontSize = 11, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0),
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE8, 0xC9, 0x6D))
             });
@@ -7141,7 +7440,23 @@ public partial class MainViewModel : INotifyPropertyChanged
         dialog.Content = panel;
 
         dialog.ConfirmButton = executeBtn;
-        executeBtn.Click += (_, _) => dialog.DialogResult = true;
+        executeBtn.Click += (_, _) =>
+        {
+            if (dialog.UseCompletionActions)
+            {
+                var selected = Selected();
+                if (selected.Length == 0 || selected.Select(m => m.PlayerUid).Distinct(StringComparer.Ordinal).Count() != selected.Length
+                    || selected.Any(m => displayedActions[m]?.IsValid() != true))
+                {
+                    MessageBox.Show("已选成员或可确认的完成动作已变化，请重新确认快捷指令。", "快捷指令未确认");
+                    return;
+                }
+                dialog.ConfirmedTargetUids = selected.Select(m => m.PlayerUid).ToArray();
+                dialog.ConfirmedCompletionActions = selected.ToDictionary(m => m.PlayerUid,
+                    m => displayedActions[m]!, StringComparer.Ordinal);
+            }
+            dialog.DialogResult = true;
+        };
         cancelBtn.Click += (_, _) => dialog.DialogResult = false;
         return dialog;
     }
@@ -7156,16 +7471,29 @@ public partial class MainViewModel : INotifyPropertyChanged
     }
 
     internal async Task ExecuteBoundQuickCommandAsync(string key, IReadOnlyList<MemberViewModel> onlineMembers,
-        bool useCompletionActions)
+        bool useCompletionActions, IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null,
+        IReadOnlyList<string>? confirmedTargetUids = null)
     {
         if (!TryEnterConfigTransferOperation("bound_quick_start", out var transferOperation))
         { AddLog(ConfigTransferBlockedMessage); return; }
         using var configTransferOperation = transferOperation;
         if (useCompletionActions)
         {
-            var selected = onlineMembers.Where(m => m.IsSelected && m.Online
+            var selected = onlineMembers.Where(m => (confirmedTargetUids == null ? m.IsSelected : confirmedTargetUids.Contains(m.PlayerUid)) && m.Online
                 && ParseQuickCommandBinding(QuickCommandBinding(key, m)) != null).ToArray();
             if (selected.Length == 0) { AddLog("没有在线、被选中且已绑定任务的成员可下发"); return; }
+            if (confirmedTargetUids != null && !selected.Select(m => m.PlayerUid).Order(StringComparer.Ordinal)
+                    .SequenceEqual(confirmedTargetUids.Order(StringComparer.Ordinal)))
+            {
+                AddLog($"{key}未发送：确认的成员已变化，请重新确认。");
+                return;
+            }
+            if (selected.Any(m => !CoordinatedCompletionAction.MatchesRoomSwitchConfirmation(
+                    confirmedCompletionActions?.GetValueOrDefault(m.PlayerUid), MemberCompletionAction(m))))
+            {
+                AddLog($"{key}未发送：成员的切房动作未确认或已变化，请重新打开确认窗口。");
+                return;
+            }
             if (_signalRClient?.SupportsQuickCommandCompletion != true || !_signalRClient.SupportsCompletionChoice
                 || selected.Any(m => MemberCompletionAction(m)?.IsValid() != true))
             {
@@ -7176,8 +7504,11 @@ public partial class MainViewModel : INotifyPropertyChanged
             try
             {
                 var batch = await BeginCoordinatedWithContinuationAsync(requestId,
-                    selected.Select(m => m.PlayerUid).ToArray(), useCompletionActions: true, quickCommandKey: key);
-                AddLog($"{key}已受理，批次 {batch.BatchId}，完成后使用各成员绑定动作");
+                    selected.Select(m => m.PlayerUid).ToArray(), useCompletionActions: true, quickCommandKey: key,
+                    confirmedCompletionActions: confirmedCompletionActions);
+                AddLog($"{key}已受理，批次 {batch.BatchId}，完成后使用各成员绑定动作"
+                    + (batch.ConfirmedCompletionActions.Values.Any(a => a.Policy == "switchRoom")
+                        ? "；切房须有实际联机锄地成功证据并完成批次清理" : ""));
             }
             catch (OperationCanceledException) { AddLog($"{key}原开始请求已取消"); }
             catch (Services.Gateway.GatewayErrorException ex) { AddLog($"{key}未受理：{ex.Message}"); }
@@ -7221,6 +7552,7 @@ public partial class MainViewModel : INotifyPropertyChanged
                             ["startFromIndex"] = 0
                         }
                     };
+                    CancelRoomOrchestrationPending("新的本机快捷指令", revokeOnline: false);
                     await _commandExecutor.ExecuteAsync(localCmd);
                 }
                 else
@@ -7294,6 +7626,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         if (_signalRClient == null) return;
         // 一键锄地是全局危险操作（给所有选中成员下发执行锄地配置组），先弹确认，
         // 说明确认后会发生什么，避免误触。
+        var context = CurrentControlContext();
         var targetMembers = Members.Where(m => m.IsSelected && m.Online).ToList();
         var confirmation = ShowQuickHoeingConfirmDialog(targetMembers);
         if (!confirmation.Confirmed)
@@ -7301,7 +7634,20 @@ public partial class MainViewModel : INotifyPropertyChanged
             AddLog("已取消一键锄地下发");
             return;
         }
-        if (!_signalRClient.SupportsCoordinatedStart)
+        if (context != CurrentControlContext() || RoomSwitchBlocksRoomOperations)
+        {
+            AddLog("一键锄地未发送：确认窗口的房间已变化，请重新确认。");
+            return;
+        }
+        if (confirmation.UseCompletionActions && targets.Any(uid =>
+                !CoordinatedCompletionAction.MatchesRoomSwitchConfirmation(
+                    confirmation.ConfirmedCompletionActions?.GetValueOrDefault(uid),
+                    Members.FirstOrDefault(m => m.PlayerUid == uid) is { } member ? MemberCompletionAction(member) : null)))
+        {
+            AddLog("一键锄地未发送：成员的切房动作未确认或已变化，请重新打开确认窗口。");
+            return;
+        }
+        if (_signalRClient?.SupportsCoordinatedStart != true)
         {
             AddLog("一键锄地未发送：请先更新支持统一开锄的配套服务端");
             return;
@@ -7310,7 +7656,8 @@ public partial class MainViewModel : INotifyPropertyChanged
         try
         {
             var batch = await BeginCoordinatedWithContinuationAsync(requestId, targets,
-                useCompletionActions: confirmation.UseCompletionActions);
+                useCompletionActions: confirmation.UseCompletionActions,
+                confirmedCompletionActions: confirmation.ConfirmedCompletionActions);
             AddLog($"一键锄地已受理，批次 {batch.BatchId}，等待 {batch.ParticipantUids.Count} 名成员准备完成");
         }
         catch (OperationCanceledException) { AddLog("一键锄地原开始请求已取消"); }
@@ -7337,8 +7684,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     internal QuickHoeingConfirmationWindow CreateQuickHoeingConfirmation(IReadOnlyList<MemberViewModel> targets)
         => new(targets.Select(m => new QuickHoeingConfirmationMember(m.PlayerUid,
             $"{m.PlayerName}（{m.DisplayUid}）", string.Join(" → ", m.OnlineHoeingGroupNames ?? []),
-            m.PlayerUid == _config?.PlayerUid && IsExecutorMode
-                ? CoordinatedCompletionAction.FromSettings(SnapshotOnlineHoeingPolicy()) : m.HoeingCompletionAction)).ToArray(),
+            MemberCompletionAction(m))).ToArray(),
             _signalRClient?.SupportsCompletionChoice == true);
 
     private QuickHoeingConfirmationWindow ShowQuickHoeingConfirmDialog(List<MemberViewModel> targets)

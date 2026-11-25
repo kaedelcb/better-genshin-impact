@@ -1341,6 +1341,9 @@ internal sealed class InstanceRequestHandler
                 onlineGeneration = onlineSignal.Generation, // 无任务时返回 0
                 onlineTriggeredAt = onlineSignal.TriggeredAt,
                 onlineWorkflowRunId = onlineSignal.WorkflowRunId?.ToString("N"),
+                onlineJobId = onlineSignal.JobId?.ToString("N"),
+                onlineSubmissionKey = onlineSignal.SubmissionKey,
+                onlineStopVersion = onlineSignal.StopVersion,
                 hasSuspendedTaskContext,
                 takeoverActive = PreemptionGate.IsArmed,
                 suspendedTakeoverTicket = suspendedCtx?.TakeoverTicket,

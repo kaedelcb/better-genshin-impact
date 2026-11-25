@@ -117,6 +117,8 @@ public partial class SettingsWindow : Window
 
         // 复制整个设置，包含其他房间和全部列表；不让窗口中的编辑触碰正在运行的对象。
         var result = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.SerializeToUtf8Bytes(_sourceConfig))!;
+        // 活动档案的权威值是运行字段。普通设置随后 ApplyTo 时不能把绑定/完成动作和定时恢复成较旧档案摘要。
+        result.ActiveRoomProfile?.Capture(result);
         if (room is null && result.RoomProfiles.Count == 0) result.ServerUrl = serverUrl;
         result.PlayerName = playerName;
         result.PlayerUid = playerUid;

@@ -44,7 +44,8 @@ public sealed partial class BgiExternalClient
     }
 
     private async Task<Dictionary<string, object?>> FreezeRetainedStartPayloadAsync(
-        Dictionary<string, object?> payload, string? key, CancellationToken cancellationToken)
+        Dictionary<string, object?> payload, string? key, CancellationToken cancellationToken,
+        bool useSharedTakeoverTicket = true)
     {
         if (string.IsNullOrWhiteSpace(key) || !HasCapability(StateContinuationCapability))
             throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "原请求编号或状态续办能力缺失，未发送");
@@ -72,7 +73,8 @@ public sealed partial class BgiExternalClient
             cancellationToken.ThrowIfCancellationRequested();
             var copy = new Dictionary<string, object?>(payload)
             {
-                ["takeoverTicket"] = TakeoverTicket,
+                // 编排后继是新的普通任务，显式保留 null，SendCommand 不得再补入其他批次的票据。
+                ["takeoverTicket"] = useSharedTakeoverTicket ? TakeoverTicket : null,
                 ["expectedStopVersion"] = expectedFence is long providedVersion ? providedVersion : stopVersion.Value
             };
             if (copy.GetValueOrDefault("bgiEpoch") is null)
@@ -83,6 +85,66 @@ public sealed partial class BgiExternalClient
         finally { _retainedStartPayloadGate.Release(); }
     }
 
+
+    // 不经远控 AsyncLocal，也不继承其他联机批次票据。verify 在停止查询及载荷冻结之后、
+    // 真实发包之前最后复核房间/批次意图；写锁等待仍可撤销，发包后保留原回执观察。
+    internal async Task<BgiTaskSubmitResult> SubmitRoomOrchestrationTaskAsync(RoomOrchestrationLaunch launch,
+        CommandExecutor.CompletionStart start, Func<CancellationToken, Task> verify, CancellationToken ct)
+    {
+        var key = CommandExecutor.RoomOrchestrationTaskKey(launch.IntentId);
+        var payload = new Dictionary<string, object?>
+        {
+            ["groupName"] = start.OneDragon ? null : start.Name,
+            ["configName"] = start.OneDragon ? start.Name : null,
+            ["startFromIndex"] = start.Index, ["startFromTaskId"] = start.TaskId,
+            ["generation"] = 0, ["idempotencyKey"] = key,
+            ["expectedConfigRevision"] = start.Revision,
+            ["bgiEpoch"] = new { processId = launch.Epoch.ProcessId, startTicksUtc = launch.Epoch.StartTicksUtc },
+            ["expectedStopVersion"] = launch.StopVersion,
+            // The assistant owns room membership; this field also binds the retained
+            // request fingerprint to that particular confirmed target connection.
+            ["roomOrchestrationRoomIdentity"] = launch.RoomIdentity,
+            ["retainUntilAcknowledged"] = true,
+            // SendCommandAsync 对存在的键（包括 null）不会自动补入共享票据。
+            ["takeoverTicket"] = null,
+        };
+        try
+        {
+            payload = await FreezeRetainedStartPayloadAsync(payload, key, ct, useSharedTakeoverTicket: false).ConfigureAwait(false);
+            await verify(ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            RequireRetainedStartEpoch(payload);
+        }
+        catch (BgiStateContinuationStoppedException) { throw; }
+        catch (BgiNotSentException) { throw; }
+        catch (Exception ex)
+        {
+            // 本段只有查询/冻结/复核，尚未进入 task.start 发送面。
+            throw new BgiNotSentException(BgiNotSentException.LocalRequestRejected, "编排后继未发送：" + ex.Message);
+        }
+
+        var response = await SendCommandCoreAsync(ExternalOperations.TaskStart, payload, CommandTimeout,
+            CancellationToken.None, beforeWriteToken: ct).ConfigureAwait(false);
+        if (!response.Success || response.Data is null)
+        {
+            var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                JsonSerializer.SerializeToUtf8Bytes(payload)))[..24].ToLowerInvariant();
+            return new BgiTaskSubmitResult
+            {
+                ErrorCode = response.ErrorCode, ErrorMessage = response.ErrorMessage,
+                ServerRejectedBeforeAcceptance = BgiServerRejectionEvidence.Verify(response, ExternalOperations.TaskStart,
+                    payload, WorkflowStopAuthority.Epoch(launch.Epoch)!, key, fingerprint, ServerEpoch) is not null,
+            };
+        }
+        using var doc = JsonDocument.Parse(response.Data);
+        var root = doc.RootElement;
+        return new BgiTaskSubmitResult
+        {
+            Success = true,
+            Status = root.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.String ? status.GetString() : null,
+            TaskHandle = root.TryGetProperty("taskHandle", out var handle) && handle.ValueKind == JsonValueKind.String ? handle.GetString() : null,
+        };
+    }
 
     private BgiEpoch RequireRetainedStartEpoch(IReadOnlyDictionary<string, object?> payload)
     {

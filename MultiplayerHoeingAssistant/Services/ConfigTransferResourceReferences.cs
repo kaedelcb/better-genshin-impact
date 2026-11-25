@@ -7,7 +7,7 @@ namespace MultiplayerHoeingAssistant.Services;
 public static partial class ConfigTransferResources
 {
     private static bool RewriteAssistant(JsonNode root, Dictionary<string, string> groups, Dictionary<string, string> dragons,
-        IReadOnlyDictionary<string, byte[]> resources)
+        IReadOnlyDictionary<string, byte[]> resources, IReadOnlyDictionary<string, byte[]> sourceResources, List<string> warnings)
     {
         var changed = false;
         Visit(root);
@@ -27,12 +27,13 @@ public static partial class ConfigTransferResources
                 var directory = ReferenceEquals(map, dragons) ? "OneDragon" : "ScriptGroup";
                 if (resources.TryGetValue(Prefix + directory + "/" + old + ".json", out var bytes))
                 {
-                    Set(reference, "revision", Hash(bytes)); changed = true;
+                    var revision = Hash(bytes);
+                    if (Text(Get(reference, "revision")) != revision) { Set(reference, "revision", revision); changed = true; }
                     var configKey = Text(Get(reference, "configKey"));
                     // ConfigKey is Name#sourceHash8, a migration mapping identity. Its source
                     // hash is provenance, not the current revision of the transformed bytes.
                     if (name != old && configKey.StartsWith(old + "#", StringComparison.Ordinal))
-                        Set(reference, "configKey", name + configKey[old.Length..]);
+                    { Set(reference, "configKey", name + configKey[old.Length..]); changed = true; }
                 }
             }
             if (Get(obj, "onlineHoeingGroupNames") is JsonArray names)
@@ -45,10 +46,15 @@ public static partial class ConfigTransferResources
                 }
             }
             var specifiedType = Text(Get(obj, "onlineHoeingSpecifiedTaskType"));
+            var specifiedName = Text(Get(obj, "onlineHoeingSpecifiedTaskName"));
             var specifiedMap = specifiedType == "onedragon" ? dragons : groups;
-            if (specifiedType is "group" or "onedragon"
-                && specifiedMap.TryGetValue(Text(Get(obj, "onlineHoeingSpecifiedTaskName")), out var specified))
-            { Set(obj, "onlineHoeingSpecifiedTaskName", specified); changed = true; }
+            if (specifiedType is "group" or "onedragon")
+            {
+                var name = specifiedMap.GetValueOrDefault(specifiedName, specifiedName);
+                if (name != specifiedName) { Set(obj, "onlineHoeingSpecifiedTaskName", name); changed = true; }
+                if (HasSwitchTask(obj))
+                    changed |= RebindSwitchResource(obj, specifiedType, specifiedName, name, sourceResources, resources, warnings);
+            }
             var startupMap = kind == "startOneClick" ? dragons : groups;
             if (kind is "startGroup" or "startOneClick" && startupMap.TryGetValue(Text(Get(obj, "taskName")), out var startupName))
             { Set(obj, "taskName", startupName); changed = true; }
@@ -68,6 +74,61 @@ public static partial class ConfigTransferResources
                     { quick[binding.Key] = prefix + renamed; changed = true; }
                 }
             foreach (var field in obj.ToArray()) Visit(field.Value);
+        }
+    }
+
+    private static bool HasSwitchTask(JsonObject obj) => Text(Get(obj, "onlineHoeingCompletionPolicy")) == "switchRoom"
+        && Get(Get(obj, "onlineHoeingRoomSwitchCompletion"), "runAfterSwitch") is JsonValue value
+        && value.TryGetValue<bool>(out var runAfter) && runAfter;
+
+    /// <summary>只有冻结修订与包内资源一致才可重绑到确定的迁入资源；不能授权目标机碰巧同名的任务。</summary>
+    private static bool RebindSwitchResource(JsonObject obj, string type, string sourceName, string name,
+        IReadOnlyDictionary<string, byte[]> sourceResources, IReadOnlyDictionary<string, byte[]> resources, List<string> warnings)
+    {
+        var key = Prefix + (type == "onedragon" ? "OneDragon/" : "ScriptGroup/") + sourceName + ".json";
+        var oldRevision = Text(Get(obj, "onlineHoeingSpecifiedConfigRevision"));
+        var newRevision = "";
+        if (sourceResources.TryGetValue(key, out var source) && Hash(source) == oldRevision
+            && resources.TryGetValue(key, out var target))
+        {
+            // 一条龙旧格式的投影 ID 可能依赖文件名或旧任务键；有显式稳定身份时才能随改名重绑节点。
+            var stableStart = type != "onedragon" || Text(Get(obj, "onlineHoeingSpecifiedStartMode")) != "node"
+                || sourceName == name && source.AsSpan().SequenceEqual(target)
+                || HasEnabledNativeNode(source) && HasEnabledNativeNode(target);
+            if (stableStart) newRevision = Hash(target);
+        }
+        if (newRevision.Length == 0)
+            warnings.Add($"切房后指定任务「{name}」的迁入资源或起点无法确认，请在对应房间重新选择任务和起点；确认前不会执行。");
+        if (newRevision == oldRevision) return false;
+        Set(obj, "onlineHoeingSpecifiedConfigRevision", newRevision);
+        return true;
+
+        bool HasEnabledNativeNode(byte[] bytes)
+        {
+            var nodeId = Text(Get(obj, "onlineHoeingSpecifiedStartTaskId"));
+            var doc = Parse(bytes);
+            // 公版 TaskDefinitions / TaskEnabledList 的同一个稳定 ID；不猜测 legacy 投影 ID 或同名任务。
+            return nodeId.Length > 0 && Get(doc, "taskDefinitions") is JsonObject definitions
+                && definitions.ContainsKey(nodeId) && Get(doc, "taskEnabledList") is JsonObject enabled
+                && enabled[nodeId] is JsonValue value && value.TryGetValue<bool>(out var active) && active;
+        }
+    }
+
+    internal static byte[] RevalidateSwitchTasksWithoutResources(byte[] assistantConfig, List<string> warnings)
+    {
+        var root = Parse(assistantConfig) as JsonObject ?? throw new InvalidDataException("助手主配置须为对象");
+        var empty = new Dictionary<string, byte[]>();
+        var changed = Revalidate(root);
+        if (Get(root, "roomProfiles") is JsonArray profiles)
+            foreach (var profile in profiles.OfType<JsonObject>()) changed |= Revalidate(profile);
+        return changed ? Bytes(root) : assistantConfig;
+
+        bool Revalidate(JsonObject config)
+        {
+            var type = Text(Get(config, "onlineHoeingSpecifiedTaskType"));
+            if (type is not ("group" or "onedragon") || !HasSwitchTask(config)) return false;
+            var name = Text(Get(config, "onlineHoeingSpecifiedTaskName"));
+            return RebindSwitchResource(config, type, name, name, empty, empty, warnings);
         }
     }
 

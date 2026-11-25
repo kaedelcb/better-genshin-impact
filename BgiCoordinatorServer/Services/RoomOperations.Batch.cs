@@ -38,7 +38,8 @@ public sealed partial class RoomOperations
 
     public async Task<CoordinatedBatchSnapshot> BeginManualCoordinatedBatchAsync(GatewayHandlerContext ctx,
         string requestId, IReadOnlyList<string> targetUids, DateTimeOffset? expiresAtUtc,
-        bool useCompletionActions = false, string quickCommandKey = "")
+        bool useCompletionActions = false, string quickCommandKey = "",
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null)
     {
         if (quickCommandKey is not ("" or "一键传奇" or "一键次数盾" or "一键精英" or "一键小怪" or "一键自定义"))
             throw new InvalidOperationException("batch_quick_command_key");
@@ -61,7 +62,8 @@ public sealed partial class RoomOperations
                 ?? throw new InvalidOperationException("batch_identity_required");
             _roomManager.ExpireOnlineIntents(group, _roomManager.ControlUtcNow);
             batch = BeginCoordinatedBatch(group, "manual", senderUid + "\0" + requestId,
-                requestId, targetUids, null, expiresAtUtc, out created, useCompletionActions, quickCommandKey);
+                requestId, targetUids, null, expiresAtUtc, out created, useCompletionActions, quickCommandKey,
+                confirmedCompletionActions);
             if (created) _roomManager.DisarmOnlineEvents(group, batch.ParticipantUids);
         }
         if (created) await PublishBatchStartAsync(group, batch);
@@ -103,7 +105,8 @@ public sealed partial class RoomOperations
     // 只负责受理。拒绝新请求不得修改旧批次，包括尚未完成清理的终态批次。
     private CoordinatedBatchState BeginCoordinatedBatch(string group, string source, string requestKey,
         string requestId, IReadOnlyList<string> uids, IReadOnlyDictionary<string, int>? intentGenerations,
-        DateTimeOffset? expiresAtUtc, out bool created, bool useCompletionActions = false, string quickCommandKey = "")
+        DateTimeOffset? expiresAtUtc, out bool created, bool useCompletionActions = false, string quickCommandKey = "",
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null)
     {
         created = false;
         if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
@@ -119,6 +122,8 @@ public sealed partial class RoomOperations
             var prior = repeated.Snapshot();
             if (prior.UseCompletionActions != useCompletionActions || prior.QuickCommandKey != quickCommandKey)
                 throw new InvalidOperationException("batch_request_identity_mismatch");
+            if (source == "manual" && useCompletionActions)
+                RequireConfirmedRoomSwitchActions(uids, prior.ConfirmedCompletionActions, confirmedCompletionActions);
             return repeated;
         }
         if (expiresAtUtc is { } expiry && expiry <= _roomManager.ControlUtcNow)
@@ -180,21 +185,42 @@ public sealed partial class RoomOperations
                     new CoordinatedBatchBinding(name, p.OnlineHoeingGroupTypes.Count == 0 ? "group" : p.OnlineHoeingGroupTypes[i])).ToArray(),
                 StringComparer.Ordinal);
         }
-        if (useCompletionActions)
+        // 不从确认请求替执行端设置动作。以受理时的成员状态为准，冻结有效动作的摘要。
+        // 自动上线沿用绑定动作，即使 UseCompletionActions 为 false；手动未勾选才不使用。
+        var actions = new Dictionary<string, CoordinatedCompletionAction>(StringComparer.Ordinal);
+        if (source != "manual" || useCompletionActions)
+        {
             foreach (var player in selected)
-                if (player.HoeingCompletionAction?.IsValid() != true)
+            {
+                var action = player.HoeingCompletionAction;
+                if ((useCompletionActions || action?.Policy == "switchRoom") && action?.IsValid() != true)
                     throw new InvalidOperationException("hoeing_completion_action_invalid:" + player.PlayerUid);
+                if (action != null) actions[player.PlayerUid] = action;
+            }
+            if (source == "manual")
+                RequireConfirmedRoomSwitchActions(uids, actions, confirmedCompletionActions);
+        }
         var instances = selected.ToDictionary(p => p.PlayerUid, p => p.ClientInstanceId, StringComparer.Ordinal);
         var generation = Interlocked.Increment(ref _nextBatchGeneration);
         if (generation <= 0) throw new InvalidOperationException("batch_generation_exhausted");
         var batch = new CoordinatedBatchState(generation, uids, DateTime.UtcNow, source, requestId,
             bindings, intentGenerations, instances, useCompletionActions, quickCommandKey, stateContinuation: true,
             priorityRecovery: selected.All(p => _capabilityLookup?.Supports(p.ConnectionId,
-                GatewayProtocol.HoeingPriorityRecoveryCapability) == true));
+                GatewayProtocol.HoeingPriorityRecoveryCapability) == true), confirmedCompletionActions: actions);
         _controlBatches[group] = batch;
         _batchRequests[key] = batch;
         created = true;
         return batch;
+    }
+
+    private static void RequireConfirmedRoomSwitchActions(IEnumerable<string> uids,
+        IReadOnlyDictionary<string, CoordinatedCompletionAction> actual,
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmed)
+    {
+        foreach (var uid in uids)
+            if (!CoordinatedCompletionAction.MatchesRoomSwitchConfirmation(
+                    confirmed?.GetValueOrDefault(uid), actual.GetValueOrDefault(uid)))
+                throw new InvalidOperationException("hoeing_completion_action_changed:" + uid);
     }
 
     private static CoordinatedBatchBinding ParseQuickCommandBinding(Models.ControlRoomPlayer player, string key)

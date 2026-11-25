@@ -575,7 +575,7 @@ public sealed class CompletionActionPanelTests
     {
         var config = new AssistConfig
         {
-            ServerUrl = "http://localhost:5000", ControlRoomPassword = "1234", PlayerUid = "self", TeamUids = ["self"]
+            ServerUrl = "http://localhost:5000", ControlRoomPassword = "1234", PlayerUid = "self", PlayerName = "本机", TeamUids = ["self"]
         };
         var settings = Settings("workflow", "node-c", "rev-1");
         CompletionPolicyFields.Apply(config, settings);
@@ -591,6 +591,237 @@ public sealed class CompletionActionPanelTests
         finally { window.Close(); }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task OrdinarySettingsAfterActiveRoomPolicySaveKeepsSwitchAndPagePreference() => OnSta(() =>
+    {
+        var config = new AssistConfig
+        {
+            PlayerUid = "111111111", PlayerName = "本机", StandaloneMode = true,
+            ActiveRoomProfileId = "room-a", LocalRoomProfileId = "room-a", ViewedRoomProfileId = "room-b", ShowRoomOrchestration = true,
+            RoomProfiles = [
+                new() { Id = "room-a", Name = "甲", RoomCode = "AAAAAA", ServerUrl = "https://source.example.test", TeamUids = ["111111111"] },
+                new() { Id = "room-b", Name = "乙", RoomCode = "BBBBBB", ServerUrl = "https://target.example.test", TeamUids = ["111111111"] }
+            ]
+        };
+        config.ActiveRoomProfile!.ApplyTo(config);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var window = (SettingsWindow)Activator.CreateInstance(typeof(SettingsWindow), flags, null, [config], null)!;
+        try
+        {
+            // 普通设置窗口早于完成动作另一次编辑打开，必须以保存时最新档案为基础。
+            var settings = Settings("group", "node-c", "rev-1");
+            settings.Policy = TaskConflictPolicy.Stop;
+            settings.RoomSwitch = RoomSwitchCompletion.Choices(config, "room-a").Single() with { RunAfterSwitch = true };
+            CompletionPolicyFields.ApplyForProfile(config, "room-a", settings);
+            var saved = (AssistConfig)typeof(SettingsWindow).GetMethod("BuildConfig", flags)!.Invoke(window, null)!;
+            var actual = CompletionPolicyFields.Parameters(CompletionPolicyFields.Snapshot(saved));
+            foreach (var pair in CompletionPolicyFields.Parameters(settings)) Assert.Equal(pair.Value, actual[pair.Key]);
+            Assert.Equal(settings.RoomSwitch, saved.ActiveRoomProfile!.OnlineHoeingRoomSwitchCompletion);
+            Assert.True(saved.ShowRoomOrchestration);
+            Assert.Equal("room-b", saved.ViewedRoomProfileId);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task SwitchRoomNeedsAnExplicitTargetAndDefaultsToStandbyEvenWithoutCatalog() => OnSta(async () =>
+    {
+        var choices = new[] { RoomChoice(), RoomChoice() with
+        {
+            TargetProfileId = "room-c", TargetServerUrl = "https://third.example.test"
+        } };
+        var resources = ProductionComboResources();
+        var editor = new CompletionActionPanel(new TaskConflictPolicySettings { Policy = TaskConflictPolicy.Resume }, [], [], "",
+            (_, _, _) => Task.FromResult<CompletionTargetCatalog?>(new([], null, "BGI 目录未就绪")),
+            createCombo: () => ThemedCombo(resources), roomSwitchChoices: choices);
+        await editor.CatalogLoadTask;
+        var window = Show(editor, resources);
+        try
+        {
+            Assert.True(editor.TryGetChanges(out var unchanged, out _));
+            Assert.Null(unchanged);
+            editor.PolicyCombo.SelectedIndex = 1;
+            editor.ActionCombo.SelectedIndex = 2;
+            await SettleLayout(window);
+            Assert.Equal(-1, editor.RoomTargetCombo.SelectedIndex);
+            Assert.Equal(0, editor.AfterSwitchCombo.SelectedIndex);
+            Assert.True(editor.RoomTargetCombo.IsVisible);
+            Assert.False(editor.TypeCombo.IsVisible);
+            Assert.False(editor.StartModeCombo.IsVisible);
+            Assert.False(editor.TryGetChanges(out _, out var error));
+            Assert.Contains("房间", error);
+            // 同名、同房间号、不同服务器必须能在真正的主题下拉里区分。
+            await AssertThemedPopup(window, editor.RoomTargetCombo, resources,
+                "乙房 · BBBBBB · https://target.example.test", "乙房 · BBBBBB · https://third.example.test");
+            editor.RoomTargetCombo.SelectedIndex = 1;
+            Assert.True(editor.TryGetChanges(out var selected, out error), error);
+            Assert.NotNull(selected);
+            Assert.Equal(TaskConflictPolicy.Stop, selected.Policy);
+            Assert.Equal(choices[1], selected.RoomSwitch);
+            Assert.False(selected.HasSpecifiedTask);
+            Assert.Empty(selected.SpecifiedTaskName);
+            Assert.Equal("default", selected.SpecifiedStartMode);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task SwitchRoomWithNoOtherSavedRoomCannotBeSavedAsStop() => OnSta(async () =>
+    {
+        var editor = new CompletionActionPanel(new TaskConflictPolicySettings { Policy = TaskConflictPolicy.Resume }, [], [], "",
+            (_, _, _) => Task.FromResult<CompletionTargetCatalog?>(null), roomSwitchChoices: []);
+        await editor.CatalogLoadTask;
+        editor.PolicyCombo.SelectedIndex = 1;
+        editor.ActionCombo.SelectedIndex = 2;
+        Assert.Empty(editor.RoomTargetCombo.Items);
+        Assert.False(editor.TryGetChanges(out _, out var error));
+        Assert.Contains("房间", error);
+    });
+
+    [Theory]
+    [InlineData("group")]
+    [InlineData("onedragon")]
+    [InlineData("workflow")]
+    public Task SwitchRoomSpecifiedTaskUsesExistingEnabledNodeRevisionAndPriorityValidation(string type) => OnSta(async () =>
+    {
+        var initial = Settings(type, "node-c", "rev-1");
+        initial.Policy = TaskConflictPolicy.Stop;
+        initial.RoomSwitch = RoomChoice() with { RunAfterSwitch = true };
+        var editor = new CompletionActionPanel(initial, ["收尾"], ["收尾"], "",
+            (kind, name, id) => Task.FromResult<CompletionTargetCatalog?>(Catalog(kind, name, id)), roomSwitchChoices: [RoomChoice()]);
+        await editor.CatalogLoadTask;
+        var window = Show(editor);
+        try
+        {
+            await SettleLayout(window);
+            Assert.Equal(2, editor.ActionCombo.SelectedIndex);
+            Assert.Equal(1, editor.AfterSwitchCombo.SelectedIndex);
+            Assert.True(editor.StartModeCombo.IsVisible);
+            Assert.Equal(2, editor.NodeCombo.Items.Count);
+            Assert.True(editor.TryGetChanges(out var unchanged, out var error), error);
+            Assert.Null(unchanged);
+            editor.PriorityBox.Text = "2147483648";
+            Assert.False(editor.TryGetChanges(out _, out error));
+            editor.PriorityBox.Text = "21";
+            editor.StartModeCombo.SelectedIndex = 0;
+            Assert.True(editor.TryGetChanges(out var beginning, out error), error);
+            Assert.NotNull(beginning);
+            Assert.Equal(TaskConflictPolicy.Stop, beginning.Policy);
+            Assert.Equal(initial.RoomSwitch, beginning.RoomSwitch);
+            Assert.Equal(type, beginning.SpecifiedTaskType);
+            Assert.Equal(21, beginning.SpecifiedTaskPriority);
+            Assert.Equal("beginning", beginning.SpecifiedStartMode);
+            Assert.Empty(beginning.SpecifiedStartTaskId);
+            Assert.Equal("rev-1", beginning.SpecifiedConfigRevision);
+            editor.StartModeCombo.SelectedIndex = 1;
+            Assert.False(editor.TryGetChanges(out _, out error)); // 不能把没有选择节点当成从头。
+            editor.NodeCombo.SelectedIndex = 0;
+            Assert.True(editor.TryGetChanges(out var node, out error), error);
+            Assert.Equal("node-a", node!.SpecifiedStartTaskId);
+            Assert.Equal(type == "workflow" ? "wf-finish" : "", node.SpecifiedWorkflowId);
+            editor.AfterSwitchCombo.SelectedIndex = 0;
+            await SettleLayout(window);
+            Assert.False(editor.StartModeCombo.IsVisible);
+            Assert.True(editor.TryGetChanges(out var standby, out error), error);
+            Assert.Equal(RoomChoice(), standby!.RoomSwitch);
+            Assert.Empty(standby.SpecifiedTaskName);
+            Assert.Empty(standby.SpecifiedConfigRevision);
+            Assert.Empty(standby.SpecifiedWorkflowId);
+            Assert.Equal(0, standby.SpecifiedTaskPriority);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public Task InvalidSavedTargetRemainsVisibleWithoutUnintendedWriteAndNeedsExplicitReselection() => OnSta(async () =>
+    {
+        var original = RoomChoice();
+        var moved = original with { TargetServerUrl = "https://moved.example.test" };
+        var initial = new TaskConflictPolicySettings { Policy = TaskConflictPolicy.Stop, RoomSwitch = original };
+        var editor = new CompletionActionPanel(initial, [], [], "", (_, _, _) => Task.FromResult<CompletionTargetCatalog?>(null),
+            roomSwitchChoices: [moved]);
+        await editor.CatalogLoadTask;
+        var window = Show(editor);
+        try
+        {
+            Assert.Equal(2, editor.RoomTargetCombo.Items.Count);
+            Assert.Contains("已失效", editor.RoomTargetCombo.SelectedItem.ToString(), StringComparison.Ordinal);
+            Assert.False(editor.TryGetSettings(out var invalid, out _));
+            Assert.Equal(original, invalid.RoomSwitch);
+            Assert.True(editor.TryGetChanges(out var unchanged, out _));
+            Assert.Null(unchanged); // 未编辑切房不能阻挡普通绑定/设置。
+            editor.RoomTargetCombo.SelectedIndex = 1;
+            Assert.True(editor.TryGetChanges(out var edited, out var error), error);
+            Assert.Equal(moved, edited!.RoomSwitch);
+        }
+        finally { window.Close(); }
+        var renamed = original with { TargetName = "乙房新名称" };
+        var renamedEditor = new CompletionActionPanel(initial, [], [], "", (_, _, _) => Task.FromResult<CompletionTargetCatalog?>(null),
+            roomSwitchChoices: [renamed]);
+        await renamedEditor.CatalogLoadTask;
+        Assert.True(renamedEditor.TryGetSettings(out var displayed, out _));
+        Assert.Equal(renamed, displayed.RoomSwitch);
+        Assert.True(renamedEditor.TryGetChanges(out var renameOnly, out _));
+        Assert.Null(renameOnly);
+    });
+
+    [Fact]
+    public Task RemoteEditorPreservesDisplayedSwitchAndCanExplicitlyChooseOriginalActions() => OnSta(async () =>
+    {
+        var settings = Settings("group", "node-c", "rev-1");
+        settings.Policy = TaskConflictPolicy.Stop;
+        settings.RoomSwitch = RoomChoice() with { RunAfterSwitch = true };
+        var editor = new CompletionActionPanel(settings, ["收尾"], [], "",
+            (type, name, id) => Task.FromResult<CompletionTargetCatalog?>(Catalog(type, name, id)));
+        await editor.CatalogLoadTask;
+        var window = Show(editor);
+        try
+        {
+            await SettleLayout(window);
+            Assert.Equal(2, editor.ActionCombo.SelectedIndex);
+            Assert.Single(editor.RoomTargetCombo.Items);
+            Assert.False(editor.RoomTargetCombo.IsEnabled);
+            Assert.False(editor.AfterSwitchCombo.IsEnabled);
+            Assert.False(editor.TypeCombo.IsEnabled);
+            Assert.False(editor.TryGetSettings(out var displayed, out _));
+            Assert.Equal(settings.RoomSwitch, displayed.RoomSwitch);
+            Assert.True(editor.TryGetChanges(out var unchanged, out _));
+            Assert.Null(unchanged);
+            editor.ActionCombo.SelectedIndex = 0;
+            Assert.True(editor.TryGetChanges(out var stop, out var error), error);
+            Assert.Equal(TaskConflictPolicy.Stop, stop!.Policy);
+            Assert.Null(stop.RoomSwitch);
+            Assert.Empty(stop.SpecifiedTaskName);
+            Assert.Empty(stop.SpecifiedConfigRevision);
+            editor.PolicyCombo.SelectedIndex = 0;
+            Assert.True(editor.TryGetChanges(out var resume, out error), error);
+            Assert.Equal(TaskConflictPolicy.Resume, resume!.Policy);
+            Assert.Null(resume.RoomSwitch);
+            editor.PolicyCombo.SelectedIndex = 1;
+            editor.ActionCombo.SelectedIndex = 1;
+            Assert.True(editor.TypeCombo.IsEnabled);
+            Assert.True(editor.TryGetChanges(out var specified, out error), error);
+            Assert.Equal(TaskConflictPolicy.RunSpecified, specified!.Policy);
+            Assert.Null(specified.RoomSwitch);
+            Assert.Equal("rev-1", specified.SpecifiedConfigRevision);
+            editor.NameCombo.Text = "临时普通任务";
+            await editor.CatalogLoadTask.WaitAsync(TimeSpan.FromSeconds(2));
+            editor.ActionCombo.SelectedIndex = 2;
+            await SettleLayout(window);
+            Assert.True(editor.TryGetChanges(out var stillUnchanged, out _));
+            Assert.Null(stillUnchanged);
+            Assert.Contains(VisibleText(editor.Root), text => text.Contains("已保存切换后动作：执行 配置组「收尾」", StringComparison.Ordinal));
+            Assert.DoesNotContain(VisibleText(editor.Root), text => text.Contains("临时普通任务", StringComparison.Ordinal));
+        }
+        finally { window.Close(); }
+        var ordinary = new CompletionActionPanel(new TaskConflictPolicySettings(), [], [], "", (_, _, _) => Task.FromResult<CompletionTargetCatalog?>(null));
+        Assert.Equal(2, ordinary.ActionCombo.Items.Count); // 不暴露远程房间选择，也不能新增切房。
+    });
+
+    private static RoomSwitchCompletion RoomChoice() => new("room-a", "https://source.example.test", "AAAAAA",
+        "room-b", "https://target.example.test", "BBBBBB", "乙房");
 
     private static ResourceDictionary ProductionComboResources([CallerFilePath] string sourcePath = "")
     {

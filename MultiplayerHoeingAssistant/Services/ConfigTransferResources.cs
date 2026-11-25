@@ -100,6 +100,8 @@ public static partial class ConfigTransferResources
         var warnings = new List<string>();
         if (resources.Count > 0)
             warnings.Add("已迁移 BGI 业务配置和脚本资源；BGI 全局设置、角色队伍命名及外部程序/命令仍使用本机配置。不同版本脚本或外部文件须先处理冲突。");
+        // Preserve source bytes for confirming the frozen post-switch task revision before aliases are rewritten.
+        var originalResources = new Dictionary<string, byte[]>(resources, StringComparer.OrdinalIgnoreCase);
         var groupMap = Allocate("ScriptGroup", false);
         var dragonMap = Allocate("OneDragon", groupMap.Count > 0);
 
@@ -122,7 +124,7 @@ public static partial class ConfigTransferResources
         foreach (var key in assistant.Keys.Where(k => k.EndsWith(".json", StringComparison.OrdinalIgnoreCase)).ToArray())
         {
             var doc = Parse(assistant[key]);
-            var changed = RewriteAssistant(doc, groupMap, dragonMap, resources);
+            var changed = RewriteAssistant(doc, groupMap, dragonMap, resources, originalResources, warnings);
             if (changed) assistant[key] = Bytes(doc);
         }
         var targets = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);

@@ -206,8 +206,10 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
             await peerA.ConnectAsync(a.Url, code, source.Password, peer, "A 队友", list, cancellationToken: budget.Token);
             await peerB.ConnectAsync(b.Url, code, target.Password, peer, "B 队友", list, cancellationToken: budget.Token);
             var vm = new MultiplayerHoeingAssistant.ViewModels.MainViewModel();
+            source.OnlineHoeingCompletionPolicy = "switchRoom";
+            source.OnlineHoeingRoomSwitchCompletion = new RoomSwitchCompletion(source.Id, a.Url, code, target.Id, b.Url, code, target.Name);
             var config = new AssistConfig { PlayerUid = player, PlayerName = "隔离测试", ClientInstanceId = "cross-server-test",
-                RoomProfiles = [source, target], ActiveRoomProfileId = source.Id };
+                RoomProfiles = [source, target], ActiveRoomProfileId = source.Id, ShowRoomOrchestration = true, ViewedRoomProfileId = source.Id };
             source.ApplyTo(config);
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
             var type = vm.GetType();
@@ -218,6 +220,22 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
             {
                 await (Task)type.GetMethod("ConnectSignalRAsync", flags)!.Invoke(vm, null)!;
                 Assert.Contains(vm.Members, member => member.PlayerName == "A 队友");
+                // The monitor uses its own saved credentials to observe each room; these
+                // connections must never appear as an extra executor or replace the actual member.
+                // Exercise the internal helper without changing production visibility for a test.
+                var linkType = type.Assembly.GetType("MultiplayerHoeingAssistant.Services.RoomOrchestrationMonitorLink", true)!;
+                IAsyncDisposable Monitor(AssistantRoomProfile profile, string server) => (IAsyncDisposable)Activator.CreateInstance(linkType,
+                    flags, null, [profile, server, player, "隔离监控端", true], null)!;
+                void ConnectMonitor(IAsyncDisposable link) => linkType.GetMethod("EnsureConnected", flags)!.Invoke(link, null);
+                bool Ready(IAsyncDisposable link) => (bool)linkType.GetProperty("IsReady", flags)!.GetValue(link)!;
+                RemoteCenterTarget[] Targets(IAsyncDisposable link) => (RemoteCenterTarget[])linkType.GetMethod("Targets", flags)!.Invoke(link, null)!;
+                await using var monitorA = Monitor(source, a.Url);
+                await using var monitorB = Monitor(target, b.Url);
+                ConnectMonitor(monitorA); ConnectMonitor(monitorB);
+                await WaitUntilAsync(() => Task.FromResult(Ready(monitorA) && Ready(monitorB) && Targets(monitorA).Length == 1));
+                var selectedInstance = Assert.Single(Targets(monitorA)).ClientInstanceId;
+                Assert.Equal(config.ClientInstanceId, selectedInstance);
+                Assert.Empty(Targets(monitorB));
                 var switchRoom = type.GetMethod("SwitchAssistantRoomForFlowAsync", flags)!;
                 Task<FlowRoomSwitchResult> Switch(string id) =>
                     (Task<FlowRoomSwitchResult>)switchRoom.Invoke(vm, [id, null, budget.Token])!;
@@ -225,15 +243,60 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 Assert.True(toB.Success, toB.Message);
                 Assert.Equal(b.Url, config.ServerUrl);
                 Assert.Equal(code, vm.RoomCode);
+                Assert.True(config.ShowRoomOrchestration);
+                Assert.Equal(source.Id, config.ViewedRoomProfileId);
+                Assert.Equal("resume", config.OnlineHoeingCompletionPolicy);
+                Assert.Equal(target.Id, config.RoomProfiles.Single(p => p.Id == source.Id).OnlineHoeingRoomSwitchCompletion?.TargetProfileId);
                 Assert.DoesNotContain(vm.Members, member => member.PlayerName == "A 队友");
                 Assert.Contains(vm.Members, member => member.PlayerName == "B 队友");
                 Assert.DoesNotContain(a.Manager.GetControlRoomPlayers("CTRL_" + code), p => p.PlayerUid == player && p.Online);
                 var bMember = Assert.Single(b.Manager.GetControlRoomPlayers("CTRL_" + code).Where(p => p.PlayerUid == player && p.Online));
                 Assert.Equal(3, bMember.ExpectedHoeingPlayers);
                 Assert.Equal("B 的绑定", Assert.Single(bMember.OnlineHoeingGroupNames));
+                await WaitUntilAsync(() => Task.FromResult(Targets(monitorA).Length == 0 && Targets(monitorB).Any(t => t.ClientInstanceId == selectedInstance)));
+                Assert.Equal(bMember.ClientInstanceId, Assert.Single(Targets(monitorB)).ClientInstanceId);
+                Assert.DoesNotContain(b.Manager.GetControlRoomPlayers("CTRL_" + code), p => p.PlayerName == "隔离监控端");
+                // A second same-UID instance must not overwrite the chosen instance. A synthetic
+                // machine identity on this isolated gateway fixture also exercises the network
+                // center request/reply path rather than the same-machine named pipe path.
+                await using (var secondExecutor = new MultiplayerHoeingAssistant.Services.Gateway.MhaGatewayClient())
+                {
+                    const string secondInstance = "cross-server-second", secondMachine = "isolated-other-machine";
+                    var delivered = new TaskCompletionSource<RemoteCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    secondExecutor.EnvelopeReceived += envelope =>
+                    {
+                        if (envelope.Name != "control.remoteCommand" || envelope.Get<RemoteCommand>("command") is not { } cmd
+                            || cmd.Cmd != RemoteCenterProtocol.RequestCommand) return;
+                        delivered.TrySetResult(cmd);
+                    };
+                    await secondExecutor.ConnectAsync(b.Url, true, budget.Token);
+                    var joined = await secondExecutor.InvokeCommandAsync("control.joinRoom", new { roomCode = code,
+                        password = target.Password, playerUid = player, playerName = "隔离第二执行端", allowedUids = list,
+                        clientInstanceId = secondInstance, machineId = secondMachine }, ct: budget.Token);
+                    // Non-prepared joins can confirm through the full member event rather than a response payload.
+                    Assert.NotEqual(false, joined.Payload?["success"]?.GetValue<bool>());
+                    await WaitUntilAsync(() => Task.FromResult(Targets(monitorB).Length == 2));
+                    Assert.Contains(Targets(monitorB), t => t.ClientInstanceId == selectedInstance);
+                    var remote = Assert.Single(Targets(monitorB).Where(t => t.ClientInstanceId == secondInstance));
+                    Assert.Equal(secondMachine, remote.MachineId);
+                    var requestId = Guid.NewGuid().ToString("N");
+                    var request = new RemoteCenterRequest { Operation = "room.orchestration.get", TargetInstanceId = secondInstance, ExpectedMachineId = secondMachine };
+                    var responseTask = (Task<RemoteCenterReply>)linkType.GetMethod("RequestAsync", flags)!.Invoke(monitorB, [remote, request, requestId, budget.Token])!;
+                    var received = await delivered.Task.WaitAsync(TimeSpan.FromSeconds(8), budget.Token);
+                    Assert.Equal(requestId, received.CommandId);
+                    Assert.Equal(secondInstance, received.TargetInstanceId);
+                    var response = RemoteCenterReply.Ok(new { fixture = true }); response.TargetInstanceId = secondInstance;
+                    await secondExecutor.InvokeCommandAsync("control.sendCommand", new { command = RemoteCenterProtocol.Reply(received, player, "隔离第二执行端", response) }, ct: budget.Token);
+                    Assert.Equal("ok", (await responseTask).Status);
+                }
+                await WaitUntilAsync(() => Task.FromResult(Targets(monitorB).Length == 1));
                 var toA = await Switch(source.Id);
                 Assert.True(toA.Success, toA.Message);
                 Assert.Equal(a.Url, config.ServerUrl);
+                Assert.Equal("switchRoom", config.OnlineHoeingCompletionPolicy);
+                Assert.Equal(target.Id, config.OnlineHoeingRoomSwitchCompletion?.TargetProfileId);
+                Assert.True(config.ShowRoomOrchestration);
+                await WaitUntilAsync(() => Task.FromResult(Targets(monitorB).Length == 0 && Targets(monitorA).Any(t => t.ClientInstanceId == selectedInstance)));
                 target.Password = "incorrect";
                 var rejected = await Switch(target.Id);
                 Assert.False(rejected.Success);

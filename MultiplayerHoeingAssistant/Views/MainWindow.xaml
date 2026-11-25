@@ -821,7 +821,7 @@
                                                         <Setter Property="Background" Value="#1AE8C96D"/>
                                                         <Setter Property="BorderBrush" Value="#59D4AF37"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsViewingReadOnlyRoom}" Value="True">
+                                                            <DataTrigger Binding="{Binding IsHeaderViewingReadOnlyRoom}" Value="True">
                                                                 <Setter Property="Background" Value="#243E5F8A"/>
                                                                 <Setter Property="BorderBrush" Value="#738FC1E8"/>
                                                             </DataTrigger>
@@ -843,14 +843,24 @@
                                     <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock Text="查看" FontSize="10" Foreground="{StaticResource Dim}"
-                                                       Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                       Margin="0,0,4,0" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsShowingRoomOrchestration}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
                                             <TextBlock x:Name="HeaderViewingRoomText" Text="{Binding HeaderViewingRoomName}"
                                                        FontSize="10.5" FontWeight="Medium" VerticalAlignment="Center">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
                                                         <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsViewingReadOnlyRoom}" Value="True">
+                                                            <DataTrigger Binding="{Binding IsHeaderViewingReadOnlyRoom}" Value="True">
                                                                 <Setter Property="Foreground" Value="{StaticResource Water}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -993,7 +1003,26 @@
                                                 <ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <StackPanel>
-                                                <TextBlock Text="助手房间" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource GoldText}"/>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="助手房间" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource GoldText}"
+                                                               VerticalAlignment="Center"/>
+                                                    <Button x:Name="RoomOrchestrationEntryButton" Content="{Binding RoomOrchestrationEntryText}"
+                                                            Padding="9,5" Margin="8,0,4,0" MinHeight="26" Click="RoomOrchestrationEntryClick"
+                                                            Visibility="{Binding CanSelectRoomOrchestration, Converter={StaticResource BoolToVis}}"
+                                                            AutomationProperties.Name="{Binding RoomOrchestrationEntryText}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource BtnGhost}">
+                                                                <Setter Property="Foreground" Value="{StaticResource GoldText}"/>
+                                                                <Setter Property="BorderBrush" Value="{StaticResource GoldLine}"/>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                        <Setter Property="BorderBrush" Value="{StaticResource Gold}"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                </StackPanel>
                                                 <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource Dim}" TextTrimming="CharacterEllipsis"
                                                            ToolTip="{Binding ActiveRoomProfile.Name}">
                                                     <Run Text="最后确认："/>
@@ -1040,7 +1069,7 @@
                                                         <DataTrigger Binding="{Binding HasItems, ElementName=AssistantRoomSelector}" Value="False">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsViewingAllRooms}" Value="True">
+                                                        <DataTrigger Binding="{Binding IsDisplayingAllRoomsView}" Value="True">
                                                             <Setter Property="Background" Value="#294868A8"/>
                                                             <Setter Property="BorderBrush" Value="#8C8FC1E8"/>
                                                         </DataTrigger>
@@ -1061,14 +1090,13 @@
                                                 </StackPanel>
                                                 <Border Grid.Column="2" CornerRadius="5" Padding="6,1" Margin="8,0,0,0"
                                                         Background="#2E8FC1E8" BorderBrush="#668FC1E8" BorderThickness="1" VerticalAlignment="Center"
-                                                        Visibility="{Binding IsViewingAllRooms, Converter={StaticResource BoolToVis}}">
+                                                        Visibility="{Binding IsDisplayingAllRoomsView, Converter={StaticResource BoolToVis}}">
                                                     <TextBlock Text="查看中" FontSize="10" Foreground="{StaticResource Water}" VerticalAlignment="Center"/>
                                                 </Border>
                                             </Grid>
                                         </Button>
                                         <ListBox x:Name="AssistantRoomSelector" ItemsSource="{Binding RoomSwitchChoices}"
                                                  SelectedValuePath="Id" SelectedValue="{Binding ActiveRoomProfile.Id, Mode=OneWay}"
-                                                 SelectionChanged="AssistantRoomSelectorSelectionChanged"
                                                  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{StaticResource White}"
                                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                                                  MaxHeight="224" IsEnabled="{Binding CanEditConfiguration}" AutomationProperties.Name="选择目标房间">
@@ -1107,16 +1135,21 @@
                                                                         <Setter TargetName="RoomRow" Property="Background" Value="#428278C2"/>
                                                                     </Trigger>
                                                                     <!-- 当前查看的非登录房间：冷色边框提示查看中，文字保持白色 -->
-                                                                    <DataTrigger Value="True">
-                                                                        <DataTrigger.Binding>
-                                                                            <MultiBinding Converter="{StaticResource StringEqualsMulti}">
-                                                                                <Binding Path="Id"/>
-                                                                                <Binding Path="DataContext.ViewedRoomProfileId" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
-                                                                            </MultiBinding>
-                                                                        </DataTrigger.Binding>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding DataContext.IsShowingRoomOrchestration, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="False"/>
+                                                                            <Condition Value="True">
+                                                                                <Condition.Binding>
+                                                                                    <MultiBinding Converter="{StaticResource StringEqualsMulti}">
+                                                                                        <Binding Path="Id"/>
+                                                                                        <Binding Path="DataContext.ViewedRoomProfileId" RelativeSource="{RelativeSource AncestorType=ListBox}"/>
+                                                                                    </MultiBinding>
+                                                                                </Condition.Binding>
+                                                                            </Condition>
+                                                                        </MultiDataTrigger.Conditions>
                                                                         <Setter TargetName="RoomRow" Property="Background" Value="#294868A8"/>
                                                                         <Setter TargetName="RoomRow" Property="BorderBrush" Value="#8C8FC1E8"/>
-                                                                    </DataTrigger>
+                                                                    </MultiDataTrigger>
                                                                     <!-- 选中作为切换目标（非登录房间）：保持白色文字，仅加选中边框 -->
                                                                     <Trigger Property="IsSelected" Value="True">
                                                                         <Setter TargetName="RoomRow" Property="Background" Value="#384C64A8"/>
@@ -1269,12 +1302,15 @@
 
                 <!-- 内容区（成员列表 / 设置页面 / 嘟嘟可，通过 CurrentPage 三态切换） -->
                 <Grid Grid.Row="1">
-                    <!-- 成员列表主页（默认显示） -->
-                    <Grid>
+                    <!-- Home 的成员/快捷指令与编排是互斥内容模式，其他页面导航不变。 -->
+                    <Grid x:Name="MemberHomeContent">
                         <Grid.Style>
                             <Style TargetType="Grid">
                                 <Setter Property="Visibility" Value="Visible"/>
                                 <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsShowingRoomOrchestration}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
                                     <DataTrigger Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Settings}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                     </DataTrigger>
@@ -1548,7 +1584,17 @@
                                                             <StackPanel Orientation="Horizontal" Grid.Column="0">
                                                                 <Button Content="🔗 锄地" Style="{StaticResource TextAction}"
                                                                         Command="{Binding DataContext.BindHoeingGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                        CommandParameter="{Binding}" Margin="0,0,2,0" FontSize="11" ToolTip="绑定联机锄地配置组（所有人可编辑）"/>
+                                                                        CommandParameter="{Binding}" Margin="0,0,2,0" FontSize="11">
+                                                                    <Button.ToolTip>
+                                                                        <ToolTip DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}" MaxWidth="460">
+                                                                            <StackPanel>
+                                                                                <TextBlock Text="绑定联机锄地配置组（所有人可编辑）" TextWrapping="Wrap"/>
+                                                                                <TextBlock Text="{Binding HoeingCompletionAction.Description, StringFormat='完成后：{0}', FallbackValue='完成后动作尚未确认', TargetNullValue='完成后动作尚未确认'}"
+                                                                                           TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                                                            </StackPanel>
+                                                                        </ToolTip>
+                                                                    </Button.ToolTip>
+                                                                </Button>
                                                                 <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
                                                                 <Button Content="配置组" Style="{StaticResource TextAction}" Command="{Binding DataContext.StartGroupCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
                                                                 <TextBlock Text="|" FontSize="13" Foreground="{StaticResource Dim}" Margin="4,0"/>
@@ -1789,6 +1835,24 @@
                                 </StackPanel>
                             </Border>
                         </Grid>
+
+                        <!-- 编排是 Home 的内容分支，不是新的主导航页。 -->
+                        <views:RoomOrchestrationPage x:Name="RoomOrchestrationHomeContent">
+                            <views:RoomOrchestrationPage.Style>
+                                <Style TargetType="views:RoomOrchestrationPage">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding CurrentPage}" Value="{x:Static vm:AppPage.Home}"/>
+                                                <Condition Binding="{Binding IsShowingRoomOrchestration}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </views:RoomOrchestrationPage.Style>
+                        </views:RoomOrchestrationPage>
 
                         <!-- 设置页面（CurrentPage==Settings 时显示） -->
                         <views:SettingsPage IsEnabled="{Binding DataContext.CanEditConfiguration, RelativeSource={RelativeSource AncestorType=Window}}">

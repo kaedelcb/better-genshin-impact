@@ -23,8 +23,14 @@ public partial class MainViewModel
     // Keep the original button request alive. This is the same invocation and request ID,
     // not a second batch or a background command queue.
     private async Task<CoordinatedBatchSnapshot> BeginCoordinatedWithContinuationAsync(string requestId,
-        IReadOnlyList<string> targets, bool useCompletionActions, string quickCommandKey = "")
+        IReadOnlyList<string> targets, bool useCompletionActions, string quickCommandKey = "",
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null)
     {
+        // Keep each resend bound to the exact actions rendered in the original confirmation.
+        // Never replace this map with a fresh member/status read on retry.
+        var confirmed = useCompletionActions
+            ? confirmedCompletionActions?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)
+            : null;
         var context = CurrentControlContext();
         var originalClient = _signalRClient;
         var originalServer = _config!.ServerUrl;
@@ -85,12 +91,13 @@ public partial class MainViewModel
         async Task<CoordinatedBatchSnapshot> Begin(CancellationToken token)
         {
             var accepted = await ViaCurrentClient(client => client.BeginCoordinatedBatchAsync(requestId, targets,
-                DateTimeOffset.UtcNow.AddMinutes(2), token, useCompletionActions, quickCommandKey)).ConfigureAwait(false);
+                DateTimeOffset.UtcNow.AddMinutes(2), token, useCompletionActions, quickCommandKey, confirmed)).ConfigureAwait(false);
             if (BeforeCoordinatedBeginReplyForTest is { } pause) await pause(accepted).ConfigureAwait(false);
             return accepted;
         }
         try
         {
+            CancelRoomOrchestrationPending("新的手动联机开始请求", revokeOnline: false);
             return await ContinueCoordinatedBeginAsync(requestId, Begin,
                 ct => InOriginalRoom(client => client.GetCurrentCoordinatedBatchAsync(ct), ct),
                 async (accepted, ct) =>

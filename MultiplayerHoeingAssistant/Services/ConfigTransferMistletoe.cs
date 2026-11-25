@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -71,7 +72,12 @@ internal static class ConfigTransferMistletoe
         string? localSchemesJson = null)
     {
         var files = NormalizeForExport(incoming);
+        // 资源改写与可移植化均已先于 ID 冲突映射。若旧冻结修订已因这些改写失效，应重新确认，
+        // 不仅凭计划同名或稳定 ID 为已变动的计划补充执行授权。
+        var sourceFlows = files.Where(pair => IsFlowEntry(pair.Key))
+            .ToDictionary(pair => FlowId(pair.Key), pair => pair.Value, StringComparer.Ordinal);
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        var warnings = new List<string>();
         var reused = new List<string>();
         var reserved = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var existingById = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
@@ -162,9 +168,54 @@ internal static class ConfigTransferMistletoe
             if (map.TryGetValue(id, out var replacement) && replacement != id)
                 files[CurrentWorkflowFileName] = Utf8.GetBytes(replacement);
         }
-        var warnings = new List<string>();
+        if (files.TryGetValue("assistant-config.json", out var assistantConfig))
+            files["assistant-config.json"] = RewriteSwitchWorkflowReferences(assistantConfig, map, sourceFlows, files, existingById, warnings);
         if (requiresAuthorization) warnings.Add("槲寄生自动执行授权需重新确认或手动运行一次；已保留自动执行开关及流程配置。");
         return new(files, map, reused, requiresAuthorization, warnings);
+    }
+
+    private static byte[] RewriteSwitchWorkflowReferences(byte[] config, IReadOnlyDictionary<string, string> map,
+        IReadOnlyDictionary<string, byte[]> sourceFlows, IReadOnlyDictionary<string, byte[]> files,
+        IReadOnlyDictionary<string, byte[]> existingById, List<string> warnings)
+    {
+        var root = JsonNode.Parse(Text(config)) as JsonObject ?? throw Invalid("助手主配置须为对象");
+        var changed = Rewrite(root);
+        if (Get(root, "roomProfiles") is JsonArray profiles)
+            foreach (var profile in profiles.OfType<JsonObject>()) changed |= Rewrite(profile);
+        return changed ? Encode(root) : config;
+
+        bool Rewrite(JsonObject obj)
+        {
+            if (Field(obj, "onlineHoeingCompletionPolicy") != "switchRoom"
+                || Field(obj, "onlineHoeingSpecifiedTaskType") != "workflow"
+                || Get(Get(obj, "onlineHoeingRoomSwitchCompletion"), "runAfterSwitch") is not JsonValue runAfter
+                || !runAfter.TryGetValue<bool>(out var run) || !run) return false;
+
+            var id = Field(obj, "onlineHoeingSpecifiedWorkflowId");
+            var before = Field(obj, "onlineHoeingSpecifiedConfigRevision");
+            var hasMapping = map.TryGetValue(id, out var mappedId);
+            var targetId = mappedId ?? id;
+            var revision = "";
+            if (hasMapping && sourceFlows.TryGetValue(id, out var original)
+                && Convert.ToHexString(SHA256.HashData(original)) == before
+                && (files.TryGetValue("flows/" + targetId + ".flow.json", out var target) || existingById.TryGetValue(targetId, out target)))
+            {
+                // ID 迁移仅重写计划标识；保留原稳定节点 ID。相同定义复用时采用本机最终字节的修订。
+                revision = Convert.ToHexString(SHA256.HashData(target));
+            }
+            if (revision.Length == 0)
+                warnings.Add($"切房后指定计划表「{Field(obj, "onlineHoeingSpecifiedTaskName")}」的来源修订或计划引用无法确认，请重新选择计划与起点；确认前不会执行。");
+            if (targetId == id && revision == before) return false;
+            Set(obj, "onlineHoeingSpecifiedWorkflowId", targetId);
+            Set(obj, "onlineHoeingSpecifiedConfigRevision", revision);
+            return true;
+        }
+
+        static JsonNode? Get(JsonNode? obj, string key) => obj is JsonObject o
+            ? o.FirstOrDefault(pair => pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Value : null;
+        static string Field(JsonObject obj, string key) => Get(obj, key) is JsonValue value && value.TryGetValue<string>(out var text) ? text : "";
+        static void Set(JsonObject obj, string key, string value)
+            => obj[obj.FirstOrDefault(pair => pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase)).Key ?? key] = value;
     }
 
     private static bool NormalizeAuthorization(JsonObject config, JsonObject? local)

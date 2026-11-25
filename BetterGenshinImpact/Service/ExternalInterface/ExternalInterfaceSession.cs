@@ -154,6 +154,14 @@ internal sealed class ExternalInterfaceSession
                 ["kind"] = signal.Kind,
                 ["targetRoomName"] = signal.TargetRoomName is { } name ? new JValue(name) : JValue.CreateNull(),
                 ["stopVersion"] = signal.StopVersion,
+                ["jobId"] = signal.JobId is { } job ? new JValue(job.ToString("N")) : JValue.CreateNull(),
+                ["submissionKey"] = signal.SubmissionKey is { } key ? new JValue(key) : JValue.CreateNull(),
+                ["workflowRunId"] = signal.WorkflowRunId is { } run ? new JValue(run.ToString("N")) : JValue.CreateNull(),
+                ["bgiEpoch"] = new JObject
+                {
+                    ["processId"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.ProcessId,
+                    ["startTicksUtc"] = BetterGenshinImpact.Service.Execution.JobRegistry.CurrentEpoch.StartTicksUtc,
+                },
             };
             return InstanceIpcEnvelope.Response(request, new JObject { ["signal"] = payload });
         }

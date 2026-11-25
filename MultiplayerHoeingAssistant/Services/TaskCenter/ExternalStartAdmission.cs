@@ -14,6 +14,13 @@ public sealed class ExternalStartAdmissionRequest
     /// <summary>宿主生命周期令牌（进程内，仅用于观察/收敛；不来自单次调用者）。由 TaskCenterHost 在提交前固定。</summary>
     internal CancellationToken HostLifetimeToken { get; set; }
 
+    // A room successor uses the ordinary arbitration ledger but receives an early
+    // retained-task receipt instead of waiting for the complete external operation.
+    internal RoomOrchestrationLaunch? RoomOrchestration { get; init; }
+
+    // 仅切房后继使用：固定原 BGI 纪元，在发送责任登记后立即返回，不让原切房锁持有完成观察。
+    internal string? RoomOrchestrationEpoch => WorkflowStopAuthority.Epoch(RoomOrchestration?.Epoch);
+
     /// <summary>来源命名空间：E3/E5 远程=v2；E4 本地热键=manual（§2.1 可信上下文）。</summary>
     public string Namespace { get; init; } = "";
 

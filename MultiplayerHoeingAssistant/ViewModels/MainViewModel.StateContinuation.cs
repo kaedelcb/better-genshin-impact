@@ -247,7 +247,7 @@ public partial class MainViewModel
             RequireCoordinatedControlContext(batch, ct, terminalReport: true);
             lock (_batchGate)
                 if (!ReferenceEquals(_commandExecutor, executor) || !ReferenceEquals(_activeBatch, batch)
-                    || batch.Generation <= _resetFenceGeneration || _localResetGate.CurrentCount == 0
+                    || batch.Generation <= ReadCoordinatedResetFence() || _localResetGate.CurrentCount == 0
                     || batch.ExplicitStopRequested || !batch.LocalCompletionReady)
                     throw new ControlContextRevokedException("本批绑定完成动作已被停止或替换", ct);
             if (!batch.PriorityRecoveryEnabled && _externalClient?.ServerEpoch is { } current

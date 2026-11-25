@@ -105,6 +105,8 @@ public partial class App : Application
 
         _mainViewModel = new MainViewModel();
         var viewModel = _mainViewModel;
+        // Only prime presentation. InitializeAsync still owns the real configuration and connection lifecycle.
+        viewModel.PrimeStartupRoomView(_appConfig);
         _mainWindow = new MainWindow(viewModel);
 
         StartContinuousCliListener();

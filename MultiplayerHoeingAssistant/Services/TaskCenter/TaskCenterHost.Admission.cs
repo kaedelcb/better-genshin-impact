@@ -798,6 +798,10 @@ public sealed partial class TaskCenterHost
                 "外部启动准入请求字段缺失（namespace/workflowId/resourceRef/trigger 必填）。", "");
         // 严格合同要求固定 bgiEpoch（§2.2/I-1）：未知纪元不得签发发送许可——否则台账/线协议身份会以空纪元落盘。
         var externalEpoch = CurrentBgiEpoch();
+        if (request.RoomOrchestrationEpoch is { } frozenEpoch
+            && (externalEpoch != frozenEpoch || _onlineSendGate.IsClosed))
+            return AdmissionResult.Of(AdmissionResultKind.TerminalRejected, "start_cancelled",
+                "编排原进程或联机准入已变化，未发送", "");
         if (string.IsNullOrEmpty(externalEpoch))
             return AdmissionResult.Of(AdmissionResultKind.Error, "bgi_epoch_unknown",
                 "BGI 进程纪元未知（严格合同要求固定 bgiEpoch；未发送、未签发许可）。", "");
@@ -814,6 +818,17 @@ public sealed partial class TaskCenterHost
         {
             return AdmissionResult.Of(AdmissionResultKind.Error, "facade_init_failed",
                 "仲裁面初始化失败（未发送）：" + ex.GetType().Name, "");
+        }
+
+        if (request.RoomOrchestrationEpoch is not null)
+        {
+            // No re-entry or re-signing a consumed intent. Inspect only current/retained admission records.
+            var read = _admissionStore!.Read();
+            if (!IsCompleteAdmissionRead(read))
+                return AdmissionResult.Of(AdmissionResultKind.Error, "state_unavailable", "编排原准入记录暂不可核对，未重发", "");
+            if (string.IsNullOrWhiteSpace(request.WireSubmitKey)
+                || AllAdmissionOperations(read.File?.Handoff).Any(op => op.WireSubmitKey == request.WireSubmitKey))
+                return AdmissionResult.Of(AdmissionResultKind.NeedReconcile, "result_unknown", "编排意图已申请，只核对原任务，不重发", "");
         }
 
         // §2.1：非空身份＝**续用既有操作**（同次用户操作的内部重试复用同一身份）；
@@ -1345,6 +1360,7 @@ public sealed partial class TaskCenterHost
             return new SendOutcome.Unknown("run_binding_missing");
 
         var workflowId = d.Candidate.WorkflowId;
+        WorkflowRunRecord? preparedRun;
         lock (_gate)
         {
             if (d.CallerToken.IsCancellationRequested)
@@ -1353,7 +1369,6 @@ public sealed partial class TaskCenterHost
             if (CapabilityBlockReason() is { } cap) return new SendOutcome.Rejected("capability_blocked", false, "host:" + cap);
             if (_reservedWorkflows.Contains(workflowId) || _drives.ContainsKey(workflowId))
                 return new SendOutcome.Rejected("task_running", true, "host:flow_inflight"); // 同流程在飞=可重试拒绝（门面派生窗口）
-            WorkflowRunRecord? preparedRun;
             try { preparedRun = _runs.Load(runId); }
             catch (Exception) { return new SendOutcome.Unknown("prepared_run_unreadable"); }
             if (preparedRun is null) return new SendOutcome.Unknown("prepared_run_missing");
@@ -1386,9 +1401,16 @@ public sealed partial class TaskCenterHost
             return new SendOutcome.Rejected("launch_error", false, "host:" + ex.GetType().Name);
         }
 
+        if (await CheckRoomOrchestrationRegistrationAsync(d, preparedRun!, runner).ConfigureAwait(false) is { } rejected)
+        {
+            lock (_gate) _reservedWorkflows.Remove(workflowId);
+            return rejected;
+        }
         var launch = LaunchDrive(workflowId, runner,
             cts => runner.StartExistingRunAsync(runId, cts.Token),
             $"已受理启动（流程 {workflowId}）", runId);
+        if (d.ProcessLocalContext is RoomOrchestrationRegistration orchestration && launch.Status != HostActionStatus.Unavailable)
+            orchestration.DriverRegistered = true;
         // LaunchDrive 返回 Unavailable 的唯一可达路径=关闭竞态册外观察（驱动或在飞——异步入口异常一律入 Task 由观察器收敛）：
         // 受理与否不可考=Unknown 保守待对账（孤儿观察器按既有合同收敛运行记录；不臆断拒绝防双跑）。
         return launch.Status != HostActionStatus.Unavailable
@@ -2509,10 +2531,18 @@ public sealed partial class TaskCenterHost
     public async Task<ExternalStartAdmissionOutcome> AdmitExternalStartAsync(
         ExternalStartAdmissionRequest request, CancellationToken ct = default)
     {
+        if (request.RoomOrchestration is not null)
+            return await AdmitRoomOrchestrationStartAsync(request, ct).ConfigureAwait(false);
         // Keep the linked send lifetime alive through completion observation. The queue observer is started
         // while the send runs, and must remain linked to host shutdown after the early receipt returns.
         using var sendLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdownCts.Token);
         var result = await SubmitExternalStartViaAdmissionCoreAsync(request, sendLifetime.Token).ConfigureAwait(false);
+        result = await SettleExternalStartObservationAsync(request, result).ConfigureAwait(false);
+        return ProjectExternalStartOutcome(request, result);
+    }
+
+    private async Task<AdmissionResult> SettleExternalStartObservationAsync(ExternalStartAdmissionRequest request, AdmissionResult result)
+    {
         // [Batch B 收尾之二] §24.10／§24.14 完成观察接线：受理成功后取完成层结果并交完成结算入口——
         // `CompletionProvider` 缺失/返回 null ⇒ 保持普通受理（责任 Pending）；返回 `Unknown` ⇒ 不写终态载体、保守待对账；
         // 返回权威终态 ⇒ 由门面按 §24.15 唯一顺序结算（终态载体→台账 Terminal→关闭→终局）并回传结算事实。
@@ -2625,6 +2655,11 @@ public sealed partial class TaskCenterHost
                 }
             }
         }
+        return result;
+    }
+
+    private static ExternalStartAdmissionOutcome ProjectExternalStartOutcome(ExternalStartAdmissionRequest request, AdmissionResult result)
+    {
         var status = MapAdmissionResultToExternalStartStatus(result);
         // 回显本次操作身份（§2.1）：适配器据此在**同次用户操作**的内部重试上发起 ContinueUse。
         // **不得用 `??`**：`AdmissionResult.RequestIdentity` 默认是空串（门面各前置/异常分支也显式返回空串），

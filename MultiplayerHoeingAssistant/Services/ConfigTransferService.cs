@@ -126,6 +126,8 @@ public class ConfigTransferService
                 foreach (var target in resources.TargetFiles) targets.Add(target.Key, target.Value);
                 warnings.AddRange(resources.Warnings);
             }
+            else if (files.TryGetValue("assistant-config.json", out var assistantConfig))
+                files["assistant-config.json"] = ConfigTransferResources.RevalidateSwitchTasksWithoutResources(assistantConfig, warnings);
             // 资源改名先于计划身份复用：同ID计划只有引用恢复后的定义仍相同才允许复用本机文件。
             var newResources = targets.Keys.ToList();
             var prepared = ConfigTransferMistletoe.PrepareImport(files, existing,
@@ -292,6 +294,9 @@ public class ConfigTransferService
         Set("clientInstanceId", imported.ClientInstanceId);
         Set("bgiPath", imported.BgiPath);
         Set("bgiPackageDir", imported.BgiPackageDir);
+        // 页面偏好属于接收端设备，而非迁入的执行配置或登录房间。
+        Set("showRoomOrchestration", local?.ShowRoomOrchestration ?? false);
+        Set("viewedRoomProfileId", local?.ViewedRoomProfileId ?? AssistConfig.AllRoomsViewId);
         var confirmationKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("scheduledOnlineRequiresConfirmation", StringComparison.OrdinalIgnoreCase))
             ?? "scheduledOnlineRequiresConfirmation";
         var profilesKey = document.Select(p => p.Key).FirstOrDefault(k => k.Equals("roomProfiles", StringComparison.OrdinalIgnoreCase)) ?? "roomProfiles";
@@ -334,7 +339,7 @@ public class ConfigTransferService
         document[dateKey] = JsonSerializer.SerializeToNode(imported.ActiveRoomProfile?.ScheduledOnlineLastFireDate
             ?? (imported.ActiveRoomProfile is null ? local?.ScheduledOnlineLastFireDate : null), Options);
         return JsonSerializer.SerializeToUtf8Bytes(document, Options);
-        void Set(string key, string value)
+        void Set(string key, JsonNode? value)
         {
             var actual = document.Select(p => p.Key).FirstOrDefault(k => k.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
             document[actual] = value;

@@ -158,6 +158,7 @@ public partial class MainViewModel
     private void InvalidateCoordinatedControlContext()
     {
         CancelPendingCoordinatedBegin();
+        CancelRoomOrchestrationPending("控制房间身份已变化", revokeOnline: true);
         Interlocked.Increment(ref _controlContextVersion);
         _controlAuthority.Revoke();
         OnlineHoeingBatch? batch;
@@ -177,7 +178,7 @@ public partial class MainViewModel
                 throw new ControlContextRevokedException("原批次执行循环已退出，不能重新取得运行授权", batch.Cts.Token);
         }
         if (_disposing || IsStandaloneMode || batch.ControlContext != CurrentControlContext()
-            || !terminalReport && (batch.Generation <= Volatile.Read(ref _resetFenceGeneration) || _localResetGate.CurrentCount == 0))
+            || !terminalReport && (batch.Generation <= ReadCoordinatedResetFence() || _localResetGate.CurrentCount == 0))
             throw new ControlContextRevokedException("原批次控制房间或停止权限已撤销", batch.Cts.Token);
         lock (_batchGate)
             if (!ReferenceEquals(_activeBatch, batch))
@@ -389,6 +390,7 @@ public partial class MainViewModel
         {
         if (!client.IsControlRoomReady || client.ControlContext != CurrentControlContext())
             throw new ControlChannelUnavailableException("接管时连接已失效");
+        PublishCoordinatedResetFenceRoom(client);
         _signalRClient = client;
         _controlAuthority.Publish(client, client.ControlContext);
         }

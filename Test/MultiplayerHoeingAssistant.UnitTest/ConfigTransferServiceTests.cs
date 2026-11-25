@@ -299,6 +299,39 @@ public sealed class ConfigTransferServiceTests
         foreach (var item in before) Assert.Equal(item.Value, after[item.Key]);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ImportKeepsTheReceivingDevicesOrchestrationPageAndViewedRoom(bool showOrchestration)
+    {
+        using var fixture = new Fixture();
+        var rooms = new List<AssistantRoomProfile>
+        {
+            new() { Id = "room-a", Name = "甲", RoomCode = "AAAAAA", ServerUrl = "https://first.example.test" },
+            new() { Id = "room-b", Name = "乙", RoomCode = "BBBBBB", ServerUrl = "https://second.example.test" }
+        };
+        var source = new AssistConfig
+        {
+            RoomProfiles = rooms, ActiveRoomProfileId = "room-a", ViewedRoomProfileId = "room-a",
+            ShowRoomOrchestration = !showOrchestration
+        };
+        source.ActiveRoomProfile!.ApplyTo(source);
+        var local = JsonSerializer.Deserialize<AssistConfig>(JsonSerializer.Serialize(source))!;
+        local.ViewedRoomProfileId = "room-b";
+        local.ShowRoomOrchestration = showOrchestration;
+        Write(fixture.Source, "assistant-config.json", JsonSerializer.Serialize(source));
+        Write(fixture.Target, "assistant-config.json", JsonSerializer.Serialize(local));
+
+        var exported = new ConfigTransferService(fixture.Source).Export(fixture.Package);
+        Assert.True(exported.Success, exported.Message);
+        var imported = new ConfigTransferService(fixture.Target).Import(fixture.Package);
+        Assert.True(imported.Success, imported.Message);
+        var restored = JsonSerializer.Deserialize<AssistConfig>(File.ReadAllText(Path.Combine(fixture.Target, "assistant-config.json")))!;
+        Assert.Equal(showOrchestration, restored.ShowRoomOrchestration);
+        Assert.Equal("room-b", restored.ViewedRoomProfileId);
+        Assert.Equal("room-a", restored.ActiveRoomProfileId);
+    }
+
     private static void SeedSettings(string root, string label, string instanceId, string? planId = null)
     {
         Write(root, "assistant-config.json", JsonSerializer.Serialize(new AssistConfig { PlayerName = label, ClientInstanceId = instanceId }));

@@ -36,7 +36,8 @@ public partial class MainViewModel
 
     private sealed record WorkflowOnlineOrigin(int Generation, string RunId, string ControlContext);
     private WorkflowOnlineOrigin? _workflowOnlineOrigin;
-    private sealed record BgiRoomSignal(string Id, string RunId, string Kind, string? Target, long StopVersion);
+    private sealed record BgiRoomSignal(string Id, string RunId, string Kind, string? Target, long StopVersion,
+        string? JobId, string? SubmissionKey, string? WorkflowRunId, BgiEpoch? Epoch, DateTime ReceivedAt, string? OrchestrationId = null);
     private readonly object _bgiRoomMailboxGate = new();
     private CancellationTokenSource? _bgiRoomMailboxCancellation;
     private BgiExternalClient? _bgiRoomMailboxPeer;
@@ -115,9 +116,13 @@ public partial class MainViewModel
                 using var doc = JsonDocument.Parse(reply.Data ?? "{}");
                 if (doc.RootElement.TryGetProperty("signal", out var item) && item.ValueKind == JsonValueKind.Object)
                 {
+                    string? Field(string name) => item.TryGetProperty(name, out var property)
+                        && property.ValueKind == JsonValueKind.String ? property.GetString() : null;
+                    BgiEpoch? signalEpoch = CommandExecutor.TryParseEpoch(item.GetRawText(), out var pid, out var ticks)
+                        ? new BgiEpoch { ProcessId = pid, StartTicksUtc = ticks } : null;
                     var signal = new BgiRoomSignal(item.GetProperty("id").GetString()!, item.GetProperty("runId").GetString()!,
-                        item.GetProperty("kind").GetString()!, item.TryGetProperty("targetRoomName", out var name) ? name.GetString() : null,
-                        item.GetProperty("stopVersion").GetInt64());
+                        item.GetProperty("kind").GetString()!, Field("targetRoomName"), item.GetProperty("stopVersion").GetInt64(),
+                        Field("jobId"), Field("submissionKey"), Field("workflowRunId"), signalEpoch, DateTime.UtcNow);
                     if (signal.Id != last)
                     {
                         var accepted = false;
@@ -126,7 +131,17 @@ public partial class MainViewModel
                             await Verify(signal.StopVersion, token);
                             var sameRun = admittedRun == signal.RunId;
                             var pending = Volatile.Read(ref outstanding);
-                            accepted = !IsStandaloneMode && !_roomSwitchRecordUnreadable
+                            if (TryResolveRoomOrchestrationSignal(signal.SubmissionKey, signal.WorkflowRunId, out var orchestrationId))
+                            {
+                                // The post-switch task is already in its target room. Explicitly choosing that
+                                // same room can still use the mailbox, but must not perform an independent switch.
+                                accepted = orchestrationId is not null && pending < 3
+                                    && signal.Kind is "switch" or "online" or "switchOnline"
+                                    && await VerifyRoomOrchestrationMailboxSignalAsync(orchestrationId, signal.WorkflowRunId,
+                                        signal.JobId, signal.SubmissionKey, signal.StopVersion, signal.Epoch, signal.Kind, signal.Target, token);
+                                if (accepted) signal = signal with { OrchestrationId = orchestrationId };
+                            }
+                            else accepted = !IsStandaloneMode && !_roomSwitchRecordUnreadable
                                 && signal.Kind is "switch" or "online" or "switchOnline" && pending < 3
                                 && (signal.Kind == "online" || !string.IsNullOrWhiteSpace(signal.Target))
                                 && (sameRun ? !RoomSwitchBlocksRoomOperations || _changingAssistantRoom && pending > 0
@@ -186,6 +201,20 @@ public partial class MainViewModel
                 {
                     if (failed) continue;
                     await Verify(signal.StopVersion, token);
+                    if (signal.OrchestrationId is { } orchestrationId)
+                    {
+                        if (!await VerifyRoomOrchestrationMailboxSignalAsync(orchestrationId, signal.WorkflowRunId,
+                            signal.JobId, signal.SubmissionKey, signal.StopVersion, signal.Epoch, signal.Kind, signal.Target, token))
+                            throw new InvalidOperationException("编排后继的原房间或停止授权已撤销");
+                        if (signal.Kind is "online" or "switchOnline")
+                        {
+                            if (!await ReportRoomOrchestrationMailboxOnlineAsync(orchestrationId, signal.WorkflowRunId,
+                                signal.JobId!, signal.SubmissionKey!, signal.StopVersion, signal.Epoch, signal.ReceivedAt, token))
+                                throw new InvalidOperationException("编排后继上线受理未确认");
+                            reportedOnline = true;
+                        }
+                        continue;
+                    }
                     if (roomIdentity is not null && !IsAssistantRoomIdentityCurrent(roomIdentity))
                         throw new InvalidOperationException("前序目标房间已变化，后续房间动作未提交");
                     if (signal.Kind is "switch" or "switchOnline")

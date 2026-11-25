@@ -47,6 +47,9 @@ public sealed class AssistantRoomProfile
     [JsonPropertyName("onlineHoeingCompletionPolicy")]
     public string OnlineHoeingCompletionPolicy { get; set; } = "resume";
 
+    [JsonPropertyName("onlineHoeingRoomSwitchCompletion")]
+    public RoomSwitchCompletion? OnlineHoeingRoomSwitchCompletion { get; set; }
+
     [JsonPropertyName("onlineHoeingSpecifiedTaskType")]
     public string OnlineHoeingSpecifiedTaskType { get; set; } = "group";
 
@@ -93,7 +96,19 @@ public sealed class AssistantRoomProfile
         OnlineHoeingGroupNames = config.OnlineHoeingGroupNames?.ToList() ?? [];
         OnlineHoeingGroupTypes = config.OnlineHoeingGroupTypes?.ToList() ?? [];
         OnlineHoeingGroupIndex = config.OnlineHoeingGroupIndex;
+        CaptureCompletion(config);
+        QuickCommands = CloneQuickCommands(config.QuickCommands);
+        ScheduledOnlineTime = config.ScheduledOnlineTime;
+        ScheduledOnlineRequiresConfirmation = config.ScheduledOnlineRequiresConfirmation;
+        ScheduledOnlineLastFireDate = config.ScheduledOnlineLastFireDate;
+    }
+
+    /// <summary>定向完成动作保存不覆盖档案中的其他房间设置。</summary>
+    internal void CaptureCompletion(AssistConfig config)
+    {
         OnlineHoeingCompletionPolicy = config.OnlineHoeingCompletionPolicy;
+        OnlineHoeingRoomSwitchCompletion = OnlineHoeingCompletionPolicy == "switchRoom"
+            ? config.OnlineHoeingRoomSwitchCompletion : null;
         OnlineHoeingSpecifiedTaskType = config.OnlineHoeingSpecifiedTaskType;
         OnlineHoeingSpecifiedTaskName = config.OnlineHoeingSpecifiedTaskName;
         OnlineHoeingSpecifiedTaskPriority = config.OnlineHoeingSpecifiedTaskPriority;
@@ -102,10 +117,6 @@ public sealed class AssistantRoomProfile
         OnlineHoeingSpecifiedStartTaskName = config.OnlineHoeingSpecifiedStartTaskName;
         OnlineHoeingSpecifiedConfigRevision = config.OnlineHoeingSpecifiedConfigRevision;
         OnlineHoeingSpecifiedWorkflowId = config.OnlineHoeingSpecifiedWorkflowId;
-        QuickCommands = CloneQuickCommands(config.QuickCommands);
-        ScheduledOnlineTime = config.ScheduledOnlineTime;
-        ScheduledOnlineRequiresConfirmation = config.ScheduledOnlineRequiresConfirmation;
-        ScheduledOnlineLastFireDate = config.ScheduledOnlineLastFireDate;
     }
 
     /// <summary>将房间字段复制到运行设置；何时确认激活由调用方决定。</summary>
@@ -118,7 +129,18 @@ public sealed class AssistantRoomProfile
         config.OnlineHoeingGroupNames = OnlineHoeingGroupNames?.ToList() ?? [];
         config.OnlineHoeingGroupTypes = OnlineHoeingGroupTypes?.ToList() ?? [];
         config.OnlineHoeingGroupIndex = OnlineHoeingGroupIndex;
+        ApplyCompletionTo(config);
+        config.QuickCommands = CloneQuickCommands(QuickCommands);
+        config.ScheduledOnlineTime = ScheduledOnlineTime;
+        config.ScheduledOnlineRequiresConfirmation = ScheduledOnlineRequiresConfirmation;
+        config.ScheduledOnlineLastFireDate = ScheduledOnlineLastFireDate;
+    }
+
+    internal void ApplyCompletionTo(AssistConfig config)
+    {
         config.OnlineHoeingCompletionPolicy = OnlineHoeingCompletionPolicy;
+        config.OnlineHoeingRoomSwitchCompletion = OnlineHoeingCompletionPolicy == "switchRoom"
+            ? OnlineHoeingRoomSwitchCompletion : null;
         config.OnlineHoeingSpecifiedTaskType = OnlineHoeingSpecifiedTaskType;
         config.OnlineHoeingSpecifiedTaskName = OnlineHoeingSpecifiedTaskName;
         config.OnlineHoeingSpecifiedTaskPriority = OnlineHoeingSpecifiedTaskPriority;
@@ -127,10 +149,6 @@ public sealed class AssistantRoomProfile
         config.OnlineHoeingSpecifiedStartTaskName = OnlineHoeingSpecifiedStartTaskName;
         config.OnlineHoeingSpecifiedConfigRevision = OnlineHoeingSpecifiedConfigRevision;
         config.OnlineHoeingSpecifiedWorkflowId = OnlineHoeingSpecifiedWorkflowId;
-        config.QuickCommands = CloneQuickCommands(QuickCommands);
-        config.ScheduledOnlineTime = ScheduledOnlineTime;
-        config.ScheduledOnlineRequiresConfirmation = ScheduledOnlineRequiresConfirmation;
-        config.ScheduledOnlineLastFireDate = ScheduledOnlineLastFireDate;
     }
 
     private static Dictionary<string, string> CloneQuickCommands(Dictionary<string, string>? commands)

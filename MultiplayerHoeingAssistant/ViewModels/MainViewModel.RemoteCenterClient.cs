@@ -195,8 +195,10 @@ public partial class MainViewModel
 
     public async Task<RemoteCenterReply> RequestRemoteCenterAsync(RemoteCenterTarget target,
         string operation, object? payload = null, string? expectedRevision = null,
-        string? requestId = null, int? flowEditVersion = null)
+        string? requestId = null, int? flowEditVersion = null, CancellationToken cancellationToken = default,
+        string? expectedMachineId = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!IsObserverMode || _config is not { } config)
             return RemoteCenterReply.Rejected("远程中心仅供监控端使用");
         if (string.IsNullOrWhiteSpace(target.PlayerUid) || string.IsNullOrWhiteSpace(target.ClientInstanceId))
@@ -214,6 +216,7 @@ public partial class MainViewModel
         {
             Operation = operation,
             TargetInstanceId = target.ClientInstanceId,
+            ExpectedMachineId = expectedMachineId,
             ExpectedRevision = expectedRevision,
             FlowEditVersion = flowEditVersion,
             PayloadJson = payload is null ? null : JsonSerializer.Serialize(payload)
@@ -244,11 +247,13 @@ public partial class MainViewModel
                         return RemoteCenterReply.Rejected("同机执行端本地通道不可用；未改走网络重发");
                     _localCenterEndpoints[key] = endpoint;
                 }
+                cancellationToken.ThrowIfCancellationRequested();
                 if (!IsCurrentCenterCaller(room, senderUid, authentication))
                     return RemoteCenterReply.Rejected("监控端房间或服务器已变化，请重新选择目标");
                 try
                 {
-                    reply = ParseCenterReply(await LocalConfigEditChannel.SendAsync(endpoint, command, secret, serverUrl: server));
+                    reply = ParseCenterReply(await LocalConfigEditChannel.SendAsync(endpoint, command, secret, serverUrl: server,
+                        cancellationToken: cancellationToken));
                 }
                 catch { _localCenterEndpoints.TryRemove(key, out _); throw; }
             }
@@ -266,8 +271,9 @@ public partial class MainViewModel
                     return RemoteCenterReply.Rejected("远程中心请求身份冲突");
                 try
                 {
-                    await client.SendRemoteCenterCommandAsync(command);
-                    reply = await completion.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await client.SendRemoteCenterCommandAsync(command, cancellationToken);
+                    reply = await completion.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
                 }
                 finally { _pendingCenterReplies.TryRemove(command.CommandId, out _); }
             }
@@ -275,6 +281,7 @@ public partial class MainViewModel
                 return RemoteCenterReply.Rejected("执行端实例已变化，回复未采用");
             return reply;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (TimeoutException)
         {
             return RemoteCenterReply.Unknown(command.CommandId,

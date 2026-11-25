@@ -116,7 +116,8 @@ internal sealed class ConfigurationGroupRoomActions : IDisposable
                 throw new RoomActionHandoffException("切换助手房间需要填写目标房间名称。");
             ct.ThrowIfCancellationRequested();
             _owner.ThrowIfStopped();
-            var signal = new RoomActionMailbox.Signal(Guid.NewGuid(), _chain.RunId, kind, targetRoomName, _owner.StopVersion);
+            var signal = new RoomActionMailbox.Signal(Guid.NewGuid(), _chain.RunId, kind, targetRoomName, _owner.StopVersion,
+                _owner.Descriptor.JobId, _owner.Descriptor.IdempotencyKey, _owner.Descriptor.WorkflowRunId);
             var delivery = RoomActionMailbox.Post(signal, _chain.PeerId, ct);
             var outcome = await RoomActionMailbox.WaitAsync(delivery).ConfigureAwait(false);
             if (!outcome.Accepted || outcome.PeerId is not { } peerId)

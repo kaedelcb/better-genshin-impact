@@ -137,6 +137,7 @@ public partial class MainViewModel
             },
             AbandonExitedOwnership = (ticket, epoch, ct) => owner is null
                 ? Task.FromResult(false) : AbandonExitedCoordinatedBatchOwnershipAsync(batch, owner, ticket, epoch, ct),
+            ItemStatus = (index, state, detail) => RecordRoomOrchestrationItem(batch, index, state, detail),
             Status = (phase, message) =>
             {
                 if (batch.LocalExecutionReleased && phase is "running" or "stopping" or "completed")
@@ -174,6 +175,7 @@ internal sealed class CoordinatedBatchRuntime
     internal Action<BgiEpoch>? ExecutorObserved { get; init; }
     internal Func<string?, BgiEpoch, CancellationToken, Task<bool>>? AbandonExitedOwnership { get; init; }
     internal Action<string, string> Status { get; init; } = (_, _) => { };
+    internal Action<int, string, string> ItemStatus { get; init; } = (_, _, _) => { };
     internal Action<string> Log { get; init; } = _ => { };
     internal TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
     internal TimeSpan StageTimeout { get; init; } = TimeSpan.FromSeconds(150);
@@ -295,6 +297,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         if (_revision != snapshot.Revision)
             io.Log($"[全队批次] {batch.BatchId} revision={snapshot.Revision} item={snapshot.Index} attempt={snapshot.Attempt} phase={snapshot.Phase} reason={snapshot.Reason}");
         _revision = snapshot.Revision;
+        batch.ObserveRoomCompletionAuthority(snapshot);
         return snapshot;
     }
 
@@ -490,6 +493,12 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                             await Task.Delay(io.PollInterval, ct);
                             continue;
                         }
+                        if (batch.IncomingRoomOrchestrationIntentId is not null && !batch.TakenOver
+                            && !SameEpoch(batch.ExecutionEpoch, preparedEpoch))
+                        {
+                            batch.Cancel();
+                            throw new BgiStateContinuationStoppedException("编排上线的原 BGI 纪元已变化，未重新取得启动授权");
+                        }
                         _observationUnavailableSince = null;
                         _epoch = preparedEpoch;
                         batch.ExecutionEpoch = _epoch;
@@ -635,6 +644,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 _item.State = BatchItemState.TerminalConfirmed;
                 _result = "failed";
                 _reason = "原 BGI 的 PID 与启动时间已确认退出，等待全队退出当前项后共同恢复";
+                io.ItemStatus(_index, "unknown", _reason);
                 batch.SetControlItemSubmitted(false);
                 SaveProgress();
             }
@@ -661,8 +671,13 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 _epoch = replacement;
                 batch.ExecutionEpoch = replacement;
             }
-            if (recovery && batch.PriorityRecoveryEnabled) batch.RetryUnfinishedJointItem();
+            if (recovery)
+            {
+                batch.ResetRoomBindingEvidence(_index);
+                if (batch.PriorityRecoveryEnabled) batch.RetryUnfinishedJointItem();
+            }
             _index = team.Index; _attempt = team.Attempt;
+            io.ItemStatus(_index, "pending", recovery ? "等待共同恢复的新尝试" : "等待本项执行");
             _item = null; _result = ""; _reason = ""; _cancelSent = false; _completedNative = 0;
             _retryStopDeferredForGameRecovery = false;
             batch.SetControlItemSubmitted(false);
@@ -708,6 +723,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                     // Only the retained-key authority can prove absence; an empty ordinary JobRegistry cannot.
                     _item.State = BatchItemState.PendingSubmit;
                     batch.SetControlItemSubmitted(false);
+                    io.ItemStatus(_index, "pending", "原键权威查询确认尚未提交");
                 }
             }
         }
@@ -734,7 +750,10 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             && (!ContinueByState || batch.PriorityRecoveryEnabled || batch.ExplicitStopRequested))
         {
             if (_item.State == BatchItemState.PendingSubmit)
-            { _item.State = BatchItemState.TerminalConfirmed; _result = "stopped"; }
+            {
+                _item.State = BatchItemState.TerminalConfirmed; _result = "stopped";
+                io.ItemStatus(_index, "cancelled", "共同停止，原任务未提交");
+            }
             else if (_item.JobId != null && !_cancelSent)
             {
                 if (batch.ExplicitStopRequested || io.CancelOwnedForRetry == null)
@@ -769,6 +788,17 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 ObservationUnavailable("本批整组终态与联机执行证据未完整对齐");
                 return;
             }
+            // Projection identities are also required for per-task state and room-switch authorization.
+            var exact = terminal?.TaskHandle is { } handle && SameJob(handle, _item.JobId)
+                && terminal.IdempotencyKey == _item.RequestKey && SameEpoch(_epoch, terminal.Epoch);
+            if (batch.Policy?.RoomSwitch is not null && !exact)
+            {
+                ObservationUnavailable("本批作业终态身份不完整");
+                return;
+            }
+            if (exact && terminal!.Status is "pending" or "running")
+                io.ItemStatus(_index, terminal.Status == "running" ? "running" : "queued",
+                    $"作业 {_item.JobId}（尝试 {_attempt + 1}）");
             if (terminal.HoeingEvidence is { IsValid: true } evidence)
                 _completedNative = Math.Max(_completedNative, evidence.Completed);
             var localTasksCancellation = !batch.IsCancellationRequested && !_cancelSent && team.Phase == "running"
@@ -814,6 +844,17 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
                 _reason = LimitReason($"{outcome}；本项已完成 {_completedNative} 次联机锄地，"
                     + (ContinueByState ? "保留错误并继续后续绑定与设定动作；" : "不重跑且不执行成功完成动作；") + _reason);
                 batch.RecordLocalTasksFailure(_epoch!, _reason, _index, _attempt, _item.JobId!, _item.RequestKey);
+            }
+            if (_item.State == BatchItemState.TerminalConfirmed && exact && terminal!.ExecutionExitConfirmed)
+            {
+                if (_result == "succeeded")
+                {
+                    batch.RecordRoomBindingSuccess(_index, _attempt, _item.JobId!, _item.RequestKey, _epoch!, terminal);
+                    io.ItemStatus(_index, "completed", $"本机作业 {_item.JobId} 已确认成功");
+                }
+                else io.ItemStatus(_index,
+                    terminal.Cancelled || terminal.Status == "queueCancelled" || _result is "cancelled" or "stopped" ? "cancelled"
+                    : terminal.Status == "failed" || localTasksFailure ? "failed" : "unknown", _reason);
             }
             if (_result == "unknown") throw new InvalidOperationException("本批任务终态未知");
             if (_item.State == BatchItemState.TerminalConfirmed
@@ -862,10 +903,16 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             }
             _item.State = BatchItemState.TerminalConfirmed;
             batch.SetControlItemSubmitted(false);
-            _result = "failed"; _reason = LimitReason(ex.Message); return;
+            _result = "failed"; _reason = LimitReason(ex.Message);
+            io.ItemStatus(_index, "failed", _reason);
+            return;
         }
         catch (Exception ex) when (!batch.IsCancellationRequested && ex is IOException or TimeoutException or OperationCanceledException)
-        { io.Log("[全队批次] 启动回执未确认，将按原请求键补查: " + ex.Message); return; }
+        {
+            io.Log("[全队批次] 启动回执未确认，将按原请求键补查: " + ex.Message);
+            io.ItemStatus(_index, "unknown", "启动回执未确认");
+            return;
+        }
         if (ContinueByState && !submitted.Success && submitted.ErrorCode == "manual_stop_fence")
         {
             // The same key might have been accepted before its reply was lost: reconcile/cancel it, never create a new key.
@@ -885,12 +932,15 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
             batch.SetControlItemSubmitted(false);
             _result = submitted.ErrorCode == "manual_stop_cooldown" ? "cancelled" : "failed";
             _reason = LimitReason(submitted.ErrorCode + ": " + submitted.ErrorMessage);
+            io.ItemStatus(_index, _result, _reason);
             return;
         }
         if (!submitted.Success || submitted.Status is not ("queued" or "adopted" or "already_executed")
             || string.IsNullOrWhiteSpace(submitted.TaskHandle))
-        { io.Log("[全队批次] 提交结果未知，保留原请求身份补查: " + submitted.ErrorCode); return; }
+        { io.Log("[全队批次] 提交结果未知，保留原请求身份补查: " + submitted.ErrorCode);
+            io.ItemStatus(_index, "unknown", "启动回执未确认"); return; }
         _item.JobId = submitted.TaskHandle;
+        io.ItemStatus(_index, "queued", $"本机作业 {_item.JobId} 已受理，等待实际执行");
         io.Log($"[全队批次] {batch.BatchId} item={_index} attempt={_attempt} job={_item.JobId} {binding.Name}");
     }
 
@@ -933,6 +983,7 @@ internal sealed class CoordinatedBatchLoop(OnlineHoeingBatch batch, CoordinatedB
         _observationUnavailableTimestamp ??= io.Clock.GetTimestamp();
         if (!ContinueByState && now - _observationUnavailableSince >= io.ObservationReconcileTimeout)
             throw new TimeoutException(message + "，有界补查后仍未确认；未重发任务");
+        if (_item?.State == BatchItemState.Submitted) io.ItemStatus(_index, "unknown", message);
         io.Status("reconciling", message + "，正在按原任务身份补查；未重发任务");
     }
 

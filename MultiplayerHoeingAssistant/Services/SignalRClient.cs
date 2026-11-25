@@ -790,7 +790,8 @@ public class SignalRClient : IAsyncDisposable
 
     public async Task<CoordinatedBatchSnapshot> BeginCoordinatedBatchAsync(string requestId,
         IReadOnlyList<string> targetUids, DateTimeOffset expiresAtUtc, CancellationToken ct = default,
-        bool useCompletionActions = false, string quickCommandKey = "")
+        bool useCompletionActions = false, string quickCommandKey = "",
+        IReadOnlyDictionary<string, CoordinatedCompletionAction>? confirmedCompletionActions = null)
     {
         if (!SupportsCoordinatedStart) throw new InvalidOperationException("服务端不支持统一开锄，请更新配套服务端（未启动任务）");
         if (useCompletionActions && !SupportsCompletionChoice)
@@ -798,7 +799,8 @@ public class SignalRClient : IAsyncDisposable
         if (quickCommandKey.Length > 0 && !SupportsQuickCommandCompletion)
             throw new Gateway.GatewayErrorException("hoeing_quick_command_completion_capability_required", "服务端尚不支持快捷指令锄地后动作选项，未发送任务");
         var response = await _gateway!.InvokeCommandAsync(GatewayProtocol.Names.ControlBatchBegin,
-            new { requestId, targetUids, expiresAtUtc, useCompletionActions, quickCommandKey }, ct: ct);
+            new { requestId, targetUids, expiresAtUtc, useCompletionActions, quickCommandKey,
+                confirmedCompletionActions = useCompletionActions ? confirmedCompletionActions : null }, ct: ct);
         return response.DeserializePayload<CoordinatedBatchSnapshot>()
             ?? throw new InvalidOperationException("服务端未返回联机批次身份");
     }
@@ -858,15 +860,16 @@ public class SignalRClient : IAsyncDisposable
     }
 
     /// <summary>远程中心要求发送错误可见；旧命令仍使用原有尽力发送语义。</summary>
-    public async Task SendRemoteCenterCommandAsync(RemoteCommand command)
+    public async Task SendRemoteCenterCommandAsync(RemoteCommand command, CancellationToken cancellationToken = default)
     {
         if (command.Cmd is not (RemoteCenterProtocol.RequestCommand or RemoteCenterProtocol.ReplyCommand))
             throw new ArgumentException("不是远程中心命令", nameof(command));
         if (_gateway == null || !IsConnected || _retired || _awaitingRoomSwitchCommit
             || !string.IsNullOrEmpty(command.RoomCode) && command.RoomCode != _roomCode)
             throw new InvalidOperationException("控制房间未连接或命令所属房间已变化");
+        cancellationToken.ThrowIfCancellationRequested();
         command.RoomCode = _roomCode;
-        await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlSendCommand, new { command });
+        await _gateway.InvokeCommandAsync(GatewayProtocol.Names.ControlSendCommand, new { command }, ct: cancellationToken);
     }
 
     /// <summary>

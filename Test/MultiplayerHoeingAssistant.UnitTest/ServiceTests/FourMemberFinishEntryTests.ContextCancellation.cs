@@ -52,7 +52,7 @@ public sealed partial class FourMemberFinishEntryTests
             var begin = typeof(MainViewModel).GetMethod("BeginCoordinatedWithContinuationAsync",
                 BindingFlags.Instance | BindingFlags.NonPublic)!;
             var request = Guid.NewGuid().ToString("N");
-            var work = (Task<CoordinatedBatchSnapshot>)begin.Invoke(vm, [request, uids, true, ""])!;
+            var work = (Task<CoordinatedBatchSnapshot>)begin.Invoke(vm, [request, uids, true, "", null])!;
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => work.WaitAsync(TimeSpan.FromSeconds(15)));
             Assert.NotNull(originalBatch);
             var cancelled = (await clients[1].GetCurrentCoordinatedBatchAsync())!;

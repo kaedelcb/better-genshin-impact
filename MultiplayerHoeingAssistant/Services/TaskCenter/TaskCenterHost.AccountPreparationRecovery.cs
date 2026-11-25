@@ -66,7 +66,7 @@ public sealed partial class TaskCenterHost
                     if (result is null)
                     {
                         token.ThrowIfCancellationRequested();
-                        var resumed = await ResumeRunAsync(original.RunId).ConfigureAwait(false);
+                        var resumed = await ResumeRunCoreAsync(original.RunId, notifyNewIntent: false).ConfigureAwait(false);
                         var state = TryReadRunState(original.RunId) ?? original.State;
                         var pending = !resumed.Ok || state is WorkflowRunState.Unknown or WorkflowRunState.Interrupted;
                         result = new(HandoffOutcome.AlreadyAccepted, original.RunId,

@@ -3341,8 +3341,31 @@ public sealed class ArbitrationAdmissionService
         };
     }
 
+    // 切房后继是一次性的非抢占动作。只撤销已知未受理/仍未签发的这笔准入；已经在途、受理或有冲突的原责任不改写。
+    internal async Task<AdmissionResult?> RevokeRoomOrchestrationUnacceptedAsync(string requestIdentity, string key)
+    {
+        if (string.IsNullOrWhiteSpace(requestIdentity) || !key.StartsWith("room-orchestration/", StringComparison.Ordinal)) return null;
+        using var ownerResponsibility = BeginOwnerResponsibility();
+        if (OwnerEntryReject() is not null) return null;
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var read = _store.Read();
+            if (read.File?.Lease is not { } lease) return null;
+            var op = FindOp(read.File, requestIdentity);
+            if (op is null || op.WireSubmitKey != key
+                || op.OperationType is not (OperationType.ExternalStart or OperationType.FlowRegistration)
+                || op.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)) return null;
+            return await TerminatePrecheckAsync(new AdmissionRequest { RequestIdentity = requestIdentity, WireSubmitKey = key },
+                lease, "start_cancelled", AdmissionResultKind.TerminalRejected,
+                "编排后继未获准，撤销本次申请，不进入稍后的等待/接管。", revokeRoomOrchestration: true).ConfigureAwait(false);
+        }
+        finally { _gate.Release(); }
+    }
+
     /// <summary>终局落盘（本地权威裁决+无未决发送责任；发布失败=不报告未持久化终局，响亮 Error）。</summary>
-    private async Task<AdmissionResult?> TerminatePrecheckAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, AdmissionResultKind kind, string detail)
+    private async Task<AdmissionResult?> TerminatePrecheckAsync(AdmissionRequest request, LeaseSegment lease, string reasonCode, AdmissionResultKind kind, string detail,
+        bool revokeRoomOrchestration = false)
     {
         var now = _utcNow();
         var read = _store.Read();
@@ -3357,6 +3380,12 @@ public sealed class ArbitrationAdmissionService
             // B1：仅未发布发送许可的操作可终局预检拒绝（已占位/在途/已受理/待对账=状态已推进，不覆盖不迁墓碑）。
             if (op.RequestState is not (OperationRequestState.Queued or OperationRequestState.InRound or OperationRequestState.RetryableRejected)) return "state_changed";
             if (IsMergeConflictHeld(op)) return "merged_target_conflict";
+            if (revokeRoomOrchestration && (op.WireSubmitKey != request.WireSubmitKey || op.ConflictPending
+                || op.ExecutionResult is not null || op.PendingTerminal is not null || op.AcceptanceClaim is not null
+                || op.LastSendSeq != 0 && (op.LastResult is not { Outcome: OperationOutcome.Rejected } rejected
+                    || rejected.AnsweredSendSeq != op.LastSendSeq)
+                || file.Handoff?.Submission is { } pending && pending.SubmissionIdentity == op.SubmissionIdentity))
+                return "state_changed";
             if (op.MergedInto is { } mergedInto)
             {
                 var target = FindOp(file, mergedInto);
@@ -3372,6 +3401,11 @@ public sealed class ArbitrationAdmissionService
             resultSubmissionIdentity = op.SubmissionIdentity;
             resultSendSeq = op.LastSendSeq;
             op.RequestState = OperationRequestState.TerminalRejected;
+            if (revokeRoomOrchestration)
+            {
+                op.PreemptConfirmPending = false;
+                foreach (var mirror in mirrors) mirror.PreemptConfirmPending = false;
+            }
             op.LastPrecheckResult = new OperationResult
             {
                 Outcome = OperationOutcome.Rejected,

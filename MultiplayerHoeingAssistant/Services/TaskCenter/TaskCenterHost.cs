@@ -566,6 +566,7 @@ public sealed partial class TaskCenterHost
     public async Task<HostActionResult> StartWorkflowAsync(string workflowId, string? entryNodeId = null, string? expectedRevision = null,
         string? stopAfterNodeId = null)
     {
+        RoomOrchestrationNewIntent?.Invoke("用户启动新计划表");
         using var authorityScope = EnterExecutionAuthorityScope();
         using var configurationOperation = TryBeginConfigurationOperation();
         if (configurationOperation is null) return HostActionResult.Unavailable("配置迁移尚未结束，暂停新的执行");
@@ -669,8 +670,12 @@ public sealed partial class TaskCenterHost
     }
 
     /// <summary>显式恢复运行（Interrupted/Paused；Unknown 拒绝——需先对账）。与 Start 共用互斥临界区。</summary>
-    public async Task<HostActionResult> ResumeRunAsync(string runId)
+    public Task<HostActionResult> ResumeRunAsync(string runId)
+        => ResumeRunCoreAsync(runId, notifyNewIntent: !IsAutomaticLeaseRecovery);
+
+    private async Task<HostActionResult> ResumeRunCoreAsync(string runId, bool notifyNewIntent)
     {
+        if (notifyNewIntent) RoomOrchestrationNewIntent?.Invoke("用户恢复计划表");
         using var controlCall = EnterControlCall();
         ThrowIfAutomaticRecoverySuperseded();
         using var configurationOperation = TryBeginConfigurationOperation();
@@ -1695,6 +1700,7 @@ public sealed partial class TaskCenterHost
         if (VerifyHandoffRoom(request) is { } staleRoom) return staleRoom;
         if (LedgerGate(request) is { } receipt)
             return await ReplayAccountPreparationAsync(request, receipt, ct).ConfigureAwait(false);
+        RoomOrchestrationNewIntent?.Invoke("启动中心新任务移交");
 
         // 环境确保（2026-09-20 修复+会诊处置：台账之后、快照之前——受理事实优先（重放同键由 LedgerGate 先回执，不触发拉起）；
         // 锁外有界等待，取消随调用方 ct 与宿主退出联动。失败经台账复核回执：等待期间同键可能已被并发请求受理，

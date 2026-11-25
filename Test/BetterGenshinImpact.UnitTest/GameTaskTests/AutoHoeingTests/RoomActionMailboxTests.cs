@@ -17,7 +17,10 @@ public sealed class RoomActionMailboxTests
         var peer = Guid.NewGuid();
         try
         {
-            using var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "targeted-online", JobSource.Ui));
+            var job = Guid.NewGuid();
+            var workflowRun = Guid.NewGuid();
+            using var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "targeted-online", JobSource.Ui,
+                IdempotencyKey: "room-orchestration/test", JobId: job, WorkflowRunId: workflowRun));
             using var actions = ConfigurationGroupRoomActions.Begin(scope, "targeted-online", 0, false);
             using var step = actions.EnterStep(NotifyOnlineTask.TaskName, 0, 0);
             var settings = new System.Collections.Generic.Dictionary<string, object?> { [SwitchAssistantRoomTask.TargetRoomName] = "房间 B" };
@@ -30,6 +33,10 @@ public sealed class RoomActionMailboxTests
             Assert.NotNull(signal);
             Assert.Equal("switchOnline", signal.Kind);
             Assert.Equal("房间 B", signal.TargetRoomName);
+            Assert.Equal(job, signal.JobId);
+            Assert.Equal(workflowRun, signal.WorkflowRunId);
+            Assert.Equal("room-orchestration/test", signal.SubmissionKey);
+            Assert.Equal(scope.StopVersion, signal.StopVersion);
             Assert.True(RoomActionMailbox.Acknowledge(peer, signal.Id, false));
             await Assert.ThrowsAsync<RoomActionHandoffException>(() => execution);
             Assert.Equal(generation, NotifyOnlineTask.CurrentGeneration);
@@ -38,6 +45,31 @@ public sealed class RoomActionMailboxTests
         {
             peerLifetime.Cancel();
         }
+    }
+
+    [Fact]
+    public void OrdinaryOnlineSignalCapturesSourceIdentityAndOriginalStopVersion()
+    {
+        var job = Guid.NewGuid();
+        var run = Guid.NewGuid();
+        var triggered = DateTime.UtcNow;
+        NotifyOnlineTask.Signal signal;
+        using (var scope = ExecutionScope.Start(new JobDescriptor(JobKind.Group, "online-source", JobSource.Ext,
+            IdempotencyKey: "room-orchestration/test", JobId: job, WorkflowRunId: run)))
+        {
+            signal = NotifyOnlineTask.CreateSignal(11, triggered, scope);
+            Assert.Equal(scope.StopVersion, signal.StopVersion);
+        }
+        Assert.Equal(job, signal.JobId);
+        Assert.Equal(run, signal.WorkflowRunId);
+        Assert.Equal("room-orchestration/test", signal.SubmissionKey);
+        Assert.Equal(11, signal.Generation);
+        Assert.Equal(triggered, signal.TriggeredAt);
+        var ordinary = NotifyOnlineTask.CreateSignal(12, triggered, null);
+        Assert.Null(ordinary.JobId);
+        Assert.Null(ordinary.WorkflowRunId);
+        Assert.Null(ordinary.SubmissionKey);
+        Assert.Null(ordinary.StopVersion);
     }
 
     [Fact]

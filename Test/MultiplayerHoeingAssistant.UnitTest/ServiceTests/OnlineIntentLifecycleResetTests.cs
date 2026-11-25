@@ -63,6 +63,36 @@ public sealed class OnlineIntentLifecycleResetTests
     }
 
     [Fact]
+    public void OrchestrationRevocationCannotCancelAnotherGenerationOrAnAcceptedBatch()
+    {
+        var lifecycle = new OnlineIntentLifecycle(_ => { });
+        var original = lifecycle.RaiseLocalIntent("command");
+        var newer = lifecycle.RaiseLocalIntent("command");
+        Assert.False(lifecycle.RevokeArmedIntent(original, "旧编排动作已撤销"));
+        Assert.Equal(newer, lifecycle.ArmedOnlineGeneration);
+        Assert.True(lifecycle.TryBeginCoordinatedBatch("newer", 71, manual: false, intentGeneration: newer));
+        Assert.False(lifecycle.RevokeArmedIntent(newer, "编排上线已撤销"));
+        Assert.Equal(OnlineIntentState.Executing, lifecycle.State);
+    }
+
+    [Fact]
+    public void NumericGenerationReuseInAnotherRoomDoesNotAdoptOrRevokeOldOrchestration()
+    {
+        var lifecycle = new OnlineIntentLifecycle(_ => { });
+        // Mailbox uses the assistant's local counter; a later native BGI signal can use the same number.
+        var generation = lifecycle.RaiseLocalIntent("command", "a-to-b", "context-b");
+        Assert.Equal("a-to-b", lifecycle.CurrentOrchestrationOrigin?.IntentId);
+        Assert.False(lifecycle.TryBeginCoordinatedBatch("wrong", 20, false, generation));
+        lifecycle.ChangeAssistantRoom(false);
+        Assert.Null(lifecycle.CurrentOrchestrationOrigin);
+        Assert.Equal(OnlineEdgeResult.Accepted, lifecycle.ApplyEdge(generation, DateTime.UtcNow, out var ordinary));
+        Assert.Equal(generation, ordinary);
+        Assert.Null(lifecycle.CurrentOrchestrationOrigin);
+        Assert.False(lifecycle.RevokeArmedIntent(generation, "旧乙的迟到撤回", "a-to-b"));
+        Assert.True(lifecycle.TryBeginCoordinatedBatch("room-c", 21, false, ordinary));
+    }
+
+    [Fact]
     public void ServerOnlineExpiryDoesNotInterruptExecutingBatch()
     {
         var lifecycle = new OnlineIntentLifecycle(_ => { });

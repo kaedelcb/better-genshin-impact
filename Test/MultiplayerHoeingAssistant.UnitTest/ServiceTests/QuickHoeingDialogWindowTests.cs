@@ -35,7 +35,9 @@ public sealed class QuickHoeingDialogWindowTests
                         new("a", "成员甲", "联机锄地", new("resume", "group", "", 0)),
                         new("b", "成员乙", "联机锄地 → 拾取", new("stop", "group", "", 0)),
                         new("c", "成员丙", "联机锄地", new("runSpecified", "group", "绑定中的收尾任务", 0)),
-                        new("d", "成员丁", string.Join(" → ", Enumerable.Repeat("很长的绑定任务名称", 12)), new("runSpecified", "onedragon", "绑定中的一条龙", 0))
+                        new("d", "成员丁", string.Join(" → ", Enumerable.Repeat("很长的绑定任务名称", 12)),
+                            new("switchRoom", "group", "乙房上线前准备", 3, "beginning", ConfigRevision: "task-revision",
+                                TargetName: "乙房", TargetRoomCode: "ROOM-B", RunAfterSwitch: true, ActionRevision: "v1:" + new string('A', 64)))
                     };
                     foreach (var selected in new[] { false, true })
                     {
@@ -65,6 +67,9 @@ public sealed class QuickHoeingDialogWindowTests
                         Assert.True(dialogResult);
                         Assert.True(dialog.Confirmed);
                         Assert.Equal(selected, dialog.UseCompletionActions);
+                        if (selected)
+                            Assert.Equal(members[3].CompletionAction, dialog.ConfirmedCompletionActions!["d"]);
+                        else Assert.Null(dialog.ConfirmedCompletionActions);
                     }
                     var unsupported = Create(members, false);
                     Assert.False(unsupported.CompletionOption.IsEnabled);
@@ -186,6 +191,41 @@ public sealed class QuickHoeingDialogWindowTests
             if (cancelFailure != null) throw cancelFailure;
             Assert.Equal(logCount, vm.CommandLogs.Count);
         }
+
+        // The actual confirmation must keep the action shown in the old dialog, even if a
+        // member publishes another destination before the user clicks the confirm button.
+        var member = vm.Members[3];
+        var displayed = new CoordinatedCompletionAction("switchRoom", "group", "", 0,
+            TargetName: "乙房", TargetRoomCode: "ROOM-B", ActionRevision: "v1:" + new string('A', 64));
+        member.HoeingCompletionAction = displayed;
+        var switchDialog = vm.CreateQuickCommandBindingWindow(keys[0], vm.Members.ToArray());
+        Prepare(switchDialog);
+        member.HoeingCompletionAction = displayed with
+        {
+            TargetName = "丙房", TargetRoomCode = "ROOM-C", ActionRevision = "v1:" + new string('B', 64)
+        };
+        Exception? switchFailure = null;
+        switchDialog.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+        {
+            try
+            {
+                switchDialog.CompletionChoice.CompletionOption.IsChecked = true;
+                switchDialog.UpdateLayout();
+                var text = All<TextBlock>(switchDialog).Select(t => t.Text).ToArray();
+                Assert.Contains(text, t => t.Contains(displayed.Description) && t.Contains("仅实际联机"));
+                Assert.Contains(text, t => t.Contains("纯普通任务"));
+                switchDialog.ConfirmButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            catch (Exception error) { switchFailure = error; switchDialog.Close(); }
+        }));
+        var switchResult = switchDialog.ShowDialog();
+        if (switchFailure != null) throw switchFailure;
+        Assert.True(switchResult);
+        Assert.True(switchDialog.UseCompletionActions);
+        Assert.Equal(displayed, switchDialog.ConfirmedCompletionActions![member.PlayerUid]);
+        vm.ExecuteBoundQuickCommandAsync(keys[0], vm.Members.ToArray(), true,
+            switchDialog.ConfirmedCompletionActions, switchDialog.ConfirmedTargetUids).GetAwaiter().GetResult();
+        Assert.Contains(vm.CommandLogs, l => l.Contains("切房动作") && l.Contains("重新"));
 
         typeof(MhaGatewayClient).GetProperty(nameof(MhaGatewayClient.ServerCapabilities))!.SetValue(gateway, Array.Empty<string>());
         foreach (var key in keys)
