@@ -21,6 +21,8 @@ namespace MultiplayerHoeingAssistant.Views;
 /// </summary>
 public partial class UpdateBgiWindow : Window
 {
+    internal const int UpdateCompletedAutoCloseSeconds = 10;
+
     private readonly MainViewModel _vm;
     private readonly ObservableCollection<string> _excludeDirs = [];
     private readonly ObservableCollection<string> _backupDirs = [];
@@ -503,7 +505,7 @@ public partial class UpdateBgiWindow : Window
             }
             // 同机协作：通知本机所有使用这个 BGI 目录的助手（执行端、监控端、任何 Windows 账户）各自关闭 BGI。
             StatusText.Text = "正在通知本机所有助手关闭 BGI…";
-            _vm.AddLog($"[更新BGI][电脑端] 安装包={package.FileName}；目标={Path.GetFullPath(targetDir)}；排除={string.Join("、", _excludeDirs)}；完成后等待确认再重启");
+            _vm.AddLog($"[更新BGI][电脑端] 安装包={package.FileName}；目标={Path.GetFullPath(targetDir)}；排除={string.Join("、", _excludeDirs)}；完成后等待确认（{UpdateCompletedAutoCloseSeconds} 秒自动关闭）再重启");
             BgiUpdateCoordinationSession coordination;
             try
             {
@@ -545,11 +547,15 @@ public partial class UpdateBgiWindow : Window
                 if (result.BackupDir != null) lines.Add($"备份已保存到：{result.BackupDir}");
                 if (result.BackupCleanupWarning != null) lines.Add(result.BackupCleanupWarning);
                 lines.Add(autoRelaunch
-                    ? "点击确定后，本机所有助手（执行端和监控端）将自动重启，原来在运行的 BGI 也会重新启动。"
+                    ? $"点击确定或 {UpdateCompletedAutoCloseSeconds} 秒倒计时结束后，本机所有助手（执行端和监控端）将自动重启，原来在运行的 BGI 也会重新启动。"
                     : restartBlocked
                         ? "有文件未完整更新，BGI 保持关闭，助手未重启。请修复后重新更新。"
                         : "有文件被跳过，未自动重启。已恢复原来运行的 BGI，请手动重启助手和 BGI 使新版本生效。");
-                MessageBox.Show(this, string.Join("\n\n", lines), "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
+                var summary = string.Join("\n\n", lines);
+                if (autoRelaunch)
+                    AutoCloseNoticeWindow.ShowNotice(this, "更新BGI", summary, UpdateCompletedAutoCloseSeconds);
+                else
+                    MessageBox.Show(this, summary, "更新BGI", MessageBoxButton.OK, MessageBoxImage.Information);
                 RefreshCurrentVersion();
                 // 本机版本已变，重算启动检查提示点。
                 _vm.NotifyRemoteUpdateStateChanged();
