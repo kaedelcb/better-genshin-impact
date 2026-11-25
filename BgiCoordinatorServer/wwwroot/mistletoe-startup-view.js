@@ -226,7 +226,7 @@ function mtBindOutline(host) {
 function mtOpenAdd(chain, label) {
     if (mtChainHasEnd(chain)) return mtToast(`「${label}」已有「结束流程」节点，它是终点，之后不能再添加节点`, true);
     const dialog = mtDialog('mtAddDialog');
-    const group = (title, type) => `<h4>${title}</h4><div class="mt-kind-grid">${MT_KINDS.filter(k => k[1] === type).map(([key, , name, icon, color]) => `<button class="mt-kind" data-kind="${key}" style="--c:${color}"${['setRegister','judgeRegister'].includes(key) && !mtRegistersSupported() ? ' disabled title="执行端未提供寄存器能力"' : ''}><span class="mt-ic">${icon}</span><span>${name}</span></button>`).join('')}</div>`;
+    const group = (title, type) => `<h4>${title}</h4><div class="mt-kind-grid">${MT_KINDS.filter(k => k[1] === type).map(([key, , name, icon, color]) => `<button class="mt-kind" data-kind="${key}" style="--c:${color}"${['setRegister','judgeRegister'].includes(key) && !mtRegistersSupported() ? ' disabled title="执行端未提供寄存器能力"' : key === 'switchAssistantRoom' && (!mtRoomSwitchSupported() || mtIsBackgroundChain(chain)) ? ' disabled title="仅本人执行端的主链和普通条件分支支持"' : ''}><span class="mt-ic">${icon}</span><span>${name}</span></button>`).join('')}</div>`;
     dialog.innerHTML = `<header class="mt-dialog-head"><div><h3>添加节点</h3><p class="dodoco-hint">添加到${label.startsWith('「') ? mte(label) : '「' + mte(label) + '」'}末尾</p></div><button class="dd-btn dd-btn-sm" data-close>取消</button></header>${group('条件判断', 'condition')}${group('动作', 'action')}${group('触发器', 'trigger')}`;
     dialog.querySelector('[data-close]').onclick = () => dialog.close();
     dialog.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { dialog.close(); mtAddStep(b.dataset.kind, chain, label); });
@@ -466,6 +466,7 @@ function mtKindFields(s) {
         case 'killProgram': return mtField('进程名', mtInput('processName', s.processName, 'maxlength="260" placeholder="可带或不带 .exe；仅结束当前会话的同名进程"'));
         case 'runCmd': return mtField('CMD 命令', `<textarea data-f="arguments" rows="3" maxlength="4000" placeholder="以 cmd /c 隐藏窗口执行，不等待结果">${mte(s.arguments)}</textarea>`);
         case 'wait': return mtField('等待秒数', mtInput('waitSeconds', s.waitSeconds, 'type="number" min="0" max="3600" data-int="0,3600"'));
+        case 'switchAssistantRoom': return mtField('目标助手房间', mtSel('roomProfileId', s.roomProfileId || '', mtRoomSwitchOptions(s.roomProfileId))) + '<p class="dodoco-hint">目标房间就绪后才继续；切房本身不触发上线。</p>';
         case 'startGroup': case 'startOneClick': return mtField('任务名', mtInput('taskName', s.taskName, 'maxlength="200"')) + '<p class="dodoco-hint">旧版节点，建议改用「进入任务中心执行」。</p>';
         case 'timerTrigger': return `<div class="mt-form-row">${mtField('触发时间', mtInput('triggerTime', s.triggerTime, 'type="time"'))}<label class="dd-check dd-align-end"><input type="checkbox" data-f="repeatDaily"${s.repeatDaily ? ' checked' : ''}>每天重复</label></div><p class="dodoco-hint">流程跑到此节点时挂载定时器；今天该时刻已过则顺延到明天，到点执行「到点执行」链。</p>`;
         case 'watchdog': {

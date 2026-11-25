@@ -1575,7 +1575,24 @@ public partial class RoomManager
         return false;
     }
 
-    /// <summary>解析远程命令的目标连接列表（"*"=全部在线，否则按 UID 匹配）</summary>
+    // 只收紧已有的单成员请求。回执中的实例字段可能标识回复来源，不是新的投递目标；
+    // 共享批次、全停止和重置也有自己的房间级路由与授权边界。
+    internal static bool RequiresInstanceTarget(RemoteCommand command)
+    {
+        if (command.Cmd == "center.request") return true;
+        if (string.IsNullOrEmpty(command.TargetInstanceId)) return false;
+        return command.Cmd switch
+        {
+            "start_group" => command.Params?.GetValueOrDefault("key")?.ToString() != "一键锄地",
+            "stop" => command.Params?.GetValueOrDefault("stopScope")?.ToString() != "all",
+            "start_bgi" or "start_oneclick" or "hotkey_execute" or "close_game" or "clear_online"
+                or "set_scheduled_online_time" or "bind_hoeing_group" or "set_quick_command" or "set_task_enabled"
+                or "task_policy.pull" or "task_policy.push" or "remote_config.pull" or "remote_config.push" => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>解析远程命令目标；显式实例请求必须唯一匹配在线执行端，旧命令仍按 UID 路由。</summary>
     public List<string> ResolveTargets(RemoteCommand command)
     {
         var group = $"CTRL_{command.RoomCode}";
@@ -1584,12 +1601,14 @@ public partial class RoomManager
 
         lock (players)
         {
-            if (command.Cmd == "center.request")
+            if (RequiresInstanceTarget(command))
             {
-                if (command.Target.Count != 1 || string.IsNullOrWhiteSpace(command.TargetInstanceId)) return [];
-                return players.Where(p => p.Online && p.PlayerUid == command.Target[0]
-                        && p.ClientInstanceId == command.TargetInstanceId)
-                    .Select(p => p.ConnectionId).ToList();
+                if (command.Target is not { Count: 1 } || command.Target[0] == "*"
+                    || string.IsNullOrWhiteSpace(command.Target[0]) || string.IsNullOrWhiteSpace(command.TargetInstanceId)) return [];
+                var matches = players.Where(p => p.Online && !string.IsNullOrEmpty(p.ConnectionId)
+                        && p.PlayerUid == command.Target[0] && p.ClientInstanceId == command.TargetInstanceId)
+                    .Select(p => p.ConnectionId).Take(2).ToList();
+                return matches.Count == 1 ? matches : [];
             }
             if (command.Target.Count == 1 && command.Target[0] == "*")
                 return players.Where(p => p.Online).Select(p => p.ConnectionId).ToList();
@@ -1810,10 +1829,10 @@ public partial class RoomManager
         return false;
     }
 
-    /// <summary>离线命令只属于原控制房间及目标 UID，不转移到另一个房间。</summary>
+    /// <summary>离线缓存只按原房间与 UID，不接收要求实例绑定的请求。</summary>
     public void CachePendingCommand(string group, string targetUid, RemoteCommand command)
     {
-        if (group != $"CTRL_{command.RoomCode}") return;
+        if (group != $"CTRL_{command.RoomCode}" || RequiresInstanceTarget(command)) return;
         var now = ControlUtcNow;
         command.ExpiresAtUtc ??= now.AddMinutes(2);
         if (command.ExpiresAtUtc <= now) return;
@@ -1832,7 +1851,8 @@ public partial class RoomManager
         {
             if (!_pendingCommands.Remove((group, targetUid), out var pending)) return [];
             var now = ControlUtcNow;
-            return pending.Where(cmd => $"CTRL_{cmd.RoomCode}" == group && cmd.ExpiresAtUtc > now).ToList();
+            return pending.Where(cmd => $"CTRL_{cmd.RoomCode}" == group && cmd.ExpiresAtUtc > now
+                && !RequiresInstanceTarget(cmd)).ToList();
         }
     }
 

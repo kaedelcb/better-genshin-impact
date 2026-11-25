@@ -2,6 +2,9 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -10,11 +13,13 @@ using BgiCoordinatorServer.Hubs;
 using BgiCoordinatorServer.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
+using OneDragonMigration.Core;
 using Xunit;
 using Envelope = BgiCoordinatorServer.Gateway.GatewayEnvelope;
 using Protocol = BgiCoordinatorServer.Gateway.GatewayProtocol;
@@ -312,6 +317,329 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
             }
             finally { vm.Shutdown(); }
         }
+    }
+
+    // 真实网页 → 两个不同服务器的同号房间 → 本人真实助手；只编辑房间设置和手动切房。
+    // 与其他 WPF 集成用例一样独立按名称筛选运行，需独立空数据根。
+    [Fact]
+    public async Task AuthorizedBrowserEditsCrossServerRoomAndChecksOriginalSwitchReceipt()
+    {
+        Assert.True(AssistantDataDirectory.IsExplicit, "必须使用隔离 NEXUSBGI_DATA_ROOT。");
+        Assert.True(!Directory.Exists(AssistantDataDirectory.Root) || !Directory.EnumerateFileSystemEntries(AssistantDataDirectory.Root).Any(),
+            "本用例需要专用空助手数据根，不能覆盖已有测试或用户配置。");
+        var repository = FindRoomBrowserSourceRoot();
+        var webRoot = Path.Combine(repository, "BgiCoordinatorServer", "wwwroot");
+        var script = Path.Combine(repository, "BgiCoordinatorServer.Tests", "Web", "cross-room-assistant-browser.py");
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(app.Dispatcher));
+                app.Dispatcher.InvokeAsync(new Action(async () =>
+                {
+                    try { await VerifyAsync(); finished.SetResult(); }
+                    catch (Exception ex) { finished.SetException(ex); }
+                    finally { app.Shutdown(); }
+                }));
+                app.Run();
+            }
+            catch (Exception ex) { finished.TrySetException(ex); }
+        }) { IsBackground = true, Name = "isolated-cross-room-web" };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await finished.Task.WaitAsync(TimeSpan.FromMinutes(3));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)));
+
+        async Task VerifyAsync()
+        {
+            using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(155));
+            await using var a = await Server.StartAsync(webRoot);
+            await using var b = await Server.StartAsync(webRoot);
+            Assert.NotEqual(a.Url, b.Url);
+            const string uid = "111111111", aPeerUid = "222222222", bPeerUid = "333333333";
+            const string code = "A12345", instance = "cross-room-web-executor";
+            const string note = "隔离网页保存的乙房备注";
+            var source = new AssistantRoomProfile { Id = "web-a", Name = "甲房档案", ServerUrl = a.Url, RoomCode = code,
+                Password = "isolated-web-a", TeamUids = [uid, aPeerUid], ExpectedHoeingPlayers = 2,
+                OnlineHoeingGroupNames = ["甲房绑定"], OnlineHoeingGroupTypes = ["group"] };
+            var target = new AssistantRoomProfile { Id = "web-b", Name = "乙房档案", ServerUrl = b.Url, RoomCode = code,
+                Password = "isolated-web-b", TeamUids = [uid, bPeerUid], ExpectedHoeingPlayers = 3,
+                OnlineHoeingGroupNames = ["乙房绑定"], OnlineHoeingGroupTypes = ["group"] };
+            var aToB = new RoomSwitchCompletion(source.Id, a.Url, code, target.Id, b.Url, code, target.Name);
+            var bToA = new RoomSwitchCompletion(target.Id, b.Url, code, source.Id, a.Url, code, source.Name);
+            source.OnlineHoeingCompletionPolicy = "switchRoom";
+            source.OnlineHoeingRoomSwitchCompletion = aToB;
+            await using var peerA = new SignalRClient();
+            await using var peerB = new SignalRClient();
+            await peerA.ConnectAsync(a.Url, code, source.Password, aPeerUid, "甲房队友", source.TeamUids,
+                bypassSystemProxy: true, cancellationToken: budget.Token);
+            await peerB.ConnectAsync(b.Url, code, target.Password, bPeerUid, "乙房队友", target.TeamUids,
+                bypassSystemProxy: true, cancellationToken: budget.Token);
+
+            // 首连会触发真实状态采集。使用独立包标记隔离 ext/v2 管道，绝不连到本机运行中的 BGI。
+            var bgiDirectory = Directory.CreateDirectory(Path.Combine(AssistantDataDirectory.Root, "offline-bgi-" + Guid.NewGuid().ToString("N"))).FullName;
+            File.WriteAllText(Path.Combine(bgiDirectory, InstallationPipeScope.MarkerFile),
+                "{\"schema\":\"mistletoe.local-package\",\"schemaVersion\":1,\"ipcIsolation\":true}");
+            using (var ipc = new IpcClient(bgiDirectory)) Assert.Contains(".install-", ipc.GetPipeName());
+            var bgiPath = Path.Combine(bgiDirectory, "BetterGI.exe");
+            var config = new AssistConfig { PlayerUid = uid, PlayerName = "隔离网页执行端", ClientInstanceId = instance,
+                BgiPath = bgiPath, BypassSystemProxy = true, RoomProfiles = [source, target], ActiveRoomProfileId = source.Id,
+                LocalRoomProfileId = source.Id, ViewedRoomProfileId = source.Id, ShowRoomOrchestration = true };
+            source.ApplyTo(config);
+            var vm = new MultiplayerHoeingAssistant.ViewModels.MainViewModel();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var type = vm.GetType();
+            Assert.Null(type.GetMethod("ResolveSamePackageBgiPath", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [AppContext.BaseDirectory]));
+            var configManager = new AssistConfigManager();
+            Assert.True(configManager.TrySave(config));
+            type.GetField("_config", flags)!.SetValue(vm, config);
+            type.GetField("_configManager", flags)!.SetValue(vm, configManager);
+            vm.RoomCode = code;
+            var ledgerPath = Path.Combine(AssistantDataDirectory.Root, "remote-center-operation-results.json");
+            try
+            {
+                await (Task)type.GetMethod("ConnectSignalRAsync", flags)!.Invoke(vm, null)!;
+                Assert.True(vm.IsConnected);
+                // With no BGI installed at the fixture path the first real status collection
+                // may spend several bounded IPC attempts before publishing the room bindings.
+                var firstStatusDeadline = Stopwatch.StartNew();
+                while (!a.Manager.GetControlRoomPlayers("CTRL_" + code).Any(p => p.PlayerUid == uid && p.Online
+                    && p.ExpectedHoeingPlayers == 2 && p.OnlineHoeingGroupNames.SequenceEqual(source.OnlineHoeingGroupNames)))
+                {
+                    Assert.True(firstStatusDeadline.Elapsed < TimeSpan.FromSeconds(35), "真实助手首轮状态未确认：" + vm.CommandLogsText);
+                    await Task.Delay(100, budget.Token);
+                }
+                var machine = Assert.Single(a.Manager.GetControlRoomPlayers("CTRL_" + code).Where(p => p.PlayerUid == uid && p.Online)).MachineId;
+                Assert.False(string.IsNullOrWhiteSpace(machine));
+                // 由生产授权库新签一次性授权码，浏览器须通过实际授权 UI 兑换；不预置浏览器凭据。
+                var owners = type.GetProperty("WebOwners", flags)!.GetValue(vm)!;
+                var (ownerCode, _) = ((string, DateTimeOffset))owners.GetType().GetMethod("CreateCode", flags)!.Invoke(owners, null)!;
+
+                var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("BGI_ROOM_WEB_PYTHON") ?? "python")
+                {
+                    UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = AssistantDataDirectory.Root,
+                    RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                    StandardInputEncoding = new UTF8Encoding(false), StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8
+                };
+                start.ArgumentList.Add("-I");
+                start.ArgumentList.Add("-B");
+                start.ArgumentList.Add("-X");
+                start.ArgumentList.Add("utf8");
+                start.ArgumentList.Add(script);
+                using var browser = new Process { StartInfo = start };
+                Assert.True(browser.Start(), "未能启动 Python Playwright 浏览器用例。");
+                var browserError = browser.StandardError.ReadToEndAsync();
+                try
+                {
+                    // 仅本次临时夹具的地址、房间密码和授权码，经 stdin 传入，不把凭据写到命令行。
+                    await browser.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { a = a.Url, b = b.Url,
+                        aPassword = source.Password, bPassword = target.Password, ownerCode }));
+                    await browser.StandardInput.FlushAsync();
+                    await ReadStage("before-switch");
+                    AssertRoomState(switched: false);
+                    var profileReceipt = AssertSaved("room.profiles.save", "room-profiles-web-");
+                    var orchestrationReceipt = AssertSaved("room.orchestration.save", "room-orchestration-web-");
+                    Assert.Equal(profileReceipt.Request.BrowserId, orchestrationReceipt.Request.BrowserId);
+                    Assert.Empty(b.BrowserTrace!.Requests.Where(r => r.Operation is "room.profiles.save" or "room.orchestration.save" or "room.switch.start"));
+                    Assert.Empty(a.BrowserTrace!.Requests.Where(r => r.Operation == "room.switch.start"));
+                    await ContinueBrowser();
+
+                    // 浏览器观察到同一实例从乙房重新出现才报告这个阶段；真实切房回执仍须落盘终结。
+                    var switched = await ReadStage("switched");
+                    var original = switched.GetProperty("operationId").GetString()!;
+                    var switchRequest = Assert.Single(a.BrowserTrace.Requests.Where(r => r.Operation == "room.switch.start"));
+                    AssertOwnerRequest(switchRequest, target.Id);
+                    Assert.Equal(profileReceipt.Request.BrowserId, switchRequest.BrowserId);
+                    Assert.StartsWith("room-switch-web-", original);
+                    Assert.EndsWith("-" + switchRequest.Id, original);
+                    await WaitUntilAsync(() => Task.FromResult(ReadReceipt(original)?.Status is { } status && status != "accepted"));
+                    var terminal = ReadReceipt(original);
+                    Assert.NotNull(terminal);
+                    Assert.Equal("ok", terminal.Status);
+                    Assert.Equal(original, terminal.OperationId);
+                    using (var data = JsonDocument.Parse(terminal.PayloadJson!))
+                        Assert.Equal(target.Id, data.RootElement.GetProperty("activeProfileId").GetString());
+                    AssertRoomState(switched: true);
+                    await ContinueBrowser();
+
+                    await ReadStage("complete");
+                    await browser.WaitForExitAsync(budget.Token);
+                    Assert.True(browser.ExitCode == 0, await browserError);
+                    var checkedRequest = Assert.Single(b.BrowserTrace.Requests.Where(r => r.Operation == "operation.get"
+                        && r.Argument == original && b.BrowserTrace.Replies.Any(reply => reply.Id == r.Id && reply.Delivered && reply.Status == "ok")));
+                    AssertOwnerRequest(checkedRequest, original, requiresRevision: false);
+                    Assert.Equal(switchRequest.BrowserId, checkedRequest.BrowserId);
+                    var checkedReply = Assert.Single(b.BrowserTrace.Replies.Where(r => r.Id == checkedRequest.Id && r.Delivered));
+                    Assert.Equal(original, checkedReply.OperationId);
+                    Assert.Equal(instance, checkedReply.TargetInstanceId);
+                    Assert.Equal("ok", checkedReply.Status);
+                    AssertRoomState(switched: true);
+                    var requests = a.BrowserTrace.Requests.Concat(b.BrowserTrace.Requests).ToArray();
+                    Assert.Single(requests.Where(r => r.Operation == "web.authorize"));
+                    Assert.Single(requests.Where(r => r.Operation == "room.switch.start"));
+                    Assert.Single(requests.Where(r => r.Operation == "room.profiles.save"));
+                    Assert.Single(requests.Where(r => r.Operation == "room.orchestration.save"));
+                    Assert.DoesNotContain(requests, r => r.ExplicitRefresh || r.Operation is not ("web.identity" or "web.authorize"
+                        or "room.profiles.get" or "room.profiles.legacyCode" or "room.profiles.save" or "room.orchestration.get"
+                        or "room.orchestration.edit" or "room.orchestration.names" or "room.orchestration.catalog" or "room.orchestration.layout"
+                        or "room.orchestration.save" or "room.switch.start" or "room.switch.status" or "operation.get" or "bgi.update.hint"));
+                    Assert.DoesNotContain(a.BrowserTrace.Names.Concat(b.BrowserTrace.Names), name => name is
+                        "control.batch.begin" or "control.sendCommand" or "control.reportOnlineEvent");
+                    using var ledger = JsonDocument.Parse(File.ReadAllText(ledgerPath));
+                    Assert.Equal(3, ledger.RootElement.EnumerateObject().Count());
+                }
+                finally
+                {
+                    // Only the process launched above and its own headless browser are cleaned up.
+                    if (!browser.HasExited) browser.Kill(entireProcessTree: true);
+                    await browser.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                }
+
+                async Task<JsonElement> ReadStage(string expected)
+                {
+                    var line = await browser.StandardOutput.ReadLineAsync(budget.Token);
+                    if (line is null)
+                    {
+                        await browser.WaitForExitAsync(budget.Token);
+                        throw new InvalidOperationException("浏览器未到达阶段 " + expected + ": " + await browserError);
+                    }
+                    using var json = JsonDocument.Parse(line);
+                    Assert.True(json.RootElement.GetProperty("stage").GetString() == expected, "浏览器阶段未通过：" + line);
+                    return json.RootElement.Clone();
+                }
+                async Task ContinueBrowser()
+                {
+                    await browser.StandardInput.WriteLineAsync("continue");
+                    await browser.StandardInput.FlushAsync();
+                }
+                (BrowserOwnerRequest Request, string Id) AssertSaved(string operation, string prefix)
+                {
+                    var request = Assert.Single(a.BrowserTrace!.Requests.Where(r => r.Operation == operation));
+                    AssertOwnerRequest(request, target.Id);
+                    var reply = Assert.Single(a.BrowserTrace.Replies.Where(r => r.Id == request.Id && r.Delivered));
+                    Assert.Equal(instance, reply.TargetInstanceId);
+                    Assert.Equal("ok", reply.Status);
+                    Assert.NotNull(reply.OperationId);
+                    Assert.StartsWith(prefix, reply.OperationId);
+                    Assert.EndsWith("-" + request.Id, reply.OperationId);
+                    var receipt = ReadReceipt(reply.OperationId);
+                    Assert.NotNull(receipt);
+                    Assert.Equal("ok", receipt.Status);
+                    Assert.Equal(reply.OperationId, receipt.OperationId);
+                    return (request, reply.OperationId);
+                }
+                void AssertOwnerRequest(BrowserOwnerRequest request, string argument, bool requiresRevision = true)
+                {
+                    Assert.Equal(code, request.RoomCode);
+                    Assert.Equal(uid, request.TargetUid);
+                    Assert.Equal(instance, request.TargetInstanceId);
+                    Assert.Equal(instance, request.RequestTargetInstanceId);
+                    Assert.Equal(machine, request.ExpectedMachineId);
+                    Assert.Equal(request.Id, request.InnerId);
+                    Assert.Equal(argument, request.Argument);
+                    Assert.False(string.IsNullOrEmpty(request.BrowserId));
+                    Assert.True(request.HasBrowserSecret);
+                    if (requiresRevision) Assert.False(string.IsNullOrEmpty(request.ExpectedRevision));
+                }
+            }
+            finally { vm.Shutdown(); }
+
+            RemoteCenterReply? ReadReceipt(string id)
+            {
+                if (!File.Exists(ledgerPath)) return null;
+                using var stream = File.Open(ledgerPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var data = JsonDocument.Parse(stream);
+                return data.RootElement.TryGetProperty(id, out var entry)
+                    ? entry.GetProperty("Reply").Deserialize<RemoteCenterReply>() : null;
+            }
+
+            void AssertRoomState(bool switched)
+            {
+                VerifyConfig(config);
+                VerifyConfig(new AssistConfigManager().Load());
+                Assert.True(vm.IsConnected);
+                Assert.Equal(code, vm.RoomCode);
+                Assert.Contains(vm.Members, m => m.PlayerUid == (switched ? bPeerUid : aPeerUid) && m.Online);
+                Assert.DoesNotContain(vm.Members, m => m.PlayerUid == (switched ? aPeerUid : bPeerUid) && m.Online);
+                Assert.False(vm.IsBgiRunning);
+                var aMembers = a.Manager.GetControlRoomPlayers("CTRL_" + code);
+                var bMembers = b.Manager.GetControlRoomPlayers("CTRL_" + code);
+                Assert.Equal(switched ? new[] { aPeerUid } : new[] { uid, aPeerUid },
+                    aMembers.Where(p => p.Online).Select(p => p.PlayerUid).OrderBy(x => x).ToArray());
+                Assert.Equal(switched ? new[] { uid, bPeerUid } : new[] { bPeerUid },
+                    bMembers.Where(p => p.Online).Select(p => p.PlayerUid).OrderBy(x => x).ToArray());
+                var member = Assert.Single((switched ? bMembers : aMembers).Where(p => p.PlayerUid == uid && p.Online));
+                Assert.Equal(instance, member.ClientInstanceId);
+                Assert.Equal(switched ? 4 : 2, member.ExpectedHoeingPlayers);
+                Assert.Equal(switched ? "乙房绑定" : "甲房绑定", Assert.Single(member.OnlineHoeingGroupNames));
+                Assert.All(aMembers.Concat(bMembers), p =>
+                {
+                    Assert.False(p.OnlineReady);
+                    Assert.False(p.TaskRunning);
+                    Assert.False(p.AutoHoeingRunning);
+                    Assert.True(string.IsNullOrEmpty(p.HoeingBatchId));
+                    Assert.Equal(0, p.OnlineEventGeneration);
+                    Assert.Empty(p.OnlineHistory);
+                });
+                Assert.Null(a.Operations.CurrentCoordinatedBatch(GatewayHandlerContext.V3(Assert.Single(aMembers.Where(p => p.PlayerUid == aPeerUid && p.Online)).ConnectionId)));
+                Assert.Null(b.Operations.CurrentCoordinatedBatch(GatewayHandlerContext.V3(Assert.Single(bMembers.Where(p => p.PlayerUid == bPeerUid && p.Online)).ConnectionId)));
+                Assert.False(Directory.Exists(Path.Combine(bgiDirectory, "User")));
+
+                void VerifyConfig(AssistConfig saved)
+                {
+                    Assert.Equal(2, saved.RoomProfiles.Count);
+                    Assert.Equal(source.Id, saved.LocalRoomProfileId);
+                    Assert.Equal(source.Id, saved.ViewedRoomProfileId);
+                    Assert.True(saved.ShowRoomOrchestration);
+                    Assert.Equal(switched ? target.Id : source.Id, saved.ActiveRoomProfileId);
+                    Assert.Equal(switched ? b.Url : a.Url, saved.ServerUrl);
+                    Assert.Equal(switched ? 4 : 2, saved.ExpectedHoeingPlayers);
+                    Assert.Equal(switched ? target.Password : source.Password, saved.ControlRoomPassword);
+                    Assert.Equal(switched ? bToA : aToB, saved.OnlineHoeingRoomSwitchCompletion);
+                    Assert.Equal(bgiPath, saved.BgiPath);
+                    var savedA = saved.RoomProfiles.Single(p => p.Id == source.Id);
+                    var savedB = saved.RoomProfiles.Single(p => p.Id == target.Id);
+                    Assert.Equal(a.Url, savedA.ServerUrl);
+                    Assert.Equal(b.Url, savedB.ServerUrl);
+                    Assert.Equal(code, savedA.RoomCode);
+                    Assert.Equal(code, savedB.RoomCode);
+                    Assert.Equal(source.Password, savedA.Password);
+                    Assert.Equal(target.Password, savedB.Password);
+                    Assert.Equal(source.TeamUids, savedA.TeamUids);
+                    Assert.Equal(target.TeamUids, savedB.TeamUids);
+                    Assert.Equal("", savedA.Note);
+                    Assert.Equal(note, savedB.Note);
+                    Assert.Equal(2, savedA.ExpectedHoeingPlayers);
+                    Assert.Equal(4, savedB.ExpectedHoeingPlayers);
+                    Assert.Equal("甲房绑定", Assert.Single(savedA.OnlineHoeingGroupNames));
+                    Assert.Equal("乙房绑定", Assert.Single(savedB.OnlineHoeingGroupNames));
+                    Assert.Equal("switchRoom", savedA.OnlineHoeingCompletionPolicy);
+                    Assert.Equal("switchRoom", savedB.OnlineHoeingCompletionPolicy);
+                    Assert.Equal(aToB, savedA.OnlineHoeingRoomSwitchCompletion);
+                    Assert.Equal(bToA, savedB.OnlineHoeingRoomSwitchCompletion);
+                    Assert.Empty(savedA.ScheduledOnlineTime);
+                    Assert.Empty(savedB.ScheduledOnlineTime);
+                }
+            }
+        }
+    }
+
+    private static string FindRoomBrowserSourceRoot()
+    {
+        static bool HasInputs(string root) => File.Exists(Path.Combine(root, "BgiCoordinatorServer", "wwwroot", "index.html"))
+            && File.Exists(Path.Combine(root, "BgiCoordinatorServer.Tests", "Web", "cross-room-assistant-browser.py"));
+        if (Environment.GetEnvironmentVariable("BGI_ROOM_WEB_SOURCE_ROOT") is { Length: > 0 } explicitRoot)
+        {
+            Assert.True(Path.IsPathFullyQualified(explicitRoot) && HasInputs(explicitRoot), "BGI_ROOM_WEB_SOURCE_ROOT 必须指向当前完整源码根。");
+            return Path.GetFullPath(explicitRoot);
+        }
+        foreach (var start in new[] { Environment.CurrentDirectory, AppContext.BaseDirectory })
+            for (var directory = new DirectoryInfo(start); directory is not null; directory = directory.Parent)
+                if (HasInputs(directory.FullName)) return directory.FullName;
+        throw new InvalidOperationException("找不到真实 wwwroot 和浏览器用例，请指定 BGI_ROOM_WEB_SOURCE_ROOT。");
     }
 
     [Fact]
@@ -800,17 +1128,56 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
         }
     }
 
-    private sealed class Server(WebApplication application) : IAsyncDisposable
+    private sealed record BrowserOwnerRequest(string? Id, string? InnerId, string? Operation, string? RoomCode,
+        string? TargetUid, string? TargetInstanceId, string? RequestTargetInstanceId, string? ExpectedMachineId,
+        string? BrowserId, bool HasBrowserSecret, string? Argument, string? ExpectedRevision, bool ExplicitRefresh);
+    private sealed record BrowserOwnerReply(string? Id, string? OperationId, string? Status, string? TargetInstanceId, bool Delivered);
+
+    // Passive observation at the real hub: never replaces a response, mutates requests or retains passwords/secrets.
+    private sealed class BrowserGatewayTrace : IHubFilter
+    {
+        public ConcurrentQueue<BrowserOwnerRequest> Requests { get; } = new();
+        public ConcurrentQueue<BrowserOwnerReply> Replies { get; } = new();
+        public ConcurrentQueue<string> Names { get; } = new();
+
+        private static string? Text(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+        private static bool True(JsonNode? node) => node is JsonValue value && value.TryGetValue<bool>(out var result) && result;
+
+        public async ValueTask<object?> InvokeMethodAsync(HubInvocationContext context, Func<HubInvocationContext, ValueTask<object?>> next)
+        {
+            if (context.HubMethodArguments.FirstOrDefault() is not Envelope env) return await next(context);
+            Names.Enqueue(env.Name);
+            if (env.Name == "mistletoe.request" && env.Payload is { } body && body["request"] is JsonObject request)
+            {
+                var argument = request["payload"] as JsonObject;
+                Requests.Enqueue(new(Text(body["requestId"]), Text(request["requestId"]), Text(request["operation"]), Text(body["roomCode"]),
+                    Text(body["targetUid"]), Text(body["targetInstanceId"]), Text(request["targetInstanceId"]), Text(request["expectedMachineId"]),
+                    Text(request["browserId"]), !string.IsNullOrEmpty(Text(request["browserSecret"])),
+                    Text(request["payload"]) ?? Text(argument?["profileId"]) ?? Text(argument?["ProfileId"]), Text(request["expectedRevision"]),
+                    True(argument?["ExplicitRefresh"]) || True(argument?["explicitRefresh"])));
+            }
+            var result = await next(context);
+            if (env.Name == "mistletoe.respond" && env.Payload is { } responseBody && responseBody["reply"] is JsonObject reply
+                && result is Envelope response)
+                Replies.Enqueue(new(Text(responseBody["requestId"]), Text(reply["operationId"]), Text(reply["status"]),
+                    Text(reply["targetInstanceId"]), True(response.Payload?["accepted"])));
+            return result;
+        }
+    }
+
+    private sealed class Server(WebApplication application, BrowserGatewayTrace? trace = null) : IAsyncDisposable
     {
         public string Url => application.Urls.Single();
         public RoomManager Manager => application.Services.GetRequiredService<RoomManager>();
+        public RoomOperations Operations => application.Services.GetRequiredService<RoomOperations>();
+        public BrowserGatewayTrace? BrowserTrace => trace;
 
-        public static async Task<Server> StartAsync()
+        public static async Task<Server> StartAsync(string? staticWebRoot = null)
         {
             Assert.True(AssistantDataDirectory.IsExplicit, "必须使用隔离 NEXUSBGI_DATA_ROOT。");
             var root = Path.Combine(AssistantDataDirectory.Root, "four-member-recovery-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
-            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root });
+            var builder = WebApplication.CreateBuilder(new WebApplicationOptions { ContentRootPath = root, WebRootPath = staticWebRoot });
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Logging.ClearProviders();
             builder.Services.AddSingleton(_ => new RoomManager(50));
@@ -820,12 +1187,45 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
             builder.Services.AddSingleton<IClientCapabilityLookup, GatewayCapabilityLookup>();
             builder.Services.AddSingleton<RoomOperations>();
             builder.Services.AddSingleton<GatewayDispatcher>();
-            builder.Services.AddSignalR();
+            BrowserGatewayTrace? trace = null;
+            if (staticWebRoot is not null)
+            {
+                trace = new BrowserGatewayTrace();
+                builder.Services.AddSingleton(trace);
+                // 与 Program.cs 的真实网页跨域连接策略一致；仍走正常入房密码和本人授权。
+                builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
+            }
+            builder.Services.AddSignalR(options =>
+            {
+                if (trace is not null)
+                {
+                    options.AddFilter<BrowserGatewayTrace>();
+                    options.MaximumReceiveMessageSize = 10 * 1024 * 1024;
+                }
+            });
             var application = builder.Build();
+            if (staticWebRoot is not null)
+            {
+                application.UseRouting();
+                application.UseCors();
+                // 该夹具没有管理端鉴权路由，不直接公开正式管理页面。
+                application.Use(async (context, next) =>
+                {
+                    if (new[] { "/admin-login.html", "/admin-monitor.html", "/admin-routes.html", "/route-upload.html" }
+                        .Contains(context.Request.Path.Value, StringComparer.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 404;
+                        return;
+                    }
+                    await next(context);
+                });
+                application.UseDefaultFiles();
+                application.UseStaticFiles();
+            }
             application.MapHub<GatewayHub>("/gateway");
             application.MapHub<CoordinatorHub>("/hub");
             await application.StartAsync();
-            return new Server(application);
+            return new Server(application, trace);
         }
 
         public async ValueTask DisposeAsync()

@@ -58,7 +58,7 @@ function mtChooseTarget(key) {
 }
 function mtResetTarget() {
     mt.identity = null; mt.identityError = ''; mt.lastReady = mt.target ? mtTargetReady() : null;
-    Object.assign(su, { loaded:false, loading:false, statusLoading:false, statusSig:'', config:null, dirty:false, saving:false, saveError:'', selected:null, states:new Map(), flows:[], triggers:[], unifiedTriggers:null, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0 });
+    Object.assign(su, { loaded:false, loading:false, statusLoading:false, statusSig:'', config:null, dirty:false, saving:false, saveError:'', selected:null, states:new Map(), flows:[], roomSwitchChoices:[], triggers:[], unifiedTriggers:null, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0 });
     clearTimeout(su.saveTimer); mtViewReset();
     if (typeof tcReset === 'function') tcReset();
     if (typeof mtRegistersResetState === 'function') mtRegistersResetState();

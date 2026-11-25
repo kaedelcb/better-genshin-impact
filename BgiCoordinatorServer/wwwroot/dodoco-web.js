@@ -62,9 +62,9 @@ function showProduct(name) {
     dodocoRoot.hidden = !dodoco.active;
     if (d('mistletoeView')) d('mistletoeView').hidden = !mistletoe;
     if (typeof mtShow === 'function') mtShow(mistletoe);
-    if (!gengdi) { d('homeView').hidden = true; d('detailView').hidden = true; d('selectionBar').hidden = true; }
+    if (!gengdi) { if(typeof webCloseOwnerView==='function')webCloseOwnerView(); d('homeView').hidden = true; d('detailView').hidden = true; d('selectionBar').hidden = true; }
     if (dodoco.active) { dodocoRender(); dodocoSyncSubscription(); }
-    else { dodocoSyncSubscription(); if (gengdi) showHome(); }
+    else { dodocoSyncSubscription(); if (gengdi) { if(globalThis.window?.webRooms?.getView()?.mode==='orchestration'&&typeof webOpenOwnerView==='function')webOpenOwnerView('orchestration');else showHome(); } }
 }
 function dodocoIsLocal(uid = dodoco.target) { return !!globalThis.window?.bgiLocalBridge?.usesLocal(uid); }
 function dodocoMembersList() { return globalThis.window?.bgiLocalBridge ? window.bgiLocalBridge.members(players) : players; }

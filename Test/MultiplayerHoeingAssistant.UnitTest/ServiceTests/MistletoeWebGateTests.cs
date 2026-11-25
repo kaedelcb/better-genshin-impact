@@ -84,13 +84,107 @@ public class MistletoeWebGateTests
     }
 
     [Fact]
-    public async Task DesktopRoomOrchestrationDoesNotExtendWebOperations()
+    public async Task RoomOrchestrationWithoutExactMachineAndWebReceiptScopeIsRejected()
     {
         var (vm, seen) = NewVm();
         foreach (var request in new[] { Request("room.orchestration.get"), Request("room.orchestration.edit"),
             Request("room.orchestration.save"), Request("operation.get", payload: JsonValue.Create("room-orchestration-fixture")) })
             Assert.Equal("rejected", Reply(await vm.ExecuteMistletoeWebCoreAsync(request, "r", true, Recorder(seen)))["status"]!.GetValue<string>());
         Assert.Empty(seen);
+    }
+
+    [Fact]
+    public async Task PairedOwnerRoomOperationsUseExactIdentityAndScopedReceipt()
+    {
+        var (vm, seen) = NewVm();
+        var identity = Reply(await vm.ExecuteMistletoeWebCoreAsync(Request("web.identity"), "bridge", true, Recorder(seen)));
+        var data = identity["data"]!;
+        var machine = data["machineId"]!.GetValue<string>();
+        var prefixes = data["roomRequestPrefixes"]!;
+        var prefix = prefixes["Profiles"]!.GetValue<string>();
+        var request = Request("room.profiles.get"); request["expectedMachineId"] = machine;
+        var reply = Reply(await vm.ExecuteMistletoeWebCoreAsync(request, "bridge", true, Recorder(seen)));
+        Assert.Equal("ok", reply["status"]!.GetValue<string>());
+        Assert.Equal(prefix + "abc123", Assert.Single(seen).CommandId);
+        var wrong = Request("room.profiles.get", requestId: "wrongid"); wrong["expectedMachineId"] = "different";
+        Assert.Equal("rejected", Reply(await vm.ExecuteMistletoeWebCoreAsync(wrong, "r", true, Recorder(seen)))["status"]!.GetValue<string>());
+        var desktop = Request("operation.get", payload: JsonValue.Create("room-orchestration-fixture"));desktop["expectedMachineId"] = machine;
+        Assert.Equal("rejected", Reply(await vm.ExecuteMistletoeWebCoreAsync(desktop, "r", true, Recorder(seen)))["status"]!.GetValue<string>());
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task BrowserRoomReceiptsRemainScopedToTheOriginalOwnerAuthorization()
+    {
+        var (vm, seen) = NewVm();
+        (string Browser, string Secret) Grant()
+        {
+            var (code, _) = vm.WebOwners.CreateCode();
+            return vm.WebOwners.Redeem(code, "isolated browser");
+        }
+        var first = Grant(); var second = Grant();
+        async Task<JsonObject> Call(JsonObject r) => Reply(await vm.ExecuteMistletoeWebCoreAsync(r, "gateway", false, Recorder(seen)));
+        var identity = (await Call(Request("web.identity", browserId: first.Browser, secret: first.Secret)))["data"]!;
+        var prefix = identity["roomRequestPrefixes"]!["Switch"]!.GetValue<string>();
+        var machine = identity["machineId"]!.GetValue<string>();
+        JsonObject Read((string Browser, string Secret) grant)
+        {
+            var r = Request("operation.get", browserId: grant.Browser, secret: grant.Secret,
+                payload: JsonValue.Create(prefix + "originalswitch"));
+            r["expectedMachineId"] = machine;
+            return r;
+        }
+        Assert.Equal("rejected", (await Call(Read(second)))["status"]!.GetValue<string>());
+        Assert.Empty(seen);
+        Assert.Equal("ok", (await Call(Read(first)))["status"]!.GetValue<string>());
+        Assert.Single(seen);
+        Assert.True(vm.WebOwners.Revoke(first.Browser));
+        Assert.Equal("denied", (await Call(Read(first)))["status"]!.GetValue<string>());
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task PairedOwnerActualRoomProfileReadsAndUpdatesInactiveProfileOnly()
+    {
+        var (vm, seen) = NewVm();
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var config = (AssistConfig)typeof(MainViewModel).GetField("_config", flags)!.GetValue(vm)!;
+        var source = new AssistantRoomProfile { Id = "a", Name = "甲房", ServerUrl = "https://fixture.invalid", RoomCode = "A12345", Password = "fixture-a-password", TeamUids = ["123456789"], ExpectedHoeingPlayers = 4 };
+        var target = new AssistantRoomProfile { Id = "b", Name = "乙房", ServerUrl = "https://fixture.invalid", RoomCode = "B12345", Password = "fixture-b-password", TeamUids = ["123456789"], ExpectedHoeingPlayers = 2 };
+        config.PlayerUid = "123456789";
+        config.StandaloneMode = true;
+        config.RoomProfiles = [source, target];
+        config.ActiveRoomProfileId = config.LocalRoomProfileId = source.Id;
+        source.ApplyTo(config);
+        var manager = new AssistConfigManager();
+        var root = Path.Combine(AssistantDataDirectory.Root, "web-room-profile-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        typeof(AssistConfigManager).GetField("_configPath", flags)!.SetValue(manager, Path.Combine(root, "config.json"));
+        manager.Save(config);
+        typeof(MainViewModel).GetField("_configManager", flags)!.SetValue(vm, manager);
+        var method = typeof(MainViewModel).GetMethod("ExecuteMistletoeWebAsync", flags)!;
+        async Task<JsonObject> Call(JsonObject request) => Reply(await (Task<object>)method.Invoke(vm, [request, "bridge", true, CancellationToken.None])!);
+        var identity = await Call(Request("web.identity"));
+        var machine = identity["data"]!["machineId"]!.GetValue<string>();
+        JsonObject Room(string op, string id, JsonNode? payload = null, string? revision = null)
+        {
+            var r = Request(op, payload: payload, requestId: id);r["expectedMachineId"] = machine;
+            if (revision is not null)r["expectedRevision"]=revision;
+            return r;
+        }
+        var before = await Call(Room("room.profiles.get", "read1"));
+        Assert.Equal("ok", before["status"]!.GetValue<string>());
+        Assert.DoesNotContain("fixture-a-password", before.ToJsonString());
+        Assert.DoesNotContain("fixture-b-password", before.ToJsonString());
+        var revision = before["revision"]!.GetValue<string>();
+        var draft = new JsonObject { ["profileId"]="b",["name"]="乙房更新",["note"]="fixture",["serverUrl"]="https://fixture.invalid",["roomCode"]="B12345",["memberUids"]=new JsonArray("123456789"),["expectedPlayers"]=3 };
+        var saved = await Call(Room("room.profiles.save", "save1", draft.DeepClone(), revision));
+        Assert.Equal("ok", saved["status"]!.GetValue<string>());
+        Assert.Equal("a", config.ActiveRoomProfileId);Assert.Equal(4, config.ExpectedHoeingPlayers);
+        Assert.Equal("fixture-b-password", config.RoomProfiles.Single(p=>p.Id=="b").Password);
+        Assert.Equal(3, config.RoomProfiles.Single(p=>p.Id=="b").ExpectedHoeingPlayers);
+        var stale = await Call(Room("room.profiles.save", "save2", draft.DeepClone(), revision));
+        Assert.Equal("rejected", stale["status"]!.GetValue<string>());
     }
 
     [Fact]

@@ -1,0 +1,18 @@
+.room-owner-head{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.room-owner-head label{flex:1;min-width:180px;display:grid;gap:4px;color:var(--muted)}
+.room-owner-head select{min-height:44px;color:var(--text)}
+.room-owner-status{min-height:1.5em;overflow-wrap:anywhere}
+.room-owner-profiles{display:grid;grid-template-columns:minmax(0,280px) minmax(0,1fr);gap:16px;align-items:start}
+.room-owner-list,.room-owner-form{min-width:0;display:flex;flex-direction:column;gap:12px}
+.room-owner-list h3,.room-owner-form h3{margin:0;color:var(--gold)}
+.room-owner-item{display:flex;flex-direction:column;text-align:left;justify-content:center;gap:4px;background:var(--raised);border:1px solid var(--line);padding:10px 12px;border-radius:8px;overflow-wrap:anywhere;min-width:0}
+.room-owner-item.selected{border-color:var(--gold);color:var(--gold)}
+.room-owner-item small{color:var(--muted);max-width:100%}
+.room-owner-form label{display:grid;gap:5px;color:var(--muted)}
+.room-owner-form input,.room-owner-form select{color:var(--text);font-size:16px;min-height:44px}
+.room-owner-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.room-owner-actions button{min-height:44px}
+.room-owner-form>.room-owner-actions{position:sticky;bottom:0;padding:12px 0 max(12px,env(safe-area-inset-bottom));background:var(--panel);z-index:2;border-top:1px solid var(--line)}
+.room-owner-status:empty{display:none}
+.room-owner-back{display:none}
+@media(max-width:700px){.room-owner-head{align-items:stretch}.room-owner-head label{flex:1 0 100%;min-width:0}.room-owner-head button{flex:1;min-width:0}.room-owner-profiles{grid-template-columns:minmax(0,1fr);gap:12px}.room-owner-profiles:not(.room-owner-editing) .room-owner-form,.room-owner-editing .room-owner-list{display:none}.room-owner-back{display:inline-flex;align-self:start}.room-owner-actions button{flex:1 0 100%}}

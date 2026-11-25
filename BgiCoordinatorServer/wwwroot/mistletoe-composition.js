@@ -1,6 +1,6 @@
 // 任务中心编排编辑：只提交作者结构；执行端编译路径并拥有监听、暂停及续接责任。
-const TC_FLOW_KINDS = ['wait','setRegister','startProgram','timeRange','weekday','bgiRunning','gameRunning','processRunning','bgiTaskRunning','bgiTaskName','judgeRegister','manualConfirm','timerTrigger','watchdog','logTrigger'];
-const TC_FLOW_LABELS = { wait:'等待', setRegister:'设置寄存器', startProgram:'启动辅助程序', timeRange:'时间区间', weekday:'星期判断', bgiRunning:'BGI 进程状态', gameRunning:'游戏进程状态', processRunning:'指定进程状态', bgiTaskRunning:'BGI 任务状态', bgiTaskName:'BGI 当前任务名', judgeRegister:'判断寄存器', manualConfirm:'人工确认', timerTrigger:'定时触发器', watchdog:'电子狗', logTrigger:'日志触发器' };
+const TC_FLOW_KINDS = ['wait','setRegister','startProgram','switchAssistantRoom','timeRange','weekday','bgiRunning','gameRunning','processRunning','bgiTaskRunning','bgiTaskName','judgeRegister','manualConfirm','timerTrigger','watchdog','logTrigger'];
+const TC_FLOW_LABELS = { wait:'等待', setRegister:'设置寄存器', startProgram:'启动辅助程序', switchAssistantRoom:'切换助手房间', timeRange:'时间区间', weekday:'星期判断', bgiRunning:'BGI 进程状态', gameRunning:'游戏进程状态', processRunning:'指定进程状态', bgiTaskRunning:'BGI 任务状态', bgiTaskName:'BGI 当前任务名', judgeRegister:'判断寄存器', manualConfirm:'人工确认', timerTrigger:'定时触发器', watchdog:'电子狗', logTrigger:'日志触发器' };
 const TC_FLOW_CONDITIONS = new Set(['timeRange','weekday','bgiRunning','gameRunning','processRunning','bgiTaskRunning','bgiTaskName','judgeRegister','manualConfirm']);
 const TC_FLOW_TRIGGERS = new Set(['timerTrigger','watchdog','logTrigger']);
 function tcIsComposition(n) { return n?.kind === 'control.flow' || n?.kind === 'control.lanes'; }
@@ -73,6 +73,7 @@ function tcFlowLabel(s) { return s.name?.trim() || TC_FLOW_LABELS[s.kind] || s.k
 function tcFlowSummary(s) {
     if (s.kind === 'setRegister' || s.kind === 'judgeRegister') return typeof mtRegisterSummary === 'function' ? mtRegisterSummary(s) : (s.kind === 'setRegister' ? '设置寄存器' : '判断寄存器');
     if (s.kind === 'wait') return `等待 ${s.waitSeconds} 秒`;
+    if (s.kind === 'switchAssistantRoom') return mtRoomSwitchSummary(s);
     if (s.kind === 'timeRange') return `${s.timeStart}–${s.timeEnd}`;
     if (s.kind === 'weekday') return (s.weekdays || []).map(d => TC_WEEK[d - 1]).join('、') || '未选择星期（不会满足）';
     if (s.kind === 'logTrigger') return `日志出现「${s.logKeyword || '待填写'}」 · ${(s.fireSteps || []).length} 个触发动作`;
@@ -112,7 +113,8 @@ function tcFlowValidate(flow, resources = tcResourceNodes(), programs = tcAllowe
         const label = tcFlowLabel(s), fail = msg => { throw new Error(label + '：' + msg); };
         if (!s.id || seen.has(s.id)) fail('节点身份缺失或重复'); seen.add(s.id);
         if (!TC_FLOW_KINDS.includes(s.kind) || s.nodeType !== (TC_FLOW_CONDITIONS.has(s.kind) ? 'condition' : 'action')) fail('不支持的节点类型');
-        if (background && (TC_FLOW_TRIGGERS.has(s.kind) || ['startProgram','manualConfirm'].includes(s.kind))) fail('后台子链不能添加触发器、辅助程序或人工确认');
+        if (background && (TC_FLOW_TRIGGERS.has(s.kind) || ['startProgram','manualConfirm','switchAssistantRoom'].includes(s.kind))) fail('后台子链不能添加触发器、辅助程序、人工确认或切换房间');
+        if (s.kind === 'switchAssistantRoom' && (!s.roomProfileId?.trim() || flow.exitStepId)) fail('请选择目标房间；车道选择流程不能切换房间');
         const integer = (value,min,max) => Number.isInteger(value) && value >= min && value <= max;
         if (s.kind === 'wait' && !integer(s.waitSeconds,0,86400)) fail('等待秒数须为 0–86400 的整数');
         if (s.kind === 'manualConfirm' && !integer(s.confirmTimeoutSeconds,0,86400)) fail('超时秒数须为 0–86400 的整数');
@@ -139,6 +141,7 @@ function tcFlowParameterHtml(s, options = {}) {
     const condition = kind => {
         if (kind === 'setRegister' || kind === 'judgeRegister') return typeof mtRegisterFields === 'function' ? mtRegisterFields(s) : '<p>寄存器编辑组件未加载，请刷新页面。</p>';
         if (kind === 'wait') return input('等待秒数','waitSeconds','number','min="0" max="86400" step="1"');
+        if (kind === 'switchAssistantRoom') return select('目标助手房间','roomProfileId',mtRoomSwitchOptions(s.roomProfileId)) + '<p class="dodoco-hint">目标房间确认就绪后才继续。</p>';
         if (kind === 'timeRange') return `<div class="mt-form-row">${input('开始时间','timeStart','time')}${input('结束时间','timeEnd','time')}</div><p class="dodoco-hint">按执行端时间判断，支持跨午夜。</p>`;
         if (kind === 'weekday') return `<div class="mt-week">${TC_WEEK.map((w,i) => `<label><input data-week="${i + 1}" type="checkbox"${(s.weekdays || []).includes(i + 1) ? ' checked' : ''}>${w}</label>`).join('')}</div>`;
         if (kind === 'manualConfirm') return input('询问内容','confirmMessage') + input('超时秒数（0 表示一直等待）','confirmTimeoutSeconds','number','min="0" max="86400"') + check('超时选择“是”','confirmTimeoutGoTrue');
@@ -184,7 +187,7 @@ function tcFlowEditor(node = null, selectedStepId = null, options = {}) {
     function draw() {
         slots = new Map(); chains = new Map(); const tree = stepTree(draft.steps); const slot = slots.get(selected);
         if (slot) { targetChain=slot.chain; targetBackground=slot.background; insertAfter=selected; }
-        const background = targetBackground, kinds = TC_FLOW_KINDS.filter(k => !background || ['wait','setRegister'].includes(k) || TC_FLOW_CONDITIONS.has(k) && k !== 'manualConfirm');
+        const background = targetBackground, kinds = TC_FLOW_KINDS.filter(k => (!background || ['wait','setRegister'].includes(k) || TC_FLOW_CONDITIONS.has(k) && k !== 'manualConfirm') && (k !== 'switchAssistantRoom' || (mtRoomSwitchSupported() && !options.requireExit && !draft.exitStepId)));
         const jumpRow = !options.onApply && !options.requireExit && !draft.exitStepId && typeof tcJumpChoices === 'function'
             ? `<label class="dd-field tc-jump-field"><span>执行完后</span>${tcJumpSelect('data-flow-jump', tcJumpChoices(nodeId || null, draft.jumpTo), draft.jumpTo)}<small class="dodoco-hint">跳到后面的行时，中间的行不执行；流程被停用、过滤或跳过时不跳，照常执行下一行。</small></label>` : '';
         body.innerHTML = `<label class="dd-field"><span>流程名称</span><input data-flow-name value="${mte(draft.name)}"></label>${jumpRow}<div class="tc-flow-editor"><section class="tc-flow-tree"><header><h4>按顺序执行</h4><button class="dd-btn dd-btn-sm" data-main>＋ 添加步骤</button></header>${tree || '<p class="dd-empty">还没有步骤，选择右侧动作开始。</p>'}</section><aside class="tc-flow-catalog"><h4>选择要做的事情</h4><p class="dodoco-hint">添加到：${mte(slot ? tcFlowLabel(slot.step) + '之后' : targetName)}</p>${[['动作',kinds.filter(k => !TC_FLOW_CONDITIONS.has(k) && !TC_FLOW_TRIGGERS.has(k))],['判断',kinds.filter(k => TC_FLOW_CONDITIONS.has(k))],['触发器',kinds.filter(k => TC_FLOW_TRIGGERS.has(k))]].filter(x => x[1].length).map(([title,list]) => `<h5>${title}</h5><div class="dd-actions">${list.map(k => `<button class="dd-btn dd-btn-sm" data-add="${k}">＋ ${TC_FLOW_LABELS[k]}</button>`).join('')}</div>`).join('')}</aside></div><section class="tc-flow-parameters tc-sec">${slot ? `<div class="dd-actions"><strong>${mte(tcFlowLabel(slot.step))}</strong><button class="dd-btn dd-btn-sm" data-move="-1">上移</button><button class="dd-btn dd-btn-sm" data-move="1">下移</button><button class="dd-btn dd-btn-sm" data-copy>复制</button><button class="dd-btn dd-btn-sm dd-btn-danger" data-remove>移除</button>${options.requireExit ? '<button class="dd-btn dd-btn-sm" data-exit>作为车道选择条件</button>' : ''}</div><div data-parameters>${tcFlowParameterHtml(slot.step)}</div>` : '<p class="dodoco-hint">选择一个步骤编辑参数；选择子链的“添加动作”，可在对应上下文继续添加。</p>'}</section>`;
@@ -212,7 +215,14 @@ function tcFlowEditor(node = null, selectedStepId = null, options = {}) {
             dialog.close(); if (!options.onApply) tcEdited('流程已应用到计划，正在自动保存。');
         } catch(e) { error(e.message); }
     };
-    draw(); return dialog;
+    draw();
+    if (typeof mtLoadRoomSwitchChoices === 'function' && mtRoomSwitchSupported()) {
+        void mtLoadRoomSwitchChoices().then(() => {
+            if (!dialog.open || mt.target !== context.target) return;
+            if (body.querySelector('[data-param="roomProfileId"]')) draw();
+        });
+    }
+    return dialog;
 }
 function tcFlowHasStep(flow,stepId) { let found=false; if(stepId)tcFlowWalk(flow?.steps,s=>{if(s.id===stepId)found=true;}); return found; }
 function tcLanesEditor(node = null, selectedStepId = null) {

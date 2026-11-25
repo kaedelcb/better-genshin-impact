@@ -120,16 +120,26 @@ public partial class MainWindow : Window
     private async Task<LocalBrowserResult> ExecuteLocalBrowserAsync(LocalBrowserRequest request,
         CancellationToken cancellationToken, string server)
     {
-        using var roomEffect = ViewModel.TryEnterLocalBrowserRoomEffect();
-        if (roomEffect is null || !RoomServerAddress.Same(server, ViewModel.Config?.ServerUrl))
+        var isMistletoe = request.Operation is "mistletoe.read" or "mistletoe.request";
+        var body = isMistletoe ? request.Args["request"] as System.Text.Json.Nodes.JsonObject : null;
+        if (isMistletoe && body is null) return new LocalBrowserResult("error", "槲寄生请求为空");
+        // The authenticated bridge can still identify itself and query/cancel/recheck its
+        // original Web room switch while its room effects are blocked. Keep the original paired
+        // server boundary; unrelated Dodoco/center operations remain blocked as before.
+        var readback = request.Operation == "local.identity" || body is not null && MainViewModel.WebRoomRequestCanReadOrRecoverDuringSwitch(body);
+        using var roomEffect = readback ? null : ViewModel.TryEnterLocalBrowserRoomEffect();
+        if ((!readback && roomEffect is null) || !RoomServerAddress.Same(server, ViewModel.Config?.ServerUrl))
             return new LocalBrowserResult("error", "助手房间正在切换或服务器已变化，请从助手重新打开本机网页");
-        if (request.Operation is not ("mistletoe.read" or "mistletoe.request"))
+        if (request.Operation == "local.identity")
+            return await Dispatcher.InvokeAsync(() => RoomServerAddress.Same(server, ViewModel.Config?.ServerUrl)
+                ? Dodoco.LocalBrowserService.ExecuteAsync(request, cancellationToken)
+                : Task.FromResult(new LocalBrowserResult("error", "本机网页配对的服务器已变化，请从助手重新打开"))).Task.Unwrap();
+        if (!isMistletoe)
             return await Dodoco.LocalBrowserService.ExecuteAsync(request, cancellationToken);
         try
         {
-            if (request.Args["request"] is not System.Text.Json.Nodes.JsonObject body)
-                return new LocalBrowserResult("error", "槲寄生请求为空");
-            var reply = await ViewModel.ExecuteMistletoeLocalAsync((System.Text.Json.Nodes.JsonObject)body.DeepClone(), request.RequestId);
+            var reply = await ViewModel.ExecuteMistletoeLocalAsync((System.Text.Json.Nodes.JsonObject)body!.DeepClone(),
+                request.RequestId, server, cancellationToken);
             return new LocalBrowserResult("ok", Data: reply);
         }
         catch (OperationCanceledException) { throw; }

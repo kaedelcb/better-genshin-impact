@@ -96,35 +96,205 @@ function checkGatewayError(resp) {
     }
 }
 // session.hello 握手（§4.4 DAP 时序：连接后第一条消息必须是 hello，否则一律 handshake_required）
-async function sayHello() {
-    const resp = await connection.invoke('Query', makeEnvelope('query', 'session.hello', {
+async function sayHello(ownConnection = connection) {
+    const resp = await ownConnection.invoke('Query', makeEnvelope('query', 'session.hello', {
         clientKind: 'web',
         clientVersion: WEB_CLIENT_VERSION,
         protocolVersion: PROTOCOL_VERSION,
         capabilities: ['hoeing.start.v2', 'hoeing.completionChoice.v1', 'hoeing.quickCommandCompletion.v1']
     }));
     checkGatewayError(resp);
+    if (connection !== ownConnection) throw new Error('控制房间连接已变化');
     serverCapabilities = resp?.payload?.capabilities || [];
 }
-// control.joinRoom（旧 JoinControlRoom；payload 键名按服务器路由实读：旧参数 teamUids 的键名是 allowedUids，值恒 []）
-async function joinControlRoom() {
+// 主房间仍走原控制端身份及昵称认证；明确 requireReady:false 只是请求已有业务确认/全量快照。
+async function joinControlRoom(ownConnection = connection) {
+    const generation = typeof webMainGeneration === 'undefined' ? null : webMainGeneration;
+    const ownRoomCode = roomCode;
+    const requireOwnConnection = () => {
+        if (connection !== ownConnection || roomCode !== ownRoomCode
+            || generation !== null && webMainGeneration !== generation) throw new Error('控制房间连接已变化');
+    };
+    requireOwnConnection();
     joinRejection = '';
-    const resp = await connection.invoke('Dispatch', makeEnvelope('command', 'control.joinRoom', {
-        roomCode,
+    const resp = await ownConnection.invoke('Dispatch', makeEnvelope('command', 'control.joinRoom', {
+        roomCode: ownRoomCode,
         password,
         playerUid: webSessionUid,
         playerName,
         allowedUids: [],
         isRemote: false,
-        clientInstanceId: ''
+        clientInstanceId: '',
+        ...(webMemberRooms() ? { requireReady: false } : {})
     }));
+    requireOwnConnection();
     checkGatewayError(resp);
-    if (joinRejection) throw new Error(joinRejection);
+    if (joinRejection || resp?.payload?.success === false)
+        throw new Error(joinRejection || resp.payload.reason || '加入被拒绝');
+    if (webMemberRooms() && typeof webMainSnapshotGeneration !== 'undefined') {
+        if (resp?.payload?.success !== true && resp?.payload?.ack !== true) throw new Error('加入控制房间结果未确认');
+        if (resp?.payload?.playersUpdate?.full === true) onPlayersUpdated(resp.payload.playersUpdate);
+        if (webMainSnapshotGeneration !== generation) {
+            const snapshot = await ownConnection.invoke('Query', makeEnvelope('query', 'control.roomSnapshot', { roomCode: ownRoomCode }));
+            requireOwnConnection();
+            checkGatewayError(snapshot);
+            if (snapshot?.payload?.success !== true || snapshot.payload.playersUpdate?.full !== true)
+                throw new Error('控制房间成员全量快照未确认');
+            onPlayersUpdated(snapshot.payload.playersUpdate);
+        }
+        if (webMainSnapshotGeneration !== generation) throw new Error('控制房间成员全量快照未确认');
+    }
 }
 // control.sendCommand（旧 SendRemoteCommand；cmd 本体由 makeCmd 生成，逐字不动）
 function sendRemoteCommand(cmd) {
     return connection.invoke('Dispatch', makeEnvelope('command', 'control.sendCommand', { command: cmd }))
         .then(checkGatewayError);
+}
+
+// 单卡操作只使用打开时冻结的来源。省略来源的旧入口（包括嘟嘟可快捷键）始终指主房，
+// 显式来源一旦失效，不再按 UID 从主房或当前查看列表补找。
+function webMemberRooms() { return globalThis.window?.webRooms || null; }
+function mainMemberContext() {
+    const rooms = webMemberRooms();
+    return rooms?.getMainContext?.() || rooms?.getDisplayedMembers().find(x => x.context.isMain)?.context || null;
+}
+function mainMemberRoomKey() { return mainMemberContext()?.roomKey || null; }
+function mainBulkViewAllowed() {
+    const view = webMemberRooms()?.getView();
+    return !view || view.mode === 'current' || view.mode === 'all'
+        || view.mode === 'room' && view.roomKey === mainMemberRoomKey();
+}
+function captureMainMemberScope() {
+    if (!webMemberRooms()) return null;
+    const context = mainMemberContext();
+    return Object.freeze({ roomKey: context?.roomKey, generation: context?.generation, connection });
+}
+function requireMainMemberScope(scope, bulkView = true) {
+    if (!scope && !webMemberRooms()) return; // 旧单房入口
+    const context = mainMemberContext();
+    if (!scope || !roomReady || !context?.ready || (bulkView && !mainBulkViewAllowed())
+        || context.roomKey !== scope.roomKey || context.generation !== scope.generation || scope.connection !== connection)
+        throw new Error('当前控制房间或查看范围已变化，本次未发送，请重新确认');
+}
+function memberSourceKey(uid, source) {
+    return source ? JSON.stringify([source.roomKey, uid, source.instanceId || '', source.machineId || '',
+        source.connectionId || '', source.generation]) : uid;
+}
+function sameMemberSource(p, source) {
+    return p?.playerUid === source.uid && (p.clientInstanceId || '') === (source.instanceId || '')
+        && (p.machineId || '') === (source.machineId || '')
+        && (source.connectionId === undefined || (p.connectionId || '') === source.connectionId);
+}
+function freezeMemberSource(uid, source = undefined) {
+    if (!uid || uid === '*') throw new Error('请明确选择操作成员');
+    const rooms = webMemberRooms();
+    if (source === undefined) {
+        if (!rooms) return null;
+        const context = mainMemberContext();
+        if (context?.roomKey) source = rooms.sourceFor ? rooms.sourceFor(uid, context.roomKey)
+            : rooms.getDisplayedMembers().find(x => x.context.isMain && x.member.playerUid === uid)?.source;
+        if (source?.roomKey !== context?.roomKey) source = null;
+    }
+    if (source === null && !rooms) return null;
+    if (!rooms || !source || source.uid !== uid || !source.roomKey)
+        throw new Error('成员来源未确认，本次未发送，请重新选择');
+    return Object.isFrozen(source) ? source : Object.freeze({ ...source });
+}
+function legacyMemberEntry(uid, member = players.find(p => p.playerUid === uid)) {
+    return member ? { member, source: null, context: { roomKey: null, isMain: true, ready: roomReady,
+        roomCode, nickname: playerName, senderUid: webSessionUid, players, capabilities: serverCapabilities } } : null;
+}
+function resolveMemberEntry(uid, source, online, uniqueUid) {
+    const entry = webMemberRooms()?.requireSource(source, { online, uniqueUid });
+    if (!entry?.context?.ready || entry.context.roomKey !== source.roomKey || entry.context.generation !== source.generation
+        || entry.context.isMain && !roomReady || !sameMemberSource(entry.member, source) || online && entry.member.online !== true)
+        throw new Error('房间连接或成员实例已变化，本次未发送，请重新选择');
+    if (uniqueUid && !entry.context.isMain && !source.instanceId)
+        throw new Error('该成员未上报实例身份，请更新助手后再从其他房间操作');
+    if (uniqueUid && entry.context.players.filter(p => p.playerUid === uid && (!online || p.online === true)).length !== 1)
+        throw new Error('该房间同 UID 存在多个目标实例，本次未发送');
+    return { ...entry, source };
+}
+function readMemberEntry(uid, source = undefined) {
+    try {
+        const frozen = freezeMemberSource(uid, source);
+        return frozen ? resolveMemberEntry(uid, frozen, false, false) : legacyMemberEntry(uid);
+    } catch { return null; }
+}
+function requireMemberTarget(uid, source = undefined, online = true) {
+    const frozen = freezeMemberSource(uid, source);
+    if (frozen) return resolveMemberEntry(uid, frozen, online, true);
+    const entry = legacyMemberEntry(uid, players.find(p => p.playerUid === uid && (!online || p.online === true)) || null);
+    if (!roomReady) throw new Error('尚未连接控制房间，请等待重新入房');
+    if (!entry) throw new Error('有成员已离线，本次未发送，请重新确认');
+    return entry;
+}
+function freezeMemberTargets(targets, source = undefined) {
+    if (!targets.length || targets.includes('*') || source && targets.length !== 1)
+        throw new Error('请明确选择操作成员');
+    return new Map(targets.map(uid => [uid, freezeMemberSource(uid, source)]));
+}
+function requireFrozenMemberTargets(targets, sources) {
+    if (!targets.length || targets.includes('*')) throw new Error('请明确选择操作成员');
+    for (const uid of targets) {
+        const source = sources.get(uid);
+        if (source === undefined) throw new Error('成员来源未确认，请重新选择');
+        requireMemberTarget(uid, source);
+    }
+}
+function requireMainMemberTargets(scope, targets, sources) {
+    requireMainMemberScope(scope);
+    requireFrozenMemberTargets(targets, sources);
+    if (scope && targets.some(uid => sources.get(uid)?.roomKey !== scope.roomKey))
+        throw new Error('批量操作仅支持当前控制房间成员');
+}
+function memberRoomLabel(context) {
+    return [context?.name, context?.roomCode].filter(Boolean).filter((value, i, all) => all.indexOf(value) === i).join(' · ');
+}
+function memberTargetLabel(entry, fallback, showRoom = !entry?.context?.isMain || webMemberRooms()?.getView()?.mode === 'all') {
+    if (!entry) return fallback;
+    const name = entry.member.playerName || entry.member.playerUid || fallback;
+    return entry.source && showRoom ? `${name}（${memberRoomLabel(entry.context)}）` : name;
+}
+function memberReceiptRoute(entry) {
+    return { uid: entry.member.playerUid, source: entry.source, roomKey: entry.source?.roomKey || null,
+        roomCode: entry.context.roomCode, senderUid: entry.context.senderUid,
+        name: memberTargetLabel(entry, entry.member.playerUid, true) };
+}
+function memberPendingKey(roomKey, commandId) {
+    return roomKey ? JSON.stringify([roomKey, commandId]) : commandId;
+}
+function matchesMemberReceipt(route, data, reply = false) {
+    if (!route || route.uid !== (reply ? data?.senderUid : data?.targetUid)) return false;
+    if (!route.source) return true; // 兼容未装载跨房模块的单房回执。
+    if (data.roomCode !== route.roomCode || (reply
+        ? !Array.isArray(data.target) || data.target.length !== 1 || data.target[0] !== route.senderUid
+        : data.senderUid !== route.senderUid)) return false;
+    const instance = reply ? data.senderInstanceId : data.targetInstanceId;
+    if (instance && instance !== route.source.instanceId) return false;
+    // 旧普通命令的回执只有 UID；仍须同一已知实例、同一入房代次，无其他在线同 UID 目标。
+    const entry = readMemberEntry(route.uid, route.source);
+    return !!entry && entry.context.senderUid === route.senderUid
+        && !entry.context.players.some(p => p.playerUid === route.uid && p.online && !sameMemberSource(p, route.source));
+}
+function sendMemberCommand(cmd, source = undefined) {
+    if (cmd.target?.length !== 1) throw new Error('单卡命令必须明确指定一名成员');
+    const entry = requireMemberTarget(cmd.target[0], source);
+    if (!entry.source) return sendRemoteCommand(cmd);
+    return webMemberRooms().sendRemoteCommand(entry.source, { ...cmd, roomCode: entry.context.roomCode,
+        senderUid: entry.context.senderUid, sender: entry.context.nickname || entry.context.name,
+        ...(entry.source.instanceId ? { targetInstanceId: entry.source.instanceId } : {}) });
+}
+async function invokeMemberGateway(uid, source, name, payload, online = true) {
+    const entry = requireMemberTarget(uid, source, online);
+    const response = entry.source ? await webMemberRooms().invoke(entry.source, 'Dispatch', name, payload)
+        : await connection.invoke('Dispatch', makeEnvelope('command', name, payload));
+    checkGatewayError(response);
+    if (entry.source) {
+        try { requireMemberTarget(uid, entry.source, online); }
+        catch { throw new Error('原成员连接或实例已变化，操作结果未确认；不会自动重发'); }
+    }
+    return response;
 }
 
 const pendingConfigApplied = new Map();
@@ -135,51 +305,67 @@ function resolveConfigTargets(requested, members) {
         : requested;
     return [...new Set(targets.filter(uid => uid && uid !== '*'))];
 }
-function consumeConfigApplied(result) {
+function consumeConfigApplied(result, roomKey = mainMemberRoomKey()) {
     if (!result || result.cmd !== 'set_task_enabled') return;
-    const pending = pendingConfigApplied.get(result.commandId);
-    if (!pending || pending.uid !== result.targetUid) return;
-    pendingConfigApplied.delete(result.commandId);
+    const key = memberPendingKey(roomKey, result.commandId), pending = pendingConfigApplied.get(key);
+    if (!pending || !matchesMemberReceipt(pending, result)) return;
+    pendingConfigApplied.delete(key);
     clearTimeout(pending.timer);
     if (result.status !== 'success' || !result.configRevision || !result.targetProcessId || !result.targetStartTicksUtc)
         pending.reject(new Error(result.message || '执行端未确认配置版本，未启动任务'));
     else pending.resolve(result);
 }
-function sendAndWaitConfigApplied(cmd, uid) {
+function sendAndWaitConfigApplied(cmd, uid, source = undefined) {
+    if (cmd.target?.length !== 1 || cmd.target[0] !== uid) throw new Error('配置回执必须对应单一明确成员');
+    const route = memberReceiptRoute(requireMemberTarget(uid, source)), key = memberPendingKey(route.roomKey, cmd.commandId);
+    if (pendingConfigApplied.has(key) || [...pendingConfigApplied.values()].some(p => memberSourceKey(p.uid, p.source) === memberSourceKey(uid, route.source)))
+        throw new Error('该成员仍在等待上次的配置应用回执，本次未发送');
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            pendingConfigApplied.delete(cmd.commandId);
+            pendingConfigApplied.delete(key);
             reject(new Error('等待配置应用回执超时，未启动任务'));
         }, 15000);
-        pendingConfigApplied.set(cmd.commandId, { uid, resolve, reject, timer });
-        sendRemoteCommand(cmd).catch(error => {
-            if (pendingConfigApplied.delete(cmd.commandId)) { clearTimeout(timer); reject(error); }
+        pendingConfigApplied.set(key, { ...route, resolve, reject, timer });
+        Promise.resolve().then(() => {
+            if (pendingConfigApplied.has(key)) return sendMemberCommand(cmd, route.source);
+        }).catch(error => {
+            if (pendingConfigApplied.delete(key)) { clearTimeout(timer); reject(error); }
         });
     });
 }
 
 // ---------- 重置状态：服务端批次失效后，逐成员等待实际执行回执 ----------
-let resetStateBusy = false;
+const resetStateBusyRooms = new Set();
 const pendingStateResets = new Map();
-function consumeStateResetResult(result) {
-    if (!result || result.cmd !== 'reset_state') return;
-    const pending = pendingStateResets.get(result.commandId);
-    if (!pending || !pending.results.has(result.targetUid)
-        || pending.results.get(result.targetUid) !== null) return;
-    if (!['success', 'failed', 'cancelled', 'unknown'].includes(result.status)) return;
-    pending.results.set(result.targetUid, result);
+function memberResetBusy(source = undefined) { return resetStateBusyRooms.has(source?.roomKey || mainMemberRoomKey()); }
+function consumeStateResetReceipt(result, roomKey, reply) {
+    const key = memberPendingKey(roomKey, result.commandId), pending = pendingStateResets.get(key);
+    const uid = reply ? result.senderUid : result.targetUid;
+    if (!pending || !matchesMemberReceipt(pending.routes.get(uid), result, reply)
+        || pending.results.get(uid) !== null) return;
+    const status = reply ? result.params?.status : result.status;
+    if (!['success', 'failed', 'cancelled', 'unknown'].includes(status)) return;
+    pending.results.set(uid, { status, message: reply ? result.params?.message : result.message });
     if ([...pending.results.values()].every(Boolean)) pending.finish();
 }
-function consumeStateResetAck(cmd) {
-    if (cmd?.cmd !== 'ack') return;
-    consumeStateResetResult({ cmd: 'reset_state', commandId: cmd.commandId,
-        targetUid: cmd.senderUid, status: cmd.params?.status, message: cmd.params?.message });
+function consumeStateResetResult(result, roomKey = mainMemberRoomKey()) {
+    if (result?.cmd === 'reset_state') consumeStateResetReceipt(result, roomKey, false);
 }
-function sendAndWaitStateReset(cmd, onProgress) {
+function consumeStateResetAck(cmd, roomKey = mainMemberRoomKey()) {
+    if (cmd?.cmd === 'ack') consumeStateResetReceipt(cmd, roomKey, true);
+}
+function sendAndWaitStateReset(cmd, onProgress, sources = freezeMemberTargets(cmd.target), send = null) {
+    requireFrozenMemberTargets(cmd.target, sources);
+    const routes = new Map(cmd.target.map(uid => [uid, memberReceiptRoute(requireMemberTarget(uid, sources.get(uid)))]));
+    const roomKey = routes.values().next().value.roomKey;
+    if ([...routes.values()].some(route => route.roomKey !== roomKey) || cmd.target.length > 1 && roomKey !== mainMemberRoomKey())
+        throw new Error('批量重置仅支持当前控制房间成员');
+    const key = memberPendingKey(roomKey, cmd.commandId);
+    if (pendingStateResets.has(key)) throw new Error('重置编号仍在等待回执');
     return new Promise(resolve => {
         const results = new Map(cmd.target.map(uid => [uid, null]));
         const finish = (reason = '') => {
-            if (!pendingStateResets.delete(cmd.commandId)) return;
+            if (!pendingStateResets.delete(key)) return;
             clearTimeout(timer);
             resolve([...results].map(([uid, result]) => ({
                 uid, status: result?.status || 'unknown',
@@ -187,37 +373,60 @@ function sendAndWaitStateReset(cmd, onProgress) {
             })));
         };
         const timer = setTimeout(finish, 90000);
-        pendingStateResets.set(cmd.commandId, { results, finish });
+        pendingStateResets.set(key, { roomKey, routes, results, finish });
         // 先登记等待者，防止快回执早于 Dispatch 响应到达。
-        sendRemoteCommand(cmd).then(() => {
-            if (pendingStateResets.has(cmd.commandId))
+        Promise.resolve().then(() => {
+            if (!pendingStateResets.has(key)) return;
+            requireFrozenMemberTargets(cmd.target, sources);
+            if (send) return send();
+            if (cmd.target.length === 1) return sendMemberCommand(cmd, sources.get(cmd.target[0]));
+            return sendRemoteCommand(cmd);
+        }).then(() => {
+            if (pendingStateResets.has(key))
                 onProgress('重置命令已发送，等待执行端确认（最多 90 秒）…');
         }).catch(err => finish('命令发送或回执未确认：' + err.message));
     });
 }
-function interruptStateResetWaits() {
+function interruptStateResetWaits(roomKey = mainMemberRoomKey()) {
     for (const pending of pendingStateResets.values())
-        pending.finish('连接已断开，重置结果未确认；不会自动重发');
+        if (pending.roomKey === roomKey) pending.finish('连接已断开，重置结果未确认；不会自动重发');
 }
-async function resetMemberState(uid, resetAll, onProgress, explicitTargets = null) {
-    if (!roomReady) throw new Error('控制房间连接未就绪');
-    if (resetStateBusy) throw new Error('已有重置正在处理中，请等待结果');
-    const targets = resolveConfigTargets(explicitTargets || (resetAll ? ['*'] : [uid]), players);
-    if (!targets.length || targets.some(target => !players.some(p => p.playerUid === target && p.online)))
-        throw new Error('没有可重置的在线成员');
-    resetStateBusy = true;
-    renderMembers();
+async function resetMemberState(uid, resetAll, onProgress, explicitTargets = null, source = undefined) {
+    const entry = requireMemberTarget(uid, source), frozen = entry.source;
+    const key = frozen?.roomKey || null;
+    if (resetStateBusyRooms.has(key)) throw new Error('该房间已有重置正在处理中，请等待结果');
+    const targets = resolveConfigTargets(explicitTargets || (resetAll ? ['*'] : [uid]), entry.context.players);
+    if (!entry.context.isMain && (resetAll || targets.length !== 1 || targets[0] !== uid))
+        throw new Error('旁观房间仅支持所选成员重置；整房操作请先明确切换控制房间');
+    if (!targets.length) throw new Error('没有可重置的在线成员');
+    const sources = targets.length === 1 && targets[0] === uid ? new Map([[uid, frozen]]) : freezeMemberTargets(targets);
+    const scope = captureMainMemberScope(), originalConnection = connection;
+    const validate = () => {
+        requireMemberTarget(uid, frozen);
+        requireFrozenMemberTargets(targets, sources);
+        if (resetAll || targets.length > 1) requireMainMemberScope(scope);
+    };
+    const invoke = async (name, payload) => {
+        validate();
+        if (targets.length === 1) return invokeMemberGateway(targets[0], sources.get(targets[0]), name, payload);
+        const response = await originalConnection.invoke('Dispatch', makeEnvelope('command', name, payload));
+        checkGatewayError(response);
+        validate();
+        return response;
+    };
+    validate();
+    const names = new Map(targets.map(target => [target, memberTargetLabel(readMemberEntry(target, sources.get(target)), target, true)]));
+    resetStateBusyRooms.add(key);
     try {
+        renderMembers();
         const resetId = 'reset_' + newRequestId();
         onProgress('正在确认并撤销当前联机批次…');
-        const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
-        checkGatewayError(current);
-        const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.reset', {
+        const current = await invoke('control.batch.current', {});
+        const response = await invoke('control.batch.reset', {
             resetId, targetUids: targets,
             expectedGeneration: current?.payload?.generation ?? null,
             expectedBatchId: current?.payload?.batchId ?? null
-        }));
-        checkGatewayError(response);
+        });
         const reset = response?.payload;
         if (!reset || reset.resetId !== resetId)
             throw new Error('服务端重置结果未确认，未下发执行端重置');
@@ -228,10 +437,14 @@ async function resetMemberState(uid, resetAll, onProgress, explicitTargets = nul
         cmd.target = targets;
         if (reset.generation > 0) cmd.params.generation = reset.generation;
         if (reset.batchId) cmd.params.batchId = reset.batchId;
+        validate();
         onProgress('服务端已撤销旧批次，正在发送执行端重置…');
-        const results = await sendAndWaitStateReset(cmd, onProgress);
+        const results = await sendAndWaitStateReset(cmd, onProgress, sources, () => {
+            validate();
+            return targets.length === 1 ? sendMemberCommand(cmd, sources.get(targets[0])) : sendRemoteCommand(cmd);
+        });
         const lines = results.map(r => {
-            const name = players.find(p => p.playerUid === r.uid)?.playerName || r.uid;
+            const name = names.get(r.uid);
             return r.status === 'success' ? `${name}：重置成功`
                 : `${name}：${r.status === 'unknown' ? '未确认' : '重置未完成'}（${r.message || r.status}）`;
         });
@@ -241,12 +454,15 @@ async function resetMemberState(uid, resetAll, onProgress, explicitTargets = nul
         log('[重置状态] ' + message);
         return message;
     } finally {
-        resetStateBusy = false;
+        resetStateBusyRooms.delete(key);
         renderMembers();
     }
 }
-function showResetStateModal(uid, memberName) {
-    if (resetStateBusy) return;
+function showResetStateModal(uid, memberName, source = undefined) {
+    const entry = readMemberEntry(uid, source);
+    if (!entry) { log('成员来源已变化，未发送重置'); return; }
+    const frozen = entry.source, allowAll = entry.context.isMain && mainBulkViewAllowed();
+    if (memberResetBusy(frozen)) return;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -254,7 +470,8 @@ function showResetStateModal(uid, memberName) {
             <h3 id="resetStateTitle">确认重置状态</h3>
             <p class="reset-state-description"></p>
             <p class="reset-state-description">这也会中止当前房间的共享联机批次，影响参与该轮联机的其他成员。</p>
-            <label class="check-row"><input type="checkbox" class="reset-state-all">同时重置所有在线成员</label>
+            <label class="check-row" ${allowAll ? '' : 'hidden'}><input type="checkbox" class="reset-state-all">同时重置所有在线成员</label>
+            ${allowAll ? '' : '<p class="reset-state-description">旁观房间仅可重置所选成员；整房操作请先切换控制房间。</p>'}
             <p class="reset-state-result" role="status" aria-live="polite"></p>
             <div class="btn-row">
                 <button class="btn btn-secondary reset-state-cancel">取消</button>
@@ -262,7 +479,7 @@ function showResetStateModal(uid, memberName) {
             </div>
         </div>`;
     overlay.querySelector('.reset-state-description').textContent =
-        `将停止 ${memberName} 正在运行的单机和联机任务，清空任务中心运行状态，恢复到可以重新组织联机的初始状态。`;
+        `将停止 ${memberTargetLabel(entry, memberName)} 正在运行的单机和联机任务，清空任务中心运行状态，恢复到可以重新组织联机的初始状态。`;
     const all = overlay.querySelector('.reset-state-all');
     const status = overlay.querySelector('.reset-state-result');
     const confirmButton = overlay.querySelector('.reset-state-confirm');
@@ -273,7 +490,7 @@ function showResetStateModal(uid, memberName) {
         all.disabled = true;
         cancelButton.disabled = true;
         try {
-            status.textContent = await resetMemberState(uid, all.checked, message => { status.textContent = message; });
+            status.textContent = await resetMemberState(uid, allowAll && all.checked, message => { status.textContent = message; }, null, frozen);
         } catch (err) {
             status.textContent = '重置未完成或未确认：' + err.message;
             log('[重置状态] ' + status.textContent);
@@ -300,7 +517,7 @@ function showResetStateModal(uid, memberName) {
     }
 })();
 // ---------- 加入房间（无服务器地址输入，同源 /gateway） ----------
-function joinRoom() {
+function joinRoom(explicitServerUrl) {
     if (joiningRoom || roomReady) return;
     roomCode = document.getElementById('roomCode').value.trim();
     password = document.getElementById('password').value.trim();
@@ -316,26 +533,28 @@ function joinRoom() {
     showError('');
     // 记住登录
     const remember = document.getElementById('rememberMe').checked;
-    if (remember) {
-        saveCreds({ roomCode, password, nickname: playerName });
-    } else {
-        clearCreds();
-    }
-
+    const attemptedPassword = password;
     let gatewayAddress = '/gateway';
     if (window.bgiLocalBridge) {
         try { gatewayAddress = window.bgiLocalBridge.gatewayUrl(); }
         catch (err) { showError(err.message); joiningRoom = false; document.getElementById('joinButton').disabled = false; return; }
     }
+    if(typeof explicitServerUrl==='string'&&explicitServerUrl.trim()){
+        try{const url=new URL(explicitServerUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)throw new Error('服务器地址无效');gatewayAddress=url.href.replace(/\/+$/,'')+'/gateway';}
+        catch(err){showError(err.message);joiningRoom=false;document.getElementById('joinButton').disabled=false;return;}
+    }
     const gatewayBuilder = new signalR.HubConnectionBuilder();
-    connection = (window.bgiLocalBridge
-        ? gatewayBuilder.withUrl(gatewayAddress, { withCredentials: false })
-        : gatewayBuilder.withUrl(gatewayAddress))
+    const actualServer = typeof location!=='undefined' ? new URL(gatewayAddress,location.href).href.replace(/\/gateway\/?$/i,'') : '';
+    if(window.webRooms?.validateMainLogin){try{window.webRooms.validateMainLogin(actualServer,roomCode);}catch(err){showError(err.message);joiningRoom=false;document.getElementById('joinButton').disabled=false;return;}}
+    const useDirect = !!window.bgiLocalBridge || (typeof location!=='undefined'&&new URL(gatewayAddress,location.href).origin!==location.origin);
+    connection = (useDirect ? gatewayBuilder.withUrl(gatewayAddress, { withCredentials: false }) : gatewayBuilder.withUrl(gatewayAddress))
         .withAutomaticReconnect([0, 2000, 10000, 30000]).build();
+    const ownConnection = connection;
+    if(typeof webMainGeneration!=='undefined'){webMainGeneration++;webMainServerUrl=actualServer;}
 
     // evt 单订阅：服务端广播统一回调（§4.2），按 name 分发；未知 name 静默忽略
     connection.on('evt', env => {
-        if (!env || typeof env !== 'object') return;
+        if (connection !== ownConnection || !env || typeof env !== 'object') return;
         const payload = env.payload;
         if (typeof dodocoEvent === 'function') dodocoEvent(env);
         if (typeof mtEvent === 'function') mtEvent(env);
@@ -380,24 +599,32 @@ function joinRoom() {
     });
 
     connection.onreconnecting(() => {
+        if(connection!==ownConnection)return;
+        if(typeof webMainGeneration!=='undefined')webMainGeneration++;
+        if(typeof mtCancelRoomPending==='function')mtCancelRoomPending(null,'控制房间连接中断，结果待核对。');
         interruptStateResetWaits();
         interruptMemberWaits();
         setConn(false);
         log('连接断开，重连中...');
     });
     connection.onreconnected(() => {
-        sayHello().then(joinControlRoom).then(() => {
+        if(connection!==ownConnection)return;
+        sayHello(ownConnection).then(() => joinControlRoom(ownConnection)).then(() => {
+            if(connection!==ownConnection)return;
             setConn(true);
             log('已重新加入房间，未自动重发任何命令');
-        }).catch(err => { setConn(false); log('重连后重新入房失败: ' + err.message); });
+        }).catch(err => { if (connection === ownConnection) { setConn(false); log('重连后重新入房失败: ' + err.message); } });
     });
-    connection.onclose(() => { setConn(false); interruptStateResetWaits(); interruptMemberWaits(); });
+    connection.onclose(() => { if(connection!==ownConnection)return; if(typeof webMainGeneration!=='undefined')webMainGeneration++;setConn(false); interruptStateResetWaits(); interruptMemberWaits();if(typeof mtCancelRoomPending==='function')mtCancelRoomPending(null,'控制房间断开，结果未确认。'); });
 
-    connection.start()
-        .then(() => sayHello())
-        .then(() => joinControlRoom())
+    return ownConnection.start()
+        .then(() => sayHello(ownConnection))
+        .then(() => joinControlRoom(ownConnection))
         .then(() => {
+            if(connection!==ownConnection)return;
+            if(remember)saveCreds({roomCode,password:attemptedPassword,nickname:playerName,serverUrl:actualServer});else clearCreds();
             setConn(true);
+            window.webRooms?.mainChanged({remember,password:attemptedPassword});
             document.getElementById('loginPanel').style.display = 'none';
             document.getElementById('controlPanel').style.display = 'block';
             document.getElementById('roomInfo').textContent = `房间 ${roomCode}`;
@@ -405,11 +632,12 @@ function joinRoom() {
             renderMembers();
         })
         .catch(err => {
+            if(connection!==ownConnection)return;
             showError('连接失败: ' + err.message);
             log('连接失败: ' + err.message);
             setConn(false);
-            connection.stop().catch(() => {});
-        }).finally(() => { joiningRoom = false; document.getElementById('joinButton').disabled = false; });
+            ownConnection.stop().catch(() => {});
+        }).finally(() => { if(connection===ownConnection){joiningRoom = false; document.getElementById('joinButton').disabled = false;} });
 }
 
 function setConn(online) {
@@ -418,6 +646,7 @@ function setConn(online) {
     if (typeof mtConnection === 'function') mtConnection(online);
     document.getElementById('connectionText').textContent = online ? '连接正常' : '连接未就绪';
     if (typeof renderControlRoom === 'function') renderControlRoom();
+    window.webRooms?.mainChanged();
     const dot = document.getElementById('connDot');
     dot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
     if (window.bgiLocalBridge) window.bgiLocalBridge.networkChanged(online);
@@ -447,6 +676,8 @@ function onPlayersUpdated(update) {
             players = players.filter(p => p.playerUid !== uid);
         });
     }
+    if(typeof webRoomUpdateMain==='function')webRoomUpdateMain(update);
+    window.webRooms?.mainChanged();
     renderMembers();
     if (typeof dodocoMembers === 'function') dodocoMembers();
     if (typeof mtMembersChanged === 'function') mtMembersChanged(update);
@@ -504,6 +735,12 @@ function applyTagFold(card) {
     });
 }
 // ---------- 成员卡片点击事件委托（按钮+标签，全局只绑一次） ----------
+function memberSourceFromCard(element, uid) {
+    if (!webMemberRooms()) return null;
+    const entry = typeof renderedCardEntry === 'function' ? renderedCardEntry(element) : null;
+    if (!entry?.source || entry.source.uid !== uid) throw new Error('原成员卡片已变化，请重新选择');
+    return entry.source;
+}
 document.getElementById('memberList').addEventListener('click', e => {
     // "更多"按钮 → 弹窗查看全部配置组/一条龙
     const moreBtn = e.target.closest('.tag-more');
@@ -512,7 +749,8 @@ document.getElementById('memberList').addEventListener('click', e => {
         const memberName = moreBtn.dataset.name;
         const type = moreBtn.dataset.type;
         if (!uid || !type) return;
-        showTagMoreModal(uid, memberName, type);
+        try { showTagMoreModal(uid, memberName, type, memberSourceFromCard(moreBtn, uid)); }
+        catch (err) { log(err.message); }
         return;
     }
 
@@ -524,13 +762,15 @@ document.getElementById('memberList').addEventListener('click', e => {
     const type = tag.dataset.type;
     const value = tag.dataset.value;
     if (!uid || !value) return;
-    showMemberConfirmModal(uid, memberName, value, type === 'oneclick');
+    try { showMemberConfirmModal(uid, memberName, value, type === 'oneclick', memberSourceFromCard(tag, uid)); }
+    catch (err) { log(err.message); }
 });
 
 // ---------- "更多"按钮 → 弹窗查看全部配置组/一条龙 ----------
-function showTagMoreModal(uid, memberName, type) {
-    const member = players.find(p => p.playerUid === uid);
-    if (!member) return;
+function showTagMoreModal(uid, memberName, type, source = undefined) {
+    const entry = readMemberEntry(uid, source), member = entry?.member;
+    if (!member) { log('原成员来源已变化，请重新选择'); return; }
+    const frozen = entry.source, targetName = memberTargetLabel(entry, memberName);
 
     const isOneClick = type === 'oneclick';
     const items = isOneClick ? (member.oneClickConfigs || []) : (member.configGroups || []);
@@ -545,7 +785,7 @@ function showTagMoreModal(uid, memberName, type) {
     overlay.innerHTML = `
         <div class="modal">
             <h3>${label}列表</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">「${escapeHtml(memberName)}」共 ${items.length} 个${label}，点击即可下发</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">「${escapeHtml(targetName)}」共 ${items.length} 个${label}，点击即可下发</p>
             <div class="tags modal-tags">
                 ${items.map(g =>
                     `<span class="tag${isOneClick ? ' purple' : ''}" data-uid="${escapeHtml(uid)}" data-name="${escapeHtml(memberName)}" data-type="${type}" data-value="${escapeHtml(g)}">${escapeHtml(g)}</span>`
@@ -569,7 +809,7 @@ function showTagMoreModal(uid, memberName, type) {
             const v = tag.dataset.value;
             if (!v) return;
             overlay.remove();
-            showMemberConfirmModal(uid, memberName, v, isOneClick);
+            showMemberConfirmModal(uid, memberName, v, isOneClick, frozen);
         });
     });
 }
@@ -589,11 +829,21 @@ function parseQuickCommandBinding(binding) {
     return name.trim() && name === name.trim() && name.length <= 1024 ? { name, isOneClick } : null;
 }
 
-function showQuickCommandConfirm(key) {
-    const selectedTargets = getSelectedMembers().map(p => p.playerUid);
+function selectedMainTargetUids() {
+    return webMemberRooms() && typeof selectedMemberUids !== 'undefined'
+        ? [...selectedMemberUids] : getSelectedMembers().map(p => p.playerUid);
+}
+function showQuickCommandConfirm(key, mainScope = captureMainMemberScope()) {
+    const selectedTargets = selectedMainTargetUids();
     if (!selectedTargets.length) { log('请先选择在线成员'); return; }
+    let sources;
+    try { requireMainMemberScope(mainScope); sources = freezeMemberTargets(selectedTargets); }
+    catch (err) { log('未打开快捷任务：' + err.message); return; }
     const parsed = parseQuickCommandBinding(loadBindings()[key]);
     showConfirmModal(key, parsed?.name || '', parsed?.isOneClick || false, result => {
+        if (result === 'cancel') return;
+        try { requireMainMemberScope(mainScope); }
+        catch (err) { log(err.message); return; }
         if (result === 'confirm' && parsed) {
             // 不勾选仍保留网页原来的统一任务、起点及启用状态选择。
             let tasks = null;
@@ -605,10 +855,11 @@ function showQuickCommandConfirm(key) {
                 if (Array.isArray(dictWs[parsed.name])) tasksWithStatus = dictWs[parsed.name];
                 if (tasks && tasksWithStatus) break;
             }
-            showTaskListSelect('*', '已选成员', parsed.name, parsed.isOneClick, tasks, selectedTargets, tasksWithStatus);
+            showTaskListSelect('*', '已选成员', parsed.name, parsed.isOneClick, tasks, selectedTargets, tasksWithStatus, undefined, sources, mainScope);
         } else if (result === 'modify') {
             showBindModal(key, newBind => {
                 if (!newBind) return;
+                try { requireMainMemberScope(mainScope); } catch (err) { log(err.message); return; }
                 const bindings = loadBindings();
                 bindings[key] = newBind;
                 saveBindings(bindings);
@@ -616,18 +867,28 @@ function showQuickCommandConfirm(key) {
                 showQuickCommandConfirm(key);
             });
         }
-    });
+    }, mainScope, sources);
 }
 
 function isValidCompletionAction(action) {
-    if (!action || !['resume', 'stop', 'runSpecified'].includes(action.policy)
+    if (!action || !['resume', 'stop', 'runSpecified', 'switchRoom'].includes(action.policy)
         || !['group', 'onedragon', 'workflow'].includes(action.taskType)
-        || typeof action.taskName !== 'string' || action.taskName.length > 1024) return false;
+        || typeof action.taskName !== 'string' || action.taskName.length > 1024
+        || action.priority !== undefined && (!Number.isInteger(action.priority)
+            || action.priority < -2147483648 || action.priority > 2147483647)) return false;
     const mode = action.startMode === undefined ? 'default' : action.startMode;
     const fields = ['startTaskId', 'startTaskName', 'configRevision', 'workflowId'];
     if (!['default', 'beginning', 'node'].includes(mode)
         || fields.some(key => action[key] !== undefined && (typeof action[key] !== 'string' || action[key].length > 1024))) return false;
-    if (action.policy !== 'runSpecified') return true;
+    if (action.policy === 'switchRoom') {
+        // 与 CoordinatedCompletionAction.IsValid 同一传输合同；仅确认摘要，不在网页验证或重建本机房间配置。
+        const text = value => typeof value === 'string' && value.length <= 1024 && !!value.trim();
+        if (!text(action.targetName) || !text(action.targetRoomCode) || typeof action.runAfterSwitch !== 'boolean'
+            || typeof action.actionRevision !== 'string' || action.actionRevision.length !== 67
+            || !/^v1:[0-9a-fA-F]{64}$/.test(action.actionRevision)) return false;
+        if (!action.runAfterSwitch) return true;
+        if (mode === 'default') return false;
+    } else if (action.policy !== 'runSpecified') return true;
     const [id, name, revision, workflowId] = fields.map(key => action[key] ?? '');
     if (!action.taskName.trim() || (action.taskType === 'workflow' ? !workflowId.trim() : workflowId.length > 0)) return false;
     if (mode === 'default') return action.taskType !== 'workflow' && !id && !name && !revision;
@@ -636,25 +897,79 @@ function isValidCompletionAction(action) {
 }
 
 // default 只兼容旧配置入口，不能将其描述为保证从头执行。
+function specifiedCompletionDescription(action) {
+    const type = { group: '配置组', onedragon: '一条龙', workflow: '计划表' }[action.taskType] || '任务';
+    const mode = action.startMode ?? 'default';
+    const start = mode === 'node' ? `从任务「${action.startTaskName || ''}」开始`
+        : mode === 'beginning' ? '从头开始' : mode === 'default' ? '沿用原入口（旧配置）' : '起点未确认';
+    return `执行${type}「${action.taskName || ''}」 · ${start}`;
+}
 function hoeingCompletionDescription(action) {
     if (!action) return '尚未上报（需更新该成员助手）';
+    if (action.policy === 'switchRoom') {
+        const target = [action.targetName, action.targetRoomCode].filter(value => typeof value === 'string' && value.trim()).join(' · ');
+        return `切换助手房间${target ? `「${target}」` : '（未选择目标）'}`
+            + (action.runAfterSwitch === true ? `，切换成功后${specifiedCompletionDescription(action)}（优先级 ${action.priority ?? 0}）`
+                : action.runAfterSwitch === false ? '，切换成功后待命' : '，后继动作未确认')
+            + (isValidCompletionAction(action) ? '' : '（配置无效，请核对）');
+    }
     if (!isValidCompletionAction(action)) return '动作配置不完整';
     if (action.policy === 'resume') return '恢复原任务';
     if (action.policy === 'stop') return '锄完停止';
-    const type = { group: '配置组', onedragon: '一条龙', workflow: '计划表' }[action.taskType];
-    const mode = action.startMode ?? 'default';
-    const start = mode === 'node' ? `从任务「${action.startTaskName}」开始`
-        : mode === 'beginning' ? '从头开始' : '沿用原入口（旧配置）';
-    return `执行${type}「${action.taskName}」 · ${start}`;
+    return specifiedCompletionDescription(action);
+}
+function completionChoiceExplanation(targets, quickCommand = false) {
+    return '正常完成后执行各成员已有动作；失败或手动停止不触发。'
+        + (targets.some(p => p.hoeingCompletionAction?.policy === 'switchRoom')
+            ? quickCommand ? ' 配置了切房的成员仅在实际联机锄地正常完成并结清后切房，纯普通任务完成时仅停止。'
+                : ' 切房须有实际联机锄地正常完成并结清的证据。'
+            : '');
+}
+
+// 仅序列化桌面与协调器的公开摘要字段；旧三种动作的缺省字段保持兼容。
+function completionActionForConfirmation(action) {
+    if (!action) return null;
+    const { policy, taskType, taskName, priority = 0, startMode = 'default', startTaskId = '', startTaskName = '',
+        configRevision = '', workflowId = '' } = action;
+    const room = policy === 'switchRoom' ? action : {};
+    const { targetName = '', targetRoomCode = '', runAfterSwitch = false, actionRevision = '' } = room;
+    return { policy, taskType, taskName, priority, startMode, startTaskId, startTaskName, configRevision, workflowId,
+        targetName, targetRoomCode, runAfterSwitch, actionRevision };
+}
+function completionActionSignature(action) {
+    const summary = completionActionForConfirmation(action);
+    // 显示名变化不改变目标身份；其余切房及后继任务字段均须与确认时一致。
+    if (summary?.policy === 'switchRoom') summary.targetName = '';
+    return JSON.stringify(summary);
+}
+function memberBinding(member) {
+    const names = member?.onlineHoeingGroupNames || [];
+    const types = member?.onlineHoeingGroupTypes?.length ? member.onlineHoeingGroupTypes : names.map(() => 'group');
+    return { names: [...names], types: [...types] };
+}
+function snapshotForStart(targets) {
+    return targets.map(p => ({ ...p, onlineHoeingGroupNames: [...(p.onlineHoeingGroupNames || [])],
+        onlineHoeingGroupTypes: [...(p.onlineHoeingGroupTypes || [])], quickCommands: { ...p.quickCommands },
+        hoeingCompletionAction: p.hoeingCompletionAction ? { ...p.hoeingCompletionAction } : null }));
+}
+function startSettingsSignature(p, key, useActions = true) {
+    return JSON.stringify({ binding: key ? p?.quickCommands?.[key] : memberBinding(p),
+        ...(useActions ? { action: completionActionSignature(p?.hoeingCompletionAction) } : {}) });
 }
 
 // 一键锄地与PC共用服务端批次；全部成员准备完成后才允许接管和执行。
 function showQuickHoeingConfirmModal() {
-    const targets = getSelectedMembers();
+    const targets = snapshotForStart(getSelectedMembers()), mainScope = captureMainMemberScope();
     if (targets.length === 0) {
         log('没有在线成员可下发一键锄地');
         return;
     }
+    let sources;
+    try {
+        sources = freezeMemberTargets(selectedMainTargetUids());
+        if (targets.length !== sources.size) throw new Error('有已选成员不在原控制房间，请重新选择');
+        requireMainMemberTargets(mainScope, targets.map(p => p.playerUid), sources);
+    } catch (err) { log('未打开一键锄地：' + err.message); return; }
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
@@ -680,12 +995,16 @@ function showQuickHoeingConfirmModal() {
     });
     document.body.appendChild(overlay);
     const completionOption = overlay.querySelector('#hoeingCompletionActions');
+    const hint = overlay.querySelector('#hoeingCompletionHint');
     completionOption.disabled = !serverCapabilities.includes('hoeing.completionChoice.v1')
-        || targets.some(p => !p.hoeingCompletionAction
-            || !['resume', 'stop', 'runSpecified'].includes(p.hoeingCompletionAction.policy)
-            || hoeingCompletionDescription(p.hoeingCompletionAction) === '动作配置不完整');
-    if (completionOption.disabled)
-        overlay.querySelector('#hoeingCompletionHint').textContent = '服务端或成员尚不支持此选项，或绑定动作不完整；不勾选仍可按原方式开始。';
+        || targets.some(p => !isValidCompletionAction(p.hoeingCompletionAction));
+    const updateChoice = () => {
+        hint.textContent = completionOption.disabled
+            ? '服务端或成员尚不支持此选项，或绑定动作不完整；不勾选仍可按原方式开始。'
+            : completionOption.checked ? completionChoiceExplanation(targets) : '不勾选：本次锄完停止。';
+    };
+    completionOption.addEventListener('change', updateChoice);
+    updateChoice();
     const confirm = overlay.querySelector('#hoeingOk');
     const cancel = overlay.querySelector('#hoeingCancel');
     cancel.addEventListener('click', () => overlay.remove());
@@ -694,47 +1013,58 @@ function showQuickHoeingConfirmModal() {
         confirm.disabled = true;
         cancel.disabled = true;
         try {
-            await beginCoordinatedQuickCommand(targets, !completionOption.disabled && completionOption.checked, '', '一键锄地');
+            await beginCoordinatedQuickCommand(targets, !completionOption.disabled && completionOption.checked, '', '一键锄地', mainScope, sources);
         } finally { overlay.remove(); }
     });
 }
 
 // 确认后的精确成员快照；已受理、拒绝和传输未知分别处理，不重发开始。
-async function beginCoordinatedQuickCommand(targets, useCompletionActions, quickCommandKey, label) {
-    // 冻结确认列表；有人离线时整批不下发，不能悄悄缩成更少成员。
-    const onlineUids = new Set(players.filter(p => p.online === true).map(p => p.playerUid));
+async function beginCoordinatedQuickCommand(targets, useCompletionActions, quickCommandKey, label,
+    mainScope = captureMainMemberScope(), sources = null) {
+    const refuse = detail => {
+        const message = label + detail;
+        log(message);
+        return { status: 'failed', message };
+    };
+    // 冻结确认列表；有人离线或具体实例已变化时整批不下发，不能悄悄缩成更少成员。
     const targetUids = [...new Set(targets.map(p => p.playerUid))];
-    if (targetUids.some(uid => !onlineUids.has(uid))) {
-        log(label + '未下发：有成员已离线，请重新确认');
-        return;
+    if (webMemberRooms()) {
+        try {
+            sources ||= freezeMemberTargets(targetUids);
+            requireMainMemberTargets(mainScope, targetUids, sources);
+        } catch (err) { return refuse('未下发：' + err.message); }
     }
-    if ((quickCommandKey || useCompletionActions) && targets.some(p => {
-        const current = players.find(latest => latest.playerUid === p.playerUid);
-        return quickCommandKey && current?.quickCommands?.[quickCommandKey] !== p.quickCommands?.[quickCommandKey]
-            || JSON.stringify(current?.hoeingCompletionAction) !== JSON.stringify(p.hoeingCompletionAction);
-    })) {
-        log(label + '未下发：成员绑定或锄地后动作已改变，请重新确认');
-        return;
-    }
+    const latestMember = uid => sources && webMemberRooms()
+        ? (typeof currentMember === 'function' ? currentMember(uid, sources.get(uid)) : readMemberEntry(uid, sources.get(uid))?.member)
+        : players.find(p => p.playerUid === uid);
+    if (targetUids.some(uid => !latestMember(uid)?.online))
+        return refuse('未下发：有成员已离线，请重新确认');
     if (useCompletionActions && (!serverCapabilities.includes('hoeing.completionChoice.v1')
         || targets.some(p => !isValidCompletionAction(p.hoeingCompletionAction)))
-        || quickCommandKey && !serverCapabilities.includes('hoeing.quickCommandCompletion.v1')) {
-        log(label + '未下发：服务端或成员尚不支持完成动作，或绑定动作不完整');
-        return;
-    }
-    const requestId = 'web_hoeing_' + newRequestId();
+        || quickCommandKey && !serverCapabilities.includes('hoeing.quickCommandCompletion.v1'))
+        return refuse('未下发：服务端或成员尚不支持完成动作，或绑定动作不完整');
+    if (targets.some(p => {
+        const current = latestMember(p.playerUid);
+        return startSettingsSignature(current, quickCommandKey, useCompletionActions) !== startSettingsSignature(p, quickCommandKey, useCompletionActions)
+            || useCompletionActions && !isValidCompletionAction(current?.hoeingCompletionAction);
+    })) return refuse('未下发：成员绑定或锄地后动作已改变，请重新确认');
+    // 来自弹窗中实际展示的各成员摘要，不从最新状态补齐或替执行端写设置；未勾选不携带动作。
+    const confirmedCompletionActions = useCompletionActions
+        ? Object.fromEntries(targets.map(p => [p.playerUid, completionActionForConfirmation(p.hoeingCompletionAction)])) : null;
+    const requestId = 'web_hoeing_' + newRequestId(), originalConnection = connection;
     try {
-        if (!serverCapabilities.includes('hoeing.start.v2')) {
-            log(label + '未受理：服务器尚未支持统一联机开始，请升级配套服务器');
-            return;
-        }
-        const response = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
+        if (!serverCapabilities.includes('hoeing.start.v2'))
+            return refuse('未受理：服务器尚未支持统一联机开始，请升级配套服务器');
+        const response = await originalConnection.invoke('Dispatch', makeEnvelope('command', 'control.batch.begin', {
             requestId, targetUids,
             ...(quickCommandKey ? { quickCommandKey } : {}),
             useCompletionActions: useCompletionActions,
+            ...(useCompletionActions ? { confirmedCompletionActions } : {}),
             expiresAtUtc: new Date(Date.now() + 120000).toISOString()
         }));
         checkGatewayError(response);
+        // 原控制房间已改变时，不能将旧批次结果填进新房间的 UI。
+        requireMainMemberScope(mainScope, false);
         const batch = response?.payload;
         if (!batch?.batchId || batch.protocol !== 'hoeing.start.v2')
             throw new Error('服务器未返回有效批次身份，受理结果待确认');
@@ -756,9 +1086,12 @@ async function beginCoordinatedQuickCommand(targets, useCompletionActions, quick
         } else {
             let recovered = null;
             try {
-                const current = await connection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
+                requireMainMemberScope(mainScope, false);
+                if (connection !== originalConnection) throw new Error('原连接已变化');
+                const current = await originalConnection.invoke('Dispatch', makeEnvelope('command', 'control.batch.current', {}));
                 checkGatewayError(current);
-                if (current?.payload?.requestId === requestId) recovered = current.payload;
+                requireMainMemberScope(mainScope, false);
+                if (connection === originalConnection && current?.payload?.requestId === requestId) recovered = current.payload;
             } catch { /* 传输未知保留待确认，不另造请求重发。 */ }
             const message = recovered
                 ? `已按原请求确认${label}批次 ${recovered.batchId}，状态：${batchPhaseName(recovered.phase)}`
@@ -822,12 +1155,14 @@ function showBindModal(key, callback) {
 }
 
 // ---------- 弹窗：确认（含修改按钮） ----------
-function showConfirmModal(key, value, isOneClick, callback) {
+function showConfirmModal(key, value, isOneClick, callback, mainScope = captureMainMemberScope(), sources = null) {
     const quickCommandKey = '一键' + key;
-    const members = getSelectedMembers().map(p => ({
-        ...p, quickCommands: { ...p.quickCommands },
-        hoeingCompletionAction: p.hoeingCompletionAction ? { ...p.hoeingCompletionAction } : null
-    }));
+    const members = snapshotForStart(getSelectedMembers());
+    try {
+        requireMainMemberScope(mainScope);
+        sources ||= freezeMemberTargets(selectedMainTargetUids());
+        if (members.length !== sources.size) throw new Error('有已选成员不在原控制房间，请重新选择');
+    } catch (err) { log(err.message); return; }
     // 与桌面端一致：未绑定的成员只作说明，不下发该快捷指令。
     const targets = members.filter(p => parseQuickCommandBinding(p.quickCommands[quickCommandKey]));
     const overlay = document.createElement('div');
@@ -873,7 +1208,7 @@ function showConfirmModal(key, value, isOneClick, callback) {
         list.hidden = !useActions;
         hint.textContent = completionOption.disabled
             ? '服务端尚不支持此选项、成员未绑定该快捷指令，或锄地后动作尚未上报完整；不勾选仍可执行网页任务。'
-            : useActions ? '正常完成后执行各成员已有动作；失败或手动停止不触发。'
+            : useActions ? completionChoiceExplanation(targets, true)
                 : '不勾选：本次锄完停止。';
         confirm.disabled = !useActions && !value;
     }
@@ -883,11 +1218,11 @@ function showConfirmModal(key, value, isOneClick, callback) {
     confirm.addEventListener('click', async () => {
         if (confirm.disabled) return;
         const useActions = !completionOption.disabled && completionOption.checked;
-        if (!useActions) { overlay.remove(); callback('confirm'); return; }
         confirm.disabled = true;
         modify.disabled = true;
         cancel.disabled = true;
-        try { await beginCoordinatedQuickCommand(targets, true, quickCommandKey, key); }
+        if (!useActions) { overlay.remove(); callback('confirm'); return; }
+        try { await beginCoordinatedQuickCommand(targets, true, quickCommandKey, key, mainScope, sources); }
         finally { overlay.remove(); }
     });
     modify.addEventListener('click', () => { overlay.remove(); callback('modify'); });
@@ -895,21 +1230,19 @@ function showConfirmModal(key, value, isOneClick, callback) {
 }
 
 // ---------- 弹窗：确认对指定成员下发配置组/一条龙（含"从此处开始执行"任务列表） ----------
-function showMemberConfirmModal(uid, memberName, value, isOneClick) {
-    const member = players.find(p => p.playerUid === uid);
-    const tasks = member
-        ? (isOneClick ? (member.oneClickTasks || {}) : (member.configGroupTasks || {}))[value]
-        : null;
-    const tasksWithStatus = member
-        ? (isOneClick ? (member.oneClickTasksWithStatus || {}) : (member.configGroupTasksWithStatus || {}))[value]
-        : null;
-    showTaskListSelect(uid, memberName, value, isOneClick, tasks || null, null, tasksWithStatus || null);
+function showMemberConfirmModal(uid, memberName, value, isOneClick, source = undefined) {
+    const entry = readMemberEntry(uid, source), member = entry?.member;
+    if (!member) { log('原成员来源已变化，请重新选择'); return; }
+    showTaskListSelect(uid, memberName, value, isOneClick,
+        (isOneClick ? member.oneClickTasks : member.configGroupTasks)?.[value] || null,
+        null, (isOneClick ? member.oneClickTasksWithStatus : member.configGroupTasksWithStatus)?.[value] || null, entry.source);
 }
 
 // ---------- 弹窗：选择成员的配置组/一条龙并下发（含"从此处开始执行"任务列表） ----------
-function showMemberConfigSelect(uid, memberName, type) {
-    const member = players.find(p => p.playerUid === uid);
-    if (!member) { log(`找不到成员 ${escapeHtml(memberName)} 的配置信息`); return; }
+function showMemberConfigSelect(uid, memberName, type, source = undefined) {
+    const entry = readMemberEntry(uid, source), member = entry?.member;
+    if (!member) { log(`找不到原成员 ${escapeHtml(memberName)} 的配置信息，请重新选择`); return; }
+    const frozen = entry.source, targetName = memberTargetLabel(entry, memberName);
 
     const isOneClick = type === 'oneclick';
     const items = isOneClick ? (member.oneClickConfigs || []) : (member.configGroups || []);
@@ -925,7 +1258,7 @@ function showMemberConfigSelect(uid, memberName, type) {
     overlay.innerHTML = `
         <div class="modal">
             <h3>选择${label}</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择对「${escapeHtml(memberName)}」下发的${label}</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择对「${escapeHtml(targetName)}」下发的${label}</p>
             <div class="list-items">
                 ${items.map((item, i) => `<div class="list-item" data-index="${i}" data-value="${escapeHtml(item)}">${escapeHtml(item)}</div>`).join('')}
             </div>
@@ -947,22 +1280,20 @@ function showMemberConfigSelect(uid, memberName, type) {
     });
     overlay.querySelector('#mcfgOk').addEventListener('click', () => {
         if (selected) {
-            const tasks = isOneClick
-                ? (member.oneClickTasks || {})[selected]
-                : (member.configGroupTasks || {})[selected];
-            const tasksWs = isOneClick
-                ? (member.oneClickTasksWithStatus || {})[selected]
-                : (member.configGroupTasksWithStatus || {})[selected];
             overlay.remove();
-            showTaskListSelect(uid, memberName, selected, isOneClick, tasks || null, null, tasksWs || null);
+            showMemberConfirmModal(uid, memberName, selected, isOneClick, frozen);
         }
     });
     overlay.querySelector('#mcfgCancel').addEventListener('click', () => overlay.remove());
 }
 
 // ---------- 弹窗：快捷键选择 ----------
-function showHotkeySelect(uid, memberName, host = document.body, onError = null) {
-    const member = players.find(p => p.playerUid === uid);
+function showHotkeySelect(uid, memberName, host = document.body, onError = null, source = undefined) {
+    const scoped = !!globalThis.window?.webRooms || source !== undefined;
+    const entry = scoped ? readMemberEntry(uid, source) : null;
+    if (scoped && !entry) { const message = '原成员连接或实例已变化，请重新选择快捷键目标'; log(message); if (typeof onError === 'function') onError(message); return; }
+    const member = scoped ? entry?.member : players.find(p => p.playerUid === uid);
+    const frozen = entry?.source || null, targetName = entry ? memberTargetLabel(entry, memberName) : memberName;
     const hotkeys = member ? member.hotkeys || [] : [];
     if (!hotkeys || hotkeys.length === 0) {
         log(`${escapeHtml(memberName)} 没有可用的快捷键`);
@@ -974,12 +1305,12 @@ function showHotkeySelect(uid, memberName, host = document.body, onError = null)
     overlay.innerHTML = `
         <div class="modal">
             <h3>选择快捷键</h3>
-            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择要对「${escapeHtml(memberName)}」执行的快捷键</p>
+            <p style="font-size:13px;color:#6E6E73;margin-bottom:12px;">选择要对「${escapeHtml(targetName)}」执行的快捷键</p>
             <div class="list-items">
                 ${hotkeys.map((hk, i) => {
                     const funcName = hk.functionName || '';
                     const hotkeyText = hk.hotkeyText || '';
-                    return `<div class="list-item" data-index="${i}" data-config-name="${hk.configName || ''}">
+                    return `<div class="list-item" data-index="${i}" data-config-name="${escapeHtml(hk.configName || '')}">
                         ${escapeHtml(funcName)} <span style="font-size:11px;color:#6E6E73;">(${escapeHtml(hotkeyText)})</span>
                     </div>`;
                 }).join('')}
@@ -1010,7 +1341,11 @@ function showHotkeySelect(uid, memberName, host = document.body, onError = null)
         if (selected) {
             const cmd = makeCmd('hotkey_execute', { hotkeyConfigName: selected });
             cmd.target = [uid];
-            try { await sendTrackedCommand(cmd); } catch (err) {
+            try {
+                if (frozen && !(requireMemberTarget(uid, frozen).member.hotkeys || []).some(h => h.configName === selected))
+                    throw new Error('该成员快捷键已变化，请重新选择');
+                await sendTrackedCommand(cmd, null, frozen);
+            } catch (err) {
                 const message='快捷键未完成: ' + err.message;log(message);
                 if(typeof onError==='function')onError(message);
             }
@@ -1021,11 +1356,27 @@ function showHotkeySelect(uid, memberName, host = document.body, onError = null)
 }
 
 // ---------- 弹窗：任务列表选择（"从此处开始执行" + 启用状态编辑） ----------
-function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targetList, tasksWithStatus) {
+function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targetList, tasksWithStatus,
+    source = undefined, frozenTargets = null, mainScope = captureMainMemberScope()) {
     const label = isOneClick ? '一条龙' : '配置组';
-    // 下发目标：默认单成员；targetList 传入时用自定义目标（如一键命令对全员 ['*']）
-    const targets = resolveConfigTargets(targetList || [uid], players);
-    if (targets.length === 0) { log('没有在线成员可下发任务'); return; }
+    // 旧网页快捷绑定只使用主房选中的成员；普通单卡固定其所属房间和实例。
+    const bulk = !!targetList || uid === '*';
+    if (bulk && source) { log('不能将单卡来源用于批量任务，本次未发送'); return; }
+    const entry = bulk ? null : readMemberEntry(uid, source);
+    if (!bulk && !entry) { log('原成员来源已变化，请重新选择'); return; }
+    const targets = resolveConfigTargets(targetList || [uid], entry?.context.players || players);
+    let sources;
+    try {
+        sources = frozenTargets || freezeMemberTargets(targets, bulk ? undefined : entry.source);
+        if (bulk) requireMainMemberTargets(mainScope, targets, sources);
+        else {
+            if (memberSourceKey(uid, sources.get(uid)) !== memberSourceKey(uid, entry.source))
+                throw new Error('任务启动须保留原单卡来源');
+            requireFrozenMemberTargets(targets, sources);
+        }
+    } catch (err) { log('未打开任务：' + err.message); return; }
+    const targetName = entry ? memberTargetLabel(entry, memberName) : memberName;
+    const showRoom = entry?.source && (!entry.context.isMain || webMemberRooms()?.getView().mode === 'all');
     // 构建任务选项列表：第一项"从头开始"，后面是真实任务名
     const options = [{ index: 0, text: '从头开始', sub: '第一个任务', isTask: false }];
     if (tasks && Array.isArray(tasks)) {
@@ -1057,6 +1408,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
     overlay.innerHTML = `
         <div class="modal">
             <h3>从此处开始执行</h3>
+            ${showRoom ? `<p class="note">目标：${escapeHtml(targetName)}</p>` : ''}
             <p style="font-size:13px;color:#1D1D1F;margin-bottom:4px;font-weight:600;">「${escapeHtml(configName)}」${tasks ? '共 ' + tasks.length + ' 个任务' : ''}</p>
             <p style="font-size:12px;color:#6E6E73;margin-bottom:10px;">选择从哪个任务开始（勾选切换启用状态）</p>
             <div class="list-items" style="max-height:300px;overflow-y:auto;">
@@ -1099,11 +1451,27 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
     listItems[0].classList.add('selected');
 
     function validateTargets() {
-        requireOnlineTargets(targets);
-        requireNoPendingMemberWrite(targets, commandName);
+        if (bulk) requireMainMemberTargets(mainScope, targets, sources);
+        else requireFrozenMemberTargets(targets, sources);
+        requireNoPendingMemberWrite(targets, commandName, sources);
         for (const pending of pendingConfigApplied.values()) {
-            if (targets.includes(pending.uid))
+            if (targets.some(uid => memberSourceKey(uid, sources.get(uid)) === memberSourceKey(pending.uid, pending.source)))
                 throw new Error('有成员仍在等待上次的配置应用回执，本次未发送');
+        }
+        if (entry?.source) {
+            const current = requireMemberTarget(uid, entry.source).member;
+            const names = isOneClick ? current.oneClickConfigs : current.configGroups;
+            if (Array.isArray(names) && !names.includes(configName))
+                throw new Error('原成员的任务目录已变化，请重新选择任务');
+            const currentTasks = (isOneClick ? current.oneClickTasks : current.configGroupTasks)?.[configName];
+            if (Array.isArray(tasks) && (!Array.isArray(currentTasks) || JSON.stringify(tasks) !== JSON.stringify(currentTasks)))
+                throw new Error('原成员的任务列表已变化，请重新选择起点');
+            if (isOneClick && Array.isArray(tasksWithStatus)) {
+                const currentStatus = current.oneClickTasksWithStatus?.[configName];
+                const taskIds = list => list.map(t => t?.taskId || '');
+                if (!Array.isArray(currentStatus) || JSON.stringify(taskIds(tasksWithStatus)) !== JSON.stringify(taskIds(currentStatus)))
+                    throw new Error('原成员的一条龙任务标识已变化，请重新选择起点');
+            }
         }
     }
     function setResult(message, error = false) {
@@ -1132,6 +1500,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
             const appliedByUid = new Map();
             for (const uid of targets) {
                 for (const [taskIdx, en] of changes) {
+                    validateTargets();
                     const previous = appliedByUid.get(uid);
                     // R3 原生身份：一条龙按 GUID taskId 寻址；配置组保持数字 taskIndex
                     const changeCmd = makeCmd('set_task_enabled', {
@@ -1141,7 +1510,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                         bgiEpoch: previous ? { processId: previous.targetProcessId, startTicksUtc: previous.targetStartTicksUtc } : undefined
                     });
                     changeCmd.target = [uid];
-                    appliedByUid.set(uid, await sendAndWaitConfigApplied(changeCmd, uid));
+                    appliedByUid.set(uid, await sendAndWaitConfigApplied(changeCmd, uid, sources.get(uid)));
                     if (!overlay.isConnected) return;
                 }
             }
@@ -1161,7 +1530,7 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
                     bgiEpoch: applied ? { processId: applied.targetProcessId, startTicksUtc: applied.targetStartTicksUtc } : undefined
                 });
                 cmd.target = [uid];
-                void sendTrackedCommand(cmd);
+                void sendTrackedCommand(cmd, null, sources.get(uid));
             }
             overlay.remove();
         } catch (error) {
@@ -1180,6 +1549,9 @@ function showTaskListSelect(uid, memberName, configName, isOneClick, tasks, targ
 
 // ---------- 设置弹窗 ----------
 function openSettings() {
+    // 正式页面在显示入口前已初始化房间簿；不再另行编辑迁移前的登录凭据。
+    const rooms = webMemberRooms();
+    if (typeof rooms?.openManager === 'function') return rooms.openManager();
     const creds = loadCreds() || {};
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';

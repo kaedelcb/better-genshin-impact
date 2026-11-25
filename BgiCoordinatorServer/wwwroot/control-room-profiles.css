@@ -1,0 +1,112 @@
+/* Browser room book. All new selectors are scoped; the existing member card and product nav remain unchanged. */
+.wr-nav .wr-selector{margin-inline-start:auto;align-self:flex-start;flex:0 1 184px;min-width:0;max-width:210px}
+.wr-nav .wr-trigger{display:flex;align-items:center;justify-content:space-between;gap:9px;width:100%;min-height:44px;padding:6px 11px;color:var(--gold);border:1px solid var(--line);border-radius:9px;background:var(--panel);text-align:left}
+.wr-trigger-label{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wr-chevron{width:8px;height:8px;flex-shrink:0;transform:rotate(45deg);border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;margin:0 3px 4px 0}
+.wr-nav .wr-trigger:hover,.wr-nav .wr-trigger[aria-expanded="true"]{border-color:var(--gold);background:var(--raised)}
+.wr-view-notice{margin:0 0 12px;padding:10px 14px;overflow-wrap:anywhere;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:10px;font-size:13px;line-height:1.65}
+/* Parent can add room labels without changing card structure or fixed subgrid row count. */
+.wr-member-source{display:block;max-width:100%;overflow-wrap:anywhere;color:var(--gold);font-size:12px;line-height:1.35;margin-top:3px}
+
+.wr-dialog{--wr-edge:var(--line,#3d3e54);margin:auto;padding:0;width:min(620px,calc(100% - 32px));max-width:none;max-height:90vh;max-height:90dvh;overflow:hidden;color:var(--text,#f4f2fa);background:var(--panel,#202137);border:1px solid #60566c;border-radius:16px;box-shadow:0 16px 60px #0007;font:inherit;overflow-wrap:anywhere}
+.wr-dialog[open]{display:flex;flex-direction:column}
+.wr-dialog::backdrop{background:#090b18bf}
+.wr-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;padding:15px 18px;border-bottom:1px solid var(--wr-edge)}
+.wr-dialog-head>div{min-width:0}
+.wr-dialog-head h3{font-size:18px;font-weight:600;color:var(--gold);line-height:1.4;margin:0 0 2px}
+.wr-dialog-head .wr-link{flex-shrink:0}
+.wr-muted{color:var(--muted);line-height:1.6;font-size:13px;margin:0}
+.wr-dialog .wr-link{color:var(--gold);padding:7px 10px;text-align:left;min-height:44px;border-radius:7px}
+.wr-dialog .wr-action{border:1px solid var(--wr-edge);border-radius:8px;background:var(--raised);padding:8px 13px;min-height:44px;font-weight:500;line-height:1.4}
+.wr-dialog .wr-action:hover:not(:disabled),.wr-dialog .wr-menu-row:hover:not(:disabled),.wr-dialog .wr-book-row:hover:not(:disabled){border-color:var(--gold)}
+.wr-dialog .wr-link:hover:not(:disabled){background:var(--raised)}
+.wr-dialog .wr-action.wr-primary{background:var(--gold);color:#29241a;border-color:var(--gold);font-weight:600}
+.wr-dialog .wr-danger,.wr-dialog .wr-error{color:var(--red)}
+.wr-dialog button:focus-visible,.wr-dialog input:focus-visible,.wr-dialog textarea:focus-visible,.wr-dialog select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.wr-dialog-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--wr-edge);flex-shrink:0;background:var(--panel)}
+.wr-dialog .wr-room-status{display:inline-block;color:var(--muted);font-size:13px;line-height:1.45}
+.wr-dialog .wr-room-status[data-state="ready"]{color:var(--green)}
+.wr-dialog .wr-room-status:is([data-state="failed"],[data-state="unauthenticated"]){color:var(--red)}
+.wr-dialog .wr-room-status:is([data-state="connecting"],[data-state="reconnecting"],[data-state="unconfirmed"]){color:var(--gold)}
+.wr-dialog .wr-selected-label{color:var(--gold);font-size:13px;white-space:nowrap;align-self:center}
+
+/* Desktop anchored menu; native dialog gives modal keyboard focus and Escape handling. */
+.wr-menu{width:min(460px,calc(100% - 24px));position:fixed;inset:var(--wr-menu-top,12vh) var(--wr-menu-right,12px) auto auto;margin:0;max-height:calc(100vh - var(--wr-menu-top,12vh) - 10px);max-height:min(88dvh,calc(100dvh - var(--wr-menu-top,12vh) - 10px));border-radius:13px}
+.wr-menu::backdrop{background:#090b1840}
+.wr-menu-content{min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px;display:grid;gap:6px}
+.wr-menu-row{width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid transparent;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:left;background:#191a2e}
+.wr-menu-row[aria-pressed="true"],.wr-book-row[aria-pressed="true"]{background:#363145;border-color:#8f784a}
+.wr-menu-row>span:first-child{min-width:0;flex:1}
+.wr-menu-row strong,.wr-book-row strong{display:block;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.wr-menu-row small,.wr-book-row small{display:block;color:var(--muted);font-size:13px;overflow-wrap:anywhere;font-weight:400;line-height:1.5;margin-top:3px}
+.wr-menu-room{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(72px,auto);align-items:center;gap:6px;background:#191a2e;border-radius:8px}
+.wr-menu-room .wr-room-status{padding:0 9px 0 2px;max-width:110px}
+.wr-menu-actions{justify-content:stretch}
+.wr-menu-actions .wr-action{flex:1 1 auto;padding-inline:8px}
+.wr-menu-copy-result:empty{display:none}
+
+/* Room manager: list + editor on wide screens, single-step list/editor on narrow screens. */
+.wr-manager{width:min(860px,calc(100% - 32px))}
+.wr-manager-tabs{display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--wr-edge);padding:0 18px;flex-shrink:0}
+.wr-current-tab{color:var(--gold);font-weight:600;border-bottom:2px solid var(--gold);padding:11px 0;margin-bottom:-1px}
+.wr-manager-body{display:grid;grid-template-columns:minmax(200px,.8fr) minmax(0,1.55fr);min-height:0;overflow:hidden}
+.wr-book-list{padding:14px;border-right:1px solid var(--wr-edge);min-height:0;overflow:auto;overscroll-behavior:contain}
+.wr-list-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.wr-list-header strong{color:var(--muted);font-size:13px;font-weight:500}
+.wr-book-row{display:block;text-align:left;width:100%;min-width:0;min-height:56px;border:1px solid var(--wr-edge);border-radius:9px;background:#191a2e;padding:10px 12px;margin:0 0 8px}
+.wr-book-row>span:not(.wr-room-status){display:block;margin:3px 0;color:var(--muted);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+.wr-book-editor{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}
+.wr-profile-form,.wr-switch-form{display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.wr-editor-head{padding:12px 16px 0;flex-shrink:0;display:flex;align-items:center;gap:10px}
+.wr-editor-head .wr-back{display:none}
+.wr-editor-head h3{color:var(--gold);font-weight:600}
+.wr-fields{min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:12px 16px;display:grid;gap:12px;align-content:start}
+.wr-fields>label{display:grid;gap:5px;min-width:0;font-size:14px;color:var(--muted)}
+.wr-fields input:not([type=checkbox]),.wr-fields select,.wr-fields textarea{font:inherit;font-size:16px;width:100%;min-height:44px;min-width:0;max-width:100%;border:1px solid #56556c;border-radius:8px;background:#181a2d;color:var(--text);padding:9px 11px}
+.wr-fields input[readonly],.wr-fields input:disabled{opacity:.7}
+.wr-fields textarea{min-height:64px;resize:vertical;max-height:160px}
+.wr-fields .wr-check{display:flex;align-items:center;gap:9px;min-height:44px;color:var(--text);font-size:14px}
+.wr-check input{margin:0}
+.wr-editor-actions{display:flex;flex-shrink:0;justify-content:flex-end;flex-wrap:wrap;gap:8px;border-top:1px solid var(--wr-edge);background:var(--panel);padding:10px 16px}
+.wr-book-result{flex-shrink:0;min-height:36px;padding:8px 16px;border-top:1px solid var(--wr-edge);font-size:13px;color:var(--green);max-height:25dvh;overflow:auto;line-height:1.5}
+.wr-book-result:empty{min-height:0;padding:0;border-top:0}
+.wr-switch{width:min(480px,calc(100% - 24px))}
+.wr-switch-form .wr-fields{padding:16px 18px}
+.wr-switch [data-wr-switch-target]{font-size:14px;color:var(--gold);line-height:1.5}
+.wr-switch [data-wr-switch-status]:empty{display:none}
+
+@media(max-width:860px){
+    .wr-nav{flex-wrap:wrap;column-gap:18px;row-gap:3px;align-items:flex-start}
+    .wr-nav .wr-selector{flex-basis:170px}
+    .wr-menu{right:12px}
+}
+@media(max-width:700px){
+    .wr-nav{column-gap:14px;row-gap:4px}
+    .wr-nav .wr-selector{flex:1 0 100%;max-width:none;display:flex;justify-content:flex-end;margin:0 0 8px}
+    .wr-nav .wr-trigger{width:min(100%,210px);min-height:44px}
+    .wr-dialog{position:fixed;inset:auto 8px max(8px,env(safe-area-inset-bottom)) 8px;margin:0;width:auto;max-height:92vh;max-height:92dvh;border-radius:15px 15px 12px 12px}
+    .wr-dialog::backdrop{background:#090b18bf}
+    .wr-dialog-head{padding:11px 14px}
+    .wr-manager-tabs{gap:9px;padding-inline:13px}
+    .wr-menu-content{padding:8px 10px}
+    .wr-menu-row{padding:10px}
+    .wr-menu-room{grid-template-columns:minmax(0,1fr) minmax(65px,auto)}
+    .wr-dialog-actions{padding:10px 12px}
+    .wr-manager-body{display:flex;flex-direction:column}
+    .wr-book-list{border-right:none;padding:10px 12px}
+    .wr-book-editor{display:none}
+    .wr-manager.wr-editing .wr-book-list{display:none}
+    .wr-manager.wr-editing .wr-book-editor{display:flex}
+    .wr-editor-head{padding:6px 12px 0}
+    .wr-editor-head .wr-back{display:inline-block;flex-shrink:0;padding-inline:0}
+    .wr-fields{padding:10px 12px;gap:10px}
+    .wr-editor-actions{padding:10px 12px}
+    .wr-editor-actions .wr-action{flex:1 1 42%}
+    .wr-switch-form .wr-fields{padding:12px}
+    .wr-switch .wr-primary{width:100%}
+}
+@media(max-width:380px){
+    .wr-nav{column-gap:10px}
+    .wr-menu-actions .wr-action{flex:1 1 40%}
+    .wr-manager-tabs .wr-link{padding-inline:4px}
+}

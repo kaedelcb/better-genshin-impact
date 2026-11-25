@@ -43,7 +43,8 @@ public partial class MainViewModel
         return await HandleRemoteCenterRequestAsync(command);
     }
 
-    private async Task<RemoteCommand?> HandleRemoteCenterRequestAsync(RemoteCommand command, bool allowLocalObserver = false)
+    private async Task<RemoteCommand?> HandleRemoteCenterRequestAsync(RemoteCommand command, bool allowLocalObserver = false,
+        bool fromOwnerWeb = false, WebRoomRequestContext? ownerRoomContext = null)
     {
         if (_config is null || (!IsExecutorMode && !allowLocalObserver) || command.Cmd != RemoteCenterProtocol.RequestCommand
             || command.RoomCode != RoomCode || command.Target is not { Count: 1 }
@@ -72,6 +73,23 @@ public partial class MainViewModel
                 throw new InvalidOperationException("请求的执行端实例不匹配");
             if (request.ExpectedMachineId is { } machine && machine != HostMachineIdentity.Current)
                 throw new InvalidOperationException("请求的执行端机器已变化，请重新连接");
+            var referenceId = IsRoomWebReceiptReference(request.Operation) && request.PayloadJson is not null
+                ? Decode<string>(request.PayloadJson) : null;
+            var roomWeb = fromOwnerWeb && IsRoomWebRequest(request.Operation, referenceId);
+            // The PC protocol keeps its own request/receipt scope. Same UID alone is not Web owner proof.
+            if (!fromOwnerWeb && (IsRoomProfilesOrSwitchOperation(request.Operation) || IsWebRoomReceipt(command.CommandId)
+                || IsWebRoomReceipt(referenceId)))
+                throw new InvalidOperationException("网页房间操作或回执需要本人网页授权");
+            if (fromOwnerWeb)
+            {
+                if (ValidateRoomWebBoundary(_config, request.Operation, referenceId,
+                        request.ExpectedMachineId, ownerRoomContext?.Prefixes) is { } error)
+                    throw new InvalidOperationException(error);
+                var prefix = ownerRoomContext?.Prefixes.ForOperation(request.Operation);
+                if (roomWeb && (ownerRoomContext?.StillAuthorized() != true
+                    || prefix is not null && !WebRoomPrefixes.Owns(command.CommandId, prefix)))
+                    throw new InvalidOperationException("原网页授权或当前执行端身份已变化");
+            }
             var fingerprint = RemoteCenterProtocol.RequestFingerprint(command, request);
             var claim = new CenterRequestClaim(fingerprint,
                 new TaskCompletionSource<RemoteCenterReply>(TaskCreationOptions.RunContinuationsAsynchronously));
@@ -91,8 +109,8 @@ public partial class MainViewModel
                         ? (_centerOperations.TryGetValue(command.CommandId, out var inFlight) ? inFlight : previous)
                         : UsesImmediateCenterReceipt(request.Operation)
                             ? await ExecuteImmediateCenterMutationAsync(command.CommandId, fingerprint,
-                                () => ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint))
-                            : await ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint);
+                                () => ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint, roomWeb ? ownerRoomContext : null))
+                            : await ExecuteRemoteCenterOperationAsync(command.CommandId, request, fingerprint, roomWeb ? ownerRoomContext : null);
                 }
                 catch (RemoteCenterOperationConflictException ex)
                 { reply = RemoteCenterReply.Unknown(command.CommandId, ex.Message); }
@@ -122,21 +140,22 @@ public partial class MainViewModel
     private static bool UsesImmediateCenterReceipt(string operation) => operation is
         "startup.save" or "startup.schemes.save" or "startup.autoLaunch.save" or "registers.configure" or "registers.reset" or "registers.set"
         or "task.resource.layout.save" or "task.resource.editor.open" or "task.bgiPath.save"
-        or "task.flow.save" or "task.flow.delete" or "task.flow.restore" or "room.orchestration.save";
+        or "task.flow.save" or "task.flow.delete" or "task.flow.restore" or "room.orchestration.save"
+        or "room.profiles.save" or "room.profiles.create" or "room.profiles.remove";
 
     private static bool UsesDurableCenterReceipt(RemoteCenterRequest request)
         => UsesImmediateCenterReceipt(request.Operation) || request.Operation is
             "startup.run" or "task.catalog.connect" or "task.flow.import" or "task.schedule.import"
             or "task.migration.prepare" or "task.migration.activate" or "task.migration.rollback"
             or "task.migration.rehearsal" or "task.run.start" or "task.run.resume"
-            or "task.flow.resetExecutionState"
+            or "task.flow.resetExecutionState" or "room.switch.start" or "room.switch.recheck"
         || request.Operation == "task.run.action"
             && Decode<RunActionArgs>(request.PayloadJson).Action != nameof(WorkflowRunAction.Stop)
         || request.Operation is ("room.orchestration.names" or "room.orchestration.catalog")
             && Decode<RemoteOrchestrationCatalogRequest>(request.PayloadJson).ExplicitRefresh;
 
     private async Task<RemoteCenterReply> ExecuteRemoteCenterOperationAsync(string requestId,
-        RemoteCenterRequest request, string fingerprint)
+        RemoteCenterRequest request, string fingerprint, WebRoomRequestContext? ownerRoomContext = null)
     {
         var isStop = request.Operation is "startup.cancel" or "startup.trigger.cancel" or "task.trigger.cancel"
             || request.Operation == "task.run.action"
@@ -144,12 +163,17 @@ public partial class MainViewModel
         if (!TryEnterConfigTransferOperation(isStop ? "stop" : request.Operation, out var transferOperation))
             return RemoteCenterReply.Rejected(ConfigTransferBlockedMessage);
         using var configTransferOperation = transferOperation;
+        if (IsRoomProfilesOrSwitchOperation(request.Operation))
+            return ownerRoomContext is null ? RemoteCenterReply.Rejected("需要本人网页授权")
+                : await ExecuteRoomProfilesWebOperationAsync(requestId, fingerprint, request, ownerRoomContext);
         if (request.Operation.StartsWith("room.orchestration.", StringComparison.Ordinal))
         {
+            if (ownerRoomContext is not null && !ownerRoomContext.StillAuthorized())
+                return RemoteCenterReply.Rejected("原网页授权或执行端已变化，未执行");
             if (request.Operation is ("room.orchestration.catalog" or "room.orchestration.names")
                 && Decode<RemoteOrchestrationCatalogRequest>(request.PayloadJson).ExplicitRefresh)
-                return BeginRoomOrchestrationCatalogRefresh(requestId, fingerprint, request);
-            return await ExecuteRoomOrchestrationRemoteOperationAsync(request);
+                return BeginRoomOrchestrationCatalogRefresh(requestId, fingerprint, request, ownerRoomContext?.StillAuthorized);
+            return await ExecuteRoomOrchestrationRemoteOperationAsync(request, stillAuthorized: ownerRoomContext?.StillAuthorized);
         }
         if (request.Operation == "operation.get")
         {
@@ -648,6 +672,9 @@ public partial class MainViewModel
         else _centerOperations[id] = reply;
         return reply;
     }
+
+    private RemoteCenterReply? ReadCenterOperation(string operationId)
+        => _centerOperations.TryGetValue(operationId, out var state) ? state : _centerOperationStore.Get(operationId);
 
     private static T Decode<T>(string? json)
         => string.IsNullOrWhiteSpace(json)

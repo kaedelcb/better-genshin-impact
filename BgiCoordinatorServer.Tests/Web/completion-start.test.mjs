@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 
 const read = name => readFileSync(new URL('../../BgiCoordinatorServer/wwwroot/' + name, import.meta.url), 'utf8');
@@ -34,6 +35,27 @@ function wire(a) {
         completionStartVersion: '1', specifiedStartMode: a.startMode, specifiedStartTaskId: a.startTaskId,
         specifiedStartTaskName: a.startTaskName, specifiedConfigRevision: a.configRevision, specifiedWorkflowId: a.workflowId };
 }
+function emptyAction(policy) {
+    return { policy, taskType: 'group', taskName: '', priority: 0, startMode: 'default', startTaskId: '',
+        startTaskName: '', configRevision: '', workflowId: '' };
+}
+const emptyRoomFields = { roomSwitchSourceProfileId: '', roomSwitchSourceServerUrl: '', roomSwitchSourceRoomCode: '',
+    roomSwitchTargetProfileId: '', roomSwitchTargetServerUrl: '', roomSwitchTargetRoomCode: '', roomSwitchTargetName: '', roomSwitchRunAfter: 'false' };
+function switchAction(runAfterSwitch = true, changes = {}) {
+    return { ...(runAfterSwitch ? action('workflow', 'node') : emptyAction('switchRoom')), policy: 'switchRoom',
+        targetName: '乙房', targetRoomCode: 'ROOM-B', runAfterSwitch, actionRevision: 'v1:' + 'A'.repeat(64), ...changes };
+}
+function switchWire(a = switchAction(), changes = {}) {
+    return { ...wire(a), roomSwitchSourceProfileId: 'source-profile', roomSwitchSourceServerUrl: 'https://source.invalid', roomSwitchSourceRoomCode: 'ROOM-A',
+        roomSwitchTargetProfileId: 'target-profile', roomSwitchTargetServerUrl: 'https://target.invalid', roomSwitchTargetRoomCode: a.targetRoomCode,
+        roomSwitchTargetName: a.targetName, roomSwitchRunAfter: String(a.runAfterSwitch),
+        roomSwitchDescription: `切换助手房间「${a.targetName} · ${a.targetRoomCode}」${a.runAfterSwitch ? '，切换成功后执行计划表「晚间计划」' : '，切换成功后待命'}`,
+        ...changes };
+}
+// Produced by the desktop's sorted CompletionPolicyFields pairs / default System.Text.Json / SHA256.
+const switchNodeRevision = '104F175D5323845192D42FF2FDFB7FE8B9763094BD03904DC55CCB95A05A7B3D';
+const specialTargetName = '乙房 "\'&+<>`\\😃';
+const switchStandbyRevision = '22AFF598BF202517231CE6D05278D5EB2E3ADB5BDDD3C770C3347705959244C9';
 function harness({ initial = action(), initialData, operation, catalogTransform } = {}) {
     const elements = new Map(), calls = [], remote = [], logs = [], timers = new Map(), delays = [];
     const selects = new Set(['completionPolicy', 'completionTaskType', 'completionTask', 'completionStartMode', 'completionStartTask']);
@@ -78,8 +100,12 @@ function harness({ initial = action(), initialData, operation, catalogTransform 
     evaluate('players = __members; roomReady = true; activeMemberUid = "u0"; detailSection = "settings"; log = message => __logs.push(message); globalThis.__trackedOperation = sendMemberOperation; sendRemoteCommand = __sendRemote;');
     const fallback = async (uid, name, params) => {
         if (name === 'task_policy.push') {
-            stored = copy(params);
-            return { status: 'success', message: '已保存', data: { ...copy(params), ok: 'true' } };
+            const hasRoomFields = Object.hasOwn(stored, 'roomSwitchRunAfter');
+            const replacingSwitch = stored.policy === 'switchRoom';
+            stored = { ...copy(params), ...(hasRoomFields ? emptyRoomFields : {}) };
+            delete stored.expectedCompletionRevision; // the executor confirms the policy, not the precondition
+            if (replacingSwitch && params.policy !== 'runSpecified') Object.assign(stored, wire(emptyAction(params.policy)));
+            return { status: 'success', message: '已保存', data: { ...copy(stored), ok: 'true' } };
         }
         const type = params.catalogType ?? stored.specifiedType, nameOfTarget = params.catalogName ?? stored.specifiedName;
         const id = params.catalogWorkflowId ?? stored.specifiedWorkflowId ?? '';
@@ -507,4 +533,160 @@ test('every explicit start identity field participates in the confirmation signa
         const signature = h.evaluate('startSettingsSignature({ onlineHoeingGroupNames: [], hoeingCompletionAction: __action }, "")', { __action: changed });
         assert.notEqual(signature, before, field);
     }
+});
+
+test('the pure browser edit revision matches desktop vectors with Unicode and escaped punctuation without crypto.subtle', () => {
+    const h = harness();
+    const digest = data => h.evaluate('completionEditRevision(__data)', { __data: data });
+    assert.equal(digest(switchWire()), switchNodeRevision);
+    const standby = switchWire(switchAction(false, { targetName: specialTargetName }));
+    assert.equal(digest(standby), switchStandbyRevision);
+    assert.equal(digest({ ...standby, catalog: 'other catalog', roomSwitchDescription: 'new display text', ok: 'true' }), switchStandbyRevision);
+    assert.notEqual(digest({ ...standby, roomSwitchTargetProfileId: 'different-profile' }), switchStandbyRevision);
+    for (const length of [0, 1, 55, 56, 63, 64, 65, 1024]) {
+        const text = 'X'.repeat(length);
+        assert.equal(h.evaluate('sha256CompletionEdit(__text)', { __text: text }), createHash('sha256').update(text).digest('hex').toUpperCase());
+    }
+});
+
+test('existing switch is read-only, keeps the reported confirmation summary and cannot be saved as a route', async () => {
+    const initial = switchAction();
+    const h = harness({ initial, initialData: switchWire(initial) }); await h.mount();
+    assert.equal(h.element('completionPolicy').value, 'switchRoom');
+    assert.deepEqual(h.element('completionPolicy').options.filter(option => !option.disabled).map(option => option.value), ['resume', 'stop', 'runSpecified']);
+    assert.equal(h.element('specifiedTaskField').hidden, true);
+    assert.equal(h.element('priorityField').hidden, true);
+    assert.match(h.element('completionPreview').textContent, /执行端当前已保存：切换助手房间「乙房 · ROOM-B」/);
+    assert.match(h.element('completionPreview').textContent, /须在执行端本机编辑/);
+    assert.equal(h.element('savePolicy').disabled, true);
+    await h.click('savePolicy'); await h.click('reloadPolicy'); await h.click('savePolicy');
+    assert.equal(h.pushes().length, 0);
+    assert.deepEqual(copy(h.member.hoeingCompletionAction), initial);
+    assert.throws(() => h.evaluate('completionPolicyParams(__action, "1")', { __action: initial }), /执行端本机编辑/);
+    assert.ok(h.calls.every(call => call.name === 'task_policy.pull' && call.uid === 'u0'));
+});
+
+for (const policy of ['resume', 'stop', 'runSpecified']) {
+    test('explicit switch replacement with ' + policy + ' sends the actual edit revision and no route fields', async () => {
+        const initial = switchAction();
+        const h = harness({ initial, initialData: switchWire(initial) }); await h.mount();
+        await h.change('completionPolicy', policy);
+        assert.match(h.element('completionPreview').textContent, /将替换此设置/);
+        let expected = emptyAction(policy);
+        if (policy === 'runSpecified') {
+            // Do not silently retain the task that was configured to run in the other room.
+            assert.equal(h.element('completionTask').value, '');
+            assert.equal(h.element('completionStartTask').value, '');
+            assert.equal((await h.click('savePolicy')).status, 'failed'); assert.equal(h.pushes().length, 0);
+            await h.change('completionTaskType', 'onedragon');
+            await h.change('completionTask', key('onedragon', names.onedragon));
+            await h.change('completionStartMode', 'node');
+            await h.change('completionStartTask', target('onedragon').nodes[1].taskId);
+            h.element('completionPriority').value = '7'; expected = action('onedragon', 'node');
+        }
+        const saved = await h.click('savePolicy');
+        assert.equal(saved.status, 'success');
+        assert.deepEqual(h.pushes().map(call => call.params), [{ ...wire(expected), expectedCompletionRevision: switchNodeRevision }]);
+        assert.ok(h.calls.every(call => call.uid === 'u0'));
+        assert.equal(h.calls.at(-1).name, 'task_policy.pull');
+        assert.deepEqual(copy(h.member.hoeingCompletionAction), expected);
+        assert.ok(h.element('completionPolicy').options.every(option => option.value !== 'switchRoom'));
+        assert.match(h.element('policyResult').textContent, /已保存并回读确认/);
+    });
+}
+
+test('a standby switch can be explicitly replaced even when its stored destination is invalid', async () => {
+    const initial = switchAction(false, { targetName: '', targetRoomCode: '', actionRevision: '' });
+    const data = switchWire(initial, { roomSwitchTargetProfileId: '', roomSwitchTargetServerUrl: '', roomSwitchDescription: '切换助手房间（配置无效，请核对）' });
+    const h = harness({ initial, initialData: data }); await h.mount();
+    const expected = h.evaluate('completionEditRevision(__data)', { __data: data });
+    assert.match(h.element('completionPreview').textContent, /配置无效/);
+    assert.equal(h.element('savePolicy').disabled, true);
+    await h.change('completionPolicy', 'stop');
+    assert.equal((await h.click('savePolicy')).status, 'success');
+    assert.deepEqual(h.pushes().map(call => call.params), [{ ...wire(emptyAction('stop')), expectedCompletionRevision: expected }]);
+});
+
+test('a partial switch pull cannot authorize saving a different policy', async () => {
+    const initial = switchAction(), data = switchWire(initial); delete data.roomSwitchSourceProfileId;
+    const h = harness({ initial, initialData: data }); await h.mount();
+    assert.equal(h.element('completionPolicy').disabled, true);
+    assert.equal(h.element('savePolicy').disabled, true);
+    assert.match(h.element('policyResult').textContent, /字段不完整/);
+    assert.match(h.element('completionPreview').textContent, /上次上报（尚未核对）/);
+    assert.deepEqual(copy(h.member.hoeingCompletionAction), initial);
+    assert.equal(h.pushes().length, 0);
+});
+
+for (const hiddenField of ['roomSwitchSourceProfileId', 'roomSwitchSourceServerUrl', 'roomSwitchTargetProfileId', 'roomSwitchTargetServerUrl']) {
+    test('a concurrent change to ' + hiddenField + ' prevents overwriting a different switch', async () => {
+        const initial = switchAction(); let pulls = 0;
+        const h = harness({ initial, initialData: switchWire(initial), operation: async request => {
+            const result = await request.fallback();
+            if (request.name === 'task_policy.pull' && ++pulls > 1) result.data[hiddenField] = 'changed';
+            return result;
+        } }); await h.mount();
+        await h.change('completionPolicy', 'resume');
+        assert.equal((await h.click('savePolicy')).status, 'failed');
+        assert.equal(h.pushes().length, 0);
+        assert.equal(h.element('savePolicy').disabled, true);
+        assert.match(h.element('policyResult').textContent, /其他端改变/);
+        assert.deepEqual(copy(h.member.hoeingCompletionAction), initial);
+    });
+}
+
+for (const modern of [false, true]) {
+    test('an ordinary editor cannot overwrite a switch configured after it was opened; modern=' + modern, async () => {
+        let pulls = 0;
+        const h = harness({ initialData: { ...wire(action()), ...(modern ? emptyRoomFields : {}) }, operation: async request => {
+            const result = await request.fallback();
+            if (request.name === 'task_policy.pull' && ++pulls > 1) Object.assign(result.data, switchWire());
+            return result;
+        } }); await h.mount();
+        await h.change('completionPolicy', 'stop');
+        assert.equal((await h.click('savePolicy')).status, 'failed');
+        assert.equal(h.pushes().length, 0);
+        assert.match(h.element('policyResult').textContent, /其他端改变/);
+    });
+}
+
+test('modern ordinary replacement also carries its edit revision and preserves the old hidden ordinary fields', async () => {
+    const initial = action('group', 'node'), data = { ...wire(initial), ...emptyRoomFields };
+    const h = harness({ initial, initialData: data }); await h.mount();
+    const expected = h.evaluate('completionEditRevision(__data)', { __data: data });
+    await h.change('completionPolicy', 'stop');
+    assert.equal((await h.click('savePolicy')).status, 'success');
+    assert.deepEqual(h.pushes().map(call => call.params), [{ ...wire({ ...initial, policy: 'stop' }), expectedCompletionRevision: expected }]);
+    assert.deepEqual(copy(h.member.hoeingCompletionAction), { ...initial, policy: 'stop' });
+});
+
+test('a switch changing after preflight is left to the desktop revision guard without retry or false mirror update', async () => {
+    const initial = switchAction();
+    const h = harness({ initial, initialData: switchWire(initial), operation: async request => {
+        if (request.name === 'task_policy.push') {
+            assert.equal(request.params.expectedCompletionRevision, switchNodeRevision);
+            return { status: 'failed', message: '完成动作已变化或未经确认，请重新读取后保存。' };
+        }
+        return request.fallback();
+    } }); await h.mount();
+    await h.change('completionPolicy', 'stop');
+    assert.equal((await h.click('savePolicy')).status, 'failed');
+    assert.equal(h.pushes().length, 1);
+    assert.deepEqual(copy(h.member.hoeingCompletionAction), initial);
+    assert.doesNotMatch(h.element('policyResult').textContent, /已保存并回读确认/);
+});
+
+test('a new switch seen in readback after a replacement is unknown, not confirmed or silently cleared', async () => {
+    const initial = switchAction(); let pulls = 0;
+    const h = harness({ initial, initialData: switchWire(initial), operation: async request => {
+        const result = await request.fallback();
+        if (request.name === 'task_policy.pull' && ++pulls === 3) Object.assign(result.data, switchWire(switchAction(false)));
+        return result;
+    } }); await h.mount();
+    await h.change('completionPolicy', 'stop');
+    assert.equal((await h.click('savePolicy')).status, 'unknown');
+    assert.equal(h.pushes().length, 1);
+    assert.deepEqual(copy(h.member.hoeingCompletionAction), initial);
+    assert.equal(h.element('savePolicy').disabled, true);
+    assert.doesNotMatch(h.element('policyResult').textContent, /已保存并回读确认/);
 });

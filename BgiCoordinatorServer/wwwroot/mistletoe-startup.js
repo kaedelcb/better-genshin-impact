@@ -9,7 +9,7 @@ const MT_KINDS = [
     ['setRegister','action','设置寄存器','▦','#E8C96D'], ['startBgi','action','启动 BGI','▶','#48C87E'], ['stopBgi','action','关闭 BGI','■','#EF5350'],
     ['startGame','action','启动游戏','▶','#48C87E'], ['startProgram','action','启动第三方程序','▶','#64B5F6'],
     ['killProgram','action','关闭程序','■','#EF5350'], ['runCmd','action','执行 CMD 命令','›_','#9575CD'],
-    ['wait','action','等待','⧗','#9C97C0'], ['enterTaskCenter','action','进入任务中心执行','➤','#E8C96D'],
+    ['wait','action','等待','⧗','#9C97C0'], ['switchAssistantRoom','action','切换助手房间','▶','#E8C96D'], ['enterTaskCenter','action','进入任务中心执行','➤','#E8C96D'],
     ['timerTrigger','trigger','定时触发器','⏰','#FFC857'], ['watchdog','trigger','电子狗','🐕','#E88A6F'],
     ['logTrigger','trigger','日志触发器','📜','#4FC3F7'], ['jumpTo','action','跳转','↪','#B39DDB'], ['endFlow','action','结束流程','■','#EF5350'],
     ['startGroup','legacy','旧版 · 启动配置组','▶','#90A4AE'], ['startOneClick','legacy','旧版 · 启动一条龙','▶','#90A4AE']
@@ -26,7 +26,7 @@ const MT_WEEK = ['一','二','三','四','五','六','日'];
 const su = { config:null, revision:'', schemes:[], schemesRevision:'', isRunning:false, statusText:'', autoLaunch:null,
     triggers:[], unifiedTriggers:null, triggerFilter:"all", triggersExpanded:false, triggerStale:false, triggerSequence:0, triggerEpoch:"", triggerCapturedAt:0, prompts:[], states:new Map(), selected:null, dirty:false, saving:false, saveError:'', saveTimer:null,
     loaded:false, loading:false, view:{ zoom:1, x:0, y:0, mode:'fit', follow:true }, inspectorOpen:true, mobilePane:'outline',
-    flows:[], schemeSaving:false, addTarget:null };
+    flows:[], roomSwitchChoices:[], schemeSaving:false, addTarget:null };
 
 // ---------- 模型工具 ----------
 function mtNewStep(kind) {
@@ -37,6 +37,7 @@ function mtNewStep(kind) {
         triggerTime:'08:00', repeatDaily:false, watchKind:'bgiTaskRunning', watchIntervalSeconds:30, watchRepeat:true,
         watchConfirmSeconds:1, watchConfirmTimes:1, killBeforeStart:false, statusSource:'currentSession', statusTargetOrder:1,
         statusTargetUser:'', taskName:'', logKeyword:'', taskCenterFlowId:'', taskCenterHandoffMode:'start', continueAfterTaskCenterHandoff:false, jumpTargetId:'' };
+    if (kind === 'switchAssistantRoom') s.roomProfileId = '';
     if (kind === 'setRegister') s.registerWrite = { values:Array(10).fill(null) };
     if (kind === 'judgeRegister') s.registerCondition = { values:Array(10).fill(null), match:'all' };
     if (kind === 'weekday') s.weekdays = [1,2,3,4,5,6,7];
@@ -98,6 +99,7 @@ function mtBaseSummary(s) {
         case 'runCmd': return (s.arguments || '').trim() || '（未填写命令）';
         case 'killProgram': return (s.processName || '').trim() ? `结束进程 ${s.processName}` : '（未填写进程名）';
         case 'wait': return `等待 ${s.waitSeconds} 秒`;
+        case 'switchAssistantRoom': return mtRoomSwitchSummary(s);
         case 'timerTrigger': return `${s.triggerTime} 触发「到点执行」链（${(s.fireSteps || []).length} 个节点${s.repeatDaily ? '，每天重复' : ''}）`;
         case 'watchdog': return !(s.fireSteps || []).length ? `每 ${Math.max(1, s.watchIntervalSeconds)}s 盯「${mtWatchDesc(s)}」，仅显示状态（无触发动作，持续盯梢）`
             : `每 ${Math.max(1, s.watchIntervalSeconds)}s 盯「${mtWatchDesc(s)}」，成立执行 ${s.fireSteps.length} 个节点（${s.watchRepeat ? '触发后继续循环' : '触发后停止'}，复核 ${clamp(s.watchConfirmSeconds,1,60)}s×${clamp(s.watchConfirmTimes,1,10)}）`;
@@ -126,7 +128,43 @@ function mtChainHasEnd(chain) { return !!mtChainTerminal(chain); }
 /** 旧配置里位于链尾节点之后的节点（执行时不会走到）。 */
 function mtAfterTerminal(id) { const hit = mtFind(id); return !!hit && hit.chain.slice(0, hit.index).some(s => mtIsTerminal(s.kind)); }
 function mtCountKind(kind) { let n = 0; mtWalk(su.config.steps, s => { if (s.kind === kind) n++; }); return n; }
+// 房间切换只在普通主链/条件分支提供，目标由本人执行端真实档案给出。
+function mtRoomSwitchSupported() { return !!mt.identity?.isExecutor && !!mt.identity?.capabilities?.includes('roomOrchestrationV1'); }
+function mtRoomSwitchSummary(s) {
+    if (!s.roomProfileId) return '（未选择目标房间）';
+    const room = su.roomSwitchChoices.find(r => r.id === s.roomProfileId);
+    return room ? `等待 ${room.label} 就绪` : '原目标房间尚未核对，请重新读取档案';
+}
+function mtRoomSwitchOptions(id) {
+    const options = [['', '请选择目标房间'], ...su.roomSwitchChoices.map(r => [r.id, r.label])];
+    if (id && !su.roomSwitchChoices.some(r => r.id === id)) options.push([id, '原目标（尚未核对）']);
+    return options;
+}
+function mtIsBackgroundChain(chain) {
+    let background = false;
+    function visit(list, inside) {
+        if (list === chain) background = inside;
+        for (const s of list || []) for (const [key] of mtChains(s)) visit(s[key], inside || key === 'fireSteps');
+    }
+    visit(su.config?.steps, false); return background;
+}
+function mtHasOrdinaryRoomSwitch(step) {
+    return step.kind === 'switchAssistantRoom' || (step.trueSteps || []).some(mtHasOrdinaryRoomSwitch) || (step.falseSteps || []).some(mtHasOrdinaryRoomSwitch);
+}
+async function mtLoadRoomSwitchChoices() {
+    const target = mt.target;
+    su.roomSwitchChoices = [];
+    if (!target || !mtRoomSwitchSupported()) return;
+    try {
+        const reply = await mtRead('room.orchestration.get', undefined, { target, extra:{ expectedMachineId:target.machineId } });
+        if (mt.target !== target) return;
+        const cards = mtPick(mtPick(reply.data, 'presentation') || {}, 'cards') || [];
+        su.roomSwitchChoices = cards.map(c => ({id:mtPick(c,'id'),label:[mtPick(c,'name'),mtPick(c,'identity')].filter(Boolean).join(' · ')})).filter(c => c.id);
+        if (mt.tab === 'startup' && mtEl('mtOutline')) { mtRenderOutline(); mtRenderCanvas(); mtRenderInspector(); }
+    } catch { /* 保留旧引用，目录不可用时不推断替代房间。 */ }
+}
 function mtAddStep(kind, chain, label) {
+    if (kind === 'switchAssistantRoom' && (!mtRoomSwitchSupported() || mtIsBackgroundChain(chain))) return mtToast('切换助手房间仅支持本人执行端的主链和普通条件分支。', true);
     if (['setRegister','judgeRegister'].includes(kind) && !mtRegistersSupported()) return mtToast('当前执行端未提供寄存器能力，未添加；请检查连接或版本。', true);
     if (mtChainHasEnd(chain)) return mtToast(`「${label}」已以「${mtDisplayName(mtChainTerminal(chain))}」收尾，它是这条链的终点，之后不能再添加节点`, true);
     if (kind === 'enterTaskCenter' && mtCountKind('enterTaskCenter')) return mtToast('启动流程中只能有一个「进入任务中心执行」节点；如需调整位置，请删除后重新添加', true);
@@ -158,6 +196,7 @@ function mtMoveStepTo(id, targetChain, insertIndex, targetLabel) {
     const hit = mtFind(id); if (!hit) return;
     const contains = step => mtChains(step).some(([k]) => step[k] === targetChain || (step[k] || []).some(contains));
     if (contains(hit.step)) return mtToast(`不能把「${mtDisplayName(hit.step)}」拖进它自己的分支里`, true);
+    if (mtIsBackgroundChain(targetChain) && mtHasOrdinaryRoomSwitch(hit.step)) return mtToast('切换助手房间不能移到后台触发链。', true);
     if (mtIsTerminal(hit.step.kind) && targetChain !== hit.chain && mtChainHasEnd(targetChain))
         return mtToast(`「${targetLabel}」已以「${mtDisplayName(mtChainTerminal(targetChain))}」收尾，不能再放入「${mtDisplayName(hit.step)}」`, true);
     hit.chain.splice(hit.index, 1);
@@ -203,7 +242,7 @@ async function mtLoadStartup(force) {
         mtToast('已读取执行端启动中心。');
     } catch (error) { if (mt.target?.key === targetKey) mtToast('启动中心读取失败：' + error.message, true); }
     finally { if (mt.target?.key === targetKey) { su.loading = false; mtRenderStartupBody(); } }
-    if (mt.target?.key === targetKey && mt.identity?.isExecutor) mtLoadFlowChoices();
+    if (mt.target?.key === targetKey && mt.identity?.isExecutor) { mtLoadFlowChoices(); mtLoadRoomSwitchChoices(); }
 }
 function mtApplyStatus(d, registerVersion = mtRegistersVersion()) {
     const u = mtPick(d, 'unifiedTriggers');

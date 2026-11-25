@@ -21,7 +21,8 @@ public partial class MainViewModel
 
     // Executed only by the existing authenticated same-UID/instance center handler. No room
     // passwords, local BGI paths or mutable AssistConfig/room profile objects leave the executor.
-    private RemoteCenterReply BeginRoomOrchestrationCatalogRefresh(string id, string fingerprint, RemoteCenterRequest request)
+    private RemoteCenterReply BeginRoomOrchestrationCatalogRefresh(string id, string fingerprint, RemoteCenterRequest request,
+        Func<bool>? stillAuthorized = null)
     {
         var accepted = BeginOperationReceipt(id, fingerprint);
         _ = CompleteCenterOperationAsync(id, async () =>
@@ -32,15 +33,16 @@ public partial class MainViewModel
             var uid = _config?.PlayerUid ?? "";
             if (!TryRegisterCompletionCatalogRefresh((uid, id), cancellation))
                 return RemoteCenterReply.Rejected("同一目录刷新正在执行");
-            try { return await ExecuteRoomOrchestrationRemoteOperationAsync(request, cancellation.Token); }
+            try { return await ExecuteRoomOrchestrationRemoteOperationAsync(request, cancellation.Token, stillAuthorized); }
             finally { _completionCatalogRefreshes.TryRemove((uid, id), out _); }
         });
         return accepted;
     }
 
     internal async Task<RemoteCenterReply> ExecuteRoomOrchestrationRemoteOperationAsync(RemoteCenterRequest request,
-        CancellationToken? refreshToken = null)
+        CancellationToken? refreshToken = null, Func<bool>? stillAuthorized = null)
     {
+        if (stillAuthorized?.Invoke() == false) return RemoteCenterReply.Rejected("原网页授权已变化，未执行任务编排请求");
         if (!IsExecutorMode || _config is not { } config || request.TargetInstanceId != config.ClientInstanceId)
             return RemoteCenterReply.Rejected("仅当前已确认身份的执行端可以响应任务编排请求");
         using var budget = refreshToken is { } longRefresh ? CancellationTokenSource.CreateLinkedTokenSource(longRefresh)
@@ -111,7 +113,7 @@ public partial class MainViewModel
                         if (args.Changes.Bindings is not null || args.Changes.QuickCommands?.Values.Any(value => value.Length > 0) == true)
                             names = await LoadRoomOrchestrationNamesAsync(false, ct);
                         ct.ThrowIfCancellationRequested();
-                        if (!IsExecutorMode || !ReferenceEquals(config, _config) || config.ClientInstanceId != request.TargetInstanceId
+                        if (stillAuthorized?.Invoke() == false || !IsExecutorMode || !ReferenceEquals(config, _config) || config.ClientInstanceId != request.TargetInstanceId
                             || RoomOrchestrationEditRevision(ReadRoomOrchestrationEdit(args.ProfileId)) != request.ExpectedRevision)
                             return RemoteCenterReply.Rejected("执行端房间配置或实例已变化，本次未保存");
                         committing = true;

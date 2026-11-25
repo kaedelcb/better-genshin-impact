@@ -78,7 +78,7 @@ public sealed partial class RoomOperations
     }
 
     /// <summary>
-    /// 向控制房间成员转发远程命令。目标离线时缓存，上线后自动下发。
+    /// 向控制房间成员转发远程命令。旧 UID 路由可离线缓存；显式实例请求仅实时投递。
     /// </summary>
     public async Task SendRemoteCommandAsync(GatewayHandlerContext ctx, RemoteCommand command)
     {
@@ -89,6 +89,7 @@ public sealed partial class RoomOperations
             throw new InvalidOperationException("request_expired");
         if (command.ExpiresAtUtc > now.AddMinutes(2))
             command.ExpiresAtUtc = now.AddMinutes(2);
+        var requiresInstanceTarget = RoomManager.RequiresInstanceTarget(command);
         try
         {
             var group = $"CTRL_{command.RoomCode}";
@@ -159,12 +160,21 @@ public sealed partial class RoomOperations
             List<string> targets;
             lock (_batchGate)
             {
-                if (!IsInControlRoomOrRemote(ctx, group) || command.ExpiresAtUtc <= _roomManager.ControlUtcNow) return;
+                if (!IsInControlRoomOrRemote(ctx, group))
+                {
+                    if (requiresInstanceTarget) throw new InvalidOperationException("当前连接未在该房间就绪");
+                    return;
+                }
+                if (command.ExpiresAtUtc <= _roomManager.ControlUtcNow)
+                {
+                    if (requiresInstanceTarget) throw new InvalidOperationException("request_expired");
+                    return;
+                }
                 targets = _roomManager.ResolveTargets(command);
                 if (isRemoteConfigReply)
                     targets = targets.Union(_roomManager.GetRemoteConnectionIdsByUids(group, command.Target)).ToList();
-                if (isCenterRequest && targets.Count != 1)
-                    throw new InvalidOperationException("center_target_unavailable_or_ambiguous");
+                if (requiresInstanceTarget && targets.Count != 1)
+                    throw InstanceTargetUnavailable(command);
 
                 if (isAllStop)
                 {
@@ -189,7 +199,7 @@ public sealed partial class RoomOperations
                 }
 
                 // 决定在线投递和缓存时与就绪/离房共锁，避免两条路径都漏掉刚就绪的成员。
-                if (!isRemoteConfigReply && !isCenterRequest && command.Cmd is not ("reset_state" or "stop")
+                if (!isRemoteConfigReply && !requiresInstanceTarget && command.Cmd is not ("reset_state" or "stop")
                     && !command.Target.Contains("*"))
                 {
                     foreach (var uid in command.Target.Distinct(StringComparer.Ordinal))
@@ -204,6 +214,12 @@ public sealed partial class RoomOperations
             var changedStopTargets = 0;
             foreach (var connectionId in targets)
             {
+                if (requiresInstanceTarget)
+                {
+                    if (await SendInstanceBoundCommandAsync(ctx, group, connectionId, command)) deliveredTo++;
+                    else changedStopTargets++;
+                    continue;
+                }
                 if (!IsInControlRoomOrRemote(ctx, group) || command.ExpiresAtUtc <= _roomManager.ControlUtcNow) break;
                 if (!_roomManager.IsInControlRoom(group, connectionId)
                     && !(isRemoteConfigReply && _roomManager.IsRemoteConnection(group, connectionId))) continue;
@@ -243,8 +259,49 @@ public sealed partial class RoomOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "SendRemoteCommand 失败");
-            if (command.Cmd is "center.request" or "center.data") throw;
+            if (requiresInstanceTarget || command.Cmd is "center.request" or "center.data") throw;
         }
+    }
+
+    private static InvalidOperationException InstanceTargetUnavailable(RemoteCommand command)
+        => new(command.Cmd == "center.request" ? "center_target_unavailable_or_ambiguous"
+            : "target_instance_unavailable_or_ambiguous");
+
+    private async Task<bool> SendInstanceBoundCommandAsync(GatewayHandlerContext ctx, string group,
+        string connectionId, RemoteCommand command)
+    {
+        // 同一连接重新登记可能改变 UID/实例。使用现有成员连接门，直到定向发送结束，
+        // 并在发送前复核原连接；即使同一实例重连，也不让已选定的请求改投新连接。
+        var gate = ControlConnectionGate(connectionId);
+        await gate.WaitAsync();
+        try
+        {
+            Task send;
+            lock (_batchGate)
+            {
+                if (!IsInControlRoomOrRemote(ctx, group))
+                    throw new InvalidOperationException("当前连接未在该房间就绪");
+                if (command.ExpiresAtUtc <= _roomManager.ControlUtcNow)
+                    throw new InvalidOperationException("request_expired");
+                if (command.Cmd == "center.request")
+                {
+                    var boundUid = _roomManager.IsRemoteConnection(group, ctx.ConnectionId)
+                        ? _roomManager.GetRemoteUidByConnectionId(group, ctx.ConnectionId)
+                        : _roomManager.GetUidByConnectionId(group, ctx.ConnectionId);
+                    if (string.IsNullOrEmpty(boundUid) || boundUid != command.SenderUid)
+                        throw new InvalidOperationException("center_sender_identity_mismatch");
+                }
+                var current = _roomManager.ResolveTargets(command);
+                if (current.Count != 1 || current[0] != connectionId)
+                    throw InstanceTargetUnavailable(command);
+                var outgoing = command.Cmd == "stop" ? FreezeStopTarget(group, connectionId, command) : command;
+                if (outgoing is null) return false;
+                send = SendCommandInRoomAsync(group, connectionId, outgoing);
+            }
+            await send;
+            return true;
+        }
+        finally { gate.Release(); }
     }
 
     private RemoteCommand? FreezeResetCommand(string group, RemoteCommand source)

@@ -21,7 +21,17 @@ const MT_DURABLE_OPS = new Set(['registers.configure','registers.reset','registe
     'task.resource.layout.save','task.resource.editor.open','task.bgiPath.save','task.flow.save','task.flow.delete','task.flow.restore',
     'task.catalog.connect','task.flow.import','task.schedule.import','task.migration.prepare','task.migration.activate',
     'task.migration.rollback','task.migration.rehearsal','task.run.start','task.run.resume','task.flow.resetExecutionState']);
-function mtDurable(operation, payload) { return MT_DURABLE_OPS.has(operation) || operation === 'task.run.action' && payload?.action !== 'Stop'; }
+function mtRoomOperation(operation) { return operation.startsWith('room.profiles.') || operation.startsWith('room.switch.') || operation.startsWith('room.orchestration.'); }
+function mtRoomOperationKind(operation) { return operation.startsWith('room.profiles.') ? 'profiles' : operation.startsWith('room.switch.') ? 'switch' : 'orchestration'; }
+function mtRoomRead(operation, payload) {
+    return ['room.profiles.get','room.profiles.legacyCode','room.switch.status','room.orchestration.get','room.orchestration.edit','room.orchestration.layout'].includes(operation)
+        || ['room.orchestration.names','room.orchestration.catalog'].includes(operation) && !(payload?.ExplicitRefresh ?? payload?.explicitRefresh);
+}
+function mtDurable(operation, payload) {
+    return MT_DURABLE_OPS.has(operation) || operation === 'task.run.action' && payload?.action !== 'Stop'
+        || ['room.profiles.save','room.profiles.create','room.profiles.remove','room.switch.start','room.switch.recheck','room.orchestration.save'].includes(operation)
+        || ['room.orchestration.names','room.orchestration.catalog'].includes(operation) && !!(payload?.ExplicitRefresh ?? payload?.explicitRefresh);
+}
 
 // ---------- 本人凭据（按执行端实例保存；只在这个浏览器里；uid 只用于把它归到「我的执行端」） ----------
 function mtCredentials() { try { return JSON.parse(localStorage.getItem(MT_CRED_KEY) || '{}') || {}; } catch { return {}; } }
@@ -79,25 +89,34 @@ function mtTargets() {
 function mtTargetReady(target = mt.target) {
     if (!target) return false;
     if (target.local) return !!window.bgiLocalBridge?.available;
+    if (target.source && window.webRooms) {
+        try { const known = window.webRooms.requireSource(target.source,{exactInstance:true}); return known.member.playerUid === target.uid && known.member.clientInstanceId === target.instanceId && known.member.machineId === target.machineId; }
+        catch { return false; }
+    }
     return !!roomReady && mtMemberList().some(p => p.playerUid === target.uid && p.clientInstanceId === target.instanceId && p.online === true);
 }
 
 // ---------- 传输 ----------
-function mtWaitRemote(requestId, timeout) {
+function mtWaitRemote(requestId, timeout, sourceRoomKey = null) {
     const promise = new Promise((resolve, reject) => {
         const timer = setTimeout(() => { if (mt.pending.delete(requestId)) reject(Object.assign(new Error('等待执行端回复超时，结果未确认'), { unconfirmed:true })); }, timeout);
-        mt.pending.set(requestId, { resolve, reject, timer });
+        mt.pending.set(requestId, { resolve, reject, timer, sourceRoomKey });
     });
     promise.catch(() => {});
     return promise;
 }
-function mtEvent(env) {
+function mtEvent(env, sourceRoomKey = null) {
     if (env?.name !== 'mistletoe.result') return;
     const x = env.payload || {}, p = mt.pending.get(x.requestId);
-    if (!p) return;
+    if (!p || p.sourceRoomKey !== sourceRoomKey) return;
     mt.pending.delete(x.requestId); clearTimeout(p.timer);
     if (!x.reply || typeof x.reply !== 'object') p.reject(Object.assign(new Error('执行端回复无效，结果未确认'), { unconfirmed:true }));
     else p.resolve(x.reply);
+}
+function mtCancelRoomPending(roomKey, message) {
+    for (const [id,p] of mt.pending) if (p.sourceRoomKey === roomKey) {
+        mt.pending.delete(id); clearTimeout(p.timer); p.reject(Object.assign(new Error(message), {unconfirmed:true}));
+    }
 }
 function mtCancelPending(message) {
     mt.generation++;
@@ -111,6 +130,7 @@ async function mtSend(operation, payload, options = {}) {
     if (!target) throw new Error('请先选择执行端');
     if (!mtTargetReady(target)) throw new Error(target.local ? '本机连接未就绪，请从助手重新打开' : '执行端不在线或房间连接未就绪');
     const request = { operation, targetInstanceId:target.instanceId };
+    if ((mtRoomOperation(operation) || operation === 'operation.get') && target.machineId) request.expectedMachineId = target.machineId;
     if (payload !== undefined) request.payload = payload;
     if (options.expectedRevision) request.expectedRevision = options.expectedRevision;
     if (options.flowEditVersion !== undefined) request.flowEditVersion = options.flowEditVersion;
@@ -125,16 +145,19 @@ async function mtSend(operation, payload, options = {}) {
         // 只读请求可被本机桥按身份复用结果；写入请求每次独立认领，防止同编号被执行两次。
         // 本机桥在进入执行前拒绝（会话失效、来源无效、请求为空）时是确定未执行；
         // 超时、连接中断、实例变化或桥返回 unknown 都可能已经执行，一律按结果未确认处理。
-        try { reply = await window.bgiLocalBridge.execute(MT_READ_OPS.has(operation) ? 'mistletoe.read' : 'mistletoe.request', { request }, timeout, 'local'); }
+        try { reply = await window.bgiLocalBridge.execute(MT_READ_OPS.has(operation) || mtRoomRead(operation, payload) ? 'mistletoe.read' : 'mistletoe.request', { request }, timeout, 'local'); }
         catch (error) {
             if (error?.localStatus === 'not_sent' || error?.localStatus === 'error') throw new Error(error.message || '本机连接拒绝了请求，未执行');
             throw Object.assign(new Error((error?.message || '本机请求中断') + (/未确认/.test(error?.message || '') ? '' : '，结果未确认')), { unconfirmed:true });
         }
     } else {
-        const wait = mtWaitRemote(requestId, timeout);
+        const routed = target.source && window.webRooms ? window.webRooms.requireSource(target.source,{exactInstance:true}) : null;
+        const wait = mtWaitRemote(requestId, timeout, routed && !routed.context.isMain ? routed.context.roomKey : null);
         try {
-            const response = await connection.invoke('Dispatch', makeEnvelope('command', 'mistletoe.request',
-                { roomCode, targetUid:target.uid, targetInstanceId:target.instanceId, requestId, request }));
+            const body = { roomCode:routed?.context.roomCode || roomCode, targetUid:target.uid, targetInstanceId:target.instanceId, requestId, request };
+            const response = routed && !routed.context.isMain
+                ? await window.webRooms.invoke(target.source, 'Dispatch', 'mistletoe.request', body)
+                : await connection.invoke('Dispatch', makeEnvelope('command', 'mistletoe.request', body));
             checkGatewayError(response);
         } catch (error) {
             const p = mt.pending.get(requestId); if (p) { clearTimeout(p.timer); mt.pending.delete(requestId); }
