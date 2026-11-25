@@ -67,7 +67,7 @@ public sealed class ControlRoomAuth
             }
         }
 
-        // 网页控制端继续用密码 + 原房间昵称校验，不是可执行成员。其他连接不能绕过登记的名单。
+        // 网页控制端继续用密码 + 原房间昵称校验，日志协助旁观端凭房号和密码只读查看，都不是可执行成员；其他连接不能绕过登记的名单。
         if (IsMemberUid(playerUid) && registration.AllowedUids.Length > 0
             && !registration.AllowedUids.Contains(playerUid, StringComparer.Ordinal)) return ControlRoomAuthResult.Rejected;
         var actual = DerivePassword(password, Convert.FromHexString(registration.Salt));
@@ -128,7 +128,12 @@ public sealed class ControlRoomAuth
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
     private static bool IsUid(string? value) => value is { Length: > 0 and <= 128 }
         && value == value.Trim() && !value.Any(char.IsControl);
-    internal static bool IsMemberUid(string? value) => IsUid(value) && !value!.StartsWith("web_", StringComparison.Ordinal);
+    internal static bool IsWebUid(string? value) =>
+        IsUid(value) && value!.StartsWith("web_", StringComparison.Ordinal);
+    internal static bool IsLogViewerUid(string? value) =>
+        IsUid(value) && value!.StartsWith("log_viewer_", StringComparison.Ordinal);
+    internal static bool IsMemberUid(string? value) =>
+        IsUid(value) && !IsWebUid(value) && !IsLogViewerUid(value);
     private static bool IsPassword(string value) => value.Length is > 0 and <= 128;
     private static bool IsRoster(IReadOnlyList<string> roster, string playerUid) => roster.Count <= 64 &&
         roster.All(IsUid) && (roster.Count == 0 || roster.Contains(playerUid, StringComparer.Ordinal));

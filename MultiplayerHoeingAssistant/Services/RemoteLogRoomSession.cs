@@ -39,8 +39,9 @@ internal sealed class RemoteLogRoomSession : IAsyncDisposable
         try
         {
             // 独立身份 + isRemote：即使与执行端同机，也不会挤掉执行端或进入其任务目标列表。
+            // 与网页端协助房间对齐 web_logviewer_ 前缀，兼容尚未升级白名单豁免的旧服务端。
             await session.Client.ConnectAsync(serverUrl, roomCode, password,
-                "log_viewer_" + Guid.NewGuid().ToString("N"), "日志协助", [], isRemote: true,
+                "web_logviewer_" + Guid.NewGuid().ToString("N"), "日志协助", [], isRemote: true,
                 bypassSystemProxy: bypassSystemProxy, cancellationToken: timeout.Token);
             // join 的 ACK 不代表认证成功；只有收到认证后的完整成员快照才切换面板。
             var rejection = await session._firstSnapshot.Task.WaitAsync(timeout.Token);

@@ -53,9 +53,11 @@ public sealed partial class RoomOperations
         try
         {
             var group = $"CTRL_{roomCode}";
-            var isWebClient = playerUid.StartsWith("web_", StringComparison.Ordinal);
+            var isWebClient = ControlRoomAuth.IsWebUid(playerUid);
+            var isLogViewer = ControlRoomAuth.IsLogViewerUid(playerUid);
             var roster = allowedUids?.ToArray() ?? [];
-            var session = new ControlRoomSession(group, playerUid, playerName, clientInstanceId, machineId, isRemote || isWebClient, roster);
+            var session = new ControlRoomSession(group, playerUid, playerName, clientInstanceId, machineId,
+                isRemote || isWebClient || isLogViewer, roster);
             ControlRoomSession? previous;
             string? rejection = null;
             var repeat = false;
@@ -84,11 +86,16 @@ public sealed partial class RoomOperations
 
             if (rejection is null)
             {
-                rejection = AuthRejection(_controlRoomAuth.Authenticate(roomCode, password, playerUid, roster,
-                    allowLegacyCreate: !requireReady, allowLegacyMigration: requireReady));
-                // 网页控制端仍要求成员昵称；日志协助等显式 isRemote 入口保持原权限。
-                if (rejection is null && isWebClient && !isRemote && !IsControlRoomMemberName(group, playerName))
-                    rejection = "控制端昵称必须与房间内某个成员的昵称一致";
+                if (isLogViewer && !isRemote)
+                    rejection = "日志协助连接必须以旁观模式加入";
+                else
+                {
+                    rejection = AuthRejection(_controlRoomAuth.Authenticate(roomCode, password, playerUid, roster,
+                        allowLegacyCreate: !requireReady, allowLegacyMigration: requireReady));
+                    // 网页控制端仍要求成员昵称；日志协助等显式 isRemote 入口保持原权限。
+                    if (rejection is null && isWebClient && !isRemote && !IsControlRoomMemberName(group, playerName))
+                        rejection = "控制端昵称必须与房间内某个成员的昵称一致";
+                }
             }
             if (rejection is not null) return await RejectControlJoinAsync(ctx, rejection, requireReady);
 

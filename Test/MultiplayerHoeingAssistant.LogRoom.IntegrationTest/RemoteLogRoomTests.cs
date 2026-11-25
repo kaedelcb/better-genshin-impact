@@ -60,17 +60,20 @@ public sealed partial class RemoteLogRoomTests
         var url = server.Urls.Single();
         var suffix = Guid.NewGuid().ToString("N")[..10];
         var ownRoom = "own-" + suffix;
-        var targetRoom = "help-" + suffix;
         var thirdRoom = "third-" + suffix;
         const string thirdPassword = "third-local-test-only";
         const string password = "local-test-only";
+        var ops = server.Services.GetRequiredService<RoomOperations>();
+        var createdTarget = ops.CreateControlRoom(GatewayHandlerContext.V3("seed-target"), password, "target", ["target", "another"]);
+        Assert.True(createdTarget.Success, createdTarget.Reason);
+        var targetRoom = createdTarget.RoomCode;
         await using var own = new SignalRClient();
         await using var peer = new SignalRClient();
         await using var target = new SignalRClient();
         await using var third = new SignalRClient();
         await own.ConnectAsync(url, ownRoom, password, "own", "本人", []);
         await peer.ConnectAsync(url, ownRoom, password, "peer", "本房间成员" + suffix, []);
-        await target.ConnectAsync(url, targetRoom, password, "target", "被协助成员", []);
+        await target.ConnectAsync(url, targetRoom, password, "target", "被协助成员", ["target", "another"]);
         await third.ConnectAsync(url, thirdRoom, thirdPassword, "third", "第三房间成员", []);
         await own.ReportControlStatusAsync(new ClientStatus { PlayerUid = "own", PlayerName = "本人", TaskRunning = true,
             TaskStatusAvailable = true, CurrentTaskName = "隔离运行中任务" });
@@ -247,8 +250,14 @@ public sealed partial class RemoteLogRoomTests
             Assert.Equal(bytes, await File.ReadAllBytesAsync(ownDownloadedPath));
             Snapshot(window, Path.Combine(root, "own-room.png"));
 
-            // 在线增量、离线移除；跨房间同名文件不会覆盖。
+            // 在线增量、离线移除；跨房间同名文件不会覆盖；兼容旧版 PC log_viewer_ 前缀直连白名单房间。
             Assert.True(await browser.ConnectAssistedLogRoomAsync(targetRoom, password));
+            await using (var legacyViewer = new SignalRClient())
+            {
+                await legacyViewer.ConnectAsync(url, targetRoom, password,
+                    "log_viewer_" + Guid.NewGuid().ToString("N"), "日志协助", [], isRemote: true);
+                Assert.True(legacyViewer.IsConnected);
+            }
             await using (var another = new SignalRClient())
             {
                 await another.ConnectAsync(url, targetRoom, password, "another", "另一在线成员", []);
@@ -258,6 +267,9 @@ public sealed partial class RemoteLogRoomTests
             Assert.True(await browser.ConnectAssistedLogRoomAsync(ownRoom, password));
             Assert.Contains(browser.RemoteMembers, m => m.Uid == "own");
             Assert.False(await browser.ConnectAssistedLogRoomAsync(targetRoom, "bad-password"));
+            Assert.Contains(ownRoom, browser.LogRoomLabel);
+            Assert.False(await browser.ConnectAssistedLogRoomAsync("NOEXST", password));
+            Assert.Contains("控制房间不存在", browser.RemoteStatus);
             Assert.Contains(ownRoom, browser.LogRoomLabel);
             browser.ReturnToOwnLogRoomCommand.Execute(null);
             using (var cancelled = new CancellationTokenSource())
