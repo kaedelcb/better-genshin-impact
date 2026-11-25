@@ -20,7 +20,12 @@ public static class AutoHoeingRoutePaths
         if (selection.StartsWith("local/", StringComparison.Ordinal))
         { root = LocalRoot; selection = selection[6..]; }
         else if (selection.StartsWith("legacy-local/", StringComparison.Ordinal))
-        { root = LegacyLocalRoot; selection = selection[13..]; }
+        {
+            if (multiplayer)
+                throw new InvalidDataException("联机锄地旧线路目录已弃用，请重新选择官方线路或本地导入线路。");
+            root = LegacyLocalRoot;
+            selection = selection[13..];
+        }
         if (selection is "." or ".." || selection.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || selection.Contains('/') || selection.Contains('\\'))
             throw new InvalidDataException("线路目录名无效");

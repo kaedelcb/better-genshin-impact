@@ -11,23 +11,22 @@ public sealed class AutoHoeingRouteSourcesTests : IDisposable
     private string Legacy => Path.Combine(_root, "legacy");
 
     [Fact]
-    public void ScannerDistinguishesIdenticalNamesAndFindsVariantOnlyDebugRoutes()
+    public void MultiplayerScannerExcludesLegacyAndDistinguishesOfficialAndImportedRoutes()
     {
         Add(Official, "同名", "official.json");
         Add(Local, "同名", "local.json");
         Add(Legacy, "同名", "legacy.json");
+        Add(Legacy, "仅旧目录", "legacy-only.json");
         Add(Official, "DebugRoutes", Path.Combine("A变体", "01_a.json"));
         var folders = new RouteDirectoryScanner(Official, Local, Legacy).ScanBuiltinRoutes();
-        Assert.Equal(4, folders.Count);
+        Assert.Equal(3, folders.Count);
         var official = Assert.Single(folders, f => f.FolderName == "同名");
         var local = Assert.Single(folders, f => f.FolderName == "local/同名");
-        var legacy = Assert.Single(folders, f => f.FolderName == "legacy-local/同名");
         Assert.StartsWith("[官方]", official.DisplayName);
         Assert.StartsWith("[本地导入]", local.DisplayName);
-        Assert.StartsWith("[本地旧目录]", legacy.DisplayName);
+        Assert.DoesNotContain(folders, f => f.DisplayName.StartsWith("[本地旧目录]"));
         Assert.Equal(Path.Combine(Official, "同名"), official.FullPath);
         Assert.Equal(Path.Combine(Local, "同名"), local.FullPath);
-        Assert.Equal(Path.Combine(Legacy, "同名"), legacy.FullPath);
         Assert.Equal(1, Assert.Single(folders, f => f.FolderName == "DebugRoutes").RouteCount);
     }
 
@@ -35,6 +34,7 @@ public sealed class AutoHoeingRouteSourcesTests : IDisposable
     public void MissingOfficialPackageDoesNotHideExplicitLocalChoicesOrCreateOfficialRoot()
     {
         Add(Local, "我的线路", "01.json");
+        Add(Legacy, "旧线路", "01.json");
         var folders = new RouteDirectoryScanner(Official, Local, Legacy).ScanBuiltinRoutes();
         Assert.Equal("local/我的线路", Assert.Single(folders).FolderName);
         Assert.False(Directory.Exists(Official));
@@ -49,6 +49,16 @@ public sealed class AutoHoeingRouteSourcesTests : IDisposable
         var folders = new RouteDirectoryScanner(Official, Local, Legacy, multiplayer: false).ScanBuiltinRoutes();
         Assert.Equal(new[] { "local/导入", "旧单机" }, folders.Select(f => f.FolderName));
         Assert.Equal(Path.Combine(Legacy, "旧单机"), folders.Single(f => f.FolderName == "旧单机").FullPath);
+    }
+
+    [Fact]
+    public void LegacySelectionCannotResolveInMultiplayer()
+    {
+        var error = Assert.Throws<InvalidDataException>(() =>
+            AutoHoeingRoutePaths.ResolveSelection("legacy-local/旧线路", multiplayer: true));
+        Assert.Contains("已弃用", error.Message);
+        Assert.Equal(Path.Combine(AutoHoeingRoutePaths.LegacyLocalRoot, "旧线路"),
+            AutoHoeingRoutePaths.ResolveSelection("legacy-local/旧线路", multiplayer: false));
     }
 
     [Theory]

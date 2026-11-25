@@ -7,7 +7,7 @@ using System.IO;
 namespace BetterGenshinImpact.GameTask.AutoHoeing.Services;
 
 /// <summary>
-/// 线路来源扫描服务，分别标识受管官方、独立本地导入及旧本地目录。
+/// 线路来源扫描服务：联机仅扫描受管官方和独立本地导入；单机保留原内置目录。
 /// </summary>
 public class RouteDirectoryScanner
 {
@@ -15,7 +15,6 @@ public class RouteDirectoryScanner
     private readonly string _assetsPath;
     private readonly bool _multiplayer;
     private readonly string _localRoot;
-    private readonly string _legacyRoot;
 
     public RouteDirectoryScanner(bool multiplayer = true)
         : this(AutoHoeingRoutePaths.BuiltinRoot, AutoHoeingRoutePaths.LocalRoot, AutoHoeingRoutePaths.LegacyLocalRoot, multiplayer) { }
@@ -24,7 +23,6 @@ public class RouteDirectoryScanner
     {
         _multiplayer = multiplayer;
         _localRoot = localRoot;
-        _legacyRoot = legacyRoot;
         _assetsPath = multiplayer ? builtinRoot : legacyRoot;
     }
 
@@ -40,8 +38,7 @@ public class RouteDirectoryScanner
         var roots = new[]
         {
             (_assetsPath, "", _multiplayer ? "官方" : "本地旧目录"),
-            (_localRoot, "local/", "本地导入"),
-            (_multiplayer ? _legacyRoot : "", "legacy-local/", "本地旧目录")
+            (_localRoot, "local/", "本地导入")
         };
         foreach (var (root, prefix, source) in roots)
         {
