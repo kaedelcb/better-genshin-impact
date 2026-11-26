@@ -141,6 +141,171 @@ public sealed class NetworkRecoveryStagesTests : IDisposable
         Assert.Equal(version, TaskControl.NetworkRecoveryVersion);
     }
 
+    [Theory]
+    [InlineData("连接已断开", false, "连接已断开")]
+    [InlineData("连 接 已 断 开", false, "连接已断开")]
+    [InlineData("连接超时", false, "连接超时")]
+    [InlineData("网络错误", false, "网络错误")]
+    [InlineData("无法登录服务器", false, "无法登录服务器")]
+    [InlineData("点击进入", false, null)]
+    [InlineData("点击进入", true, "点击进入")]
+    [InlineData("提示", false, null)]
+    [InlineData("通知", true, null)]
+    public void DisconnectPromptMatchingRecognizesDisconnectKeywordsWithoutGenericPopups(
+        string ocrText, bool allowLoginPrompt, string? expected)
+    {
+        var actual = NetworkRecoveryDecisions.MatchDisconnectPromptText(new[] { ocrText }, allowLoginPrompt);
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task RepeatedMapOpenFailureWithMainUiDisconnectDialogEntersNetworkRecovery()
+    {
+        TaskControl.IsSuspendedByNetwork = false;
+        TaskControl.IsSuspendedByWindow = false;
+        var hasDisconnectDialog = true;
+        var promptChecks = 0;
+        var recoveryStarts = 0;
+        var probes = 0;
+
+        Bv.MainUiForTest = () => true; // 模拟半透明断线弹窗覆盖主界面，派蒙图标仍可见
+        NetworkRecovery.FindDisconnectPromptForTest = allowLogin =>
+        {
+            promptChecks++;
+            Assert.False(allowLogin);
+            return hasDisconnectDialog ? "连接已断开" : null;
+        };
+        NetworkRecovery.StartForTest = _ =>
+        {
+            recoveryStarts++;
+            Assert.True(TaskControl.IsSuspendedByWindow);
+            hasDisconnectDialog = false;
+            return Task.CompletedTask;
+        };
+
+        await TaskControl.WaitForEnvironmentRecoveryAsync(_ =>
+        {
+            probes++;
+            return Task.FromResult(!hasDisconnectDialog);
+        }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(TaskControl.DisconnectPromptProbeFailureThreshold + 1, probes);
+        Assert.Equal(1, promptChecks);
+        Assert.Equal(1, recoveryStarts);
+        Assert.False(TaskControl.IsSuspendedByWindow);
+        Assert.False(TaskControl.IsSuspendedByNetwork);
+        Assert.True(NetworkRecovery.RecoveryNetworkDone);
+    }
+
+    [Fact]
+    public async Task SingleMapOpenFailureRecoveryNeverChecksDisconnectPrompt()
+    {
+        TaskControl.IsSuspendedByNetwork = false;
+        TaskControl.IsSuspendedByWindow = false;
+        var probes = 0;
+        var promptChecks = 0;
+        Bv.MainUiForTest = () => true;
+        NetworkRecovery.FindDisconnectPromptForTest = _ => { promptChecks++; return "连接已断开"; };
+        NetworkRecovery.StartForTest = _ => throw new Exception("未达多次失败阈值不应进入断网恢复");
+
+        await TaskControl.WaitForEnvironmentRecoveryAsync(_ =>
+        {
+            probes++;
+            return Task.FromResult(probes >= 2); // 第 1 次失败，第 2 次恢复，未达 2 次连续失败阈值
+        }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(2, probes);
+        Assert.Equal(0, promptChecks);
+        Assert.False(TaskControl.IsSuspendedByWindow);
+    }
+
+    [Fact]
+    public async Task RepeatedMapOpenFailureWithoutDisconnectTextNeverTriggersNetworkRecovery()
+    {
+        TaskControl.IsSuspendedByNetwork = false;
+        TaskControl.IsSuspendedByWindow = false;
+        var probes = 0;
+        var promptChecks = 0;
+        Bv.MainUiForTest = () => false;
+        NetworkRecovery.FindDisconnectPromptForTest = allowLogin =>
+        {
+            promptChecks++;
+            Assert.True(allowLogin);
+            return null;
+        };
+        NetworkRecovery.StartForTest = _ => throw new Exception("未检测到断线提示不应调用断网恢复");
+
+        await TaskControl.WaitForEnvironmentRecoveryAsync(_ =>
+        {
+            probes++;
+            return Task.FromResult(probes >= 3); // 前 2 次失败触发一次 OCR 检查（无命中），第 3 次自然恢复
+        }, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(3, probes);
+        Assert.Equal(1, promptChecks);
+        Assert.False(TaskControl.IsSuspendedByWindow);
+    }
+
+    [Fact]
+    public async Task CancelledRecoveryTriggeredByDisconnectPromptDoesNotLeakWindowFlag()
+    {
+        TaskControl.IsSuspendedByNetwork = false;
+        TaskControl.IsSuspendedByWindow = false;
+        using var stop = new CancellationTokenSource();
+        var enteredRecovery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Bv.MainUiForTest = () => true;
+        NetworkRecovery.FindDisconnectPromptForTest = _ => "连接超时";
+        NetworkRecovery.StartForTest = async ct =>
+        {
+            enteredRecovery.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+        };
+
+        var recovery = TaskControl.WaitForEnvironmentRecoveryAsync(_ => Task.FromResult(false), stop.Token);
+        await enteredRecovery.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(TaskControl.IsSuspendedByWindow);
+
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => recovery);
+        Assert.False(TaskControl.IsSuspendedByWindow);
+    }
+
+    [Fact]
+    public async Task NetworkRecoveryOverMainUiDisconnectDialogForcesConfirmationAfterRepeatedMapFailure()
+    {
+        var hasDisconnectDialog = true;
+        var recoveryStarts = 0;
+        var probes = 0;
+        var onMap = false;
+
+        Screen.IsMapForTest = false;
+        Bv.MainUiForTest = () => !onMap;
+        NetworkRecovery.FindDisconnectPromptForTest = _ => hasDisconnectDialog ? "连接超时" : null;
+        NetworkRecovery.StartForTest = _ =>
+        {
+            recoveryStarts++;
+            hasDisconnectDialog = false;
+            return Task.CompletedTask;
+        };
+        TpTaskFastDrag.ProbeForTest = _ =>
+        {
+            probes++;
+            if (hasDisconnectDialog) return Task.FromResult(false);
+            onMap = Screen.IsMapForTest = true;
+            return Task.FromResult(true);
+        };
+        InputHub.Keyboard.PressForTest = () => onMap = Screen.IsMapForTest = false;
+        TaskControl.DelayForTest = (_, ct) => { ct.ThrowIfCancellationRequested(); return Task.CompletedTask; };
+
+        await TaskControl.RunNetworkRecoveryForTest(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(TaskControl.DisconnectPromptProbeFailureThreshold + 1, probes);
+        Assert.Equal(1, recoveryStarts);
+        Assert.False(TaskControl.IsSuspendedByNetwork);
+        Assert.False(TaskControl.IsSuspendedByWindow);
+    }
+
     public void Dispose()
     {
         Screen.IsMapForTest = false;
@@ -149,6 +314,7 @@ public sealed class NetworkRecoveryStagesTests : IDisposable
         TaskContext.Instance().Runtime = null;
         Bv.MainUiForTest = () => true;
         NetworkRecovery.StartForTest = null;
+        NetworkRecovery.FindDisconnectPromptForTest = null;
         TpTaskFastDrag.ProbeForTest = null;
         InputHub.Keyboard.PressForTest = null;
         TaskControl.DelayForTest = null;

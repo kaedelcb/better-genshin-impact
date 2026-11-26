@@ -115,6 +115,9 @@ namespace BetterGenshinImpact.GameTask.Common.Job
     {
         public static bool RecoveryNetworkDone;
         public static Func<CancellationToken, Task>? StartForTest;
+        public static Func<bool, string?>? FindDisconnectPromptForTest;
+        public static string? FindDisconnectPromptText(Common.Screen _, bool allowLoginPrompt)
+            => FindDisconnectPromptForTest?.Invoke(allowLoginPrompt);
         public static Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true,
             int mainUiAttempts = 60)
             => StartForTest?.Invoke(ct) ?? Task.CompletedTask;

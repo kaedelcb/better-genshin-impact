@@ -19,37 +19,79 @@ public class NetworkRecovery
     private static RecognitionObject GetConfirmRa(bool isOcrMatch = false,params string[] targetText)
     {
         using var screenArea = CaptureToRectArea();
+        return GetConfirmRa(screenArea, isOcrMatch, targetText);
+    }
+
+    private static RecognitionObject GetConfirmRa(ImageRegion screenArea, bool isOcrMatch = false, params string[] targetText)
+    {
         var x = (int)(screenArea.Width * 0.3);
         var y = (int)(screenArea.Height * 0.1);
         var width = (int)(screenArea.Width * 0.65);
         var height = (int)(screenArea.Height * 0.87);
-        
-        return isOcrMatch ? RecognitionObject.OcrMatch(x, y, width, height, targetText) : 
+
+        return isOcrMatch ? RecognitionObject.OcrMatch(x, y, width, height, targetText) :
             RecognitionObject.Ocr(x, y, width, height);
     }
-    
+
+    /// <summary>
+    /// 供快速拖动环境恢复在连续多次开图失败后检测画面是否存在明确断线提示或登录入口。
+    /// </summary>
+    internal static string? FindDisconnectPromptText(ImageRegion screen, bool allowLoginPrompt)
+    {
+        var ocrRegions = screen.FindMulti(GetConfirmRa(screen));
+        try
+        {
+            return NetworkRecoveryDecisions.MatchDisconnectPromptText(
+                ocrRegions.Select(t => t.Text), allowLoginPrompt);
+        }
+        finally
+        {
+            foreach (var region in ocrRegions) region.Dispose();
+        }
+    }
+
+    private static string NormalizeOcrText(string? text)
+        => string.IsNullOrWhiteSpace(text) ? string.Empty : string.Concat(text.Where(c => !char.IsWhiteSpace(c)));
+
     //完成任务标志
     public static bool RecoveryNetworkDone = false;
-    
+
     public static async Task Start(CancellationToken ct, bool verifyMainUi = false, bool clearSuspend = true,
         int mainUiAttempts = 60)
     {
         ct.ThrowIfCancellationRequested();
         RecoveryNetworkDone = false;
-        
+
         var aa =await NewRetry.WaitForElementDisappear(
             GetConfirmRa(true,"连接超时","连接已断开","网络错误","无法登录服务器","提示","通知"),
             screen => {
-                if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)) return;
-                var confirm =
-                    screen.FindMulti(GetConfirmRa());
-                var confirmDone = confirm.LastOrDefault(t =>
-                    Regex.IsMatch(t.Text, "确认") || Regex.IsMatch(t.Text, "点击进入"));
-                if (confirmDone != null)
+                var confirm = screen.FindMulti(GetConfirmRa(screen));
+                try
                 {
-                    Logger.LogWarning("点击: {confirmDone.Text}",confirmDone.Text);
-                    confirmDone.Click();
-                    confirmDone.Dispose();
+                    // 游戏内半透明断线弹窗覆盖在主界面上时左上角派蒙图标仍可能可见，
+                    // 仅当未匹配到明确断线文案（如普通“提示/通知”）时才因在主界面跳过点击。
+                    if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)
+                        && NetworkRecoveryDecisions.MatchDisconnectPromptText(
+                            confirm.Select(t => t.Text), allowLoginPrompt: false) == null)
+                    {
+                        return;
+                    }
+                    var confirmDone = confirm.LastOrDefault(t =>
+                    {
+                        var normalized = NormalizeOcrText(t.Text);
+                        return Regex.IsMatch(normalized, "确认")
+                               || Regex.IsMatch(normalized, "点击进入")
+                               || Regex.IsMatch(normalized, "重新连接");
+                    });
+                    if (confirmDone != null)
+                    {
+                        Logger.LogWarning("点击: {confirmDone.Text}",confirmDone.Text);
+                        confirmDone.Click();
+                    }
+                }
+                finally
+                {
+                    foreach (var region in confirm) region.Dispose();
                 }
             },
             ct,
@@ -61,38 +103,52 @@ public class NetworkRecovery
         // {
         //     return;
         // }
-        
+
         await Task.Delay(1000, ct);
-        
+
         await NewRetry.WaitForElementDisappear(
             GetConfirmRa(true,"连接超时","连接已断开","网络错误","无法登录服务器","提示","通知"),
             screen => {
-                if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)) return;
-                var confirm =
-                    screen.FindMulti(GetConfirmRa());
-                var confirmDone = confirm.LastOrDefault(t =>
-                    Regex.IsMatch(t.Text, "确认"));
-                if (confirmDone != null)
+                var confirm = screen.FindMulti(GetConfirmRa(screen));
+                try
                 {
-                    confirmDone.Click();
-                    confirmDone.Dispose();
+                    if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(screen)
+                        && NetworkRecoveryDecisions.MatchDisconnectPromptText(
+                            confirm.Select(t => t.Text), allowLoginPrompt: false) == null)
+                    {
+                        return;
+                    }
+                    var confirmDone = confirm.LastOrDefault(t =>
+                    {
+                        var normalized = NormalizeOcrText(t.Text);
+                        return Regex.IsMatch(normalized, "确认") || Regex.IsMatch(normalized, "重新连接");
+                    });
+                    if (confirmDone != null)
+                    {
+                        Logger.LogWarning("点击: {confirmDone.Text}",confirmDone.Text);
+                        confirmDone.Click();
+                    }
+                }
+                finally
+                {
+                    foreach (var region in confirm) region.Dispose();
                 }
             },
             ct,
             3,
             1000
         );
-        
+
         var mainUiAppeared = await NewRetry.WaitForElementAppear(
             ElementAssets.Instance.PaimonMenuRo,
-            ()  => {  
-                
+            ()  => {
+
                 if (RecoveryNetworkDone && !IsSuspendedByWindow)
                 {
                     Logger.LogWarning("回到主页-1:{RecoveryNetworkDone} - {IsSuspendedByWindow}",RecoveryNetworkDone,IsSuspendedByWindow);
                     return;//回到主页一次后，后续异步执行的所有操作都取消
                 }
-                IsSuspendedByNetwork = true;
+                if (clearSuspend) IsSuspendedByNetwork = true;
                 using var ra = CaptureToRectArea();
                 // 受保护恢复只在仍未到主界面时处理登录按钮，避免返回大世界后继续盲点。
                 if (verifyMainUi && BetterGenshinImpact.GameTask.Common.BgiVision.Bv.IsInMainUi(ra)) return;

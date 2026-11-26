@@ -149,6 +149,9 @@ public partial class TaskControl
         ct.ThrowIfCancellationRequested();
     }
 
+    // 连续多次无法打开地图后才做断线提示 OCR 兜底，不影响正常传送与偶发掉帧；仅快速拖动模式生效。
+    internal const int DisconnectPromptProbeFailureThreshold = 2;
+
     /// <summary>仅失败分支调用；保持当前调用未完成，JS/配置组/独立任务均不能越过当前操作。</summary>
     public static async Task WaitForEnvironmentRecoveryAsync(
         Func<CancellationToken, Task<bool>> probe, CancellationToken ct,
@@ -162,6 +165,8 @@ public partial class TaskControl
         RunnerContext.Instance.StopAutoPick();
         var acknowledged = false;
         var ownsRecoveryGate = false;
+        var ownedWindowRecoveryFlag = false;
+        var recovered = false;
         try
         {
             InputHub.ReleaseAll();
@@ -172,6 +177,7 @@ public partial class TaskControl
             Logger.LogWarning("游戏操作连续无响应，保留当前步骤并检查环境；本次等待不计入任务重试");
             await _networkRecoveryGate.WaitAsync(ct);
             ownsRecoveryGate = true;
+            var consecutiveProbeFailures = 0;
             await (window ?? OperationRecoveryWindow.Value ?? new EnvironmentRecoveryWindow()).WaitAsync(async token =>
             {
                 var previous = _inNetworkRecovery.Value;
@@ -183,9 +189,18 @@ public partial class TaskControl
                     if (IsSuspendedByWindow || IsSuspendedByNetwork)
                         await PrepareNetworkRecoveryUiAsync(token);
                     token.ThrowIfCancellationRequested();
-                    if (!await probe(token)) return false;
+                    if (await probe(token))
+                    {
+                        token.ThrowIfCancellationRequested();
+                        return true;
+                    }
                     token.ThrowIfCancellationRequested();
-                    return true;
+                    if (await TryEnterDisconnectRecoveryOnRepeatedProbeFailureAsync(
+                            ++consecutiveProbeFailures, token, () => ownedWindowRecoveryFlag = true))
+                    {
+                        consecutiveProbeFailures = 0;
+                    }
+                    return false;
                 }
                 catch (RetryException ex) when (!token.IsCancellationRequested)
                 {
@@ -199,6 +214,7 @@ public partial class TaskControl
                 }
             }, WaitForEnvironmentUserAsync, ct);
             ct.ThrowIfCancellationRequested();
+            recovered = true;
             ClearVerifiedNetworkRecovery();
             Logger.LogInformation("已确认游戏操作恢复，继续原任务步骤");
         }
@@ -207,6 +223,7 @@ public partial class TaskControl
             try { InputHub.ReleaseAll(); }
             finally
             {
+                if (!recovered && ownedWindowRecoveryFlag) IsSuspendedByWindow = false;
                 if (ownsRecoveryGate) _networkRecoveryGate.Release();
                 if (acknowledged)
                 {
@@ -234,6 +251,7 @@ public partial class TaskControl
     // 调用方已经持有恢复门。确认地图后按任务归还界面：传送保留地图，其余任务返回主界面。
     private static async Task RecoverNetworkWithProtectionAsync(CancellationToken ct)
     {
+        var consecutiveProbeFailures = 0;
         await new EnvironmentRecoveryWindow().WaitAsync(async token =>
         {
             var previousToken = RecoveryProbeToken.Value;
@@ -250,8 +268,13 @@ public partial class TaskControl
                 if (!await tp.ProbeMapForRecoveryAsync(teleport?.MapName, verifyExistingMapResponse: teleport != null))
                 {
                     Logger.LogWarning("[网络恢复] 尚未确认大地图可操作，保持暂停并重试");
+                    if (await TryEnterDisconnectRecoveryOnRepeatedProbeFailureAsync(++consecutiveProbeFailures, token))
+                    {
+                        consecutiveProbeFailures = 0;
+                    }
                     return false;
                 }
+                consecutiveProbeFailures = 0;
                 if (teleport == null)
                 {
                     if (!await CloseRecoveryMapAsync(token)) return false;
@@ -277,15 +300,53 @@ public partial class TaskControl
         Logger.LogInformation("已确认游戏操作恢复，继续原任务步骤");
     }
 
-    private static async Task PrepareNetworkRecoveryUiAsync(CancellationToken ct)
+    private static async Task<bool> TryEnterDisconnectRecoveryOnRepeatedProbeFailureAsync(
+        int consecutiveProbeFailures, CancellationToken ct, Action? onOwnedWindowRecoveryEntered = null)
+    {
+        if (!NetworkRecoveryDecisions.ShouldCheckDisconnectPromptOnProbeFailure(
+                consecutiveProbeFailures, DisconnectPromptProbeFailureThreshold))
+        {
+            return false;
+        }
+        ct.ThrowIfCancellationRequested();
+        var matchedText = DetectEnvironmentDisconnectPrompt();
+        if (string.IsNullOrEmpty(matchedText)) return false;
+
+        if (!IsSuspendedByWindow)
+        {
+            IsSuspendedByWindow = true;
+            onOwnedWindowRecoveryEntered?.Invoke();
+        }
+        Logger.LogWarning("[环境恢复] 连续 {Count} 次无法确认地图操作，检测到断线提示「{Text}」，接入断网异常恢复流程",
+            consecutiveProbeFailures, matchedText);
+        await PrepareNetworkRecoveryUiAsync(ct, forceDisconnectDialog: true);
+        return true;
+    }
+
+    private static string? DetectEnvironmentDisconnectPrompt()
+    {
+        if ((TaskContext.Instance().Runtime?.Window.RequiresForeground ?? true)
+            && !SystemControl.IsGenshinImpactActiveByProcess())
+        {
+            return null;
+        }
+        using var screen = CaptureToRectArea();
+        using var map = screen.Find(TpTaskFastDragAssets.Get(screen).MapScaleButtonRo);
+        if (map.IsExist()) return null;
+        return NetworkRecovery.FindDisconnectPromptText(screen, allowLoginPrompt: !Bv.IsInMainUi(screen));
+    }
+
+    private static async Task PrepareNetworkRecoveryUiAsync(CancellationToken ct, bool forceDisconnectDialog = false)
     {
         ct.ThrowIfCancellationRequested();
         using (var screen = CaptureToRectArea())
         {
             // 已到主界面或上一轮已打开地图时，直接继续操作验证，不重跑登录/OCR点击。
+            // 仅在多次开图失败后明确识别到断线弹窗时，放行处理覆盖在主界面上的断线对话框。
             // 地图识别与快速传送探测使用同一套资产，不能混用公版模板。
             using var map = screen.Find(TpTaskFastDragAssets.Get(screen).MapScaleButtonRo);
-            if (map.IsExist() || Bv.IsInMainUi(screen)) return;
+            if (map.IsExist()) return;
+            if (Bv.IsInMainUi(screen) && !forceDisconnectDialog) return;
         }
         await NetworkRecovery.Start(ct, verifyMainUi: true, clearSuspend: false,
             mainUiAttempts: RecoveryMainUiAttempts);
