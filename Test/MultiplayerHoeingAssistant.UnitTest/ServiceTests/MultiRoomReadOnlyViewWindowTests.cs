@@ -363,7 +363,61 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         typeof(MainViewModel).GetField("_configManager", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(vm, manager);
                         var otherRoomEdit = vm.ReadRoomOrchestrationEdit(secondRoom.Id);
                         var activeBindingBefore = testConfig.OnlineHoeingGroupNames.ToArray();
-                        vm.CommitRoomOrchestrationEdit(otherRoomEdit, new RoomOrchestrationEditChanges(ExpectedPlayers: 3, Schedule: "19:30"), null);
+                        // A waiting switch and ordinary read/command effects may live for a long
+                        // time. They are not concurrent configuration writers and must not block
+                        // this independent profile save, even through the remote save handler.
+                        const BindingFlags roomFlags = BindingFlags.Instance | BindingFlags.NonPublic;
+                        var switchGate = (SemaphoreSlim)typeof(MainViewModel).GetField("_assistantRoomSwitchGate", roomFlags)!.GetValue(vm)!;
+                        IDisposable HoldRoomEffect() => (IDisposable)typeof(MainViewModel).GetMethod("TryEnterAssistantRoomEffect", roomFlags)!.Invoke(vm, null)!;
+                        Assert.True(switchGate.Wait(0));
+                        try
+                        {
+                            using var concurrentRead = HoldRoomEffect();
+                            vm.CommitRoomOrchestrationEdit(otherRoomEdit, new RoomOrchestrationEditChanges(ExpectedPlayers: 3, Schedule: "19:30"), null);
+                            var activeEdit = vm.ReadRoomOrchestrationEdit(activeRoom.Id);
+                            vm.CommitRoomOrchestrationEdit(activeEdit, new RoomOrchestrationEditChanges(ExpectedPlayers: 3), null);
+                            Assert.Equal(3, testConfig.ExpectedHoeingPlayers);
+                            Assert.Equal(3, manager.Load().ExpectedHoeingPlayers);
+                            using var remoteRequest = HoldRoomEffect();
+                            var read = await vm.ExecuteRoomOrchestrationRemoteOperationAsync(new RemoteCenterRequest
+                            { Operation = "room.orchestration.edit", TargetInstanceId = testConfig.ClientInstanceId, PayloadJson = System.Text.Json.JsonSerializer.Serialize(third.Id) });
+                            Assert.Equal("ok", read.Status);
+                            var remoteEdit = System.Text.Json.JsonSerializer.Deserialize<RemoteOrchestrationEdit>(read.PayloadJson!)!;
+                            var savedRemote = await vm.ExecuteRoomOrchestrationRemoteOperationAsync(new RemoteCenterRequest
+                            {
+                                Operation = "room.orchestration.save", TargetInstanceId = testConfig.ClientInstanceId, ExpectedRevision = remoteEdit.Revision,
+                                PayloadJson = System.Text.Json.JsonSerializer.Serialize(new RemoteOrchestrationSaveRequest(third.Id, new(ExpectedPlayers: 3), null))
+                            });
+                            Assert.True(savedRemote.Status == "ok", savedRemote.Message);
+                            Assert.Equal(3, manager.Load().RoomProfiles.Single(p => p.Id == third.Id).ExpectedHoeingPlayers);
+                            var stale = await vm.ExecuteRoomOrchestrationRemoteOperationAsync(new RemoteCenterRequest
+                            {
+                                Operation = "room.orchestration.save", TargetInstanceId = testConfig.ClientInstanceId, ExpectedRevision = remoteEdit.Revision,
+                                PayloadJson = System.Text.Json.JsonSerializer.Serialize(new RemoteOrchestrationSaveRequest(third.Id, new(ExpectedPlayers: 2), null))
+                            });
+                            Assert.Equal("rejected", stale.Status);
+                        }
+                        finally { switchGate.Release(); }
+                        var latestEdit = vm.ReadRoomOrchestrationEdit(secondRoom.Id);
+                        var beforeActualSwitch = manager.ReadRawJson();
+                        Assert.True((bool)typeof(MainViewModel).GetMethod("TryBlockAssistantRoomEffects", roomFlags)!.Invoke(vm, null)!);
+                        try
+                        {
+                            var blocked = Assert.Throws<InvalidOperationException>(() => vm.CommitRoomOrchestrationEdit(latestEdit,
+                                new RoomOrchestrationEditChanges(Schedule: "20:00"), null));
+                            Assert.Contains("实际离开或加入房间", blocked.Message);
+                            Assert.Equal(beforeActualSwitch, manager.ReadRawJson());
+                        }
+                        finally { typeof(MainViewModel).GetField("_changingAssistantRoom", roomFlags)!.SetValue(vm, false); }
+                        typeof(MainViewModel).GetField("_roomSwitchRecordUnreadable", roomFlags)!.SetValue(vm, true);
+                        try
+                        {
+                            var blocked = Assert.Throws<InvalidOperationException>(() => vm.CommitRoomOrchestrationEdit(latestEdit,
+                                new RoomOrchestrationEditChanges(Schedule: "20:00"), null));
+                            Assert.Contains("切换结果尚未确认", blocked.Message);
+                            Assert.Equal(beforeActualSwitch, manager.ReadRawJson());
+                        }
+                        finally { typeof(MainViewModel).GetField("_roomSwitchRecordUnreadable", roomFlags)!.SetValue(vm, false); }
                         Assert.Equal(activeBindingBefore, testConfig.OnlineHoeingGroupNames);
                         Assert.Equal(activeRoom.Id, testConfig.ActiveRoomProfileId);
                         Assert.Equal(3, secondRoom.ExpectedHoeingPlayers);

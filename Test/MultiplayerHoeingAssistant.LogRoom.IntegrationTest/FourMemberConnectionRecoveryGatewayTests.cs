@@ -244,7 +244,33 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 var switchRoom = type.GetMethod("SwitchAssistantRoomForFlowAsync", flags)!;
                 Task<FlowRoomSwitchResult> Switch(string id) =>
                     (Task<FlowRoomSwitchResult>)switchRoom.Invoke(vm, [id, null, budget.Token])!;
-                var toB = await Switch(target.Id);
+                // A real switch waiting for a shared room effect must not reject a profile-only
+                // save. The subsequently confirmed target must consume the newly saved fields.
+                var configManager = (AssistConfigManager)type.GetField("_configManager", flags)!.GetValue(vm)!;
+                Assert.True(configManager.TrySave(config));
+                var heldRead = (IDisposable)type.GetMethod("TryEnterAssistantRoomEffect", flags)!.Invoke(vm, null)!;
+                Task<RemoteCenterReply> Orchestrate(RemoteCenterRequest req) => (Task<RemoteCenterReply>)type
+                    .GetMethod("ExecuteRoomOrchestrationRemoteOperationAsync", flags)!.Invoke(vm, [req, null, null])!;
+                Task<FlowRoomSwitchResult> switching;
+                try
+                {
+                    switching = Switch(target.Id);
+                    await WaitUntilAsync(() => Task.FromResult(vm.RoomSwitchStatus.StartsWith("等待切换到", StringComparison.Ordinal)));
+                    Assert.False(switching.IsCompleted);
+                    var opened = await Orchestrate(new RemoteCenterRequest { Operation = "room.orchestration.edit",
+                        TargetInstanceId = config.ClientInstanceId, PayloadJson = JsonSerializer.Serialize(target.Id) });
+                    Assert.Equal("ok", opened.Status);
+                    using var edit = JsonDocument.Parse(opened.PayloadJson!);
+                    var savedDuringWait = await Orchestrate(new RemoteCenterRequest { Operation = "room.orchestration.save",
+                        TargetInstanceId = config.ClientInstanceId, ExpectedRevision = edit.RootElement.GetProperty("Revision").GetString(),
+                        PayloadJson = JsonSerializer.Serialize(new { ProfileId = target.Id, Changes = new { ExpectedPlayers = 4 } }) });
+                    Assert.True(savedDuringWait.Status == "ok", savedDuringWait.Message);
+                    Assert.Equal(source.Id, config.ActiveRoomProfileId);
+                    Assert.Equal(2, config.ExpectedHoeingPlayers);
+                    Assert.Equal(4, configManager.Load().RoomProfiles.Single(p => p.Id == target.Id).ExpectedHoeingPlayers);
+                }
+                finally { heldRead.Dispose(); }
+                var toB = await switching;
                 Assert.True(toB.Success, toB.Message);
                 Assert.Equal(b.Url, config.ServerUrl);
                 Assert.Equal(code, vm.RoomCode);
@@ -256,7 +282,7 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 Assert.Contains(vm.Members, member => member.PlayerName == "B 队友");
                 Assert.DoesNotContain(a.Manager.GetControlRoomPlayers("CTRL_" + code), p => p.PlayerUid == player && p.Online);
                 var bMember = Assert.Single(b.Manager.GetControlRoomPlayers("CTRL_" + code).Where(p => p.PlayerUid == player && p.Online));
-                Assert.Equal(3, bMember.ExpectedHoeingPlayers);
+                Assert.Equal(4, bMember.ExpectedHoeingPlayers);
                 Assert.Equal("B 的绑定", Assert.Single(bMember.OnlineHoeingGroupNames));
                 await WaitUntilAsync(() => Task.FromResult(Targets(monitorA).Length == 0 && Targets(monitorB).Any(t => t.ClientInstanceId == selectedInstance)));
                 Assert.Equal(bMember.ClientInstanceId, Assert.Single(Targets(monitorB)).ClientInstanceId);

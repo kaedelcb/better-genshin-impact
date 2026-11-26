@@ -319,14 +319,19 @@ public partial class MainViewModel
             lock (_assistantRoomEffectsGate)
             lock (_batchGate)
             {
-                // Do not take a room effect for the whole dialog. At the final short synchronous
-                // boundary, ensure no other room writer is in progress and no switch can commit.
-                // Batch admission also reads the active completion policy under _batchGate; it must
-                // see either the old fields or the fully committed new fields, never a mixture.
-                if (!ReferenceEquals(current, _config) || _assistantRoomEffects != (remoteCenterOwnsRoomEffect ? 1 : 0)
-                    || RoomSwitchHasPendingRequest || RoomSwitchBlocksRoomOperations)
-                    throw new InvalidOperationException("正在更新房间或核对切换结果，请稍后重试保存。");
-                using var roomEffect = TryEnterAssistantRoomEffect() ?? throw new InvalidOperationException("房间状态尚未确认。");
+                // Room effects are shared leases against *actual* leave/join, not exclusive
+                // config writers. Catalog reads, status/command processing and a switch waiting
+                // for the old round may coexist with a short profile-only save. A switch does not
+                // acquire its exclusive boundary until TryBlockAssistantRoomEffects succeeds.
+                // Field-level conflict checks, the config write gate and _batchGate below still
+                // protect persistence and frozen batch admission; never wait for ordinary work here.
+                if (!ReferenceEquals(current, _config))
+                    throw new InvalidOperationException("执行端配置已变化，请重新打开编辑器核对。");
+                if (_changingAssistantRoom)
+                    throw new InvalidOperationException("正在实际离开或加入房间，请在本次切换结束后保存；编辑内容仍保留。");
+                if (RoomSwitchBlocksRoomOperations)
+                    throw new InvalidOperationException("切换结果尚未确认，请先在助手房间中核对切换结果；本次未保存，编辑内容仍保留。");
+                using var roomEffect = TryEnterAssistantRoomEffect() ?? throw new InvalidOperationException("实际切房正在提交，未保存。");
                 using var writing = manager.AcquireWriteGate();
                 var disk = ReadOrchestrationConfig(manager, out var expectedRaw);
                 if (current.ObserverMode || disk.ObserverMode || disk.ActiveRoomProfileId != current.ActiveRoomProfileId)
