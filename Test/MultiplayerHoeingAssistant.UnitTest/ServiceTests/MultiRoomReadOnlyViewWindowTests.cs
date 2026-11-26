@@ -484,6 +484,15 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                                 Assert.True(action.ActualWidth > 75, $"完成动作空间不足：{action.ActualWidth}");
                             }
                             var firstTitle = Assert.Single(titles.Where(t => t.DataContext is RoomOrchestrationCard c && c.Id == activeRoom.Id));
+                            var taskBadges = FindVisualChildren<Border>(graph).Where(b => b.Name == "TaskStatusChrome").ToArray();
+                            Assert.NotEmpty(taskBadges);
+                            Assert.All(taskBadges, b => Assert.Equal(new Thickness(6, 1.5, 6, 1.5), b.Padding));
+                            var titleBadge = Assert.Single(FindVisualChildren<Border>(firstTitle).Where(b => b.DataContext is RoomOrchestrationStatus s && s.Kind == "done" && b.Padding == new Thickness(6, 3, 6, 3)));
+                            Assert.All(taskBadges.Where(b => b.DataContext is RoomOrchestrationStatus s && s.Kind == "done"), b =>
+                            {
+                                Assert.True(b.ActualHeight < titleBadge.ActualHeight, "任务状态框应比房间状态框略矮");
+                                Assert.Contains(FindVisualChildren<TextBlock>(b), t => t.FontSize == 12 && t.Text.Contains("已完成"));
+                            });
                             Assert.Contains(FindVisualChildren<TextBlock>(firstTitle), t => t.Name == "CardCompactProgressText" && t.Text == "2/2");
                             Assert.Contains(FindVisualChildren<ProgressBar>(firstTitle), p => p.Name == "CardCompactProgressBar" && p.Visibility == Visibility.Visible);
                             var time = Assert.Single(FindVisualChildren<TextBlock>(firstTitle).Where(t => t.Name == "CardUpdatedText"));
