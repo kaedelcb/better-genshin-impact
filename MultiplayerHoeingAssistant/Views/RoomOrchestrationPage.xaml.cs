@@ -32,6 +32,7 @@ public partial class RoomOrchestrationPage : UserControl
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(750) };
         _refreshTimer.Tick += (_, _) => RefreshPresentation();
         PresentationRoot.DataContext = RoomOrchestrationPresentation.Empty;
+        HeaderLayout.DataContext = RoomOrchestrationHeaderDisplay.Create(RoomOrchestrationPresentation.Empty, false, null, null);
         Loaded += (_, _) =>
         {
             _owner = Window.GetWindow(this);
@@ -86,6 +87,8 @@ public partial class RoomOrchestrationPage : UserControl
         {
             StopMonitor();
             MonitorTargetRow.Visibility = Visibility.Collapsed;
+            HeaderExecutorNameText.Visibility = Visibility.Visible;
+            HeaderLayout.ColumnDefinitions[1].Width = new GridLength(2, GridUnitType.Star);
             return;
         }
         _monitorViewModel = vm;
@@ -95,12 +98,16 @@ public partial class RoomOrchestrationPage : UserControl
         _updatingMonitorTargets = true;
         try
         {
-            if (MonitorTargetSelector.ItemsSource is not MainViewModel.OrchestrationMonitorTarget[] old || !old.SequenceEqual(choices))
-                MonitorTargetSelector.ItemsSource = choices;
-            MonitorTargetSelector.SelectedItem = choices.FirstOrDefault(t => selected is not null && t.Uid == selected.Uid
-                && t.InstanceId == selected.InstanceId && t.MachineId == selected.MachineId);
+            var options = choices.Select(t => new MonitorTargetOption(t, choices.Count(c => c.Name == t.Name) > 1)).ToArray();
+            if (MonitorTargetSelector.ItemsSource is not MonitorTargetOption[] old || !old.SequenceEqual(options))
+                MonitorTargetSelector.ItemsSource = options;
+            var displayed = (MonitorTargetOption[])MonitorTargetSelector.ItemsSource;
+            MonitorTargetSelector.SelectedItem = displayed.FirstOrDefault(o => selected is not null && o.Target.Uid == selected.Uid
+                && o.Target.InstanceId == selected.InstanceId && o.Target.MachineId == selected.MachineId);
             MonitorTargetRow.Visibility = choices.Length > 1 || choices.Length == 1 && MonitorTargetSelector.SelectedItem is null
                 ? Visibility.Visible : Visibility.Collapsed;
+            HeaderExecutorNameText.Visibility = MonitorTargetRow.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            HeaderLayout.ColumnDefinitions[1].Width = new GridLength(MonitorTargetRow.Visibility == Visibility.Visible ? 2.6 : 2, GridUnitType.Star);
         }
         finally { _updatingMonitorTargets = false; }
     }
@@ -108,8 +115,8 @@ public partial class RoomOrchestrationPage : UserControl
     private void MonitorTargetChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_updatingMonitorTargets || DataContext is not MainViewModel vm
-            || MonitorTargetSelector.SelectedItem is not MainViewModel.OrchestrationMonitorTarget target) return;
-        vm.SelectOrchestrationMonitorTarget(target);
+            || MonitorTargetSelector.SelectedItem is not MonitorTargetOption option) return;
+        vm.SelectOrchestrationMonitorTarget(option.Target);
         RefreshPresentation();
     }
 
@@ -121,6 +128,9 @@ public partial class RoomOrchestrationPage : UserControl
         {
             UpdateMonitorTargets(vm);
             var presentation = vm.GetRoomOrchestrationPresentation();
+            var header = RoomOrchestrationHeaderDisplay.Create(presentation, vm.IsObserverMode,
+                vm.SelectedOrchestrationMonitorTarget, vm.Config?.PlayerName);
+            if (!Equals(HeaderLayout.DataContext, header)) HeaderLayout.DataContext = header;
             var signature = JsonSerializer.Serialize(presentation);
             if (signature == _lastProjection) return;
 
@@ -206,6 +216,21 @@ public partial class RoomOrchestrationPage : UserControl
 
     // The main window has a normal minimum width; high-DPI work areas can be smaller. Reflow
     // metadata below the task list rather than shrinking text or creating horizontal scrolling.
+    private void HeaderLayoutSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged || e.NewSize.Width <= 0) return;
+        var narrow = e.NewSize.Width < 590;
+        // A second line is used only below the normal minimum window's available width.
+        // Reason text can trim, but the status, detail button and actual target selector stay reachable.
+        HeaderLayout.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(3, GridUnitType.Star);
+        Grid.SetRow(HeaderStatusPane, narrow ? 1 : 0);
+        Grid.SetColumn(HeaderStatusPane, narrow ? 0 : 2);
+        Grid.SetColumnSpan(HeaderStatusPane, narrow ? 2 : 1);
+        HeaderStatusPane.BorderThickness = narrow ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0);
+        HeaderStatusPane.Padding = narrow ? new Thickness(0, 5, 0, 0) : new Thickness(8, 0, 0, 0);
+        HeaderStatusPane.Margin = narrow ? new Thickness(0, 5, 0, 0) : new Thickness(0);
+    }
+
     private void RoomContentLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is Grid grid) ApplyRoomContentWidth(grid, grid.ActualWidth);
@@ -220,7 +245,11 @@ public partial class RoomOrchestrationPage : UserControl
     {
         if (width <= 0 || grid.Children.Count != 2 || grid.Children[0] is not StackPanel tasks
             || grid.Children[1] is not Border meta) return;
-        var narrow = width < 495;
+        var narrow = width < 520;
+        // Reserve the pair of parameter tiles at normal/minimum window widths. Reflow only
+        // for genuinely smaller work areas; never reduce the original text sizes to squeeze them in.
+        grid.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+        grid.ColumnDefinitions[1].Width = new GridLength(narrow ? 0 : Math.Clamp(width * .31, 222, 266));
         Grid.SetColumnSpan(tasks, narrow ? 2 : 1);
         Grid.SetRow(meta, narrow ? 1 : 0);
         Grid.SetColumn(meta, narrow ? 0 : 1);
@@ -243,6 +272,66 @@ public partial class RoomOrchestrationPage : UserControl
             _editing = false;
             RefreshPresentation();
         }
+    }
+
+    private void RoomDetailsClick(object sender, RoutedEventArgs e)
+    {
+        if (_editing || sender is not Button { DataContext: RoomOrchestrationCard card }
+            || Window.GetWindow(this) is not Window owner) return;
+        e.Handled = true;
+        ShowReadOnlyDetails(owner, "房间执行详情 · " + card.Name, RoomOrchestrationDisplayConverter.FullDetails(card));
+    }
+
+    private void HeaderDetailsClick(object sender, RoutedEventArgs e)
+    {
+        if (_editing || HeaderLayout.DataContext is not RoomOrchestrationHeaderDisplay header
+            || Window.GetWindow(this) is not Window owner) return;
+        e.Handled = true;
+        ShowReadOnlyDetails(owner, "当前登录及执行详情", header.Details);
+    }
+
+    private void ShowReadOnlyDetails(Window owner, string title, string text)
+    {
+        StopDrag();
+        // A read-only snapshot of the underlying details, not a command or a second state source.
+        var window = new Window
+        {
+            Owner = owner, Title = title, Width = 510, Height = 370,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
+            FontFamily = owner.FontFamily, FontSize = 13, Background = owner.Background,
+            Foreground = (Brush)FindResource("OrchWhite"), UseLayoutRounding = true,
+            MinWidth = 280, MinHeight = 200
+        };
+        var work = Helpers.DpiAwarenessController.GetLogicalWorkAreaRect(owner) ?? SystemParameters.WorkArea;
+        window.MaxWidth = Math.Max(200, work.Width - 24);
+        window.MaxHeight = Math.Max(180, work.Height - 24);
+        window.MinWidth = Math.Min(window.MinWidth, window.MaxWidth);
+        window.MinHeight = Math.Min(window.MinHeight, window.MaxHeight);
+        window.Width = Math.Min(window.Width, window.MaxWidth);
+        window.Height = Math.Min(window.Height, window.MaxHeight);
+        var root = new Grid { Margin = new Thickness(14) };
+        root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new() { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new() { Height = GridLength.Auto });
+        root.Children.Add(new TextBlock { Text = "打开时的已读取状态 · 可选择并复制原文", Foreground = (Brush)FindResource("OrchDim"),
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
+        var detail = new TextBox
+        {
+            Name = "RoomDetailTextBox", Text = text, IsReadOnly = true,
+            TextWrapping = TextWrapping.Wrap, AcceptsReturn = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(8),
+            Background = new SolidColorBrush(Color.FromRgb(0x21, 0x1E, 0x41)), Foreground = window.Foreground,
+            BorderBrush = (Brush)FindResource("OrchLine")
+        };
+        System.Windows.Automation.AutomationProperties.SetName(detail, "房间原始状态和作业详情");
+        Grid.SetRow(detail, 1); root.Children.Add(detail);
+        var close = new Button { Content = "关闭", IsCancel = true, MinWidth = 76, Margin = new Thickness(0, 8, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right, Style = (Style)FindResource("OrchEditButton") };
+        close.Click += (_, _) => window.Close(); Grid.SetRow(close, 2); root.Children.Add(close);
+        window.Content = root;
+        _editing = true;
+        try { window.ShowDialog(); }
+        finally { _editing = false; RefreshPresentation(); }
     }
 
     private void GraphMouseDown(object sender, MouseButtonEventArgs e)

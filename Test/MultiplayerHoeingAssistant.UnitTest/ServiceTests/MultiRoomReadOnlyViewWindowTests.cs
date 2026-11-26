@@ -347,9 +347,15 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                         var displayState = (RoomOrchestrationStateStore)typeof(MainViewModel).GetField("_roomOrchestrationState", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(vm)!;
                         var key = vm.GetRoomOrchestrationKey(activeRoom)!;
                         displayState.Begin(key, "fixture-room-completed", 1, [new("罐传精英", "group"), new("精英收尾", "group")]);
-                        displayState.SetItem(key, "fixture-room-completed", 1, 0, "completed", "");
+                        const string fixtureJob = "6e97a488393f41cbbff3597b64288fad";
+                        const string fixtureNote = "绑定完成动作尚未确认，保留原请求：计划表原运行尚未退出，保留同一完成动作";
+                        displayState.SetItem(key, "fixture-room-completed", 1, 0, "completed", $"本机作业 {fixtureJob} 已确认成功");
                         displayState.SetItem(key, "fixture-room-completed", 1, 1, "completed", "");
                         displayState.SetPhase(key, "fixture-room-completed", 1, "succeeded", "最近一轮已确认完成", settled: true);
+                        var secondKey = vm.GetRoomOrchestrationKey(secondRoom)!;
+                        displayState.Begin(secondKey, "fixture-room-settling", 1, [new("精英讨伐", "group")]);
+                        displayState.SetItem(secondKey, "fixture-room-settling", 1, 0, "completed", $"本机作业 {fixtureJob} 已确认成功");
+                        displayState.SetPhase(secondKey, "fixture-room-settling", 1, "completion_wait", fixtureNote);
                         typeof(MainViewModel).GetMethod("NotifyRoomProfiles", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(vm, null);
                         // Establish a real isolated configuration store so the test verifies persistence, not only in-memory selection.
                         var manager = new AssistConfigManager();
@@ -402,6 +408,65 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                             Assert.True(scroll.ActualWidth > 0 && scroll.ActualHeight > 0);
                             Assert.Equal(5, vm.GetRoomOrchestrationPresentation().Cards.Length);
                             Assert.True(vm.GetRoomOrchestrationPresentation().Cards[0].CompletedCount == 2);
+                            var headerLayout = (Grid)graph.FindName("HeaderLayout");
+                            var header = Assert.IsType<RoomOrchestrationHeaderDisplay>(headerLayout.DataContext);
+                            Assert.Equal("最后确认", header.LoginLabel);
+                            Assert.Equal(activeRoom.Name, header.RoomName);
+                            Assert.Equal(activeRoom.RoomCode, header.RoomCode);
+                            Assert.Equal("unknown", header.Status.Kind);
+                            Assert.Equal(0, Grid.GetRow((FrameworkElement)graph.FindName("HeaderStatusPane")));
+                            Assert.True(headerLayout.ActualHeight <= 36, $"顶部状态信息行过高：{headerLayout.ActualHeight}");
+                            Assert.Equal(Visibility.Collapsed, ((Grid)graph.FindName("MonitorTargetRow")).Visibility);
+                            Assert.Contains(FindVisualChildren<Border>(graph), b => b.Name == "RoomSectionTag" && b.Visibility == Visibility.Visible
+                                && b.DataContext is RoomOrchestrationCard c && c.Id == fifth.Id && c.SectionTitle == "独立房间");
+                            var detailButtons = FindVisualChildren<Button>(graph).Where(b => b.Name == "RoomDetailButton").ToArray();
+                            var secondDetails = Assert.Single(detailButtons.Where(b => b.DataContext is RoomOrchestrationCard c && c.Id == secondRoom.Id));
+                            Assert.Equal(Visibility.Visible, secondDetails.Visibility);
+                            Assert.Contains(FindVisualChildren<TextBlock>(secondDetails), t => t.Name == "RoomDetailSummary" && t.Text == "计划表尚未退出");
+                            Assert.All(detailButtons.Where(b => b.DataContext is RoomOrchestrationCard c && c.Id == third.Id), b => Assert.Equal(Visibility.Collapsed, b.Visibility));
+                            var jobLabels = FindVisualChildren<TextBlock>(graph).Where(t => t.Name == "CompactJobText"
+                                && t.DataContext is RoomOrchestrationTaskRow row && row.Status.Detail.Contains(fixtureJob)).ToArray();
+                            Assert.NotEmpty(jobLabels);
+                            if (width == 1180) Assert.Contains(jobLabels, t => t.IsVisible && t.Text == "作业 6e97a488…");
+                            else Assert.All(jobLabels, t => Assert.Equal(Visibility.Collapsed, t.Visibility));
+                            Assert.All(FindVisualChildren<TextBlock>(graph).Where(t => t.Name == "TaskInlineDetail"
+                                && t.DataContext is RoomOrchestrationTaskRow row && row.Status.Detail.Contains(fixtureJob)), t => Assert.Equal(Visibility.Collapsed, t.Visibility));
+                            if (width == 1180)
+                            {
+                                Exception? detailFailure = null;
+                                app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                                {
+                                    var dialog = app.Windows.OfType<Window>().FirstOrDefault(w => w.Title.StartsWith("房间执行详情"));
+                                    try
+                                    {
+                                        Assert.NotNull(dialog);
+                                        var raw = Assert.Single(FindVisualChildren<TextBox>(dialog!).Where(t => t.Name == "RoomDetailTextBox"));
+                                        Assert.True(raw.IsReadOnly);
+                                        Assert.Contains(fixtureNote, raw.Text);
+                                        Assert.Contains(fixtureJob, raw.Text);
+                                    }
+                                    catch (Exception ex) { detailFailure = ex; }
+                                    finally { dialog?.Close(); }
+                                }));
+                                secondDetails.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                if (detailFailure is not null) throw detailFailure;
+                                app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                                {
+                                    var dialog = app.Windows.OfType<Window>().FirstOrDefault(w => w.Title == "当前登录及执行详情");
+                                    try
+                                    {
+                                        Assert.NotNull(dialog);
+                                        var raw = Assert.Single(FindVisualChildren<TextBox>(dialog!).Where(t => t.Name == "RoomDetailTextBox"));
+                                        Assert.True(raw.IsReadOnly);
+                                        Assert.Contains("尚未确认连接", raw.Text);
+                                        Assert.Contains(activeRoom.RoomCode, raw.Text);
+                                    }
+                                    catch (Exception ex) { detailFailure = ex; }
+                                    finally { dialog?.Close(); }
+                                }));
+                                ((Button)graph.FindName("HeaderDetailButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                if (detailFailure is not null) throw detailFailure;
+                            }
                             var visual = (UIElement)window.Content;
                             var image = new RenderTargetBitmap((int)Math.Ceiling(visual.RenderSize.Width), (int)Math.Ceiling(visual.RenderSize.Height), 96, 96, PixelFormats.Pbgra32);
                             image.Render(visual);
@@ -415,6 +480,14 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                                 scroll.ScrollToEnd();
                                 window.UpdateLayout();
                                 Assert.True(scroll.VerticalOffset > 0);
+                                if (width == 980)
+                                {
+                                    var bottom = new RenderTargetBitmap((int)Math.Ceiling(visual.RenderSize.Width), (int)Math.Ceiling(visual.RenderSize.Height), 96, 96, PixelFormats.Pbgra32);
+                                    bottom.Render(visual);
+                                    var bottomEncoder = new PngBitmapEncoder(); bottomEncoder.Frames.Add(BitmapFrame.Create(bottom));
+                                    using var bottomOutput = File.Create(Path.Combine(AssistantDataDirectory.Root, "room-orchestration-wpf-bottom-980.png"));
+                                    bottomEncoder.Save(bottomOutput);
+                                }
                                 scroll.ScrollToHome();
                             }
                         }

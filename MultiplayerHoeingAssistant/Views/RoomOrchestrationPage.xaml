@@ -1,9 +1,11 @@
 <UserControl x:Class="MultiplayerHoeingAssistant.Views.RoomOrchestrationPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:MultiplayerHoeingAssistant.Views"
              x:Name="OrchestrationRoot" SnapsToDevicePixels="True" UseLayoutRounding="True">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="Show"/>
+        <local:RoomOrchestrationDisplayConverter x:Key="CompactDisplay"/>
         <SolidColorBrush x:Key="OrchGold" Color="#F2E3B6"/>
         <SolidColorBrush x:Key="OrchWhite" Color="#F4F2FA"/>
         <SolidColorBrush x:Key="OrchDim" Color="#BCB7D8"/>
@@ -48,6 +50,52 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+        <Style x:Key="OrchParameterTile" TargetType="Border">
+            <Setter Property="Background" Value="#343052"/>
+            <Setter Property="BorderBrush" Value="#514969"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Padding" Value="5,3"/>
+        </Style>
+        <Style x:Key="OrchDetailButton" TargetType="Button" BasedOn="{StaticResource OrchEditButton}">
+            <Setter Property="MinHeight" Value="27"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="Background" Value="#342F50"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1" Padding="{TemplateBinding Padding}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Chrome" Property="Background" Value="#403964"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Chrome" Property="BorderBrush" Value="#F2E3B6"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Chrome" Property="Opacity" Value="0.75"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="waiting"><Setter Property="Background" Value="#342D4C"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="failed"><Setter Property="Background" Value="#422C42"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="unknown"><Setter Property="Background" Value="#3B2D54"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="OrchDetailInk" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource OrchDim}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="waiting"><Setter Property="Foreground" Value="#E8C96D"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="failed"><Setter Property="Foreground" Value="#F0A08A"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="unknown"><Setter Property="Foreground" Value="#D3B3EF"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="running"><Setter Property="Foreground" Value="#8FC1E8"/></DataTrigger>
+                <DataTrigger Binding="{Binding Status.Kind}" Value="done"><Setter Property="Foreground" Value="#6FD8CE"/></DataTrigger>
+            </Style.Triggers>
         </Style>
         <!-- The badge is display-only; text and symbol always accompany the colour. -->
         <Style x:Key="OrchStatusChrome" TargetType="Border">
@@ -99,9 +147,9 @@
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
-                <Grid>
+                <Grid x:Name="TaskRowGrid">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Border Background="#383253" CornerRadius="4" Width="21" Height="21" VerticalAlignment="Top" Margin="0,0,7,0">
@@ -112,9 +160,18 @@
                         <Run Text="{Binding Name, Mode=OneWay}" FontSize="13" FontWeight="Medium" Foreground="{StaticResource OrchWhite}"/>
                         <Run Text="  "/><Run Text="{Binding Type, Mode=OneWay}" FontSize="12" Foreground="{StaticResource OrchDim}"/>
                     </TextBlock>
-                    <ContentControl Grid.Column="2" Content="{Binding Status}" ContentTemplate="{StaticResource StatusBadge}"
+                    <TextBlock x:Name="CompactJobText" Grid.Column="2" FontSize="12" Foreground="{StaticResource OrchDim}"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="132" Margin="0,0,7,0" ToolTip="{Binding Status.Detail}">
+                        <TextBlock.Text><MultiBinding Converter="{StaticResource CompactDisplay}">
+                            <Binding/><Binding ElementName="TaskRowGrid" Path="ActualWidth"/>
+                        </MultiBinding></TextBlock.Text>
+                        <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers>
+                            <Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger>
+                        </Style.Triggers></Style></TextBlock.Style>
+                    </TextBlock>
+                    <ContentControl Grid.Column="3" Content="{Binding Status}" ContentTemplate="{StaticResource StatusBadge}"
                                     MaxWidth="114" VerticalAlignment="Center" HorizontalAlignment="Right" IsTabStop="False"/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Text="{Binding Status.Detail}" Margin="0,2,0,0">
+                    <TextBlock x:Name="TaskInlineDetail" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Status, Converter={StaticResource CompactDisplay}, ConverterParameter=TaskDetail}" Margin="0,2,0,0">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock" BasedOn="{StaticResource OrchLabel}">
                                 <Style.Triggers>
@@ -183,8 +240,6 @@
 
         <DataTemplate x:Key="OrchestrationRoom">
             <StackPanel Margin="0,0,0,5">
-                <TextBlock Text="{Binding SectionTitle}" Foreground="{StaticResource OrchDim}" FontWeight="Medium" FontSize="13" TextWrapping="Wrap"
-                           Margin="44,9,0,7" Visibility="{Binding HasSection, Converter={StaticResource Show}}"/>
                 <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid>
@@ -221,8 +276,13 @@
                                         <Run Text="{Binding Name, Mode=OneWay}" Foreground="{StaticResource OrchGold}" FontSize="17" FontWeight="SemiBold"/>
                                         <Run Text="  "/><Run Text="{Binding Identity, Mode=OneWay}" Foreground="{StaticResource OrchDim}" FontSize="12"/>
                                     </TextBlock>
-                                    <TextBlock Text="⌖ 当前登录" Foreground="{StaticResource OrchGold}" FontSize="12" Margin="0,0,0,2" VerticalAlignment="Center"
+                                    <TextBlock Text="⌖ 当前登录" Foreground="{StaticResource OrchGold}" FontSize="12" Margin="0,0,6,2" VerticalAlignment="Center"
                                                Visibility="{Binding Current, Converter={StaticResource Show}}"/>
+                                    <Border x:Name="RoomSectionTag" Background="#343052" BorderBrush="#62516D" BorderThickness="1" CornerRadius="6"
+                                            Padding="6,2" Margin="0,0,0,2" VerticalAlignment="Center"
+                                            Visibility="{Binding HasSection, Converter={StaticResource Show}}">
+                                        <TextBlock Text="{Binding SectionTitle}" FontSize="12" Foreground="{StaticResource OrchDim}"/>
+                                    </Border>
                                 </WrapPanel>
                                 <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" MaxWidth="218">
                                     <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource OrchLabel}" Margin="0,0,6,2" VerticalAlignment="Center"
@@ -264,23 +324,53 @@
                                         BorderBrush="#544B69" VerticalAlignment="Top">
                                     <Grid>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                        <StackPanel Margin="0,0,5,0">
-                                            <TextBlock Text="预期人数" Style="{StaticResource OrchLabel}"/>
-                                            <TextBlock Text="{Binding ExpectedPlayers}" Foreground="{StaticResource OrchWhite}" FontWeight="Medium" TextWrapping="Wrap"/>
-                                        </StackPanel>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock Text="定时上线" Style="{StaticResource OrchLabel}"/>
-                                            <TextBlock Text="{Binding Schedule}" Foreground="{StaticResource OrchWhite}" FontWeight="Medium" TextWrapping="Wrap"/>
-                                        </StackPanel>
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <Border x:Name="PeopleParameterTile" Style="{StaticResource OrchParameterTile}" Margin="0,0,3,0"
+                                                ToolTip="{Binding ExpectedPlayers, StringFormat='预期人数：{0}'}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <Path Width="11" Height="12" Stroke="#D3C5E2" StrokeThickness="1" Stretch="Uniform" VerticalAlignment="Center"
+                                                      Data="M 6,1 A 2.5,2.5 0 1 1 5.99,1 M 1,11 C 1,5.5 11,5.5 11,11"/>
+                                                <TextBlock Grid.Column="1" Text="预期" Foreground="{StaticResource OrchDim}" FontSize="11" Margin="3,0,2,0" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="2" Text="{Binding ExpectedPlayers}" Foreground="{StaticResource OrchWhite}" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </Border>
+                                        <Border x:Name="ScheduleParameterTile" Grid.Column="1" Margin="3,0,0,0" Style="{StaticResource OrchParameterTile}"
+                                                ToolTip="{Binding Schedule, StringFormat='定时上线：{0}'}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <Path Width="11" Height="11" Stroke="#D3C5E2" StrokeThickness="1" Stretch="Uniform" VerticalAlignment="Center"
+                                                      Data="M 6,1 A 5,5 0 1 1 5.99,1 M 6,3 L 6,6 L 9,6"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding Schedule, Converter={StaticResource CompactDisplay}, ConverterParameter=ScheduleLabel}"
+                                                           FontSize="11" Margin="3,0,2,0" VerticalAlignment="Center" TextWrapping="Wrap">
+                                                    <TextBlock.Style><Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource OrchDim}"/>
+                                                        <Style.Triggers><DataTrigger Binding="{Binding Schedule, Converter={StaticResource CompactDisplay}, ConverterParameter=ScheduleNeedsConfirmation}" Value="True"><Setter Property="Foreground" Value="#E8C96D"/></DataTrigger></Style.Triggers>
+                                                    </Style></TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="2" Text="{Binding Schedule, Converter={StaticResource CompactDisplay}, ConverterParameter=ScheduleValue}"
+                                                           Foreground="{StaticResource OrchWhite}" FontSize="12" FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="60"/>
+                                            </Grid>
+                                        </Border>
                                         <Button Grid.Row="1" Grid.ColumnSpan="2" Content="编辑配置" Style="{StaticResource OrchEditButton}"
-                                                Margin="0,8,0,0" IsEnabled="{Binding CanEdit}" Click="EditRoomClick"
+                                                Margin="0,5,0,0" IsEnabled="{Binding CanEdit}" Click="EditRoomClick"
                                                 AutomationProperties.Name="{Binding Name, StringFormat='编辑房间 {0} 的配置'}"/>
+                                        <Button x:Name="RoomDetailButton" Grid.Row="2" Grid.ColumnSpan="2" Margin="0,6,0,0" Style="{StaticResource OrchDetailButton}"
+                                                Visibility="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=DetailsVisibility}"
+                                                ToolTip="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=Details}"
+                                                AutomationProperties.Name="{Binding Name, StringFormat='查看房间 {0} 的执行详情'}" Click="RoomDetailsClick">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Status.Glyph}" Style="{StaticResource OrchDetailInk}" Margin="0,0,5,0"/>
+                                                <TextBlock x:Name="RoomDetailSummary" Grid.Column="1" Text="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=Summary}"
+                                                           Style="{StaticResource OrchDetailInk}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" FontWeight="Medium"/>
+                                                <TextBlock Grid.Column="2" Text="详情" Foreground="{StaticResource OrchDim}" FontSize="12" VerticalAlignment="Center" Margin="5,0,4,0"/>
+                                                <Path Grid.Column="3" Data="M 0,0 L 4,4 L 0,8" Stroke="{StaticResource OrchDim}" StrokeThickness="1.3" VerticalAlignment="Center" Width="4" Height="8"/>
+                                            </Grid>
+                                        </Button>
                                     </Grid>
                                 </Border>
                             </Grid>
-                            <TextBlock Text="{Binding Detail}" Style="{StaticResource OrchLabel}" Margin="0,5,0,0"
-                                       Visibility="{Binding HasDetail, Converter={StaticResource Show}}"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -295,36 +385,72 @@
     <!-- Only the canvas scrolls. The confirmed login remains visible. -->
     <Grid x:Name="PresentationRoot">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-        <Border Grid.Row="0" Background="#30294D" BorderBrush="#897344" BorderThickness="1" CornerRadius="10" Padding="10,8" Margin="0,0,0,7">
-            <Grid>
-                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Border Width="34" Height="34" CornerRadius="9" BorderThickness="1" BorderBrush="#A28A54" Background="#40344B" Margin="0,0,9,0" VerticalAlignment="Center">
-                    <Path Width="16" Height="19" Stretch="Uniform" Stroke="#E8C96D" StrokeThickness="1.6" StrokeLineJoin="Round"
-                          Data="M 8,17 C 4,13 2,10 2,7 A 6,6 0 0 1 14,7 C 14,10 12,13 8,17 Z M 8,4 A 2.5,2.5 0 1 1 7.99,4 Z"/>
-                </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <TextBlock Text="{Binding LoginText}" Foreground="{StaticResource OrchGold}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding LoginContext}" Style="{StaticResource OrchLabel}" Margin="0,2,0,0"/>
-                </StackPanel>
-                <ContentControl Grid.Column="2" Content="{Binding CurrentStatus}" ContentTemplate="{StaticResource StatusBadge}" IsTabStop="False" MaxWidth="155"/>
-                <Grid x:Name="MonitorTargetRow" Grid.Row="2" Grid.ColumnSpan="3" Margin="0,6,0,0" Visibility="Collapsed">
-                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                    <TextBlock Text="执行端" Style="{StaticResource OrchLabel}" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                    <ComboBox x:Name="MonitorTargetSelector" Grid.Column="1" MinHeight="28"
-                              Style="{DynamicResource GoldComboBox}" ItemContainerStyle="{DynamicResource GoldComboItem}"
-                              AutomationProperties.Name="选择任务编排执行端" SelectionChanged="MonitorTargetChanged">
-                        <ComboBox.ItemTemplate><DataTemplate>
-                            <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Label}"/>
-                        </DataTemplate></ComboBox.ItemTemplate>
-                    </ComboBox>
+        <Border Grid.Row="0" Background="#30294D" BorderBrush="#897344" BorderThickness="1" CornerRadius="10" Padding="8,6" Margin="0,0,0,7">
+            <StackPanel>
+                <Grid x:Name="HeaderLayout" SizeChanged="HeaderLayoutSizeChanged">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <Grid x:Name="HeaderLoginPane" Margin="0,0,8,0" VerticalAlignment="Center" ToolTip="{Binding Details}">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Width="26" Height="26" CornerRadius="7" BorderThickness="1" BorderBrush="#A28A54" Background="#40344B" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Path Width="13" Height="16" Stretch="Uniform" Stroke="#E8C96D" StrokeThickness="1.6" StrokeLineJoin="Round"
+                                  Data="M 8,17 C 4,13 2,10 2,7 A 6,6 0 0 1 14,7 C 14,10 12,13 8,17 Z M 8,4 A 2.5,2.5 0 1 1 7.99,4 Z"/>
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="{Binding LoginLabel}" Foreground="{StaticResource OrchDim}" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                        <TextBlock x:Name="HeaderRoomNameText" Grid.Column="2" Text="{Binding RoomName}" Foreground="{StaticResource OrchGold}" FontSize="14"
+                                   FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <Border Grid.Column="3" Background="#38314D" BorderBrush="#62516D" BorderThickness="1" CornerRadius="5" Padding="5,2" Margin="5,0,0,0"
+                                VerticalAlignment="Center" Visibility="{Binding HasRoomCode, Converter={StaticResource Show}}">
+                            <TextBlock Text="{Binding RoomCode}" Foreground="{StaticResource OrchDim}" FontSize="12" MaxWidth="82" TextTrimming="CharacterEllipsis"/>
+                        </Border>
+                    </Grid>
+                    <Border x:Name="HeaderExecutorPane" Grid.Column="1" BorderBrush="#544B69" BorderThickness="1,0,0,0" Padding="8,0,8,0" VerticalAlignment="Center">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border Width="24" Height="23" Background="#343052" BorderBrush="#514969" BorderThickness="1" CornerRadius="5" Margin="0,0,6,0" VerticalAlignment="Center">
+                                <Path Width="14" Height="13" Stroke="#D3C5E2" StrokeThickness="1" Stretch="Uniform" Data="M 1,1 H 15 V 11 H 1 Z M 8,11 V 15 M 4,15 H 12"/>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="执行端" Foreground="{StaticResource OrchDim}" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="HeaderExecutorNameText" Grid.Column="2" Text="{Binding ExecutorName}" Foreground="{StaticResource OrchWhite}" FontSize="13"
+                                       FontWeight="Medium" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding Details}"/>
+                            <Grid x:Name="MonitorTargetRow" Grid.Column="2" Visibility="Collapsed">
+                                <ComboBox x:Name="MonitorTargetSelector" MinHeight="28" FontSize="12"
+                                          Style="{DynamicResource GoldComboBox}" ItemContainerStyle="{DynamicResource GoldComboItem}"
+                                          AutomationProperties.Name="选择任务编排执行端" SelectionChanged="MonitorTargetChanged">
+                                    <ComboBox.ItemTemplate><DataTemplate>
+                                        <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FullLabel}"/>
+                                    </DataTemplate></ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <Border x:Name="HeaderStatusPane" Grid.Column="2" BorderBrush="#544B69" BorderThickness="1,0,0,0" Padding="8,0,0,0" VerticalAlignment="Center">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <ContentControl Content="{Binding Status}" ContentTemplate="{StaticResource StatusBadge}" IsTabStop="False" MaxWidth="126" Margin="0,0,5,0"/>
+                            <Button x:Name="HeaderDetailButton" Grid.Column="1" Style="{StaticResource OrchDetailButton}" Background="Transparent" Padding="3,2" MinHeight="27"
+                                    Click="HeaderDetailsClick" ToolTip="{Binding Details}" AutomationProperties.Name="查看当前登录和执行端完整详情">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="HeaderReasonText" Text="{Binding Reason}" FontSize="12" FontWeight="Medium"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource OrchDetailInk}">
+                                            <Style.Triggers><DataTrigger Binding="{Binding IsCleanupPending}" Value="True"><Setter Property="Foreground" Value="#E8C96D"/></DataTrigger></Style.Triggers>
+                                        </Style></TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Grid.Column="1" Text="详情" Foreground="{StaticResource OrchDim}" FontSize="12" Margin="5,0,4,0" VerticalAlignment="Center"/>
+                                    <Path Grid.Column="2" Data="M 0,0 L 4,4 L 0,8" Stroke="{StaticResource OrchDim}" StrokeThickness="1.3" VerticalAlignment="Center" Width="4" Height="8"/>
+                                </Grid>
+                            </Button>
+                        </Grid>
+                    </Border>
                 </Grid>
-                <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Text="{Binding DataContext.RoomViewPreferenceMessage, ElementName=OrchestrationRoot}" Foreground="#E8C96D" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0">
+                <TextBlock Text="{Binding DataContext.RoomViewPreferenceMessage, ElementName=OrchestrationRoot}" Foreground="#E8C96D" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style>
                     </TextBlock.Style>
                 </TextBlock>
-            </Grid>
+            </StackPanel>
         </Border>
         <ScrollViewer x:Name="RoomGraphScrollViewer" Grid.Row="1" Style="{DynamicResource GoldScrollViewer}"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False" PanningMode="VerticalOnly"
