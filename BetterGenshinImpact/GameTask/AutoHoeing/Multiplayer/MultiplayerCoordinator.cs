@@ -38,7 +38,8 @@ public class MultiplayerCoordinator : IAsyncDisposable
     public CooperativeRouteContext? ActiveCooperativeContext { get; set; }
 
     // === 基础状态 ===
-    public bool IsHost { get; private set; }
+    // 玩家名单可能晚于建房回执；实时读取本轮房主身份，旧协调器不继承下一轮角色。
+    public bool IsHost => OwnsCurrentRoom && _client.IsHost;
     public bool IsConnected => _client.IsConnected;
     public bool IsExitTriggered { get; private set; }
     public bool IsAbortRequested { get; private set; }
@@ -218,7 +219,6 @@ public class MultiplayerCoordinator : IAsyncDisposable
         // EnableKazuhaSync 永远是全局值（多半为 false）→ PathExecutor 跳过聚物分支。
         _config = config ?? TaskContext.Instance().Config.AutoHoeingConfig;
         _resolver = resolver;
-        IsHost = client.IsHost;
 
         // 初始化子协调器
         WaitPointStateManager = new WaitPointStateManager();
