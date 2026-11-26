@@ -105,6 +105,20 @@ test('规范化服务器与房号的复合身份；同房号跨服务器不合�
     assert.throws(() => w.roomKey(A, 'Room With Space'));
 });
 
+test('默认名称只展示一次房号，采用匹配本人档案名而不改浏览器数据或串服', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', []] }), w = x.api;
+    x.setMain(x.mainSnapshot(), { remember: true, password: 'fake-main' });
+    const b = x.save(B, 'ROOM01', '网页乙房', '', false);
+    assert.equal(w.getMainContext().displayName, 'ROOM01');
+    w.setOwnerRoomNames([{serverUrl:A+'/hub',roomCode:'ROOM01',name:'罐传精队'}, {serverUrl:B,roomCode:'ROOM01',name:'另一服档案'}]);
+    assert.equal(w.getMainContext().displayName, '罐传精队');
+    assert.equal(w.getContext(b.roomKey).displayName, '网页乙房');
+    assert.equal(w.getMainContext().name, '房间 ROOM01');
+    assert.equal(JSON.parse(x.store.get(BOOK)).profiles[0].name, '房间 ROOM01');
+    w.setOwnerRoomNames([]);
+    assert.equal(w.getMainContext().displayName, 'ROOM01');
+});
+
 test('旧单房记住登录迁移；未开控制房不连接次房，公开快照不返回密码', async t => {
     let old = { roomCode: 'ROOM01', password: 'fake-legacy-secret', nickname: 'fake-name' }, cleared = 0;
     const x = fixture(t, { adapter: { loadLegacyCredentials: () => old, clearLegacyCredentials: () => { old = null; cleared++; } } });

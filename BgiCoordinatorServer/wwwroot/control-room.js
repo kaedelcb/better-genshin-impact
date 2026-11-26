@@ -249,7 +249,12 @@ function requireMainMemberTargets(scope, targets, sources) {
         throw new Error('批量操作仅支持当前控制房间成员');
 }
 function memberRoomLabel(context) {
-    return [context?.name, context?.roomCode].filter(Boolean).filter((value, i, all) => all.indexOf(value) === i).join(' · ');
+    const code = context?.roomCode || '', name = context?.displayName || context?.name || '';
+    const label = !name || name === code || name === '房间 ' + code || name === '房间' + code ? code : [name, code].filter(Boolean).join(' · ');
+    // 相同房号跨服时仍要可辨认；不把服务器身份混进房间名或路由。
+    const duplicateCode = webMemberRooms()?.listProfiles?.().some(p => p.roomCode === code && p.serverUrl !== context?.serverUrl);
+    if (duplicateCode) { try { return `${label} · ${new URL(context.serverUrl).host}`; } catch {} }
+    return label;
 }
 function memberTargetLabel(entry, fallback, showRoom = !entry?.context?.isMain || webMemberRooms()?.getView()?.mode === 'all') {
     if (!entry) return fallback;

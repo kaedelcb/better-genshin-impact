@@ -23,10 +23,28 @@
         'room.orchestration.get', 'room.orchestration.edit', 'room.orchestration.layout',
         'room.orchestration.names', 'room.orchestration.catalog', 'room.orchestration.save', 'room.orchestration.cancel']);
     const profiles = new Map(), sessions = new Map();
+    // 本人档案名称仅作已认证房间的显示别名，不改变浏览器档案、凭证或房间身份。
+    let ownerRoomNames = new Map();
+    function setOwnerRoomNames(rows) {
+        const next = new Map();
+        for (const p of Array.isArray(rows) ? rows : []) {
+            try { const name = trim(p.name ?? p.Name); if (name) next.set(roomKey(p.serverUrl ?? p.ServerUrl, p.roomCode ?? p.RoomCode), name); } catch { /* 无效身份不采用 */ }
+        }
+        if (JSON.stringify([...next]) === JSON.stringify([...ownerRoomNames])) return;
+        ownerRoomNames = next; notify();
+    }
+    function profileDisplayName(p) {
+        if (!p) return '';
+        const name = trim(p.name), code = p.roomCode;
+        const autoServerName = p.serverUrl && `${code} · ${new URL(p.serverUrl).host}`;
+        if (!name || name === code || name === '房间 ' + code || name === '房间' + code || name === autoServerName)
+            return ownerRoomNames.get(p.roomKey) || code;
+        return name;
+    }
     let options = {}, initialized = false, active = false, suspended = false, generation = 0;
     let main = null, view = { mode: 'current', roomKey: '' }, lastLoginKey = '', legacyMigrated = false;
     let storageError = '', storageRaw = null, storageBlocked = false, viewNotice = '', switchingKey = '', notifyQueued = false;
-    let selector = null, notice = null, menu = null, manager = null, switchDialog = null;
+    let selector = null, notice = null, menu = null, manager = null, switchDialog = null, placeSelector = null;
 
     const text = value => typeof value === 'string' ? value : '';
     const trim = value => text(value).trim();
@@ -251,7 +269,7 @@
     }
     function publicProfile(p) {
         return { id: p.profileId, profileId: p.profileId, roomKey: p.roomKey, serverUrl: p.serverUrl,
-            roomCode: p.roomCode, name: p.name, note: p.note, remember: p.remember, saved: p.saved, hasPassword: !!p.password,
+            roomCode: p.roomCode, name: p.name, displayName: profileDisplayName(p), note: p.note, remember: p.remember, saved: p.saved, hasPassword: !!p.password,
             isMain: main?.roomKey === p.roomKey, ...statusFor(p) };
     }
     function listProfiles() { return [...profiles.values()].map(publicProfile); }
@@ -263,7 +281,7 @@
         const s = statusFor(p), record = sessions.get(key), attempt = record?.attempt;
         const state = isMain ? main : attempt;
         return { roomKey: key, serverUrl: p.serverUrl, roomCode: p.roomCode, profileId: p.profileId || '',
-            name: p.name, note: p.note || '', isMain, ...s,
+            name: p.name, displayName: profileDisplayName(p), note: p.note || '', isMain, ...s,
             authenticated: isMain ? s.ready : !!attempt?.joined,
             players: s.ready ? [...(isMain ? main.players : attempt.rows)] : [],
             senderUid: state?.senderUid || '', capabilities: [...(state?.capabilities || [])], generation: state?.generation ?? 0 };
@@ -676,25 +694,31 @@
     const statuses = { ready: '已连接', connecting: '连接中', reconnecting: '重连中', unauthenticated: '需认证',
         failed: '连接失败', unconfirmed: '状态待确认', idle: '未连接' };
     function statusText(p) { return p.isMain ? (p.ready ? '当前控制 · 已连接' : '当前控制 · 状态待确认') : statuses[p.status] || '状态待确认'; }
-    function roomLabel(context) { return context ? `${context.name} · ${context.roomCode}（${context.serverUrl}）` : '未登录控制房间'; }
+    function roomCaption(context) {
+        if (!context) return '';
+        const code = context.roomCode, name = context.displayName || profileDisplayName(context) || code;
+        return name === code || name === '房间 ' + code || name === '房间' + code ? code : `${name} · ${code}`;
+    }
+    function roomLabel(context) { return context ? `${roomCaption(context)}（${context.serverUrl}）` : '未登录控制房间'; }
     function getViewNotice() {
         if (view.mode === 'orchestration') return '';
         const relevant = view.mode === 'all' ? orderedContexts() : [view.mode === 'room' ? getContext(view.roomKey) : getMainContext()].filter(Boolean);
         const missing = relevant.filter(c => !c.ready);
         return [viewNotice, !relevant.length ? '尚未连接控制房间。' : '',
-            missing.length ? missing.map(c => `${c.name} · ${c.roomCode}（${c.serverUrl}）：${c.error || statuses[c.status] || '状态待确认'}`).join('；') : '',
-            view.mode === 'room' && view.roomKey !== main?.roomKey ? '正在旁观其他房间；单卡操作独立，批量和快捷指令仅作用于当前控制房间。' :
-                view.mode === 'all' ? '成员按 UID 去重；批量和快捷指令仅作用于当前控制房间。' : '', storageError].filter(Boolean).join(' ');
+            missing.length ? missing.map(c => `${roomLabel(c)}：${c.error || statuses[c.status] || '状态待确认'}`).join('；') : '',
+            storageError].filter(Boolean).join(' ');
     }
     function viewLabel() {
         if (view.mode === 'all') return '所有房间';
         if (view.mode === 'orchestration') return '任务编排';
-        return (view.mode === 'room' ? getContext(view.roomKey)?.name : getMainContext()?.name) || '当前控制房间';
+        const context = view.mode === 'room' ? getContext(view.roomKey) : getMainContext();
+        return context?.displayName || '当前控制房间';
     }
     function refreshUi() {
         if (selector) {
+            placeSelector?.();
             const button = selector.querySelector('button'), caption = selector.querySelector('.wr-trigger-label');
-            const label = viewLabel(); caption.textContent = `查看：${label}`; button.title = label;
+            const label = viewLabel(); caption.textContent = label; button.title = label;
             button.setAttribute('aria-label', `查看：${label}，打开房间菜单`);
         }
         if (notice) { const message = getViewNotice(); notice.textContent = message; notice.hidden = !message; }
@@ -706,8 +730,16 @@
         if (!host) return null;
         if (selector?.isConnected) return selector;
         selector = document.createElement('div'); selector.className = 'wr-selector';
-        selector.innerHTML = '<button type="button" class="wr-trigger" aria-haspopup="dialog" aria-expanded="false"><span class="wr-trigger-label"></span><span class="wr-chevron" aria-hidden="true"></span></button>';
+        selector.innerHTML = '<button type="button" class="wr-trigger" aria-haspopup="dialog" aria-expanded="false"><span class="wr-trigger-prefix">查看</span><span class="wr-trigger-label"></span><span class="wr-chevron" aria-hidden="true"></span></button>';
         host.classList.add('wr-nav'); host.append(selector);
+        // 手机把选择器放入已有房间状态行，不再额外撑高导航。
+        placeSelector = () => {
+            if (!selector) return;
+            const room = root.matchMedia?.('(max-width:700px)').matches && document.querySelector('.topbar .room');
+            const parent = room || host;
+            if (selector.parentElement !== parent) parent.append(selector);
+        };
+        root.addEventListener?.('resize', placeSelector); placeSelector();
         selector.querySelector('button').onclick = openMenu;
         // 对不可用/非当前视图在原成员区域之外给出独立提示；正常旧单房布局不增高。
         notice = document.createElement('p'); notice.className = 'wr-view-notice'; notice.setAttribute('role', 'status'); notice.hidden = true;
@@ -732,7 +764,7 @@
         closeDialog(menu, restore ? button : null); menu = null;
     }
     function renderMenu(dialog) {
-        const rooms = listProfiles(), signature = JSON.stringify([view, main?.roomKey, rooms.map(p => [p.roomKey, p.name, p.note])]);
+        const rooms = listProfiles(), signature = JSON.stringify([view, main?.roomKey, rooms.map(p => [p.roomKey, p.displayName, p.note])]);
         if (dialog.dataset.signature !== signature) {
             const focusKey = document.activeElement?.dataset?.wrAction;
             dialog.dataset.signature = signature;
@@ -740,7 +772,7 @@
             dialog.innerHTML = `<div class="wr-dialog-head"><h3>助手房间</h3><button type="button" class="wr-link" data-wr-action="close">关闭</button></div>
                 <div class="wr-menu-content">${row('all', '', '所有房间', `${rooms.length} 个浏览器房间`, view.mode === 'all')}
                 ${row('current', main?.roomKey || '', '当前控制房间', main ? roomLabel(getMainContext()) : '尚未登录', view.mode === 'current' || view.mode === 'room' && view.roomKey === main?.roomKey)}
-                ${rooms.filter(p => !p.isMain).map(p => `<div class="wr-menu-room">${row('room', p.roomKey, `${p.name} · ${p.roomCode}`, p.serverUrl, view.mode === 'room' && view.roomKey === p.roomKey)}<span class="wr-room-status" data-wr-status="${e(p.roomKey)}"></span></div>`).join('')}
+                ${rooms.filter(p => !p.isMain).map(p => `<div class="wr-menu-room">${row('room', p.roomKey, roomCaption(p), p.serverUrl, view.mode === 'room' && view.roomKey === p.roomKey)}<span class="wr-room-status" data-wr-status="${e(p.roomKey)}"></span></div>`).join('')}
                 ${row('orchestration', '', '任务编排', '本人授权的执行端档案', view.mode === 'orchestration')}
                 <p class="wr-muted wr-menu-copy-result" role="status"></p></div>
                 <div class="wr-dialog-actions wr-menu-actions"><button type="button" class="wr-action" data-wr-action="copy">复制房间号</button><button type="button" class="wr-action" data-wr-action="manage">管理房间</button><button type="button" class="wr-action" data-wr-action="switch">切换控制房间</button></div>`;
@@ -915,11 +947,13 @@
         initialized = false; active = false; root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
         for (const record of sessions.values()) retire(record);
         sessions.clear(); closeMenu(false); closeDialog(manager?.dialog); closeDialog(switchDialog); manager = null; switchDialog = null;
-        selector?.parentElement?.classList.remove('wr-nav'); selector?.remove(); notice?.remove(); selector = null; notice = null;
-        profiles.clear(); main = null; options = {}; switchingKey = '';
+        root.removeEventListener?.('resize', placeSelector); placeSelector = null;
+        if (selector) document.querySelector('#gengdiNav')?.classList.remove('wr-nav');
+        selector?.remove(); notice?.remove(); selector = null; notice = null;
+        profiles.clear(); ownerRoomNames.clear(); main = null; options = {}; switchingKey = '';
     }
     root.webRooms = { init, dispose, mount, normalizeServer, roomKey, validateMainLogin, getLogin,
         mainChanged, getMainContext, getContext, listProfiles, getView, setView, getViewNotice, getDisplayedMembers,
         getKnownInstances, sourceFor, getMember, requireSource, sendRemoteCommand, invoke, setActive, reconnect,
-        saveProfile, removeProfile, requestSwitch, openManager, openSwitch };
+        saveProfile, removeProfile, requestSwitch, openManager, openSwitch, setOwnerRoomNames };
 })();

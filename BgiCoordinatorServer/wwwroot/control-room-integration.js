@@ -26,6 +26,23 @@ function webOwnerTargets() {
 function webOwnerReady(t) { return !t.ambiguous && mtTargetReady(t); }
 function webOwnerPreferenceKey() { return 'bgi.room.owner.target.v1:'+(webDefaultRoomServer()||'local'); }
 function webOwnerPreference() { try{return localStorage.getItem(webOwnerPreferenceKey())||'';}catch{return '';} }
+let webNamesTarget='', webNamesReadAt=0, webNamesRequest=null;
+function webSyncOwnerRoomNames() {
+    // 仅使用已配对本机或已获本人授权的明确实例；多实例未选择时不猜测归属。
+    const targets=webOwnerTargets().filter(t=>webOwnerReady(t)&&(t.local||mtCredentialFor(t)));
+    const keyOf=t=>JSON.stringify([t.uid,t.instanceId,t.machineId]);
+    const remembered=webOwnerPreference();
+    const target=remembered?targets.find(t=>keyOf(t)===remembered):targets.length===1?targets[0]:null;
+    const key=target?keyOf(target):'';
+    if(key!==webNamesTarget){webNamesTarget=key;webNamesReadAt=0;window.webRooms.setOwnerRoomNames([]);}
+    if(!target||webNamesRequest||Date.now()-webNamesReadAt<30000)return;
+    webNamesReadAt=Date.now();
+    const job=mtSend('room.profiles.get',undefined,{target}).then(reply=>{
+        if(webNamesTarget!==key||!webOwnerReady(target)||!target.local&&!mtCredentialFor(target))return;
+        window.webRooms.setOwnerRoomNames(reply.status==='ok'?(reply.data?.profiles??reply.data?.Profiles):[]);
+    }).catch(()=>{if(webNamesTarget===key)window.webRooms.setOwnerRoomNames([]);}).finally(()=>{if(webNamesRequest===job)webNamesRequest=null;});
+    webNamesRequest=job;
+}
 function webCloseOwnerView() {
     webMainOwnerView?.dispose?.();webMainOwnerView=null;
     const host=document.getElementById('roomOwnerView');if(host)host.hidden=true;
@@ -36,7 +53,12 @@ function webOpenOwnerView(mode) {
     document.getElementById('homeView').hidden=true;document.getElementById('detailView').hidden=true;
     document.getElementById('selectionBar').hidden=true;host.hidden=false;
     webMainOwnerView=window.webRoomOwner.mount(host,{mode,targets:webOwnerTargets,ready:webOwnerReady,
-        send:(target,op,payload,options)=>mtSend(op,payload,{...options,target}),initialTargetKey:webOwnerPreference(),
+        send:async(target,op,payload,options)=>{
+            const reply=await mtSend(op,payload,{...options,target});
+            if(op==='room.profiles.get'&&reply.status==='ok'&&webOwnerReady(target)&&JSON.stringify([target.uid,target.instanceId,target.machineId])===webOwnerPreference())
+                window.webRooms.setOwnerRoomNames(reply.data?.profiles??reply.data?.Profiles);
+            return reply;
+        },initialTargetKey:webOwnerPreference(),
         onSelect:key=>{try{localStorage.setItem(webOwnerPreferenceKey(),key);}catch{}},onMessage:text=>{if(text)log(text);}});
 }
 function webRoomViewChanged(view) {
@@ -92,7 +114,7 @@ function webRoomsInit() {
     window.webRooms.init({getMainContext:webMainContext,defaultServerUrl:webDefaultRoomServer,
         legacyServerUrl:()=>document.body.dataset.localBrowser==='true'?null:location.origin,
         loadLegacyCredentials:loadCreds,clearLegacyCredentials:clearCreds,
-        onChange:()=>{if(window.webRooms.getView().mode==='orchestration'&&!webMainOwnerView&&document.getElementById('gengdiProduct')?.classList.contains('active')&&document.getElementById('controlPanel').style.display!=='none')webOpenOwnerView('orchestration');renderControlRoom();webMainOwnerView?.refresh?.();},onViewChange:webRoomViewChanged,
+        onChange:()=>{if(window.webRooms.getView().mode==='orchestration'&&!webMainOwnerView&&document.getElementById('gengdiProduct')?.classList.contains('active')&&document.getElementById('controlPanel').style.display!=='none')webOpenOwnerView('orchestration');renderControlRoom();webMainOwnerView?.refresh?.();webSyncOwnerRoomNames();},onViewChange:webRoomViewChanged,
         onEvent:webRoomSecondaryEvent,onDisconnect:webRoomSecondaryDisconnected,
         onSwitchMain:creds=>webSwitchControlRoom(creds),onOrchestration:()=>{if(!webMainOwnerView)webOpenOwnerView('orchestration');},onOwnerProfiles:()=>webOpenOwnerView('profiles')});
     window.webRooms.mount();

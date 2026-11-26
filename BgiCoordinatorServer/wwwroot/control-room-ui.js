@@ -142,7 +142,7 @@ function renderControlRoom() {
     const running = entries.filter(({member}) => member.online && member.taskRunning && member.taskStatusAvailable !== false).length;
     const batchMember = !allRooms && bulk && entries.map(x => x.member).find(p => p.hoeingBatchId && ['registering', 'preparing', 'takeover', 'running', 'cleaning', 'stopping', 'cleanupPending'].includes(p.hoeingStartPhase));
     const viewContext = !bulk && rooms?.getContext?.(view.roomKey);
-    const title = allRooms ? '所有房间' : !bulk ? viewContext?.name || '房间成员' : batchMember ? batchPhaseName(batchMember.hoeingStartPhase) : '准备一起开锄';
+    const title = allRooms ? '所有房间' : !bulk ? viewContext?.displayName || viewContext?.name || '房间成员' : batchMember ? batchPhaseName(batchMember.hoeingStartPhase) : '准备一起开锄';
     const summary = allRooms ? '每张卡片使用其来源房间；批量操作仅用于当前控制房间。' : !bulk ? '仅对所选成员进行单卡操作。整房联机请先切换控制房间。'
         : batchMember ? batchMember.hoeingStartMessage || '成员正在执行当前联机批次' : '选择成员，检查各自安排。全部准备就绪后接管当前任务。';
     document.getElementById('roomSummary').innerHTML = `<section class="hero"><div><p class="eyebrow">${online} 人在线 · ${running} 人正在执行任务</p><h1>${webEscapeHtml(title)}</h1><p>${webEscapeHtml(summary)}</p></div><div class="hero-metric"><b>${bulk ? selectedMemberUids.size : entries.length}</b><span>${allRooms ? '控制房已选' : bulk ? '已选成员' : '房间成员'}</span></div></section>`;
