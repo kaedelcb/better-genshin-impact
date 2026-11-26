@@ -6,11 +6,13 @@ $('overviewSearch').addEventListener('input',()=>{$('search').value=$('overviewS
 $('overviewType').addEventListener('change',()=>{$('roomType').value=$('overviewType').value;selected.live=null;render();});
 $('overviewFilter').addEventListener('change',()=>{$('filter').value=$('overviewFilter').value;selected.live=null;render();});
 $('historyTab').addEventListener('click', () => setView('history'));
+$('summaryTab').addEventListener('click', () => setView('summary'));
+initSummary();
 $('findLogs').addEventListener('click', () => { setView('history'); $('archiveCode')?.focus(); });
 $('search').addEventListener('input', () => { if(view==='live')$('overviewSearch').value=$('search').value; queries[view] = $('search').value; selected[view] = null; unlinkedPage = 0; render(); });
 $('filter').addEventListener('change', () => { selected.live = null; $('overviewFilter').value=$('filter').value; render(); });
 $('roomType').addEventListener('change', () => { selected.live = null; $('overviewType').value=$('roomType').value; render(); });
-$('refresh').addEventListener('click', () => { load(); if (view === 'history') { loadDaily(); loadArchive(); } });
+$('refresh').addEventListener('click', () => { load(); if (view === 'history') { loadDaily(); loadArchive(); } if (view === 'summary') loadSummary(); });
 $('logout').addEventListener('click', async () => {
   try {
     const response = await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });

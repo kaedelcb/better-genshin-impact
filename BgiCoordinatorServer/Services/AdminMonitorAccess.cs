@@ -126,6 +126,32 @@ public static class AdminMonitorRoutes
             }
         }).RequireAuthorization().WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(4096));
 
+        app.MapGet("/api/admin/hoeing/summary", (string? start, string? end, HttpContext context,
+            RoomHoeingHistory history, RoomLogArchive archive, AdminControlRoomNotes store) =>
+        {
+            NoStore(context);
+            var now = DateTime.UtcNow;
+            var first = RoomLogArchive.GetDate(now);
+            var last = first;
+            if ((start is not null && !DateOnly.TryParseExact(start, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out first))
+                || (end is not null && !DateOnly.TryParseExact(end, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out last)))
+                return Results.Problem("请选择有效的北京时间日期。", statusCode: 400);
+            if (end is null) last = first;
+            if (!RoomHoeingSummary.IsValidRange(first, last, now))
+                return Results.Problem("请选择不超过 366 天的有效日期范围，结束日期不能晚于今天。", statusCode: 400);
+            var (rooms, historyWarnings) = history.ReadSummarySource(now);
+            var warnings = historyWarnings.ToList();
+            IReadOnlyDictionary<string, string>? notes = null;
+            try { notes = store.Read(); }
+            catch (Exception exception) when (IsNotesStorageError(exception))
+            { warnings.Add("助手房间备注暂不可读取，统计仍按房间号展示。"); }
+            RoomLogHistorySnapshot? links = null;
+            try { links = archive.ReadSummaryLogHistory(); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            { warnings.Add("历史世界房间关联暂不可读取，批次时长仍按锄地记录统计。"); }
+            return Results.Json(RoomHoeingSummary.Create(first, last, now, rooms, notes, links, warnings));
+        }).RequireAuthorization();
+
         app.MapGet("/api/admin/logs/cards", (string? date, HttpContext context,
             RoomLogArchive archive, RoomHoeingHistory history) =>
         {

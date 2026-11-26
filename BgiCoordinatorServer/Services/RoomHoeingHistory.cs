@@ -62,22 +62,39 @@ public sealed class RoomHoeingHistory(string root)
     {
         lock (_gate)
         {
-            try
-            {
-                if (Directory.Exists(_root))
-                    foreach (var path in Directory.EnumerateFiles(_root, "*.json"))
-                    {
-                        var name = Path.GetFileNameWithoutExtension(path);
-                        if (RoomLogStore.NormalizeCode(name) == name) Load(name);
-                    }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            { _warnings.Add("锄地记录目录读取失败，今日记录可能缺失。"); }
             var now = Utc(utcNow);
-            foreach (var (code, room) in _rooms) ExpireSignals(code, room, now);
+            LoadAllAndExpire(now);
             return _rooms.Where(pair => TodayRuns(pair.Value, date, date == RoomLogArchive.GetDate(now)).Any() || pair.Value.Warnings.Count > 0)
                 .Select(pair => pair.Key).Order(StringComparer.Ordinal).ToArray();
         }
+    }
+
+    // Copy the saved runs under one lock; statistics and log-index joins happen outside it.
+    internal (HoeingSummarySource[] Rooms, string[] Warnings) ReadSummarySource(DateTime utcNow)
+    {
+        lock (_gate)
+        {
+            LoadAllAndExpire(Utc(utcNow));
+            return (_rooms.Select(pair => new HoeingSummarySource(pair.Key,
+                pair.Value.Runs.Values.Select(saved => saved.Run).ToArray(),
+                pair.Value.Warnings.ToArray())).ToArray(), _warnings.ToArray());
+        }
+    }
+
+    private void LoadAllAndExpire(DateTime now)
+    {
+        try
+        {
+            if (Directory.Exists(_root))
+                foreach (var path in Directory.EnumerateFiles(_root, "*.json"))
+                {
+                    var name = Path.GetFileNameWithoutExtension(path);
+                    if (RoomLogStore.NormalizeCode(name) == name) Load(name);
+                }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        { _warnings.Add("锄地记录目录读取失败，已保存记录可能缺失。"); }
+        foreach (var (code, room) in _rooms) ExpireSignals(code, room, now);
     }
 
     public IReadOnlyList<DateOnly> GetRecordedDates()

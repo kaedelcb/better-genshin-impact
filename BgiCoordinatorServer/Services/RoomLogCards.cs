@@ -11,6 +11,11 @@ public sealed record RoomLogCards(string Date, string[] Dates, RoomLogCard[] Roo
 
 public sealed partial class RoomLogArchive
 {
+    internal RoomLogHistorySnapshot ReadSummaryLogHistory()
+    {
+        lock (_gate) return CaptureHistory();
+    }
+
     /// <summary>只读取索引及文件元数据，页面刷新不扫描全服日志正文。</summary>
     public RoomLogCards GetCards(DateOnly date, DateTime utcNow, RoomHoeingHistory history)
     {

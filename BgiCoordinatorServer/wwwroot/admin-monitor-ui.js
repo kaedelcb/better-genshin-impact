@@ -350,6 +350,9 @@ function renderOverview() {
   }
 }
 function render() {
+  const summary = view === 'summary';
+  $('hoeingSummary').hidden = !summary; $('liveMetrics').hidden = summary;
+  if (summary) { $('workbench').hidden = true; $('liveOverview').hidden = true; $('viewHeading').hidden = true; return; }
   const overview=view==='live'&&!liveDetailOpen;$('liveOverview').hidden=!overview;$('workbench').hidden=overview;$('backToOverview').hidden=view!=='live'||overview;$('viewHeading').hidden=overview;
   if(view==='live'){$('viewTitle').textContent=overview?'实时房间':'房间详情';$('viewHint').textContent=overview?'查看全部房间和当前锄地状态':'选择左侧房间，在右侧查看状态与成员';}
   if(overview){renderOverview();return;}
@@ -443,8 +446,10 @@ function renderUnlinked(panel) {
 }
 function setView(next) {
   if (next === 'live') liveDetailOpen = false;
-  if (view !== next) { queries[view] = $('search').value; view = next; $('search').value = queries[view]; }
+  if (view !== next) { if (view !== 'summary') queries[view] = $('search').value; view = next; if (view !== 'summary') $('search').value = queries[view]; }
   $('liveTab').setAttribute('aria-pressed', String(view === 'live')); $('historyTab').setAttribute('aria-pressed', String(view === 'history'));
+  $('summaryTab').setAttribute('aria-pressed', String(view === 'summary'));
+  if (view === 'summary') { render(); loadSummary(); return; }
   $('historyControls').hidden = view !== 'history'; $('liveFilters').hidden = view !== 'live';
   $('viewTitle').textContent = view === 'history' ? '历史与日志' : '实时房间';
   $('viewHint').textContent = view === 'history' ? '先选日期和助手房间，再查看批次与世界日志' : '选择左侧房间，在右侧查看状态与成员';
