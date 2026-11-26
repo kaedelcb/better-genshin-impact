@@ -284,7 +284,8 @@ public partial class MainViewModel
             }
             if (runId is not null && policy.Policy != TaskConflictPolicy.Resume && !stoppedPlan)
                 stoppedPlan = await host.SettleFailedOnlineHoeingAsync(batch.Generation, runId,
-                    batch.PolicyTicketReleased, "锄地结束，按绑定策略结束原计划而不恢复").ConfigureAwait(false);
+                    batch.PolicyTicketReleased, "锄地结束，按绑定策略结束原计划而不恢复",
+                    ticket, batch.SuspendedRawData).ConfigureAwait(false);
             if (runId is not null && policy.Policy == TaskConflictPolicy.Resume && !associatedResume)
             {
                 if (gapResume)
@@ -501,6 +502,11 @@ public partial class MainViewModel
                 try { await Reconcile(token).ConfigureAwait(false); }
                 catch (Exception ex) when (ex is not ControlContextRevokedException && !token.IsCancellationRequested)
                 { Waiting("原计划停止记录待补，绑定完成动作继续：" + ex.Message); }
+                // 重进同一计划必须等待原运行及其准入责任真正结清，不能仅凭 BGI 空闲启动。
+                if (workflowSuccessor && runId is not null && !stoppedPlan
+                    && (host?.Runs.Load(runId) is not { } originalPlan
+                        || originalPlan.WorkflowId == policy.SpecifiedWorkflowId))
+                    return false;
             }
             return true;
         }

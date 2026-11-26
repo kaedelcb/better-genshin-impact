@@ -1671,6 +1671,9 @@ public sealed partial class WorkflowRunner
             new WorkflowSubmitRequest(run, occurrence, node, SuppressConfigCompletionAction: true,
                 control.CurrentVerifiedUid, control.CurrentVerifiedUidEpoch, plan.Document.NodeTimeWindowEnabled, _opt.Clock), ct)
             .ConfigureAwait(false);
+        // 门面可以把取消期间已证实的零发送返回为拒绝；停止仍应走原记录的取消收敛，
+        // 而不是把该节点当成普通失败并推进游标。
+        if (!submit.Accepted) ct.ThrowIfCancellationRequested();
         // 生产边界冻结会用最新盘上记录rebase，旧submission引用不再属于run。
         // 重新绑定同一出现，才能把受理句柄和退出事实持久化到实际记录。
         if (run.CurrentSubmission is not { } currentSubmission

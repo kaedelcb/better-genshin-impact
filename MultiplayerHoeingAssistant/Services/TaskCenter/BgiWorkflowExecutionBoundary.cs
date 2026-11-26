@@ -381,8 +381,25 @@ public sealed class BgiWorkflowExecutionBoundary : IWorkflowExecutionBoundary
         if (prepared.Rejection is { } rejected) return rejected;
         if (prepared.Run is not { } run || prepared.Submission is not { } submission || prepared.Payload is not { } payload)
             return BoundarySubmitResult.UnknownWith("冻结载荷不完整（内部违例），未发送、待对账");
-        await using var onlineSendLease = _onlineSendGate is null
-            ? null : await _onlineSendGate.EnterAsync(ct).ConfigureAwait(false);
+        IAsyncDisposable? lease;
+        try
+        {
+            lease = _onlineSendGate is null ? null : await _onlineSendGate.EnterAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // 发送闸门内等待的冻结请求尚未调用端口。原计划被明确停止时，
+            // 消费同一耐久许可并发布零调用证明，不能留下一个永远等闸门的未决提交。
+            if (_runs.Load(run.RunId)?.StopRequested == true && prepared.TryConsume()
+                && _runs.TryConsumePreparedSubmission(prepared, out var stopped) && stopped is { StopRequested: true }
+                && _runs.TryPublishPreparedNoSend(prepared, out var discharged) && discharged is not null)
+            {
+                RunStore.RebaseOnto(run, discharged);
+                return BoundarySubmitResult.Rejected("原计划停止，冻结请求在发送闸门前已确认零调用。");
+            }
+            throw;
+        }
+        await using var onlineSendLease = lease;
         if (!prepared.TryConsume())
             return BoundarySubmitResult.UnknownWith("冻结载荷已被消费（内部违例：禁止重复发送），未重发");
         WorkflowRunRecord? beforeSend;

@@ -17,7 +17,7 @@ public sealed partial class TaskCenterHost
 {
     private string? _onlineHoeingRunId;
     private int _onlineHoeingGeneration;
-    private (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot)? _pendingPriorityPreparation;
+    private (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot, string? SupersedingWorkflowId)? _pendingPriorityPreparation;
     private readonly Func<BgiEpoch?>? _onlineEpochProvider;
     private readonly Func<int, long, bool?>? _onlineHandoffProcessAlive;
     private sealed record OnlineResumeSignal(string? JobId, string? FailureReason);
@@ -225,14 +225,15 @@ public sealed partial class TaskCenterHost
     // Physical exclusion belongs to the closed send gate and BGI's targeted suspend.
     // The old plan's recovery bookkeeping must never veto a priority hoeing request.
     internal OnlineHoeingPreparation PreparePriorityOnlineHoeing(int generation,
-        CommandExecutor.ExecutionBoundarySnapshot snapshot)
+        CommandExecutor.ExecutionBoundarySnapshot snapshot, string? supersedingWorkflowId = null)
     {
         if (!_onlineSendGate.IsClosed || !snapshot.Known
             || snapshot.Active is null && snapshot.SlotOccupied)
             return new OnlineHoeingPreparation(false, null, "等待普通任务派发暂停及 BGI 实际执行状态");
         try
         {
-            var prepared = PrepareOnlineHoeing(generation, snapshot, stateContinuation: true, priorityRecovery: true);
+            var prepared = PrepareOnlineHoeing(generation, snapshot, stateContinuation: true, priorityRecovery: true,
+                supersedingWorkflowId: supersedingWorkflowId);
             if (_runs.PriorityPreparationReadError is { } readError)
                 prepared = prepared with { Reason = readError + (prepared.Reason is null ? "" : "；" + prepared.Reason) };
             if (prepared.Ready) return prepared;
@@ -247,8 +248,18 @@ public sealed partial class TaskCenterHost
         }
     }
 
+    private static bool IsUnconsumedGapSubmission(WorkflowRunRecord run, string epoch)
+        => run.State == WorkflowRunState.Running && !run.StopRequested && run.PendingCompletion is null
+           && run.CurrentSubmission is { Intent: SubmitIntentState.Submitted, SendAttempted: true,
+               SendPermit: { Version: 1, Consumed: false }, JobId: null, AcceptedSendIdentity: null,
+               ObservedTerminal: null, ExecutionExitConfirmed: false, LocalNoSendProof: null } sub
+           && sub.Epoch == epoch && sub.WireRunId == run.WireRunId
+           && run.Cursor is { } cursor && sub.NodeId == cursor.NodeId && sub.Occurrence == cursor.Occurrence
+           && sub.LoopIteration == cursor.LoopIteration && sub.Attempt == cursor.Attempt;
+
     internal OnlineHoeingPreparation PrepareOnlineHoeing(int generation,
-        CommandExecutor.ExecutionBoundarySnapshot snapshot, bool stateContinuation = false, bool priorityRecovery = false)
+        CommandExecutor.ExecutionBoundarySnapshot snapshot, bool stateContinuation = false, bool priorityRecovery = false,
+        string? supersedingWorkflowId = null)
     {
         if (!_onlineSendGate.IsClosed)
             return new OnlineHoeingPreparation(false, null, "任务中心接管闸门尚未关闭");
@@ -305,7 +316,11 @@ public sealed partial class TaskCenterHost
             && _clientAccessor()?.HasCapability("task.planContinuation.v1") != true)
             return new OnlineHoeingPreparation(false, null,
                 "BGI 尚未声明计划表联机续跑能力，未打断当前计划");
-        if (snapshot.Active is null && RunStore.HasUnresolvedExternalFact(target))
+        // 指定后继恰好是原计划时，冻结但尚未消费的发送许可不能让原计划身份丢失。
+        // 仍须取得 BGI 的 no_task 接管票据；后继启动前停止原驱动并证明该许可未调用端口。
+        var pendingUnsent = snapshot.Active is null && priorityRecovery && target.WorkflowId == supersedingWorkflowId
+            && IsUnconsumedGapSubmission(target, epoch);
+        if (snapshot.Active is null && RunStore.HasUnresolvedExternalFact(target) && !pendingUnsent)
             return new OnlineHoeingPreparation(false, null,
                 "任务间隙仍有未确认的节点提交或终态，不能按空闲接管");
         if (target.Cursor is not { } cursor)
@@ -318,7 +333,7 @@ public sealed partial class TaskCenterHost
             {
                 _onlineHoeingRunId = target.RunId;
                 _onlineHoeingGeneration = generation;
-                _pendingPriorityPreparation = (generation, target.RunId, snapshot);
+                _pendingPriorityPreparation = (generation, target.RunId, snapshot, supersedingWorkflowId);
                 if (stateContinuation) _stateContinuationRuns[target.RunId] = generation;
             }
             lock (_gate)
@@ -335,7 +350,9 @@ public sealed partial class TaskCenterHost
                     || currentCursor.Occurrence != cursor.Occurrence
                     || currentCursor.LoopIteration != cursor.LoopIteration
                     || currentCursor.Attempt != cursor.Attempt
-                    || latest.CurrentSubmission?.JobId != expectedJob) return false;
+                    || latest.CurrentSubmission?.JobId != expectedJob
+                    || pendingUnsent && (!IsUnconsumedGapSubmission(latest, epoch)
+                        || latest.CurrentSubmission!.SendPermit != target.CurrentSubmission!.SendPermit)) return false;
                 latest.OnlineHoeingHandoff = new OnlineHoeingHandoffRecord
                 {
                     Generation = generation,
@@ -405,7 +422,7 @@ public sealed partial class TaskCenterHost
 
     private bool RetryPriorityPreparation(int generation, string runId)
     {
-        (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot)? pending;
+        (int Generation, string RunId, CommandExecutor.ExecutionBoundarySnapshot Snapshot, string? SupersedingWorkflowId)? pending;
         lock (_gate) pending = _pendingPriorityPreparation;
         if (pending is not { } original || original.Generation != generation || original.RunId != runId) return true;
         if (Volatile.Read(ref _manualResetActive) != 0) return false;
@@ -413,7 +430,8 @@ public sealed partial class TaskCenterHost
         if (saved is null || saved.StopRequested || saved.IsTerminal || IsExecutionUnavailable(saved)) return false;
         if (saved.OnlineHoeingHandoff is { } linked)
             return linked.Generation == generation;
-        var prepared = PrepareOnlineHoeing(generation, original.Snapshot, stateContinuation: true, priorityRecovery: true);
+        var prepared = PrepareOnlineHoeing(generation, original.Snapshot, stateContinuation: true, priorityRecovery: true,
+            supersedingWorkflowId: original.SupersedingWorkflowId);
         if (prepared.Ready && prepared.ManagedRunId == runId) return true;
         // 让位回执与原 Runner 可同时补登记；另一方已写入同代关联也属于成功。
         var reconciled = _runs.Load(runId);
@@ -953,13 +971,30 @@ public sealed partial class TaskCenterHost
     }
 
     internal async Task<bool> SettleFailedOnlineHoeingAsync(int generation, string runId,
-        bool physicalCleanupConfirmed, string reason)
+        bool physicalCleanupConfirmed, string reason, string? originalTicket = null, string? originalReceipt = null)
     {
         bool Owns(WorkflowRunRecord? run) => run?.RunId == runId
             && run.OnlineHoeingHandoff is { } handoff && handoff.Generation == generation;
+        bool ownerCleared;
         lock (_gate)
-            if (_onlineHoeingGeneration != generation || _onlineHoeingRunId != runId) return false;
+        {
+            if (_onlineHoeingGeneration != generation || _onlineHoeingRunId is not null && _onlineHoeingRunId != runId) return false;
+            ownerCleared = _onlineHoeingRunId is null;
+        }
         var original = _runs.Load(runId);
+        // 已释放 owner 的同代重试仅接受已结清的原历史，绝不重新登记接管。
+        if (ownerCleared && (Owns(original) || original?.OnlineHoeingHistory.LastOrDefault() is not { Phase: "stopped" } archived
+            || archived.Generation != generation)) return false;
+        // 首次接管票据关联可能因存储/并发失败。只凭本批保留的原回执重试，
+        // 不用此刻的空闲状态补造 no_task，也不覆盖已停止的历史。
+        if (physicalCleanupConfirmed && original is { StopRequested: false, IsTerminal: false }
+            && (original.OnlineHoeingHandoff is null or { Phase: "prepared" or "preparedGap", Ticket: null })
+            && !string.IsNullOrWhiteSpace(originalTicket) && !string.IsNullOrWhiteSpace(originalReceipt))
+        {
+            if (!RetryPriorityPreparation(generation, runId)
+                || !ConfirmOnlineHoeingSuspendForRun(runId, generation, originalTicket, originalReceipt)) return false;
+            original = _runs.Load(runId);
+        }
         if (!Owns(original))
         {
             // Finalization may have succeeded while admission writeback was unavailable.
@@ -1077,12 +1112,19 @@ public sealed partial class TaskCenterHost
                             if (!Owns(latest) || latest.IsTerminal || !latest.StopRequested
                                 || latest.OnlineHoeingGateParked || _drives.ContainsKey(latest.WorkflowId)
                                 || _reservedWorkflows.Contains(latest.WorkflowId)
-                                || latest.OnlineHoeingHandoff is not { ResumeJobId: null, Ticket: not null } current
-                                || latest.CurrentSubmission is not { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true } exited
-                                || exited.Key != current.OriginalSubmissionKey || exited.JobId != current.OriginalJobId
-                                || exited.Epoch != current.Epoch || exited.WireRunId != latest.WireRunId
-                                || exited.NodeId != current.NodeId || exited.Occurrence != current.Occurrence
-                                || exited.LoopIteration != current.LoopIteration || exited.Attempt != current.Attempt) return false;
+                                || TaskFlowRuntime.HasPendingRoomSwitch(latest)
+                                || latest.OnlineHoeingHandoff is not { ResumeJobId: null, Ticket: not null } current) return false;
+                            // 空隙接管没有原 BGI 作业；仅已停止的驱动、同一接管票据及耐久零发送
+                            // 证明（或无未决外部事实）足以结清。不可用 no_task 推断已发送作业的结果。
+                            var confirmedGap = current.Phase == "gap" && current.OriginalJobId is null
+                                && (latest.CurrentSubmission is null
+                                    || TerminalReleaseEvidence.BodySettled(latest, latest.CurrentSubmission));
+                            var confirmedExit = latest.CurrentSubmission is { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true } exited
+                                && exited.Key == current.OriginalSubmissionKey && exited.JobId == current.OriginalJobId
+                                && exited.Epoch == current.Epoch && exited.WireRunId == latest.WireRunId
+                                && exited.NodeId == current.NodeId && exited.Occurrence == current.Occurrence
+                                && exited.LoopIteration == current.LoopIteration && exited.Attempt == current.Attempt;
+                            if (!confirmedGap && !confirmedExit) return false;
                             var candidate = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(latest))!;
                             candidate.StopRequested = true;
                             candidate.State = WorkflowRunState.Cancelled;
@@ -1094,7 +1136,8 @@ public sealed partial class TaskCenterHost
                                 || !TerminalReleaseEvidence.RunSettled(candidate)) return false;
                             latest.State = WorkflowRunState.Cancelled;
                             latest.Note = (latest.Note is null ? "" : latest.Note + " | ")
-                                + "联机批次失败/取消，原作业取消及退出均已确认；结束原计划且不创建恢复作业：" + reason;
+                                + (confirmedGap ? "联机间隙接管已确认，原计划已停止且提交责任已结清；结束原计划且不创建恢复作业："
+                                    : "联机批次失败/取消，原作业取消及退出均已确认；结束原计划且不创建恢复作业：") + reason;
                             return true;
                         }, out stopped);
                     }
@@ -1257,8 +1300,10 @@ public sealed partial class TaskCenterHost
             _log?.Invoke("[任务中心] 原计划已停止，受理责任仍待核对：" + runId + " " + result.Message);
             return false;
         }
+        // 原运行已结清但全局门检查可能暂时失败。保留同代 owner，下一次按 stopped 历史幂等读回。
+        if (!CanOpenOnlineSendAfterBatch) return false;
         ClearFailedOnlineHandoffOwner(generation, runId, reason);
-        return CanOpenOnlineSendAfterBatch;
+        return true;
     }
 
     private void ClearFailedOnlineHandoffOwner(int generation, string runId, string reason)
@@ -1277,6 +1322,7 @@ public sealed partial class TaskCenterHost
         => _runs.UpdateMergingIf(runId, latest =>
         {
             if (latest.State != WorkflowRunState.Cancelled || !latest.StopRequested
+                || TaskFlowRuntime.HasPendingRoomSwitch(latest)
                 || latest.OnlineHoeingHandoff is not { ResumeJobId: null } handoff
                 || expectedGeneration is { } generation && handoff.Generation != generation) return false;
             var externalFacts = JsonSerializer.Deserialize<WorkflowRunRecord>(JsonSerializer.Serialize(latest))!;

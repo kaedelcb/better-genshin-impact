@@ -429,8 +429,10 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
             => throw new InvalidOperationException("stopped fixture cannot invoke completion");
     }
 
-    [Fact]
-    public async Task PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreparedStop_RealRunnerStopsWithoutLookupSuccessorOrFakeRawTerminal(bool gateClosed)
     {
         var flows = new WorkflowStore(Path.Combine(_dir, "flows"));
         var flow = new WorkflowDocument { Name = "prepared-stop", Activation = new() { Status = "active" },
@@ -438,7 +440,9 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
                 new() { NodeId = "next", Kind = "resource.oneDragonConfig", Ref = new() { Config = "config", Revision = "revision" } }] };
         flows.Save(flow, null);
         var port = new FakePort();
-        var boundary = new StopAtPreparedBoundary(new BgiWorkflowExecutionBoundary(port, _runs));
+        var gate = new TaskCenterOnlineSendGate();
+        if (gateClosed) gate.CloseForPriority();
+        var boundary = new StopAtPreparedBoundary(new BgiWorkflowExecutionBoundary(port, _runs, gateClosed ? gate : null));
         var runner = new WorkflowRunner(flows, _runs, boundary, new NoPrerequisites(), new NoCompletion());
         boundary.Stop = id => runner.RequestAction(id, WorkflowRunAction.Stop);
         var result = await runner.StartAsync(flow.WorkflowId!).WaitAsync(TimeSpan.FromSeconds(5));
@@ -452,6 +456,84 @@ public class BgiWorkflowExecutionBoundaryPortSeamTests : IDisposable
         Assert.False(result.CurrentSubmission.ExecutionExitConfirmed);
         _runs.RecoverOnStart();
         Assert.Equal(WorkflowRunState.Cancelled, _runs.Load(result.RunId)!.State);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FrozenGateCancellation_OnlyDurableStopDischargesAndNeverSends(bool stopped)
+    {
+        var (run, node, occurrence) = Seed();
+        var port = new FakePort();
+        var gate = new TaskCenterOnlineSendGate();
+        gate.CloseForPriority();
+        var boundary = new BgiWorkflowExecutionBoundary(port, _runs, gate);
+        var prepared = boundary.PrepareSubmit(new WorkflowSubmitRequest(run, occurrence, node, true));
+        Assert.Null(prepared.Rejection);
+        using var cts = new CancellationTokenSource();
+        var sending = boundary.SendPreparedAsync(prepared, cts.Token);
+        Assert.False(sending.IsCompleted);
+        if (stopped) Assert.True(_runs.UpdateMergingIf(run.RunId, latest => { latest.StopRequested = true; return true; }, out _));
+        cts.Cancel();
+        if (stopped)
+            Assert.Equal(BoundarySubmitKind.Rejected, (await sending).Kind);
+        else
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sending);
+        var saved = _runs.Load(run.RunId)!;
+        Assert.Equal(stopped, LocalNoSendEvidence.IsDischarged(saved, saved.CurrentSubmission!));
+        Assert.Null(saved.CurrentSubmission!.ObservedTerminal);
+        Assert.False(saved.CurrentSubmission.ExecutionExitConfirmed);
+        Assert.Empty(port.Sends);
+        if (stopped)
+        {
+            await gate.OpenAsync();
+            Assert.True((await boundary.SendPreparedAsync(prepared, default)).Uncertain);
+            Assert.Empty(port.Sends);
+        }
+    }
+
+    [Fact]
+    public async Task PriorityGap_SameWorkflowSuccessorStopsUnsentOriginalWithoutOpeningGate()
+    {
+        var flows = Path.Combine(_dir, "flows");
+        var runs = Path.Combine(_dir, "host-runs");
+        var port = new FakePort();
+        TaskCenterOnlineSendGate? gate = null;
+        var frozen = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var host = new TaskCenterHost(flows, runs, Path.Combine(_dir, "catalog.json"), () => null, null,
+            (_, w, r) =>
+            {
+                var boundary = new StopAtPreparedBoundary(new BgiWorkflowExecutionBoundary(port, r, gate));
+                boundary.Stop = id => { gate!.CloseForPriority(); frozen.TrySetResult(id); };
+                return new WorkflowRunner(w, r, boundary, new NoPrerequisites(), new NoCompletion());
+            }, () => (true, null), onlineEpochProvider: () => port.ServerEpoch);
+        gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost).GetField("_onlineSendGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        try
+        {
+            var flow = new WorkflowDocument { Name = "same-workflow-successor", Activation = new() { Status = "active" },
+                Nodes = [new() { NodeId = "first", Kind = "resource.oneDragonConfig", Ref = new() { Config = "config", Revision = "revision" } }] };
+            host.SaveFlow(flow, null);
+            Assert.True((await host.StartWorkflowAsync(flow.WorkflowId!)).Ok);
+            var id = await frozen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var idle = new CommandExecutor.ExecutionBoundarySnapshot(true, false, 4321, 638999999999999999, null);
+            Assert.Null(host.PreparePriorityOnlineHoeing(7, idle, "other-workflow").ManagedRunId);
+            var prepared = host.PreparePriorityOnlineHoeing(7, idle, flow.WorkflowId);
+            Assert.True(prepared.Ready);
+            Assert.Equal(id, prepared.ManagedRunId);
+            Assert.True(host.ConfirmOnlineHoeingSuspend(7, "gap-ticket", "{\"status\":\"no_task\"}"));
+            Assert.True(await host.SettleFailedOnlineHoeingAsync(7, id, true, "绑定同计划后继").WaitAsync(TimeSpan.FromSeconds(20)));
+            var stopped = host.Runs.Load(id)!;
+            Assert.Equal(WorkflowRunState.Cancelled, stopped.State);
+            Assert.True(stopped.StopRequested);
+            Assert.Null(stopped.OnlineHoeingHandoff);
+            Assert.Equal("stopped", stopped.OnlineHoeingHistory.Single().Phase);
+            Assert.True(LocalNoSendEvidence.IsDischarged(stopped, stopped.CurrentSubmission!));
+            Assert.Null(stopped.CurrentSubmission!.ObservedTerminal);
+            Assert.Empty(port.Sends);
+            Assert.True(gate.IsClosed); // Only the successor's confirmed registration may reopen it.
+        }
+        finally { await host.ShutdownAsync(); }
     }
 
     [Theory]

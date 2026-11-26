@@ -1270,7 +1270,9 @@ public partial class MainViewModel
                     try
                     {
                         context.Plan = batch.PriorityRecoveryEnabled
-                            ? context.Host.PreparePriorityOnlineHoeing(batch.Generation, current)
+                            ? context.Host.PreparePriorityOnlineHoeing(batch.Generation, current,
+                                batch.Policy is { Policy: TaskConflictPolicy.RunSpecified, SpecifiedTaskType: "workflow" } policy
+                                    ? policy.SpecifiedWorkflowId : null)
                             : context.Host.PrepareOnlineHoeing(batch.Generation, current, stateContinuation: true);
                         if (context.Plan.Ready)
                         {

@@ -50,6 +50,110 @@ public sealed class P50LoadReproFactAttribute : FactAttribute
 public class TaskCenterSuccessorPathGateTests
 {
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task PriorityGap_SamePlanReplacementReleasesOriginalAdmissionAndRunsSelectedSuccessor(bool missedReceipt, bool diskUnavailable)
+    {
+        var root = NewRoot("priority-gap-replacement-");
+        using var client = new BgiExternalClient();
+        var port = new RoutingFakePort();
+        TaskCenterOnlineSendGate? gate = null;
+        var occupancy = 0;
+        var seams = new TaskCenterAdmissionSeams
+        {
+            Epoch = RoutingFakePort.Epoch, Occupied = false, FactsUnknown = false,
+            ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(port, r, gate),
+            Barriers = new AdmissionBarriers
+            {
+                AfterOccupyBeforeSend = () =>
+                {
+                    // E1 is the registration; close just before its first node freezes its send permit.
+                    if (Interlocked.Increment(ref occupancy) == 2) gate!.CloseForPriority();
+                    return Task.CompletedTask;
+                },
+            },
+        };
+        var host = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+            () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+            admissionWired: true, admissionSeams: seams, successorAdmissionWired: true, onlineEpochProvider: () => port.ServerEpoch);
+        gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost).GetField("_onlineSendGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        try
+        {
+            var doc = new WorkflowDocument { Name = "联机后继续同计划", Activation = new() { Status = "active" },
+                Nodes = [new() { NodeId = "old", Kind = "resource.oneDragonConfig", Ref = new() { Config = "A", Revision = "a" } },
+                    new() { NodeId = "next", Kind = "resource.oneDragonConfig", Ref = new() { Config = "B", Revision = "b" } }] };
+            host.SaveFlow(doc, null);
+            var snapshot = host.LoadFlowSnapshot(doc.WorkflowId!);
+            Assert.True((await host.StartWorkflowAsync(doc.WorkflowId!)).Ok);
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && !host.Runs.List().Any(r => r.CurrentSubmission?.SendPermit is { Consumed: false }))
+                await Task.Delay(20);
+            var old = Assert.Single(host.Runs.List());
+            Assert.NotNull(old.CurrentSubmission?.SendPermit);
+            Assert.False(old.CurrentSubmission!.SendPermit!.Consumed);
+            Assert.True(gate.IsClosed);
+            Assert.Equal(0, port.SendCount);
+            var idle = new CommandExecutor.ExecutionBoundarySnapshot(true, false, RoutingFakePort.EpochProcessId, RoutingFakePort.EpochTicks, null);
+            Assert.Equal(old.RunId, host.PreparePriorityOnlineHoeing(7, idle, doc.WorkflowId).ManagedRunId);
+            const string ticket = "same-plan-ticket", receipt = "{\"status\":\"no_task\"}";
+            Task<bool> Settle() => host.SettleFailedOnlineHoeingAsync(7, old.RunId, true, "绑定同计划指定后继",
+                ticket, receipt).WaitAsync(TimeSpan.FromSeconds(30));
+            if (missedReceipt)
+            {
+                Assert.False(host.ConfirmOnlineHoeingSuspend(7, ticket, "{\"status\":\"unknown\"}"));
+                Assert.Equal("preparedGap", host.Runs.Load(old.RunId)!.OnlineHoeingHandoff!.Phase);
+            }
+            else Assert.True(host.ConfirmOnlineHoeingSuspend(7, ticket, receipt));
+            if (diskUnavailable)
+            {
+                host.Runs.PublishFaultForTest = r => r.RunId == old.RunId && r.StopRequested
+                    ? new IOException("old run disk temporarily unavailable") : null;
+                Assert.False(await Settle());
+                Assert.True(host.Runs.HasUnpublishedPriorityProgress(old.RunId));
+                Assert.True(gate.IsClosed);
+                Assert.Equal(0, port.SendCount);
+                var persisted = new RunStore(Path.Combine(root, "runs")).Load(old.RunId)!;
+                Assert.False(persisted.StopRequested);
+                host.Runs.PublishFaultForTest = null;
+                for (var i = 0; i < 30 && host.Runs.HasUnpublishedPriorityProgress(old.RunId); i++)
+                    host.Runs.FlushPriorityProgress(old.RunId);
+            }
+            Assert.True(await Settle());
+            var stopped = host.Runs.Load(old.RunId)!;
+            Assert.False(host.Runs.HasUnpublishedPriorityProgress(old.RunId));
+            Assert.True(TerminalReleaseEvidence.ValidRunSeal(new RunStore(Path.Combine(root, "runs")).Load(old.RunId)!));
+            Assert.Equal(WorkflowRunState.Cancelled, stopped.State);
+            Assert.True(TerminalReleaseEvidence.ValidRunSeal(stopped));
+            Assert.True(gate.IsClosed);
+            Assert.Equal(0, port.SendCount);
+            var batch = new OnlineHoeingBatch(new("same-plan-completion", 7, 0, 0, 1, "completed", "")
+            {
+                Protocol = "hoeing.start.v2", ParticipantUids = ["self"],
+                Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>> { ["self"] = [new("锄地", "group")] },
+            }, "self", new TaskConflictPolicySettings
+            {
+                Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskType = "workflow", SpecifiedTaskName = doc.Name,
+                SpecifiedWorkflowId = doc.WorkflowId!, SpecifiedConfigRevision = snapshot.Revision,
+                SpecifiedStartMode = "node", SpecifiedStartTaskId = "next", SpecifiedStartTaskName = "B",
+            }) { ExecutionEpoch = port.ServerEpoch, StateContinuationEnabled = true, StateContinuationStopVersion = 0, PolicyTicketReleased = true };
+            batch.MarkLocalSuccess(port.ServerEpoch!);
+            var accepted = await host.StartCompletionWorkflowAsync(batch, default).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("success", accepted.Status);
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && host.Runs.Load(accepted.JobId!)?.State != WorkflowRunState.Succeeded)
+                await Task.Delay(20);
+            var successor = host.Runs.Load(accepted.JobId!)!;
+            Assert.Equal(WorkflowRunState.Succeeded, successor.State);
+            Assert.Equal("next", Assert.Single(successor.NodeOutcomes).NodeId);
+            Assert.Equal(1, port.SendCount);
+        }
+        finally { await host.ShutdownAsync(); try { Directory.Delete(root, true); } catch { } }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public Task OriginalHost_ShutdownWaitsForTerminalWritebackBeforeLeaseRelease(bool handoff)

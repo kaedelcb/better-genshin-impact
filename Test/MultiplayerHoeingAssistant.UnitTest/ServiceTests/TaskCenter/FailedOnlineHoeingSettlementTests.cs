@@ -128,6 +128,56 @@ public sealed class FailedOnlineHoeingSettlementTests : IAsyncLifetime
         Assert.Empty(_pipe.Received);
     }
 
+    [Fact]
+    public async Task StoppedOriginalCanRetryAfterTemporaryGlobalGateReadFailure()
+    {
+        var (host, run) = await Prepared();
+        Assert.True(host.ConfirmOnlineHoeingSuspend(7, "owned-ticket", JsonSerializer.Serialize(new
+        {
+            status = "suspended", workflowRunId = run.WireRunId, nodeId = "B",
+            originalJobId = run.CurrentSubmission!.JobId, occurrence = 0, iteration = 0, attempt = 1
+        })));
+        var stopped = host.Runs.Load(run.RunId)!;
+        stopped.State = WorkflowRunState.Cancelled;
+        stopped.StopRequested = true;
+        stopped.CurrentSubmission!.ObservedTerminal = "cancelled";
+        stopped.CurrentSubmission.ExecutionExitConfirmed = true;
+        stopped.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        stopped.CurrentSubmission.EffectState = "cancelled";
+        host.Runs.Update(stopped);
+        host.Runs.PublishFaultForTest = r =>
+        {
+            if (r.OnlineHoeingHistory.LastOrDefault()?.Phase == "stopped")
+                host.Runs.FileOperationFaultForTest = op => op == "enumerate" ? new IOException("temporary listing failure") : null;
+            return null;
+        };
+        try
+        {
+            Assert.False(await host.SettleFailedOnlineHoeingAsync(7, run.RunId, true, "批次结束"));
+            Assert.Equal(run.RunId, host.OnlineHoeingManagedRun(7));
+            Assert.Null(host.Runs.Load(run.RunId)!.OnlineHoeingHandoff);
+        }
+        finally { host.Runs.PublishFaultForTest = null; host.Runs.FileOperationFaultForTest = null; }
+        Assert.True(await host.SettleFailedOnlineHoeingAsync(7, run.RunId, true, "重试同一结束"));
+        Assert.True(await host.SettleFailedOnlineHoeingAsync(7, run.RunId, true, "重复核对同一结束"));
+        Assert.Null(host.OnlineHoeingManagedRun(7));
+        Assert.False(await host.SettleFailedOnlineHoeingAsync(8, run.RunId, true, "错误代次"));
+    }
+
+    [Fact]
+    public async Task GapFinalizationRetainsUnconfirmedRoomSwitch()
+    {
+        var (host, _) = await Prepared();
+        var gap = host.Runs.CreateRun("gap-flow", "rev-gap");
+        gap.State = WorkflowRunState.Cancelled;
+        gap.StopRequested = true;
+        gap.OnlineHoeingHandoff = new() { Generation = 7, Phase = "gap", Ticket = "gap-ticket", Epoch = "42:99", NodeId = "B", Attempt = 1 };
+        gap.ExtensionData = new() { ["taskFlowRoomSwitchPending"] = JsonSerializer.SerializeToElement("pending-switch") };
+        host.Runs.Update(gap);
+        Assert.False(host.FinalizeStoppedOnlineHandoff(gap.RunId, 7));
+        Assert.NotNull(host.Runs.Load(gap.RunId)!.OnlineHoeingHandoff);
+    }
+
     [Theory]
     [InlineData(WorkflowRunState.Cancelled, true)]
     [InlineData(WorkflowRunState.OnlineHoeingParking, false)]
