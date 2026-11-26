@@ -269,26 +269,60 @@
                             </Style>
                         </Border.Style>
                         <StackPanel>
-                            <Grid Margin="0,0,0,6">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <WrapPanel Margin="0,0,8,0" VerticalAlignment="Center">
-                                    <TextBlock TextWrapping="Wrap" MaxWidth="390" Margin="0,0,8,2" VerticalAlignment="Center">
+                            <Grid x:Name="CardTitleGrid" Margin="0,0,0,6" Loaded="CardTitleLoaded" SizeChanged="CardTitleSizeChanged">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="3.3*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="2.4*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Grid x:Name="CardIdentityPane" Margin="0,0,7,0" VerticalAlignment="Center" ToolTip="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=Details}">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" Margin="0,0,5,0" VerticalAlignment="Center">
                                         <Run Text="{Binding Name, Mode=OneWay}" Foreground="{StaticResource OrchGold}" FontSize="17" FontWeight="SemiBold"/>
                                         <Run Text="  "/><Run Text="{Binding Identity, Mode=OneWay}" Foreground="{StaticResource OrchDim}" FontSize="12"/>
                                     </TextBlock>
-                                    <TextBlock Text="⌖ 当前登录" Foreground="{StaticResource OrchGold}" FontSize="12" Margin="0,0,6,2" VerticalAlignment="Center"
-                                               Visibility="{Binding Current, Converter={StaticResource Show}}"/>
-                                    <Border x:Name="RoomSectionTag" Background="#343052" BorderBrush="#62516D" BorderThickness="1" CornerRadius="6"
-                                            Padding="6,2" Margin="0,0,0,2" VerticalAlignment="Center"
-                                            Visibility="{Binding HasSection, Converter={StaticResource Show}}">
-                                        <TextBlock Text="{Binding SectionTitle}" FontSize="12" Foreground="{StaticResource OrchDim}"/>
+                                    <TextBlock Grid.Column="1" Text="⌖ 当前" Foreground="{StaticResource OrchGold}" FontSize="12" Margin="0,0,5,0" VerticalAlignment="Center"
+                                               ToolTip="当前登录" Visibility="{Binding Current, Converter={StaticResource Show}}"/>
+                                    <Border x:Name="RoomSectionTag" Grid.Column="2" Background="#343052" BorderBrush="#62516D" BorderThickness="1" CornerRadius="6"
+                                            Padding="5,2" VerticalAlignment="Center" Visibility="{Binding HasSection, Converter={StaticResource Show}}" ToolTip="{Binding SectionTitle}">
+                                        <TextBlock Text="{Binding SectionTitle}" FontSize="11" Foreground="{StaticResource OrchDim}" MaxWidth="86" TextTrimming="CharacterEllipsis"/>
                                     </Border>
-                                </WrapPanel>
-                                <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" MaxWidth="218">
-                                    <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource OrchLabel}" Margin="0,0,6,2" VerticalAlignment="Center"
-                                               Visibility="{Binding HasUpdatedTime, Converter={StaticResource Show}}"/>
-                                    <ContentControl Content="{Binding Status}" ContentTemplate="{StaticResource StatusBadge}" IsTabStop="False" Margin="0,0,0,2" HorizontalAlignment="Right"/>
-                                </WrapPanel>
+                                </Grid>
+                                <Border x:Name="CardProgressPane" Grid.Column="1" Padding="6,3" CornerRadius="6" BorderThickness="1" Margin="0,0,6,0"
+                                        VerticalAlignment="Center" ToolTip="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=ProgressTooltip}">
+                                    <Border.Style><Style TargetType="Border">
+                                        <Setter Property="Background" Value="#343052"/><Setter Property="BorderBrush" Value="#62516D"/>
+                                        <Setter Property="TextElement.Foreground" Value="{StaticResource OrchDim}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=ShowProgressBar}" Value="True">
+                                                <Setter Property="Background" Value="#283C47"/><Setter Property="BorderBrush" Value="#437A76"/><Setter Property="TextElement.Foreground" Value="#6FD8CE"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=ProgressUnknown}" Value="True">
+                                                <Setter Property="Background" Value="#3B2D54"/><Setter Property="BorderBrush" Value="#795E95"/><Setter Property="TextElement.Foreground" Value="#D3B3EF"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style></Border.Style>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ProgressBar x:Name="CardCompactProgressBar" Width="31" Height="4" Background="#514A6E" Foreground="#6FD8CE" BorderThickness="0"
+                                                     Value="{Binding CompletedCount, Mode=OneWay}" Maximum="{Binding TaskCount, Mode=OneWay}" VerticalAlignment="Center" Margin="0,0,6,0" Focusable="False"
+                                                     Visibility="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=ProgressBarVisibility}"/>
+                                        <TextBlock x:Name="CardCompactProgressText" Text="{Binding ., Converter={StaticResource CompactDisplay}, ConverterParameter=CompactProgress}" FontSize="12" FontWeight="Medium"/>
+                                    </StackPanel>
+                                </Border>
+                                <Button x:Name="CardCompletionButton" Grid.Column="2" Style="{StaticResource OrchDetailButton}" Background="#36304D" BorderBrush="#62516D"
+                                        Padding="5,2" MinHeight="24" Margin="0,0,7,0" VerticalAlignment="Center" HorizontalAlignment="Left" Click="RoomDetailsClick"
+                                        ToolTip="{Binding Completion, StringFormat='完成后：{0}'}" AutomationProperties.Name="{Binding Name, StringFormat='查看房间 {0} 的完整完成动作及详情'}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <TextBlock Text="完成后" Foreground="{StaticResource OrchDim}" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding Completion}" Foreground="{StaticResource OrchGold}" FontSize="12" FontWeight="Medium"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <Path Grid.Column="2" Data="M 0,0 L 3,3 L 0,6" Stroke="{StaticResource OrchDim}" Width="3" Height="6" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid>
+                                </Button>
+                                <TextBlock x:Name="CardUpdatedText" Grid.Column="3" Text="{Binding UpdatedText}" Style="{StaticResource OrchLabel}" Margin="0,0,6,0" VerticalAlignment="Center" TextWrapping="NoWrap">
+                                    <TextBlock.Visibility><MultiBinding Converter="{StaticResource CompactDisplay}" ConverterParameter="CardTimeVisibility">
+                                        <Binding/><Binding ElementName="CardTitleGrid" Path="ActualWidth"/>
+                                    </MultiBinding></TextBlock.Visibility>
+                                </TextBlock>
+                                <ContentControl x:Name="CardTitleStatus" Grid.Column="4" Content="{Binding Status}" ContentTemplate="{StaticResource StatusBadge}" IsTabStop="False" MaxWidth="126" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </Grid>
                             <Grid SizeChanged="RoomContentSizeChanged" Loaded="RoomContentLoaded">
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="7*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
@@ -308,17 +342,6 @@
                                         <TextBlock Text="下轮生效的绑定" Foreground="{StaticResource OrchGold}" FontSize="12" Margin="0,0,0,3"/>
                                         <ItemsControl ItemsSource="{Binding NextTasks}" ItemTemplate="{StaticResource TaskRow}"/>
                                     </StackPanel>
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                        <ProgressBar Width="72" Height="4" Background="#514A6E" Foreground="#6FD8CE" BorderThickness="0"
-                                                     Value="{Binding CompletedCount, Mode=OneWay}" Maximum="{Binding TaskCount, Mode=OneWay}"
-                                                     VerticalAlignment="Center" Margin="0,0,7,0" Focusable="False"
-                                                     Visibility="{Binding HasConfirmedProgress, Converter={StaticResource Show}}"/>
-                                        <TextBlock Grid.Column="1" Style="{StaticResource OrchLabel}">
-                                            <Run Text="{Binding ProgressText, Mode=OneWay}"/><Run Text=" · 完成后："/>
-                                            <Run Text="{Binding Completion, Mode=OneWay}" Foreground="{StaticResource OrchGold}" FontWeight="Medium"/>
-                                        </TextBlock>
-                                    </Grid>
                                 </StackPanel>
                                 <Border x:Name="RoomMetaPane" Grid.Column="1" Margin="11,0,0,0" Padding="11,0,0,0" BorderThickness="1,0,0,0"
                                         BorderBrush="#544B69" VerticalAlignment="Top">

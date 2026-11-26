@@ -231,6 +231,44 @@ public partial class RoomOrchestrationPage : UserControl
         HeaderStatusPane.Margin = narrow ? new Thickness(0, 5, 0, 0) : new Thickness(0);
     }
 
+    private void CardTitleLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is Grid grid) ApplyCardTitleWidth(grid, grid.ActualWidth);
+    }
+
+    private void CardTitleSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged && sender is Grid grid) ApplyCardTitleWidth(grid, e.NewSize.Width);
+    }
+
+    private static void ApplyCardTitleWidth(Grid grid, double width)
+    {
+        if (width <= 0 || grid.Children.Count != 5) return;
+        var identity = grid.Children[0]; var progress = grid.Children[1]; var completion = grid.Children[2];
+        // Only extremely small work areas need a second header line. Keep the original
+        // status on the first line and never put progress back beneath the task list.
+        var veryNarrow = width < 520;
+        // Keep the progress near the room identity instead of allocating all remaining space
+        // to the left title. The flexible action column takes the remaining room, grows only
+        // as needed by its content, and still yields to the status on very small work areas.
+        grid.ColumnDefinitions[0].Width = veryNarrow ? new GridLength(3.3, GridUnitType.Star)
+            : new GridLength(Math.Clamp(width * .30, 160, 242));
+        grid.ColumnDefinitions[2].Width = new GridLength(1, GridUnitType.Star);
+        Grid.SetColumnSpan(identity, veryNarrow ? 4 : 1);
+        Grid.SetRow(progress, veryNarrow ? 1 : 0);
+        Grid.SetColumn(progress, veryNarrow ? 0 : 1);
+        Grid.SetColumnSpan(progress, veryNarrow ? 2 : 1);
+        Grid.SetRow(completion, veryNarrow ? 1 : 0);
+        Grid.SetColumnSpan(completion, veryNarrow ? 3 : 1);
+        if (progress is FrameworkElement progressElement)
+        {
+            progressElement.HorizontalAlignment = veryNarrow ? HorizontalAlignment.Left : HorizontalAlignment.Stretch;
+            progressElement.Margin = new Thickness(0, veryNarrow ? 5 : 0, 6, 0);
+        }
+        if (completion is FrameworkElement completionElement)
+            completionElement.Margin = new Thickness(0, veryNarrow ? 5 : 0, veryNarrow ? 0 : 7, 0);
+    }
+
     private void RoomContentLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is Grid grid) ApplyRoomContentWidth(grid, grid.ActualWidth);

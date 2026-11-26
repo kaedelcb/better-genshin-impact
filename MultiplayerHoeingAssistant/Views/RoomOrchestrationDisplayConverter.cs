@@ -51,10 +51,32 @@ public sealed class RoomOrchestrationDisplayConverter : IValueConverter, IMultiV
             || card.NextTasks.Any(t => !string.IsNullOrWhiteSpace(t.Status.Detail)) ? "任务执行详情" : "";
     }
 
+    internal static bool IsProgressUnknown(RoomOrchestrationCard card)
+        => card.ProgressUnconfirmed || card.Tasks.Any(t => t.Status.Kind == "unknown");
+
+    internal static bool ShowCompactProgressBar(RoomOrchestrationCard card)
+        => !IsProgressUnknown(card) && card.HasConfirmedProgress && card.TaskCount > 0
+            && card.Tasks.Any(t => t.Status.Kind != "none");
+
+    internal static string CompactProgress(RoomOrchestrationCard card)
+        => IsProgressUnknown(card) ? "进度待核对" : card.TaskCount == 0 ? "未绑定"
+            : card.Tasks.All(t => t.Status.Kind == "none") ? $"{card.TaskCount} 项绑定"
+            : $"{card.CompletedCount}/{card.TaskCount}";
+
     internal static string FullDetails(RoomOrchestrationCard card)
     {
         var result = new StringBuilder();
+        result.AppendLine($"房间：{card.Name} · {card.Identity}");
+        if (card.HasSection) result.AppendLine($"分类：{card.SectionTitle}");
         result.AppendLine($"房间状态：{card.Status.Text}");
+        result.AppendLine("任务进度：" + (IsProgressUnknown(card) ? "进度待核对" : card.ProgressText));
+        result.AppendLine("完成后：" + card.Completion);
+        if (card.Edge is { } edge)
+        {
+            result.AppendLine(edge.Relation);
+            result.AppendLine(edge.PostAction);
+        }
+        result.AppendLine($"预期人数：{card.ExpectedPlayers}  ·  定时上线：{card.Schedule}");
         if (!string.IsNullOrWhiteSpace(card.UpdatedText)) result.AppendLine($"状态时间：{card.UpdatedText}");
         if (!string.IsNullOrWhiteSpace(card.Detail)) result.AppendLine(card.Detail);
         if (!string.IsNullOrWhiteSpace(card.Status.Detail) && card.Status.Detail != card.Detail) result.AppendLine(card.Status.Detail);
@@ -80,6 +102,11 @@ public sealed class RoomOrchestrationDisplayConverter : IValueConverter, IMultiV
         "Summary" when value is RoomOrchestrationCard card => Summary(card),
         "DetailsVisibility" when value is RoomOrchestrationCard card => string.IsNullOrWhiteSpace(Summary(card)) ? Visibility.Collapsed : Visibility.Visible,
         "Details" when value is RoomOrchestrationCard card => FullDetails(card),
+        "CompactProgress" when value is RoomOrchestrationCard card => CompactProgress(card),
+        "ProgressTooltip" when value is RoomOrchestrationCard card => IsProgressUnknown(card) ? "进度待核对" : card.ProgressText,
+        "ProgressUnknown" when value is RoomOrchestrationCard card => IsProgressUnknown(card),
+        "ShowProgressBar" when value is RoomOrchestrationCard card => ShowCompactProgressBar(card),
+        "ProgressBarVisibility" when value is RoomOrchestrationCard card => ShowCompactProgressBar(card) ? Visibility.Visible : Visibility.Collapsed,
         "ScheduleLabel" when value is string schedule => ScheduleNeedsConfirmation(schedule) ? "待确认" : "定时",
         "ScheduleValue" when value is string schedule => ScheduleValue(schedule),
         "ScheduleNeedsConfirmation" when value is string schedule => ScheduleNeedsConfirmation(schedule),
@@ -87,7 +114,12 @@ public sealed class RoomOrchestrationDisplayConverter : IValueConverter, IMultiV
     };
 
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-        => values is [RoomOrchestrationTaskRow row, double width] ? ShortJob(row, width) : "";
+    {
+        if (parameter as string == "CardTimeVisibility")
+            return values is [RoomOrchestrationCard card, double available] && available >= 730 && card.HasUpdatedTime
+                ? Visibility.Visible : Visibility.Collapsed;
+        return values is [RoomOrchestrationTaskRow row, double width] ? ShortJob(row, width) : "";
+    }
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

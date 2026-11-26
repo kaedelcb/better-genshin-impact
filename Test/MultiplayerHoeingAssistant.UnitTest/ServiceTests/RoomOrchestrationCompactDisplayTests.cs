@@ -57,6 +57,30 @@ public sealed class RoomOrchestrationCompactDisplayTests
     }
 
     [Fact]
+    public void CompactProgressDistinguishesConfirmedCountsBindingsAndUnknown()
+    {
+        var card = new RoomOrchestrationCard("room", "示例", "123456", "", true, true,
+            new("waiting", "等待本轮收尾"), "11-26 12:36", "", [new(1, "任务甲", "配置组", new("done", "已完成")),
+            new(2, "任务乙", "配置组", new("pending", "未开始"))], [], "本轮冻结任务", "4 人", "未启用", "计划表 · 日常计划", null, null);
+        Assert.Equal("1/2", RoomOrchestrationDisplayConverter.CompactProgress(card));
+        Assert.True(RoomOrchestrationDisplayConverter.ShowCompactProgressBar(card));
+        var unknown = card with { ProgressUnconfirmed = true };
+        Assert.Equal("进度待核对", RoomOrchestrationDisplayConverter.CompactProgress(unknown));
+        Assert.False(RoomOrchestrationDisplayConverter.ShowCompactProgressBar(unknown));
+        var unknownItem = card with { Tasks = [card.Tasks[0], card.Tasks[1] with { Status = new("unknown", "待核对") }] };
+        Assert.Equal("进度待核对", RoomOrchestrationDisplayConverter.CompactProgress(unknownItem));
+        Assert.False(RoomOrchestrationDisplayConverter.ShowCompactProgressBar(unknownItem));
+        var bindings = card with { Tasks = card.Tasks.Select(t => t with { Status = new("none", "无执行记录") }).ToArray(), TasksCaption = "" };
+        Assert.Equal("2 项绑定", RoomOrchestrationDisplayConverter.CompactProgress(bindings));
+        Assert.False(RoomOrchestrationDisplayConverter.ShowCompactProgressBar(bindings));
+        Assert.Equal("未绑定", RoomOrchestrationDisplayConverter.CompactProgress(bindings with { Tasks = [] }));
+        var detail = RoomOrchestrationDisplayConverter.FullDetails(card);
+        Assert.Contains("计划表 · 日常计划", detail);
+        Assert.Contains("11-26 12:36", detail);
+        Assert.Contains("1 / 2 项已完成", detail);
+    }
+
+    [Fact]
     public void RoomSummaryDoesNotDiscardOriginalEvidenceOrInventStatus()
     {
         var status = new RoomOrchestrationStatus("waiting", "等待本轮收尾", Note);

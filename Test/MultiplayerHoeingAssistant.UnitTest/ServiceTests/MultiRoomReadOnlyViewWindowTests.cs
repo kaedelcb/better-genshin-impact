@@ -419,6 +419,24 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                             Assert.Equal(Visibility.Collapsed, ((Grid)graph.FindName("MonitorTargetRow")).Visibility);
                             Assert.Contains(FindVisualChildren<Border>(graph), b => b.Name == "RoomSectionTag" && b.Visibility == Visibility.Visible
                                 && b.DataContext is RoomOrchestrationCard c && c.Id == fifth.Id && c.SectionTitle == "独立房间");
+                            var titles = FindVisualChildren<Grid>(graph).Where(g => g.Name == "CardTitleGrid").ToArray();
+                            Assert.Equal(5, titles.Length);
+                            foreach (var title in titles)
+                            {
+                                var progressPane = Assert.Single(FindVisualChildren<Border>(title).Where(b => b.Name == "CardProgressPane"));
+                                var action = Assert.Single(FindVisualChildren<Button>(title).Where(b => b.Name == "CardCompletionButton"));
+                                Assert.Equal(0, Grid.GetRow(progressPane)); Assert.Equal(0, Grid.GetRow(action));
+                                Assert.True(title.ActualHeight <= 34, $"卡片标题不应增加一行：{title.ActualHeight}");
+                                Assert.True(action.ActualWidth > 75, $"完成动作空间不足：{action.ActualWidth}");
+                            }
+                            var firstTitle = Assert.Single(titles.Where(t => t.DataContext is RoomOrchestrationCard c && c.Id == activeRoom.Id));
+                            Assert.Contains(FindVisualChildren<TextBlock>(firstTitle), t => t.Name == "CardCompactProgressText" && t.Text == "2/2");
+                            Assert.Contains(FindVisualChildren<ProgressBar>(firstTitle), p => p.Name == "CardCompactProgressBar" && p.Visibility == Visibility.Visible);
+                            var time = Assert.Single(FindVisualChildren<TextBlock>(firstTitle).Where(t => t.Name == "CardUpdatedText"));
+                            Assert.Equal(width == 1180 ? Visibility.Visible : Visibility.Collapsed, time.Visibility);
+                            var fifthTitle = Assert.Single(titles.Where(t => t.DataContext is RoomOrchestrationCard c && c.Id == fifth.Id));
+                            Assert.Contains(FindVisualChildren<TextBlock>(fifthTitle), t => t.Name == "CardCompactProgressText" && t.Text == "1 项绑定");
+                            Assert.Contains(FindVisualChildren<ProgressBar>(fifthTitle), p => p.Name == "CardCompactProgressBar" && p.Visibility == Visibility.Collapsed);
                             var detailButtons = FindVisualChildren<Button>(graph).Where(b => b.Name == "RoomDetailButton").ToArray();
                             var secondDetails = Assert.Single(detailButtons.Where(b => b.DataContext is RoomOrchestrationCard c && c.Id == secondRoom.Id));
                             Assert.Equal(Visibility.Visible, secondDetails.Visibility);
@@ -465,6 +483,24 @@ public sealed class MultiRoomReadOnlyViewWindowTests
                                     finally { dialog?.Close(); }
                                 }));
                                 ((Button)graph.FindName("HeaderDetailButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                                if (detailFailure is not null) throw detailFailure;
+                                app.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() =>
+                                {
+                                    var dialog = app.Windows.OfType<Window>().FirstOrDefault(w => w.Title.StartsWith("房间执行详情"));
+                                    try
+                                    {
+                                        Assert.NotNull(dialog);
+                                        var raw = Assert.Single(FindVisualChildren<TextBox>(dialog!).Where(t => t.Name == "RoomDetailTextBox"));
+                                        Assert.True(raw.IsReadOnly);
+                                        Assert.Contains("分类：独立房间", raw.Text);
+                                        Assert.Contains("完成后：恢复任务", raw.Text);
+                                        Assert.Contains("任务进度：共 1 项绑定", raw.Text);
+                                    }
+                                    catch (Exception ex) { detailFailure = ex; }
+                                    finally { dialog?.Close(); }
+                                }));
+                                Assert.Single(FindVisualChildren<Button>(fifthTitle).Where(b => b.Name == "CardCompletionButton"))
+                                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                                 if (detailFailure is not null) throw detailFailure;
                             }
                             var visual = (UIElement)window.Content;
