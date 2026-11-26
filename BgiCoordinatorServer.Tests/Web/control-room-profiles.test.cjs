@@ -64,9 +64,12 @@ function fixture(t, supplied = {}) {
     const mainSnapshot = (serverUrl = A, roomCode = 'ROOM01', rows = []) => ({ serverUrl, roomCode, nickname: 'fake-login', ready: true,
         connection: mainHub, senderUid: 'web_main_fixture', capabilities: ['hoeing.start.v2'], generation: 1, players: rows });
     if (supplied.main) main = mainSnapshot(...supplied.main);
-    const ctx = vm.createContext({ URL, crypto, console, setTimeout: later, clearTimeout: key => timers.delete(key),
-        location: { origin: A, protocol: 'https:' }, signalR: { HubConnectionBuilder: Builder },
-        localStorage: { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, String(value)), removeItem: key => store.delete(key) },
+    const ctx = vm.createContext({ URL, TextEncoder, crypto, console, document: supplied.document, setTimeout: later, clearTimeout: key => timers.delete(key),
+        location: supplied.location || { origin: A, protocol: 'https:' }, signalR: { HubConnectionBuilder: Builder },
+        localStorage: { getItem: key => store.get(key) ?? null, setItem: (key, value) => {
+            if (supplied.failWrites?.()) throw new Error('synthetic storage failure');
+            store.set(key, String(value));
+        }, removeItem: key => store.delete(key) },
         addEventListener: (name, handler) => pageEvents.set(name, handler), removeEventListener: name => pageEvents.delete(name) });
     ctx.window = ctx;
     vm.runInContext(source, ctx, { filename: 'control-room-profiles.js' });
@@ -151,14 +154,15 @@ test('保存、上限、重复身份、地址变更和删除只作用本浏览�
     assert.throws(() => x.save(B + '/hub/', 'ROOM01', '重复房'), /已存在/);
     assert.throws(() => x.save(B, 'ROOM02', '乙'), /名称/);
     x.save(B, 'ROOM02', '丙', '', false); x.save(B, 'ROOM03', '丁', '', false); x.save(B, 'ROOM04', '戊', '', false);
-    assert.throws(() => x.save(B, 'ROOM05', '第六房'), /5 个/);
-    assert.throws(() => w.validateMainLogin(B, 'ROOM05'), /5 个/);
+    for (let i = 5; i < 64; i++) x.save(B, 'BOOK_' + i, `房间 ${i}`, '', false);
+    assert.throws(() => x.save(B, 'ROOM05', '超限房'), /64 个/);
+    assert.throws(() => w.validateMainLogin(B, 'ROOM05'), /64 个/);
     assert.throws(() => w.removeProfile(w.getMainContext().roomKey), /不可移除/);
     const moved = w.saveProfile({ serverUrl: A, roomCode: 'NEW001', name: '乙新地址', password: '', nickname: '', remember: false }, b.roomKey);
     assert.equal(moved.profileId, b.profileId); assert.equal(moved.hasPassword, false); assert.equal(w.getLogin(moved.roomKey), null);
     assert.equal(w.getContext(b.roomKey), null); assert.ok(!x.store.get(BOOK).includes('fake-b'));
     w.removeProfile(moved.roomKey); await drain();
-    assert.equal(w.listProfiles().length, 4);
+    assert.equal(w.listProfiles().length, 63);
     assert.ok(x.connections.every(c => !c.calls.some(call => call.name === 'control.createRoom')));
 });
 
@@ -318,4 +322,242 @@ test('同窗口主房断线与代次变化立即撤销可操作来源；其他�
     w.saveProfile({ serverUrl: B, roomCode: 'ROOM01', name: '本标签页编辑', remember: false }, w.roomKey(B, 'ROOM01'));
     assert.equal(JSON.parse(x.store.get(BOOK)).profiles[0].name, '另一标签页编辑');
     assert.match(w.getViewNotice(), /其他页面已修改/);
+});
+
+const roomMetadata = (overrides = {}) => ({ name: '共享档案', note: '', serverUrl: A, roomCode: 'OTHER',
+    teamUids: ['123456789'], expectedHoeingPlayers: 4, ...overrides });
+const roomBook = rooms => JSON.stringify({ kind: 'nexusbgi-room-book', version: 1, rooms });
+
+test('房间列表合并保留独立档案与当前登录，按服务器及精确房号去重，不触发认证', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', [player('111111111', 'a1')]], location: { origin: 'http://monitor.invalid', protocol: 'http:' } }), w = x.api;
+    x.setMain(x.mainSnapshot(A, 'ROOM01', [player('111111111', 'a1')]), { remember: true, password: 'fake-main-secret' });
+    const aKey = w.roomKey(A, 'ROOM01');
+    w.saveProfile({ serverUrl: A, roomCode: 'ROOM01', name: 'Original', note: '保持主房备注', remember: true }, aKey);
+    x.register(B, 'ROOM01', 'fake-b-secret', [player('222222222', 'b1')]);
+    const b = x.save(B, 'ROOM01', 'Original (2)', 'fake-b-secret', true, { note: '保持乙房备注' });
+    w.setView('room', b.roomKey); await drain();
+    const before = copy(w.listProfiles()), beforeBook = JSON.parse(x.store.get(BOOK)), beforeView = copy(w.getView());
+    const main = copy(w.getMainContext()), login = copy(w.getLogin()), bLogin = copy(w.getLogin(b.roomKey));
+    const changes = x.changes(), calls = copy(x.connFor(B, 'ROOM01').calls), views = copy(x.views);
+    const C = 'http://coordinator-c.invalid:8090', longCode = 'mIxED_-' + 'X'.repeat(121);
+    const incoming = [roomMetadata({ serverUrl: A + '/hub/', roomCode: 'ROOM01', name: '不覆盖旧名称', note: '不要覆盖' }),
+        roomMetadata({ serverUrl: B, roomCode: 'ROOM01' }),
+        roomMetadata({ serverUrl: C + '/gateway/', roomCode: 'ROOM01', name: 'original', note: '备注: "原样" \\n [{}]', teamUids: [] }),
+        roomMetadata({ serverUrl: C, roomCode: 'ROOM01', name: '重复输入的不同名称' }),
+        roomMetadata({ serverUrl: A, roomCode: 'room01', name: 'Original' }),
+        roomMetadata({ serverUrl: C, roomCode: longCode, name: '长'.repeat(64) }),
+        roomMetadata({ serverUrl: B, roomCode: longCode, name: '长'.repeat(64) })];
+    assert.deepEqual(copy(w.importRoomBook(roomBook(incoming))), { imported: 4, skipped: 3 });
+    await drain();
+    assert.deepEqual(copy(w.listProfiles().slice(0, before.length)), before);
+    assert.deepEqual(copy(w.getMainContext()), main); assert.deepEqual(copy(w.getLogin()), login);
+    assert.deepEqual(copy(w.getLogin(b.roomKey)), bLogin); assert.deepEqual(copy(w.getView()), beforeView);
+    assert.deepEqual(x.views, views); assert.equal(x.switches.length, 0); assert.equal(x.changes(), changes);
+    assert.equal(x.connections.length, 1); assert.deepEqual(x.connFor(B, 'ROOM01').calls, calls); assert.equal(x.mainHub.calls.length, 0);
+    const afterBook = JSON.parse(x.store.get(BOOK)), { profiles: beforeProfiles, ...beforePrefs } = beforeBook;
+    const { profiles: afterProfiles, ...afterPrefs } = afterBook;
+    assert.deepEqual(afterPrefs, beforePrefs); assert.deepEqual(afterProfiles.slice(0, beforeProfiles.length), beforeProfiles);
+    const added = w.listProfiles().slice(before.length);
+    assert.deepEqual(copy(added.map(p => p.name)), ['original (3)', 'Original (4)', '长'.repeat(64), '长'.repeat(60) + ' (2)']);
+    assert.deepEqual(copy(added.map(p => p.roomCode)), ['ROOM01', 'room01', longCode, longCode]);
+    assert.equal(added[0].serverUrl, C); assert.equal(added[0].note, incoming[2].note);
+    assert.equal(new Set(afterProfiles.map(p => p.profileId)).size, afterProfiles.length);
+    assert.ok(added.every(p => p.saved && !p.hasPassword && !p.remember && p.status === 'unauthenticated' && !w.getLogin(p.roomKey)));
+    for (const p of afterProfiles.slice(beforeProfiles.length)) {
+        assert.equal('password' in p, false); assert.equal('nickname' in p, false);
+        assert.deepEqual(Object.keys(p).sort(), ['name', 'note', 'profileId', 'remember', 'roomCode', 'serverUrl']);
+    }
+    const raw = x.store.get(BOOK);
+    assert.deepEqual(copy(w.importRoomBook(roomBook(incoming))), { imported: 0, skipped: incoming.length });
+    assert.equal(x.store.get(BOOK), raw);
+});
+
+test('复制列表包含未记住的当前登录时保留其档案，但不持久化本次密码', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', []] }), w = x.api;
+    x.setMain(x.mainSnapshot(), { remember: false, password: 'fixture-only-temporary-secret' });
+    const key = w.roomKey(A, 'ROOM01'), before = copy(w.getMainContext()), current = w.listProfiles().find(p => p.roomKey === key);
+    assert.equal(current.saved, false);
+    assert.deepEqual(copy(w.importRoomBook(roomBook([roomMetadata({ roomCode: 'ROOM01' })]))), { imported: 1, skipped: 0 });
+    assert.equal(w.listProfiles().find(p => p.roomKey === key).saved, true);
+    assert.equal(w.getLogin(key).password, 'fixture-only-temporary-secret');
+    assert.deepEqual(copy(w.getMainContext()), before);
+    const stored = JSON.parse(x.store.get(BOOK)).profiles.find(p => p.roomCode === 'ROOM01');
+    assert.equal(stored.profileId, current.profileId);
+    assert.equal(stored.remember, false);
+    assert.equal('password' in stored, false);
+    assert.equal('nickname' in stored, false);
+    assert.equal(x.switches.length, 0);
+    w.dispose(); const y = fixture(t, { store: x.store }); await drain();
+    assert.equal(y.api.getContext(key).status, 'unauthenticated');
+    assert.equal(y.api.getLogin(key), null);
+});
+
+test('导入仅追加原房间簿，旧档案的存储字节、未知本机字段及查看配置不重写', t => {
+    const key = JSON.stringify([A, 'Case_01']);
+    const previous = { version: 1, legacyMigrated: true, lastLoginKey: key,
+        view: { mode: 'room', roomKey: key, localOnly: 'keep' }, localOnly: { profiles: ['nested'] },
+        profiles: [{ profileId: 'old-local-id', serverUrl: A + '/gateway/', roomCode: 'Case_01', name: '旧档案', note: '格式 ] }, "profiles" [',
+            remember: true, password: 'fake-old-secret', nickname: '旧昵称', localOnly: ['preserve'] }] };
+    const raw = JSON.stringify(previous, null, 2).replace('旧档案', '\\u65e7\\u6863\\u6848').replace('"profiles": [\n    {', '"pro\\u0066iles": [\n    {');
+    const store = new Map([[BOOK, raw]]), x = fixture(t, { store });
+    const before = copy(x.api.listProfiles());
+    assert.deepEqual(copy(x.api.importRoomBook(roomBook([roomMetadata()]))), { imported: 1, skipped: 0 });
+    const output = store.get(BOOK);
+    const added = JSON.parse(output).profiles[1];
+    assert.equal(output.replace(',' + JSON.stringify(added), ''), raw);
+    assert.deepEqual(copy(x.api.listProfiles().slice(0, before.length)), before);
+    assert.equal(x.api.getLogin().password, 'fake-old-secret'); assert.equal(x.api.getView().roomKey, key);
+});
+
+test('导入的新房需要独立输入密码；可以继续保存和手动切换控制房间，重载保留未认证档案', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', []] }), w = x.api;
+    x.setMain(x.mainSnapshot(), { remember: true, password: 'fake-main-secret' });
+    const key = w.roomKey(B, 'Case_01'), waiting = w.roomKey(B, 'WAIT');
+    w.importRoomBook(roomBook([roomMetadata({ serverUrl: B, roomCode: 'Case_01' }), roomMetadata({ serverUrl: B, roomCode: 'WAIT' })]));
+    const p = w.listProfiles().find(p => p.roomKey === key);
+    await drain(); assert.equal(x.connections.length, 0); assert.equal(w.getLogin(key), null);
+    await assert.rejects(w.requestSwitch(key), /请填写房间密码/); assert.equal(x.switches.length, 0);
+    x.register(B, 'Case_01', 'fake-local-input', []);
+    w.saveProfile({ name: p.name, note: p.note, serverUrl: B, roomCode: 'Case_01', password: 'fake-local-input', nickname: '本人昵称', remember: true }, key);
+    await drain(); assert.equal(x.connFor(B, 'Case_01').join.password, 'fake-local-input'); assert.equal(w.getContext(key).ready, true);
+    assert.equal(w.getMainContext().serverUrl, A); assert.equal(x.switches.length, 0);
+    await w.requestSwitch(key); await drain();
+    assert.equal(x.switches.length, 1); assert.equal(x.switches[0].password, 'fake-local-input'); assert.equal(x.switches[0].nickname, '本人昵称');
+    assert.equal(w.getMainContext().roomKey, key); assert.equal(w.getLogin(waiting), null);
+    w.dispose(); const y = fixture(t, { store: x.store }); await drain();
+    assert.equal(y.api.getContext(waiting).status, 'unauthenticated'); assert.equal(y.api.getLogin(waiting), null);
+    assert.equal(y.api.listProfiles().find(p => p.roomKey === key).profileId, p.profileId);
+    assert.equal(y.api.getLogin().password, 'fake-local-input'); assert.equal(y.connections.length, 0);
+});
+
+test('严格校验剪贴板格式、字段、来源地址、房号、队员和人数；无效后项不能造成部分导入', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', []] });
+    x.setMain(x.mainSnapshot(), { remember: true, password: 'fake-main-secret' }); await drain();
+    const raw = x.store.get(BOOK), before = copy(x.api.listProfiles()), first = roomMetadata({ roomCode: 'FIRST' });
+    const good = roomMetadata(), invalidRows = [null, {}, { ...good, password: 'do not accept' }, { ...good, ownerToken: 'do not accept' },
+        { ...good, taskSettings: {} }, { ...good, nickname: 'not allowed' }, { ...good, id: 'not allowed' },
+        ...[null, 7, '', ' ', 'x'.repeat(65)].map(name => ({ ...good, name })),
+        ...[null, 1, 'x'.repeat(257)].map(note => ({ ...good, note })),
+        ...['ftp://host.invalid', '/gateway', 'https://host.invalid?x=1', 'https://host.invalid#', 'http://host.invalid?',
+            'https://user:pass@host.invalid', 'http://@host.invalid', 'http:///host.invalid', 'https://host.invalid\\x', 2].map(serverUrl => ({ ...good, serverUrl })),
+        ...['', 'abc ', ' abc', 'ABC\n', '甲', 'a.x', 'a'.repeat(129), 123].map(roomCode => ({ ...good, roomCode })),
+        ...[null, {}, [''], [123], ['1x'], ['1\n'], ['１'], ['1'.repeat(17)], Array(65).fill('1')].map(teamUids => ({ ...good, teamUids })),
+        ...[0, 5, '4', 1.5, null].map(expectedHoeingPlayers => ({ ...good, expectedHoeingPlayers }))];
+    const missing = { ...good }; delete missing.note; invalidRows.push(missing);
+    const invalidBooks = ['not json', '', '[]', 'null', JSON.stringify({ kind: 'wrong', version: 1, rooms: [first] }),
+        JSON.stringify({ kind: 'nexusbgi-room-book', version: 2, rooms: [first] }),
+        JSON.stringify({ kind: 'nexusbgi-room-book', version: '1', rooms: [first] }),
+        JSON.stringify({ kind: 'nexusbgi-room-book', version: 1, rooms: [first], config: {} }),
+        roomBook([first]).replace('"version":1', '"version":2,"version":1'),
+        roomBook([first]).replace('"note":""', '"note":"old","note":""'),
+        roomBook([first]).replace('"rooms":[', '"rooms":[{"password":"not allowed"}],"rooms":['),
+        ...invalidRows.map(p => roomBook([first, p])), roomBook(Array(65).fill(first))];
+    for (const book of invalidBooks) {
+        assert.throws(() => x.api.importRoomBook(book));
+        assert.equal(x.store.get(BOOK), raw); assert.deepEqual(copy(x.api.listProfiles()), before);
+    }
+    await drain(); assert.equal(x.connections.length, 0); assert.equal(x.switches.length, 0); assert.equal(x.mainHub.calls.length, 0);
+});
+
+test('按 UTF-8 计算 256 KiB 上限，接受边界并拒绝多字节超限', t => {
+    const x = fixture(t), good = roomBook([roomMetadata()]), max = 256 * 1024;
+    const exact = good + ' '.repeat(max - Buffer.byteLength(good, 'utf8'));
+    assert.deepEqual(copy(x.api.importRoomBook(exact)), { imported: 1, skipped: 0 });
+    const before = x.store.get(BOOK);
+    assert.throws(() => x.api.importRoomBook(exact + ' '), /256 KiB/);
+    const multibyte = roomBook([roomMetadata({ serverUrl: A + '/' + '汉'.repeat(90000) })]);
+    assert.ok(multibyte.length < max && Buffer.byteLength(multibyte, 'utf8') > max);
+    assert.throws(() => x.api.importRoomBook(multibyte), /256 KiB/);
+    assert.equal(x.store.get(BOOK), before);
+});
+
+test('最多保存 64 个档案，临时主房单独保留；过限整批拒绝，重复档案不占容量', async t => {
+    const x = fixture(t, { main: [A, 'ROOM01', []] }), w = x.api;
+    x.setMain(x.mainSnapshot(), { remember: false, password: 'fake-session-secret' });
+    const incoming = Array.from({ length: 63 }, (_, i) => roomMetadata({ roomCode: `r_${i}`, name: `房间 ${i}` }));
+    assert.deepEqual(copy(w.importRoomBook(roomBook(incoming))), { imported: 63, skipped: 0 });
+    assert.equal(w.listProfiles().length, 64); assert.equal(JSON.parse(x.store.get(BOOK)).profiles.length, 63);
+    const before = x.store.get(BOOK), last = roomMetadata({ roomCode: 'LAST' });
+    assert.throws(() => w.importRoomBook(roomBook([last, roomMetadata({ roomCode: 'OVER' })])), /超过 64/);
+    assert.equal(x.store.get(BOOK), before); assert.equal(w.getContext(w.roomKey(A, 'LAST')), null);
+    // The temporary main consumes a slot if explicitly included in the copied room book.
+    assert.throws(() => w.importRoomBook(roomBook([last, roomMetadata({ roomCode: 'ROOM01' })])), /超过 64/);
+    assert.equal(x.store.get(BOOK), before);
+    assert.deepEqual(copy(w.importRoomBook(roomBook([last, incoming[0], incoming[0]]))), { imported: 1, skipped: 2 });
+    assert.equal(w.listProfiles().length, 65); assert.equal(JSON.parse(x.store.get(BOOK)).profiles.length, 64);
+    assert.equal(w.getMainContext().roomCode, 'ROOM01'); assert.equal(w.getLogin(w.roomKey(A, 'ROOM01')).password, 'fake-session-secret');
+    const fullBook = x.store.get(BOOK);
+    assert.throws(() => w.importRoomBook(roomBook([roomMetadata({ roomCode: 'OVER' })])), /超过 64/);
+    assert.equal(x.store.get(BOOK), fullBook);
+    assert.doesNotThrow(() => w.validateMainLogin(A, 'LAST'));
+    assert.doesNotThrow(() => w.validateMainLogin(A, 'ROOM01'));
+    x.setMain(x.mainSnapshot(), { remember: true, password: 'fake-session-secret' });
+    assert.equal(JSON.parse(x.store.get(BOOK)).profiles.length, 64); assert.equal(w.getLogin(), null);
+    assert.match(w.getViewNotice(), /本次登录信息仅在当前页面有效/);
+    w.dispose(); const y = fixture(t, { store: x.store }); await drain();
+    assert.equal(y.api.listProfiles().length, 64); assert.equal(y.connections.length, 0);
+});
+
+test('保存失败与其他标签页写入不造成部分合并或伪成功；尚未保存的旧改动不被导入覆盖', t => {
+    let fail = false;
+    const x = fixture(t, { failWrites: () => fail });
+    const p = x.save(B, 'ROOM01', '旧资料', '', false), before = x.store.get(BOOK), incoming = roomBook([roomMetadata()]);
+    fail = true;
+    assert.throws(() => x.api.importRoomBook(incoming), /未合并/);
+    assert.equal(x.store.get(BOOK), before); assert.equal(x.api.listProfiles().length, 1);
+    fail = false;
+    assert.deepEqual(copy(x.api.importRoomBook(incoming)), { imported: 1, skipped: 0 });
+    const prior = x.store.get(BOOK);
+    fail = true;
+    x.api.saveProfile({ serverUrl: B, roomCode: 'ROOM01', name: '当前页未保存的资料', remember: false }, p.roomKey);
+    fail = false;
+    const second = roomBook([roomMetadata({ roomCode: 'SECOND' })]);
+    assert.throws(() => x.api.importRoomBook(second), /尚未确认保存/);
+    assert.equal(x.store.get(BOOK), prior); assert.equal(x.api.listProfiles().length, 2);
+    x.api.saveProfile({ serverUrl: B, roomCode: 'ROOM01', name: '当前页未保存的资料', remember: false }, p.roomKey);
+    const external = JSON.parse(x.store.get(BOOK)); external.profiles[0].name = '其他页修改';
+    x.store.set(BOOK, JSON.stringify(external));
+    assert.throws(() => x.api.importRoomBook(second), /其他页面已修改/);
+    assert.equal(x.store.get(BOOK), JSON.stringify(external)); assert.equal(x.api.listProfiles().length, 2);
+});
+
+test('管理房间的粘贴合并在普通 HTTP 无剪贴板 API 下可用；失败可修改，成功返回房间列表并可编辑', async t => {
+    const { dom } = await import('./desktop-control-harness.mjs');
+    const { document } = dom(), Element = document.createElement('div').constructor;
+    const matches = Element.prototype.matches;
+    Element.prototype.matches = function(selector) { return selector.split(',').some(s => matches.call(this, s.trim())); };
+    Element.prototype.append = function(...children) { children.forEach(child => this.appendChild(child)); };
+    Element.prototype.focus = function() { document.activeElement = this; };
+    Object.defineProperty(Element.prototype, 'isConnected', { get() {
+        let node = this;
+        while (node.parentElement?.children.includes(node)) node = node.parentElement;
+        return node === document.body;
+    } });
+    Object.defineProperty(Element.prototype, 'elements', { get() {
+        return Object.fromEntries(this.querySelectorAll('[name]').map(el => [el.getAttribute('name'), el]));
+    } });
+    const x = fixture(t, { document, location: { origin: 'http://monitor.invalid', protocol: 'http:' } }), w = x.api;
+    w.openManager();
+    const manager = document.querySelector('.wr-manager'), importButton = manager.querySelector('[data-wr-import]');
+    assert.equal(manager.open, true); assert.ok(importButton);
+    importButton.click();
+    const panel = document.querySelector('.wr-import'), form = panel.querySelector('form'), textarea = form.elements.roomBook;
+    assert.equal(panel.open, true); assert.equal(textarea.tagName, 'TEXTAREA'); assert.equal(document.activeElement, textarea);
+    textarea.value = 'not a valid room book'; form.onsubmit({ preventDefault() {} });
+    assert.match(panel.querySelector('[data-wr-import-result]').textContent, /JSON 无效/);
+    assert.equal(panel.open, true); assert.equal(w.listProfiles().length, 0); assert.equal(x.store.has(BOOK), false);
+    const room = roomMetadata({ serverUrl: 'http://room.invalid:8090', roomCode: 'mIxED_Long-01', note: '新房备注' });
+    textarea.value = roomBook([room, room]); textarea.oninput();
+    assert.equal(w.listProfiles().length, 0); assert.equal(panel.querySelector('[data-wr-import-result]').textContent, '');
+    form.onsubmit({ preventDefault() {} });
+    assert.equal(document.querySelector('.wr-import'), null); assert.equal(manager.open, true);
+    assert.match(manager.querySelector('[data-wr-result]').textContent, /已导入 1 个房间，跳过 1 个.*需认证.*密码/);
+    assert.match(manager.querySelector('[data-wr-count]').textContent, /1 \/ 64/);
+    const row = manager.querySelector('.wr-book-row'); assert.ok(row);
+    assert.match(row.textContent, /需认证/); assert.equal(document.activeElement, importButton);
+    row.click();
+    const fields = manager.querySelector('.wr-profile-form').elements;
+    assert.equal(fields.name.value, room.name); assert.equal(fields.roomCode.value, room.roomCode);
+    assert.equal(fields.password.value, ''); assert.equal(fields.nickname.value, ''); assert.equal(fields.remember.checked, false);
+    assert.equal(x.connections.length, 0); assert.equal(x.switches.length, 0);
 });

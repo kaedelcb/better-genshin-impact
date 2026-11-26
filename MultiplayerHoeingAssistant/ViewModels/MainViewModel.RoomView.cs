@@ -89,6 +89,7 @@ public partial class MainViewModel
             if (_config?.RoomProfiles is not { Count: > 0 }) return "";
             if (IsViewingReadOnlyRoom && ViewedRoomProfile is { } target)
             {
+                if (target.NeedsRoomPassword) return $"「{target.Name}」需填写密码，请在「管理房间」中补全入房资料。";
                 if (IsStandaloneMode) return $"当前为单机模式，无法实时查看或远控「{target.Name}」。";
                 if (_roomSpectators.TryGetValue(target.Id, out var session))
                 {
@@ -103,9 +104,15 @@ public partial class MainViewModel
             {
                 if (IsStandaloneMode) return "当前为单机模式，无法实时查看或远控其他房间。";
                 var failed = new List<string>();
+                var missing = 0;
                 foreach (var profile in _config.RoomProfiles)
                 {
                     if (string.Equals(profile.Id, ActiveRoomProfile?.Id, StringComparison.Ordinal)) continue;
+                    if (profile.NeedsRoomPassword)
+                    {
+                        missing++;
+                        continue;
+                    }
                     if (_roomSpectators.TryGetValue(profile.Id, out var session)
                         && !string.IsNullOrWhiteSpace(session.Error)
                         && !session.IsConnecting
@@ -114,7 +121,9 @@ public partial class MainViewModel
                         failed.Add($"{profile.Name}（{session.Error}）");
                     }
                 }
-                if (failed.Count > 0) return "部分房间连接未就绪：" + string.Join("；", failed);
+                var failures = failed.Count > 0 ? "部分房间连接未就绪：" + string.Join("；", failed) : "";
+                var passwordHint = missing > 0 ? $"{missing} 个房间需填写密码，可在「管理房间」中补全入房资料。" : "";
+                return string.Join("\n", new[] { passwordHint, failures }.Where(text => text.Length > 0));
             }
             return "";
         }

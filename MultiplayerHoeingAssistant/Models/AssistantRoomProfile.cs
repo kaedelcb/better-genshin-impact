@@ -26,6 +26,14 @@ public sealed class AssistantRoomProfile
     [JsonPropertyName("roomCode")]
     public string RoomCode { get; set; } = string.Empty;
 
+    /// <summary>房间簿导入的房间号是已存在的身份，编辑成员时保持原号码。</summary>
+    [JsonPropertyName("preserveRoomCode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool PreserveRoomCode { get; set; }
+
+    [JsonIgnore]
+    public bool NeedsRoomPassword => string.IsNullOrWhiteSpace(Password);
+
     [JsonPropertyName("teamUids")]
     public List<string> TeamUids { get; set; } = [];
 

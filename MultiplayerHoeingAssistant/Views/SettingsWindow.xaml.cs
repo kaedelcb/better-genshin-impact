@@ -138,13 +138,13 @@ public partial class SettingsWindow : Window
 
         var membersChanged = !teamUids.OrderBy(uid => uid, StringComparer.Ordinal)
             .SequenceEqual(editedRoom.TeamUids.OrderBy(uid => uid, StringComparer.Ordinal), StringComparer.Ordinal);
-        if (membersChanged)
+        if (membersChanged && !AssistantRoomDraft.HasValidMemberUids(teamUids, playerUid))
         {
-            if (!AssistantRoomDraft.HasValidMemberUids(teamUids, playerUid))
-            {
-                ErrorText.Text = "修改成员时请填写有效 UID，并包含本机玩家 UID。";
-                return null;
-            }
+            ErrorText.Text = "修改成员时请填写有效 UID，并包含本机玩家 UID。";
+            return null;
+        }
+        if (membersChanged && !RoomBookTransfer.UsesExactRoomCode(editedRoom))
+        {
             var code = AssistConfigManager.GenerateControlRoomCode(teamUids);
             if (result.RoomProfiles.Any(p => p.Id != editedRoom.Id && p.RoomCode == code
                 && RoomServerAddress.Same(result.GetRoomServerUrl(p), result.GetRoomServerUrl(editedRoom))))

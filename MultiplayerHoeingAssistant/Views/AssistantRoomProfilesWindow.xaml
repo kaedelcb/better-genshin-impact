@@ -124,7 +124,16 @@
             <Grid Grid.Row="1" Margin="16,14,16,0">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="172"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                 <DockPanel Margin="0,0,14,0">
-                    <Button x:Name="NewProfileButton" DockPanel.Dock="Top" Content="添加房间" Style="{StaticResource RoomAction}" Click="NewProfileClick" Margin="0,0,0,10"/>
+                    <StackPanel DockPanel.Dock="Top">
+                        <Button x:Name="NewProfileButton" Content="添加房间" Style="{StaticResource RoomAction}" Click="NewProfileClick" Margin="0,0,0,6"/>
+                        <TextBlock x:Name="RoomBookCountText" Foreground="{StaticResource RoomMuted}" FontSize="11" Margin="0,0,0,10"/>
+                    </StackPanel>
+                    <StackPanel DockPanel.Dock="Bottom" Margin="0,6,0,10">
+                        <Button x:Name="CopyRoomBookButton" Content="复制房间簿" Click="CopyRoomBookClick" Style="{StaticResource RoomAction}" Margin="0,0,0,6"
+                                ToolTip="复制全部已保存房间的资料，不含密码及任务设置。未保存的编辑不包含在内。"/>
+                        <Button x:Name="PasteRoomBookButton" Content="粘贴并合并房间簿" Click="PasteRoomBookClick" Style="{StaticResource RoomAction}"
+                                ToolTip="从剪贴板读取房间簿，仅添加未保存的房间，不修改原档案或登录房间。"/>
+                    </StackPanel>
                     <ListBox x:Name="ProfilesList" Background="Transparent" BorderThickness="0" Foreground="#F4F2FA"
                              ItemContainerStyle="{StaticResource RoomProfileRow}" SelectionChanged="ProfileChanged"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="已保存房间">
@@ -154,7 +163,24 @@
                                             </Style>
                                         </TextBlock.Style>
                                     </TextBlock>
-                                    <TextBlock Text="{Binding RoomCode}" Foreground="{StaticResource GoldText}" FontSize="11" Margin="0,3,0,0"/>
+                                    <TextBlock Text="需填写密码" Foreground="{StaticResource RoomWarning}" FontSize="11" Margin="0,3,0,0">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <MultiDataTrigger>
+                                                        <MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding NeedsRoomPassword}" Value="True"/>
+                                                            <Condition Binding="{Binding IsActiveRoom}" Value="False"/>
+                                                        </MultiDataTrigger.Conditions>
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </MultiDataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBlock Text="{Binding RoomCode}" Foreground="{StaticResource GoldText}" FontSize="11" Margin="0,3,0,0"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding RoomCode}"/>
                                     <TextBlock Text="{Binding ServerUrl}" Foreground="{StaticResource RoomMuted}" FontSize="11" Margin="0,2,0,0"
                                                TextTrimming="CharacterEllipsis" ToolTip="{Binding ServerUrl}"/>
                                 </StackPanel>

@@ -11,7 +11,7 @@
     'use strict';
     const root = window;
     const storageKey = 'web_hie_rooms.v1';
-    const MAX_ROOMS = 5, CONNECT_TIMEOUT = 15000, RETRY_DELAY = 15000;
+    const MAX_ROOMS = 64, MAX_ROOM_BOOK_BYTES = 256 * 1024, CONNECT_TIMEOUT = 15000, RETRY_DELAY = 15000;
     const roomCommands = new Set(['start_bgi', 'start_group', 'start_oneclick', 'hotkey_execute', 'stop',
         'close_game', 'clear_online', 'set_scheduled_online_time', 'bind_hoeing_group', 'set_quick_command',
         'task_policy.pull', 'task_policy.push', 'set_task_enabled', 'reset_state']);
@@ -43,7 +43,7 @@
     }
     let options = {}, initialized = false, active = false, suspended = false, generation = 0;
     let main = null, view = { mode: 'current', roomKey: '' }, lastLoginKey = '', legacyMigrated = false;
-    let storageError = '', storageRaw = null, storageBlocked = false, viewNotice = '', switchingKey = '', notifyQueued = false;
+    let storageError = '', storageRaw = null, storageBlocked = false, storagePending = false, viewNotice = '', switchingKey = '', notifyQueued = false;
     let selector = null, notice = null, menu = null, manager = null, switchDialog = null, placeSelector = null;
 
     const text = value => typeof value === 'string' ? value : '';
@@ -77,12 +77,17 @@
         } catch { return ''; }
     }
     function uniqueName(code, serverUrl) {
-        let name = ('房间 ' + code).slice(0, 64);
+        const name = ('房间 ' + code).slice(0, 64);
         if (!nameUsed(name)) return name;
         const host = new URL(serverUrl).host;
-        name = `${code} · ${host}`.slice(0, 64);
+        return unusedName(`${code} · ${host}`.slice(0, 64), nameUsed);
+    }
+    function unusedName(name, isUsed) {
         let n = 2, candidate = name;
-        while (nameUsed(candidate)) { const suffix = ` (${n++})`; candidate = name.slice(0, 64 - suffix.length) + suffix; }
+        while (isUsed(candidate)) {
+            const suffix = ` (${n++})`;
+            candidate = name.slice(0, 64 - suffix.length).replace(/[\uD800-\uDBFF]$/, '') + suffix;
+        }
         return candidate;
     }
     function nameUsed(name, exceptKey) {
@@ -92,10 +97,15 @@
         return { profileId: 'wr_' + id(), roomKey: roomKey(serverUrl, roomCode), serverUrl, roomCode,
             name: uniqueName(roomCode, serverUrl), note: '', password: '', nickname: '', remember: false, saved };
     }
+    function savedProfiles() { return [...profiles.values()].filter(p => p.saved); }
+    function storedProfile(p) {
+        return { profileId: p.profileId, serverUrl: p.serverUrl, roomCode: p.roomCode, name: p.name, note: p.note,
+            remember: p.remember, ...(p.remember ? { password: p.password, nickname: p.nickname } : {}) };
+    }
     function storage() { return root.localStorage; }
     function load() {
         profiles.clear(); lastLoginKey = ''; legacyMigrated = false; view = { mode: 'current', roomKey: '' };
-        storageBlocked = false; storageError = ''; storageRaw = null;
+        storageBlocked = false; storagePending = false; storageError = ''; storageRaw = null;
         try {
             storageRaw = storage().getItem(storageKey);
             if (!storageRaw) return;
@@ -126,24 +136,48 @@
             profiles.clear(); storageBlocked = true; storageError = '浏览器房间簿无法读取，原存储未覆盖；本次修改仅在当前页面有效。';
         }
     }
-    function persist() {
+    function appendStoredProfiles(original, additions) {
+        // load 已解析并检查原存储。只定位顶层 profiles 数组末尾插入，原有记录（含转义、其他字段）逐字保留。
+        let depth = 0, inProfiles = false, end = -1, arrayStart = -1;
+        for (const token of original.matchAll(/"(?:[^"\\]|\\.)*"|[{}\[\]]/g)) {
+            const value = token[0];
+            if (depth === 1 && value.startsWith('"') && JSON.parse(value) === 'profiles') {
+                const start = /^\s*:\s*\[/.exec(original.slice(token.index + value.length));
+                if (start) { inProfiles = true; arrayStart = token.index + value.length + start[0].length; }
+            }
+            if (value === '{' || value === '[') depth++;
+            else if (value === '}' || value === ']') {
+                depth--;
+                if (inProfiles && depth === 1 && value === ']') { inProfiles = false; end = token.index; }
+            }
+        }
+        if (end < 0) throw new Error('invalid book');
+        const insert = (original.slice(arrayStart, end).trim() ? ',' : '') + additions.map(p => JSON.stringify(storedProfile(p))).join(',');
+        return original.slice(0, end) + insert + original.slice(end);
+    }
+    function persist(additions = null) {
         if (storageBlocked) return false;
+        if (additions && storagePending) {
+            storageError = '房间簿已有尚未确认保存的修改，请先重新保存或重新加载页面后再导入。';
+            return false;
+        }
         try {
             if (storage().getItem(storageKey) !== storageRaw) {
                 storageBlocked = true;
                 storageError = '其他页面已修改房间簿，本页没有覆盖；请重新加载后再保存。';
                 return false;
             }
-            const data = { version: 1, legacyMigrated, lastLoginKey,
+            const raw = additions && storageRaw ? appendStoredProfiles(storageRaw, additions) : JSON.stringify({ version: 1, legacyMigrated, lastLoginKey,
                 view: view.mode === 'room' && !profiles.get(view.roomKey)?.saved ? { mode: 'current', roomKey: '' } : view,
-                profiles: [...profiles.values()].filter(p => p.saved).map(p => ({ profileId: p.profileId, serverUrl: p.serverUrl,
-                    roomCode: p.roomCode, name: p.name, note: p.note, remember: p.remember,
-                    ...(p.remember ? { password: p.password, nickname: p.nickname } : {}) })) };
-            const raw = JSON.stringify(data);
-            storage().setItem(storageKey, raw); storageRaw = raw; storageError = '';
+                profiles: [...savedProfiles(), ...(additions || [])].map(storedProfile) });
+            storage().setItem(storageKey, raw); storageRaw = raw; storageError = ''; storagePending = false;
             return true;
         } catch {
-            storageError = '浏览器未确认保存（旧记住信息可能仍存在），本次修改仅在当前页面有效。';
+            if (additions) storageError = '浏览器未确认保存房间簿，本次导入未合并。';
+            else {
+                storagePending = true;
+                storageError = '浏览器未确认保存（旧记住信息可能仍存在），本次修改仅在当前页面有效。';
+            }
             return false;
         }
     }
@@ -167,7 +201,7 @@
             if (trim(old.password).length > 128 || !trim(old.password)) return;
             let p = profiles.get(key);
             if (!p) {
-                if (profiles.size >= MAX_ROOMS) return;
+                if (savedProfiles().length >= MAX_ROOMS) return;
                 p = makeProfile(server, code, true);
                 p.password = trim(old.password); p.nickname = trim(old.nickname).slice(0, 50); p.remember = true;
                 profiles.set(key, p);
@@ -188,8 +222,8 @@
     }
     function validateMainLogin(serverUrl, roomCode) {
         const key = roomKey(serverUrl, roomCode);
-        if (!profiles.has(key) && [...profiles.values()].filter(p => p.saved || p.roomKey !== main?.roomKey).length >= MAX_ROOMS)
-            throw new Error('浏览器房间簿最多保存 5 个房间。请先移除一个非当前房间。');
+        if (!profiles.has(key) && savedProfiles().length >= MAX_ROOMS)
+            throw new Error(`浏览器房间簿最多保存 ${MAX_ROOMS} 个房间。请先移除一个非当前房间。`);
         return key;
     }
 
@@ -246,11 +280,13 @@
         }
         if (ready && typeof entered?.remember === 'boolean' && typeof entered.password === 'string' && entered.password) {
             // 仅本次已成功的网页登录凭据，不读执行端、不从 adapter 的其他字段提取密码。
-            profile.password = entered.password; profile.nickname = main.nickname; profile.remember = entered.remember;
-            profile.saved = profile.saved || entered.remember;
-            lastLoginKey = entered.remember ? key : '';
+            profile.password = entered.password; profile.nickname = main.nickname;
+            profile.remember = entered.remember && (profile.saved || savedProfiles().length < MAX_ROOMS);
+            profile.saved = profile.saved || profile.remember;
+            lastLoginKey = profile.remember ? key : '';
             legacyMigrated = true;
-            if (persist() || !entered.remember) forgetLegacy();
+            if (persist() || !profile.remember) forgetLegacy();
+            if (entered.remember && !profile.remember) viewNotice = `浏览器房间簿已保存 ${MAX_ROOMS} 个房间，本次登录信息仅在当前页面有效。`;
         }
         if (ready) active = true;
         if (view.mode === 'room' && !profiles.has(view.roomKey) && view.roomKey !== key) {
@@ -358,7 +394,7 @@
         if (!name || name.length > 64) throw new Error('房间名称需为 1–64 个字符。');
         if (nameUsed(name, existingKey)) throw new Error('房间名称已存在，请使用不同名称。');
         if (note.length > 256 || nickname.length > 50) throw new Error('备注最多 256 个字符，登录昵称最多 50 个字符。');
-        if (!previous && profiles.size >= MAX_ROOMS) throw new Error('浏览器房间簿最多保存 5 个房间。');
+        if (!previous?.saved && savedProfiles().length >= MAX_ROOMS) throw new Error(`浏览器房间簿最多保存 ${MAX_ROOMS} 个房间。`);
         if (key !== existingKey && (profiles.has(key) || main?.roomKey === key)) throw new Error('该服务器与房号已存在。');
         const locked = existingKey && (existingKey === main?.roomKey || existingKey === switchingKey);
         if (locked && (key !== existingKey || trim(draft.password))) throw new Error('不能修改当前控制房间的地址或密码；请先切换网页登录房间。');
@@ -382,6 +418,71 @@
         if (lastLoginKey === key && !remember) lastLoginKey = '';
         persist(); active = true; syncSessions(); notify();
         return publicProfile(next);
+    }
+    function hasFields(value, fields) {
+        return value !== null && typeof value === 'object' && !Array.isArray(value)
+            && Object.keys(value).length === fields.length && fields.every(key => Object.hasOwn(value, key));
+    }
+    function parseRoomBook(raw) {
+        if (typeof raw !== 'string') throw new Error('请粘贴执行端复制的房间列表 JSON。');
+        if (raw.length > MAX_ROOM_BOOK_BYTES || new TextEncoder().encode(raw).length > MAX_ROOM_BOOK_BYTES)
+            throw new Error('房间列表最多 256 KiB（UTF-8）。');
+        let book;
+        try { book = JSON.parse(raw); } catch { throw new Error('房间列表 JSON 无效，请重新复制。'); }
+        if (!hasFields(book, ['kind', 'version', 'rooms']) || book.kind !== 'nexusbgi-room-book' || book.version !== 1 || !Array.isArray(book.rooms))
+            throw new Error('请粘贴版本 1 的执行端房间列表，字段必须符合约定格式。');
+        if (book.rooms.length > MAX_ROOMS) throw new Error(`每次最多导入 ${MAX_ROOMS} 个房间。`);
+        const rooms = book.rooms.map((p, index) => {
+            const label = `第 ${index + 1} 个房间`;
+            if (!hasFields(p, ['name', 'note', 'serverUrl', 'roomCode', 'teamUids', 'expectedHoeingPlayers']))
+                throw new Error(`${label}的字段不符合约定格式。`);
+            if (typeof p.name !== 'string' || !p.name.trim() || p.name.length > 64)
+                throw new Error(`${label}的名称需为 1–64 个字符。`);
+            if (typeof p.note !== 'string' || p.note.length > 256)
+                throw new Error(`${label}的备注最多 256 个字符。`);
+            let serverUrl;
+            try {
+                // 先检查原地址的 authority，防止 URL 解析器消去空账号或修复缺失的主机分隔符。
+                const input = trim(p.serverUrl);
+                if (input.length > 2048 || !/^https?:\/\/[^/@\\\s?#]+(?:\/|$)/i.test(input)) throw new Error();
+                serverUrl = normalizeServer(input);
+            } catch { throw new Error(`${label}的协调服务器地址无效（需要 HTTP 或 HTTPS 基地址）。`); }
+            if (typeof p.roomCode !== 'string' || p.roomCode.length < 1 || p.roomCode.length > 128 || /[^A-Za-z0-9_-]/.test(p.roomCode))
+                throw new Error(`${label}的房间号无效。`);
+            if (!Array.isArray(p.teamUids) || p.teamUids.length > 64 || p.teamUids.some(uid => typeof uid !== 'string' || uid.length < 1 || uid.length > 16 || /[^0-9]/.test(uid)))
+                throw new Error(`${label}的队员 UID 列表无效。`);
+            if (!Number.isInteger(p.expectedHoeingPlayers) || p.expectedHoeingPlayers < 1 || p.expectedHoeingPlayers > 4)
+                throw new Error(`${label}的预计锄地人数需为 1–4 的整数。`);
+            return { name: p.name.trim(), note: p.note, serverUrl, roomCode: p.roomCode };
+        });
+        // JSON.parse 会覆盖重复键；字段数必须与严格的房间列表结构一致。
+        const fieldCount = (raw.match(/"(?:[^"\\]|\\.)*"|:/g) || []).filter(token => token === ':').length;
+        if (fieldCount !== 3 + rooms.length * 6) throw new Error('房间列表含重复字段，请重新复制。');
+        return rooms;
+    }
+    function importRoomBook(raw) {
+        const rows = parseRoomBook(raw), additions = new Map();
+        for (const room of rows) {
+            const key = roomKey(room.serverUrl, room.roomCode), existing = profiles.get(key);
+            // A temporary logged-in room is not yet a saved room book entry. Importing it
+            // must retain that room after a later manual switch, without remembering its password.
+            if (!existing?.saved && !additions.has(key)) additions.set(key, { room, existing });
+        }
+        if (savedProfiles().length + additions.size > MAX_ROOMS)
+            throw new Error(`合并后将超过 ${MAX_ROOMS} 个已保存房间，请先移除不需要的房间。本次未合并。`);
+        if (!additions.size) return { imported: 0, skipped: rows.length };
+        const names = new Set([...profiles.values()].map(p => p.name.toLowerCase()));
+        const staged = [...additions.values()].map(({room, existing}) => {
+            if (existing) return { ...existing, saved: true, remember: false };
+            const name = unusedName(room.name, candidate => names.has(candidate.toLowerCase()));
+            names.add(name.toLowerCase());
+            return { ...makeProfile(room.serverUrl, room.roomCode, true), name, note: room.note };
+        });
+        if (!persist(staged)) { refreshUi(); throw new Error('本次未合并房间。' + storageError); }
+        for (const p of staged) profiles.set(p.roomKey, p);
+        // 这里只更新房间列表与查看提示。导入没有凭据，也不触发旁观连接或适配器认证请求。
+        refreshUi();
+        return { imported: staged.length, skipped: rows.length - staged.length };
     }
     function removeProfile(key) {
         if (key === main?.roomKey || key === switchingKey) throw new Error('当前控制房间不可移除。');
@@ -823,8 +924,8 @@
         active = true; syncSessions();
         const opener = selector?.querySelector('button') || document.activeElement;
         const dialog = makeDialog('wr-manager', '管理房间');
-        dialog.innerHTML = '<div class="wr-dialog-head"><div><h3>管理房间</h3><p class="wr-muted">浏览器房间簿 · 仅在本浏览器保存已有房间</p></div><button type="button" class="wr-link" data-wr-close>关闭</button></div><div class="wr-manager-tabs"><span class="wr-current-tab">浏览器房间</span><button type="button" class="wr-link" data-wr-owner>本人执行端档案 ›</button></div><div class="wr-manager-body"><div class="wr-book-list"><div class="wr-list-header"><strong data-wr-count></strong><button type="button" class="wr-action" data-wr-add>添加房间</button></div><div data-wr-list></div></div><div class="wr-book-editor" data-wr-editor></div></div><p class="wr-book-result" role="status" data-wr-result></p>';
-        const state = { dialog, opener, selected: profiles.has(initialKey) ? initialKey : [...profiles.keys()][0] || '', dirty: false, editing: false, form: null };
+        dialog.innerHTML = '<div class="wr-dialog-head"><div><h3>管理房间</h3><p class="wr-muted">浏览器房间簿 · 仅在本浏览器保存已有房间</p></div><button type="button" class="wr-link" data-wr-close>关闭</button></div><div class="wr-manager-tabs"><span class="wr-current-tab">浏览器房间</span><button type="button" class="wr-link" data-wr-owner>本人执行端档案 ›</button></div><div class="wr-manager-body"><div class="wr-book-list"><div class="wr-list-header"><strong data-wr-count></strong><div class="wr-book-controls"><button type="button" class="wr-action" data-wr-add>添加房间</button><button type="button" class="wr-action" data-wr-import>粘贴合并</button></div></div><div data-wr-list></div></div><div class="wr-book-editor" data-wr-editor></div></div><p class="wr-book-result" role="status" data-wr-result></p>';
+        const state = { dialog, opener, selected: profiles.has(initialKey) ? initialKey : [...profiles.keys()][0] || '', dirty: false, editing: false, form: null, importDialog: null };
         manager = state;
         const leave = () => { if (!state.dirty || root.confirm('放弃尚未保存的房间资料？')) { closeDialog(dialog, opener); manager = null; return true; } return false; };
         state.leave = leave;
@@ -835,6 +936,7 @@
         state.select = select;
         dialog.querySelector('[data-wr-close]').onclick = leave;
         dialog.querySelector('[data-wr-add]').onclick = () => select('');
+        dialog.querySelector('[data-wr-import]').onclick = () => openRoomBookImport(state);
         dialog.querySelector('[data-wr-owner]').disabled = !options.onOwnerProfiles;
         dialog.querySelector('[data-wr-owner]').onclick = () => { if (leave()) options.onOwnerProfiles?.(); };
         dialog.addEventListener('cancel', event => { event.preventDefault(); leave(); });
@@ -843,10 +945,35 @@
     function managerMessage(state, message, error = false) {
         const el = state.dialog.querySelector('[data-wr-result]'); el.textContent = message; el.classList.toggle('wr-error', error);
     }
+    function openRoomBookImport(state) {
+        if (state.importDialog?.isConnected) return;
+        const dialog = makeDialog('wr-import', '粘贴合并房间列表');
+        const opener = state.dialog.querySelector('[data-wr-import]');
+        state.importDialog = dialog;
+        dialog.innerHTML = `<div class="wr-dialog-head"><h3>粘贴合并房间列表</h3><button type="button" class="wr-link" data-wr-close>取消</button></div>
+            <form class="wr-import-form" autocomplete="off"><div class="wr-fields"><label>房间列表（JSON）<textarea name="roomBook" rows="7" required spellcheck="false" autocapitalize="off" placeholder="在此粘贴执行端复制的房间列表"></textarea></label>
+            <p class="wr-muted">保留已有档案的设置。新增房间需要填写本浏览器的房间密码。</p><p class="wr-muted wr-error wr-import-feedback" role="alert" data-wr-import-result></p></div>
+            <div class="wr-dialog-actions"><button type="submit" class="wr-action wr-primary">合并到浏览器房间簿</button></div></form>`;
+        const form = dialog.querySelector('form'), feedback = dialog.querySelector('[data-wr-import-result]');
+        const close = () => { closeDialog(dialog); state.importDialog = null; opener.focus(); };
+        dialog.querySelector('[data-wr-close]').onclick = close;
+        dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
+        form.elements.roomBook.oninput = () => { feedback.textContent = ''; };
+        form.onsubmit = event => {
+            event.preventDefault();
+            try {
+                const result = importRoomBook(form.elements.roomBook.value);
+                close();
+                managerMessage(state, `已导入 ${result.imported} 个房间，跳过 ${result.skipped} 个已有或重复房间。${result.imported ? '新增房间需认证，请在档案中填写房间密码，需要切为控制房间时填写昵称并登录。' : ''}`);
+            } catch (error) { feedback.textContent = error.message; }
+        };
+        showDialog(dialog, form.elements.roomBook);
+    }
     function updateManager(state) {
         const rooms = listProfiles(), dialog = state.dialog, list = dialog.querySelector('[data-wr-list]');
-        dialog.querySelector('[data-wr-count]').textContent = `${rooms.length} / ${MAX_ROOMS} 个房间`;
-        dialog.querySelector('[data-wr-add]').disabled = rooms.length >= MAX_ROOMS;
+        const saved = rooms.filter(p => p.saved).length;
+        dialog.querySelector('[data-wr-count]').textContent = `已保存 ${saved} / ${MAX_ROOMS} 个房间`;
+        dialog.querySelector('[data-wr-add]').disabled = saved >= MAX_ROOMS;
         const sig = JSON.stringify([state.selected, rooms.map(p => [p.roomKey, p.name, p.note, p.isMain, p.saved])]);
         if (state.listSignature !== sig) {
             state.listSignature = sig;
@@ -946,7 +1073,7 @@
         if (!initialized) return;
         initialized = false; active = false; root.removeEventListener?.('pagehide', pagehide); root.removeEventListener?.('pageshow', pageshow);
         for (const record of sessions.values()) retire(record);
-        sessions.clear(); closeMenu(false); closeDialog(manager?.dialog); closeDialog(switchDialog); manager = null; switchDialog = null;
+        sessions.clear(); closeMenu(false); closeDialog(manager?.importDialog); closeDialog(manager?.dialog); closeDialog(switchDialog); manager = null; switchDialog = null;
         root.removeEventListener?.('resize', placeSelector); placeSelector = null;
         if (selector) document.querySelector('#gengdiNav')?.classList.remove('wr-nav');
         selector?.remove(); notice?.remove(); selector = null; notice = null;
@@ -955,5 +1082,5 @@
     root.webRooms = { init, dispose, mount, normalizeServer, roomKey, validateMainLogin, getLogin,
         mainChanged, getMainContext, getContext, listProfiles, getView, setView, getViewNotice, getDisplayedMembers,
         getKnownInstances, sourceFor, getMember, requireSource, sendRemoteCommand, invoke, setActive, reconnect,
-        saveProfile, removeProfile, requestSwitch, openManager, openSwitch, setOwnerRoomNames };
+        saveProfile, importRoomBook, removeProfile, requestSwitch, openManager, openSwitch, setOwnerRoomNames };
 })();

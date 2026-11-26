@@ -1207,13 +1207,31 @@
                                                         </Path>
                                                         <Grid Grid.Column="1">
                                                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                                             <TextBlock x:Name="RoomChoiceName" Text="{Binding Name}" FontSize="12" MaxWidth="110"
                                                                        TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                             <TextBlock x:Name="RoomChoiceNote" Grid.Column="1" Text="{Binding Note}" Margin="8,0,0,0" FontSize="11"
                                                                        Foreground="{StaticResource Dim}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                                                                        ToolTip="{Binding Note}"/>
+                                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="需填写密码" FontSize="11" Foreground="#F3B29E" Margin="0,3,0,0">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <MultiDataTrigger>
+                                                                                <MultiDataTrigger.Conditions>
+                                                                                    <Condition Binding="{Binding NeedsRoomPassword}" Value="True"/>
+                                                                                    <Condition Binding="{Binding IsActiveRoom}" Value="False"/>
+                                                                                </MultiDataTrigger.Conditions>
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </MultiDataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
                                                         </Grid>
                                                         <TextBlock x:Name="RoomChoiceCode" Grid.Column="2" Text="{Binding RoomCode}" Margin="10,0,0,0" FontSize="11"
+                                                                   MaxWidth="96" TextTrimming="CharacterEllipsis" ToolTip="{Binding RoomCode}"
                                                                    Foreground="{StaticResource Dim}" VerticalAlignment="Center"/>
                                                     </Grid>
                                                 </DataTemplate>

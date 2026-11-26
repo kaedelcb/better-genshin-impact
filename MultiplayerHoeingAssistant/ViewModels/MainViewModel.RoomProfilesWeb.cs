@@ -111,7 +111,7 @@ public partial class MainViewModel
             config.ServerUrl, config.ControlRoomPassword, config.TeamUids, config.ExpectedHoeingPlayers,
             Profiles = config.RoomProfiles.Select(p => p is null ? null : new
             {
-                p.Id, p.Name, p.Note, ServerUrl = config.GetRoomServerUrl(p), p.RoomCode, p.Password, p.TeamUids, p.ExpectedHoeingPlayers
+                p.Id, p.Name, p.Note, ServerUrl = config.GetRoomServerUrl(p), p.RoomCode, p.PreserveRoomCode, p.Password, p.TeamUids, p.ExpectedHoeingPlayers
             }).ToArray()
         })));
 
@@ -141,6 +141,7 @@ public partial class MainViewModel
             serverUrl = SafeRoomServerUrl(active ? config.ServerUrl : config.GetRoomServerUrl(profile)), roomCode = profile.RoomCode,
             memberUids = (active ? config.TeamUids : profile.TeamUids)?.ToArray() ?? [],
             expectedPlayers = active ? config.ExpectedHoeingPlayers : profile.ExpectedHoeingPlayers,
+            preserveRoomCode = RoomBookTransfer.UsesExactRoomCode(profile),
             hasPassword = !string.IsNullOrEmpty(active ? config.ControlRoomPassword : profile.Password),
             isLocalRoom = local, isActiveRoom = active, canRemove = localKnown && !local && !active,
             canEditCredentials = !local && !active
@@ -185,8 +186,8 @@ public partial class MainViewModel
                     {
                         profiles = config.RoomProfiles.Where(p => p is not null).Select(p => ProjectWebRoomProfile(config, p)).ToArray(),
                         activeProfileId = config.ActiveRoomProfileId, localProfileId = EffectiveLocalRoomProfileId(config),
-                        defaultServerUrl = SafeRoomServerUrl(config.ServerUrl), playerUid = config.PlayerUid, maxProfiles = 5,
-                        canEdit = CanEditWebRoomProfiles(config), canCreate = CanEditWebRoomProfiles(config) && !IsStandaloneMode && config.RoomProfiles.Count < 5,
+                        defaultServerUrl = SafeRoomServerUrl(config.ServerUrl), playerUid = config.PlayerUid, maxProfiles = RoomBookTransfer.MaxProfiles,
+                        canEdit = CanEditWebRoomProfiles(config), canCreate = CanEditWebRoomProfiles(config) && !IsStandaloneMode && config.RoomProfiles.Count < RoomBookTransfer.MaxProfiles,
                         canSwitch = CanStartWebRoomSwitch(config), standaloneMode = IsStandaloneMode,
                         activeRoomConfirmed = ActiveRoomProfile is not null && GetAssistantRoomIdentity() is not null,
                         switchPending = RoomSwitchHasPendingRequest, switchBlocked = RoomSwitchBlocksRoomOperations,
@@ -232,6 +233,8 @@ public partial class MainViewModel
                     if (!CanStartWebRoomSwitch(config) || _webRoomSwitch is not null)
                         return RemoteCenterReply.Rejected("当前连接、配置或切房状态不允许新的手动切房，请核对后操作");
                     var target = ResolveWebRoomProfile(config, Decode<string>(request.PayloadJson));
+                    if (target.Id != config.ActiveRoomProfileId && GetRoomSwitchCredentialError(config, target) is { } credentialError)
+                        return RemoteCenterReply.Rejected(credentialError);
                     return BeginWebRoomSwitch(requestId, fingerprint, target.Id, context);
                 }
                 case "room.switch.status":

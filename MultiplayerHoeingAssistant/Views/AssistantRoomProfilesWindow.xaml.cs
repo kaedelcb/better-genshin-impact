@@ -16,7 +16,7 @@ internal sealed record AssistantRoomDraft(string Name, string Note, string Serve
 
     internal static bool HasValidMemberUids(List<string> uids, string selfUid) =>
         uids.Count is >= 1 and <= 64 && uids.Contains(selfUid, StringComparer.Ordinal)
-        && uids.All(uid => uid.Length is >= 1 and <= 16 && uid.All(char.IsAsciiDigit));
+        && uids.All(uid => uid is { Length: >= 1 and <= 16 } && uid.All(char.IsAsciiDigit));
 }
 
 public partial class AssistantRoomProfilesWindow : Window
@@ -27,13 +27,23 @@ public partial class AssistantRoomProfilesWindow : Window
     private readonly string _selfUid;
     private readonly Func<AssistantRoomProfile?, AssistantRoomDraft, bool, Task<AssistantRoomProfile>> _save;
     private readonly Action<AssistantRoomProfile> _remove;
+    private readonly Func<string>? _exportRoomBook;
+    private readonly Func<string, RoomBookMergeResult>? _mergeRoomBook;
     private readonly List<AssistantRoomProfile> _profiles;
+    private sealed record EditorFields(string Name, string Note, string Server, string Code, string Password, string Members, object Expected);
+    private EditorFields? _savedEditorFields;
     private string _calculatedRoomCode = "";
+    private bool _preserveRoomCode;
     private bool _filling;
     private bool _saving;
 
     internal AssistantRoomProfilesWindow(IReadOnlyList<AssistantRoomProfile> profiles, string activeId, Func<string> localId, string server, string selfUid,
         Func<AssistantRoomProfile?, AssistantRoomDraft, bool, Task<AssistantRoomProfile>> save, Action<AssistantRoomProfile> remove)
+        : this(profiles, activeId, localId, server, selfUid, save, remove, null, null) { }
+
+    internal AssistantRoomProfilesWindow(IReadOnlyList<AssistantRoomProfile> profiles, string activeId, Func<string> localId, string server, string selfUid,
+        Func<AssistantRoomProfile?, AssistantRoomDraft, bool, Task<AssistantRoomProfile>> save, Action<AssistantRoomProfile> remove,
+        Func<string>? exportRoomBook, Func<string, RoomBookMergeResult>? mergeRoomBook)
     {
         _activeId = activeId;
         _localId = localId;
@@ -41,10 +51,14 @@ public partial class AssistantRoomProfilesWindow : Window
         _selfUid = selfUid;
         _save = save;
         _remove = remove;
+        _exportRoomBook = exportRoomBook;
+        _mergeRoomBook = mergeRoomBook;
         _profiles = profiles.ToList();
         UpdateLocalMarkers();
         DpiAwarenessController.Initialize(this);
         InitializeComponent();
+        CopyRoomBookButton.Visibility = _exportRoomBook is null ? Visibility.Collapsed : Visibility.Visible;
+        PasteRoomBookButton.Visibility = _mergeRoomBook is null ? Visibility.Collapsed : Visibility.Visible;
         ExpectedCountBox.ItemsSource = new[] { 1, 2, 3, 4 };
         MemberUidsBox.TextChanged += (_, _) =>
         {
@@ -77,15 +91,21 @@ public partial class AssistantRoomProfilesWindow : Window
         EditorTitle.Text = room is null ? "添加房间" : local ? "本机房间" : active ? "当前房间" : "编辑房间";
         EditorHint.Text = room is null ? "填写完整成员 UID 可自动填入旧房间号。新建房间由服务器分配号码。"
             : local ? "本机房间不可删除。房间凭据和成员可在设置页面中的「本机设置」中修改。"
-            : !localKnown ? "本机设置的房间无法确认，暂不能移除档案。"
             : active ? "当前房间不可删除，可在这里修改名称、备注或调整人数。"
+            : room.NeedsRoomPassword ? "需填写密码。请使用本机玩家的正常入房密码和成员 UID（包含本机玩家），保存后才能连接。"
+            : !localKnown ? "本机设置的房间无法确认，暂不能移除档案。"
             : string.IsNullOrWhiteSpace(room.RoomCode) ? "填写完整成员 UID 可自动填入旧房间号。"
             : "保存档案后，切到此房间时会连接这里的服务器。";
         RoomNameBox.Text = room?.Name ?? "";
         RoomNoteBox.Text = room?.Note ?? "";
         ServerBox.Text = room?.ServerUrl ?? _defaultServer;
         _calculatedRoomCode = "";
+        _preserveRoomCode = RoomBookTransfer.UsesExactRoomCode(room);
         ServerBox.IsReadOnly = RoomCodeBox.IsReadOnly = MemberUidsBox.IsReadOnly = active || local;
+        RoomCodeBox.MaxLength = _preserveRoomCode ? 128 : 6;
+        RoomCodeBox.CharacterCasing = _preserveRoomCode ? CharacterCasing.Normal : CharacterCasing.Upper;
+        RoomCodeBox.ToolTip = _preserveRoomCode ? "已保存的房间号区分大小写；修改成员不会重新计算房间号。"
+            : "修改成员 UID 时自动计算旧房间号；服务器分配的房间号可手动填写。";
         RoomCodeBox.Text = room?.RoomCode ?? "";
         RoomPasswordBox.Password = room?.Password ?? "";
         _filling = true;
@@ -108,6 +128,8 @@ public partial class AssistantRoomProfilesWindow : Window
             var shortcuts = room.QuickCommands.Count(pair => !string.IsNullOrWhiteSpace(pair.Value));
             HoeingSummary.Text = $"绑定项目：{bindings}\n定时上线：{scheduled}　　完成后：{completion}\n快捷指令：已设置 {shortcuts} 项";
         }
+        _savedEditorFields = ReadEditorFields();
+        UpdateTransferButtons();
         ShowResult("");
     }
 
@@ -139,10 +161,57 @@ public partial class AssistantRoomProfilesWindow : Window
 
     private void UpdateLegacyRoomCode(List<string> memberUids)
     {
-        if (RoomCodeBox.IsReadOnly) return;
+        if (RoomCodeBox.IsReadOnly || _preserveRoomCode) return;
         _calculatedRoomCode = AssistantRoomDraft.HasValidMemberUids(memberUids, _selfUid)
             ? AssistConfigManager.GenerateControlRoomCode(memberUids) : "";
         RoomCodeBox.Text = _calculatedRoomCode;
+    }
+
+    private EditorFields ReadEditorFields() => new(RoomNameBox.Text, RoomNoteBox.Text, ServerBox.Text, RoomCodeBox.Text,
+        RoomPasswordBox.Password, MemberUidsBox.Text, ExpectedCountBox.SelectedItem ?? 4);
+
+    private bool HasUnsavedEditorChanges => _savedEditorFields != ReadEditorFields();
+
+    private void UpdateTransferButtons()
+    {
+        RoomBookCountText.Text = $"已保存 {_profiles.Count} / {RoomBookTransfer.MaxProfiles} 个房间";
+        NewProfileButton.IsEnabled = !_saving && _profiles.Count < RoomBookTransfer.MaxProfiles;
+        CopyRoomBookButton.IsEnabled = !_saving && _exportRoomBook is not null;
+        PasteRoomBookButton.IsEnabled = !_saving && _mergeRoomBook is not null;
+    }
+
+    private void CopyRoomBookClick(object sender, RoutedEventArgs e)
+    {
+        if (_saving || _exportRoomBook is null) return;
+        try
+        {
+            Clipboard.SetText(_exportRoomBook());
+            ShowResult("已复制全部已保存房间资料（不含密码和任务设置）。" +
+                (HasUnsavedEditorChanges ? "当前编辑尚未保存，未包含在复制内容中。" : "可到另一台助手或网页的房间管理中粘贴。"));
+        }
+        catch (Exception ex) { ShowResult("复制房间簿失败：" + ex.Message); }
+    }
+
+    private void PasteRoomBookClick(object sender, RoutedEventArgs e)
+    {
+        if (_saving || _mergeRoomBook is null) return;
+        if (HasUnsavedEditorChanges)
+        {
+            ShowResult("请先保存当前档案，或切换到另一个已保存档案后再粘贴房间簿。当前编辑仍保留。");
+            return;
+        }
+        try
+        {
+            if (!Clipboard.ContainsText()) { ShowResult("剪贴板中没有房间簿文本，请先复制房间簿。"); return; }
+            var selected = (ProfilesList.SelectedItem as AssistantRoomProfile)?.Id;
+            var result = _mergeRoomBook(Clipboard.GetText());
+            _profiles.Clear();
+            _profiles.AddRange(result.Profiles);
+            RefreshProfiles(_profiles.FirstOrDefault(p => p.Id == selected));
+            ShowResult($"已合并 {result.ImportedCount} 个房间，跳过重复 {result.SkippedCount} 个。原档案不变。"
+                + (result.ImportedCount > 0 ? "新档案需填写密码及本机入房资料；未切换或登录任何新房间。" : ""));
+        }
+        catch (Exception ex) { ShowResult("房间簿未能合并：" + ex.Message); }
     }
 
     private async void SaveProfileClick(object sender, RoutedEventArgs e) => await SaveAsync(create: false);
@@ -171,6 +240,7 @@ public partial class AssistantRoomProfilesWindow : Window
         try
         {
             NewProfileButton.IsEnabled = ProfilesList.IsEnabled = Editor.IsEnabled = SaveProfileButton.IsEnabled = CreateRoomButton.IsEnabled = RemoveProfileButton.IsEnabled = false;
+            UpdateTransferButtons();
             ShowResult(create ? "正在向目标服务器建房…" : "正在保存档案…");
             var saved = await _save(selected, draft, create);
             var index = selected is null ? -1 : _profiles.IndexOf(selected);
@@ -183,7 +253,8 @@ public partial class AssistantRoomProfilesWindow : Window
         finally
         {
             _saving = false;
-            NewProfileButton.IsEnabled = ProfilesList.IsEnabled = Editor.IsEnabled = SaveProfileButton.IsEnabled = CreateRoomButton.IsEnabled = RemoveProfileButton.IsEnabled = true;
+            ProfilesList.IsEnabled = Editor.IsEnabled = SaveProfileButton.IsEnabled = CreateRoomButton.IsEnabled = RemoveProfileButton.IsEnabled = true;
+            UpdateTransferButtons();
         }
     }
 

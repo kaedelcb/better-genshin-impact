@@ -56,6 +56,11 @@
 .wr-book-list{padding:14px;border-right:1px solid var(--wr-edge);min-height:0;overflow:auto;overscroll-behavior:contain}
 .wr-list-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin:0 0 10px}
 .wr-list-header strong{color:var(--muted);font-size:13px;font-weight:500}
+.wr-book-controls{display:flex;flex-wrap:wrap;gap:8px}
+.wr-import{width:min(620px,calc(100% - 32px))}
+.wr-import-form{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.wr-import .wr-fields textarea{min-height:140px;max-height:40dvh;resize:vertical}
+.wr-import-feedback:empty{display:none}
 .wr-book-row{display:block;text-align:left;width:100%;min-width:0;min-height:56px;border:1px solid var(--wr-edge);border-radius:9px;background:#191a2e;padding:10px 12px;margin:0 0 8px}
 .wr-book-row>span:not(.wr-room-status){display:block;margin:3px 0;color:var(--muted);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 .wr-book-editor{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}

@@ -154,6 +154,39 @@ public class AssistConfigManager
     /// <summary>定向编辑在同一写入边界核对读取时的配置，避免旧副本覆盖并发更新。</summary>
     internal bool TrySave(AssistConfig config, string expectedRaw) => TryStore(config, expectedRaw);
 
+    /// <summary>房间簿只追加档案，保持盘面的其他房间字段、凭据和本机运行设置。</summary>
+    internal RoomBookMergeResult MergeRoomBook(AssistConfig config, string text)
+    {
+        using var writing = AcquireWriteGate();
+        if (_configTransferActive) throw new InvalidOperationException("设置迁移尚未完成，房间簿未保存。");
+        return RoomBookTransfer.Merge(config, text, additions =>
+        {
+            var raw = File.Exists(_configPath) ? File.ReadAllText(_configPath) : null;
+            JsonObject root;
+            try
+            {
+                if (raw is null)
+                    root = JsonSerializer.SerializeToNode(config, WriteOptions)!.AsObject();
+                else
+                {
+                    var saved = JsonSerializer.Deserialize<AssistConfig>(raw, ReadOptions);
+                    if (saved is null || !RoomBookTransfer.SameSavedBook(config, saved))
+                        throw new InvalidOperationException("已保存的房间档案或身份已变化，请重新打开助手后合并。");
+                    root = JsonNode.Parse(raw, new JsonNodeOptions { PropertyNameCaseInsensitive = true })!.AsObject();
+                }
+            }
+            catch (JsonException)
+            {
+                throw new InvalidDataException("已保存的助手配置无法读取，房间簿未保存。");
+            }
+            if (root["roomProfiles"] is not JsonArray rooms)
+                root["roomProfiles"] = rooms = new JsonArray();
+            foreach (var profile in additions) rooms.Add(JsonSerializer.SerializeToNode(profile, WriteOptions));
+            if (raw is not null && !HasStoredRoomProfiles(raw) && !BackUpBeforeRoomProfiles(raw)) return false;
+            return LocalPeerSyncService.WriteFileAtomic(_configPath, root.ToJsonString(WriteOptions));
+        });
+    }
+
     internal IDisposable AcquireWriteGate()
     {
         // Same order as TryStore. A short synchronous read/modify/readback operation cannot
