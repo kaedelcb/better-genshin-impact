@@ -1008,7 +1008,6 @@
                                                                VerticalAlignment="Center"/>
                                                     <Button x:Name="RoomOrchestrationEntryButton" Content="{Binding RoomOrchestrationEntryText}"
                                                             Padding="9,5" Margin="8,0,4,0" MinHeight="26" Click="RoomOrchestrationEntryClick"
-                                                            IsEnabled="{Binding CanChooseRoomView}"
                                                             Visibility="{Binding CanSelectRoomOrchestration, Converter={StaticResource BoolToVis}}"
                                                             AutomationProperties.Name="{Binding RoomOrchestrationEntryText}">
                                                         <Button.Style>
@@ -1040,7 +1039,6 @@
                                         <!-- 所有房间汇总查看入口（不改变当前登录房间） -->
                                         <Button x:Name="AllRoomsViewButton" Click="AllRoomsViewClick" Cursor="Hand"
                                                 Margin="0,0,0,6" MinHeight="34" HorizontalContentAlignment="Stretch"
-                                                IsEnabled="{Binding CanChooseRoomView}"
                                                 ToolTip="在耕地机页面汇总查看全部房间成员（其他房间只读）"
                                                 AutomationProperties.Name="所有房间">
                                             <Button.Style>
@@ -1292,18 +1290,6 @@
                                         </Grid>
                                         <TextBlock x:Name="RoomCodeCopyHintText" Visibility="Collapsed" FontSize="11" TextWrapping="Wrap"
                                                    Margin="0,6,0,0" Foreground="{StaticResource GoldText}" AutomationProperties.LiveSetting="Polite"/>
-                                        <Grid Margin="0,8,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Button x:Name="RoomFollowEntryButton" Content="{Binding RoomFollowEntryText}"
-                                                    Click="RoomFollowEntryClick" IsEnabled="{Binding CanOpenRoomFollow}"
-                                                    MinHeight="30" Padding="9,5" Style="{StaticResource BtnGhost}"
-                                                    ToolTip="执行端共享房间元数据；监控端可用本人已授权的房间凭据跟随。"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding RoomFollowStatus}" ToolTip="{Binding RoomFollowStatus}"
-                                                       FontSize="10.5" Foreground="{StaticResource Dim}" Margin="8,0,0,0"
-                                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="30" VerticalAlignment="Center"/>
-                                        </Grid>
                                     </StackPanel>
                                 </Border>
                             </Popup>
@@ -1390,9 +1376,9 @@
                         </Button>
 
                         <!-- 成员委托卡列表 -->
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}">
-                            <ItemsControl x:Name="DisplayedMembersControl" ItemsSource="{Binding DisplayedMembers}"
-                                          IsEnabled="{Binding CanUseAssistantRoomMemberActions}">
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Style="{StaticResource GoldScrollViewer}"
+                                      IsEnabled="{Binding CanUseAssistantRoomMemberActions}">
+                            <ItemsControl x:Name="DisplayedMembersControl" ItemsSource="{Binding DisplayedMembers}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource QuestCard}">

@@ -16,8 +16,7 @@ public partial class MainViewModel
     private volatile bool _configTransferDeferred;
     private int _configTransferOperations;
     private IDisposable? _retainedConfigTransferHostAdmission;
-    public bool CanEditConfiguration => !_configTransferInProgress && !IsRoomFollowing && !_roomFollowRestoring && !_roomFollowBusy;
-    private const string RoomFollowReadOnlyMessage = "房间跟随为只读监控；请关闭跟随后再使用本机房间配置或操作。";
+    public bool CanEditConfiguration => !_configTransferInProgress;
     public string ConfigurationRecoveryMessage => _configTransferRecoveryRequired
         ? "设置迁移恢复尚未完成，配置编辑与新任务已暂停。停止仍可使用；请退出后重新打开助手以恢复原设置。" : "";
     public string ConfigurationDeferredMessage => _configTransferDeferred
@@ -26,7 +25,7 @@ public partial class MainViewModel
         ? "导入的定时上线尚未启用，重新打开助手也不会自动上线。请在本机成员卡片的“定时上线”中确认时间后启用；其他功能可照常使用。" : "";
     public string ConfigurationTransferStatusMessage => _configTransferRecoveryRequired
         ? ConfigurationRecoveryMessage : _configTransferDeferred ? ConfigurationDeferredMessage : ConfigurationScheduledOnlineMessage;
-    private string ConfigTransferBlockedMessage => IsRoomFollowing || _roomFollowRestoring ? RoomFollowReadOnlyMessage : _configTransferRecoveryRequired
+    private string ConfigTransferBlockedMessage => _configTransferRecoveryRequired
         ? ConfigurationRecoveryMessage : _configTransferDeferred ? ConfigurationDeferredMessage
             : "正在迁移设置，本次命令未发送，请稍后重试";
 
@@ -54,7 +53,6 @@ public partial class MainViewModel
             if (owner is null || owner._configTransferRecoveryRequired || owner._configTransferDeferred) return;
             lock (owner._configTransferGate) owner._configTransferInProgress = false;
             owner.OnPropertyChanged(nameof(CanEditConfiguration));
-            owner.RoomFollowModeChanged();
         }
     }
 
@@ -73,14 +71,12 @@ public partial class MainViewModel
     {
         lock (_configTransferGate)
         {
-            if (_configTransferInProgress || IsRoomFollowing || _roomFollowRestoring || _roomFollowBusy)
-                throw new InvalidOperationException(ConfigTransferBlockedMessage);
+            if (_configTransferInProgress) throw new InvalidOperationException(ConfigTransferBlockedMessage);
             if (_configTransferOperations != 0)
                 throw new InvalidOperationException("仍有命令正在发送或执行，暂不能导入设置");
             _configTransferInProgress = true;
         }
         OnPropertyChanged(nameof(CanEditConfiguration));
-        RoomFollowModeChanged();
         return new ConfigTransferScope(this);
     }
 
@@ -88,11 +84,10 @@ public partial class MainViewModel
     internal bool TryEnterConfigTransferOperation(string command, out IDisposable? operation)
     {
         operation = null;
-        if (IsRoomFollowing || _roomFollowRestoring) return false;
         if (command == "stop") return true;
         lock (_configTransferGate)
         {
-            if (_configTransferInProgress || IsRoomFollowing || _roomFollowRestoring) return false;
+            if (_configTransferInProgress) return false;
             if (command == "scheduled_online" && _config?.ScheduledOnlineRequiresConfirmation == true) return false;
             _configTransferOperations++;
             operation = new ConfigTransferOperation(this);
@@ -142,7 +137,6 @@ public partial class MainViewModel
 
     internal ConfigTransferService.ExportResult ExportSettingsWithRuntime(string zipPath)
     {
-        if (IsRoomFollowing) throw new InvalidOperationException(RoomFollowReadOnlyMessage);
         var window = RequireConfigTransferWindow();
         window.Mistletoe.FlushConfigTransferEdits();
         window.Pet.FlushConfigTransferEdits();

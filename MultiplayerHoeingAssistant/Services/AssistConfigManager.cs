@@ -16,13 +16,8 @@ public class AssistConfigManager
     private readonly string _legacyFireDatePath;
     private readonly object _configWriteGate = new();
     private bool _configTransferActive;
-    private bool _roomFollowProjectionActive;
 
     public string? RoomProfileMigrationWarning { get; private set; }
-    internal void SetRoomFollowProjectionActive(bool active)
-    {
-        lock (_configWriteGate) _roomFollowProjectionActive = active;
-    }
     internal void SetConfigTransferActive(bool active)
     {
         lock (_configWriteGate) _configTransferActive = active;
@@ -184,7 +179,7 @@ public class AssistConfigManager
     {
         lock (_configWriteGate)
         {
-            if (_configTransferActive || _roomFollowProjectionActive || config.IsRoomFollowProjection) return false;
+            if (_configTransferActive) return false;
             try
             {
                 using var writing = ConfigFileWriteGate.Acquire(_configPath);
@@ -267,7 +262,6 @@ public class AssistConfigManager
         using var writing = AcquireWriteGate();
         {
             if (_configTransferActive) return (false, null, "设置迁移尚未完成，配置写入已暂停");
-            if (_roomFollowProjectionActive) return (false, null, "房间跟随为只读监控，配置写入已暂停");
             if (string.IsNullOrWhiteSpace(expectedRevision))
                 return (false, null, "缺少执行端设置修订，请重新读取");
             var raw = ReadRawJson();

@@ -134,20 +134,13 @@ public partial class MainViewModel : INotifyPropertyChanged
             if (_roomCode != value) InvalidateCoordinatedControlContext();
             _roomCode = value;
             OnPropertyChanged();
-            PublishRoomFollowSnapshot();
         }
     }
 
     public bool IsConnected
     {
         get => _isConnected;
-        set
-        {
-            var changed = _isConnected != value;
-            _isConnected = value;
-            OnPropertyChanged();
-            if (changed) PublishRoomFollowSnapshot();
-        }
+        set { _isConnected = value; OnPropertyChanged(); }
     }
 
     private string _onlineDebounceCountdownText = "";
@@ -232,7 +225,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     public RelayCommand ExecuteHotkeyCommand => new(OnExecuteHotkey);
     public RelayCommand CloseGameCommand => new(OnCloseGame);
     public RelayCommand ExitCommand => new(_ => OnExit());
-    public RelayCommand RefreshCommand => new(_ => _ = IsRoomFollowing ? RefreshRoomFollowingAsync() : RefreshAsync());
+    public RelayCommand RefreshCommand => new(_ => _ = RefreshAsync());
     public RelayCommand ShowOnlineHistoryCommand => new(OnShowOnlineHistory);
     public RelayCommand ScheduledOnlineCommand => new(OnScheduledOnline);
     public RelayCommand ClearOnlineCommand => new(OnClearOnline);
@@ -384,9 +377,7 @@ public partial class MainViewModel : INotifyPropertyChanged
         // 自愿开启的单次更新检查，不等待网络结果再连接房间。
         _ = CheckForBgiUpdateOnStartupAsync();
 
-        // 恢复独立房间跟随偏好：监控端已开启时不用先登录原房间再切换。
-        await InitializeRoomFollowAsync();
-        // 连接 SignalR（单机模式/房间跟随由 ConnectSignalRAsync 入口门控直接跳过）
+        // 连接 SignalR（单机模式下由 ConnectSignalRAsync 入口门控直接跳过）
         await ConnectSignalRAsync();
         SyncRoomViewSessions();
         RebuildDisplayedMembers();
@@ -4901,7 +4892,6 @@ public partial class MainViewModel : INotifyPropertyChanged
     public void Shutdown()
     {
         _disposing = true; // R4.8 二轮（阻断4）：此后的日志回调跳过 UI 派发，避免与退出路径等待互等
-        StopRoomFollowOnShutdown();
         StopAllRoomSpectators();
         StopRoomOrchestrationMonitor();
         CancelWaitingAssistantRoomSwitch();
@@ -5005,7 +4995,7 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// </summary>
     private async Task<bool> RefreshAsync()
     {
-        if (IsRoomFollowing || RoomSwitchBlocksRoomOperations) return false;
+        if (RoomSwitchBlocksRoomOperations) return false;
         if (!TryEnterConfigTransferOperation("connection_refresh", out var transferOperation)) return false;
         using var configTransferOperation = transferOperation;
         // 离线优先：单机模式下不发起连接，刷新无意义（本地状态采集循环独立运行，不靠刷新驱动）
@@ -6377,19 +6367,20 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>切换执行/监控模式。点击右上角连接徽章触发。</summary>
     private async Task SwitchModeAsync()
     {
-        if (_configTransferInProgress || _roomFollowBusy) { AddLog(ConfigTransferBlockedMessage); return; }
+        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null) return;
         var targetObserver = !_config.ObserverMode;
         var modeName = targetObserver ? "监控" : "执行";
 
         if (!ShowModeSwitchConfirm(modeName)) return;
-        await StopRoomFollowForRoleChangeAsync();
-        if (_disposing || _config is null) return;
 
         _config.ObserverMode = targetObserver;
         _configManager?.Save(_config);
         ApplyModeRuntime(targetObserver);
-        NotifyModeBindings();
+        OnPropertyChanged(nameof(IsObserverMode));
+        OnPropertyChanged(nameof(IsExecutorMode));
+        NotifyRoomOrchestrationModeProperties();
+        foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         AddLog($"已切换为{modeName}模式，正在重建连接...");
         await RefreshAsync();
     }
@@ -6397,12 +6388,9 @@ public partial class MainViewModel : INotifyPropertyChanged
     /// <summary>切换模式确认弹窗（深色鎏金主题）。</summary>
     private bool ShowModeSwitchConfirm(string modeName) => ShowSwitchConfirmDialog(
         $"切换为{modeName}模式",
-        (modeName == "监控"
-            ? "切换为监控模式后，本机 BGI 进程将继续运行，但助手将不再监控 BGI 状态。"
-            : "切换为执行模式后，助手将重新监控本机 BGI 状态并参与联机任务。")
-        + (IsRoomFollowing ? " 本次跟随将结束并恢复原房间配置。" : "")
-        + (RoomFollowSharingEnabled || _roomFollowGrants.Length > 0 ? " 本执行端的跟随共享将关闭，已生成邀请将被撤销。" : "")
-        + "是否继续切换？");
+        modeName == "监控"
+            ? "切换为监控模式后，本机 BGI 进程将继续运行，但助手将不再监控 BGI 状态。是否继续切换？"
+            : "切换为执行模式后，助手将重新监控本机 BGI 状态并参与联机任务。是否继续切换？");
 
     /// <summary>通用切换确认弹窗（深色鎏金主题；总开关/子开关/执行监控切换共用）。</summary>
     private bool ShowSwitchConfirmDialog(string title, string tipText)
@@ -6612,7 +6600,7 @@ public partial class MainViewModel : INotifyPropertyChanged
 
     internal AutoStartupRegistrationResult ConfigureAutoStartup(bool enabled, int modeIndex, bool allowElevation = true)
     {
-        if (!CanEditConfiguration) return new(false, ConfigTransferBlockedMessage);
+        if (_configTransferInProgress) return new(false, ConfigTransferBlockedMessage);
         if (_config is null) return new(false, "助手配置尚未加载，请稍后重试。");
         if (modeIndex is not (0 or 1)) return new(false, "启动方式无效，请重新选择弹窗或托盘。");
         var previousEnabled = _config.AutoLaunchOnBoot;
@@ -6979,7 +6967,6 @@ public partial class MainViewModel : INotifyPropertyChanged
         foreach (var member in Members) member.IsObserverMode = IsObserverMode;
         // 服务器地址/单机开关变化同样影响派生属性（设置弹窗清空地址 = 单机模式）
         OnPropertyChanged(nameof(IsStandaloneMode));
-        RoomFollowModeChanged();
     }
 
     private void OpenSettings()

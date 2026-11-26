@@ -95,20 +95,10 @@ builder.Services.AddSingleton<BgiCoordinatorServer.Services.IClientCapabilityLoo
     BgiCoordinatorServer.Services.GatewayCapabilityLookup>();
 builder.Services.AddSingleton<RoomOperations>();
 builder.Services.AddSingleton<GatewayDispatcher>();
-builder.Services.AddSingleton<RoomFollowRelay>();
-// SignalR 的调试级调用日志会格式化参数；能力与元数据均不能进入日志。
-builder.Logging.AddFilter("Microsoft.AspNetCore.SignalR", LogLevel.Information);
 builder.Services.AddSignalR(options =>
 {
+    options.AddFilter<RoomLogHubFilter>();
     options.MaximumReceiveMessageSize = 10 * 1024 * 1024; // 10MB，支持大量路线文件上报
-})
-.AddHubOptions<CoordinatorHub>(options => options.AddFilter<RoomLogHubFilter>())
-.AddHubOptions<GatewayHub>(options => options.AddFilter<RoomLogHubFilter>())
-.AddHubOptions<RoomFollowHub>(options =>
-{
-    options.MaximumReceiveMessageSize = RoomFollowRelay.MaxInvocationBytes;
-    options.MaximumParallelInvocationsPerClient = 1;
-    options.EnableDetailedErrors = false;
 });
 
 // 配置 CORS（开发阶段允许所有来源）
@@ -148,7 +138,6 @@ if (routeForwarding)
         await next(context);
     });
 }
-app.Use(RoomFollowHub.RequireHttpsAsync);
 app.UseRoutePackageBoundary();
 app.UseRouting();
 app.UseCors();
@@ -233,12 +222,6 @@ if (Directory.Exists(bgiUpdateRoot))
 // 保留 /hub 与 /gateway 两个传输入口；锄地均由 RoomOperations 核验精确新版及线路 pin。
 app.MapHub<CoordinatorHub>("/hub");
 app.MapHub<GatewayHub>("/gateway");
-app.MapHub<RoomFollowHub>("/room-follow", options =>
-{
-    options.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets;
-    options.ApplicationMaxBufferSize = RoomFollowRelay.MaxInvocationBytes;
-    options.TransportMaxBufferSize = RoomFollowRelay.MaxInvocationBytes;
-});
 app.MapAdminMonitor(playerTimeoutSeconds);
 app.MapRoutePackages();
 

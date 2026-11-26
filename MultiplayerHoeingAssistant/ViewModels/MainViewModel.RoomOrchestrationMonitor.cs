@@ -31,14 +31,13 @@ public partial class MainViewModel
     private AssistConfig? _orchestrationMonitorConfig;
     private string _orchestrationPrimaryScope = "";
 
-    internal OrchestrationMonitorTarget? SelectedOrchestrationMonitorTarget => _roomFollowing is { } follow
-        ? new(follow.Invitation.Uid, follow.Invitation.InstanceId, follow.Invitation.MachineId, "邀请中的执行端") : _orchestrationSelected;
-    internal OrchestrationMonitorTarget[] OrchestrationMonitorTargets => IsRoomFollowing ? [] : _orchestrationRoutes.Select(r => r.Identity)
+    internal OrchestrationMonitorTarget? SelectedOrchestrationMonitorTarget => _orchestrationSelected;
+    internal OrchestrationMonitorTarget[] OrchestrationMonitorTargets => _orchestrationRoutes.Select(r => r.Identity)
         .DistinctBy(t => (t.Uid, t.InstanceId, t.MachineId)).ToArray();
 
     internal void SelectOrchestrationMonitorTarget(OrchestrationMonitorTarget target)
     {
-        if (IsRoomFollowing || !IsObserverMode || !OrchestrationMonitorTargets.Contains(target) || SameOrchestrationTarget(target, _orchestrationSelected)) return;
+        if (!IsObserverMode || !OrchestrationMonitorTargets.Contains(target) || SameOrchestrationTarget(target, _orchestrationSelected)) return;
         _orchestrationSelected = target;
         _orchestrationRemoteSnapshot = null;
         _orchestrationSnapshotRoute = null;
@@ -71,9 +70,6 @@ public partial class MainViewModel
 
     internal async Task RefreshRoomOrchestrationMonitorAsync()
     {
-        // The follow snapshot only grants metadata and view selection. Do not use the old
-        // same-UID task graph discovery (including its additional observer room logins) for it.
-        if (IsRoomFollowing) return;
         if (_disposing || !IsObserverMode || !IsShowingRoomOrchestration || _config is not { } config
             || string.IsNullOrWhiteSpace(config.PlayerUid)) { StopRoomOrchestrationMonitor(); return; }
         if (!ReferenceEquals(_orchestrationMonitorConfig, config) || _orchestrationSelected is { } selected && selected.Uid != config.PlayerUid)
@@ -281,8 +277,8 @@ public partial class MainViewModel
 
     internal async Task<(RemoteOrchestrationEdit Edit, RoomOrchestrationEditorBackend Backend)> ReadMonitorRoomOrchestrationEditorAsync(string profileId)
     {
-        if (IsRoomFollowing || !HasFreshOrchestrationSnapshot || _orchestrationSnapshotRoute is not { } route)
-            throw new InvalidOperationException("执行端状态尚未确认或正在只读跟随，请退出跟随后等待重新读取再编辑。");
+        if (!HasFreshOrchestrationSnapshot || _orchestrationSnapshotRoute is not { } route)
+            throw new InvalidOperationException("执行端状态尚未确认，请等待重新读取后编辑。");
         var ct = _orchestrationMonitorLifetime?.Token ?? CancellationToken.None;
         var reply = await RequestOrchestrationEditorAsync(route, "room.orchestration.edit", profileId, null, false, ct);
         var edit = ReadOrchestrationReply<RemoteOrchestrationEdit>(reply) ?? throw new InvalidOperationException("执行端未返回编辑配置。");

@@ -85,9 +85,8 @@ function onControlBatchState(batch) {
     renderControlRoom();
 }
 function showHome() {
-    const rooms = webMemberRooms();
-    if (rooms?.isFollowing?.() && rooms.getView().mode === 'orchestration') { webOpenOwnerView('orchestration'); return; }
     if (typeof webCloseOwnerView === 'function') webCloseOwnerView();
+    const rooms = webMemberRooms();
     // 只在显式返回房间成员时离开编排视图，不在渲染时自动进出 owner 页面。
     if (rooms?.getView().mode === 'orchestration') rooms.setView?.('current');
     document.getElementById('homeView').hidden = false;
@@ -132,7 +131,7 @@ function toggleSelectedMembers() {
 }
 function renderControlRoom() {
     const rooms = webMemberRooms(), view = rooms?.getView() || { mode: 'current' };
-    const entries = displayedMemberEntries(), bulk = mainBulkViewAllowed(), allRooms = view.mode === 'all', following = !!rooms?.isFollowing?.();
+    const entries = displayedMemberEntries(), bulk = mainBulkViewAllowed(), allRooms = view.mode === 'all';
     const mainRoster = rooms ? mainMemberContext()?.players || [] : players;
     const onlineMain = mainOnlineSelectionUids();
     if (!selectionInitialized && mainRoster.length && (!rooms || roomReady)) {
@@ -142,14 +141,12 @@ function renderControlRoom() {
     const online = entries.filter(({member}) => member.online).length;
     const running = entries.filter(({member}) => member.online && member.taskRunning && member.taskStatusAvailable !== false).length;
     const batchMember = !allRooms && bulk && entries.map(x => x.member).find(p => p.hoeingBatchId && ['registering', 'preparing', 'takeover', 'running', 'cleaning', 'stopping', 'cleanupPending'].includes(p.hoeingStartPhase));
-    const viewContext = !bulk && (view.mode === 'room' ? rooms?.getContext?.(view.roomKey) : rooms?.getMainContext?.());
+    const viewContext = !bulk && rooms?.getContext?.(view.roomKey);
     const title = allRooms ? '所有房间' : !bulk ? viewContext?.displayName || viewContext?.name || '房间成员' : batchMember ? batchPhaseName(batchMember.hoeingStartPhase) : '准备一起开锄';
-    const summary = following ? '此处跟随执行端的房间视图。成员状态以本浏览器的普通登录与网关快照为准；关闭跟随后可操作任务。' : allRooms ? '每张卡片使用其来源房间；批量操作仅用于当前控制房间。' : !bulk ? '仅对所选成员进行单卡操作。整房联机请先切换控制房间。'
+    const summary = allRooms ? '每张卡片使用其来源房间；批量操作仅用于当前控制房间。' : !bulk ? '仅对所选成员进行单卡操作。整房联机请先切换控制房间。'
         : batchMember ? batchMember.hoeingStartMessage || '成员正在执行当前联机批次' : '选择成员，检查各自安排。全部准备就绪后接管当前任务。';
-    const followComplete = !following || (allRooms ? !!rooms.getMainContext()?.ready && rooms.listProfiles().every(p => p.ready) : !!viewContext?.ready);
-    const counts = following && !followComplete ? (entries.length ? `已确认 ${online} 人在线 · ${running} 人执行任务，其余待确认` : '在线与执行人数待确认') : `${online} 人在线 · ${running} 人正在执行任务`;
-    document.getElementById('roomSummary').innerHTML = `<section class="hero"><div><p class="eyebrow">${counts}</p><h1>${webEscapeHtml(title)}</h1><p>${webEscapeHtml(summary)}</p></div><div class="hero-metric"><b>${following && !followComplete && !entries.length ? '—' : bulk ? selectedMemberUids.size : entries.length}</b><span>${following && !followComplete ? '已确认成员' : allRooms && !following ? '控制房已选' : bulk ? '已选成员' : '房间成员'}</span></div></section>`;
-    document.getElementById('memberCount').textContent = following && !followComplete ? (entries.length ? `${entries.length}（部分已确认）` : '待确认') : entries.length;
+    document.getElementById('roomSummary').innerHTML = `<section class="hero"><div><p class="eyebrow">${online} 人在线 · ${running} 人正在执行任务</p><h1>${webEscapeHtml(title)}</h1><p>${webEscapeHtml(summary)}</p></div><div class="hero-metric"><b>${bulk ? selectedMemberUids.size : entries.length}</b><span>${allRooms ? '控制房已选' : bulk ? '已选成员' : '房间成员'}</span></div></section>`;
+    document.getElementById('memberCount').textContent = entries.length;
     const selectAll = document.getElementById('selectAll');
     selectAll.hidden = !bulk;
     selectAll.textContent = onlineMain.length && onlineMain.every(uid => selectedMemberUids.has(uid)) ? '取消全选' : '选择在线成员';
@@ -171,13 +168,13 @@ function renderControlRoom() {
         const presence = !ready ? '连接待确认' : !p.online ? '助手离线' : `助手在线 · 锄地${presenceText}`;
         const presenceClass = !ready ? 'presence-unknown' : !p.online ? 'presence-offline' : p.onlineReady ? 'presence-online' : 'presence-not-ready';
         const task = p.taskRunning ? p.currentTaskName || '正在执行任务' : p.bgiStatus === 'stopped' ? '可远程启动 BGI' : '等待下一项任务';
-        const version = context.isMain && !following ? window.bgiWebUpdate?.renderVersion(p) ?? webEscapeHtml(p.bgiVersion || '版本未上报') : webEscapeHtml(p.bgiVersion || '版本未上报');
+        const version = context.isMain ? window.bgiWebUpdate?.renderVersion(p) ?? webEscapeHtml(p.bgiVersion || '版本未上报') : webEscapeHtml(p.bgiVersion || '版本未上报');
         return `<article class="member-card ${selected ? 'selected' : ''} ${taskAvailable ? 'assistant-online' : ''} ${p.online ? '' : 'offline'}" data-member-uid="${webEscapeHtml(p.playerUid)}" data-member-key="${webEscapeHtml(key)}">
             <div class="member-head">${avatarFor(p)}<div class="member-identity"><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">${webEscapeHtml(p.playerName || p.playerUid)}</button><small>${webEscapeHtml(p.playerUid)}</small>${allRooms ? `<span class="wr-member-source" title="${webEscapeHtml(context.serverUrl)}">房间：${webEscapeHtml(memberRoomLabel(context))}</span>` : ''}</div>${selectable ? `<button class="member-select" data-ui="select" data-uid="${webEscapeHtml(p.playerUid)}" aria-label="选择${webEscapeHtml(p.playerName || p.playerUid)}" aria-pressed="${selected}" ${!selected && (!p.online || source && !memberCanOperate(p.playerUid, source)) ? 'disabled' : ''}><span>${selected ? '✓' : ''}</span></button>` : ''}</div>
             <div class="member-version-row"><span class="version-label">BGI</span><span class="member-version">${version}</span><span class="presence ${presenceClass}" title="${presence}" aria-label="${presence}"><span class="presence-dot" aria-hidden="true"></span><span class="presence-visible" aria-hidden="true">${presenceText}</span><span class="sr-only">${presence}</span></span></div>
             <div class="member-body"><div class="status-row"><span>当前任务</span><span class="${taskAvailable ? state.tone : 'muted'}">${webEscapeHtml(taskAvailable ? state.label : '状态待确认')}</span></div><div class="task-name${taskAvailable && p.taskRunning ? ' task-active' : ''}">${webEscapeHtml(taskAvailable ? task : '当前状态待确认')}</div><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentTaskGroupName || '' : ready ? '助手离线后无法获取实时任务' : '网页连接中断，无法确认实时任务')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.currentRouteDisplay || p.currentScriptRouteName || '' : p.bgiVersion ? '上次版本仅供参考' : '')}</p><p class="task-route">${webEscapeHtml(taskAvailable ? p.hoeingStartMessage || p.scriptTaskProgress || p.friendshipProgress || '' : '')}</p></div>
             <div class="member-foot"><span>${webEscapeHtml(hoeingCompletionDescription(p.hoeingCompletionAction))}</span><button data-ui="detail" data-uid="${webEscapeHtml(p.playerUid)}">管理 ›</button></div><div class="member-result" ${memberResultAttributes(p.playerUid, source)} hidden></div></article>`;
-    }).join('') || (following && !followComplete ? '<div class="section-empty">所查看房间的成员状态尚未确认。</div>' : view.mode === 'current' ? '<div class="section-empty">暂无成员连接。请使用 PC 助手加入相同控制房间。</div>'
+    }).join('') || (view.mode === 'current' ? '<div class="section-empty">暂无成员连接。请使用 PC 助手加入相同控制房间。</div>'
         : '<div class="section-empty">暂无已确认成员，请检查所查看房间的连接状态。</div>');
     renderMemberResults(); renderSelectionBar();
     window.bgiWebUpdate?.refreshHints();
@@ -271,7 +268,7 @@ function renderDetailHeader() {
     const room = source && (!entry.context.isMain || webMemberRooms()?.getView().mode === 'all')
         ? `<span class="wr-member-source" title="${webEscapeHtml(entry.context.serverUrl)}">房间：${webEscapeHtml(memberRoomLabel(entry.context))}</span>` : '';
     host.innerHTML = `<button class="back-button" onclick="showHome()">‹ 返回房间</button><div class="detail-top">${avatarFor(p)}<div class="detail-identity"><h1>${webEscapeHtml(p.playerName || p.playerUid)}</h1><div class="muted detail-meta"><span class="detail-meta-text">${webEscapeHtml(p.playerUid)} · <span class="${state.tone}">${webEscapeHtml(state.label)}</span> · BGI ${webEscapeHtml(p.bgiVersion || '版本未上报')}</span>${room}</div>${!entry.context.isMain ? '<p class="note">此卡暂不支持更新 BGI，请切换到该控制房间或在执行端本机更新。</p>' : ''}</div></div>`;
-    if (!webMemberRooms()?.isFollowing?.() && entry.context.isMain && window.bgiWebUpdate?.targetFor(p)) {
+    if (entry.context.isMain && window.bgiWebUpdate?.targetFor(p)) {
         const update = document.createElement('button');
         update.className = 'text-button detail-bgi-update'; update.type = 'button'; update.textContent = '更新 BGI';
         update.onclick = () => {
@@ -284,8 +281,7 @@ function renderDetailHeader() {
     }
 }
 function renderDetailTabs() {
-    const tabs = webMemberRooms()?.isFollowing?.() ? [['status', '状态'], ['history', '记录']]
-        : [['status', '状态'], ['tasks', '任务'], ['settings', '联机设置'], ['history', '记录']];
+    const tabs = [['status', '状态'], ['tasks', '任务'], ['settings', '联机设置'], ['history', '记录']];
     const host = document.getElementById('detailTabs');
     host.innerHTML = tabs.map(([id, label]) => `<button data-section="${id}" class="${detailSection === id ? 'active' : ''}">${label}</button>`).join('');
     host.querySelectorAll('button').forEach(b => b.onclick = () => { detailSection = b.dataset.section; renderDetailTabs(); renderDetailContent(); });
@@ -311,8 +307,7 @@ function renderStatusDetail(p, host, source = undefined) {
         <section class="panel plan-panel"><div class="panel-header"><h2>联机安排</h2><button id="editBindings" class="text-button">编辑联机安排 ›</button></div><div class="plan-items">${memberBinding(p).names.map((n, i) => `<div class="binding-row"><span class="order">${i + 1}</span><div class="binding-name">${webEscapeHtml(n)}<small>${memberBinding(p).types[i] === 'onedragon' ? '一条龙' : '配置组'}</small></div></div>`).join('') || '<p class="note">尚未绑定联机任务。</p>'}</div><p class="note plan-after">结束后：${webEscapeHtml(hoeingCompletionDescription(p.hoeingCompletionAction))}</p><div ${memberResultAttributes(p.playerUid, source)} class="member-result" hidden></div></section></div>`;
     host.querySelectorAll('[data-op]').forEach(b => b.onclick = () => showMemberOperation([p.playerUid], b.dataset.op, {}, source));
     host.querySelector('#detailReset').onclick = () => showResetStateModal(p.playerUid, p.playerName || p.playerUid, source);
-    host.querySelector('#editBindings').disabled = !!webMemberRooms()?.isFollowing?.();
-    host.querySelector('#editBindings').onclick = () => { if(webMemberRooms()?.isFollowing?.())return;detailSection = 'settings'; renderDetailTabs(); renderDetailContent(); };
+    host.querySelector('#editBindings').onclick = () => { detailSection = 'settings'; renderDetailTabs(); renderDetailContent(); };
     renderMemberResults();
 }
 function renderTaskCatalog(p, host, source = undefined) {

@@ -72,7 +72,7 @@ public partial class MainViewModel
 
     internal void SelectRoomOrchestration(bool persist = true)
     {
-        if (IsRoomFollowing || !CanSelectRoomOrchestration || _config is null) return;
+        if (!CanSelectRoomOrchestration || _config is null) return;
         CurrentPage = AppPage.Home;
         SetRoomViewPreference(true, null, persist);
         NotifyRoomViewProperties();
@@ -82,7 +82,7 @@ public partial class MainViewModel
 
     private void SetRoomViewPreference(bool? show, string? viewedId, bool persist)
     {
-        if (_config is not { } current || current.IsRoomFollowProjection) return;
+        if (_config is not { } current) return;
         var changed = show.HasValue && current.ShowRoomOrchestration != show.Value
             || viewedId is not null && current.ViewedRoomProfileId != viewedId;
         if (!changed && _roomViewPreferenceMessage.Length == 0) return;
@@ -129,7 +129,6 @@ public partial class MainViewModel
         current.ShowRoomOrchestration = show ?? priorShow;
         current.ViewedRoomProfileId = viewedId ?? priorView;
         OnPropertyChanged(nameof(RoomViewPreferenceMessage));
-        PublishRoomFollowSnapshot();
     }
 
     private static AssistConfig ReadOrchestrationConfig(AssistConfigManager manager) => ReadOrchestrationConfig(manager, out _);
@@ -192,7 +191,6 @@ public partial class MainViewModel
     {
         try
         {
-            if (IsRoomFollowing) throw new InvalidOperationException(RoomFollowReadOnlyMessage);
             if (IsObserverMode)
             {
                 await EditMonitorRoomOrchestrationAsync(profileId, owner);
@@ -500,7 +498,6 @@ public partial class MainViewModel
 
     internal RoomOrchestrationPresentation GetRoomOrchestrationPresentation()
     {
-        if (IsRoomFollowing) return GetFollowRoomOrchestrationPresentation();
         var config = RoomViewConfig;
         if (config is null) return RoomOrchestrationPresentation.Empty;
         if (config.ObserverMode) return GetMonitorRoomOrchestrationPresentation();

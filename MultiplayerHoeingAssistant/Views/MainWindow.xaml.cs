@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Threading;
 using System.Reflection;
@@ -24,12 +23,6 @@ public partial class MainWindow : Window
     /// <summary>由设置页“本机网页”卡片调用；配对桥随主窗口生命周期复用。</summary>
     internal async void OpenLocalBrowser()
     {
-        if (ViewModel.IsRoomFollowing)
-        {
-            MessageBox.Show(this, "请先关闭只读房间跟随，再按原房间身份打开本机网页。", "本机网页",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
         if (_openingLocalBrowser) return;
         _openingLocalBrowser = true;
         try
@@ -240,10 +233,7 @@ public partial class MainWindow : Window
             if (!AssistantRoomPopup.IsOpen) return;
             if (AssistantRoomSelector.SelectedItem is { } room &&
                 AssistantRoomSelector.ItemContainerGenerator.ContainerFromItem(room) is ListBoxItem row && row.Focus()) return;
-            if (!AssistantRoomSelector.IsVisible || !AssistantRoomSelector.Focus())
-            {
-                if (!ManageAssistantRoomsButton.Focus()) RoomFollowEntryButton.Focus();
-            }
+            if (!AssistantRoomSelector.IsVisible || !AssistantRoomSelector.Focus()) ManageAssistantRoomsButton.Focus();
         }));
     }
 
@@ -309,183 +299,6 @@ public partial class MainWindow : Window
     }
 
     private void ManageAssistantRoomsClick(object sender, RoutedEventArgs e) => DismissAssistantRoomPopup();
-
-    private void RoomFollowEntryClick(object sender, RoutedEventArgs e)
-    {
-        if (!ViewModel.CanOpenRoomFollow) return;
-        DismissAssistantRoomPopup();
-        var executor = ViewModel.IsExecutorMode;
-        var dialog = new Window
-        {
-            Owner = this, DataContext = ViewModel, Title = executor ? "共享房间跟随" : "跟随执行端房间",
-            Width = 470, Height = executor ? 485 : 450, MinHeight = 300,
-            MaxHeight = Math.Max(300, SystemParameters.WorkArea.Height - 32),
-            WindowStartupLocation = WindowStartupLocation.CenterOwner, ShowInTaskbar = false,
-            ResizeMode = ResizeMode.CanResizeWithGrip, Background = Background, FontFamily = FontFamily, FontSize = FontSize
-        };
-        dialog.Resources.MergedDictionaries.Add(Resources);
-        var panel = new StackPanel { Margin = new Thickness(18) };
-        dialog.Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-
-        TextBlock Label(string text, string color = "Dim", double size = 12)
-        {
-            var block = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) };
-            block.SetResourceReference(TextBlock.ForegroundProperty, color);
-            return block;
-        }
-        Button ActionButton(string title, RoutedEventHandler handler, bool primary = false)
-        {
-            var button = new Button { Content = title, MinHeight = 30, Padding = new Thickness(9, 5, 9, 5), Margin = new Thickness(0, 3, 7, 5) };
-            button.SetResourceReference(StyleProperty, primary ? "BtnGold" : "BtnGhost");
-            button.Click += handler;
-            return button;
-        }
-        void StyleInput(Control input)
-        {
-            input.SetResourceReference(Control.BackgroundProperty, "Card");
-            input.SetResourceReference(Control.ForegroundProperty, "White");
-            input.SetResourceReference(Control.BorderBrushProperty, "GoldLine");
-            input.BorderThickness = new Thickness(1);
-            input.Padding = new Thickness(7);
-            input.Margin = new Thickness(0, 0, 0, 6);
-        }
-        void AddToggle(string text, string checkedProperty, string enabledProperty, Func<bool, Task> change)
-        {
-            var check = new CheckBox { Content = text, FontSize = 13, Margin = new Thickness(0, 2, 0, 10) };
-            check.SetResourceReference(StyleProperty, "GuildCheckBox");
-            check.SetResourceReference(Control.ForegroundProperty, "White");
-            check.SetBinding(ToggleButton.IsCheckedProperty, new Binding(checkedProperty) { Mode = BindingMode.OneWay });
-            check.SetBinding(IsEnabledProperty, new Binding(enabledProperty));
-            check.Click += async (_, _) =>
-            {
-                try { await change(check.IsChecked == true); }
-                finally { check.GetBindingExpression(ToggleButton.IsCheckedProperty)?.UpdateTarget(); }
-            };
-            panel.Children.Add(check);
-        }
-        var title = Label(executor ? "邀请监控端跟随本机房间" : "跟随指定的执行端", "GoldText", 15);
-        title.FontWeight = FontWeights.SemiBold;
-        panel.Children.Add(title);
-        panel.Children.Add(Label(executor
-            ? "仅共享房间档案名称、备注、服务器/房间号、成员 UID、当前登录和查看页面等元数据。邀请不包含房间密码，也不授予房间登录或任务执行权限。"
-            : "跟随为只读查看：仅对本机已保存、且普通入房鉴权通过的房间自动连接。需要操作或添加房间时，先关闭跟随；关闭后恢复本机原登录和查看页面。"));
-        var feedback = Label("", "GoldText", 11);
-        if (executor)
-        {
-            AddToggle("开启房间元数据共享", nameof(MainViewModel.RoomFollowSharingEnabled), nameof(MainViewModel.CanShareRoomFollow),
-                ViewModel.SetRoomFollowSharingEnabledAsync);
-            panel.Children.Add(Label("本机邀请仅限同一台机器、同一个 Windows 用户。跨机或网页使用 HTTPS 中继邀请。"));
-            panel.Children.Add(Label("远程中继 HTTPS 基地址", "GoldText"));
-            var relay = new TextBox { Text = ViewModel.RoomFollowDefaultRelay, MaxLength = 2048 };
-            StyleInput(relay);
-            System.Windows.Automation.AutomationProperties.SetName(relay, "远程跟随 HTTPS 服务地址");
-            panel.Children.Add(relay);
-            void CopyInvitation(string? invitation)
-            {
-                if (invitation is null) { feedback.Text = "未获得可复制的邀请。"; return; }
-                try { Clipboard.SetText(invitation); feedback.Text = "邀请已复制。请仅交给信任的监控端；可在下方撤销。"; }
-                catch { feedback.Text = "剪贴板不可用。邀请仍保存在授权列表中，可再次复制。"; }
-            }
-            var generate = new WrapPanel();
-            foreach (var local in new[] { true, false })
-            {
-                var button = ActionButton(local ? "生成并复制本机邀请" : "生成并复制 HTTPS 邀请", async (_, _) =>
-                {
-                    feedback.Text = "";
-                    CopyInvitation(await ViewModel.GenerateRoomFollowInvitationAsync(local, relay.Text));
-                }, primary: true);
-                button.SetBinding(IsEnabledProperty, new Binding(nameof(MainViewModel.CanGenerateRoomFollowGrant)));
-                generate.Children.Add(button);
-            }
-            panel.Children.Add(generate);
-            panel.Children.Add(Label("已生成邀请（选择后复制或撤销）", "GoldText"));
-            var grants = new ListBox { DisplayMemberPath = nameof(MainViewModel.RoomFollowGrantChoice.Label), Height = 80 };
-            StyleInput(grants);
-            ScrollViewer.SetHorizontalScrollBarVisibility(grants, ScrollBarVisibility.Disabled);
-            grants.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(MainViewModel.RoomFollowGrantChoices)));
-            panel.Children.Add(grants);
-            var grantActions = new WrapPanel();
-            var copy = ActionButton("复制所选邀请", (_, _) =>
-            {
-                try
-                {
-                    if (grants.SelectedItem is MainViewModel.RoomFollowGrantChoice choice)
-                        CopyInvitation(ViewModel.CopyRoomFollowInvitation(choice.Id));
-                }
-                catch { feedback.Text = "邀请无法读取，请核对授权列表。"; }
-            });
-            var revoke = ActionButton("撤销所选邀请", async (_, _) =>
-            {
-                if (grants.SelectedItem is not MainViewModel.RoomFollowGrantChoice choice) return;
-                if (MessageBox.Show(dialog, "撤销这份邀请？其跟随端将不能再收到本机房间元数据。", "撤销邀请",
-                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
-                feedback.Text = "";
-                await ViewModel.RevokeRoomFollowGrantAsync(choice.Id);
-            });
-            copy.IsEnabled = revoke.IsEnabled = false;
-            grants.SelectionChanged += (_, _) => copy.IsEnabled = revoke.IsEnabled = grants.SelectedItem is not null && !ViewModel.RoomFollowBusy;
-            grantActions.Children.Add(copy);
-            grantActions.Children.Add(revoke);
-            panel.Children.Add(grantActions);
-        }
-        else
-        {
-            var current = Label("", "Water");
-            current.SetBinding(TextBlock.TextProperty, new Binding(nameof(MainViewModel.RoomFollowInvitationSummary)));
-            panel.Children.Add(current);
-            AddToggle("跟随此执行端（只读）", nameof(MainViewModel.IsRoomFollowing), nameof(MainViewModel.CanEnableRoomFollow),
-                ViewModel.SetRoomFollowingEnabledAsync);
-            panel.Children.Add(Label("粘贴执行端生成的完整邀请。邀请会在本机加密保存，不写入房间设置。", "GoldText"));
-            var invitationBox = new PasswordBox { MaxLength = RoomFollowFormat.MaxInvitationLength };
-            StyleInput(invitationBox);
-            System.Windows.Automation.AutomationProperties.SetName(invitationBox, "房间跟随邀请");
-            panel.Children.Add(invitationBox);
-            var invitationActions = new WrapPanel();
-            var paste = ActionButton("粘贴邀请", (_, _) =>
-            {
-                try
-                {
-                    var text = Clipboard.ContainsText() ? Clipboard.GetText() : "";
-                    if (text.Length == 0 || text.Length > RoomFollowFormat.MaxInvitationLength)
-                    { feedback.Text = "剪贴板中没有有效长度的文本邀请。"; return; }
-                    invitationBox.Password = text;
-                    feedback.Text = "已粘贴，请点击保存或替换。";
-                }
-                catch { feedback.Text = "剪贴板不可用，请重试或手动粘贴。"; }
-            });
-            var save = ActionButton("保存/替换", async (_, _) =>
-            {
-                if (string.IsNullOrWhiteSpace(invitationBox.Password)) { feedback.Text = "请先粘贴邀请。"; return; }
-                var value = invitationBox.Password;
-                invitationBox.Clear();
-                feedback.Text = "";
-                await ViewModel.ReplaceRoomFollowInvitationAsync(value);
-            }, primary: true);
-            var remove = ActionButton("移除邀请", async (_, _) =>
-            {
-                invitationBox.Clear(); feedback.Text = "";
-                await ViewModel.ReplaceRoomFollowInvitationAsync("");
-            });
-            foreach (var button in new[] { paste, save, remove })
-            {
-                button.SetBinding(IsEnabledProperty, new Binding(nameof(MainViewModel.CanChangeRoomFollowInvitation)));
-                invitationActions.Children.Add(button);
-            }
-            panel.Children.Add(invitationActions);
-            dialog.Closed += (_, _) => invitationBox.Clear();
-        }
-        var status = Label("", "Water");
-        status.SetBinding(TextBlock.TextProperty, new Binding(nameof(MainViewModel.RoomFollowStatus)));
-        System.Windows.Automation.AutomationProperties.SetLiveSetting(status, System.Windows.Automation.AutomationLiveSetting.Polite);
-        var error = Label("", "GoldText");
-        error.SetBinding(TextBlock.TextProperty, new Binding(nameof(MainViewModel.RoomFollowError)));
-        panel.Children.Add(status);
-        panel.Children.Add(error);
-        panel.Children.Add(feedback);
-        panel.Children.Add(ActionButton("关闭面板", (_, _) => dialog.Close()));
-        dialog.ShowDialog();
-        e.Handled = true;
-    }
 
     private void DismissAssistantRoomPopup()
     {
