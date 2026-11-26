@@ -26,6 +26,7 @@
     // 本人档案名称仅作已认证房间的显示别名，不改变浏览器档案、凭证或房间身份。
     let ownerRoomNames = new Map();
     function setOwnerRoomNames(rows) {
+        if (follow) return; // 原本人授权别名不受跟随期间迟到的查询结果影响。
         const next = new Map();
         for (const p of Array.isArray(rows) ? rows : []) {
             try { const name = trim(p.name ?? p.Name); if (name) next.set(roomKey(p.serverUrl ?? p.ServerUrl, p.roomCode ?? p.RoomCode), name); } catch { /* 无效身份不采用 */ }
@@ -35,6 +36,7 @@
     }
     function profileDisplayName(p) {
         if (!p) return '';
+        if (p.followed) return p.name || p.roomCode || '未命名房间';
         const name = trim(p.name), code = p.roomCode;
         const autoServerName = p.serverUrl && `${code} · ${new URL(p.serverUrl).host}`;
         if (!name || name === code || name === '房间 ' + code || name === '房间' + code || name === autoServerName)
@@ -43,6 +45,10 @@
     }
     let options = {}, initialized = false, active = false, suspended = false, generation = 0;
     let main = null, view = { mode: 'current', roomKey: '' }, lastLoginKey = '', legacyMigrated = false;
+    // 跟随只替换显示投影，原浏览器房间簿（包括本页未记住的登录）不被删除或写回。
+    let follow = null;
+    const visibleProfiles = () => follow?.profiles || profiles;
+    const visibleView = () => follow?.view || view;
     let storageError = '', storageRaw = null, storageBlocked = false, viewNotice = '', switchingKey = '', notifyQueued = false;
     let selector = null, notice = null, menu = null, manager = null, switchDialog = null, placeSelector = null;
 
@@ -127,7 +133,7 @@
         }
     }
     function persist() {
-        if (storageBlocked) return false;
+        if (follow || storageBlocked) return false;
         try {
             if (storage().getItem(storageKey) !== storageRaw) {
                 storageBlocked = true;
@@ -183,11 +189,66 @@
             nickname: p.nickname, password: p.password, remember: p.remember } : null;
     }
     function getLogin(key = lastLoginKey) {
-        if (!key) { migrateLegacy(); key = lastLoginKey; }
+        if (!key && !follow) { migrateLegacy(); key = lastLoginKey; }
         return loginFor(profiles.get(key));
     }
-    function validateMainLogin(serverUrl, roomCode) {
+    function canBeginFollow() { return initialized && !follow && !switchingKey && !manager?.dialog.isConnected && !switchDialog?.isConnected; }
+    function requireOrdinaryBook() {
+        if (follow) throw new Error('请先关闭房间跟随，恢复原浏览器房间簿后再操作。');
+    }
+    function beginFollow() {
+        if (!canBeginFollow()) throw new Error('原房间仍有操作正在处理，请完成后开启跟随。');
+        const old = getView();
+        follow = { profiles: new Map(), targetKey: '', loginAllowed: false, view: { mode: 'current', roomKey: '' }, rejected: new Set() };
+        mainChanged(); options.onViewChange?.(getView(), old); notify();
+    }
+    function followRoomKey(p) {
+        // 空白/无效旧档案、同地址同房号的重复项仍可显示，但不能用它们猜测密码归属。
+        try { return p.roomCode === trim(p.roomCode) ? roomKey(p.serverUrl, p.roomCode) : ''; }
+        catch { return ''; }
+    }
+    function setFollowSnapshot(snapshot, rejected = new Set()) {
+        if (!follow) throw new Error('跟随已关闭。');
+        const old = getView(), rows = snapshot?.profiles || [], counts = new Map(), keys = new Map();
+        for (const p of rows) { const key = followRoomKey(p); counts.set(key, (counts.get(key) || 0) + 1); }
+        const projected = new Map();
+        for (const p of rows) {
+            const exact = followRoomKey(p), key = exact && counts.get(exact) === 1 ? exact : JSON.stringify(['follow', p.id, 'unavailable']);
+            keys.set(p.id, key);
+            projected.set(key, { profileId: p.id, roomKey: key, serverUrl: p.serverUrl, roomCode: p.roomCode,
+                name: p.name, note: p.note, teamUids: [...p.teamUids], expectedHoeingPlayers: p.expectedHoeingPlayers, followed: true });
+        }
+        const targetKey = snapshot?.confirmed ? keys.get(snapshot.activeId) || '' : '';
+        const credentials = targetKey && !rejected.has(targetKey) ? loginFor(profiles.get(targetKey)) : null;
+        // 普通主连接仍需原网页登录昵称，次房旁观认证不能代替这一项。
+        const login = credentials?.nickname ? credentials : null;
+        const viewed = keys.get(snapshot?.viewedId);
+        follow.profiles = projected; follow.targetKey = targetKey; follow.loginAllowed = !!login; follow.rejected = rejected;
+        follow.view = snapshot?.showOrchestration ? { mode: 'orchestration', roomKey: '' }
+            : viewed && viewed !== targetKey ? { mode: 'room', roomKey: viewed }
+                : viewed || !snapshot ? { mode: 'current', roomKey: '' } : { mode: 'all', roomKey: '' };
+        mainChanged();
+        if (old.mode !== follow.view.mode || old.roomKey !== follow.view.roomKey) options.onViewChange?.(getView(), old);
+        notify();
+        return { key: targetKey, login };
+    }
+    function endFollow() {
+        if (!follow) return;
+        const old = getView();
+        // 切回原档案时，丢弃临时会话的代次，防止迟到的卡片或回执复用。
+        for (const record of sessions.values()) retire(record);
+        sessions.clear(); follow = null; main = null; mainChanged();
+        options.onViewChange?.(getView(), old); notify();
+    }
+    function isFollowing() { return !!follow; }
+    function validateMainLogin(serverUrl, roomCode, temporary = false) {
         const key = roomKey(serverUrl, roomCode);
+        if (temporary) {
+            // 临时登录仅使用原簿中已有的房间；必须由普通网关继续验证密码和昵称。
+            if (!getLogin(key)) throw new Error('没有本浏览器的目标房间登录凭据。');
+            return key;
+        }
+        requireOrdinaryBook();
         if (!profiles.has(key) && [...profiles.values()].filter(p => p.saved || p.roomKey !== main?.roomKey).length >= MAX_ROOMS)
             throw new Error('浏览器房间簿最多保存 5 个房间。请先移除一个非当前房间。');
         return key;
@@ -230,7 +291,7 @@
                 serverUrl = normalizeServer(raw.serverUrl); code = normalizeCode(raw.roomCode); key = roomKey(serverUrl, code);
             }
         } catch { /* 主登录地址尚未确认 */ }
-        const ready = !!(key && raw?.ready === true && raw.connection);
+        const ready = !!(key && raw?.ready === true && raw.connection && (!follow || key === follow.targetKey && follow.loginAllowed));
         const sameTransport = !!(previous && key === previous.roomKey && raw?.connection === previous.connection && raw?.generation === previous.adapterGeneration);
         const sameGeneration = !previous && !key || sameTransport && ready === previous.ready;
         const rows = ready ? normalizedMembers(raw.players) : [];
@@ -238,6 +299,12 @@
             nickname: trim(raw?.nickname), ready, players: rows, senderUid: text(raw?.senderUid), capabilities: raw?.capabilities || [],
             adapterGeneration: raw?.generation, generation: sameGeneration ? previous.generation : ++generation } : null;
         if (previous?.ready && (!sameGeneration || !main)) disconnected(previous.roomKey, previous.generation);
+        if (follow) {
+            // 临时主连接的成功、失败和断线都不改变原档案或 lastLoginKey。
+            syncSessions();
+            if (!sameGeneration || !sameRows(previous?.players || [], rows)) notify();
+            return;
+        }
         if (previous && previous.roomKey !== key && !profiles.get(previous.roomKey)?.saved) profiles.delete(previous.roomKey);
         let profile = profiles.get(key);
         if (ready && !profile) {
@@ -261,22 +328,27 @@
     }
 
     function statusFor(p) {
+        const credentials = follow ? profiles.get(p.roomKey) : p;
+        if (follow && follow.targetKey && (follow.rejected.has(p.roomKey) || !credentials?.password || p.roomKey === follow.targetKey && !credentials.nickname))
+            return { status: 'unauthenticated', ready: false, error: '需普通入房授权，请关闭跟随并在管理房间中确认登录' };
+        if (follow && (!follow.loginAllowed || !follow.targetKey)) return { status: 'unconfirmed', ready: false, error: '跟随登录未确认' };
         if (main?.roomKey === p.roomKey) return { status: main.ready ? 'ready' : 'unconfirmed', ready: main.ready, error: main.ready ? '' : '控制房间连接未就绪' };
         if (switchingKey === p.roomKey) return { status: 'connecting', ready: false, error: '正在切换网页控制房间' };
         const record = sessions.get(p.roomKey);
         if (record) return { status: record.status, ready: record.status === 'ready', error: record.error || '' };
-        return { status: p.password ? 'idle' : 'unauthenticated', ready: false, error: p.password ? '尚未连接' : '请填写本浏览器的房间密码' };
+        return { status: credentials?.password ? 'idle' : 'unauthenticated', ready: false, error: credentials?.password ? '尚未连接' : '请填写本浏览器的房间密码' };
     }
     function publicProfile(p) {
+        const credentials = follow ? profiles.get(p.roomKey) : p;
         return { id: p.profileId, profileId: p.profileId, roomKey: p.roomKey, serverUrl: p.serverUrl,
-            roomCode: p.roomCode, name: p.name, displayName: profileDisplayName(p), note: p.note, remember: p.remember, saved: p.saved, hasPassword: !!p.password,
-            isMain: main?.roomKey === p.roomKey, ...statusFor(p) };
+            roomCode: p.roomCode, name: p.name, displayName: profileDisplayName(p), note: p.note, remember: !!credentials?.remember, saved: !!p.saved, hasPassword: !!credentials?.password,
+            isMain: main?.roomKey === p.roomKey && (!follow || main.ready), ...(p.followed ? { teamUids: [...p.teamUids], expectedHoeingPlayers: p.expectedHoeingPlayers } : {}), ...statusFor(p) };
     }
-    function listProfiles() { return [...profiles.values()].map(publicProfile); }
+    function listProfiles() { return [...visibleProfiles().values()].map(publicProfile); }
     function getContext(key) {
         if (!key) return null;
         const isMain = main?.roomKey === key;
-        const p = profiles.get(key) || (isMain ? { roomKey: key, serverUrl: main.serverUrl, roomCode: main.roomCode, name: '房间 ' + main.roomCode } : null);
+        const p = visibleProfiles().get(key) || (!follow && isMain ? { roomKey: key, serverUrl: main.serverUrl, roomCode: main.roomCode, name: '房间 ' + main.roomCode } : null);
         if (!p) return null;
         const s = statusFor(p), record = sessions.get(key), attempt = record?.attempt;
         const state = isMain ? main : attempt;
@@ -295,8 +367,8 @@
         return context?.ready ? context.players.map(member => ({ member, context, source: sourceOf(member, context) })) : [];
     }
     function orderedContexts() {
-        const keys = [...profiles.keys()];
-        if (main?.roomKey) { const pos = keys.indexOf(main.roomKey); if (pos >= 0) keys.splice(pos, 1); keys.unshift(main.roomKey); }
+        const keys = [...visibleProfiles().keys()];
+        if (main?.roomKey && (!follow || follow.profiles.has(main.roomKey))) { const pos = keys.indexOf(main.roomKey); if (pos >= 0) keys.splice(pos, 1); keys.unshift(main.roomKey); }
         return keys.map(getContext).filter(Boolean);
     }
     function getKnownInstances() { return orderedContexts().flatMap(entriesFor); }
@@ -310,6 +382,7 @@
         return [...winners.values()];
     }
     function getDisplayedMembers() {
+        const view = visibleView();
         if (view.mode === 'all') return dedupe(getKnownInstances());
         if (view.mode === 'room') return dedupe(entriesFor(getContext(view.roomKey)));
         if (view.mode === 'current') return dedupe(entriesFor(getMainContext()));
@@ -337,8 +410,9 @@
         if (exactInstance && (!source.instanceId || !source.machineId)) throw new Error('执行端实例或机器身份未确认。');
         return { member, context, source: sourceOf(member, context) };
     }
-    function getView() { return { ...view }; }
+    function getView() { return { ...visibleView() }; }
     function setView(value, key) {
+        if (follow) return getView();
         const next = typeof value === 'string' ? { mode: value, roomKey: key || '' } : value;
         if (!['current', 'all', 'room', 'orchestration'].includes(next?.mode)) throw new Error('查看模式无效。');
         if (next.mode === 'room' && !getContext(next.roomKey)) throw new Error('该房间已不在浏览器房间簿。');
@@ -351,6 +425,7 @@
         return getView();
     }
     function saveProfile(draft, existingKey = '') {
+        requireOrdinaryBook();
         const previous = profiles.get(existingKey);
         if (existingKey && !previous) throw new Error('房间档案已不存在，请重新选择。');
         const serverUrl = normalizeServer(draft.serverUrl), code = normalizeCode(draft.roomCode), key = roomKey(serverUrl, code);
@@ -384,6 +459,7 @@
         return publicProfile(next);
     }
     function removeProfile(key) {
+        requireOrdinaryBook();
         if (key === main?.roomKey || key === switchingKey) throw new Error('当前控制房间不可移除。');
         if (!profiles.delete(key)) throw new Error('房间档案已不存在。');
         if (lastLoginKey === key) lastLoginKey = '';
@@ -419,7 +495,12 @@
         notify();
     }
     function syncSessions() {
-        const desired = active && !suspended ? [...profiles.values()].filter(p => p.roomKey !== main?.roomKey && p.roomKey !== switchingKey && p.password) : [];
+        const currentView = visibleView();
+        // 跟随只连接当前确认视图中的已知房间，所需密码仅取自本浏览器原簿。
+        const candidates = follow ? (follow.loginAllowed && main?.roomKey === follow.targetKey && main.ready
+            ? [...follow.profiles.keys()].filter(key => !follow.rejected.has(key) && (currentView.mode === 'all' || currentView.mode === 'room' && currentView.roomKey === key))
+                .map(key => profiles.get(key)).filter(Boolean) : []) : active ? [...profiles.values()] : [];
+        const desired = !suspended ? candidates.filter(p => p.roomKey !== main?.roomKey && p.roomKey !== switchingKey && p.password) : [];
         const wanted = new Map(desired.map(p => [p.roomKey, p]));
         for (const [key, record] of sessions) {
             const p = wanted.get(key);
@@ -433,7 +514,7 @@
         }
     }
     function reconnect(key) {
-        if (!profiles.get(key)?.password || key === main?.roomKey || key === switchingKey) return false;
+        if (follow || !profiles.get(key)?.password || key === main?.roomKey || key === switchingKey) return false;
         active = true;
         const existing = sessions.get(key);
         syncSessions();
@@ -512,6 +593,7 @@
         })();
     }
     function rejectJoin(record, a) {
+        if (follow && live(record, a)) follow.rejected.add(record.roomKey);
         fail(record, a, 'unauthenticated', '服务器拒绝加入。请核对已有房间号、密码和房间访问权限。', false);
     }
     function markReady(record, a) {
@@ -620,6 +702,7 @@
         try { options.onEvent?.(record.roomKey, env, getContext(record.roomKey)); } catch { /* UI 错误不伤及旁观连接 */ }
     }
     async function sendRemoteCommand(source, input) {
+        requireOrdinaryBook();
         const { member, context } = requireSource(source);
         if (!roomCommands.has(input?.cmd) || !Array.isArray(input.target) || input.target.length !== 1 || input.target[0] !== source.uid
             || typeof input.commandId !== 'string' || !input.commandId || input.targetInstanceId && input.targetInstanceId !== source.instanceId
@@ -646,6 +729,7 @@
         return gatewayResponse(response, request);
     }
     async function invoke(source, channel, name, payload = {}) {
+        requireOrdinaryBook();
         if (channel !== 'Dispatch') throw new Error('不支持的旁观操作。');
         const owner = name === 'mistletoe.request';
         const { member, context } = requireSource(source, { exactInstance: owner, allowOffline: name === 'control.clearOnlineHistory' });
@@ -673,6 +757,7 @@
         return attemptInvoke(record, a, channel, name, payload);
     }
     async function requestSwitch(key, credentials = {}) {
+        requireOrdinaryBook();
         if (!options.onSwitchMain) throw new Error('网页控制房间切换入口暂不可用。');
         if (switchingKey) throw new Error('正在切换网页控制房间，请等待确认。');
         const p = profiles.get(key);
@@ -701,14 +786,16 @@
     }
     function roomLabel(context) { return context ? `${roomCaption(context)}（${context.serverUrl}）` : '未登录控制房间'; }
     function getViewNotice() {
+        const view = visibleView();
         if (view.mode === 'orchestration') return '';
         const relevant = view.mode === 'all' ? orderedContexts() : [view.mode === 'room' ? getContext(view.roomKey) : getMainContext()].filter(Boolean);
         const missing = relevant.filter(c => !c.ready);
-        return [viewNotice, !relevant.length ? '尚未连接控制房间。' : '',
+        return [follow ? '' : viewNotice, follow && !follow.targetKey ? '执行端的登录房间尚未确认。' : !relevant.length ? '尚未连接控制房间。' : '',
             missing.length ? missing.map(c => `${roomLabel(c)}：${c.error || statuses[c.status] || '状态待确认'}`).join('；') : '',
-            storageError].filter(Boolean).join(' ');
+            follow ? '' : storageError].filter(Boolean).join(' ');
     }
     function viewLabel() {
+        const view = visibleView();
         if (view.mode === 'all') return '所有房间';
         if (view.mode === 'orchestration') return '任务编排';
         const context = view.mode === 'room' ? getContext(view.roomKey) : getMainContext();
@@ -764,25 +851,31 @@
         closeDialog(menu, restore ? button : null); menu = null;
     }
     function renderMenu(dialog) {
-        const rooms = listProfiles(), signature = JSON.stringify([view, main?.roomKey, rooms.map(p => [p.roomKey, p.displayName, p.note])]);
+        const rooms = listProfiles(), view = visibleView(), currentMain = getMainContext();
+        const confirmedMain = !follow || currentMain?.ready === true;
+        const mainKey = confirmedMain ? main?.roomKey : '';
+        const signature = JSON.stringify([!!follow, view, mainKey, rooms.map(p => [p.roomKey, p.displayName, p.note])]);
         if (dialog.dataset.signature !== signature) {
             const focusKey = document.activeElement?.dataset?.wrAction;
             dialog.dataset.signature = signature;
-            const row = (action, key, title, detail, selected) => `<button type="button" class="wr-menu-row" data-wr-action="${e(action)}" data-wr-key="${e(key)}" aria-pressed="${selected}"><span><strong>${e(title)}</strong>${detail ? `<small>${e(detail)}</small>` : ''}</span>${selected ? '<span class="wr-selected-label">已选</span>' : ''}</button>`;
+            const row = (action, key, title, detail, selected) => `<button type="button" class="wr-menu-row" data-wr-action="${e(action)}" data-wr-key="${e(key)}" aria-pressed="${selected}"${follow ? ' disabled' : ''}><span><strong>${e(title)}</strong>${detail ? `<small>${e(detail)}</small>` : ''}</span>${selected ? '<span class="wr-selected-label">已选</span>' : ''}</button>`;
             dialog.innerHTML = `<div class="wr-dialog-head"><h3>助手房间</h3><button type="button" class="wr-link" data-wr-action="close">关闭</button></div>
-                <div class="wr-menu-content">${row('all', '', '所有房间', `${rooms.length} 个浏览器房间`, view.mode === 'all')}
-                ${row('current', main?.roomKey || '', '当前控制房间', main ? roomLabel(getMainContext()) : '尚未登录', view.mode === 'current' || view.mode === 'room' && view.roomKey === main?.roomKey)}
+                <div class="wr-menu-content">${row('all', '', '所有房间', `${rooms.length} 个${follow ? '共享' : '浏览器'}房间`, view.mode === 'all')}
+                ${row('current', mainKey || '', '当前控制房间', confirmedMain && currentMain ? roomLabel(currentMain) : follow ? '实际登录待确认' : '尚未登录', view.mode === 'current' || view.mode === 'room' && view.roomKey === mainKey)}
                 ${rooms.filter(p => !p.isMain).map(p => `<div class="wr-menu-room">${row('room', p.roomKey, roomCaption(p), p.serverUrl, view.mode === 'room' && view.roomKey === p.roomKey)}<span class="wr-room-status" data-wr-status="${e(p.roomKey)}"></span></div>`).join('')}
-                ${row('orchestration', '', '任务编排', '本人授权的执行端档案', view.mode === 'orchestration')}
+                ${row('orchestration', '', '任务编排', follow ? '仅共享档案元数据' : '本人授权的执行端档案', view.mode === 'orchestration')}
+                ${options.followPanel ? '<section data-wr-follow-panel class="wr-follow-panel"></section>' : ''}
                 <p class="wr-muted wr-menu-copy-result" role="status"></p></div>
                 <div class="wr-dialog-actions wr-menu-actions"><button type="button" class="wr-action" data-wr-action="copy">复制房间号</button><button type="button" class="wr-action" data-wr-action="manage">管理房间</button><button type="button" class="wr-action" data-wr-action="switch">切换控制房间</button></div>`;
             dialog.querySelectorAll('[data-wr-action]').forEach(b => b.onclick = () => menuAction(b.dataset.wrAction, b.dataset.wrKey));
             if (focusKey) [...dialog.querySelectorAll('[data-wr-action]')].find(b => b.dataset.wrAction === focusKey)?.focus();
         }
         for (const el of dialog.querySelectorAll('[data-wr-status]')) setStatus(el, rooms.find(p => p.roomKey === el.dataset.wrStatus));
-        dialog.querySelector('[data-wr-action="copy"]').disabled = !(view.mode === 'room' ? getContext(view.roomKey) : getMainContext());
-        dialog.querySelector('[data-wr-action="switch"]').disabled = !options.onSwitchMain || !rooms.some(p => !p.isMain);
-        dialog.querySelector('[data-wr-action="orchestration"]').disabled = !options.onOrchestration;
+        dialog.querySelector('[data-wr-action="copy"]').disabled = !(view.mode === 'room' ? getContext(view.roomKey) : confirmedMain && currentMain);
+        dialog.querySelector('[data-wr-action="manage"]').disabled = !!follow;
+        dialog.querySelector('[data-wr-action="switch"]').disabled = !!follow || !options.onSwitchMain || !rooms.some(p => !p.isMain);
+        dialog.querySelector('[data-wr-action="orchestration"]').disabled = !!follow || !options.onOrchestration;
+        options.followPanel?.(dialog.querySelector('[data-wr-follow-panel]'));
     }
     function setStatus(el, p) {
         if (!el || !p) return;
@@ -806,6 +899,7 @@
         return event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom;
     }
     async function menuAction(action, key) {
+        const view = visibleView();
         if (action === 'close') { closeMenu(); return; }
         if (action === 'copy') {
             const p = view.mode === 'room' ? getContext(view.roomKey) : getMainContext(); if (!p) return;
@@ -813,12 +907,14 @@
             catch { root.prompt('复制房间号', p.roomCode); }
             return;
         }
+        if (follow) return;
         if (action === 'manage' || action === 'switch') { closeMenu(false); action === 'manage' ? openManager() : openSwitch(key); return; }
         closeMenu();
         setView(action, key);
         if (action === 'orchestration') options.onOrchestration?.();
     }
     function openManager(initialKey = main?.roomKey || '') {
+        if (follow) { if (!menu?.isConnected) openMenu(); return; }
         if (manager?.dialog.isConnected) return;
         active = true; syncSessions();
         const opener = selector?.querySelector('button') || document.activeElement;
@@ -906,7 +1002,7 @@
         if (retry) retry.onclick = () => { if (state.dirty) { managerMessage(state, '请先保存或取消修改。', true); return; } if (reconnect(state.selected)) managerMessage(state, '正在重新认证，未重发任何命令。'); };
     }
     function openSwitch(key = '') {
-        if (switchDialog?.isConnected || !options.onSwitchMain) return;
+        if (follow || switchDialog?.isConnected || !options.onSwitchMain) return;
         const rooms = [...profiles.values()].filter(p => p.roomKey !== main?.roomKey), opener = selector?.querySelector('button') || document.activeElement;
         if (!rooms.length) return;
         const dialog = makeDialog('wr-switch', '切换网页控制房间'); switchDialog = dialog;
@@ -932,7 +1028,7 @@
         };
         fill(); showDialog(dialog);
     }
-    function setActive(value) { active = !!value; syncSessions(); notify(); }
+    function setActive(value) { if (!follow) active = !!value; syncSessions(); notify(); }
     function pagehide() { suspended = true; syncSessions(); }
     function pageshow() { if (suspended) { suspended = false; mainChanged(); syncSessions(); notify(); } }
     function init(adapter = {}) {
@@ -950,10 +1046,11 @@
         root.removeEventListener?.('resize', placeSelector); placeSelector = null;
         if (selector) document.querySelector('#gengdiNav')?.classList.remove('wr-nav');
         selector?.remove(); notice?.remove(); selector = null; notice = null;
-        profiles.clear(); ownerRoomNames.clear(); main = null; options = {}; switchingKey = '';
+        profiles.clear(); ownerRoomNames.clear(); main = null; follow = null; options = {}; switchingKey = '';
     }
     root.webRooms = { init, dispose, mount, normalizeServer, roomKey, validateMainLogin, getLogin,
         mainChanged, getMainContext, getContext, listProfiles, getView, setView, getViewNotice, getDisplayedMembers,
         getKnownInstances, sourceFor, getMember, requireSource, sendRemoteCommand, invoke, setActive, reconnect,
-        saveProfile, removeProfile, requestSwitch, openManager, openSwitch, setOwnerRoomNames };
+        saveProfile, removeProfile, requestSwitch, openManager, openSwitch, setOwnerRoomNames,
+        canBeginFollow, beginFollow, setFollowSnapshot, endFollow, isFollowing, refreshUi };
 })();

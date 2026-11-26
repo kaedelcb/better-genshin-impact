@@ -50,6 +50,7 @@ function dodocoScreenAllowed() {
 }
 
 function showProduct(name) {
+    if (globalThis.window?.webRooms?.isFollowing?.()) name = 'gengdi';
     const mistletoe = name === 'mistletoe' && !!d('mistletoeView');
     dodoco.active = name === 'dodoco';
     dodocoScreenSync();
@@ -69,6 +70,7 @@ function showProduct(name) {
 function dodocoIsLocal(uid = dodoco.target) { return !!globalThis.window?.bgiLocalBridge?.usesLocal(uid); }
 function dodocoMembersList() { return globalThis.window?.bgiLocalBridge ? window.bgiLocalBridge.members(players) : players; }
 function dodocoTargetReady(uid = dodoco.target) {
+    if (globalThis.window?.webRooms?.isFollowing?.()) return false;
     return dodocoIsLocal(uid) ? !!window.bgiLocalBridge?.available : !!roomReady && players.some(p => p.playerUid === uid && p.online === true);
 }
 function dodocoStatus(text) { if(dodoco.active && dodoco.tab==='screen' && dodoco.screenVisit?.expired)text=dodocoScreenExpiredText; const el = d('dodocoStatus'); if (el) el.textContent = (globalThis.window?.bgiLocalBridge && dodoco.target ? (dodoco.target==='*' ? '本机与服务器 · ' : dodocoIsLocal() ? (window.bgiLocalBridge.available?'本机直连 · ':'本机连接未就绪 · ') : '服务器中转 · ') : '') + (dodoco.uncertain ? '先前请求因断线结果未确认。' : '') + text; }
@@ -86,6 +88,9 @@ function dodocoReady() {
     return true;
 }
 async function dodocoDispatch(name, payload, transport=connection) {
+    // 退出前一监控页的取消/结束仍按其冻结的原连接清理，不把新请求送入跟随房间。
+    const cleanup = arguments.length >= 3 && (name === 'desktop.control.cancel' || name === 'desktop.control.presence' && payload?.presence?.action === 'end');
+    if (globalThis.window?.webRooms?.isFollowing?.() && !cleanup) throw new Error('请关闭房间跟随后操作。');
     try {
         const response = await transport.invoke('Dispatch', makeEnvelope('command', name, { roomCode, ...payload }));
         checkGatewayError(response);

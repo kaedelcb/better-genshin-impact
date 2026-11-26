@@ -133,6 +133,7 @@
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-owner.css" LogicalName="LocalBrowser/control-room-owner.css" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-orchestration.js" LogicalName="LocalBrowser/control-room-orchestration.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-orchestration.css" LogicalName="LocalBrowser/control-room-orchestration.css" />
+    <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-follow.js" LogicalName="LocalBrowser/control-room-follow.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\control-room-integration.js" LogicalName="LocalBrowser/control-room-integration.js" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\project-star.css" LogicalName="LocalBrowser/project-star.css" />
     <EmbeddedResource Include="..\BgiCoordinatorServer\wwwroot\dodoco-web.js" LogicalName="LocalBrowser/dodoco-web.js" />

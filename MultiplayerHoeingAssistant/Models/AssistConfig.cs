@@ -6,6 +6,10 @@ namespace MultiplayerHoeingAssistant.Models;
 
 public class AssistConfig : IJsonOnDeserialized
 {
+    // A monitor's follow view and a retired pre-follow runtime object are never saved.
+    [JsonIgnore]
+    internal bool IsRoomFollowProjection { get; set; }
+
     // 供现有连接、重连和状态订阅使用的当前房间地址；未设置房间时是新建档案的默认地址。
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = "http://localhost:5000";

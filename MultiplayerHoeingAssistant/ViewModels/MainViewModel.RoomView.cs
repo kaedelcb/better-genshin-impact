@@ -55,7 +55,7 @@ public partial class MainViewModel
         && !IsViewingActiveRoom;
 
     /// <summary>底部快捷指令是否允许对当前视图执行（其他房间或编排页不执行批量快捷指令）。</summary>
-    public bool CanOperateDisplayedRoom => !IsShowingRoomOrchestration && !IsViewingReadOnlyRoom;
+    public bool CanOperateDisplayedRoom => !IsRoomFollowing && !_roomFollowRestoring && !IsShowingRoomOrchestration && !IsViewingReadOnlyRoom;
     public bool IsDisplayingAllRoomsView => !IsShowingRoomOrchestration && IsViewingAllRooms;
     public bool IsHeaderViewingReadOnlyRoom => !IsShowingRoomOrchestration && IsViewingReadOnlyRoom;
 
@@ -79,14 +79,17 @@ public partial class MainViewModel
         ? $"{rooms.Count} 个房间"
         : "暂无房间";
 
-    public string RoomViewNoticeText => string.Join("\n", new[] { RoomViewPreferenceMessage, RoomConnectionsNoticeText }
-        .Where(text => !string.IsNullOrWhiteSpace(text)));
+    public string RoomViewNoticeText => IsRoomFollowing ? RoomFollowNoticeText
+        : string.Join("\n", new[] { RoomViewPreferenceMessage, RoomConnectionsNoticeText }
+            .Where(text => !string.IsNullOrWhiteSpace(text)));
 
     private string RoomConnectionsNoticeText
     {
         get
         {
-            if (_config?.RoomProfiles is not { Count: > 0 }) return "";
+            // Following has an independent ordinary-observer pool and reports its authentication
+            // and connection states in RoomFollowNoticeText, not the regular web spectator pool.
+            if (IsRoomFollowing || _config?.RoomProfiles is not { Count: > 0 }) return "";
             if (IsViewingReadOnlyRoom && ViewedRoomProfile is { } target)
             {
                 if (IsStandaloneMode) return $"当前为单机模式，无法实时查看或远控「{target.Name}」。";
@@ -137,6 +140,7 @@ public partial class MainViewModel
     /// <summary>切换耕地机当前查看的房间视图（不改变当前登录房间），并持久化记忆。</summary>
     internal void SelectViewedRoom(string? targetId, bool persist = true)
     {
+        if (IsRoomFollowing) return;
         var normalized = string.IsNullOrWhiteSpace(targetId)
             || string.Equals(targetId, AssistConfig.AllRoomsViewId, StringComparison.Ordinal)
             || _config?.RoomProfiles.Any(p => string.Equals(p.Id, targetId, StringComparison.Ordinal)) != true
@@ -170,6 +174,7 @@ public partial class MainViewModel
     /// <summary>按当前视图模式与房间档案列表协调只读旁观连接：仅连接需要查看的非登录房间。</summary>
     internal void SyncRoomViewSessions()
     {
+        if (IsRoomFollowing) { SyncFollowRoomSessions(); return; }
         var desired = new Dictionary<string, (AssistantRoomProfile Profile, string ServerUrl)>(StringComparer.Ordinal);
         if (!_disposing && !IsStandaloneMode && _config is { RoomProfiles.Count: > 0 } config
             && (_configManager is not null || RoomSpectatorFactory is not null))
@@ -238,7 +243,7 @@ public partial class MainViewModel
 
     internal void RefreshRoomSpectators()
     {
-        if (_disposing || IsStandaloneMode) return;
+        if (_disposing || IsStandaloneMode || IsRoomFollowing) return;
         SyncRoomViewSessions();
         foreach (var session in _roomSpectators.Values.ToList())
         {
@@ -310,7 +315,7 @@ public partial class MainViewModel
                 member.SourceRoomProfileId = activeId;
                 member.RoomLabel = activeName;
                 member.IsActiveRoomMember = true;
-                member.IsReadOnlyView = false;
+                member.IsReadOnlyView = IsRoomFollowing;
                 member.ShowRoomLabel = false;
             }
             desired = [.. Members];
@@ -343,7 +348,7 @@ public partial class MainViewModel
                         member.SourceRoomProfileId = profile.Id;
                         member.RoomLabel = profile.Name;
                         member.IsActiveRoomMember = true;
-                        member.IsReadOnlyView = false;
+                        member.IsReadOnlyView = IsRoomFollowing;
                         member.ShowRoomLabel = true;
                     }
                     roomMembers = Members;
@@ -381,8 +386,13 @@ public partial class MainViewModel
 
     private List<MemberViewModel> BuildSpectatorMembersForProfile(AssistantRoomProfile profile, bool showRoomLabel)
     {
-        if (!_roomSpectators.TryGetValue(profile.Id, out var session)) return [];
-        var snapshot = session.GetPlayersSnapshot();
+        IReadOnlyList<ControlRoomPlayer> snapshot;
+        if (IsRoomFollowing) snapshot = GetFollowRoomPlayers(profile.Id);
+        else
+        {
+            if (!_roomSpectators.TryGetValue(profile.Id, out var session)) return [];
+            snapshot = session.GetPlayersSnapshot();
+        }
         var result = new List<MemberViewModel>(snapshot.Count);
         var aliveUids = new HashSet<string>(StringComparer.Ordinal);
 

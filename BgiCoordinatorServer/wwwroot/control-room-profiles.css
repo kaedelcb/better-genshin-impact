@@ -47,6 +47,11 @@
 .wr-menu-actions{justify-content:stretch}
 .wr-menu-actions .wr-action{flex:1 1 auto;padding-inline:8px}
 .wr-menu-copy-result:empty{display:none}
+.wr-follow-panel{border-top:1px solid var(--line);display:grid;gap:8px;padding:10px 12px 4px}
+.wr-follow-panel .wr-check{display:flex;align-items:center;gap:9px;min-height:44px;font-size:14px}
+.wr-follow-panel .wr-follow-input{display:grid;gap:5px;color:var(--muted);font-size:13px}
+.wr-follow-panel input[type=password]{font:inherit;font-size:16px;width:100%;min-height:44px;min-width:0;border:1px solid #56556c;border-radius:8px;background:#181a2d;color:var(--text);padding:9px 11px}
+.wr-follow-panel [data-follow-identity]{overflow-wrap:anywhere;color:var(--gold)}
 
 /* Room manager: list + editor on wide screens, single-step list/editor on narrow screens. */
 .wr-manager{width:min(860px,calc(100% - 32px))}

@@ -87,6 +87,7 @@ function mtTargets() {
     return list;
 }
 function mtTargetReady(target = mt.target) {
+    if (globalThis.window?.webRooms?.isFollowing?.()) return false;
     if (!target) return false;
     if (target.local) return !!window.bgiLocalBridge?.available;
     if (target.source && window.webRooms) {

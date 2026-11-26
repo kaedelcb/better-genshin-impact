@@ -97,6 +97,7 @@ function checkGatewayError(resp) {
 }
 // session.hello 握手（§4.4 DAP 时序：连接后第一条消息必须是 hello，否则一律 handshake_required）
 async function sayHello(ownConnection = connection) {
+    const generation = typeof webMainGeneration === 'undefined' ? null : webMainGeneration;
     const resp = await ownConnection.invoke('Query', makeEnvelope('query', 'session.hello', {
         clientKind: 'web',
         clientVersion: WEB_CLIENT_VERSION,
@@ -104,7 +105,7 @@ async function sayHello(ownConnection = connection) {
         capabilities: ['hoeing.start.v2', 'hoeing.completionChoice.v1', 'hoeing.quickCommandCompletion.v1']
     }));
     checkGatewayError(resp);
-    if (connection !== ownConnection) throw new Error('控制房间连接已变化');
+    if (connection !== ownConnection || generation !== null && webMainGeneration !== generation) throw new Error('控制房间连接已变化');
     serverCapabilities = resp?.payload?.capabilities || [];
 }
 // 主房间仍走原控制端身份及昵称认证；明确 requireReady:false 只是请求已有业务确认/全量快照。
@@ -130,7 +131,7 @@ async function joinControlRoom(ownConnection = connection) {
     requireOwnConnection();
     checkGatewayError(resp);
     if (joinRejection || resp?.payload?.success === false)
-        throw new Error(joinRejection || resp.payload.reason || '加入被拒绝');
+        throw Object.assign(new Error(joinRejection || resp.payload.reason || '加入被拒绝'), { roomAuthenticationRejected: true });
     if (webMemberRooms() && typeof webMainSnapshotGeneration !== 'undefined') {
         if (resp?.payload?.success !== true && resp?.payload?.ack !== true) throw new Error('加入控制房间结果未确认');
         if (resp?.payload?.playersUpdate?.full === true) onPlayersUpdated(resp.payload.playersUpdate);
@@ -147,6 +148,7 @@ async function joinControlRoom(ownConnection = connection) {
 }
 // control.sendCommand（旧 SendRemoteCommand；cmd 本体由 makeCmd 生成，逐字不动）
 function sendRemoteCommand(cmd) {
+    if (webMemberRooms()?.isFollowing?.()) return Promise.reject(new Error('房间跟随仅供监视，请关闭跟随后操作。'));
     return connection.invoke('Dispatch', makeEnvelope('command', 'control.sendCommand', { command: cmd }))
         .then(checkGatewayError);
 }
@@ -160,6 +162,7 @@ function mainMemberContext() {
 }
 function mainMemberRoomKey() { return mainMemberContext()?.roomKey || null; }
 function mainBulkViewAllowed() {
+    if (webMemberRooms()?.isFollowing?.()) return false;
     const view = webMemberRooms()?.getView();
     return !view || view.mode === 'current' || view.mode === 'all'
         || view.mode === 'room' && view.roomKey === mainMemberRoomKey();
@@ -170,6 +173,7 @@ function captureMainMemberScope() {
     return Object.freeze({ roomKey: context?.roomKey, generation: context?.generation, connection });
 }
 function requireMainMemberScope(scope, bulkView = true) {
+    if (webMemberRooms()?.isFollowing?.()) throw new Error('房间跟随仅供监视，请关闭跟随后操作。');
     if (!scope && !webMemberRooms()) return; // 旧单房入口
     const context = mainMemberContext();
     if (!scope || !roomReady || !context?.ready || (bulkView && !mainBulkViewAllowed())
@@ -222,6 +226,7 @@ function readMemberEntry(uid, source = undefined) {
     } catch { return null; }
 }
 function requireMemberTarget(uid, source = undefined, online = true) {
+    if (webMemberRooms()?.isFollowing?.()) throw new Error('房间跟随仅供监视，请关闭跟随后操作。');
     const frozen = freezeMemberSource(uid, source);
     if (frozen) return resolveMemberEntry(uid, frozen, online, true);
     const entry = legacyMemberEntry(uid, players.find(p => p.playerUid === uid && (!online || p.online === true)) || null);
@@ -522,44 +527,73 @@ function showResetStateModal(uid, memberName, source = undefined) {
     }
 })();
 // ---------- 加入房间（无服务器地址输入，同源 /gateway） ----------
-function joinRoom(explicitServerUrl) {
-    if (joiningRoom || roomReady) return;
-    roomCode = document.getElementById('roomCode').value.trim();
-    password = document.getElementById('password').value.trim();
-    playerName = document.getElementById('nickname').value.trim() || '网页端';
+function joinRoom(explicitServerUrl, transition = null) {
+    if (joiningRoom || roomReady || window.webRooms?.isFollowing?.() && !transition) return false;
+    const temporaryLogin = transition?.credentials;
+    roomCode = (temporaryLogin ? temporaryLogin.roomCode : document.getElementById('roomCode').value).trim();
+    password = (temporaryLogin ? temporaryLogin.password : document.getElementById('password').value).trim();
+    playerName = (temporaryLogin ? temporaryLogin.nickname || '' : document.getElementById('nickname').value).trim() || '网页端';
 
     if (!roomCode || !password) {
         showError('请输入房间码和密码');
-        return;
+        return false;
     }
 
     joiningRoom = true;
     document.getElementById('joinButton').disabled = true;
     showError('');
-    // 记住登录
-    const remember = document.getElementById('rememberMe').checked;
+    // 临时跟随/恢复使用相同网页登录，但不写 legacy 记住登录或浏览器房间簿。
+    const remember = temporaryLogin ? temporaryLogin.remember : document.getElementById('rememberMe').checked;
     const attemptedPassword = password;
-    let gatewayAddress = '/gateway';
-    if (window.bgiLocalBridge) {
-        try { gatewayAddress = window.bgiLocalBridge.gatewayUrl(); }
-        catch (err) { showError(err.message); joiningRoom = false; document.getElementById('joinButton').disabled = false; return; }
-    }
-    if(typeof explicitServerUrl==='string'&&explicitServerUrl.trim()){
-        try{const url=new URL(explicitServerUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)throw new Error('服务器地址无效');gatewayAddress=url.href.replace(/\/+$/,'')+'/gateway';}
-        catch(err){showError(err.message);joiningRoom=false;document.getElementById('joinButton').disabled=false;return;}
-    }
+    let gatewayAddress = '/gateway', actualServer = '';
+    try {
+        if(typeof explicitServerUrl==='string'&&explicitServerUrl.trim()){
+            const url=new URL(explicitServerUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password||url.search||url.hash)throw new Error('服务器地址无效');gatewayAddress=url.href.replace(/\/+$/,'')+'/gateway';
+        } else if (window.bgiLocalBridge) gatewayAddress = window.bgiLocalBridge.gatewayUrl();
+        actualServer = typeof location!=='undefined' ? new URL(gatewayAddress,location.href).href.replace(/\/gateway\/?$/i,'') : '';
+        window.webRooms?.validateMainLogin?.(actualServer, roomCode, !!transition);
+    } catch (err) { showError(transition ? '原房间登录地址或本浏览器凭据未确认' : err.message); joiningRoom=false; document.getElementById('joinButton').disabled=false; transition?.onState?.('failed'); return false; }
     const gatewayBuilder = new signalR.HubConnectionBuilder();
-    const actualServer = typeof location!=='undefined' ? new URL(gatewayAddress,location.href).href.replace(/\/gateway\/?$/i,'') : '';
-    if(window.webRooms?.validateMainLogin){try{window.webRooms.validateMainLogin(actualServer,roomCode);}catch(err){showError(err.message);joiningRoom=false;document.getElementById('joinButton').disabled=false;return;}}
     const useDirect = !!window.bgiLocalBridge || (typeof location!=='undefined'&&new URL(gatewayAddress,location.href).origin!==location.origin);
     connection = (useDirect ? gatewayBuilder.withUrl(gatewayAddress, { withCredentials: false }) : gatewayBuilder.withUrl(gatewayAddress))
         .withAutomaticReconnect([0, 2000, 10000, 30000]).build();
     const ownConnection = connection;
+    const current = () => connection === ownConnection;
+    const state = value => { if (current()) transition?.onState?.(value); };
+    const failJoin = err => {
+        if (!current()) return;
+        const reason = transition ? (err.roomAuthenticationRejected ? '原有房间鉴权未通过，请使用普通登录核对凭据。' : '房间连接或成员快照未确认。') : err.message;
+        showError('连接失败: ' + reason); log('连接失败: ' + reason);
+        setConn(false); state(err.roomAuthenticationRejected ? 'rejected' : 'failed');
+        if (current()) void ownConnection.stop().catch(() => {});
+    };
     if(typeof webMainGeneration!=='undefined'){webMainGeneration++;webMainServerUrl=actualServer;}
+    state('connecting');
+    const generation = () => typeof webMainGeneration === 'undefined' ? null : webMainGeneration;
+    const initialGeneration = generation();
+    const currentAttempt = epoch => current() && generation() === epoch;
+    let confirmedOnce = false;
+    function acceptJoin(reconnected = false) {
+        if(!current()) return false;
+        // 一次真实入房事务只保存一次普通登录。跟随与恢复的临时事务始终不写原存储。
+        if(!confirmedOnce&&!transition) {
+            if(remember)saveCreds({roomCode,password:attemptedPassword,nickname:playerName,serverUrl:actualServer});else clearCreds();
+        }
+        setConn(true);
+        if(!confirmedOnce&&!transition)window.webRooms?.mainChanged({remember,password:attemptedPassword});
+        confirmedOnce=true;
+        if(typeof webRememberMainLogin==='function')webRememberMainLogin(ownConnection, remember);
+        document.getElementById('loginPanel').style.display='none';document.getElementById('controlPanel').style.display='block';
+        document.getElementById('roomInfo').textContent=`房间 ${roomCode}`;
+        joiningRoom=false;document.getElementById('joinButton').disabled=false;
+        log(reconnected?'已重新加入房间，未自动重发任何命令':`已加入控制房间：${roomCode}（${playerName}）`);
+        renderMembers();state('ready');return true;
+    }
 
     // evt 单订阅：服务端广播统一回调（§4.2），按 name 分发；未知 name 静默忽略
     connection.on('evt', env => {
-        if (connection !== ownConnection || !env || typeof env !== 'object') return;
+        if (!current() || !env || typeof env !== 'object') return;
+        if (transition?.following && !['control.playersUpdated', 'control.joinRejected'].includes(env.name)) return;
         const payload = env.payload;
         if (typeof dodocoEvent === 'function') dodocoEvent(env);
         if (typeof mtEvent === 'function') mtEvent(env);
@@ -595,9 +629,9 @@ function joinRoom(explicitServerUrl) {
                 break;
             case 'control.joinRejected': {
                 const reason = (payload && payload.reason) || '加入被拒绝';
-                joinRejection = reason;
-                showError(reason);
-                log('加入失败: ' + reason);
+                joinRejection = transition ? '原有房间鉴权未通过' : reason;
+                showError(joinRejection);
+                log('加入失败: ' + joinRejection);
                 break;
             }
         }
@@ -609,40 +643,43 @@ function joinRoom(explicitServerUrl) {
         if(typeof mtCancelRoomPending==='function')mtCancelRoomPending(null,'控制房间连接中断，结果待核对。');
         interruptStateResetWaits();
         interruptMemberWaits();
-        setConn(false);
+        setConn(false); state('reconnecting');
         log('连接断开，重连中...');
     });
     connection.onreconnected(() => {
-        if(connection!==ownConnection)return;
-        sayHello(ownConnection).then(() => joinControlRoom(ownConnection)).then(() => {
-            if(connection!==ownConnection)return;
-            setConn(true);
-            log('已重新加入房间，未自动重发任何命令');
-        }).catch(err => { if (connection === ownConnection) { setConn(false); log('重连后重新入房失败: ' + err.message); } });
+        if(!current())return;
+        const epoch=generation();
+        joiningRoom=true;document.getElementById('joinButton').disabled=true;state('connecting');
+        const reconnect=sayHello(ownConnection).then(() => {
+            if(!currentAttempt(epoch))throw new Error('原入房代次已失效');
+            return joinControlRoom(ownConnection);
+        });
+        let deadline;
+        const attempt=transition?.following?Promise.race([reconnect,new Promise((_,reject)=>{deadline=setTimeout(()=>reject(new Error('重新入房超时')),25000);})]):reconnect;
+        attempt.then(() => {
+            if(currentAttempt(epoch))acceptJoin(true);
+        }).catch(err => {
+            if (!currentAttempt(epoch)) return;
+            if (transition?.following && window.webRooms?.isFollowing?.()) failJoin(err);
+            else { setConn(false); log('重连后重新入房失败: ' + err.message); }
+        }).finally(()=>{clearTimeout(deadline);if(currentAttempt(epoch)){joiningRoom=false;document.getElementById('joinButton').disabled=false;}});
     });
-    connection.onclose(() => { if(connection!==ownConnection)return; if(typeof webMainGeneration!=='undefined')webMainGeneration++;setConn(false); interruptStateResetWaits(); interruptMemberWaits();if(typeof mtCancelRoomPending==='function')mtCancelRoomPending(null,'控制房间断开，结果未确认。'); });
+    connection.onclose(() => { if(!current())return; if(typeof webMainGeneration!=='undefined')webMainGeneration++;setConn(false); interruptStateResetWaits(); interruptMemberWaits();if(typeof mtCancelRoomPending==='function')mtCancelRoomPending(null,'控制房间断开，结果未确认。');joiningRoom=false;document.getElementById('joinButton').disabled=false;state('closed'); });
 
-    return ownConnection.start()
-        .then(() => sayHello(ownConnection))
-        .then(() => joinControlRoom(ownConnection))
+    const starting = ownConnection.start();
+    return starting
         .then(() => {
-            if(connection!==ownConnection)return;
-            if(remember)saveCreds({roomCode,password:attemptedPassword,nickname:playerName,serverUrl:actualServer});else clearCreds();
-            setConn(true);
-            window.webRooms?.mainChanged({remember,password:attemptedPassword});
-            document.getElementById('loginPanel').style.display = 'none';
-            document.getElementById('controlPanel').style.display = 'block';
-            document.getElementById('roomInfo').textContent = `房间 ${roomCode}`;
-            log(`已加入控制房间：${roomCode}（${playerName}）`);
-            renderMembers();
+            if (!current()) { void ownConnection.stop().catch(() => {}); throw new Error('控制房间连接已变化'); }
+            if (!currentAttempt(initialGeneration)) throw new Error('原入房代次已失效');
+            return sayHello(ownConnection);
         })
-        .catch(err => {
-            if(connection!==ownConnection)return;
-            showError('连接失败: ' + err.message);
-            log('连接失败: ' + err.message);
-            setConn(false);
-            ownConnection.stop().catch(() => {});
-        }).finally(() => { if(connection===ownConnection){joiningRoom = false; document.getElementById('joinButton').disabled = false;} });
+        .then(() => {
+            if(!currentAttempt(initialGeneration))throw new Error('原入房代次已失效');
+            return joinControlRoom(ownConnection);
+        })
+        .then(() => currentAttempt(initialGeneration) && acceptJoin())
+        .catch(err => { if(currentAttempt(initialGeneration))failJoin(err); return false; })
+        .finally(() => { if(currentAttempt(initialGeneration)){joiningRoom = false; document.getElementById('joinButton').disabled = false;} });
 }
 
 function setConn(online) {
@@ -650,8 +687,8 @@ function setConn(online) {
     if (typeof dodocoConnection === 'function') dodocoConnection(online);
     if (typeof mtConnection === 'function') mtConnection(online);
     document.getElementById('connectionText').textContent = online ? '连接正常' : '连接未就绪';
-    if (typeof renderControlRoom === 'function') renderControlRoom();
     window.webRooms?.mainChanged();
+    if (typeof renderControlRoom === 'function') renderControlRoom();
     const dot = document.getElementById('connDot');
     dot.className = 'dot ' + (online ? 'dot-online' : 'dot-offline');
     if (window.bgiLocalBridge) window.bgiLocalBridge.networkChanged(online);

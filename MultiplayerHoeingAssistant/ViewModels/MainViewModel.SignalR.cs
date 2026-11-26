@@ -55,7 +55,7 @@ public partial class MainViewModel
 
     private bool ApplySavedAssistantSettings(AssistConfig config)
     {
-        if (_config is null || _configManager is null) return false;
+        if (IsRoomFollowing || _config is null || _configManager is null) return false;
         if (ValidateSettingsConnectionChange(config) is { Length: > 0 } blocked)
         {
             AddLog(blocked);
@@ -305,15 +305,25 @@ public partial class MainViewModel
         {
             lock (_batchGate) return _activeBatch?.RemainingRunningControlBudget;
         };
-        client.ControlConnectionLost += () => _controlAuthority.Revoke(client);
+        client.ControlConnectionLost += () =>
+        {
+            _controlAuthority.Revoke(client);
+            if (ReferenceEquals(_signalRClient, client)) PublishRoomFollowSnapshot();
+        };
         WireSignalRClient(client);
         // 连接状态变化（断开/重连）同步到 IsConnected → 标题栏连接徽章实时刷新
         client.OnConnectionStateChanged += connected =>
         {
             // 旧客户端在刷新/自愈换代后仍可能迟到回调；它无权覆盖新客户端的在线状态。
-            if (!ReferenceEquals(_signalRClient, client))
+            if (!ReferenceEquals(_signalRClient, client) || IsRoomFollowing)
                 return;
-            Application.Current.Dispatcher.Invoke(() => IsConnected = connected);
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (!ReferenceEquals(_signalRClient, client) || IsRoomFollowing) return;
+                IsConnected = connected;
+                PublishRoomFollowSnapshot();
+            });
+            if (!ReferenceEquals(_signalRClient, client) || IsRoomFollowing) return;
             if (connected)
             {
                 StopSignalRRecovery();
@@ -348,7 +358,7 @@ public partial class MainViewModel
         await _connectionAttemptGate.WaitAsync(cancellationToken);
         try
         {
-            if (RoomSwitchBlocksRoomOperations || client.ControlContext != CurrentControlContext() || IsStandaloneMode)
+            if (_disposing || IsRoomFollowing || RoomSwitchBlocksRoomOperations || client.ControlContext != CurrentControlContext() || IsStandaloneMode)
                 throw new OperationCanceledException("连接参数已变化", cancellationToken);
             _pendingControlClient = client;
             await client.ConnectAsync(
@@ -356,7 +366,7 @@ public partial class MainViewModel
                 _config.PlayerUid, _config.PlayerName, _config.TeamUids, _config.ObserverMode, _config.ClientInstanceId,
                 _config.BypassSystemProxy, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (RoomSwitchBlocksRoomOperations || IsStandaloneMode || client.ControlContext != CurrentControlContext())
+            if (_disposing || IsRoomFollowing || RoomSwitchBlocksRoomOperations || IsStandaloneMode || client.ControlContext != CurrentControlContext())
                 throw new OperationCanceledException("连接完成时原房间身份已撤销", cancellationToken);
             await AdoptConnectedSignalRClientAsync(client, message, fireRefreshCompleted, cancellationToken);
         }
@@ -388,7 +398,7 @@ public partial class MainViewModel
         // _signalRClient 未被污染，调用方 finally 会正确销毁这个半成品客户端
         using (await _controlAuthority.EnterAsync(ct))
         {
-        if (!client.IsControlRoomReady || client.ControlContext != CurrentControlContext())
+        if (_disposing || IsRoomFollowing || !client.IsControlRoomReady || client.ControlContext != CurrentControlContext())
             throw new ControlChannelUnavailableException("接管时连接已失效");
         PublishCoordinatedResetFenceRoom(client);
         _signalRClient = client;
@@ -397,7 +407,9 @@ public partial class MainViewModel
         // Never run callbacks, queries, or disposal while holding the transition gate.
         Application.Current.Dispatcher.Invoke(() =>
         {
+            if (!ReferenceEquals(_signalRClient, client) || IsRoomFollowing) return;
             IsConnected = true;
+            PublishRoomFollowSnapshot();
             AddLog(logMessage);
             if (fireRefreshCompleted) RefreshCompleted?.Invoke();
         });
@@ -416,6 +428,7 @@ public partial class MainViewModel
     /// </summary>
     private void StartSignalRRetryTimer(bool fireRefreshCompletedOnSuccess)
     {
+        if (_disposing || IsRoomFollowing) return;
         _retryTimer?.Dispose();
         _retryTimer = new Timer(async _ =>
         {
@@ -471,7 +484,7 @@ public partial class MainViewModel
 
     private async Task ConnectSignalRAsync()
     {
-        if (RoomSwitchBlocksRoomOperations || string.IsNullOrEmpty(RoomCode)) return;
+        if (_disposing || IsRoomFollowing || RoomSwitchBlocksRoomOperations || string.IsNullOrEmpty(RoomCode)) return;
         // 离线优先：手动单机或服务器地址留空 = 单机模式，完全不发起连接（不连接/不重试/不刷失败日志）。
         // 本地状态采集循环独立于本方法运行（InitializeAsync 里已启动），槲寄生等本地功能不受影响。
         if (IsStandaloneMode)
@@ -480,10 +493,11 @@ public partial class MainViewModel
             AddLog("单机模式（手动单机或未填服务器地址）：跳过服务器连接，槲寄生等本地功能不受影响");
             return;
         }
+        SignalRClient? client = null;
         try
         {
             // [F9-2] 连接成功才接管 _signalRClient（原实现连接前就赋值，失败会留下非 null 的死实例）
-            var client = CreateWiredSignalRClient();
+            client = CreateWiredSignalRClient();
             using var connectTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             await ConnectSignalRWithConfigAsync(client, connectTimeout.Token);
             // 连接在飞期间（最长 ~100s）用户切到离线：销毁刚到手的连接，不接管
@@ -498,6 +512,9 @@ public partial class MainViewModel
         }
         catch (Exception ex)
         {
+            if (client is not null)
+                try { await client.DisposeAsync(); } catch { }
+            if (_disposing || IsRoomFollowing) return;
             // 连接在飞时用户切到离线：失败属预期（连接被 Dispose），不再起重试
             if (IsStandaloneMode)
             {
@@ -515,7 +532,7 @@ public partial class MainViewModel
     /// </summary>
     private async Task ToggleStandaloneModeAsync()
     {
-        if (!CanEditConfiguration) { AddLog(ConfigTransferBlockedMessage); return; }
+        if (_configTransferInProgress || _roomFollowBusy) { AddLog(ConfigTransferBlockedMessage); return; }
         if (_config == null || _configManager == null) return;
         if (IsStandaloneMode)
         {
@@ -539,6 +556,8 @@ public partial class MainViewModel
         {
             if (!ShowSwitchConfirmDialog("切换为单机模式",
                 "切换为单机模式后，将断开服务器连接，耕地机、嘟嘟可、槲寄生的联机功能全部不可用（本机功能照常）。是否继续切换？")) return;
+            if (IsRoomFollowing || RoomFollowSharingEnabled) await StopRoomFollowForRoleChangeAsync(revokeSharing: false);
+            if (_disposing || _config is null) return;
             InvalidateCoordinatedControlContext();
             _config.StandaloneMode = true;
             _configManager.Save(_config);

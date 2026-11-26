@@ -31,7 +31,7 @@ public partial class MainViewModel
     {
         lock (_assistantRoomEffectsGate)
         {
-            if (RoomSwitchBlocksRoomOperations) return null;
+            if (RoomSwitchBlocksRoomOperations || IsRoomFollowing || _roomFollowRestoring) return null;
             _assistantRoomEffects++;
             return new AssistantRoomEffect(this);
         }
@@ -88,7 +88,7 @@ public partial class MainViewModel
     }
     public string RoomSwitchStatus => _roomSwitchStatus;
     internal event Action? AssistantRoomChanged;
-    public bool CanUseAssistantRoomMemberActions => !RoomSwitchBlocksRoomOperations;
+    public bool CanUseAssistantRoomMemberActions => !RoomSwitchBlocksRoomOperations && !IsRoomFollowing && !_roomFollowRestoring;
     private bool RoomSwitchBlocksRoomOperations => _changingAssistantRoom || _unconfirmedRoomSwitch is not null || _roomSwitchRecordUnreadable;
     private bool RoomSwitchHasPendingRequest => _assistantRoomSwitchGate.CurrentCount == 0;
 
@@ -127,6 +127,7 @@ public partial class MainViewModel
             _roomSwitchStatus = value;
             OnPropertyChanged(nameof(RoomSwitchStatus));
             OnPropertyChanged(nameof(CanUseAssistantRoomMemberActions));
+            PublishRoomFollowSnapshot();
             System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         });
     }
@@ -150,6 +151,7 @@ public partial class MainViewModel
         NotifyRoomViewProperties();
         SyncRoomViewSessions();
         RebuildDisplayedMembers();
+        PublishRoomFollowSnapshot();
     }
 
     private void LoadAssistantRoomSwitchRecord()
@@ -210,6 +212,7 @@ public partial class MainViewModel
         bool waitForOnlineRound = false, RoomOrchestrationIntent? orchestration = null,
         string? requestIdentity = null, Func<bool>? stillAuthorized = null)
     {
+        if (IsRoomFollowing || _roomFollowRestoring) return new(false, false, RoomFollowReadOnlyMessage);
         if (ct.IsCancellationRequested || stillAuthorized?.Invoke() == false)
             return new(false, false, "切房已取消或原授权已变化，未提交");
         var replaced = orchestration is null && CancelRoomOrchestrationPending("有更新的手动或流程切房请求", revokeOnline: false);

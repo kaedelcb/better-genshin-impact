@@ -151,7 +151,17 @@
         localKey='local_'+bridgeInstance;
         window.bgiLocalBridge={get available(){return available;},execute:call,usesLocal:localTarget,selectTarget,members,gatewayUrl,startLog,stopLog,networkChanged,localIdentity:()=>identity};
         remoteButton=document.createElement('button');remoteButton.type='button';remoteButton.className='icon-button local-connect';remoteButton.textContent='连接远程房间';
-        remoteButton.onclick=async()=>{if(roomReady){try{await connection.stop();setConn(false);}catch(e){dodocoStatus('远程断开未确认：'+e.message);}return;}showRemoteLogin();};
+        remoteButton.onclick=async()=>{
+            if(window.webRooms?.isFollowing?.()||typeof webMainDisconnecting!=='undefined'&&webMainDisconnecting)return;
+            if(roomReady){
+                const old=connection;if(typeof webMainDisconnecting!=='undefined')webMainDisconnecting=true;
+                try{await old.stop();if(connection===old){if(typeof webForgetMainLogin==='function')webForgetMainLogin(old);setConn(false);}}
+                catch(e){dodocoStatus('远程断开未确认：'+e.message);}
+                finally{if(typeof webMainDisconnecting!=='undefined')webMainDisconnecting=false;}
+                return;
+            }
+            showRemoteLogin();
+        };
         document.querySelector('.topbar').appendChild(remoteButton);
         byId('loginPanel').style.display='none';byId('controlPanel').style.display='block';
         byId('roomInfo').textContent='本机助手';byId('connectionText').textContent='本机直连';byId('connDot').className='dot dot-online';
