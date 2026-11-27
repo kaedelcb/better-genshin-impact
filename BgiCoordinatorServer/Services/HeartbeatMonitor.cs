@@ -118,7 +118,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 {
                     lock (room)
                     {
-                        if (!room.HasActiveRouteExecution || room.HasStandbyRoomExecutorInGrace
+                        if (!room.HasActiveRouteExecution || room.BlocksRecoverySensitiveAdvance
                             || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                         if (process.IsCompleted) return; // 双重检查
                         
@@ -175,7 +175,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                 List<PlayerInfo> activePlayers;
                 lock (room)
                 {
-                    if (!room.HasActiveRouteExecution || room.HasStandbyRoomExecutorInGrace
+                    if (!room.HasActiveRouteExecution || room.BlocksRecoverySensitiveAdvance
                             || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                     // 获取活跃玩家（排除异常状态和心跳超时）
                     activePlayers = room.RouteExecutors
@@ -208,7 +208,7 @@ public class HeartbeatMonitor : IHostedService, IDisposable
                     
                     lock (room)
                     {
-                        if (!room.HasActiveRouteExecution || room.HasStandbyRoomExecutorInGrace
+                        if (!room.HasActiveRouteExecution || room.BlocksRecoverySensitiveAdvance
                             || room.RerunExecution?.BlocksLegacyAdvancement == true) continue;
                         _ = _broadcaster.BroadcastGroupAsync(roomCode, "RouteEnforceSync",
                             new { minRoute, reason = "线路偏差检测", deviationInfo },

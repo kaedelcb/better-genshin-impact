@@ -68,7 +68,10 @@ public partial class RoomManager
         var previous = room.Players.FirstOrDefault(p => p.PlayerUid == playerUid);
         if (previous != null)
         {
-            if (previous.ConnectionId == room.HostConnectionId || standbySessionId != room.SessionId
+            // 普通全员跟跑模式也可能协商过 standby；仍按原会话绑定恢复房主。
+            // 真正借世界模式维持原先的房主退出语义。
+            var isHost = previous.ConnectionId == room.HostConnectionId;
+            if ((isHost && room.StandbyNegotiation?.Snapshot.Phase != "regular") || standbySessionId != room.SessionId
                 || previous.StandbyOnly != standbyOnly || !previous.NegotiatesStandby)
                 return (false, "player_standby_identity_mismatch");
             if (!room.GracePendingMembers.TryGetValue(previous.ConnectionId, out var deadline))
@@ -78,29 +81,7 @@ public partial class RoomManager
                 && (state.Snapshot.Phase == "aborted" || room.HostConfig is not { MultiWorldEnabled: true }))
                 return (false, "host_world_session_mismatch");
 
-            var oldConnection = previous.ConnectionId;
-            room.GracePendingMembers.Remove(oldConnection);
-            foreach (var set in room.ArrivalSets.Values)
-                if (set.Remove(oldConnection)) set.Add(connectionId);
-            foreach (var set in room.FightDoneSets.Values)
-                if (set.Remove(oldConnection)) set.Add(connectionId);
-            foreach (var set in room.FightParticipantSets.Values)
-                if (set.Remove(oldConnection)) set.Add(connectionId);
-            if (room.WorldJoinedSet.Remove(oldConnection)) room.WorldJoinedSet.Add(connectionId);
-            if (room.RouteVerificationDoneSet.Remove(oldConnection)) room.RouteVerificationDoneSet.Add(connectionId);
-            if (room.ExpCapReachedSet.Remove(oldConnection)) room.ExpCapReachedSet.Add(connectionId);
-            if (room.TwoConsecutiveNoExpSet.Remove(oldConnection)) room.TwoConsecutiveNoExpSet.Add(connectionId);
-            if (room.ActiveCollectiveSkip is { } skip)
-            {
-                if (skip.RequiredConnectionIds.Remove(oldConnection)) skip.RequiredConnectionIds.Add(connectionId);
-                if (skip.AppliedConnectionIds.Remove(oldConnection)) skip.AppliedConnectionIds.Add(connectionId);
-                if (skip.FailedConnectionIds.Remove(oldConnection)) skip.FailedConnectionIds.Add(connectionId);
-            }
-            RemoveConnectionMappingLocked(oldConnection, room.Code);
-            previous.ConnectionId = connectionId;
-            previous.ReportedVersion = reportedVersion;
-            previous.LastHeartbeat = DateTime.UtcNow;
-            _connectionRoomMap[connectionId] = room.Code;
+            RebindGraceMemberLocked(room, previous, connectionId, reportedVersion);
             return (true, null);
         }
 

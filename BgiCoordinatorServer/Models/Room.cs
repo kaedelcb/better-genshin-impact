@@ -35,8 +35,12 @@ public class Room
 
     internal bool HasActiveRouteExecution => HostWorld is not { } mode || mode.Snapshot.Phase == "running";
 
+    internal bool IsHostReconnecting => GracePendingMembers.ContainsKey(HostConnectionId);
+
     internal bool HasStandbyRoomExecutorInGrace => HostWorld != null
         && RouteExecutors.Any(p => GracePendingMembers.ContainsKey(p.ConnectionId));
+
+    internal bool BlocksRecoverySensitiveAdvance => IsHostReconnecting || HasStandbyRoomExecutorInGrace;
 
     internal bool AllowsRouteReport(string connectionId, string? claimedUid = null) => HostWorld is null
         || HasActiveRouteExecution && !GracePendingMembers.ContainsKey(connectionId)

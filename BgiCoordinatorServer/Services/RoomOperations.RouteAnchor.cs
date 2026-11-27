@@ -375,7 +375,7 @@ public sealed partial class RoomOperations
             anchor.LastActivityUtc[uid] = nowUtc;
             anchor.StateChangedAtUtc = nowUtc;
 
-            var decision = RouteAnchorDecisions.DecideRelease(
+            var decision = room.IsHostReconnecting ? RouteAnchorReleaseDecision.Wait : RouteAnchorDecisions.DecideRelease(
                 anchor.Phase, anchor.Participants, anchor.MemberStates,
                 allowMissingPolicy: false, nowUtc, anchor.AbsoluteDeadlineUtc);
 
@@ -490,6 +490,11 @@ public sealed partial class RoomOperations
             var anchor = room.ActiveRouteAnchor;
             if (anchor == null) return;
             if (anchor.Phase is RouteAnchorPhase.Released or RouteAnchorPhase.Stopped) return;
+            if (room.IsHostReconnecting)
+            {
+                ArmRouteAnchorEvaluateTimerLocked(room, roomCode);
+                return;
+            }
 
             // 1) 逐个参与者分类
             foreach (var uid in anchor.Participants.ToList())

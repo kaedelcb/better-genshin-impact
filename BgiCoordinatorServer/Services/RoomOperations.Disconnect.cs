@@ -22,14 +22,19 @@ public sealed partial class RoomOperations
 
         if (disconnectedRoom != null && disconnectedRoomCode != null)
         {
-            if (wasHost)
+            if (disconnected!.ClosedRoom)
             {
-                // === 房主断线：保持现有逻辑（广播 RoomClosed + 删房）===
                 _logger.LogWarning("[OnDisconnectedAsync] 房主断线，广播 RoomClosed: 房间={RoomCode}", disconnectedRoomCode);
                 _phaseObserver.Mark(disconnectedRoomCode, RoomPhase.Ended, "disconnect.host");
                 _phaseObserver.Forget(disconnectedRoomCode);
                 await _broadcaster.BroadcastGroupAsync(disconnectedRoomCode, "RoomClosed",
                     new { reason = "房主已断开连接" }, "房主已断开连接");
+            }
+            else if (wasHost)
+            {
+                // 保留原房间及同步状态，不把房主当作可豁免的掉线成员。
+                _logger.LogInformation("[OnDisconnectedAsync] 房主 {ConnId} 进入宽限期(30s)，保留房间 {Code}",
+                    ctx.ConnectionId, disconnectedRoomCode);
             }
             else
             {

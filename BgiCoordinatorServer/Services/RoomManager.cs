@@ -190,44 +190,34 @@ public partial class RoomManager
                 && p.ConnectionId != connectionId && !room.GracePendingMembers.ContainsKey(p.ConnectionId)
                 && DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
                 return (false, "hoeing_start_duplicate_participant");
+            // 房主恢复必须匹配原 UID，不能由同名成员接管。开锄后的新连接等待旧连接进入宽限期。
+            var host = room.Players.FirstOrDefault(p => p.ConnectionId == room.HostConnectionId);
+            if (host != null && !string.IsNullOrWhiteSpace(host.PlayerUid) && host.ConnectionId != connectionId
+                && (room.IsStarted || room.IsHostReconnecting))
+            {
+                if (host.PlayerUid == playerUid)
+                {
+                    if (!room.GracePendingMembers.TryGetValue(host.ConnectionId, out var deadline))
+                        return (false, "hoeing_start_duplicate_participant");
+                    if (deadline <= DateTime.UtcNow) return (false, "房主重连宽限期已结束");
+                }
+                else if (room.HoeingBatchId is null && room.WorldPlanParticipantUids is null
+                    && !string.IsNullOrEmpty(playerName) && host.PlayerName == playerName)
+                    return (false, "房主身份不匹配");
+            }
             // === 宽限期内重连复用（resilience-framework §2c）===
-            // 检查是否是宽限期内重连（同 playerUid 或同 playerName）
             var graceMember = room.Players.FirstOrDefault(p =>
                 room.GracePendingMembers.ContainsKey(p.ConnectionId) &&
                 ((!string.IsNullOrEmpty(playerUid) && p.PlayerUid == playerUid) ||
-                 (room.HoeingBatchId is null && room.WorldPlanParticipantUids is null
+                 (p.ConnectionId != room.HostConnectionId && room.HoeingBatchId is null && room.WorldPlanParticipantUids is null
                     && !string.IsNullOrEmpty(playerName) && p.PlayerName == playerName)));
             if (graceMember != null)
             {
-                // 复用：更新 ConnectionId，清除宽限期标记
-                var oldConnId = graceMember.ConnectionId;
-                room.GracePendingMembers.Remove(oldConnId);
-                // 更新 ArrivalSets / FightDoneSets / FightParticipantSets 中的 connectionId
-                foreach (var set in room.ArrivalSets.Values)
-                {
-                    if (set.Remove(oldConnId))
-                        set.Add(connectionId);
-                }
-                foreach (var set in room.FightDoneSets.Values)
-                {
-                    if (set.Remove(oldConnId))
-                        set.Add(connectionId);
-                }
-                foreach (var set in room.FightParticipantSets.Values)
-                {
-                    if (set.Remove(oldConnId))
-                        set.Add(connectionId);
-                }
-                graceMember.ConnectionId = connectionId;
-                if (room.HostConnectionId == oldConnId) room.HostConnectionId = connectionId;
-                graceMember.LastHeartbeat = DateTime.UtcNow;
-                graceMember.ReportedVersion = reportedVersion ?? "";
-                // Network recovery of a frozen participant retains only a world admission actually reported before disconnect.
-                if (room.WorldPlanParticipantUids != null && room.WorldJoinedSet.Remove(oldConnId))
-                    room.WorldJoinedSet.Add(connectionId);
-                RemoveConnectionMappingLocked(oldConnId, roomCode);
-                _connectionRoomMap[connectionId] = roomCode;
-                _logger?.LogInformation("[JoinRoom] 成员 {Name} 宽限期内重连复用，房间 {Code}", playerName, roomCode);
+                // 已协商过会话的房主要走绑定校验，不能通过普通加入入口绕过。
+                if (graceMember.ConnectionId == room.HostConnectionId && room.StandbyNegotiation != null)
+                    return (false, "host_world_session_mismatch");
+                RebindGraceMemberLocked(room, graceMember, connectionId, reportedVersion ?? "");
+                _logger?.LogInformation("[JoinRoom] 玩家 {Name} 宽限期内重连复用，房间 {Code}", playerName, roomCode);
                 return (true, null);
             }
 
@@ -418,7 +408,9 @@ public partial class RoomManager
             }
 
             arrivals.Add(connectionId);
-            
+            // 房主恢复期间保留到达回执，但暂不产生新的同步放行。
+            if (room.IsHostReconnecting) return false;
+
             // 如果指定了预期人数，使用指定人数判断
             if (expectedCount > 0 && room.HostWorld == null)
             {
@@ -494,6 +486,7 @@ public partial class RoomManager
             }
 
             doneSet.Add(connectionId);
+            if (room.IsHostReconnecting) return false;
 
             // multiplayer-shared-fight-end-quorum-sync: 开关关闭维持现状全员语义（零回归）
             if (!(room.HostConfig?.SharedFightEndQuorumEnabled ?? false))
@@ -541,10 +534,10 @@ public partial class RoomManager
             var required = enabled
                 ? RequiredDoneCount(participantCount, room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
                 : room.HostWorld?.Snapshot.ExecutorUids.Count ?? participantCount;
-            var terminal = alreadyBroadcast || (enabled
+            var terminal = alreadyBroadcast || (!room.IsHostReconnecting && (enabled
                 ? SharedFightEndQuorumDecisions.IsQuorumReached(doneCount, participantCount,
                     room.HostConfig?.SharedFightEndQuorumRatio ?? 0.5)
-                : doneCount > 0 && AllRouteExecutorsReported(room, doneSet ?? []));
+                : doneCount > 0 && AllRouteExecutorsReported(room, doneSet ?? [])));
 
             var shouldBroadcast = terminal && !alreadyBroadcast && enabled;
             if (shouldBroadcast)
@@ -925,6 +918,40 @@ public partial class RoomManager
     private void RemoveConnectionMappingLocked(string connectionId, string roomCode)
         => _connectionRoomMap.TryRemove(new KeyValuePair<string, string>(connectionId, roomCode));
 
+    // 原房间和原玩家对象不变，只原子迁移连接标识及已有事实，不制造新的到达/战斗回执。
+    private void RebindGraceMemberLocked(Room room, PlayerInfo member, string connectionId, string reportedVersion)
+    {
+        var oldConnection = member.ConnectionId;
+        room.GracePendingMembers.Remove(oldConnection);
+        void Rebind(HashSet<string> set)
+        {
+            if (set.Remove(oldConnection)) set.Add(connectionId);
+        }
+        foreach (var set in room.ArrivalSets.Values) Rebind(set);
+        foreach (var set in room.FightDoneSets.Values) Rebind(set);
+        foreach (var set in room.FightParticipantSets.Values) Rebind(set);
+        Rebind(room.WorldJoinedSet);
+        Rebind(room.RouteVerificationDoneSet);
+        Rebind(room.ExpCapReachedSet);
+        Rebind(room.TwoConsecutiveNoExpSet);
+        if (room.ActiveCollectiveSkip is { } skip)
+        {
+            Rebind(skip.RequiredConnectionIds);
+            Rebind(skip.AppliedConnectionIds);
+            Rebind(skip.FailedConnectionIds);
+        }
+        foreach (var candidate in room.KazuhaCandidates.Where(c => c.ConnectionId == oldConnection))
+            candidate.ConnectionId = connectionId;
+        if (room.KazuhaCollect.KazuhaConnectionId == oldConnection)
+            room.KazuhaCollect.KazuhaConnectionId = connectionId;
+        if (room.HostConnectionId == oldConnection) room.HostConnectionId = connectionId;
+        RemoveConnectionMappingLocked(oldConnection, room.Code);
+        member.ConnectionId = connectionId;
+        member.ReportedVersion = reportedVersion;
+        member.LastHeartbeat = DateTime.UtcNow;
+        _connectionRoomMap[connectionId] = room.Code;
+    }
+
     /// <summary>预判交接专用的条件退出。旧请求只移除其指向的房间实例，绝不操作后继房间。</summary>
     public bool EndRoomIfMatches(string roomCode, string sessionId)
     {
@@ -943,14 +970,17 @@ public partial class RoomManager
     {
         var (room, roomCode) = GetRoomByConnectionId(connectionId);
         if (room is null || roomCode is null) return null;
-        bool wasHost;
+        bool wasHost, closedRoom;
         lock (room)
         {
             if (!_rooms.TryGetValue(roomCode, out var current) || !ReferenceEquals(current, room)
                 || !_connectionRoomMap.TryGetValue(connectionId, out var mappedRoom) || mappedRoom != roomCode
                 || !room.Players.Any(p => p.ConnectionId == connectionId)) return null;
             wasHost = room.HostConnectionId == connectionId;
-            if (wasHost)
+            // 普通锄地房主可凭原 UID 恢复房间；借世界专用协商及无 UID 的旧房主保持原关闭语义。
+            closedRoom = wasHost && (room.StandbyNegotiation?.Snapshot.Phase is not (null or "regular")
+                || !room.Players.Any(p => p.ConnectionId == connectionId && !string.IsNullOrWhiteSpace(p.PlayerUid)));
+            if (closedRoom)
             {
                 if (!RemoveRoomLocked(roomCode, room)) return null;
             }
@@ -960,8 +990,8 @@ public partial class RoomManager
                 room.GracePendingMembers.TryAdd(connectionId, utcNow + memberGrace);
             }
         }
-        if (wasHost) NotifyRoomLogEnded(room);
-        return new GameDisconnectResult(room, roomCode, wasHost);
+        if (closedRoom) NotifyRoomLogEnded(room);
+        return new GameDisconnectResult(room, roomCode, wasHost, closedRoom);
     }
 
     public (Room? Room, string? RoomCode) GetRoomByConnectionId(string connectionId)
@@ -2443,4 +2473,4 @@ internal sealed record RoomPlayerSnapshot(string ConnectionId, string PlayerId, 
 
 internal sealed record RoomExpirySnapshot(string RoomCode, bool HostTimedOut,
     IReadOnlyList<RoomPlayerSnapshot> RemovedPlayers, IReadOnlyList<RoomPlayerSnapshot> RemainingPlayers);
-internal sealed record GameDisconnectResult(Room Room, string RoomCode, bool WasHost);
+internal sealed record GameDisconnectResult(Room Room, string RoomCode, bool WasHost, bool ClosedRoom);

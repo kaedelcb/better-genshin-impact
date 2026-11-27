@@ -264,7 +264,8 @@ public sealed partial class RoomOperations
                             && (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
                 .Select(p => p.CurrentProgress)
                 .ToList();
-            releaseLaggingCaller = LaggingMemberReleaseDecisions.ShouldReleaseLaggingCaller(syncProgress, others);
+            releaseLaggingCaller = !room.IsHostReconnecting
+                && LaggingMemberReleaseDecisions.ShouldReleaseLaggingCaller(syncProgress, others);
         }
         if (SyncReplayDecisions.ShouldReplayAllArrived(alreadyBroadcasted))
         {
@@ -477,7 +478,7 @@ public sealed partial class RoomOperations
     /// </summary>
     internal bool ShouldBroadcastAllArrived(Room room, string syncId, HashSet<string> arrivals, long syncProgress)
     {
-        if (!room.HasActiveRouteExecution) return false;
+        if (!room.HasActiveRouteExecution || room.IsHostReconnecting) return false;
         var onlinePlayers = room.RouteExecutors
             .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
             .ToList();
@@ -545,7 +546,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private static bool ShouldBroadcastAllArrived(Room room, HashSet<string> arrivals, long syncProgress)
     {
-        if (!room.HasActiveRouteExecution) return false;
+        if (!room.HasActiveRouteExecution || room.IsHostReconnecting) return false;
         var onlinePlayers = room.RouteExecutors
             .Where(p => room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2))
             .ToList();
@@ -576,7 +577,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private static bool AllOnlineMembersReportedStatic(Room room, HashSet<string> reported)
     {
-        if (!room.HasActiveRouteExecution) return false;
+        if (!room.HasActiveRouteExecution || room.IsHostReconnecting) return false;
         var onlinePlayers = room.RouteExecutors
             .Where(p => (room.HostWorld != null || DateTime.UtcNow - p.LastHeartbeat < TimeSpan.FromMinutes(2)))
             .Where(p => room.HostWorld != null || !room.GracePendingMembers.ContainsKey(p.ConnectionId))
@@ -623,7 +624,7 @@ public sealed partial class RoomOperations
     /// </summary>
     private bool IsCollectiveStuckLocked(Room room)
     {
-        if (!room.HasActiveRouteExecution || room.HasStandbyRoomExecutorInGrace) return false;
+        if (!room.HasActiveRouteExecution || room.BlocksRecoverySensitiveAdvance) return false;
         if (room.RerunExecution?.BlocksLegacyAdvancement == true) return false;
         if (room.HostConfig?.EnableMutualWaitCollectiveSkip != true) return false;
         // route-anchor 激活时由路线边界锚点统一推进路线，旧集体跳段不再介入卡死判定（阶段 6 隔离）
@@ -1050,6 +1051,11 @@ public sealed partial class RoomOperations
 
                 var active = room.ActiveCollectiveSkip;
                 if (active is not { Phase: CollectiveSkipPhase.Requested }) return;
+                if (room.IsHostReconnecting)
+                {
+                    ArmCollectiveSkipApplyRetryTimerLocked(room, roomCode, active.SkipId);
+                    return;
+                }
 
                 // 必要成员都已有结论（正常路径会立即广播 AppliedAll 并清除）→ 兜底清除即可
                 if (active.RequiredConnectionIds.All(c =>

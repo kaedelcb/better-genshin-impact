@@ -181,7 +181,7 @@ public class RoomMemberRecoverySafetyTests
     }
 
     [Fact]
-    public async Task OldHostDisconnectCannotCloseReplacement_ActualHostDisconnectClosesAndArchivesOnce()
+    public async Task OldHostDisconnectCannotCloseReplacement_ActualHostGraceExpiryClosesAndArchivesOnce()
     {
         var h = new GatewayTestHarness();
         var (code, room, _, _) = CreateRoom(h.RoomManager);
@@ -200,13 +200,114 @@ public class RoomMemberRecoverySafetyTests
             It.IsAny<CancellationToken>()), Times.Never);
 
         await h.Ops.HandleDisconnectAsync(GatewayHandlerContext.V3("host-new"), null);
+        var deadline = room.GracePendingMembers["host-new"];
         await h.Ops.HandleDisconnectAsync(GatewayHandlerContext.V3("host-new"), null);
+        Assert.Equal(deadline, room.GracePendingMembers["host-new"]);
+        Assert.Same(room, h.RoomManager.GetRoom(code));
+        Assert.Equal(0, ended);
+        using var monitor = Monitor(h);
+        room.Players.Single(p => p.PlayerUid == "u1").LastHeartbeat = deadline;
+        await monitor.ScanExpiredPlayersAsync(deadline.AddMilliseconds(-1));
+        Assert.Same(room, h.RoomManager.GetRoom(code));
+        await monitor.ScanExpiredPlayersAsync(deadline);
+        await monitor.ScanExpiredPlayersAsync(deadline);
         Assert.Null(h.RoomManager.GetRoom(code));
         Assert.Null(h.RoomManager.GetRoomByConnectionId("member-old").Room);
         Assert.Null(h.RoomManager.GetRoomByConnectionId("host-new").Room);
         Assert.Equal(1, ended);
         h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("RoomClosed", It.IsAny<object?[]>(),
             It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HostReconnectPreservesRoomAndProgress_AndResumesPendingSync(bool negotiatedStandby)
+    {
+        var h = new GatewayTestHarness();
+        const string hostOld = "host-old", hostNew = "host-new", memberConn = "member-old";
+        var code = h.RoomManager.CreateRoom(hostOld, "host", playerUid: "u0", expectedPlayerCount: 2,
+            reportedVersion: "1.0.0", protocol: GatewayProtocol.RoomProtocols.V3, negotiateStandby: negotiatedStandby);
+        var room = h.RoomManager.GetRoom(code)!;
+        Assert.True((await h.Ops.JoinRoomAsync(GatewayHandlerContext.V3(memberConn), code, "member", "u1", "1.0.0",
+            acceptsStandby: negotiatedStandby)).Success);
+        if (negotiatedStandby) room.StandbyNegotiation!.Start(["u0", "u1"], []);
+        room.IsStarted = true;
+        room.HostRouteList = ["first.json", "second.json"];
+        room.WorldPlanId = "original-plan";
+        room.CurrentWorldRound = 3;
+        room.HostReady = true;
+        room.WorldJoinedSet.Add(hostOld);
+        room.RouteVerificationDoneSet.Add(hostOld);
+        room.FightDoneSets["fight"] = [hostOld];
+        room.FightParticipantSets["fight"] = [hostOld, memberConn];
+        room.ExpCapReachedSet.Add(hostOld);
+        room.KazuhaCandidates.Add(new KazuhaCandidate { ConnectionId = hostOld, PlayerUid = "u0" });
+        room.KazuhaCollect.KazuhaConnectionId = hostOld;
+        var host = room.Players[0];
+        host.CurrentProgress = 42;
+        var sessionId = room.SessionId;
+        Assert.False(h.RoomManager.RecordArrival(code, "sync", hostOld));
+        var ended = 0;
+        h.RoomManager.RoomLogSessionEnded += (_, _) => ended++;
+
+        await h.Ops.HandleDisconnectAsync(GatewayHandlerContext.V3(hostOld), null);
+        Assert.True(room.IsHostReconnecting);
+        Assert.Same(room, h.RoomManager.GetRoom(code));
+        Assert.Equal(0, ended);
+        Assert.False(h.RoomManager.RecordArrival(code, "sync", memberConn, expectedCount: 1));
+        await h.Ops.WaitForAllPlayersAsync(GatewayHandlerContext.V3(memberConn), "sync", -1);
+        Assert.False(room.BroadcastedSyncIds.Contains("sync"));
+        Assert.False(h.RoomManager.RecordFightDone(code, "fight", memberConn));
+
+        var join = await h.Ops.JoinRoomAsync(GatewayHandlerContext.V3(hostNew), code, "host", "u0", "1.0.0",
+            standbySessionId: negotiatedStandby ? sessionId : null, acceptsStandby: negotiatedStandby);
+        Assert.True(join.Success, join.Error);
+        Assert.Same(room, h.RoomManager.GetRoom(code));
+        Assert.Same(host, room.Players[0]);
+        Assert.Equal(sessionId, room.SessionId);
+        Assert.Equal("original-plan", room.WorldPlanId);
+        Assert.Equal(3, room.CurrentWorldRound);
+        Assert.Equal(42, host.CurrentProgress);
+        Assert.Equal(hostNew, room.HostConnectionId);
+        Assert.Empty(room.GracePendingMembers);
+        Assert.Null(h.RoomManager.GetRoomByConnectionId(hostOld).Room);
+        Assert.Contains(hostNew, room.WorldJoinedSet);
+        Assert.Contains(hostNew, room.RouteVerificationDoneSet);
+        Assert.Contains(hostNew, room.FightDoneSets["fight"]);
+        Assert.Contains(hostNew, room.FightParticipantSets["fight"]);
+        Assert.Contains(hostNew, room.ExpCapReachedSet);
+        Assert.Equal(hostNew, room.KazuhaCollect.KazuhaConnectionId);
+        Assert.Equal(hostNew, Assert.Single(room.KazuhaCandidates).ConnectionId);
+        Assert.Equal(new[] { "first.json", "second.json" }, room.HostRouteList);
+        Assert.Contains(hostNew, room.ArrivalSets["sync"]);
+        Assert.DoesNotContain(hostOld, room.ArrivalSets["sync"]);
+
+        await h.Ops.HandleDisconnectAsync(GatewayHandlerContext.V3(hostOld), null);
+        await h.Ops.WaitForAllPlayersAsync(GatewayHandlerContext.V3(memberConn), "sync", -1);
+        Assert.Contains("sync", room.BroadcastedSyncIds);
+        Assert.True(h.RoomManager.RecordFightDone(code, "fight", hostNew));
+        Assert.Equal(0, ended);
+        h.LegacyGroupProxy.Verify(p => p.SendCoreAsync("RoomClosed", It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+        await h.Ops.CloseRoomAsync(GatewayHandlerContext.V3(hostNew));
+        Assert.Null(h.RoomManager.GetRoom(code));
+        Assert.Equal(1, ended);
+    }
+
+    [Fact]
+    public void HostGraceDoesNotAllowSameNameOrExpiredRecovery()
+    {
+        var manager = new RoomManager();
+        var (code, room, _, _) = CreateRoom(manager);
+        room.IsStarted = true;
+        var now = DateTime.UtcNow;
+        manager.BeginGameDisconnect("host-old", now, Timeout);
+        Assert.False(manager.JoinRoom(code, "different", "different", "host", "not-u0").Success);
+        Assert.Equal("host-old", room.HostConnectionId);
+        room.GracePendingMembers["host-old"] = now.AddSeconds(-1);
+        Assert.False(manager.JoinRoom(code, "host-new", "host-new", "host", "u0").Success);
+        Assert.Equal("host-old", room.HostConnectionId);
     }
 
     [Fact]
