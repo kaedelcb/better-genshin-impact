@@ -212,6 +212,19 @@ public sealed class RoomBookTransferTests
     }
 
     [Theory]
+    [InlineData("ABCDEF", false, false)]
+    [InlineData("123456", false, false)]
+    [InlineData("G12345", false, true)]
+    [InlineData("Z9M2Q1", false, true)]
+    [InlineData("abcdef", false, true)]
+    [InlineData("custom_Room-7", false, true)]
+    [InlineData("ABCDEF", true, true)]
+    [InlineData("", false, false)]
+    public void ExactRoomCodePreservesAssignedAndImportedCodes(string code, bool preserve, bool expected)
+        => Assert.Equal(expected, RoomBookTransfer.UsesExactRoomCode(new AssistantRoomProfile
+            { RoomCode = code, PreserveRoomCode = preserve }));
+
+    [Theory]
     [InlineData("http://gateway", "http://gateway")]
     [InlineData("https://ROOMS.example.test:443/path/HUB/gateway/", "https://rooms.example.test/path")]
     [InlineData("http://127.0.0.1:8080/gateway", "http://127.0.0.1:8080")]

@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using MultiplayerHoeingAssistant.Models;
 using MultiplayerHoeingAssistant.Services;
 using MultiplayerHoeingAssistant.ViewModels;
+using MultiplayerHoeingAssistant.Views;
 using Xunit;
 
 namespace MultiplayerHoeingAssistant.UnitTest;
@@ -81,6 +82,78 @@ public sealed class AssistantRoomProfileTests
         Assert.True(roundTrip.ScheduledOnlineRequiresConfirmation);
         Assert.Equal("111111111", roundTrip.PlayerUid);
         Assert.Equal("bgi.exe", roundTrip.BgiPath);
+    }
+
+    [Theory]
+    [InlineData("Z9M2Q1", false, true, true)]
+    [InlineData("ABCDEF", true, true, true)]
+    [InlineData("ABCDEF", false, false, true)]
+    [InlineData("ABCDEF", false, true, false)]
+    public async Task SettingsMemberEditPreservesAssignedRoomAndRejectsOnlyLegacyCollision(
+        string roomCode, bool preserve, bool collision, bool succeeds)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var thread = new Thread(() =>
+        {
+            SettingsWindow? window = null;
+            try
+            {
+                var newMembers = new List<string> { "111111111", "333333333" };
+                var calculated = AssistConfigManager.GenerateControlRoomCode(newMembers);
+                var date = new DateTime(2026, 11, 10);
+                var home = new AssistantRoomProfile
+                {
+                    Id = "home", Name = "Home", RoomCode = roomCode, PreserveRoomCode = preserve,
+                    ServerUrl = "https://rooms.example.test", Password = "fixture", TeamUids = ["111111111", "222222222"],
+                    ScheduledOnlineTime = "12:00", ScheduledOnlineLastFireDate = date
+                };
+                var other = new AssistantRoomProfile
+                {
+                    Id = "other", Name = "Other", RoomCode = calculated, Password = "other-fixture",
+                    ServerUrl = collision ? home.ServerUrl : "https://other.example.test", TeamUids = newMembers
+                };
+                var config = new AssistConfig
+                {
+                    PlayerUid = "111111111", PlayerName = "Test", ActiveRoomProfileId = home.Id,
+                    LocalRoomProfileId = home.Id, RoomProfiles = [home, other]
+                };
+                home.ApplyTo(config);
+                var before = JsonSerializer.Serialize(config);
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                window = (SettingsWindow)Activator.CreateInstance(typeof(SettingsWindow), flags, null, [config], null)!;
+                ((TextBox)window.FindName("TeamUidsBox")).Text = string.Join(",", newMembers);
+                var saved = (AssistConfig?)typeof(SettingsWindow).GetMethod("BuildConfig", flags)!.Invoke(window, null);
+                if (!succeeds)
+                {
+                    Assert.Null(saved);
+                    Assert.Contains("已被其他档案使用", ((TextBlock)window.FindName("ErrorText")).Text);
+                }
+                else
+                {
+                    Assert.NotNull(saved);
+                    var keepCode = preserve || roomCode == "Z9M2Q1";
+                    Assert.Equal(keepCode ? roomCode : calculated, saved.EffectiveRoomCode);
+                    Assert.Equal(saved.EffectiveRoomCode, saved.LocalRoomProfile!.RoomCode);
+                    Assert.Equal(newMembers, saved.TeamUids);
+                    Assert.Equal(newMembers, saved.LocalRoomProfile.TeamUids);
+                    Assert.Equal(keepCode ? date : (DateTime?)null, saved.LocalRoomProfile.ScheduledOnlineLastFireDate);
+                    Assert.Equal(!keepCode, saved.LocalRoomProfile.ScheduledOnlineRequiresConfirmation);
+                    Assert.Equal(JsonSerializer.Serialize(other), JsonSerializer.Serialize(saved.RoomProfiles[1]));
+                }
+                Assert.Equal(before, JsonSerializer.Serialize(config));
+                done.SetResult();
+            }
+            catch (Exception ex) { done.SetException(ex); }
+            finally
+            {
+                window?.Close();
+                Dispatcher.CurrentDispatcher.InvokeShutdown();
+            }
+        }) { IsBackground = true };
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        await done.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]

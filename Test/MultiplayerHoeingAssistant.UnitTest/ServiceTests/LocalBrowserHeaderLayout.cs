@@ -330,7 +330,7 @@ internal static class LocalBrowserHeaderLayout
         if ((bool)ensureLocal.Invoke(unresolved, null)! || unresolved.LocalRoomProfileId.Length != 0)
             throw new InvalidOperationException("原设置没有可唯一确定的当前房间时不得猜测本机房间");
         var original = vm.Config!;
-        var home = new AssistantRoomProfile { Id = "home", Name = "本机测试房间", RoomCode = "HOME01",
+        var home = new AssistantRoomProfile { Id = "home", Name = "本机测试房间", RoomCode = AssistConfigManager.GenerateControlRoomCode(["111111111", "222222222"]),
             ServerUrl = "https://home.example.test", Password = "home-password", TeamUids = ["111111111", "222222222"] };
         var other = new AssistantRoomProfile { Id = "other", Name = "当前测试房间", RoomCode = "OTHER1",
             ServerUrl = "https://other.example.test", Password = "other-password", TeamUids = ["111111111", "333333333"] };

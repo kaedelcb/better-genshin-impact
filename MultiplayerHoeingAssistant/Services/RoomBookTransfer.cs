@@ -143,9 +143,10 @@ internal static class RoomBookTransfer
     internal static bool IsValidRoomCode(string? code) => code is { Length: >= 1 and <= 128 }
         && code.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 
+    // 旧式房间号是六位大写十六进制哈希；服务端分配的新号刻意避开该范围。
     internal static bool UsesExactRoomCode(AssistantRoomProfile? profile) => profile is not null && IsValidRoomCode(profile.RoomCode)
         && (profile.PreserveRoomCode || profile.RoomCode.Length != 6
-            || profile.RoomCode.Any(c => !char.IsAsciiDigit(c) && !char.IsAsciiLetterUpper(c)));
+            || profile.RoomCode.Any(c => !char.IsAsciiHexDigitUpper(c)));
 
     private static string EffectiveServer(AssistConfig config, AssistantRoomProfile profile)
         => ReferenceEquals(config.ActiveRoomProfile, profile) ? config.ServerUrl : config.GetRoomServerUrl(profile);
