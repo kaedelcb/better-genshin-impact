@@ -1,6 +1,8 @@
 using BetterGenshinImpact.Core.Config;
 using BetterGenshinImpact.GameTask.AutoFight;
 using BetterGenshinImpact.GameTask.AutoFight.Factory;
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
+using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
 using BetterGenshinImpact.GameTask.Common;
 using System;
 using System.IO;
@@ -29,17 +31,26 @@ internal class AutoFightHandler : IActionHandler
 
     private async Task RunWithCooperativeFightAsync(CancellationToken routeCt, object? config, WaypointForTrack? waypoint)
     {
-        var fight = BetterGenshinImpact.GameTask.AutoPathing.PathExecutor.CurrentCooperativeFight;
+        if (await RunFightAsync(PathExecutor.CurrentCooperativeFight, routeCt, fightCt => StartFight(fightCt, config, waypoint)))
+            TaskControl.Logger.LogInformation("[联机协作] 当前战斗按点停止，路线继续");
+    }
+
+    internal static async Task<bool> RunFightAsync(CooperativeFightScope? fight, CancellationToken routeCt,
+        Func<CancellationToken, Task> startFight)
+    {
+        var fightCt = fight?.Token ?? routeCt;
         try
         {
-            var fightCt = fight?.Token ?? routeCt;
             fightCt.ThrowIfCancellationRequested();
-            await StartFight(fightCt, config, waypoint);
+            await startFight(fightCt);
             fightCt.ThrowIfCancellationRequested();
+            return false;
         }
-        catch (OperationCanceledException) when (fight?.IsInterrupted == true && !routeCt.IsCancellationRequested)
+        catch (Exception ex) when (ex is OperationCanceledException or NormalEndException
+            && fight?.IsInterrupted == true && fightCt.IsCancellationRequested && !routeCt.IsCancellationRequested)
         {
-            TaskControl.Logger.LogInformation("[联机协作] 当前战斗按点停止，路线继续");
+            // TaskControl.Delay 可能用 NormalEndException 表达同一个战斗取消令牌。
+            return true;
         }
     }
     

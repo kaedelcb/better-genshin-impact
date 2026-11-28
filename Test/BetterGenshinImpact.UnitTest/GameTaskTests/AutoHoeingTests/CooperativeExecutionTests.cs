@@ -1,4 +1,7 @@
+using BetterGenshinImpact.GameTask.AutoGeniusInvokation.Exception;
 using BetterGenshinImpact.GameTask.AutoHoeing.Multiplayer.Rerun;
+using BetterGenshinImpact.GameTask.AutoHoeing.Services;
+using BetterGenshinImpact.GameTask.AutoPathing.Handler;
 using BetterGenshinImpact.Shared.CooperativeRerun;
 
 namespace BetterGenshinImpact.UnitTest.GameTaskTests.AutoHoeingTests;
@@ -23,6 +26,79 @@ public class CooperativeExecutionTests
         Assert.False(next.IsInterrupted);
         Assert.False(next.Token.IsCancellationRequested);
         await next.StopMonitoringAsync();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FightCancellationLeavesRouteAvailableForRevival(bool legacyCancellation)
+    {
+        using var route = new CancellationTokenSource();
+        var stopFight = false;
+        using var fight = new CooperativeFightScope("s0:f0", () => stopFight, route.Token);
+
+        var interrupted = await AutoFightHandler.RunFightAsync(fight, route.Token, async token =>
+        {
+            stopFight = true;
+            fight.CheckStop();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token).WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (OperationCanceledException) when (legacyCancellation)
+            {
+                throw new NormalEndException("取消自动任务");
+            }
+        });
+
+        Assert.True(interrupted);
+        Assert.False(route.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task RouteStopStillPropagatesWhenFightWasInterrupted()
+    {
+        using var route = new CancellationTokenSource();
+        var stopFight = false;
+        using var fight = new CooperativeFightScope("s0:f0", () => stopFight, route.Token);
+
+        await Assert.ThrowsAsync<NormalEndException>(() => AutoFightHandler.RunFightAsync(fight, route.Token, _ =>
+        {
+            stopFight = true;
+            fight.CheckStop();
+            route.Cancel();
+            return Task.FromException(new NormalEndException("取消自动任务"));
+        }));
+    }
+
+    [Fact]
+    public async Task RevivalHandoffWaitsForAnInFlightObservation()
+    {
+        using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var release = new ManualResetEventSlim();
+        var detector = new AnomalyDetector();
+        var observing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var markRegistered = false;
+        var observation = Task.Run(() => detector.SettleRevivalAsync(false, () =>
+        {
+            observing.SetResult();
+            release.Wait(bound.Token);
+            markRegistered = true;
+        }, bound.Token), bound.Token);
+
+        try
+        {
+            await observing.Task.WaitAsync(bound.Token);
+            var handoff = detector.SettleRevivalAsync(false, () => Assert.True(markRegistered), bound.Token);
+            Assert.False(handoff.IsCompleted);
+            release.Set();
+            await handoff;
+        }
+        finally
+        {
+            release.Set();
+            await observation;
+        }
     }
 
     [Theory]

@@ -225,6 +225,13 @@ public partial class PathExecutor
 
     private string? _activeCooperativeFightKey;
 
+    // 停止战斗输出后，仍保留原战斗点，直到确认离场或交接至下一战斗点。
+    internal sealed record FightRevivalPoint(int SegmentIndex, int WaypointIndex, string? CooperativePointId);
+    private sealed class FightRevivalRetryException(string message) : RetryException(message) { }
+    private volatile FightRevivalPoint? _fightRevivalPoint;
+    internal FightRevivalPoint? CurrentFightRevivalPoint => _fightRevivalPoint;
+    internal Func<bool, Action?, CancellationToken, Task>? SettleFightRevivalAsync { get; set; }
+
     /// <summary>
     /// 本次重试前是否观察到过真实复苏（由 TryConsumeRevivalSignal 置位，在 catch(RetryException) 消费）。
     /// 仅用于决定是否向队友发布“恢复中”：本机局部保护重试（传送后复苏保护、卡死保护）同样抛
@@ -517,7 +524,9 @@ public partial class PathExecutor
             System.Diagnostics.Debug.WriteLine("[联机] SignalMultiplayerRevivalFromExternal 未找到活动 PathExecutor 实例，跳过信号位写入");
             return;
         }
-        instance.SignalMultiplayerRevival();
+        // 当前战斗点由异常检测器在实际点复苏后通知，传送只负责拒绝这次到达。
+        if (instance.CurrentFightRevivalPoint == null)
+            instance.SignalMultiplayerRevival();
     }
 
     /// <summary>
@@ -861,12 +870,14 @@ public partial class PathExecutor
                             throw new OperationCanceledException("共同重跑会话已中止");
                         }
 
+                        if (_fightRevivalPoint != null) await RecoverFightRevivalAsync();
+
                         // === 联机模式：已倒下复苏信号（来自 AnomalyDetector 色块检测）===
                         // 把异步事件转为 RetryException，统一走"同步点前/后"异常处理流程：
                         //   - 同步点后 → 上报 Reviving + 跳到下一段
                         //   - 同步点前 → 重试本段，3 次失败后跳下一段
                         // 此为兜底路径：战斗结束钩子和脱困入口未能消费时由这里兜底处理
-                        if (TryConsumeRevivalSignal())
+                        if (_fightRevivalPoint == null && TryConsumeRevivalSignal())
                         {
                             Logger.LogWarning("[联机] 主循环兜底路径检测到复苏信号，前往七天神像回血");
                             await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
@@ -1414,7 +1425,10 @@ public partial class PathExecutor
                                 {
                                     if (waypoint.Action == ActionEnum.Fight.Code)
                                     {
+                                        await FinishFightRevivalHandoffAsync(checkFrame: true);
                                         var cooperativePoint = CooperativeContext?.GetFightPointId(CurWaypoints.Item1, CurWaypoint.Item1);
+                                        if (SettleFightRevivalAsync != null)
+                                            _fightRevivalPoint = new FightRevivalPoint(CurWaypoints.Item1, CurWaypoint.Item1, cooperativePoint);
                                         if (cooperativePoint != null && CooperativeContext!.ShouldSkipFight(cooperativePoint))
                                         {
                                             CooperativeContext.MarkIncomplete("Fight skipped after arrival: " + cooperativePoint);
@@ -1556,16 +1570,7 @@ public partial class PathExecutor
                                         // 设计参考 design.md §3 / bugfix.md 2.1 / 2.2 / 2.9
                                         // 钩子放在最开头：先于其他重置（MainAvatarIndex / AutoEatCount / CombatScenesGoBackUp），
                                         // 避免无谓重置后又抛异常
-                                        if (TryConsumeRevivalSignal())
-                                        {
-                                            Logger.LogWarning("[联机] 战斗中曾触发复苏（已倒下色块检测），战斗结束后前往七天神像回血");
-                                            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
-
-                                            // === 线路重试模式 v2（§0）：回神像后不立即重跑，先到"段出口屏障"与队友碰头 ===
-                                            // 置"本段有人死过"标志 + 标记走屏障路径 → break 出 waypoint 循环直达段出口屏障。
-                                            // 屏障保证复苏者到齐前队友不放行 → 广播必然已送达 → 全员一起重跑（确定性）。
-                                            throw new RetryException("联机：战斗中触发复苏，神像回血后跳到下一段汇合");
-                                        }
+                                        await RecoverFightRevivalAsync();
 
                                         // === 集体卡死跳段消费点 3（multiplayer-mutual-wait-collective-skip §8.7 / OQ-6 A）===
                                         // 战斗结束后消费集体跳段信号位，与上面复苏信号消费点完全独立。
@@ -2027,6 +2032,16 @@ public partial class PathExecutor
                         }
                     }
 
+                    if (_fightRevivalPoint != null && !SkipRouteRequested)
+                    {
+                        await CheckMultiplayerBoundaryAsync();
+                        await SettleFightRevivalAsync!(true, null, ct);
+                        await RecoverFightRevivalAsync();
+                        // 轮末 NormalDone 会关闭死亡标记，必须在离开原段之前完成交接。
+                        Logger.LogInformation("[联机] 路段结束前离开战斗现场，复苏检测保持到神像传送完成");
+                        await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true, confirmArrival: true, waitForRevival: false);
+                    }
+
                     // ============================================================================
                     if (waypoints == waypointsList.Last())
                     {
@@ -2191,7 +2206,8 @@ public partial class PathExecutor
                     // 命中行为：原子消费机会（CAS），仅本机从当前段传送起点重跑，不 escalation、不 Reviving、
                     //          不 tracker、不跳段。命中直接 continue 回到 for-i 重试循环重跑本段起点，
                     //          不推进 _syncPointReached 分流，也不设置 SkipToNextSegment。
-                    if (MultiplayerCoordinator != null
+                    if (retryException is not FightRevivalRetryException
+                        && MultiplayerCoordinator != null
                         && _protectionSegmentId == CurWaypoints.Item1
                         && _protectionConsumed == 0)
                     {
@@ -2388,11 +2404,36 @@ public partial class PathExecutor
         }
         finally
         {
+            _fightRevivalPoint = null;
             CurrentActiveInstance = previousInstance;
         }
     }
-    
-    
+
+    // 坐标与暂停探测可以在战斗回点后台运行，不能抢先消费尚待主路线处理的战斗复苏。
+    private bool HasNoPendingMovementRevival()
+        => _fightRevivalPoint != null ? _multiplayerRevivalDetected == 0 : !TryConsumeRevivalSignal();
+
+    private async Task FinishFightRevivalHandoffAsync(bool checkFrame, bool alreadyAtStatue = false)
+    {
+        if (_fightRevivalPoint == null) return;
+        await SettleFightRevivalAsync!(checkFrame, () => _fightRevivalPoint = null, ct);
+        await RecoverFightRevivalAsync(alreadyAtStatue, fromFightPoint: true);
+    }
+
+    private async Task RecoverFightRevivalAsync(bool alreadyAtStatue = false, bool fromFightPoint = false)
+    {
+        if (!TryConsumeRevivalSignal()) return;
+        fromFightPoint |= _fightRevivalPoint != null;
+        if (!alreadyAtStatue)
+        {
+            Logger.LogWarning("[联机] 战斗点触发复苏，前往七天神像回血");
+            await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true, confirmArrival: fromFightPoint);
+        }
+        const string reason = "联机：战斗点触发复苏，神像回血后按战斗复苏处理";
+        if (fromFightPoint) throw new FightRevivalRetryException(reason);
+        throw new RetryException(reason);
+    }
+
     // 恢复状态集中收口（autoeat-count-overloaded-sentinel-fix spec）：
     // 取代原散落 4 处 if(AutoEatCount<3) AutoEatCount=0 补丁（457/904-908/1327/1334）。
     // 仅在"进入新一轮寻路重试、恢复流程确已结束"时调用，防止计数残值 + 抑制态跨路径泄漏。
@@ -3159,7 +3200,7 @@ public partial class PathExecutor
             if (!AutoEatRecoveryDecisions.ShouldRetryRoute(PathingConditionConfig.AutoEatCount)) return;
             throw new RetryException("回血完成后重试路线-1");
         }
-        else if (Bv.ClickIfInReviveModal(region))
+        else if (_fightRevivalPoint == null && Bv.ClickIfInReviveModal(region))
         {
             await Bv.WaitForMainUi(ct); // 等待主界面加载完成
             Logger.LogInformation("复苏完成-1");
@@ -3171,7 +3212,8 @@ public partial class PathExecutor
         }
     }
     
-    private async Task TpStatueOfTheSeven(bool switchOnly = false, bool requireLoadingScreen = false, bool forceStatue = false)
+    private async Task TpStatueOfTheSeven(bool switchOnly = false, bool requireLoadingScreen = false,
+        bool forceStatue = false, bool confirmArrival = false, bool waitForRevival = true)
     {
         // return-to-point-suspend-during-revival-teleport spec：
         // 进入神像传送即置位标志，使两条"战斗中回点"后台循环 return 终止本场回点循环，
@@ -3182,7 +3224,7 @@ public partial class PathExecutor
         AutoFightTask.IsTeleportingToStatue = true;
         try
         {
-            await TpStatueOfTheSevenCore(switchOnly, requireLoadingScreen, forceStatue);
+            await TpStatueOfTheSevenCore(switchOnly, requireLoadingScreen, forceStatue, confirmArrival, waitForRevival);
         }
         finally
         {
@@ -3190,7 +3232,8 @@ public partial class PathExecutor
         }
     }
 
-    private async Task TpStatueOfTheSevenCore(bool switchOnly = false, bool requireLoadingScreen = false, bool forceStatue = false)
+    private async Task TpStatueOfTheSevenCore(bool switchOnly, bool requireLoadingScreen, bool forceStatue,
+        bool confirmArrival, bool waitForRevival)
     {
         // 线路重试模式 v2（hoeing-multiplayer-route-retry-mode §0）：forceStatue=true 时跳过"嗑药分级恢复"
         // （原逻辑第 1 次只嗑小道具就 return，走不到下方传送神像）→ 直接传送神像满血，保证"全员回神像重跑"落地。
@@ -3199,7 +3242,7 @@ public partial class PathExecutor
         // 点复苏后角色被强制复活动画锁定约 5~10 秒，期间按 M 开不了大地图。
         // 判据：能成功打开大地图 = 已可控。轮询按 M 试开图，成功即 ESC 关掉（让下方正常流程重新干净开图），
         // 封顶 12 秒超时也继续（不卡死，由后续 CheckInBigMapUi 重试兜底）。仅 forceStatue（retry-mode 复苏）路径生效。
-        if (forceStatue)
+        if (forceStatue && waitForRevival)
         {
             var __waitStart = DateTime.UtcNow;
             const int __maxWaitMs = 12000;
@@ -3297,7 +3340,7 @@ public partial class PathExecutor
         try
         {
             var tpTask = new TpTask(ct);
-            await RunnerContext.Instance.StopAutoPickRunTask(async () => await tpTask.TpToStatueOfTheSeven(requireLoadingScreen), 5);
+            await RunnerContext.Instance.StopAutoPickRunTask(async () => await tpTask.TpToStatueOfTheSeven(requireLoadingScreen, confirmArrival || _fightRevivalPoint != null), 5);
         }
         finally
         {
@@ -3305,6 +3348,7 @@ public partial class PathExecutor
         }
         PartyConfig.MainAvatarIndex = PathingConditionConfig.InitialMainAvatarIndex;
         Logger.LogInformation("血量恢复完成。【设置】-【七天神像设置】可以修改回血相关配置-k {t}。",PathingConditionConfig.AutoEatCount);
+        await FinishFightRevivalHandoffAsync(checkFrame: false, alreadyAtStatue: true);
     }
 
     /// <summary>
@@ -3586,7 +3630,12 @@ public partial class PathExecutor
             // isPoint==true 仅在普通寻路段触发，战斗 / 聚物 / 回点等 isPoint==false 路径短路。
             // TryConsumeRevivalSignal 单机模式下 MultiplayerCoordinator==null 直接返回 false，零回归。
             // 详见 .kiro/specs/multiplayer-walk-revive-skip-segment/design.md §3.2
-            if (isPoint && TryConsumeRevivalSignal())
+            if (isPoint && _fightRevivalPoint != null && _multiplayerRevivalDetected != 0)
+            {
+                InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
+                await RecoverFightRevivalAsync();
+            }
+            if (isPoint && _fightRevivalPoint == null && TryConsumeRevivalSignal())
             {
                 InputHub.Foreground.SimulateAction(GIActions.MoveForward, KeyType.KeyUp);
                 Logger.LogWarning("[联机] 走路中检测到复苏信号，跳过本段，前往七天神像回血");
@@ -3910,7 +3959,7 @@ public partial class PathExecutor
 
             if (distance > 500)
             {
-                if (pathExecutorSuspend.CheckAndResetSuspendPoint() && !TryConsumeRevivalSignal())
+                if (pathExecutorSuspend.CheckAndResetSuspendPoint() && HasNoPendingMovementRevival())
                 {
                     throw new RetryNoCountException("可能暂停导致路径过远，重试一次此路线！");
                 }
@@ -4056,7 +4105,8 @@ public partial class PathExecutor
                             // 直接传送神像回血 + 抛 RetryException 跳到下一段汇合更可靠
                             // 设计参考 design.md §5 / bugfix.md 2.3
                             // 注意：此处不修改 _inTrap 计数（不增不减），保持隐含语义；段入口段循环重置即可
-                            if (TryConsumeRevivalSignal())
+                            if (isPoint && _fightRevivalPoint != null) await RecoverFightRevivalAsync();
+                            if (_fightRevivalPoint == null && TryConsumeRevivalSignal())
                             {
                                 Logger.LogWarning("[联机] 路上检测到复苏 + 位置不变（疑似复苏后卡住），跳过随机脱困，前往七天神像回血");
                                 await TpStatueOfTheSeven(requireLoadingScreen: true, forceStatue: true);
@@ -4923,7 +4973,7 @@ public partial class PathExecutor
         if (observePickupPosition != null && position != default)
             observePickupPosition(double.IsFinite(distance) && distance <= 500 ? position : default);
         //中途暂停过，地图未识别到
-        if (position is {X:0,Y:0} && GetPositionAndTimeSuspendFlag && !TryConsumeRevivalSignal())
+        if (position is {X:0,Y:0} && GetPositionAndTimeSuspendFlag && HasNoPendingMovementRevival())
         {
             GetPositionAndTimeSuspendFlag = false;
             throw new RetryNoCountException("可能暂停导致路径过远，重试一次此路线！");

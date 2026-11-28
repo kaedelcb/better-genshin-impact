@@ -825,6 +825,8 @@ public class TpTaskFastDrag
                 await _blessingOfTheWelkinMoonTask.Start(ct);
             }
 
+            if (requireLoadingScreen)
+                throw new TeleportLoadingTimeoutException("看到传送过渡页后未确认返回主界面");
             TaskControl.Logger.LogWarning("传送等待超时，换台电脑吧");
         }
         finally

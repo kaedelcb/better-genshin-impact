@@ -25,6 +25,9 @@ public class AnomalyDetector
     /// <summary>联机"已倒下"色块检测二次确认的等待间隔（毫秒）。</summary>
     private const int MultiplayerDefeatedRecheckDelayMs = 1000;
 
+    private readonly SemaphoreSlim _revivalProbe = new(1, 1);
+    private bool _revivalEpisodeNotified;
+
     private RecognitionObject? _frozenRo;
     private RecognitionObject? _whiteFurinaRo;
     private RecognitionObject? _revivalRo;
@@ -46,6 +49,7 @@ public class AnomalyDetector
 
     /// <summary>Capture execution identity with the observation frame, before confirmation delays.</summary>
     public Func<Action?>? CaptureCooperativeRevivalHandler { get; set; }
+    internal Func<bool>? HasFightRevivalPoint { get; set; }
 
     public void LoadTemplates(string assetsDir)
     {
@@ -79,20 +83,6 @@ public class AnomalyDetector
     public async Task RunDetectionLoop(Func<bool> isRunning, CancellationToken ct)
     {
         int loopCount = 0;
-        bool cooperativeEpisodeNotified = false;
-
-        void NotifyConfirmedRevival(Action? capturedHandler)
-        {
-            if (capturedHandler == null)
-            {
-                try { OnMultiplayerDefeatedDetected?.Invoke(); } catch { }
-                return;
-            }
-            if (cooperativeEpisodeNotified) return;
-            cooperativeEpisodeNotified = true;
-            try { capturedHandler(); }
-            catch (Exception ex) { Logger.LogWarning(ex, "Cooperative revival notification failed"); }
-        }
 
         while (isRunning() && !ct.IsCancellationRequested)
         {
@@ -109,155 +99,43 @@ public class AnomalyDetector
                 // 每约250ms检测一次（5次循环 × 50ms）
                 if (loopCount % 5 == 0)
                 {
-                    using var region = CaptureToRectArea();
-                    var cooperativeHandler = CaptureCooperativeRevivalHandler?.Invoke();
-                    bool? cooperativeColorHit = null;
-                    if (cooperativeHandler == null)
+                    await _revivalProbe.WaitAsync(ct);
+                    try
                     {
-                        // No active cooperative fight: allow the next fight to arm a new episode.
-                        cooperativeEpisodeNotified = false;
-                    }
-                    else
-                    {
-                        bool templateHit = false;
-                        if (_revivalRo != null)
+                        using var region = CaptureToRectArea();
+                        // 冻结检测
+                        if (_frozenRo != null)
                         {
-                            using var revivalProbe = region.Find(_revivalRo);
-                            templateHit = revivalProbe.IsExist();
-                        }
-                        cooperativeColorHit = IsMultiplayerDefeated(region);
-                        // Rearm only on a fresh frame with neither death indicator present.
-                        if (!templateHit && !cooperativeColorHit.Value)
-                            cooperativeEpisodeNotified = false;
-                    }
-
-                    // 冻结检测
-                    if (_frozenRo != null)
-                    {
-                        using var result = region.Find(_frozenRo);
-                        if (result.IsExist())
-                        {
-                            Logger.LogInformation("检测到冻结，尝试挣脱");
-                            for (int i = 0; i < 3; i++)
+                            using var result = region.Find(_frozenRo);
+                            if (result.IsExist())
                             {
-                                InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_SPACE);
-                                await Task.Delay(30, ct);
-                            }
-                            continue;
-                        }
-                    }
-
-                    // 白芙检测
-                    if (!ShouldSwitchFurina && _whiteFurinaRo != null)
-                    {
-                        using var result = region.Find(_whiteFurinaRo);
-                        if (result.IsExist())
-                        {
-                            Logger.LogInformation("检测到白芙，路线结束后切换形态");
-                            ShouldSwitchFurina = true;
-                            continue;
-                        }
-                    }
-
-                    // 复苏检测（模板匹配，单机模式）
-                    if (_revivalRo != null)
-                    {
-                        using var result = region.Find(_revivalRo);
-                        if (result.IsExist())
-                        {
-                            var suppressed = TpTask.SuppressAutoRevivalClick;
-                            if (!suppressed)
-                            {
-                                Logger.LogInformation("识别到复苏按钮（单机模板匹配），点击");
-                                result.Click();
-                                await Task.Delay(500, ct);
-                            }
-                            else
-                            {
-                                Logger.LogInformation("[传送中] 检测到复苏（模板匹配），抑制自动点击，由 TpTask 主动检测");
-                            }
-
-                            // 联机模式：触发"已倒下"信号，PathExecutor 在 MoveTo 主循环 / waypoint 兜底位置消费走异常流程
-                            // （与色块路径 IsMultiplayerDefeated 行为完全对齐，让 _revivalRo 模板路径也写信号位）
-                            // 详见 .kiro/specs/multiplayer-walk-revive-skip-segment/design.md §3.1
-                            NotifyConfirmedRevival(cooperativeHandler);
-
-                            // 联机模式：触发复苏回调上报异常状态（回调照常触发，语义不变）
-                            if (cooperativeHandler == null && OnRevivalDetected != null)
-                            {
-                                try { await OnRevivalDetected(); } catch { }
-                            }
-
-                            // 抑制分支不 continue，让循环走到末尾的 loopCount++ + Task.Delay(50, ct) 自然节流。
-                            if (AnomalyDetectorThrottleDecisions.ShouldContinueAfterRevivalHit(
-                                    revivalHit: true,
-                                    suppressAutoRevivalClick: suppressed))
-                            {
+                                Logger.LogInformation("检测到冻结，尝试挣脱");
+                                for (int i = 0; i < 3; i++)
+                                {
+                                    InputHub.Foreground.Keyboard.KeyPress(User32.VK.VK_SPACE);
+                                    await Task.Delay(30, ct);
+                                }
                                 continue;
                             }
                         }
-                    }
-                    // 联机模式复苏检测：色块连通性检测"已倒下"红色文字
-                    // 二次确认容错：首帧命中后等待 400ms 重新捕获一帧再检测，连续两帧命中才视为真倒下，
-                    // 避免战斗中红色特效/伤害数字/UI 瞬时落入检测区导致的假阳性误触发。
-                    // 详见 .kiro/specs/hoeing-multiplayer-defeated-colorblock-false-trigger-recheck-fix/bugfix.md 2.1~2.3
-                    if (cooperativeColorHit ?? IsMultiplayerDefeated(region))
-                    {
-                        await Task.Delay(MultiplayerDefeatedRecheckDelayMs, ct);
-                        using var recheckRegion = CaptureToRectArea();
-                        if (!AnomalyDetectorThrottleDecisions.ShouldProcessMultiplayerDefeated(
-                                firstHit: true,
-                                recheckHit: IsMultiplayerDefeated(recheckRegion)))
+
+                        // 白芙检测
+                        if (!ShouldSwitchFurina && _whiteFurinaRo != null)
                         {
-                            // 二次确认未通过：判定为瞬时误触发，安全忽略（不点击、不发信号、不触发回调）
-                            Logger.LogDebug("疑似联机已倒下色块误触发，二次确认未通过，已忽略");
-                        }
-                        else
-                        {
-                            var suppressed = TpTask.SuppressAutoRevivalClick;
-                            if (!suppressed)
+                            using var result = region.Find(_whiteFurinaRo);
+                            if (result.IsExist())
                             {
-                                //释放所有按键
-                                InputHub.ReleaseAll();
-                                Logger.LogInformation("识别到联机已倒下界面（色块检测），点击复苏按钮");
-                                await Task.Delay(100, ct);
-                                recheckRegion.ClickTo(960, 1020);
-                                recheckRegion.ClickTo(960, 1020);
-                                await Task.Delay(100, ct);
-                                InputHub.ReleaseAll();
-                                recheckRegion.ClickTo(960, 1020);
-                                recheckRegion.ClickTo(960, 1020);
-                                await Task.Delay(100, ct);
-                                InputHub.ReleaseAll();
-                                recheckRegion.ClickTo(960, 1020);
-                                recheckRegion.ClickTo(960, 1020);
-                                await Task.Delay(300, ct);
-                            }
-                            else
-                            {
-                                Logger.LogInformation("[传送中] 检测到复苏（色块检测），抑制自动点击，由 TpTask 主动检测");
-                            }
-
-                            // 联机模式：触发"已倒下"信号，PathExecutor 在主循环将抛 RetryException 走异常流程
-                            // （信号位写入路径不变，preservation §3.3 / §3.4）
-                            NotifyConfirmedRevival(cooperativeHandler);
-
-                            // 兼容：仍保留通用复苏回调（当前为空操作，留作未来扩展）
-                            if (cooperativeHandler == null && OnRevivalDetected != null)
-                            {
-                                try { await OnRevivalDetected(); } catch { }
-                            }
-
-                            // 抑制分支不 continue，让循环走到末尾的 loopCount++ + Task.Delay(50, ct)，
-                            // 靠 loopCount % 5 == 0 自然节流到 250 ms（OQ2 = B）。
-                            // 非抑制分支保留 continue：原"立即点击 + 800ms 延迟"语义不变（preservation §3.1）。
-                            if (AnomalyDetectorThrottleDecisions.ShouldContinueAfterRevivalHit(
-                                    revivalHit: true,
-                                    suppressAutoRevivalClick: suppressed))
-                            {
+                                Logger.LogInformation("检测到白芙，路线结束后切换形态");
+                                ShouldSwitchFurina = true;
                                 continue;
                             }
                         }
+
+                        if (await CheckRevivalAsync(region, ct)) continue;
+                    }
+                    finally
+                    {
+                        _revivalProbe.Release();
                     }
                 }
 
@@ -285,6 +163,170 @@ public class AnomalyDetector
                 await Task.Delay(50, ct);
             }
         }
+    }
+
+    // 在交接点先等待可能已开始的二次确认及上报，再切换战斗点身份。
+    internal async Task SettleRevivalAsync(bool checkFrame, Action? completeHandoff, CancellationToken ct)
+    {
+        await _revivalProbe.WaitAsync(ct);
+        try
+        {
+            if (checkFrame && !TemplatePickupService.SuppressPickupInput)
+            {
+                using var region = CaptureToRectArea();
+                await CheckRevivalAsync(region, ct);
+            }
+            ct.ThrowIfCancellationRequested();
+            completeHandoff?.Invoke();
+        }
+        finally
+        {
+            _revivalProbe.Release();
+        }
+    }
+
+    private async Task<bool> CheckRevivalAsync(ImageRegion region, CancellationToken ct)
+    {
+        var cooperativeHandler = CaptureCooperativeRevivalHandler?.Invoke();
+        var hasFightRevivalPoint = HasFightRevivalPoint?.Invoke() == true;
+        bool? cooperativeColorHit = null;
+        if (cooperativeHandler == null && !hasFightRevivalPoint)
+        {
+            _revivalEpisodeNotified = false;
+        }
+        else
+        {
+            bool templateHit = false;
+            if (_revivalRo != null)
+            {
+                using var revivalProbe = region.Find(_revivalRo);
+                templateHit = revivalProbe.IsExist();
+            }
+            cooperativeColorHit = IsMultiplayerDefeated(region);
+            // Rearm only on a fresh frame with neither death indicator present.
+            if (!templateHit && !cooperativeColorHit.Value)
+                _revivalEpisodeNotified = false;
+        }
+
+        // 复苏检测（模板匹配，单机模式）
+        if (_revivalRo != null)
+        {
+            using var result = region.Find(_revivalRo);
+            if (result.IsExist())
+            {
+                var suppressed = TpTask.SuppressAutoRevivalClick;
+                if (!suppressed)
+                {
+                    Logger.LogInformation("识别到复苏按钮（单机模板匹配），点击");
+                    result.Click();
+                    await Task.Delay(500, ct);
+                }
+                else
+                {
+                    Logger.LogInformation("[传送中] 检测到复苏（模板匹配），抑制自动点击，由 TpTask 主动检测");
+                }
+
+                // 联机模式：触发"已倒下"信号，PathExecutor 在 MoveTo 主循环 / waypoint 兜底位置消费走异常流程
+                // （与色块路径 IsMultiplayerDefeated 行为完全对齐，让 _revivalRo 模板路径也写信号位）
+                // 详见 .kiro/specs/multiplayer-walk-revive-skip-segment/design.md §3.1
+                if (!suppressed || !hasFightRevivalPoint)
+                    NotifyConfirmedRevival(cooperativeHandler, hasFightRevivalPoint);
+
+                // 联机模式：触发复苏回调上报异常状态（回调照常触发，语义不变）
+                if (cooperativeHandler == null && OnRevivalDetected != null)
+                {
+                    try { await OnRevivalDetected(); } catch { }
+                }
+
+                // 抑制分支不 continue，让循环走到末尾的 loopCount++ + Task.Delay(50, ct) 自然节流。
+                if (AnomalyDetectorThrottleDecisions.ShouldContinueAfterRevivalHit(
+                        revivalHit: true,
+                        suppressAutoRevivalClick: suppressed))
+                {
+                    return true;
+                }
+            }
+        }
+        // 联机模式复苏检测：色块连通性检测"已倒下"红色文字
+        // 二次确认容错：首帧命中后等待 1000ms 重新捕获一帧再检测，连续两帧命中才视为真倒下，
+        // 避免战斗中红色特效/伤害数字/UI 瞬时落入检测区导致的假阳性误触发。
+        // 详见 .kiro/specs/hoeing-multiplayer-defeated-colorblock-false-trigger-recheck-fix/bugfix.md 2.1~2.3
+        if (cooperativeColorHit ?? IsMultiplayerDefeated(region))
+        {
+            await Task.Delay(MultiplayerDefeatedRecheckDelayMs, ct);
+            using var recheckRegion = CaptureToRectArea();
+            if (!AnomalyDetectorThrottleDecisions.ShouldProcessMultiplayerDefeated(
+                    firstHit: true,
+                    recheckHit: IsMultiplayerDefeated(recheckRegion)))
+            {
+                // 二次确认未通过：判定为瞬时误触发，安全忽略（不点击、不发信号、不触发回调）
+                Logger.LogDebug("疑似联机已倒下色块误触发，二次确认未通过，已忽略");
+            }
+            else
+            {
+                var suppressed = TpTask.SuppressAutoRevivalClick;
+                if (!suppressed)
+                {
+                    //释放所有按键
+                    InputHub.ReleaseAll();
+                    Logger.LogInformation("识别到联机已倒下界面（色块检测），点击复苏按钮");
+                    await Task.Delay(100, ct);
+                    recheckRegion.ClickTo(960, 1020);
+                    recheckRegion.ClickTo(960, 1020);
+                    await Task.Delay(100, ct);
+                    InputHub.ReleaseAll();
+                    recheckRegion.ClickTo(960, 1020);
+                    recheckRegion.ClickTo(960, 1020);
+                    await Task.Delay(100, ct);
+                    InputHub.ReleaseAll();
+                    recheckRegion.ClickTo(960, 1020);
+                    recheckRegion.ClickTo(960, 1020);
+                    await Task.Delay(300, ct);
+                }
+                else
+                {
+                    Logger.LogInformation("[传送中] 检测到复苏（色块检测），抑制自动点击，由 TpTask 主动检测");
+                }
+
+                // 联机模式：触发"已倒下"信号，PathExecutor 在主循环将抛 RetryException 走异常流程
+                // （信号位写入路径不变，preservation §3.3 / §3.4）
+                if (!suppressed || !hasFightRevivalPoint)
+                    NotifyConfirmedRevival(cooperativeHandler, hasFightRevivalPoint);
+
+                // 兼容：仍保留通用复苏回调（当前为空操作，留作未来扩展）
+                if (cooperativeHandler == null && OnRevivalDetected != null)
+                {
+                    try { await OnRevivalDetected(); } catch { }
+                }
+
+                // 抑制分支不 continue，让循环走到末尾的 loopCount++ + Task.Delay(50, ct)，
+                // 靠 loopCount % 5 == 0 自然节流到 250 ms（OQ2 = B）。
+                // 非抑制分支保留 continue：原"立即点击 + 800ms 延迟"语义不变（preservation §3.1）。
+                if (AnomalyDetectorThrottleDecisions.ShouldContinueAfterRevivalHit(
+                        revivalHit: true,
+                        suppressAutoRevivalClick: suppressed))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void NotifyConfirmedRevival(Action? capturedHandler, bool hasFightRevivalPoint)
+    {
+        if (capturedHandler != null || hasFightRevivalPoint)
+        {
+            if (_revivalEpisodeNotified) return;
+            _revivalEpisodeNotified = true;
+        }
+        if (capturedHandler == null)
+        {
+            try { OnMultiplayerDefeatedDetected?.Invoke(); } catch { }
+            return;
+        }
+        try { capturedHandler(); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Cooperative revival notification failed"); }
     }
 
     /// <summary>

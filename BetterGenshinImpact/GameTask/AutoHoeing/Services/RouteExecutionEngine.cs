@@ -71,6 +71,7 @@ public class RouteExecutionEngine
         _coordinator = coordinator;
         _anomalyDetector.CaptureCooperativeRevivalHandler = coordinator == null
             ? null : CaptureCooperativeRevivalHandler;
+        _anomalyDetector.HasFightRevivalPoint = () => _activeExecutor?.CurrentFightRevivalPoint != null;
         
         // 设置异常检测器的复苏回调
         if (coordinator != null)
@@ -96,22 +97,24 @@ public class RouteExecutionEngine
                 var executor = _activeExecutor;
                 if (executor == null || executor.CooperativeContext != null) return;
 
-                // 本机复苏信号与“线路重试模式”无关，必须始终交给 PathExecutor，
-                // 否则主循环不会抛 RetryException，死亡后的寻路会继续使用旧坐标。
-                executor.SignalMultiplayerRevival();
-                if (!_currentRouteRetryModeEnabled) return;
+                // 未配置重跑时，仍然要执行本机的战斗复苏处理。
+                if (!_currentRouteRetryModeEnabled)
+                {
+                    executor.SignalMultiplayerRevival();
+                    return;
+                }
 
                 // === 传送后复苏保护短路（multiplayer-hoeing-post-teleport-revival-protection）===
                 // 命中保护窗口 → 仅本机处理，不进入 tracker / 路线标记 / 异常上报（requirements 2.3, 3.6）。
                 // 消费由 PathExecutor.catch(RetryException) 保护分支（Task 4.3）完成，此处只只读判定短路，
                 // 不做任何 CAS 消费，避免双重消费。未命中则完全走下方既有回调逻辑。
-                if (executor.IsPostTeleportRevivalProtectionHit())
+                var fightPoint = executor.CurrentFightRevivalPoint;
+                if (fightPoint == null && executor.IsPostTeleportRevivalProtectionHit())
                 {
+                    executor.SignalMultiplayerRevival();
                     Logger.LogInformation("[联机] 传送后复苏保护命中，短路团队副作用，仅本机从当前段起点重跑");
                     return;
                 }
-
-                HandleRevivalTrigger(executor);
                 // 标记/上报必须用"线路在组内的索引"（CurrentJsonRouteIndex），而非"当前段在路线内的索引"
                 // （CurrentRouteIndex）。误用段索引会导致：从第 N 条线路开始时，段0=0 被错记成线路0，
                 // 轮末重跑取 groupRoutes[0] 重跑第一条线路，而非真正发生复苏的线路（重跑错误线路 bugfix）。
@@ -123,12 +126,15 @@ public class RouteExecutionEngine
                 }
 
                 var c = _coordinator;
-                var fightPointId = executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1;
+                var fightPointId = fightPoint == null
+                    ? executor.CurWaypoints.Item1 * 10000 + executor.CurWaypoint.Item1
+                    : fightPoint.SegmentIndex * 10000 + fightPoint.WaypointIndex;
                 if (c != null && c.Client.IsConnected)
                 {
                     // Legacy clients retain the existing route/fight-point broadcast.
                     _ = c.Client.ReportAnomalyWithFightPointAsync(c.Client.MyPlayerUid, routeIndex, fightPointId);
                 }
+                HandleRevivalTrigger(executor);
             };
         }
         else
@@ -144,22 +150,25 @@ public class RouteExecutionEngine
         var context = executor?.CooperativeContext;
         if (executor == null || context == null) return null;
 
-        var pointId = executor.ActiveCooperativeFight?.PointId;
+        var fightPoint = executor.CurrentFightRevivalPoint;
+        var pointId = fightPoint?.CooperativePointId;
         var eligible = context.Plan.Manifest.Eligible;
         var retryMode = _currentRouteRetryModeEnabled;
-        var protectedRevival = executor.IsPostTeleportRevivalProtectionHit();
+        var protectedRevival = fightPoint == null && executor.IsPostTeleportRevivalProtectionHit();
         return () =>
         {
             if (!ReferenceEquals(_activeExecutor, executor)
                 || !ReferenceEquals(executor.CooperativeContext, context)) return;
 
-            // Always signal local recovery, including deaths outside an active fight.
-            executor.SignalMultiplayerRevival();
-            if (protectedRevival) return;
-            if (retryMode) HandleRevivalTrigger(executor);
-            if (eligible && pointId != null) context.ReportDeath(pointId);
-            else if (eligible && pointId == null)
-                Logger.LogWarning("[共同重跑] 复苏发生在没有规范战斗点身份的上下文中，未产生重跑标记");
+            if (!protectedRevival && eligible)
+            {
+                if (pointId != null) context.ReportDeath(pointId);
+                else Logger.LogWarning("[共同重跑] 复苏发生在没有规范战斗点身份的上下文中，未产生重跑标记");
+            }
+
+            // 先登记死亡标记，再放行路线线程进入恢复或结束正常轮。
+            if (retryMode && !protectedRevival) HandleRevivalTrigger(executor);
+            else executor.SignalMultiplayerRevival();
         };
     }
 
@@ -373,6 +382,7 @@ public class RouteExecutionEngine
                     if (_config.MultiplayerEnabled && _coordinator != null)
                     {
                         executor.MultiplayerCoordinator = _coordinator;
+                        executor.SettleFightRevivalAsync = _anomalyDetector.SettleRevivalAsync;
                         executor.WorldStateMonitor = _worldStateMonitor;
                         PathExecutor.CurrentWorldStateMonitor = _worldStateMonitor;
                         PathExecutor.CurrentMultiplayerCoordinator = _coordinator;

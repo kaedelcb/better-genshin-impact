@@ -41,15 +41,15 @@ public class TpTask
 
     // ===== 公共入口方法 =====
 
-    public async Task TpToStatueOfTheSeven(bool requireLoadingScreen = false)
+    public async Task TpToStatueOfTheSeven(bool requireLoadingScreen = false, bool confirmArrival = false)
     {
         if (UseOfficial)
         {
-            await _official.TpToStatueOfTheSeven();
+            await _official.TpToStatueOfTheSeven(confirmArrival);
         }
         else
         {
-            await _fastDrag.TpToStatueOfTheSeven(requireLoadingScreen);
+            await _fastDrag.TpToStatueOfTheSeven(requireLoadingScreen || confirmArrival);
         }
     }
 

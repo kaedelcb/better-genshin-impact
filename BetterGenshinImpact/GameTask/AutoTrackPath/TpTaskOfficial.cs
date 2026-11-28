@@ -251,7 +251,7 @@ public class TpTaskOfficial
     /// <summary>
     /// 传送到七天神像
     /// </summary>
-    public async Task TpToStatueOfTheSeven()
+    public async Task TpToStatueOfTheSeven(bool confirmArrival = false)
     {
         await CheckInBigMapUi();
 
@@ -272,7 +272,7 @@ public class TpTaskOfficial
         }
 
         Logger.LogInformation("将传送至 {country} {area} 七天神像", country, area);
-        await Tp(x, y, MapTypes.Teyvat.ToString(), false);
+        await Tp(x, y, MapTypes.Teyvat.ToString(), false, confirmArrival);
         if (_tpConfig.ShouldMove || _tpConfig.IsReviveInNearestStatueOfTheSeven)
         {
             (x, y) = GetClosestPoint(revivePoint.TranX, revivePoint.TranY, x, y, 5);
@@ -388,7 +388,8 @@ public class TpTaskOfficial
         double tpX,
         double tpY,
         string mapName = "Teyvat",
-        bool force = false)
+        bool force = false,
+        bool confirmArrival = false)
     {
         ClearRememberedAreaSwitchCenterPoint();
 
@@ -403,7 +404,15 @@ public class TpTaskOfficial
         var clickView = await PrepareTeleportClickView(target);
         var fallbackCandidate = ClickTeleportTargetMapPoint(target, clickView);
         await ClickTpPointAfterMapPointSelected(target, fallbackCandidate);
-        await WaitForTeleportCompletion();
+        if (confirmArrival) TpTask.SuppressAutoRevivalClick = true;
+        try
+        {
+            await WaitForTeleportCompletion(confirmArrival);
+        }
+        finally
+        {
+            if (confirmArrival) TpTask.SuppressAutoRevivalClick = false;
+        }
 
         s_lastSuccessfulTeleportMapName = target.MapName;
         return (target.X, target.Y);
@@ -1004,7 +1013,7 @@ public class TpTaskOfficial
     /// <summary>
     ///     检查传送是否完成，未完成则等待
     /// </summary>
-    private async Task WaitForTeleportCompletion()
+    private async Task WaitForTeleportCompletion(bool confirmArrival)
     {
         var observedLoadingState = false;
         var consecutiveNonUiChecks = 0;
@@ -1016,6 +1025,8 @@ public class TpTaskOfficial
 
             var capture = CaptureToRectArea();
             using var ownedCapture = capture;
+            if (confirmArrival && Bv.IsInRevivePrompt(capture))
+                throw new TeleportLoadingTimeoutException("传送过程中检测到复苏弹窗");
             var isInMainUi = Bv.IsInMainUi(capture);
 
             if (isInMainUi)
@@ -1039,7 +1050,9 @@ public class TpTaskOfficial
                     // 地图关闭后出现的黑屏、白屏或加载界面均不属于大地图和主界面。
                     // 必须先观察到这个中间态，避免把传送尚未开始时短暂出现的主界面误判为完成。
                     consecutiveNonUiChecks = isInBigMapUi ? 0 : consecutiveNonUiChecks + 1;
-                    observedLoadingState = consecutiveNonUiChecks >= 1;
+                    observedLoadingState = confirmArrival
+                        ? !isInBigMapUi && TeleportLoadingDetector.IsLoadingScreen(capture.SrcMat)
+                        : consecutiveNonUiChecks >= 1;
                 }
             }
 
@@ -1063,6 +1076,8 @@ public class TpTaskOfficial
             }
         }
 
+        if (confirmArrival)
+            throw new TeleportLoadingTimeoutException("未确认已到达七天神像");
         Logger.LogWarning("传送等待超时，换台电脑吧");
     }
 
@@ -1209,13 +1224,14 @@ public class TpTaskOfficial
     }
 
 
-    public async Task<(double, double)> Tp(double tpX, double tpY, string mapName = "Teyvat", bool force = false)
+    public async Task<(double, double)> Tp(double tpX, double tpY, string mapName = "Teyvat", bool force = false,
+        bool confirmArrival = false)
     {
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeoutCts.CancelAfter(TeleportTimeoutMs);
         try
         {
-            return await new TpTaskOfficial(timeoutCts.Token).TpWithRetries(tpX, tpY, mapName, force);
+            return await new TpTaskOfficial(timeoutCts.Token).TpWithRetries(tpX, tpY, mapName, force, confirmArrival);
         }
         catch (OperationCanceledException e) when (!ct.IsCancellationRequested && timeoutCts.IsCancellationRequested)
         {
@@ -1223,13 +1239,13 @@ public class TpTaskOfficial
         }
     }
 
-    private async Task<(double, double)> TpWithRetries(double tpX, double tpY, string mapName, bool force)
+    private async Task<(double, double)> TpWithRetries(double tpX, double tpY, string mapName, bool force, bool confirmArrival)
     {
         for (var i = 0; i < 3; i++)
         {
             try
             {
-                return await TpOnce(tpX, tpY, mapName, force);
+                return await TpOnce(tpX, tpY, mapName, force, confirmArrival);
             }
             catch (TeleportPanelNotOpenedException e)
             {
