@@ -220,11 +220,11 @@ public class SignalRClient : IAsyncDisposable
         return snapshot;
     }
 
-    internal async Task<(bool Success, bool Busy, string Reason)> LeaveControlRoomForSwitchAsync(CancellationToken ct)
+    internal async Task<(bool Success, bool Busy, string Reason)> LeaveControlRoomForSwitchAsync(bool withdrawOnlineIntent, CancellationToken ct)
     {
         var gateway = _gateway ?? throw new ControlChannelUnavailableException("原房间没有连接");
         if (!IsControlRoomReady) throw new ControlChannelUnavailableException("原房间连接状态未确认");
-        var reply = await gateway.InvokeCommandAsync("control.leaveRoom", new { roomCode = _roomCode }, ct: ct);
+        var reply = await gateway.InvokeCommandAsync("control.leaveRoom", new { roomCode = _roomCode, withdrawOnlineIntent }, ct: ct);
         if (reply.Payload?["success"] is null) throw new ControlChannelUnavailableException("离房结果未确认");
         return (reply.Payload["success"]!.GetValue<bool>(), reply.Payload["busy"]?.GetValue<bool>() == true,
             reply.GetString("reason", "服务端拒绝离房"));

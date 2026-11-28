@@ -222,25 +222,30 @@ public sealed partial class RoomOperations
         return new(true, PlayersUpdate: snapshot);
     }
 
-    public async Task<ControlRoomLeaveResult> LeaveControlRoomAsync(GatewayHandlerContext ctx, string roomCode)
+    public async Task<ControlRoomLeaveResult> LeaveControlRoomAsync(GatewayHandlerContext ctx, string roomCode,
+        bool withdrawOnlineIntent = false)
     {
         var gate = ControlConnectionGate(ctx.ConnectionId);
         await gate.WaitAsync();
         try
         {
             var group = $"CTRL_{roomCode}";
-            bool wasReady;
             ControlRoomSession session;
             lock (_batchGate)
             {
                 if (!_controlRoomSessions.TryGetValue(ctx.ConnectionId, out session!) || session.Group != group)
                     return new(false, Reason: "当前连接未加入该房间");
                 if (session.Stage == ControlRoomStage.Left) return new(true);
-                wasReady = session.Stage == ControlRoomStage.Ready;
-                if (wasReady && IsControlRoomUidBusy(group, session.PlayerUid, _roomManager.ControlUtcNow))
-                    return new(false, true, "当前房间还有未结清的上线意图或批次");
-                if (wasReady)
+                if (session.Stage == ControlRoomStage.Ready)
                 {
+                    if (!session.Observer && _roomManager.GetUidByConnectionId(group, ctx.ConnectionId) == session.PlayerUid)
+                    {
+                        if (HasUnsettledControlRoomBatch(group, session.PlayerUid))
+                            return new(false, true, "本机在原房间的联机批次仍在执行或收尾");
+                        if (!withdrawOnlineIntent && _roomManager.HasLiveOnlineIntent(group, session.PlayerUid, _roomManager.ControlUtcNow))
+                            return new(false, true, "本机在原房间的上线意图仍在等待开批");
+                    }
+                    // Removing this connection also disarms its waiting intent under the batch admission lock.
                     DetachControlRoomMember(group, ctx.ConnectionId);
                 }
                 session.Stage = ControlRoomStage.Leaving;
@@ -311,8 +316,10 @@ public sealed partial class RoomOperations
     }
 
     private bool IsControlRoomUidBusy(string group, string uid, DateTime utcNow) =>
-        _roomManager.HasLiveOnlineIntent(group, uid, utcNow)
-        || (_controlBatches.TryGetValue(group, out var batch) && !batch.IsTerminal && batch.HasParticipant(uid));
+        _roomManager.HasLiveOnlineIntent(group, uid, utcNow) || HasUnsettledControlRoomBatch(group, uid);
+
+    private bool HasUnsettledControlRoomBatch(string group, string uid) =>
+        _controlBatches.TryGetValue(group, out var batch) && batch.HasUnsettledParticipant(uid);
 
     private static string? AuthRejection(ControlRoomAuthResult auth) => auth switch
     {

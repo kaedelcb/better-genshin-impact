@@ -204,6 +204,14 @@ public partial class MainViewModel
         return host?.HasUnsettledOnlineHoeingHandoff == true;
     }
 
+    private void ClearDepartedRoomOnlineIntent(RoomOrchestrationRoomKey? sourceKey)
+    {
+        // A later reconnection to the same profile must not replay the departed session's intent.
+        _intentLifecycle.ChangeAssistantRoom();
+        _workflowOnlineOrigin = null;
+        if (sourceKey is not null) RevokeRoomOrchestrationOnline("已离开原房间", departed: sourceKey);
+    }
+
     internal Task<FlowRoomSwitchResult> SwitchAssistantRoomForFlowAsync(string profileId,
         Func<CancellationToken, Task>? verifySource, CancellationToken ct)
         => SwitchAssistantRoomCoreAsync(profileId, verifySource, null, ct);
@@ -245,6 +253,8 @@ public partial class MainViewModel
         var readyAttempted = false;
         var connectionGate = false;
         var restartSource = false;
+        CancellationToken waitToken = default;
+        string? leaveWaitReason = null;
         try
         {
             if (_disposing || _config is not { StandaloneMode: false } config || _configManager is null)
@@ -287,6 +297,7 @@ public partial class MainViewModel
             // An explicit return after BGI online can wait through the current batch. Independent
             // nodes have a shorter admission budget and never cancel the work they're waiting on.
             using var wait = CancellationTokenSource.CreateLinkedTokenSource(token);
+            waitToken = wait.Token;
             wait.CancelAfter(waitForOnlineRound ? TimeSpan.FromHours(6) : TimeSpan.FromSeconds(45));
             var comparedTarget = (target.RoomCode, target.Password, Uids: string.Join('\n', target.TeamUids));
             var record = new RoomSwitchRecord(requestIdentity ?? Guid.NewGuid().ToString("N"), config.ServerUrl, config.PlayerUid,
@@ -306,6 +317,7 @@ public partial class MainViewModel
                     || _localResetGate.CurrentCount == 0 || Volatile.Read(ref _refreshRunning) != 0
                     || !_pendingCenterReplies.IsEmpty || _pendingCommandResults.Count != 0)
                 {
+                    leaveWaitReason = "本机联机批次或房间操作尚未结清";
                     await Task.Delay(750, wait.Token);
                     continue;
                 }
@@ -328,18 +340,21 @@ public partial class MainViewModel
                     continue;
                 }
                 if (orchestration is not null && !UpdateRoomOrchestrationExecution(orchestration.Id, old => old with
-                    { SwitchState = "switching", Message = "正在确认原房间允许安全离开" }))
+                    { SwitchState = "switching", Message = "正在确认原房间的离房结果" }))
                     throw new IOException("编排接续记录未保存，未提交离房");
                 RecordAssistantRoomSwitch(record);
-                // No outbound command or automatic reconnect can reassign the source during the leave.
+                // Independent switches withdraw a waiting online intent. A chained return must
+                // wait for its online action, and orchestration must yield to any newer intent.
+                var withdrawOnlineIntent = !waitForOnlineRound && orchestration is null;
                 submittedLeave = true;
                 using var leaveBudget = CancellationTokenSource.CreateLinkedTokenSource(token);
                 leaveBudget.CancelAfter(TimeSpan.FromSeconds(12));
                 var leave = old is null ? (Success: true, Busy: false, Reason: "")
-                    : await old.LeaveControlRoomForSwitchAsync(leaveBudget.Token);
+                    : await old.LeaveControlRoomForSwitchAsync(withdrawOnlineIntent, leaveBudget.Token);
                 if (leave.Success)
                 {
                     confirmedLeave = true;
+                    ClearDepartedRoomOnlineIntent(sourceKey);
                     break;
                 }
                 if (!leave.Busy) throw new ControlChannelUnavailableException(leave.Reason);
@@ -348,10 +363,11 @@ public partial class MainViewModel
                 _changingAssistantRoom = false;
                 _connectionAttemptGate.Release();
                 connectionGate = false;
-                SetRoomSwitchStatus("等待切换到「" + target.Name + "」：当前房间仍在等待或收尾");
+                leaveWaitReason = leave.Reason;
+                SetRoomSwitchStatus("等待切换到「" + target.Name + "」：" + leaveWaitReason);
                 if (orchestration is not null)
                     UpdateRoomOrchestrationExecution(orchestration.Id, old => old with
-                    { SwitchState = "waiting", Message = "本机已清理，等待原房间队友结束或收尾" });
+                    { SwitchState = "waiting", Message = leave.Reason });
                 await Task.Delay(750, wait.Token);
             }
 
@@ -428,7 +444,6 @@ public partial class MainViewModel
                 candidate.ControlContext = CurrentControlContext();
                 candidate.CoordinateRoomJoin = CoordinateControlRoomJoinAsync;
                 PublishCoordinatedResetFenceRoom(candidate);
-                if (sourceKey is not null) RevokeRoomOrchestrationOnline("已离开原房间", departed: sourceKey);
                 _intentLifecycle.ChangeAssistantRoom(newSuppression);
                 Volatile.Write(ref _roomSwitchCommittedAtUtc, DateTime.UtcNow.Ticks);
                 _lastScheduledFireDate = config.ScheduledOnlineLastFireDate?.Date ?? DateTime.MinValue;
@@ -508,8 +523,14 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             var unknown = submittedLeave || _unconfirmedRoomSwitch is not null;
-            var message = unknown ? "切换结果待核对：" + ex.Message
-                : ex is OperationCanceledException ? "切房已取消或等待超时" : "切房失败：" + ex.Message;
+            var message = unknown ? "切换结果待核对：" + ex.Message : ex switch
+            {
+                OperationCanceledException when token.IsCancellationRequested => "切房已取消",
+                OperationCanceledException when waitToken.IsCancellationRequested =>
+                    "切房等待超时：" + (leaveWaitReason ?? "本机房间操作尚未结束"),
+                OperationCanceledException => "切房已取消：" + ex.Message,
+                _ => "切房失败：" + ex.Message,
+            };
             // A lost leave reply is not authority to disconnect a possibly still active source.
             // Keep its transport available for the existing stop and batch cleanup paths.
             SetRoomSwitchStatus(message);
@@ -623,6 +644,8 @@ public partial class MainViewModel
                 throw new InvalidOperationException("原房间连接在核对中改变");
             if (stillAuthorized?.Invoke() == false || !ReferenceEquals(config, _config) || _unconfirmedRoomSwitch != record)
                 throw new InvalidOperationException("原切房记录、网页授权或执行端已变化");
+            if (retainedSourceSnapshot is null && config.ActiveRoomProfileId == record.OriginalProfileId)
+                ClearDepartedRoomOnlineIntent(GetRoomOrchestrationKey(config.ActiveRoomProfile));
             ClearAssistantRoomSwitchRecord();
             confirmed = true;
             SetRoomSwitchStatus("已确认原请求终止，未恢复自动流程");

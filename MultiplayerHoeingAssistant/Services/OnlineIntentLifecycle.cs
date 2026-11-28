@@ -418,7 +418,7 @@ public sealed class OnlineIntentLifecycle
         get { lock (_gate) return _state == OnlineIntentState.Armed && _armedIntentGeneration > 0 ? _armedIntentGeneration : null; }
     }
 
-    internal void ChangeAssistantRoom(bool suppressScheduledOnline)
+    internal void ChangeAssistantRoom(bool? suppressScheduledOnline = null)
     {
         string? transitionLog;
         lock (_gate)
@@ -429,7 +429,7 @@ public sealed class OnlineIntentLifecycle
             _armedIntentGeneration = 0;
             _activeCoordinatedBatchId = null;
             _lastOnlineEventReportedAtUtc = DateTime.MinValue;
-            _manuallyClearedOnline = suppressScheduledOnline;
+            if (suppressScheduledOnline is { } suppress) _manuallyClearedOnline = suppress;
         }
         if (transitionLog != null) _log(transitionLog);
     }

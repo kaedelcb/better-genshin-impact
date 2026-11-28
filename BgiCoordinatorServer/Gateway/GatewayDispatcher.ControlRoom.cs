@@ -28,7 +28,8 @@ public sealed partial class GatewayDispatcher
         _commands[GatewayProtocol.Names.ControlReadyRoom] = async (env, ctx) =>
             await _ops.ReadyControlRoomAsync(ctx, Get<Models.ControlStatus>(env, "status"));
         _commands[GatewayProtocol.Names.ControlLeaveRoom] = async (env, ctx) =>
-            await _ops.LeaveControlRoomAsync(ctx, GetString(env, "roomCode", env.RoomCode ?? ""));
+            await _ops.LeaveControlRoomAsync(ctx, GetString(env, "roomCode", env.RoomCode ?? ""),
+                withdrawOnlineIntent: GetBool(env, "withdrawOnlineIntent"));
         _commands[GatewayProtocol.Names.ControlRoomSnapshot] = _queries[GatewayProtocol.Names.ControlRoomSnapshot]
             = async (env, ctx) => await _ops.GetControlRoomSnapshotAsync(ctx, GetString(env, "roomCode", env.RoomCode ?? ""));
         _commands[GatewayProtocol.Names.ControlRoomAccess] = _queries[GatewayProtocol.Names.ControlRoomAccess]

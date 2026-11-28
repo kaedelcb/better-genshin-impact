@@ -58,8 +58,9 @@ public sealed class ControlRoomSwitchTests
     private static async Task<ControlRoomPlayersResult> Ready(GatewayTestHarness h, GatewayHandlerContext ctx, ControlStatus status)
         => Payload<ControlRoomPlayersResult>(await Command(h, ctx, "control.readyRoom", new { status }));
 
-    private static async Task<ControlRoomLeaveResult> Leave(GatewayTestHarness h, GatewayHandlerContext ctx, string roomCode)
-        => Payload<ControlRoomLeaveResult>(await Command(h, ctx, "control.leaveRoom", new { roomCode }));
+    private static async Task<ControlRoomLeaveResult> Leave(GatewayTestHarness h, GatewayHandlerContext ctx,
+        string roomCode, bool withdrawOnlineIntent = false)
+        => Payload<ControlRoomLeaveResult>(await Command(h, ctx, "control.leaveRoom", new { roomCode, withdrawOnlineIntent }));
 
     private static async Task<ControlRoomAccessResult> Access(GatewayTestHarness h, GatewayHandlerContext ctx, string roomCode, string playerUid)
         => Payload<ControlRoomAccessResult>(await Command(h, ctx, "control.roomAccess", new { roomCode, password = Password, playerUid }));
@@ -288,7 +289,81 @@ public sealed class ControlRoomSwitchTests
     }
 
     [Fact]
-    public async Task LeaveAndManualAdmissionCannotBothSucceedForTheSameMember()
+    public async Task ExplicitLeaveWithdrawsOnlyTheDepartingMembersWaitingIntent()
+    {
+        var h = new GatewayTestHarness();
+        var leaving = await Connect(h);
+        var peer = await Connect(h);
+        var room = (await Create(h, leaving, "leaving", ["leaving", "peer"])).RoomCode;
+        foreach (var (ctx, uid) in new[] { (leaving, "leaving"), (peer, "peer") })
+        {
+            Assert.True((await Join(h, ctx, room, uid)).Success);
+            Assert.True((await Ready(h, ctx, Status(room, uid, expected: 3))).Success);
+            Assert.True((await Online(h, ctx, room, 1)).Success);
+        }
+
+        Assert.True((await Leave(h, leaving, room)).Busy);
+        Assert.True((await Leave(h, leaving, room, withdrawOnlineIntent: true)).Success);
+        Assert.True((await Leave(h, leaving, room, withdrawOnlineIntent: true)).Success);
+        Assert.False((await Online(h, leaving, room, 2)).Success);
+        var departed = await Access(h, peer, room, "leaving");
+        Assert.False(departed.Joined);
+        Assert.False(departed.Busy);
+        var remaining = await Access(h, peer, room, "peer");
+        Assert.True(remaining.Joined);
+        Assert.True(remaining.Busy);
+        Assert.Null(h.Ops.CurrentCoordinatedBatch(peer));
+    }
+
+    [Fact]
+    public async Task CleanedMemberCanSwitchBeforePeerCleanupButNewBatchWaitsForAdmission()
+    {
+        var h = new GatewayTestHarness();
+        var leaving = await Connect(h);
+        var peer = await Connect(h);
+        var target = await Connect(h);
+        var sourceRoom = (await Create(h, leaving, "leaving", ["leaving", "peer"])).RoomCode;
+        var targetRoom = (await Create(h, target, "leaving", ["leaving"])).RoomCode;
+        foreach (var (ctx, uid) in new[] { (leaving, "leaving"), (peer, "peer") })
+        {
+            Assert.True((await Join(h, ctx, sourceRoom, uid)).Success);
+            Assert.True((await Ready(h, ctx, Status(sourceRoom, uid))).Success);
+        }
+        var batch = await h.Ops.BeginManualCoordinatedBatchAsync(leaving, "prior", ["leaving", "peer"], null);
+        Task<CoordinatedBatchSnapshot> Update(GatewayHandlerContext ctx, string token, string stage, string result = "") =>
+            h.Ops.UpdateCoordinatedBatchAsync(ctx, batch.Generation, token, batch.BatchId, "group",
+                batch.Index, batch.Attempt, result, stage);
+        foreach (var stage in new[] { "registered", "prepared", "takeoverConfirmed" })
+        {
+            batch = await Update(leaving, "leaving-token", stage);
+            batch = await Update(peer, "peer-token", stage);
+        }
+        Assert.Equal("running", batch.Phase);
+        Assert.True((await Leave(h, leaving, sourceRoom, withdrawOnlineIntent: true)).Busy);
+        batch = await Update(leaving, "leaving-token", "takeoverConfirmed", "succeeded");
+        batch = await Update(peer, "peer-token", "takeoverConfirmed", "succeeded");
+        Assert.Equal("completed", batch.Phase);
+        Assert.True((await Leave(h, leaving, sourceRoom, withdrawOnlineIntent: true)).Busy);
+        batch = await Update(leaving, "leaving-token", "cleaned");
+        Assert.False(batch.CleanupComplete);
+        Assert.False((await Access(h, peer, sourceRoom, "leaving")).Busy);
+        Assert.True((await Access(h, peer, sourceRoom, "peer")).Busy);
+        Assert.True((await Leave(h, leaving, sourceRoom, withdrawOnlineIntent: true)).Success);
+        Assert.True((await Join(h, target, targetRoom, "leaving")).Success);
+        Assert.True((await Ready(h, target, Status(targetRoom, "leaving", expected: 1))).Success);
+        Assert.False(h.Ops.CurrentCoordinatedBatch(peer)!.CleanupComplete);
+        var blocked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            h.Ops.BeginManualCoordinatedBatchAsync(target, "next", ["leaving"], null));
+        Assert.Equal("participant_batch_active_in_another_room", blocked.Message);
+        batch = await Update(peer, "peer-token", "cleaned");
+        Assert.True(batch.CleanupComplete);
+        Assert.NotEqual(batch.BatchId, (await h.Ops.BeginManualCoordinatedBatchAsync(target, "next", ["leaving"], null)).BatchId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LeaveAndManualAdmissionCannotBothSucceedForTheSameMember(bool withdrawOnlineIntent)
     {
         var h = new GatewayTestHarness();
         var target = await Connect(h); var starter = await Connect(h);
@@ -298,7 +373,7 @@ public sealed class ControlRoomSwitchTests
         Assert.True((await Join(h, target, room, "target")).Success);
         Assert.True((await Ready(h, target, Status(room, "target"))).Success);
         var go = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var leaveTask = Task.Run(async () => { await go.Task; return await Leave(h, target, room); });
+        var leaveTask = Task.Run(async () => { await go.Task; return await Leave(h, target, room, withdrawOnlineIntent); });
         var beginTask = Task.Run(async () =>
         {
             await go.Task;

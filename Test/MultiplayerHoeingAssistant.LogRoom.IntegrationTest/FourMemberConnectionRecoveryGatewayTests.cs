@@ -225,6 +225,24 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
             {
                 await (Task)type.GetMethod("ConnectSignalRAsync", flags)!.Invoke(vm, null)!;
                 Assert.Contains(vm.Members, member => member.PlayerName == "A 队友");
+                async Task ArmSourceOnlineAsync()
+                {
+                    Assert.True(await (Task<bool>)type.GetMethod("MarkOnlineAsync", flags)!.Invoke(vm, ["manual"])!);
+                    Assert.True(a.Manager.GetControlRoomPlayers("CTRL_" + code).Single(p => p.PlayerUid == player).OnlineReady);
+                }
+                await ArmSourceOnlineAsync();
+                Assert.True(await peerB.ReportOnlineEventAsync(1, isOnlineReady: true));
+                using (var returnCancellation = CancellationTokenSource.CreateLinkedTokenSource(budget.Token))
+                {
+                    // The BGI mailbox uses this mode for a switch following its own online action.
+                    var returning = (Task<FlowRoomSwitchResult>)type.GetMethod("SwitchAssistantRoomCoreAsync", flags)!
+                        .Invoke(vm, [target.Id, null, null, returnCancellation.Token, true, null, null, null])!;
+                    await WaitUntilAsync(() => Task.FromResult(vm.RoomSwitchStatus.Contains("上线意图仍在等待开批", StringComparison.Ordinal)));
+                    Assert.False(returning.IsCompleted);
+                    returnCancellation.Cancel();
+                    Assert.False((await returning).Success);
+                    Assert.True(a.Manager.GetControlRoomPlayers("CTRL_" + code).Single(p => p.PlayerUid == player).OnlineReady);
+                }
                 // The monitor uses its own saved credentials to observe each room; these
                 // connections must never appear as an extra executor or replace the actual member.
                 // Exercise the internal helper without changing production visibility for a test.
@@ -282,6 +300,7 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 Assert.Contains(vm.Members, member => member.PlayerName == "B 队友");
                 Assert.DoesNotContain(a.Manager.GetControlRoomPlayers("CTRL_" + code), p => p.PlayerUid == player && p.Online);
                 var bMember = Assert.Single(b.Manager.GetControlRoomPlayers("CTRL_" + code).Where(p => p.PlayerUid == player && p.Online));
+                Assert.True(b.Manager.GetControlRoomPlayers("CTRL_" + code).Single(p => p.PlayerUid == peer).OnlineReady);
                 Assert.Equal(4, bMember.ExpectedHoeingPlayers);
                 Assert.Equal("B 的绑定", Assert.Single(bMember.OnlineHoeingGroupNames));
                 await WaitUntilAsync(() => Task.FromResult(Targets(monitorA).Length == 0 && Targets(monitorB).Any(t => t.ClientInstanceId == selectedInstance)));
@@ -328,6 +347,7 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 Assert.Equal(target.Id, config.OnlineHoeingRoomSwitchCompletion?.TargetProfileId);
                 Assert.True(config.ShowRoomOrchestration);
                 await WaitUntilAsync(() => Task.FromResult(Targets(monitorB).Length == 0 && Targets(monitorA).Any(t => t.ClientInstanceId == selectedInstance)));
+                await ArmSourceOnlineAsync();
                 target.Password = "incorrect";
                 var rejected = await Switch(target.Id);
                 Assert.False(rejected.Success);
@@ -337,6 +357,9 @@ public sealed class FourMemberConnectionRecoveryGatewayTests
                 Assert.True(vm.IsConnected);
                 Assert.Contains(vm.Members, member => member.PlayerName == "A 队友");
                 Assert.DoesNotContain(vm.Members, member => member.PlayerName == "B 队友");
+                Assert.False(a.Manager.GetControlRoomPlayers("CTRL_" + code).Single(p => p.PlayerUid == player).OnlineReady);
+                var lifecycle = Assert.IsType<OnlineIntentLifecycle>(type.GetField("_intentLifecycle", flags)!.GetValue(vm));
+                Assert.False(lifecycle.TryGetReReportGen(out _));
                 var saved = new AssistConfigManager().Load();
                 Assert.Equal(a.Url, saved.ServerUrl);
                 Assert.Equal(b.Url, saved.RoomProfiles.Single(p => p.Id == target.Id).ServerUrl);

@@ -130,10 +130,15 @@ public sealed class CoordinatedBatchState
     public string Phase { get; private set; } = "registering";
     public string Reason { get; private set; } = "";
     public bool ExecutionEnded => Phase is "completed" or "aborted";
-    public bool IsTerminal => ExecutionEnded
-        && _members.Values.All(m => !m.ResetCleanupPending && (m.Stage == "cleaned" || m.CompletionWaitReleased));
+    public bool IsTerminal => ExecutionEnded && _members.Values.All(IsMemberSettled);
     public IReadOnlyList<string> ParticipantUids => _members.Keys.ToArray();
     internal bool HasParticipant(string uid) => _members.ContainsKey(uid);
+
+    internal bool HasUnsettledParticipant(string uid) => _members.TryGetValue(uid, out var member)
+        && (!ExecutionEnded || !IsMemberSettled(member));
+
+    private static bool IsMemberSettled(Member member) => !member.ResetCleanupPending
+        && (member.Stage == "cleaned" || member.CompletionWaitReleased);
 
     public CoordinatedBatchState(int generation, IEnumerable<string> uids, DateTime now,
         string source = "online", string requestId = "",
