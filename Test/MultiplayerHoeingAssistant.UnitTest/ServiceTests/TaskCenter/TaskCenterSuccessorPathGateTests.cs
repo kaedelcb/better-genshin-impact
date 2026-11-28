@@ -153,6 +153,146 @@ public class TaskCenterSuccessorPathGateTests
         finally { await host.ShutdownAsync(); try { Directory.Delete(root, true); } catch { } }
     }
 
+    [Fact]
+    public async Task PriorityParkedAfterLocalWait_SamePlanReplacementSettlesOriginalCleanlyAndRunsSelectedSuccessor()
+    {
+        var root = NewRoot("priority-parked-localwait-replacement-");
+        using var client = new BgiExternalClient();
+        var port = new RoutingFakePort { UseGuidJobIds = true, HoldFirstStatus = true };
+        TaskCenterOnlineSendGate? gate = null;
+        var occupied = false;
+        var occupancy = 0;
+        var seams = new TaskCenterAdmissionSeams
+        {
+            Epoch = RoutingFakePort.Epoch, OccupiedProvider = () => Volatile.Read(ref occupied), FactsUnknown = false,
+            ProductionBoundaryFactory = (_, r) => new BgiWorkflowExecutionBoundary(port, r, gate),
+            Barriers = new AdmissionBarriers
+            {
+                AfterOccupyBeforeSend = () =>
+                {
+                    // E1 (FlowRegistration) succeeds while idle, then node "old" sees an occupied slot and parks in LocalWaitParking.
+                    if (Interlocked.Increment(ref occupancy) == 1) Volatile.Write(ref occupied, true);
+                    return Task.CompletedTask;
+                },
+            },
+        };
+        var host = new TaskCenterHost(Path.Combine(root, "flows"), Path.Combine(root, "runs"), Path.Combine(root, "catalog.json"),
+            () => client, log: null, runnerFactory: null, readinessOverride: () => (true, null), localExecutionCapability: () => true,
+            admissionWired: true, admissionSeams: seams, successorAdmissionWired: true, onlineEpochProvider: () => port.ServerEpoch);
+        gate = (TaskCenterOnlineSendGate)typeof(TaskCenterHost).GetField("_onlineSendGate",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(host)!;
+        try
+        {
+            var doc = new WorkflowDocument
+            {
+                Name = "日常计划", Activation = new() { Status = "active" },
+                Nodes =
+                [
+                    new() { NodeId = "old", Kind = "resource.oneDragonConfig", Ref = new() { Config = "单机-小怪-锄地", Revision = "a" } },
+                    new() { NodeId = "next", Kind = "resource.oneDragonConfig", Ref = new() { Config = "好感任务", Revision = "b" } },
+                ],
+            };
+            host.SaveFlow(doc, null);
+            var snapshot = host.LoadFlowSnapshot(doc.WorkflowId!);
+            Assert.True((await host.StartWorkflowAsync(doc.WorkflowId!)).Ok);
+
+            // 1) First hit LocalWaitParking on node "old" (records waitLocally outcome).
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && host.Runs.List().FirstOrDefault()?.State != WorkflowRunState.LocalWaitParking)
+                await Task.Delay(20);
+            var parkedLocalWait = Assert.Single(host.Runs.List());
+            Assert.Equal(WorkflowRunState.LocalWaitParking, parkedLocalWait.State);
+            Assert.Contains(parkedLocalWait.NodeOutcomes, o => o.NodeId == "old" && o.Result == WorkflowRunner.LocalWaitResultWord);
+
+            // 2) Resume from LocalWaitParking and let node "old" start running on BGI.
+            Volatile.Write(ref occupied, false);
+            Assert.True((await host.ResumeRunAsync(parkedLocalWait.RunId)).Ok);
+            await port.FirstStatusEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var running = host.Runs.Load(parkedLocalWait.RunId)!;
+            var originalJobId = running.CurrentSubmission!.JobId!;
+            Assert.True(Guid.TryParse(originalJobId, out var parsedOriginalJobId));
+
+            // 3) Online hoeing preempts the active node and parks the live WorkflowRunner inside AwaitStateContinuationResumeAsync.
+            gate.CloseForPriority();
+            var activeSnapshot = new CommandExecutor.ExecutionBoundarySnapshot(true, true,
+                RoutingFakePort.EpochProcessId, RoutingFakePort.EpochTicks,
+                new CommandExecutor.ExecutionIdentity(Guid.NewGuid(), RoutingFakePort.EpochProcessId,
+                    RoutingFakePort.EpochTicks, Guid.Parse(running.WireRunId), parsedOriginalJobId));
+            var prepared = host.PreparePriorityOnlineHoeing(7, activeSnapshot, doc.WorkflowId);
+            Assert.True(prepared.Ready, prepared.Reason);
+            Assert.Equal(running.RunId, prepared.ManagedRunId);
+
+            const string ticket = "parked-same-plan-ticket";
+            var suspendReceipt = JsonSerializer.Serialize(new
+            {
+                status = "suspended", workflowRunId = running.WireRunId, nodeId = "old",
+                originalJobId, occurrence = 0, iteration = 0, attempt = 1,
+            });
+            Assert.True(host.ConfirmOnlineHoeingSuspend(7, ticket, suspendReceipt));
+
+            var acceptedPayload = port.AcceptedPayloadFor(originalJobId);
+            port.OriginalStatusJob = new BgiJobInfo
+            {
+                JobId = originalJobId, State = "cancelled", ErrorCode = "preempted",
+                ExecutionExitConfirmed = true, ExecutionExitDisposition = "execution_exited",
+                Epoch = port.ServerEpoch,
+                IdempotencyKey = running.CurrentSubmission.Key,
+                WorkflowRunId = running.WireRunId,
+                NodeId = "old", Occurrence = 0, Iteration = 0, Attempt = 1,
+                ConfigRevision = "a",
+                RequestFingerprintVersion = 1,
+                RequestOperation = BgiExternalClient.ExternalOperations.TaskStart,
+                RequestFingerprint = BgiOriginalRequestFingerprint.Compute(BgiExternalClient.ExternalOperations.TaskStart, acceptedPayload.GetRawText()),
+            };
+            port.FirstStatusRelease.TrySetResult();
+
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && host.Runs.Load(running.RunId)?.OnlineHoeingHandoff?.Phase != "parked")
+                await Task.Delay(20);
+            Assert.Equal("parked", host.Runs.Load(running.RunId)!.OnlineHoeingHandoff!.Phase);
+            Assert.True(host.IsDriving(doc.WorkflowId!));
+
+            // 4) Online hoeing completes with a same-workflow completion action: settle original run while its driver is live.
+            Assert.True(await host.SettleFailedOnlineHoeingAsync(7, running.RunId, true,
+                "锄地结束，按绑定策略结束原计划而不恢复", ticket, suspendReceipt).WaitAsync(TimeSpan.FromSeconds(30)));
+            var stopped = host.Runs.Load(running.RunId)!;
+            Assert.Equal(WorkflowRunState.Cancelled, stopped.State);
+            Assert.True(stopped.StopRequested);
+            Assert.Null(stopped.OnlineHoeingHandoff);
+            Assert.DoesNotContain(stopped.NodeOutcomes, o => o.Result == "unknown");
+            Assert.True(TerminalReleaseEvidence.ValidRunSeal(stopped));
+            Assert.True(TerminalReleaseEvidence.ValidRunSeal(new RunStore(Path.Combine(root, "runs")).Load(running.RunId)!));
+
+            // 5) Same-workflow completion action must now start and finish cleanly.
+            var batch = new OnlineHoeingBatch(new("same-plan-after-localwait", 7, 0, 0, 1, "completed", "")
+            {
+                Protocol = "hoeing.start.v2", ParticipantUids = ["self"],
+                Bindings = new Dictionary<string, IReadOnlyList<CoordinatedHoeingBinding>> { ["self"] = [new("锄地", "group")] },
+            }, "self", new TaskConflictPolicySettings
+            {
+                Policy = TaskConflictPolicy.RunSpecified, SpecifiedTaskType = "workflow", SpecifiedTaskName = doc.Name,
+                SpecifiedWorkflowId = doc.WorkflowId!, SpecifiedConfigRevision = snapshot.Revision,
+                SpecifiedStartMode = "node", SpecifiedStartTaskId = "next", SpecifiedStartTaskName = "好感任务",
+            }) { ExecutionEpoch = port.ServerEpoch, StateContinuationEnabled = true, StateContinuationStopVersion = 0, PolicyTicketReleased = true };
+            batch.MarkLocalSuccess(port.ServerEpoch!);
+            var accepted = await host.StartCompletionWorkflowAsync(batch, default).WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal("success", accepted.Status);
+            await host.OpenOnlineHoeingSendAsync(priorityRecovery: true);
+            deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline && host.Runs.Load(accepted.JobId!)?.State != WorkflowRunState.Succeeded)
+                await Task.Delay(20);
+            var successor = host.Runs.Load(accepted.JobId!)!;
+            Assert.Equal(WorkflowRunState.Succeeded, successor.State);
+            Assert.Equal("next", Assert.Single(successor.NodeOutcomes).NodeId);
+        }
+        finally
+        {
+            port.FirstStatusRelease.TrySetResult();
+            await host.ShutdownAsync();
+            try { Directory.Delete(root, true); } catch { }
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -2647,7 +2787,8 @@ public class TaskCenterSuccessorPathGateTests
             string jobId;
             lock (_sync)
             {
-                jobId = "job-node-" + _sends.Count;
+                jobId = UseGuidJobIds ? Guid.NewGuid().ToString("D") : "job-node-" + _sends.Count;
+                FirstJobId ??= jobId;
                 _acceptedPayloads[jobId] = System.Text.Json.JsonSerializer.SerializeToElement(payload);
             }
             return new BgiExternalResponse
@@ -2656,6 +2797,10 @@ public class TaskCenterSuccessorPathGateTests
                 Data = System.Text.Json.JsonSerializer.Serialize(new { status = "accepted", taskHandle = jobId }),
             };
         }
+
+        public bool UseGuidJobIds { get; set; }
+        public string? FirstJobId { get; private set; }
+        public System.Text.Json.JsonElement AcceptedPayloadFor(string jobId) { lock (_sync) return _acceptedPayloads[jobId]; }
 
         public BgiJobListSnapshot? OriginalReconcileSnapshot { get; set; }
         public int OriginalReconcileQueries { get; private set; }
@@ -2671,7 +2816,7 @@ public class TaskCenterSuccessorPathGateTests
         public BgiJobInfo? OriginalStatusJob { get; set; }
         public async Task<(string? Status, BgiJobInfo? Job)> QueryJobStatusAsync(string jobId, CancellationToken ct)
         {
-            if (HoldFirstStatus && jobId == "job-node-1")
+            if (HoldFirstStatus && jobId == (FirstJobId ?? "job-node-1"))
             {
                 FirstStatusEntered.TrySetResult();
                 await FirstStatusRelease.Task.WaitAsync(ct);

@@ -284,7 +284,12 @@ internal static class TerminalReleaseEvidence
                 || r.State == WorkflowRunState.Cancelled && r.StopRequested
                     && o.RawTerminal is null && o.AcceptedSendIdentity is null
                     && Submissions(r).Any(s => s.NodeId == o.NodeId && s.Occurrence == o.Occurrence && s.LoopIteration == o.LoopIteration
-                        && s.Intent == SubmitIntentState.LocalWaitDeferred && !s.SendAttempted && string.IsNullOrEmpty(s.JobId))));
+                        && (s.Intent == SubmitIntentState.LocalWaitDeferred && !s.SendAttempted && string.IsNullOrEmpty(s.JobId)
+                            || s.ObservedTerminal == "cancelled" && s.ExecutionExitConfirmed
+                                && r.OnlineHoeingHistory.Any(h => h.Phase == "stopped" && h.OriginalJobId == s.JobId
+                                    && h.OriginalSubmissionKey == s.Key && h.Epoch == s.Epoch
+                                    && h.NodeId == s.NodeId && h.Occurrence == s.Occurrence
+                                    && h.LoopIteration == s.LoopIteration && h.Attempt == s.Attempt)))));
 
     private static bool LocalBranchSettled(WorkflowRunRecord run, WorkflowNodeOutcome outcome) =>
         outcome.Result is "branchYes" or "branchNo"

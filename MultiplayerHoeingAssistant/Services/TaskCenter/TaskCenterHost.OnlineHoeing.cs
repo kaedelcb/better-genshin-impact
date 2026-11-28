@@ -1649,8 +1649,8 @@ public sealed partial class TaskCenterHost
             {
                 var latest = _runs.Load(run.RunId);
                 if (latest is null) { await Task.Delay(100, ct).ConfigureAwait(false); continue; }
-                if (latest.StopRequested || Volatile.Read(ref _manualResetActive) != 0)
-                    return BoundaryTerminalResult.UncertainWith("原计划已被明确停止或重置");
+                if (Volatile.Read(ref _manualResetActive) != 0)
+                    return BoundaryTerminalResult.UncertainWith("原计划正在重置");
                 var handoff = latest.OnlineHoeingHandoff;
                 if (handoff is null && _stateContinuationRuns.TryGetValue(run.RunId, out var pendingGeneration))
                 {
@@ -1665,6 +1665,15 @@ public sealed partial class TaskCenterHost
                     || handoff.LoopIteration != original.LoopIteration || handoff.Attempt != original.Attempt
                     || latest.WireRunId != run.WireRunId)
                     return BoundaryTerminalResult.UncertainWith("原计划接续身份已改变，未接回其他任务");
+                if (latest.StopRequested)
+                {
+                    // 停止意图先于令牌取消落盘。已确认退出的原作业停在此处时，走驱动的停止路径。
+                    if (handoff is { Phase: "parked", ResumeKey: null, ResumeJobId: null }
+                        && latest.CurrentSubmission is { ObservedTerminal: "cancelled", ExecutionExitConfirmed: true } stopped
+                        && stopped.Key == original.Key && SameJob(stopped.JobId, original.JobId))
+                        throw new OperationCanceledException("原计划已被明确停止", ct);
+                    return BoundaryTerminalResult.UncertainWith("原计划已被明确停止，联机接续责任待核对");
+                }
                 RunStore.RebaseOnto(run, latest);
                 if (handoff.Phase is "prepared" or "suspended")
                 {

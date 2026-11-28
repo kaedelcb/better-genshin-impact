@@ -332,4 +332,106 @@ public sealed class FailedOnlineHoeingSettlementTests : IAsyncLifetime
             Assert.Null(next.ManagedRunId);
         }
     }
+
+    [Theory]
+    [InlineData(WorkflowRunState.OnlineHoeingParking, false, false)]
+    [InlineData(WorkflowRunState.Unknown, true, true)]
+    public async Task ConfirmedStoppedOriginalAfterPriorLocalWaitIsFinalizedAndSealed(
+        WorkflowRunState initialState, bool alreadyStopped, bool hasUnknownOutcome)
+    {
+        var (host, run) = await Prepared();
+        Assert.True(host.ConfirmOnlineHoeingSuspend(7, "owned-ticket", JsonSerializer.Serialize(new
+        {
+            status = "suspended", workflowRunId = run.WireRunId, nodeId = "B",
+            originalJobId = run.CurrentSubmission!.JobId, occurrence = 0, iteration = 0, attempt = 1
+        })));
+        var parked = host.Runs.Load(run.RunId)!;
+        parked.OnlineHoeingHandoff!.Phase = "parked";
+        parked.State = initialState;
+        parked.StopRequested = alreadyStopped;
+        parked.CurrentSubmission!.ObservedTerminal = "cancelled";
+        parked.CurrentSubmission.ExecutionExitConfirmed = true;
+        parked.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        parked.CurrentSubmission.EffectState = "cancelled";
+        parked.NodeOutcomes.Add(new WorkflowNodeOutcome
+        {
+            NodeId = "B", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0,
+            Result = WorkflowRunner.LocalWaitResultWord, Reason = "先停驻本地等待，再恢复提交",
+        });
+        if (hasUnknownOutcome)
+            parked.NodeOutcomes.Add(new WorkflowNodeOutcome
+            {
+                NodeId = "B", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0,
+                Result = "unknown", Reason = "联机锄地恢复结果不可考：原计划已被明确停止或重置",
+            });
+        host.Runs.Update(parked);
+
+        Assert.True(await host.SettleFailedOnlineHoeingAsync(7, run.RunId, true, "锄地结束，按绑定策略结束原计划而不恢复"));
+        var saved = host.Runs.Load(run.RunId)!;
+        Assert.Equal(WorkflowRunState.Cancelled, saved.State);
+        Assert.True(saved.StopRequested);
+        Assert.Null(saved.OnlineHoeingHandoff);
+        var history = Assert.Single(saved.OnlineHoeingHistory);
+        Assert.Equal("stopped", history.Phase);
+        Assert.True(TerminalReleaseEvidence.RunSettled(saved));
+        Assert.NotNull(host.Runs.TrySealTerminalRun(saved.RunId));
+        Assert.True(host.CanOpenOnlineSendAfterBatch);
+    }
+
+    [Theory]
+    [InlineData("parked", "B", true)]
+    [InlineData("parked", "different-node", false)]
+    [InlineData("resumeRequested", "B", false)]
+    public async Task StopReadBeforeTokenCancellationOnlyExitsTheMatchingParkedObserver(
+        string phase, string originalNodeId, bool stopObserved)
+    {
+        var (host, run) = await Prepared();
+        var stopped = host.Runs.Load(run.RunId)!;
+        stopped.OnlineHoeingHandoff!.StateContinuation = true;
+        stopped.OnlineHoeingHandoff.Phase = phase;
+        stopped.StopRequested = true;
+        stopped.CurrentSubmission!.ObservedTerminal = "cancelled";
+        stopped.CurrentSubmission.ExecutionExitConfirmed = true;
+        host.Runs.Update(stopped);
+
+        run.OnlineHoeingHandoff!.StateContinuation = true;
+        run.CurrentSubmission!.NodeId = originalNodeId;
+        using var client = new BgiExternalClient();
+        Task<BoundaryTerminalResult?> Observe() => host.AwaitOnlineHoeingContinuationAsync(
+            new BgiWorkflowExecutionBoundary(client, host.Runs), run, run.CurrentSubmission,
+            BoundaryTerminalResult.Observed("cancelled", errorCode: "preempted", exitConfirmed: true),
+            CancellationToken.None);
+        if (stopObserved)
+            await Assert.ThrowsAsync<OperationCanceledException>(Observe);
+        else
+            Assert.True((await Observe())!.Uncertain);
+    }
+
+    [Fact]
+    public async Task LocalWaitFollowedByUnsettledSubmissionOrNonCancelledStateRemainsUnsettled()
+    {
+        var (host, run) = await Prepared();
+        var record = host.Runs.Load(run.RunId)!;
+        record.OnlineHoeingHandoff = null;
+        record.NodeOutcomes.Add(new WorkflowNodeOutcome
+        {
+            NodeId = "B", SequenceIndex = 0, Occurrence = 0, LoopIteration = 0,
+            Result = WorkflowRunner.LocalWaitResultWord, Reason = "先停驻本地等待",
+        });
+        // 1) Cancelled run with unsettled submission (exit not confirmed) must remain unsettled.
+        record.State = WorkflowRunState.Cancelled;
+        record.StopRequested = true;
+        record.CurrentSubmission!.ObservedTerminal = "cancelled";
+        record.CurrentSubmission.ExecutionExitConfirmed = false;
+        Assert.False(TerminalReleaseEvidence.RunSettled(record));
+
+        // 2) Non-cancelled (Succeeded) run with unsettled waitLocally must still require HistoricalWaitSettled.
+        record.State = WorkflowRunState.Succeeded;
+        record.StopRequested = false;
+        record.CurrentSubmission.ObservedTerminal = "succeeded";
+        record.CurrentSubmission.ExecutionExitConfirmed = true;
+        record.CurrentSubmission.ExecutionExitDisposition = "execution_exited";
+        record.CurrentSubmission.EffectState = "succeeded";
+        Assert.False(TerminalReleaseEvidence.RunSettled(record));
+    }
 }

@@ -3335,9 +3335,8 @@ public sealed partial class TaskCenterHost
             return AdmissionTerminalReconciliationOutcome.Failed;
         }
         if (releaseSeal is null) return AdmissionTerminalReconciliationOutcome.Pending;
-        // 同计划空隙替换：优先接管的内存进度可能尚未写回旧 run 文件。先确认原停止、
-        // 零发送和封印全部持久化，再释放仲裁责任；不能只依赖内存读回。
-        if (run.OnlineHoeingHistory.LastOrDefault() is { PriorityRecovery: true, Phase: "stopped", OriginalJobId: null })
+        // 优先接管的停止、退出凭据和封印可能仍在内存待发布。全部持久化后才释放仲裁责任。
+        if (run.OnlineHoeingHistory.LastOrDefault() is { PriorityRecovery: true, Phase: "stopped" })
         {
             _runs.FlushPriorityProgress(runId);
             if (_runs.HasUnpublishedPriorityProgress(runId)) return AdmissionTerminalReconciliationOutcome.Pending;
